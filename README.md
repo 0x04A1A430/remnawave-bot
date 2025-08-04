@@ -77,12 +77,10 @@ URL и токен RemnaWave API
                 sub_url = self.base_url
             return f"{sub_url}/sub/{short_uuid}"
 
-4) Создайте виртуальное окружение и активируйте его:
+4) Установите python3 python pip
 
         sudo apt install pip
         sudo apt install python3
-        python3 -m venv venv
-        source venv/bin/activate
 
 5) Установите зависимости:
 
