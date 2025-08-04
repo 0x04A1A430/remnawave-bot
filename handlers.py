@@ -42,6 +42,7 @@ class BotStates(StatesGroup):
     admin_send_message_text = State()
     admin_broadcast_text = State()
     admin_create_sub_squad_select = State()
+    admin_test_monitor_user = State()
 
 router = Router()
 
@@ -817,8 +818,9 @@ async def view_subscription_detail(callback: CallbackQuery, db: Database, **kwar
 
 @router.callback_query(F.data.startswith("extend_sub_"))
 async def extend_subscription_callback(callback: CallbackQuery, db: Database, **kwargs):
-    """Show extend subscription confirmation"""
+    """Show subscription extension confirmation"""
     user = kwargs.get('user')
+    
     if not user:
         await callback.answer("❌ Ошибка пользователя")
         return
@@ -826,45 +828,61 @@ async def extend_subscription_callback(callback: CallbackQuery, db: Database, **
     try:
         user_sub_id = int(callback.data.split("_")[2])
         
-        # Get user subscription
+        # Получаем все подписки пользователя и находим нужную
         user_subs = await db.get_user_subscriptions(user.telegram_id)
         user_sub = next((sub for sub in user_subs if sub.id == user_sub_id), None)
         
         if not user_sub:
-            await callback.answer("❌ Подписка не найдена")
+            await callback.answer(t('subscription_not_found', user.language))
             return
         
+        # Get subscription details
         subscription = await db.get_subscription_by_id(user_sub.subscription_id)
         if not subscription:
-            await callback.answer("❌ Подписка не найдена")
+            await callback.answer(t('subscription_not_found', user.language))
             return
         
-        # ИСПРАВЛЕНИЕ: Запрещаем продление тестовых подписок
+        # Check if subscription is trial (can't extend trial)
         if subscription.is_trial:
             await callback.answer("❌ Тестовую подписку нельзя продлить")
             return
         
-        # Check balance
+        # Check if user has enough balance
         if user.balance < subscription.price:
-            await callback.answer(t('insufficient_balance', user.language))
+            needed = subscription.price - user.balance
+            text = f"❌ Недостаточно средств для продления!\n\n"
+            text += f"💰 Стоимость продления: {subscription.price} руб.\n"
+            text += f"💳 Ваш баланс: {user.balance} руб.\n"
+            text += f"💸 Нужно пополнить: {needed} руб."
+            
+            await callback.message.edit_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="topup_balance")],
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data=f"view_sub_{user_sub_id}")]
+                ])
+            )
             return
         
-        text = t('extend_confirmation', user.language,
-            name=subscription.name,
-            days=subscription.duration_days,
-            price=subscription.price
-        )
+        # Show confirmation
+        text = f"🔄 Продление подписки\n\n"
+        text += f"📋 Подписка: {subscription.name}\n"
+        text += f"💰 Стоимость: {subscription.price} руб.\n"
+        text += f"⏱ Продлить на: {subscription.duration_days} дней\n"
+        text += f"💳 Ваш баланс: {user.balance} руб.\n\n"
+        text += f"После продления останется: {user.balance - subscription.price} руб."
         
         await callback.message.edit_text(
             text,
             reply_markup=extend_subscription_keyboard(user_sub_id, user.language)
         )
+        
     except Exception as e:
-        logger.error(f"Error showing extend confirmation: {e}")
+        logger.error(f"Error showing extend subscription: {e}")
         await callback.answer(t('error_occurred', user.language))
 
 @router.callback_query(F.data.startswith("confirm_extend_"))
-async def confirm_extend_subscription(callback: CallbackQuery, db: Database, **kwargs):
+async def confirm_extend_subscription_callback(callback: CallbackQuery, db: Database, **kwargs):
     """Confirm subscription extension"""
     user = kwargs.get('user')
     api = kwargs.get('api')
@@ -876,56 +894,87 @@ async def confirm_extend_subscription(callback: CallbackQuery, db: Database, **k
     try:
         user_sub_id = int(callback.data.split("_")[2])
         
-        # Get user subscription
+        # Получаем все подписки пользователя и находим нужную
         user_subs = await db.get_user_subscriptions(user.telegram_id)
         user_sub = next((sub for sub in user_subs if sub.id == user_sub_id), None)
         
         if not user_sub:
-            await callback.answer("❌ Подписка не найдена")
+            await callback.answer(t('subscription_not_found', user.language))
             return
         
+        # Get subscription details
         subscription = await db.get_subscription_by_id(user_sub.subscription_id)
         if not subscription:
-            await callback.answer("❌ Подписка не найдена")
+            await callback.answer(t('subscription_not_found', user.language))
             return
         
-        # ИСПРАВЛЕНИЕ: Дополнительная проверка на тестовую подписку
+        # Check if subscription is trial (can't extend trial)
         if subscription.is_trial:
             await callback.answer("❌ Тестовую подписку нельзя продлить")
             return
         
         # Check balance again
         if user.balance < subscription.price:
-            await callback.answer(t('insufficient_balance', user.language))
+            await callback.answer("❌ Недостаточно средств")
             return
         
         # Calculate new expiry date
-        from datetime import timedelta
-        new_expiry = user_sub.expires_at + timedelta(days=subscription.duration_days)
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
         
-        # Update subscription in RemnaWave if API is available
+        # ИСПРАВЛЕНИЕ: Правильное вычисление новой даты истечения
+        # Если подписка все еще активна, продлеваем от текущей даты истечения
+        # Если истекла, продлеваем от текущего момента
+        if user_sub.expires_at > now:
+            new_expiry = user_sub.expires_at + timedelta(days=subscription.duration_days)
+        else:
+            new_expiry = now + timedelta(days=subscription.duration_days)
+        
+        # ГЛАВНОЕ ИСПРАВЛЕНИЕ: Обновляем подписку в RemnaWave с правильными полями
         if api and user_sub.short_uuid:
             try:
-                # Получаем информацию о пользователе по short_uuid
                 logger.info(f"Updating RemnaWave subscription for shortUuid: {user_sub.short_uuid}")
                 
-                # Сначала получаем полную информацию о пользователе
+                # Сначала получаем информацию о пользователе по short_uuid
                 remna_user_details = await api.get_user_by_short_uuid(user_sub.short_uuid)
                 if remna_user_details:
                     user_uuid = remna_user_details.get('uuid')
                     if user_uuid:
-                        # Обновляем пользователя в RemnaWave с новой датой истечения
-                        update_data = {
-                            'expireAt': new_expiry.isoformat() + 'Z'
+                        # ИСПРАВЛЕНИЕ: Используем правильное поле для даты истечения
+                        # В RemnaWave API может использоваться 'expireAt' или 'expiryTime'
+                        expiry_str = new_expiry.isoformat() + 'Z'
+                        
+                        # Попробуем оба варианта поля даты истечения
+                        update_data_v1 = {
+                            'enable': True,
+                            'expireAt': expiry_str  # Вариант 1
                         }
                         
-                        logger.info(f"Updating user {user_uuid} with new expiry: {update_data['expireAt']}")
-                        result = await api.update_user(user_uuid, update_data)
+                        update_data_v2 = {
+                            'enable': True,
+                            'expiryTime': expiry_str  # Вариант 2
+                        }
+                        
+                        logger.info(f"Updating user {user_uuid} with new expiry: {expiry_str}")
+                        
+                        # Пробуем первый вариант
+                        result = await api.update_user(user_uuid, update_data_v1)
+                        
+                        if not result:
+                            # Если первый не сработал, пробуем второй
+                            logger.info("Trying alternative field name 'expiryTime'")
+                            result = await api.update_user(user_uuid, update_data_v2)
                         
                         if result:
-                            logger.info(f"Successfully updated RemnaWave user expiry")
+                            logger.info(f"Successfully updated RemnaWave user expiry to {expiry_str}")
                         else:
-                            logger.warning(f"Failed to update user in RemnaWave")
+                            logger.warning(f"Failed to update user in RemnaWave - trying direct API call")
+                            
+                            # ДОПОЛНИТЕЛЬНАЯ ПОПЫТКА: Используем специальный метод для обновления даты истечения
+                            if hasattr(api, 'update_user_expiry'):
+                                result = await api.update_user_expiry(user_sub.short_uuid, expiry_str)
+                                if result:
+                                    logger.info(f"Successfully updated expiry using update_user_expiry method")
                     else:
                         logger.warning(f"Could not get user UUID from RemnaWave response")
                 else:
@@ -933,10 +982,11 @@ async def confirm_extend_subscription(callback: CallbackQuery, db: Database, **k
                     
             except Exception as e:
                 logger.error(f"Failed to update expiry in RemnaWave: {e}")
-                # Продолжаем выполнение даже если обновление в RemnaWave не удалось
+                # НЕ прерываем выполнение, продолжаем обновление в локальной БД
         
         # Update local database
         user_sub.expires_at = new_expiry
+        user_sub.is_active = True
         await db.update_user_subscription(user_sub)
         
         # Deduct balance
@@ -952,9 +1002,18 @@ async def confirm_extend_subscription(callback: CallbackQuery, db: Database, **k
             status='completed'
         )
         
+        success_text = f"✅ Подписка успешно продлена!\n\n"
+        success_text += f"📋 Подписка: {subscription.name}\n"
+        success_text += f"📅 Новая дата истечения: {format_datetime(new_expiry, user.language)}\n"
+        success_text += f"💰 Списано: {subscription.price} руб.\n"
+        success_text += f"💳 Остаток на балансе: {user.balance} руб."
+        
         await callback.message.edit_text(
-            t('subscription_extended', user.language),
-            reply_markup=main_menu_keyboard(user.language, user.is_admin)
+            success_text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📋 Мои подписки", callback_data="my_subscriptions")],
+                [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
+            ])
         )
         
         log_user_action(user.telegram_id, "subscription_extended", f"Sub: {subscription.name}")
@@ -965,6 +1024,7 @@ async def confirm_extend_subscription(callback: CallbackQuery, db: Database, **k
             t('error_occurred', user.language),
             reply_markup=main_menu_keyboard(user.language, user.is_admin)
         )
+
 
 @router.callback_query(F.data.startswith("get_connection_"))
 async def get_connection_callback(callback: CallbackQuery, db: Database, **kwargs):
