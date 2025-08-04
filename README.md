@@ -43,6 +43,7 @@ PostgreSQL, SQLite или другая поддерживаемая SQL-база
 
 URL и токен RemnaWave API
 
+Ссылки на подписку из ремны формата SUB_PUBLIC_DOMAIN=sub.example.com/sub
 
 #Установка
 
