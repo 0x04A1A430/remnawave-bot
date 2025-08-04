@@ -29,6 +29,8 @@ RemnaWave Telegram Bot — это многофункциональный бот 
 
 #Требования
 
+Pip
+
 Python 3.8+
 
 PostgreSQL, SQLite или другая поддерживаемая SQL-база данных
@@ -36,8 +38,6 @@ PostgreSQL, SQLite или другая поддерживаемая SQL-база
 Токен Telegram-бота
 
 URL и токен RemnaWave API
-
-Список администраторов Telegram ID
 
 
 #Установка
