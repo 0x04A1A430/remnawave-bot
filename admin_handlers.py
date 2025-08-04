@@ -62,7 +62,7 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
         
         text = t('stats_info', user.language,
             users=db_stats['total_users'],
-            subscriptions=db_stats['total_subscriptions'],
+            subscriptions=db_stats['total_subscriptions_non_trial'],  # Изменено
             revenue=db_stats['total_revenue']
         )
         
@@ -393,7 +393,7 @@ async def list_admin_subscriptions(callback: CallbackQuery, user: User, db: Data
         return
     
     try:
-        subs = await db.get_all_subscriptions(include_inactive=True)
+        subs = await db.get_all_subscriptions(include_inactive=True, exclude_trial=True)
         if not subs:
             await callback.message.edit_text(
                 "❌ Подписки не найдены",
