@@ -153,30 +153,42 @@ class RemnaWaveAPI:
     
     async def update_user_expiry(self, short_uuid: str, new_expiry: str) -> Optional[Dict]:
         """Update user expiry date by short UUID"""
-        # Сначала получаем пользователя по short_uuid чтобы получить его UUID
-        user_data = await self.get_user_by_short_uuid(short_uuid)
-        if not user_data:
-            logger.error(f"Could not find user with short UUID: {short_uuid}")
+        try:
+            # Сначала получаем пользователя по short_uuid чтобы получить его UUID
+            user_data = await self.get_user_by_short_uuid(short_uuid)
+            if not user_data:
+                logger.error(f"Could not find user with short UUID: {short_uuid}")
             return None
         
-        user_uuid = user_data.get('uuid')
-        if not user_uuid:
-            logger.error(f"Could not get UUID from user data: {user_data}")
+            user_uuid = user_data.get('uuid')
+            if not user_uuid:
+                logger.error(f"Could not get UUID from user data: {user_data}")
             return None
         
-        # Обновляем пользователя по UUID
-        update_data = {
-            'expireAt': new_expiry
-        }
+            # Попробуем несколько вариантов полей для даты истечения
+            update_attempts = [
+                {'enable': True, 'expireAt': new_expiry},
+                {'enable': True, 'expiryTime': new_expiry},
+                {'status': 'ACTIVE', 'expireAt': new_expiary},
+                {'status': 'ACTIVE', 'expiryTime': new_expiry}
+            ]
         
-        logger.info(f"Updating user {user_uuid} expiry to: {new_expiry}")
-        return await self.update_user(user_uuid, update_data)
-    
-    async def get_user_accessible_nodes(self, uuid: str) -> Optional[List]:
-        result = await self._make_request('GET', f'/api/users/{uuid}/accessible-nodes')
-        if result and 'data' in result:
-            return result['data']
-        return []
+            for i, update_data in enumerate(update_attempts):
+                logger.info(f"Attempt {i+1}: Updating user {user_uuid} with data: {update_data}")
+                result = await self.update_user(user_uuid, update_data)
+            
+                if result:
+                    logger.info(f"Successfully updated user expiry on attempt {i+1}")
+                return result
+            else:
+                logger.warning(f"Attempt {i+1} failed")
+        
+            logger.error(f"All attempts to update user expiry failed")
+            return None
+        
+        except Exception as e:
+            logger.error(f"Exception in update_user_expiry: {e}")
+            return None
     
     
     async def get_subscription_url(self, short_uuid: str) -> str:
