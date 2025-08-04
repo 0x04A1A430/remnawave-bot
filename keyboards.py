@@ -335,3 +335,39 @@ def trial_subscription_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=t('back', lang), callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def admin_monitor_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Beautiful admin monitor management keyboard"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статус сервиса", callback_data="monitor_status")],
+        [InlineKeyboardButton(text="🔄 Принудительная проверка", callback_data="monitor_force_check")],
+        [InlineKeyboardButton(text="⚰️ Деактивировать истекшие", callback_data="monitor_deactivate_expired")],
+        [InlineKeyboardButton(text="👤 Тест для пользователя", callback_data="monitor_test_user")],
+        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="admin_panel")]
+    ])
+    return keyboard
+
+def admin_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Beautiful admin menu keyboard"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        # Первый ряд - управление контентом
+        [
+            InlineKeyboardButton(text="📦 " + t('manage_subscriptions', lang), callback_data="admin_subscriptions"),
+            InlineKeyboardButton(text="👥 " + t('manage_users', lang), callback_data="admin_users")
+        ],
+        # Второй ряд - финансы
+        [
+            InlineKeyboardButton(text="💰 " + t('manage_balance', lang), callback_data="admin_balance"),
+            InlineKeyboardButton(text="🎁 " + t('manage_promocodes', lang), callback_data="admin_promocodes")
+        ],
+        # Третий ряд - коммуникации и аналитика
+        [
+            InlineKeyboardButton(text="📨 " + t('send_message', lang), callback_data="admin_messages"),
+            InlineKeyboardButton(text="📊 " + t('statistics', lang), callback_data="admin_stats")
+        ],
+        # Четвертый ряд - мониторинг (НОВОЕ!)
+        [InlineKeyboardButton(text="🔍 Мониторинг подписок", callback_data="admin_monitor")],
+        # Назад
+        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="main_menu")]
+    ])
+    return keyboard
