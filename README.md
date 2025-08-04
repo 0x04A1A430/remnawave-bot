@@ -72,6 +72,7 @@ URL и токен RemnaWave API
        python main.py
    
 #Конфигурация
+
 BOT_TOKEN — токен Telegram бота от BotFather.
 REMNAWAVE_URL — URL API RemnaWave.
 REMNAWAVE_MODE=remote  
