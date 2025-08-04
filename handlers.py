@@ -290,18 +290,19 @@ async def confirm_trial_callback(callback: CallbackQuery, db: Database, **kwargs
             )
             return
 
-        # Создаем тестовую подписку в базе данных (создаем временную подписку)
+        # Создаем временную тестовую подписку, которая НЕ будет отображаться в админке
         trial_subscription = await db.create_subscription(
-            name="Тестовая подписка",
-            description="Бесплатная тестовая подписка на 3 дня",
-            price=config.TRIAL_PRICE,
+            name=f"Trial_{user.telegram_id}_{int(datetime.utcnow().timestamp())}",  # Уникальное имя
+            description="Автоматически созданная тестовая подписка",
+            price=0,
             duration_days=config.TRIAL_DURATION_DAYS,
             traffic_limit_gb=config.TRIAL_TRAFFIC_GB,
             squad_uuid=config.TRIAL_SQUAD_UUID
         )
         
-        # Помечаем подписку как тестовую
+        # Помечаем подписку как тестовую И неактивную для админки
         trial_subscription.is_trial = True
+        trial_subscription.is_active = False  # Скрываем от обычных запросов
         await db.update_subscription(trial_subscription)
 
         # Создаем пользовательскую подписку
@@ -517,9 +518,7 @@ async def buy_subscription_callback(callback: CallbackQuery, db: Database, **kwa
         return
     
     try:
-        # Получаем все подписки, исключая тестовые
-        all_subscriptions = await db.get_all_subscriptions()
-        subscriptions = [sub for sub in all_subscriptions if not sub.is_trial]
+        subscriptions = await db.get_all_subscriptions(exclude_trial=True)
         
         if not subscriptions:
             await callback.message.edit_text(
