@@ -972,6 +972,7 @@ async def get_connection_callback(callback: CallbackQuery, db: Database, **kwarg
     """Get connection link"""
     user = kwargs.get('user')
     api = kwargs.get('api')
+    config = kwargs.get('config')
     
     if not user:
         await callback.answer("❌ Ошибка пользователя")
@@ -986,21 +987,21 @@ async def get_connection_callback(callback: CallbackQuery, db: Database, **kwarg
             await callback.answer("❌ Подписка не найдена")
             return
         
-        # Используем shortUuid напрямую, так как теперь каждая подписка имеет уникальный
+        # Используем shortUuid напрямую
         short_uuid = user_sub.short_uuid
         
-        # Получаем правильную ссылку
-        if api:
+        # ИСПРАВЛЕНИЕ: Приоритет config.SUBSCRIPTION_BASE_URL
+        if config and config.SUBSCRIPTION_BASE_URL:
+            connection_url = f"{config.SUBSCRIPTION_BASE_URL.rstrip('/')}/sub/{short_uuid}"
+            logger.info(f"Using config SUBSCRIPTION_BASE_URL: {connection_url}")
+        elif api:
+            # Если конфиг недоступен, используем API
             connection_url = await api.get_subscription_url(short_uuid)
-            logger.info(f"Generated connection URL: {connection_url}")
+            logger.info(f"Using API subscription URL: {connection_url}")
         else:
-            # Fallback  Замена поддомена у ссылки подписки 
-            config = kwargs.get('config')
-            if config and 'adminka.' in config.REMNAWAVE_URL:
-                base_url = config.REMNAWAVE_URL.replace('adminka.', 'sub.')
-            else:
-                base_url = config.REMNAWAVE_URL if config else "http://localhost"
-            connection_url = f"{base_url}/sub/{short_uuid}"
+            # Последний fallback
+            connection_url = f"{config.SUBSCRIPTION_BASE_URL.rstrip('/')}/sub/{short_uuid}"
+            logger.warning(f"Using hardcoded fallback URL: {connection_url}")
         
         text = t('connection_link', user.language, link=connection_url)
         
@@ -1041,7 +1042,9 @@ async def connect_subscription_callback(callback: CallbackQuery, db: Database, a
         connection_url = await api.get_subscription_by_short_uuid(user_sub.short_uuid)
         
         if not connection_url:
-            connection_url = f"{config.REMNAWAVE_URL.rstrip('/')}/sub/{user_sub.short_uuid}"
+            # Используем config.SUBSCRIPTION_BASE_URL
+            subscription_base_url = config.SUBSCRIPTION_BASE_URL if config else "http://localhost"
+            connection_url = f"{subscription_base_url.rstrip('/')}/sub/{user_sub.short_uuid}"
         
         # Открываем ссылку через URL кнопку
         await callback.answer(url=connection_url)
