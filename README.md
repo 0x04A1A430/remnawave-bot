@@ -79,7 +79,8 @@ URL и токен RemnaWave API
 
 4) Создайте виртуальное окружение и активируйте его:
 
-        suo apt install python3
+        sudo apt install pip
+        sudo apt install python3
         python3 -m venv venv
         source venv/bin/activate
 
