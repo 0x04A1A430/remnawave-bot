@@ -213,6 +213,46 @@ def log_user_action(user_id: int, action: str, details: str = ""):
     """Log user action"""
     logger.info(f"User {user_id} - {action}: {details}")
 
+def format_subscription_status(expires_at: datetime, lang: str = 'ru') -> str:
+    """Format subscription status with emoji"""
+    now = datetime.utcnow()
+    
+    if expires_at < now:
+        return "❌ Истекла" if lang == 'ru' else "❌ Expired"
+    
+    days_left = (expires_at - now).days
+    
+    if days_left == 0:
+        return "⚠️ Истекает сегодня" if lang == 'ru' else "⚠️ Expires today"
+    elif days_left == 1:
+        return "⚠️ Истекает завтра" if lang == 'ru' else "⚠️ Expires tomorrow"
+    elif days_left <= 3:
+        return f"🔶 Осталось {days_left} дней" if lang == 'ru' else f"🔶 {days_left} days left"
+    else:
+        return f"✅ Активна ({days_left} дней)" if lang == 'ru' else f"✅ Active ({days_left} days)"
+
+def format_monitor_notification_type(notification_type: str, lang: str = 'ru') -> str:
+    """Format notification type for display"""
+    type_map = {
+        'expired': 'Истекла' if lang == 'ru' else 'Expired',
+        'expires_today': 'Истекает сегодня' if lang == 'ru' else 'Expires today',
+        'expires_tomorrow': 'Истекает завтра' if lang == 'ru' else 'Expires tomorrow',
+        'warning': 'Предупреждение' if lang == 'ru' else 'Warning',
+        'urgent': 'Срочно' if lang == 'ru' else 'Urgent'
+    }
+    return type_map.get(notification_type, notification_type)
+
+def calculate_days_until_expiry(expires_at: datetime) -> int:
+    """Calculate days until expiry"""
+    now = datetime.utcnow()
+    delta = expires_at - now
+    return max(0, delta.days)
+
+def is_subscription_expiring_soon(expires_at: datetime, warning_days: int = 2) -> bool:
+    """Check if subscription is expiring soon"""
+    days_left = calculate_days_until_expiry(expires_at)
+    return days_left <= warning_days
+
 class States:
     """State constants for FSM"""
     WAITING_LANGUAGE = "waiting_language"
