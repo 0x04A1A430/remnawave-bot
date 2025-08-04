@@ -51,16 +51,16 @@ URL и токен RemnaWave API
     git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot
     cd remnawave-bedolaga-telegram-bot
 
-4) Установите python3 python pip
+2) Установите python3 python pip
 
         sudo apt install pip
         sudo apt install python3
 
-5) Установите зависимости:
+3) Установите зависимости:
 
         pip install -r requirements.txt
 
-6) Создайте файл .env в корне проекта и заполните его необходимыми переменными окружения. Пример:
+4) Создайте файл .env в корне проекта и заполните его необходимыми переменными окружения. Пример:
 
         BOT_TOKEN=ваш_telegram_bot_token
         REMNAWAVE_URL=https://your-remnawave-url.ru
@@ -77,7 +77,7 @@ URL и токен RemnaWave API
         TRIAL_SQUAD_UUID=19bd5bde-5eea-4368-809c-6ba1ffb93897
         TRIAL_PRICE=0.0
 
-8) Запустите бота:
+5) Запустите бота:
    
 1) Хлебный - создание службы автозапуска, проверка файлов, запуск бота 
 
