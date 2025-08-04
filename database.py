@@ -166,18 +166,21 @@ class Database:
                 return False
     
     # Subscription methods
-    async def get_all_subscriptions(self, include_inactive: bool = False) -> List[Subscription]:
+    async def get_all_subscriptions(self, include_inactive: bool = False, exclude_trial: bool = True) -> List[Subscription]:
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select
                 query = select(Subscription)
                 if not include_inactive:
                     query = query.where(Subscription.is_active == True)
+                if exclude_trial:
+                    query = query.where(Subscription.is_trial == False)
                 result = await session.execute(query)
                 return list(result.scalars().all())
             except Exception as e:
                 logger.error(f"Error getting subscriptions: {e}")
                 return []
+
     
     async def get_subscription_by_id(self, subscription_id: int) -> Optional[Subscription]:
         async with self.session_factory() as session:
@@ -415,37 +418,55 @@ class Database:
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select, func
-                
+            
                 # Total users
                 total_users = await session.execute(
                     select(func.count(User.id))
                 )
                 total_users = total_users.scalar()
-                
-                # Total subscriptions
-                total_subs = await session.execute(
+            
+                # Total subscriptions (excluding trial)
+                total_subs_non_trial = await session.execute(
                     select(func.count(UserSubscription.id))
+                    .join(Subscription, UserSubscription.subscription_id == Subscription.id)
+                    .where(Subscription.is_trial == False)
                 )
-                total_subs = total_subs.scalar()
-                
-                # Total payments
+                total_subs_non_trial = total_subs_non_trial.scalar()
+            
+                # Total payments (excluding trial payments)
                 total_payments = await session.execute(
-                    select(func.sum(Payment.amount)).where(Payment.status == 'completed')
+                    select(func.sum(Payment.amount)).where(
+                        Payment.status == 'completed',
+                        Payment.payment_type != 'trial'  # Исключаем тестовые платежи
+                    )
                 )
                 total_payments = total_payments.scalar() or 0
-                
+            
                 return {
-                    'total_users': total_users,
-                    'total_subscriptions': total_subs,
-                    'total_revenue': total_payments
+                   'total_users': total_users,
+                   'total_subscriptions_non_trial': total_subs_non_trial,
+                   'total_revenue': total_payments
                 }
             except Exception as e:
                 logger.error(f"Error getting stats: {e}")
                 return {
                     'total_users': 0,
-                    'total_subscriptions': 0,
+                    'total_subscriptions_non_trial': 0,
                     'total_revenue': 0
-                }
+            }
+
+    async def get_trial_subscriptions(self) -> List[Subscription]:
+        """Get only trial subscriptions"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select
+                result = await session.execute(
+                    select(Subscription).where(Subscription.is_trial == True)
+                )
+                return list(result.scalars().all())
+            except Exception as e:
+                logger.error(f"Error getting trial subscriptions: {e}")
+                return []
     
     async def update_user_subscription(self, user_sub: UserSubscription) -> UserSubscription:
         async with self.session_factory() as session:
