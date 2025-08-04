@@ -51,36 +51,6 @@ URL и токен RemnaWave API
     git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot
     cd remnawave-bedolaga-telegram-bot
 
-2) Настройте handlers.py! В нем механизм подмены поддомена адреса подписки обязательно заменить на свой! Строка 997+ 
-
-           # Fallback  Замена поддомена у ссылки подписки 
-            config = kwargs.get('config')
-            if config and 'adminka.' in config.REMNAWAVE_URL:
-                base_url = config.REMNAWAVE_URL.replace('adminka.', 'sub.')
-
-3) В remnawave_api строки 187-206 заменить поддомен панели на свой!
-
-            # Формируем правильную ссылку на основе base_url
-            # Заменяем adminka на sub в URL
-            if 'adminka.' in self.base_url:
-                sub_url = self.base_url.replace('adminka.', 'sub.')
-            else:
-                sub_url = self.base_url
-                
-            subscription_url = f"{sub_url}/sub/{short_uuid}"
-            logger.info(f"Generated subscription URL: {subscription_url}")
-            
-            return subscription_url
-
-            except Exception as e:
-            logger.error(f"Failed to get subscription URL: {e}")
-            # Fallback с заменой домена
-            if 'adminka.' in self.base_url:
-                sub_url = self.base_url.replace('adminka.', 'sub.')
-            else:
-                sub_url = self.base_url
-            return f"{sub_url}/sub/{short_uuid}"
-
 4) Установите python3 python pip
 
         sudo apt install pip
@@ -96,6 +66,7 @@ URL и токен RemnaWave API
         REMNAWAVE_URL=https://your-remnawave-url.ru
         REMNAWAVE_MODE=remote/local
         REMNAWAVE_TOKEN=ваш_remnawave_token
+        SUBSCRIPTION_BASE_URL=https://
         DATABASE_URL=sqlite+aiosqlite:///bot.db
         ADMIN_IDS=123456789,987654321
         DEFAULT_LANGUAGE=ru
@@ -106,7 +77,7 @@ URL и токен RemnaWave API
         TRIAL_SQUAD_UUID=19bd5bde-5eea-4368-809c-6ba1ffb93897
         TRIAL_PRICE=0.0
 
-7) Запустите бота:
+8) Запустите бота:
    
 1) Хлебный - создание службы автозапуска, проверка файлов, запуск бота 
 
