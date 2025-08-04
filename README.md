@@ -108,6 +108,8 @@ REMNAWAVE_TOKEN — токен доступа к API RemnaWave.
 
 DATABASE_URL — строка подключения к базе данных.
 
+SUBSCRIPTION_BASE_URL=https://sub.example.com (без / на конце)
+
 ADMIN_IDS — через запятую Telegram ID администраторов.
 
 SUPPORT_USERNAME — ник поддержки, без @ указывать
