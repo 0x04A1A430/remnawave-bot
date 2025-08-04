@@ -32,7 +32,33 @@ URL и токен RemnaWave API
 
 2) Настройте handlers.py! В нем механизм подмены поддомена адреса подписки обязательно заменить на свой! Строка 997+ 
 
+           # Fallback  Замена поддомена у ссылки подписки 
+            config = kwargs.get('config')
+            if config and 'adminka.' in config.REMNAWAVE_URL:
+                base_url = config.REMNAWAVE_URL.replace('adminka.', 'sub.')
+
 3) В remnawave_api строки 187-206 заменить поддомен панели на свой!
+
+            # Формируем правильную ссылку на основе base_url
+            # Заменяем adminka на sub в URL
+            if 'adminka.' in self.base_url:
+                sub_url = self.base_url.replace('adminka.', 'sub.')
+            else:
+                sub_url = self.base_url
+                
+            subscription_url = f"{sub_url}/sub/{short_uuid}"
+            logger.info(f"Generated subscription URL: {subscription_url}")
+            
+            return subscription_url
+
+            except Exception as e:
+            logger.error(f"Failed to get subscription URL: {e}")
+            # Fallback с заменой домена
+            if 'adminka.' in self.base_url:
+                sub_url = self.base_url.replace('adminka.', 'sub.')
+            else:
+                sub_url = self.base_url
+            return f"{sub_url}/sub/{short_uuid}"
 
 4) Создайте виртуальное окружение и активируйте его:
 
