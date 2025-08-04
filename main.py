@@ -63,7 +63,7 @@ async def main():
                 await asyncio.sleep(2)  # Wait before retry
         
         # Initialize RemnaWave API
-        api = RemnaWaveAPI(config.REMNAWAVE_URL, config.REMNAWAVE_TOKEN)
+        api = RemnaWaveAPI(config.REMNAWAVE_URL, config.REMNAWAVE_TOKEN, config.SUBSCRIPTION_BASE_URL)
         logger.info("RemnaWave API initialized")
         
         # Test API connection (optional - don't fail if it doesn't work)
