@@ -8,9 +8,10 @@ import json
 logger = logging.getLogger(__name__)
 
 class RemnaWaveAPI:
-    def __init__(self, base_url: str, token: str):
+    def __init__(self, base_url: str, token: str, subscription_base_url: str = None):
         self.base_url = base_url.rstrip('/')
         self.token = token
+        self.subscription_base_url = subscription_base_url or base_url 
         self.session = None
         
     async def _get_session(self):
@@ -177,33 +178,23 @@ class RemnaWaveAPI:
             return result['data']
         return []
     
+    
     async def get_subscription_url(self, short_uuid: str) -> str:
+        """Get subscription URL for a given short UUID"""
         try:
             logger.info(f"Getting subscription URL for shortUuid: {short_uuid}")
-            # Проверяем доступность подписки через API
-            result = await self._make_request('GET', f'/api/sub/{short_uuid}')
-            logger.debug(f"API /api/sub/{short_uuid} returned: {result}")
-            
-            # Формируем правильную ссылку на основе base_url
-            # Заменяем adminka на sub в URL
-            if 'adminka.' in self.base_url:
-                sub_url = self.base_url.replace('adminka.', 'sub.')
-            else:
-                sub_url = self.base_url
-                
-            subscription_url = f"{sub_url}/sub/{short_uuid}"
+            # Проверяем доступность подписки через API (опционально)
+            # result = await self._make_request('GET', f'/api/sub/{short_uuid}')
+            # logger.debug(f"API /api/sub/{short_uuid} returned: {result}")
+        
+            subscription_url = f"{self.subscription_base_url.rstrip('/')}/sub/{short_uuid}"
             logger.info(f"Generated subscription URL: {subscription_url}")
-            
             return subscription_url
 
         except Exception as e:
             logger.error(f"Failed to get subscription URL: {e}")
-            # Fallback с заменой домена
-            if 'adminka.' in self.base_url:
-                sub_url = self.base_url.replace('adminka.', 'sub.')
-            else:
-                sub_url = self.base_url
-            return f"{sub_url}/sub/{short_uuid}"
+            # Fallback - также используем subscription_base_url
+            return f"{self.subscription_base_url.rstrip('/')}/sub/{short_uuid}"
 
     # Subscription management
     async def get_subscription_by_short_uuid(self, short_uuid: str) -> Optional[str]:
