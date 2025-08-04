@@ -1,9 +1,16 @@
+version: '3.8'
+
 services:
   # PostgreSQL база данных
   postgres:
     image: postgres:15-alpine
     container_name: remnawave_bot_db
     restart: unless-stopped
+    environment:
+      POSTGRES_DB: remnawave_bot
+      POSTGRES_USER: bot_user
+      POSTGRES_PASSWORD: bot_password_change_me
+      POSTGRES_HOST_AUTH_METHOD: md5
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -23,6 +30,34 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    environment:
+      # Telegram Bot Token
+      BOT_TOKEN: "YOUR_BOT_TOKEN_HERE"
+      
+      # RemnaWave API настройки
+      REMNAWAVE_URL: "https://example.com"
+      REMNAWAVE_TOKEN: "YOUR_REMNAWAVE_TOKEN_HERE"
+      REMNAWAVE_MODE: "remote"
+      
+      # URL для подписок
+      SUBSCRIPTION_BASE_URL: "https://example.com"
+      
+      # База данных
+      DATABASE_URL: "postgresql+asyncpg://bot_user:bot_password_change_me@postgres:5432/remnawave_bot"
+      
+      # Администраторы (через запятую)
+      ADMIN_IDS: "141626485,987654321"
+      
+      # Настройки бота
+      DEFAULT_LANGUAGE: "ru"
+      SUPPORT_USERNAME: "your_support_username"
+      
+      # Тестовая подписка
+      TRIAL_ENABLED: "true"
+      TRIAL_DURATION_DAYS: "3"
+      TRIAL_TRAFFIC_GB: "2"
+      TRIAL_SQUAD_UUID: "19bd5bde-5eea-4368-809c-6ba1ffb93897"
+      TRIAL_PRICE: "0.0"
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
