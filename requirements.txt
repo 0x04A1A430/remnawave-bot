@@ -1,0 +1,5 @@
+aiogram==3.4.1
+aiohttp==3.9.3
+aiosqlite==0.19.0
+sqlalchemy[asyncio]==2.0.25
+python-dotenv==1.0.1
