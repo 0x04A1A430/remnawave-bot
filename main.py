@@ -11,6 +11,7 @@ from aiogram.enums import ParseMode
 from config import load_config
 from database import Database
 from remnawave_api import RemnaWaveAPI
+from subscription_monitor import create_subscription_monitor
 from middlewares import DatabaseMiddleware, UserMiddleware, LoggingMiddleware, ThrottlingMiddleware, WorkflowDataMiddleware, BotMiddleware
 from handlers import router
 from admin_handlers import admin_router
@@ -26,125 +27,213 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-async def main():
-    """Main function"""
-    try:
+class BotApplication:
+    """Main bot application class"""
+    
+    def __init__(self):
+        self.config = None
+        self.db = None
+        self.api = None
+        self.bot = None
+        self.dp = None
+        self.monitor_service = None
+        
+    async def initialize(self):
+        """Initialize all components"""
         # Load configuration
-        config = load_config()
+        self.config = load_config()
         
         # Validate required environment variables
-        if not config.BOT_TOKEN:
+        if not self.config.BOT_TOKEN:
             logger.error("BOT_TOKEN is required")
-            return
+            raise ValueError("BOT_TOKEN is required")
         
-        if not config.REMNAWAVE_URL or not config.REMNAWAVE_TOKEN:
+        if not self.config.REMNAWAVE_URL or not self.config.REMNAWAVE_TOKEN:
             logger.error("REMNAWAVE_URL and REMNAWAVE_TOKEN are required")
-            return
+            raise ValueError("REMNAWAVE_URL and REMNAWAVE_TOKEN are required")
         
         logger.info("Starting RemnaWave Bot...")
-        logger.info(f"RemnaWave URL: {config.REMNAWAVE_URL}")
-        logger.info(f"Admin IDs: {config.ADMIN_IDS}")
+        logger.info(f"RemnaWave URL: {self.config.REMNAWAVE_URL}")
+        logger.info(f"Admin IDs: {self.config.ADMIN_IDS}")
         
         # Initialize database
-        db = Database(config.DATABASE_URL)
+        self.db = Database(self.config.DATABASE_URL)
+        await self._init_database()
         
-        # Try to initialize database with retry logic
+        # Initialize RemnaWave API
+        self.api = RemnaWaveAPI(
+            self.config.REMNAWAVE_URL, 
+            self.config.REMNAWAVE_TOKEN, 
+            self.config.SUBSCRIPTION_BASE_URL
+        )
+        logger.info("RemnaWave API initialized")
+        
+        # Test API connection (optional - don't fail if it doesn't work)
+        await self._test_api_connection()
+        
+        # Initialize bot and dispatcher
+        self.bot = Bot(
+            token=self.config.BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+        )
+        
+        # Test bot token
+        await self._test_bot_token()
+        
+        # Initialize dispatcher
+        self._setup_dispatcher()
+        
+        # Initialize subscription monitor service
+        await self._init_monitor_service()
+        
+    async def _init_database(self):
+        """Initialize database with retry logic"""
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                await db.init_db()
+                await self.db.init_db()
                 logger.info("Database initialized successfully")
                 break
             except Exception as e:
                 logger.error(f"Database initialization attempt {attempt + 1} failed: {e}")
                 if attempt == max_retries - 1:
                     logger.error("Failed to initialize database after all retries")
-                    return
+                    raise
                 await asyncio.sleep(2)  # Wait before retry
-        
-        # Initialize RemnaWave API
-        api = RemnaWaveAPI(config.REMNAWAVE_URL, config.REMNAWAVE_TOKEN, config.SUBSCRIPTION_BASE_URL)
-        logger.info("RemnaWave API initialized")
-        
-        # Test API connection (optional - don't fail if it doesn't work)
+                
+    async def _test_api_connection(self):
+        """Test API connection"""
         try:
-            system_stats = await api.get_system_stats()
+            system_stats = await self.api.get_system_stats()
             if system_stats:
                 logger.info("RemnaWave API connection successful")
             else:
                 logger.warning("RemnaWave API connection test failed - continuing anyway")
         except Exception as e:
             logger.warning(f"RemnaWave API connection error: {e} - continuing anyway")
-        
-        # Initialize bot and dispatcher
-        bot = Bot(
-            token=config.BOT_TOKEN,
-            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-        )
-        
-        storage = MemoryStorage()
-        dp = Dispatcher(storage=storage)
-        
-        # Store config, api, and db in dispatcher workflow_data for access in handlers
-        dp.workflow_data.update({
-            "config": config,
-            "api": api,
-            "db": db
-        })
-        
-        # Setup middlewares in correct order
-        dp.message.middleware(LoggingMiddleware())
-        dp.callback_query.middleware(LoggingMiddleware())
-        
-        dp.message.middleware(ThrottlingMiddleware(rate_limit=0.5))
-        dp.callback_query.middleware(ThrottlingMiddleware(rate_limit=0.3))
-        
-        dp.message.middleware(WorkflowDataMiddleware())
-        dp.callback_query.middleware(WorkflowDataMiddleware())
-        
-        dp.message.middleware(BotMiddleware(bot))
-        dp.callback_query.middleware(BotMiddleware(bot))
-        
-        dp.message.middleware(DatabaseMiddleware(db))
-        dp.callback_query.middleware(DatabaseMiddleware(db))
-        
-        dp.message.middleware(UserMiddleware(db, config))
-        dp.callback_query.middleware(UserMiddleware(db, config))
-        
-        # Register routers
-        dp.include_router(router)
-        dp.include_router(admin_router)
-        
-        # Setup shutdown handler
-        async def on_shutdown():
-            logger.info("Shutting down bot...")
-            try:
-                await api.close()
-            except Exception as e:
-                logger.error(f"Error closing API: {e}")
             
-            try:
-                await db.close()
-            except Exception as e:
-                logger.error(f"Error closing database: {e}")
-            
-            logger.info("Bot shutdown complete")
-        
-        # Test bot token before starting
+    async def _test_bot_token(self):
+        """Test bot token before starting"""
         try:
-            bot_info = await bot.get_me()
+            bot_info = await self.bot.get_me()
             logger.info(f"Bot started: @{bot_info.username} ({bot_info.first_name})")
         except Exception as e:
             logger.error(f"Invalid bot token or network error: {e}")
-            return
+            raise
+            
+    def _setup_dispatcher(self):
+        """Setup dispatcher with middlewares and routers"""
+        storage = MemoryStorage()
+        self.dp = Dispatcher(storage=storage)
         
-        # Start polling
+        # Store config, api, db, and monitor_service in dispatcher workflow_data for access in handlers
+        self.dp.workflow_data.update({
+            "config": self.config,
+            "api": self.api,
+            "db": self.db,
+            "monitor_service": None  # Will be updated after monitor service is created
+        })
+        
+        # Setup middlewares in correct order
+        self.dp.message.middleware(LoggingMiddleware())
+        self.dp.callback_query.middleware(LoggingMiddleware())
+        
+        self.dp.message.middleware(ThrottlingMiddleware(rate_limit=0.5))
+        self.dp.callback_query.middleware(ThrottlingMiddleware(rate_limit=0.3))
+        
+        self.dp.message.middleware(WorkflowDataMiddleware())
+        self.dp.callback_query.middleware(WorkflowDataMiddleware())
+        
+        self.dp.message.middleware(BotMiddleware(self.bot))
+        self.dp.callback_query.middleware(BotMiddleware(self.bot))
+        
+        self.dp.message.middleware(DatabaseMiddleware(self.db))
+        self.dp.callback_query.middleware(DatabaseMiddleware(self.db))
+        
+        self.dp.message.middleware(UserMiddleware(self.db, self.config))
+        self.dp.callback_query.middleware(UserMiddleware(self.db, self.config))
+        
+        # Register routers
+        self.dp.include_router(router)
+        self.dp.include_router(admin_router)
+        
+    async def _init_monitor_service(self):
+        """Initialize subscription monitor service"""
+        try:
+            self.monitor_service = await create_subscription_monitor(
+                self.bot, self.db, self.config, self.api
+            )
+            
+            # Update workflow_data with monitor service
+            self.dp.workflow_data["monitor_service"] = self.monitor_service
+            
+            # Start the monitor service
+            await self.monitor_service.start()
+            logger.info("Subscription monitor service started successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize monitor service: {e}")
+            # Don't fail the entire application if monitor service fails
+            logger.warning("Continuing without monitor service")
+            self.monitor_service = None
+            
+    async def start(self):
+        """Start bot polling"""
         logger.info("Bot polling started successfully")
         try:
-            await dp.start_polling(bot)
+            await self.dp.start_polling(self.bot)
+        except Exception as e:
+            logger.error(f"Error during polling: {e}")
+            raise
         finally:
-            await on_shutdown()
+            await self.shutdown()
             
+    async def shutdown(self):
+        """Shutdown all services"""
+        logger.info("Shutting down bot...")
+        
+        # Stop monitor service first
+        if self.monitor_service:
+            try:
+                await self.monitor_service.stop()
+                logger.info("Monitor service stopped")
+            except Exception as e:
+                logger.error(f"Error stopping monitor service: {e}")
+        
+        # Close API connection
+        if self.api:
+            try:
+                await self.api.close()
+                logger.info("API connection closed")
+            except Exception as e:
+                logger.error(f"Error closing API: {e}")
+        
+        # Close database connection
+        if self.db:
+            try:
+                await self.db.close()
+                logger.info("Database connection closed")
+            except Exception as e:
+                logger.error(f"Error closing database: {e}")
+        
+        # Close bot session
+        if self.bot:
+            try:
+                await self.bot.session.close()
+                logger.info("Bot session closed")
+            except Exception as e:
+                logger.error(f"Error closing bot session: {e}")
+        
+        logger.info("Bot shutdown complete")
+
+async def main():
+    """Main function"""
+    app = None
+    try:
+        app = BotApplication()
+        await app.initialize()
+        await app.start()
+        
     except KeyboardInterrupt:
         logger.info("Bot stopped by user (Ctrl+C)")
     except Exception as e:
@@ -152,6 +241,9 @@ async def main():
         import traceback
         traceback.print_exc()
         raise
+    finally:
+        if app:
+            await app.shutdown()
 
 if __name__ == "__main__":
     try:
