@@ -200,7 +200,7 @@ User=$CURRENT_USER
 WorkingDirectory=$CURRENT_DIR
 Environment=PATH=$CURRENT_DIR/$VENV_DIR/bin
 EnvironmentFile=$CURRENT_DIR/.env
-ExecStart=$CURRENT_DIR/$VENV_DIR/bin/python $BOT_FILE
+ExecStart=$CURRENT_DIR/$VENV_DIR/bin/python3 $BOT_FILE
 Restart=always
 RestartSec=10
 
