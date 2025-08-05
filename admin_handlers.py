@@ -748,6 +748,142 @@ async def handle_balance_amount(message: Message, state: FSMContext, user: User,
     
     await state.clear()
 
+@admin_router.callback_query(F.data == "admin_payment_history")
+async def admin_payment_history_callback(callback: CallbackQuery, user: User, db: Database, state: FSMContext, **kwargs):
+    """Show payment history (first page) - ADMIN VERSION"""
+    logger.info(f"admin_payment_history_callback called for user {user.telegram_id}")
+    
+    if not await check_admin_access(callback, user):
+        logger.warning(f"Admin access denied for user {user.telegram_id}")
+        return
+    
+    logger.info("Admin access granted, clearing state and showing payment history")
+    await state.clear()  # Очищаем состояние для новой пагинации
+    await show_payment_history_page(callback, user, db, state, page=0)
+
+async def show_payment_history_page(callback: CallbackQuery, user: User, db: Database, state: FSMContext, page: int = 0):
+    """Show payment history page with pagination"""
+    logger.info(f"show_payment_history_page called: page={page}, user={user.telegram_id}")
+
+    try:
+        page_size = 10
+        offset = page * page_size
+        
+        # Получаем все платежи с пагинацией
+        payments, total_count = await db.get_all_payments_paginated(offset=offset, limit=page_size)
+
+        logger.info(f"Got {len(payments) if payments else 0} payments, total_count={total_count}")
+        
+        if not payments and page == 0:
+            await callback.message.edit_text(
+                "❌ История платежей пуста",
+                reply_markup=back_keyboard("admin_balance", user.language)
+            )
+            return
+        
+        # Если страница пустая, но не первая - возвращаемся на предыдущую
+        if not payments and page > 0:
+            await show_payment_history_page(callback, user, db, state, page - 1)
+            return
+        
+        # Формируем текст
+        total_pages = (total_count + page_size - 1) // page_size
+        text = f"💳 История платежей (стр. {page + 1}/{total_pages})\n"
+        text += f"📊 Всего записей: {total_count}\n\n"
+        
+        for payment in payments:
+            # Получаем информацию о пользователе
+            payment_user = await db.get_user_by_telegram_id(payment.user_id)
+            username = payment_user.username if payment_user and payment_user.username else "N/A"
+            first_name = payment_user.first_name if payment_user and payment_user.first_name else "N/A"
+            
+            # Форматируем статус
+            status_emoji = {
+                'completed': '✅',
+                'pending': '⏳',
+                'cancelled': '❌'
+            }.get(payment.status, '❓')
+            
+            # Форматируем тип платежа
+            type_emoji = {
+                'topup': '💰',
+                'subscription': '📱',
+                'subscription_extend': '🔄',
+                'promocode': '🎫',
+                'trial': '🆓',
+                'admin_topup': '👨‍💼'
+            }.get(payment.payment_type, '💳')
+            
+            date_str = format_datetime(payment.created_at, user.language)
+            amount_str = f"+{payment.amount}" if payment.amount > 0 else str(payment.amount)
+            
+            text += f"{status_emoji} {type_emoji} {amount_str} руб.\n"
+            text += f"👤 {first_name} (@{username}) ID:{payment.user_id}\n"
+            text += f"📝 {payment.description}\n"
+            text += f"📅 {date_str}\n\n"
+        
+        # Сохраняем текущую страницу в состояние
+        await state.update_data(current_page=page)
+        await state.set_state(BotStates.admin_payment_history_page)
+        
+        # Создаем клавиатуру с пагинацией
+        keyboard = create_pagination_keyboard(page, total_pages, "payment_history", user.language)
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing payment history: {e}")
+        await callback.message.edit_text(
+            t('error_occurred', user.language),
+            reply_markup=back_keyboard("admin_balance", user.language)
+        )
+
+def create_pagination_keyboard(current_page: int, total_pages: int, callback_prefix: str, language: str) -> InlineKeyboardMarkup:
+    """Create pagination keyboard"""
+    buttons = []
+    
+    # Кнопки навигации
+    nav_buttons = []
+    
+    if current_page > 0:
+        nav_buttons.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"{callback_prefix}_page_{current_page - 1}"))
+    
+    if current_page < total_pages - 1:
+        nav_buttons.append(InlineKeyboardButton(text="Вперед ➡️", callback_data=f"{callback_prefix}_page_{current_page + 1}"))
+    
+    if nav_buttons:
+        buttons.append(nav_buttons)
+    
+    # Индикатор страницы
+    if total_pages > 1:
+        buttons.append([InlineKeyboardButton(text=f"📄 {current_page + 1}/{total_pages}", callback_data="noop")])
+    
+    # Кнопка "Назад"
+    buttons.append([InlineKeyboardButton(text=t('back', language), callback_data="admin_balance")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+@admin_router.callback_query(F.data.startswith("payment_history_page_"))
+async def payment_history_page_callback(callback: CallbackQuery, user: User, db: Database, state: FSMContext, **kwargs):
+    """Handle payment history pagination"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        page = int(callback.data.split("_")[-1])
+        await show_payment_history_page(callback, user, db, state, page)
+    except (ValueError, IndexError) as e:
+        logger.error(f"Error parsing page number: {e}")
+        await callback.answer("❌ Ошибка навигации")
+
+@admin_router.callback_query(F.data == "noop")
+async def noop_callback(callback: CallbackQuery, **kwargs):
+    """Handle no-operation callback (for page indicator)"""
+    await callback.answer()
+
 # Payment approval handlers
 @admin_router.callback_query(F.data.startswith("approve_payment_"))
 async def approve_payment(callback: CallbackQuery, user: User, db: Database, **kwargs):
@@ -1009,7 +1145,8 @@ async def list_promocodes_callback(callback: CallbackQuery, user: User, db: Data
     BotStates.admin_edit_sub_value,
     BotStates.admin_send_message_user,
     BotStates.admin_send_message_text,
-    BotStates.admin_broadcast_text
+    BotStates.admin_broadcast_text,
+    BotStates.admin_payment_history_page
 ))
 
 @admin_router.callback_query(F.data == "admin_messages")
