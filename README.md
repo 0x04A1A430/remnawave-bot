@@ -47,17 +47,12 @@ URL и токен RemnaWave API
 
 #Установка
 
-1) Клонируйте репозиторий:
+1. Клонируйте репозиторий:
 
     git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot
     cd remnawave-bedolaga-telegram-bot
 
-2) Установите python3 python pip
-
-        sudo apt install pip
-        sudo apt install python3
-
-3) Создайте файл .env в корне проекта и заполните его необходимыми переменными окружения. Пример:
+2. Создайте файл .env в корне проекта и заполните его необходимыми переменными окружения. Пример:
 
         BOT_TOKEN=ваш_telegram_bot_token
         REMNAWAVE_URL=https://your-remnawave-url.ru
@@ -74,33 +69,42 @@ URL и токен RemnaWave API
         TRIAL_SQUAD_UUID=19bd5bde-5eea-4368-809c-6ba1ffb93897
         TRIAL_PRICE=0.0
 
-4) Запустите вирт среду и установите зависимости
+  
+3. Соберите образ (Makefile Dockerfile docker-compose):
 
-       sudo python3 -m venv venv
-       source venv/bin/activate
-       pip install -r requirements.txt
+       make build
 
-6) Запустите бота:
-   
-   1.Хлебный - создание службы автозапуска, проверка файлов, запуск бота 
+4. Запуск:
 
-       chmod +x run.sh
-       ./run.sh
+Запуск минимальной конфигурации (бот + база данных):
+    
+    make up-min
 
-Если создали службу через скрипт, то запустить бота можно командой
+Или запуск с Redis:
+    
+    make up
 
-        sudo systemctl start remnawave-bot
+Или запуск со всеми сервисами включая Nginx:
+    
+    make up-full
 
-Выключить
+5. Управление
 
-        sudo systemctl stop remnawave-bot
+Просмотр логов:
 
-Status: sudo systemctl status remnawave-bot
-Logs: sudo journalctl -u remnawave-bot -f
+       make logs-bot
 
-   2.Для мужчин (Службу там поднять самому, докерфайл собрать или под скрином развернуть - уже твое дело)
+Статус сервисов:
+    
+        make status
 
-       python main.py
+Перезапуск:
+    
+        make restart
+
+Остановка:
+    
+        make down
    
 #Конфигурация
 
