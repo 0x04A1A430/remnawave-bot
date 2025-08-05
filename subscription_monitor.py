@@ -41,11 +41,11 @@ class SubscriptionMonitorService:
         self.api = api
         self.is_running = False
         self._monitor_task: Optional[asyncio.Task] = None
-        
-        # Настройки уведомлений
-        self.WARNING_DAYS = 2  # За сколько дней предупреждать
-        self.CHECK_INTERVAL = 3600  # Интервал проверки (в секундах) - каждый час
-        self.DAILY_CHECK_HOUR = 10  # В какой час дня делать основную проверку
+    
+        # Настройки уведомлений из конфига
+        self.WARNING_DAYS = config.MONITOR_WARNING_DAYS  # За сколько дней предупреждать
+        self.CHECK_INTERVAL = config.MONITOR_CHECK_INTERVAL  # Интервал проверки (в секундах)
+        self.DAILY_CHECK_HOUR = config.MONITOR_DAILY_CHECK_HOUR  # В какой час дня делать основную 
         
     async def start(self):
         """Запуск сервиса мониторинга"""
