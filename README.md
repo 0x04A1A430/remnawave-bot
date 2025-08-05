@@ -89,11 +89,14 @@ URL и токен RemnaWave API
 
 Если создали службу через скрипт, то запустить бота можно командой
 
-            sudo systemctl start remnawave-bot
+        sudo systemctl start remnawave-bot
 
 Выключить
 
         sudo systemctl stop remnawave-bot
+
+Status: sudo systemctl status remnawave-bot
+Logs: sudo journalctl -u remnawave-bot -f
 
    2.Для мужчин (Службу там поднять самому, докерфайл собрать или под скрином развернуть - уже твое дело)
 
