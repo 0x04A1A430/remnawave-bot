@@ -57,11 +57,7 @@ URL и токен RemnaWave API
         sudo apt install pip
         sudo apt install python3
 
-3) Установите зависимости:
-
-        pip install -r requirements.txt
-
-4) Создайте файл .env в корне проекта и заполните его необходимыми переменными окружения. Пример:
+3) Создайте файл .env в корне проекта и заполните его необходимыми переменными окружения. Пример:
 
         BOT_TOKEN=ваш_telegram_bot_token
         REMNAWAVE_URL=https://your-remnawave-url.ru
@@ -78,7 +74,13 @@ URL и токен RemnaWave API
         TRIAL_SQUAD_UUID=19bd5bde-5eea-4368-809c-6ba1ffb93897
         TRIAL_PRICE=0.0
 
-5) Запустите бота:
+4) Запустите вирт среду и установите зависимости
+
+       sudo python3 -m venv venv
+       source venv/bin/activate
+       pip install -r requirements.txt
+
+6) Запустите бота:
    
 1) Хлебный - создание службы автозапуска, проверка файлов, запуск бота 
 
