@@ -22,6 +22,11 @@ class Config:
     TRIAL_TRAFFIC_GB: int
     TRIAL_SQUAD_UUID: str
     TRIAL_PRICE: float
+    
+    # Monitor service settings
+    MONITOR_CHECK_INTERVAL: int
+    MONITOR_DAILY_CHECK_HOUR: int
+    MONITOR_WARNING_DAYS: int
 
 def load_config() -> Config:
     """Load configuration from environment variables"""
@@ -39,7 +44,7 @@ def load_config() -> Config:
     
     # Если SUBSCRIPTION_BASE_URL не установлен, используем значение по умолчанию
     if not subscription_base_url:
-        subscription_base_url = 'https://sub.example.com'
+        subscription_base_url = 'https://sub.fring.tech'
     
     return Config(
         BOT_TOKEN=os.getenv('BOT_TOKEN', ''),
@@ -59,5 +64,10 @@ def load_config() -> Config:
         TRIAL_DURATION_DAYS=int(os.getenv('TRIAL_DURATION_DAYS', '3')),
         TRIAL_TRAFFIC_GB=int(os.getenv('TRIAL_TRAFFIC_GB', '2')),
         TRIAL_SQUAD_UUID=os.getenv('TRIAL_SQUAD_UUID', '19bd5bde-5eea-4368-809c-6ba1ffb93897'),
-        TRIAL_PRICE=float(os.getenv('TRIAL_PRICE', '0.0'))
+        TRIAL_PRICE=float(os.getenv('TRIAL_PRICE', '0.0')),
+        
+        # Monitor service settings
+        MONITOR_CHECK_INTERVAL=int(os.getenv('MONITOR_CHECK_INTERVAL', '3600')),
+        MONITOR_DAILY_CHECK_HOUR=int(os.getenv('MONITOR_DAILY_CHECK_HOUR', '10')),
+        MONITOR_WARNING_DAYS=int(os.getenv('MONITOR_WARNING_DAYS', '2'))
     )
