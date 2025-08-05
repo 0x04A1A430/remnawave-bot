@@ -1,6 +1,4 @@
-<img width="900" height="782" alt="Снимок экрана 2025-08-04 в 17 48 12" src="https://github.com/user-attachments/assets/bcb3ed55-2582-4946-adc7-24396246cc02" />
-<img width="900" height="633" alt="Снимок экрана 2025-08-04 в 17 50 04" src="https://github.com/user-attachments/assets/a7bece59-9038-4983-82cf-a853f12bed6f" /><img width="900" height="633" alt="Снимок экрана 2025-08-04 в 17 50 13" src="https://github.com/user-attachments/assets/4a3a0249-0b4f-4e18-8b27-e044dcfcdc50" /><img width="900" height="633" alt="Снимок экрана 2025-08-04 в 17 50 21" src="https://github.com/user-attachments/assets/34c7fe40-9aaf-4160-913d-1f98ddbb5137" /><img width="900" height="633" alt="Снимок экрана 2025-08-04 в 17 50 34" src="https://github.com/user-attachments/assets/84ec3760-6c3e-4700-8aa9-84aec533e579" /><img width="900" height="633" alt="Снимок экрана 2025-08-04 в 17 50 49" src="https://github.com/user-attachments/assets/69b362ef-4658-4e3f-8457-3623e6998f6a" /><img width="900" height="633" alt="Снимок экрана 2025-08-04 в 17 52 02" src="https://github.com/user-attachments/assets/5cd6187a-dc80-492c-8baa-bbfdac4a38ac" /><img width="900" height="633" alt="Снимок экрана 2025-08-04 в 17 52 09" src="https://github.com/user-attachments/assets/fc31972e-e95e-4f65-8465-3b9dc7246df1" /><img width="900" height="748" alt="Снимок экрана 2025-08-04 в 17 52 31" src="https://github.com/user-attachments/assets/c834cfdb-85a9-4b3b-985e-9386a8b67873" /><img width="900" height="749" alt="Снимок экрана 2025-08-04 в 17 52 46" src="https://github.com/user-attachments/assets/53210179-eb4f-4884-b6ed-1604bd324656" /><img width="900" height="749" alt="Снимок экрана 2025-08-04 в 17 52 55" src="https://github.com/user-attachments/assets/16eb4a20-25f2-4ac5-8570-9b5809021199" /><img width="900" height="749" alt="Снимок экрана 2025-08-04 в 17 53 13" src="https://github.com/user-attachments/assets/c100f74f-f1b8-486a-9107-2c6d1af5da4a" /><img width="900" height="749" alt="Снимок экрана 2025-08-04 в 17 53 21" src="https://github.com/user-attachments/assets/dd64921f-3129-4ee7-a973-314e8c787fbc" /><img width="900" height="749" alt="Снимок экрана 2025-08-04 в 17 55 41" src="https://github.com/user-attachments/assets/4a0c995f-a252-473b-9f5f-ff98d3fd004a" /><img width="900" height="682" alt="Снимок экрана 2025-08-04 в 17 57 56" src="https://github.com/user-attachments/assets/b9832f8a-0408-47f9-84e0-7c51a46aa394" /><img width="900" height="770" alt="Снимок экрана 2025-08-04 в 17 58 09" src="https://github.com/user-attachments/assets/99a4eef9-da30-4fb6-befa-26520c84e37c" /><img width="900" height="770" alt="Снимок экрана 2025-08-04 в 17 58 30" src="https://github.com/user-attachments/assets/b6986980-4a56-4014-ad3f-c4c5916e2af4" /><img width="900" height="770" alt="Снимок экрана 2025-08-04 в 17 58 44" src="https://github.com/user-attachments/assets/55551413-e921-4df7-8129-cc79e1c8feba" />
-<img width="900" height="770" alt="Снимок экрана 2025-08-04 в 17 59 22" src="https://github.com/user-attachments/assets/f5c1b179-d61d-4cec-be4b-99ce3691ddc9" /><img width="900" height="770" alt="Снимок экрана 2025-08-04 в 17 59 39" src="https://github.com/user-attachments/assets/2ffab61f-94c6-4134-9d3e-7975d2dc68a8" /><img width="900" height="770" alt="Снимок экрана 2025-08-04 в 18 00 24" src="https://github.com/user-attachments/assets/74fb9c05-9597-4fb0-98cf-be089fd5de9d" /><img width="900" height="770" alt="Снимок экрана 2025-08-04 в 18 00 36" src="https://github.com/user-attachments/assets/10941dd6-631b-4af9-bb61-666d5052d00a" />
+<img width="906" height="496" alt="Снимок экрана 2025-08-05 в 03 15 13" src="https://github.com/user-attachments/assets/91098622-1bce-4f27-afef-60a3c5b5061f" /><img width="906" height="496" alt="Снимок экрана 2025-08-05 в 03 14 22" src="https://github.com/user-attachments/assets/46b87e75-b420-4ac6-91b9-8c7e9bcffb2a" /><img width="906" height="496" alt="Снимок экрана 2025-08-05 в 03 14 39" src="https://github.com/user-attachments/assets/ca97811f-ca00-4133-a120-1c11f0efa0fc" /><img width="906" height="496" alt="Снимок экрана 2025-08-05 в 03 14 45" src="https://github.com/user-attachments/assets/258e1adb-2c39-4126-82a7-7791b56d42db" /><img width="906" height="496" alt="Снимок экрана 2025-08-05 в 03 14 53" src="https://github.com/user-attachments/assets/073455fc-f42d-4d70-839d-59042add2d94" /><img width="906" height="316" alt="Снимок экрана 2025-08-05 в 03 16 00" src="https://github.com/user-attachments/assets/2034dde8-a48b-4149-a23f-b788aa40e0b1" /><img width="906" height="366" alt="Снимок экрана 2025-08-05 в 03 16 18" src="https://github.com/user-attachments/assets/3a3d1e0a-92fc-4573-a48c-f36481d6d0de" /><img width="906" height="842" alt="Снимок экрана 2025-08-05 в 03 17 24" src="https://github.com/user-attachments/assets/8b407f69-6861-4810-822e-c3f7b8f63629" /><img width="906" height="274" alt="Снимок экрана 2025-08-05 в 03 17 43" src="https://github.com/user-attachments/assets/923a945a-5ef8-4dcb-9804-fffc37ab8887" /><img width="936" height="364" alt="Снимок экрана 2025-08-05 в 03 20 03" src="https://github.com/user-attachments/assets/1faecdfe-f80c-4ac2-ad38-81a30fc6623d" /><img width="936" height="251" alt="Снимок экрана 2025-08-05 в 03 20 12" src="https://github.com/user-attachments/assets/e5337c63-7a62-4de1-99f3-aeacb98a6e6f" /><img width="936" height="251" alt="Снимок экрана 2025-08-05 в 03 20 20" src="https://github.com/user-attachments/assets/3502eaf4-b22d-42e0-b309-adaf55169480" />
 
 #Описание
 
@@ -25,6 +23,8 @@ RemnaWave Telegram Bot — это многофункциональный бот 
 Полноценная админ-панель с контролем пользователей, созданием подписок(Подтягивает UUID сквада из панели), платежей и статистикой
 
 Рассылка сообщений отдельным пользователям и всем сразу
+
+Сервис контроля истечения сроков действия подписки(Уведомляет об истечении за указанный в настройках срок), уведомления с предложением продления подписи. (NEW)
 
 Интеграция с RemnaWave API для управления подписками и пользователями RemnaWave
 
@@ -127,6 +127,14 @@ TRIAL_SQUAD_UUID=(УКазать UUID сквада из панели!)
 
 TRIAL_PRICE=0.0(не трогать)
 
+Monitor Service Settings (дополнительные настройки)
+
+MONITOR_CHECK_INTERVAL=3600 (Запуск службы проверки)
+
+MONITOR_DAILY_CHECK_HOUR=10 (Разовый чек в определенный промежуток дня)
+
+MONITOR_WARNING_DAYS=2 (За сколько дней слать уведомления)
+
 
 #Использование
 
@@ -152,6 +160,8 @@ utils.py — вспомогательные функции.
 
 middlewares.py — промежуточные слои для обработки сообщений и запросов.
 
+subscription_monitor.py - сервис мониторинга сроков истечения подписок 
+
 .env — файл конфигурации с переменными окружения.
 
 requirements.txt — список зависимостей Python.
@@ -175,6 +185,8 @@ run.sh — скрипт установки и управления ботом (�
 Одобрение или отклонение платежей (Приходит запрос администраторам)
 
 Отправка сообщений пользователям или массовая рассылка
+
+Мониторинг подписок (Проверка статуса службы, принудитедьный запуск, деактивация истекщих подписок(на случай падения базы), персональный тест(можно отправить уведомления юзеру по tg id)
 
 Просмотр краткой статистики
 
