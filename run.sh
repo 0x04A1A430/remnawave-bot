@@ -215,4 +215,4 @@ fi
 
 msg completed
 msg start_prompt
-python "$BOT_FILE"
+python3 "$BOT_FILE"
