@@ -69,13 +69,16 @@ URL и токен RemnaWave API
         TRIAL_TRAFFIC_GB=2
         TRIAL_SQUAD_UUID=19bd5bde-5eea-4368-809c-6ba1ffb93897
         TRIAL_PRICE=0.0
+        MONITOR_CHECK_INTERVAL=3600
+        MONITOR_DAILY_CHECK_HOUR=10
+        MONITOR_WARNING_DAYS=2
 
   
-3. Соберите образ (Makefile Dockerfile docker-compose):
+4. Соберите образ (Makefile Dockerfile docker-compose):
 
        make build
 
-4. Запуск:
+5. Запуск:
 
 Запуск минимальной конфигурации (бот + база данных):
     
