@@ -1057,6 +1057,165 @@ async def handle_message_user_id(message: Message, state: FSMContext, user: User
     )
     await state.set_state(BotStates.admin_send_message_text)
 
+# Monitor service management
+@admin_router.callback_query(F.data == "admin_monitor")
+async def admin_monitor_callback(callback: CallbackQuery, user: User, **kwargs):
+    """Show monitor service management"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    await callback.message.edit_text(
+        "🔍 Управление сервисом мониторинга",
+        reply_markup=admin_monitor_keyboard(user.language)
+    )
+
+@admin_router.callback_query(F.data == "monitor_status")
+async def monitor_status_callback(callback: CallbackQuery, user: User, **kwargs):
+    """Show monitor service status"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    monitor_service = kwargs.get('monitor_service')
+    if not monitor_service:
+        await callback.message.edit_text(
+            "❌ Сервис мониторинга недоступен",
+            reply_markup=back_keyboard("admin_monitor", user.language)
+        )
+        return
+    
+    try:
+        status = await monitor_service.get_service_status()
+        
+        status_text = "🔍 Статус сервиса мониторинга:\n\n"
+        status_text += f"🟢 Работает: {'Да' if status['is_running'] else 'Нет'}\n"
+        status_text += f"⏱ Интервал проверки: {status['check_interval']} сек\n"
+        status_text += f"🕙 Время ежедневной проверки: {status['daily_check_hour']}:00\n"
+        status_text += f"⚠️ Предупреждение за: {status['warning_days']} дней\n"
+        
+        if status['last_check']:
+            status_text += f"🕐 Последняя проверка: {status['last_check']}"
+        
+        await callback.message.edit_text(
+            status_text,
+            reply_markup=back_keyboard("admin_monitor", user.language)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting monitor status: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка получения статуса",
+            reply_markup=back_keyboard("admin_monitor", user.language)
+        )
+
+@admin_router.callback_query(F.data == "monitor_force_check")
+async def monitor_force_check_callback(callback: CallbackQuery, user: User, **kwargs):
+    """Force daily check"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    monitor_service = kwargs.get('monitor_service')
+    if not monitor_service:
+        await callback.answer("❌ Сервис мониторинга недоступен")
+        return
+    
+    try:
+        await callback.answer("⏳ Запускаю принудительную проверку...")
+        await monitor_service.force_daily_check()
+        await callback.message.edit_text(
+            "✅ Принудительная проверка завершена",
+            reply_markup=back_keyboard("admin_monitor", user.language)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error forcing check: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при выполнении проверки",
+            reply_markup=back_keyboard("admin_monitor", user.language)
+        )
+
+@admin_router.callback_query(F.data == "monitor_deactivate_expired")
+async def monitor_deactivate_expired_callback(callback: CallbackQuery, user: User, **kwargs):
+    """Deactivate expired subscriptions"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    monitor_service = kwargs.get('monitor_service')
+    if not monitor_service:
+        await callback.answer("❌ Сервис мониторинга недоступен")
+        return
+    
+    try:
+        await callback.answer("⏳ Деактивирую истекшие подписки...")
+        count = await monitor_service.deactivate_expired_subscriptions()
+        
+        await callback.message.edit_text(
+            f"✅ Деактивировано {count} истекших подписок",
+            reply_markup=back_keyboard("admin_monitor", user.language)
+        )
+        
+        log_user_action(user.telegram_id, "expired_subscriptions_deactivated", f"Count: {count}")
+        
+    except Exception as e:
+        logger.error(f"Error deactivating expired subscriptions: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при деактивации подписок",
+            reply_markup=back_keyboard("admin_monitor", user.language)
+        )
+
+@admin_router.callback_query(F.data == "monitor_test_user")
+async def monitor_test_user_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
+    """Test monitor for specific user"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    await callback.message.edit_text(
+        "👤 Введите Telegram ID пользователя для тестирования уведомлений:",
+        reply_markup=cancel_keyboard(user.language)
+    )
+    await state.set_state(BotStates.admin_test_monitor_user)
+
+@admin_router.message(StateFilter(BotStates.admin_test_monitor_user))
+async def handle_monitor_test_user(message: Message, state: FSMContext, user: User, **kwargs):
+    """Handle user ID for monitor testing"""
+    telegram_id = parse_telegram_id(message.text)
+    
+    if not telegram_id:
+        await message.answer("❌ Неверный Telegram ID")
+        return
+    
+    monitor_service = kwargs.get('monitor_service')
+    if not monitor_service:
+        await message.answer("❌ Сервис мониторинга недоступен")
+        await state.clear()
+        return
+    
+    try:
+        results = await monitor_service.check_single_user(telegram_id)
+        
+        if not results:
+            await message.answer("❌ Результаты не получены")
+        else:
+            text = f"📊 Результаты тестирования для пользователя {telegram_id}:\n\n"
+            
+            for result in results:
+                status = "✅" if result.success else "❌"
+                text += f"{status} {result.message}\n"
+                if result.error:
+                    text += f"   Ошибка: {result.error}\n"
+            
+            await message.answer(
+                text,
+                reply_markup=admin_menu_keyboard(user.language)
+            )
+        
+        log_user_action(user.telegram_id, "monitor_test_user", f"User: {telegram_id}")
+        
+    except Exception as e:
+        logger.error(f"Error testing monitor for user: {e}")
+        await message.answer("❌ Ошибка при тестировании")
+    
+    await state.clear()
+
 @admin_router.message(StateFilter(BotStates.admin_send_message_text))
 async def handle_send_message(message: Message, state: FSMContext, user: User, **kwargs):
     """Handle message text input and send message"""
@@ -1097,6 +1256,15 @@ async def admin_send_to_all_callback(callback: CallbackQuery, user: User, state:
         reply_markup=cancel_keyboard(user.language)
     )
     await state.set_state(BotStates.admin_broadcast_text)
+
+@admin_router.callback_query(F.data == "main_menu", StateFilter(BotStates.admin_test_monitor_user))
+async def cancel_monitor_test(callback: CallbackQuery, state: FSMContext, user: User, **kwargs):
+    """Cancel monitor test"""
+    await state.clear()
+    await callback.message.edit_text(
+        t('main_menu', user.language),
+        reply_markup=main_menu_keyboard(user.language, user.is_admin)
+    )
 
 @admin_router.message(StateFilter(BotStates.admin_broadcast_text))
 async def handle_broadcast_message(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
