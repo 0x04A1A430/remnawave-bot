@@ -33,6 +33,7 @@ class BotStates(StatesGroup):
     
     admin_add_balance_user = State()
     admin_add_balance_amount = State()
+    admin_payment_history_page = State()
     
     admin_create_promo_code = State()
     admin_create_promo_discount = State()
