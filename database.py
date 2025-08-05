@@ -528,3 +528,86 @@ class Database:
                 logger.error(f"Error marking trial used for user {user_id}: {e}")
                 await session.rollback()
                 return False
+
+    async def get_all_payments_paginated(self, offset: int = 0, limit: int = 10) -> tuple[List[Payment], int]:
+        """Get all payments with pagination"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, desc, func
+        
+                # Получаем общее количество записей
+                count_result = await session.execute(
+                    select(func.count(Payment.id))
+                )
+                total_count = count_result.scalar()
+        
+                # Получаем платежи с пагинацией
+                result = await session.execute(
+                    select(Payment)
+                    .order_by(desc(Payment.created_at))
+                    .offset(offset)
+                    .limit(limit)
+                )
+                payments = list(result.scalars().all())
+        
+                return payments, total_count
+        
+            except Exception as e:
+                logger.error(f"Error getting paginated payments: {e}")
+                return [], 0
+
+    async def get_payments_by_type_paginated(self, payment_type: str, offset: int = 0, limit: int = 10) -> tuple[List[Payment], int]:
+        """Get payments by type with pagination"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, desc, func
+        
+                # Получаем общее количество записей
+                count_result = await session.execute(
+                    select(func.count(Payment.id)).where(Payment.payment_type == payment_type)
+                )
+                total_count = count_result.scalar()
+        
+                # Получаем платежи с пагинацией
+                result = await session.execute(
+                    select(Payment)
+                    .where(Payment.payment_type == payment_type)
+                    .order_by(desc(Payment.created_at))
+                    .offset(offset)
+                    .limit(limit)
+                )
+                payments = list(result.scalars().all())
+        
+                return payments, total_count
+        
+            except Exception as e:
+                logger.error(f"Error getting paginated payments by type: {e}")
+                return [], 0
+
+    async def get_payments_by_status_paginated(self, status: str, offset: int = 0, limit: int = 10) -> tuple[List[Payment], int]:
+        """Get payments by status with pagination"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, desc, func
+            
+                # Получаем общее количество записей
+                count_result = await session.execute(
+                    select(func.count(Payment.id)).where(Payment.status == status)
+                )
+                total_count = count_result.scalar()
+            
+                # Получаем платежи с пагинацией
+                result = await session.execute(
+                    select(Payment)
+                    .where(Payment.status == status)
+                    .order_by(desc(Payment.created_at))
+                    .offset(offset)
+                    .limit(limit)
+                )
+                payments = list(result.scalars().all())
+            
+                return payments, total_count
+            
+            except Exception as e:
+                logger.error(f"Error getting paginated payments by status: {e}")
+                return [], 0
