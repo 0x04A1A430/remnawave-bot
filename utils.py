@@ -209,9 +209,16 @@ def get_subscription_connection_url(base_url: str, short_uuid: str) -> str:
     """Generate subscription connection URL"""
     return f"{base_url.rstrip('/')}/api/sub/{short_uuid}"
 
-def log_user_action(user_id: int, action: str, details: str = ""):
-    """Log user action"""
-    logger.info(f"User {user_id} - {action}: {details}")
+def log_user_action(telegram_id: int, action: str, details: str = None):
+    """Log user action for audit"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    log_message = f"Admin action by {telegram_id}: {action}"
+    if details:
+        log_message += f" - {details}"
+    
+    logger.info(log_message)
 
 def format_subscription_status(expires_at: datetime, lang: str = 'ru') -> str:
     """Format subscription status with emoji"""
