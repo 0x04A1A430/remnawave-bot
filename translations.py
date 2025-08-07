@@ -16,7 +16,9 @@ TRANSLATIONS = {
         'trial_not_available': '❌ Тестовая подписка недоступна',
         'trial_success': '🎉 Тестовая подписка успешно активирована!\n\nТеперь вы можете найти её в разделе "Мои подписки".',
         'trial_error': '❌ Ошибка при создании тестовой подписки',
-        'trial_info': '🧪 Тестовая подписка выдается на три дня!\n\nТариф действует 3 дня!\n\nОграничение трафика - 2гб!',
+        'trial_info': '🧪 Тестовая подписка выдается на три дня!\n\nНа тарифе действует ограничение в 3 дня\n\nОграничение по трафику - 2гб',
+        'subscriptions_list': '📋 Список подписок в продаже:',
+
         
         # Balance menu
         'your_balance': '💰 Ваш баланс: {balance:.2f} руб.',
@@ -25,6 +27,17 @@ TRANSLATIONS = {
         'topup_card': 'Пополнение картой',
         'topup_support': 'Через саппорт',
         'back': 'Назад',
+        'system_management': 'Управление системой',
+        'nodes_management': 'Управление нодами', 
+        'system_users': 'Системные пользователи',
+        'system_statistics': 'Системная статистика',
+        'restart_nodes': 'Перезагрузить ноды',
+        'bulk_operations': 'Массовые операции',
+        'search_user': 'Поиск пользователя',
+        'user_details': 'Детали пользователя',
+        'reset_traffic': 'Сбросить трафик',
+        'disable_user': 'Отключить пользователя',
+        'enable_user': 'Включить пользователя',
 
         'send_message': 'Отправить сообщение',
         'send_to_user': 'Отправить пользователю',
@@ -145,7 +158,17 @@ TRANSLATIONS = {
         'enter_user_id_message': 'Enter user id message',
         'enter_message_text': 'Enter message text',
         'trial_subscription': 'Trial subscription',
-
+        'system_management': 'System Management',
+        'nodes_management': 'Nodes Management',
+        'system_users': 'System Users', 
+        'system_statistics': 'System Statistics',
+        'restart_nodes': 'Restart Nodes',
+        'bulk_operations': 'Bulk Operations',
+        'search_user': 'Search User',
+        'user_details': 'User Details',
+        'reset_traffic': 'Reset Traffic',
+        'disable_user': 'Disable User',
+        'enable_user': 'Enable User',
         
         # Balance menu
         'your_balance': '💰 Your balance: ${balance:.2f}',
