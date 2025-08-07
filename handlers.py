@@ -67,7 +67,7 @@ class BotStates(StatesGroup):
 
 router = Router()
 
-# Start command - БЕЗ ИЗМЕНЕНИЙ
+# Start command 
 @router.message(Command("start"))
 async def start_command(message: Message, state: FSMContext, db: Database, **kwargs):
     """Handle /start command"""
@@ -92,7 +92,7 @@ async def start_command(message: Message, state: FSMContext, db: Database, **kwa
     else:
         await show_main_menu(message, user.language, user.is_admin, user.telegram_id, db, config)
 
-# Language selection - БЕЗ ИЗМЕНЕНИЙ
+# Language selection 
 @router.callback_query(F.data.startswith("lang_"))
 async def language_callback(callback: CallbackQuery, state: FSMContext, db: Database, **kwargs):
     """Handle language selection"""
@@ -159,7 +159,7 @@ async def show_main_menu(message: Message, lang: str, is_admin: bool = False, us
         logger.error(f"Error showing main menu: {e}")
         await message.answer("❌ Ошибка отображения меню")
 
-# Main menu handlers - БЕЗ ИЗМЕНЕНИЙ
+# Main menu handlers 
 @router.callback_query(F.data == "main_menu")
 async def main_menu_callback(callback: CallbackQuery, **kwargs):
     """Return to main menu"""
@@ -186,7 +186,7 @@ async def main_menu_callback(callback: CallbackQuery, **kwargs):
         reply_markup=main_menu_keyboard(user.language, user.is_admin, show_trial)
     )
 
-# Trial subscription handlers - НЕБОЛЬШИЕ ИЗМЕНЕНИЯ
+# Trial subscription handlers 
 @router.callback_query(F.data == "trial_subscription")
 async def trial_subscription_callback(callback: CallbackQuery, db: Database, **kwargs):
     """Show trial subscription info"""
@@ -377,7 +377,7 @@ async def confirm_trial_callback(callback: CallbackQuery, db: Database, **kwargs
             reply_markup=main_menu_keyboard(user.language, user.is_admin)
         )
 
-# Balance handlers - БЕЗ ИЗМЕНЕНИЙ
+# Balance handlers 
 @router.callback_query(F.data == "change_language")
 async def change_language_callback(callback: CallbackQuery, **kwargs):
     """Show language selection for changing language"""
@@ -545,7 +545,7 @@ async def payment_history_callback(callback: CallbackQuery, db: Database, **kwar
         logger.error(f"Error getting payment history: {e}")
         await callback.answer(t('error_occurred', user.language))
 
-# Subscription handlers - БЕЗ ИЗМЕНЕНИЙ ДО confirm_purchase
+# Subscription handlers 
 @router.callback_query(F.data == "buy_subscription")
 async def buy_subscription_callback(callback: CallbackQuery, db: Database, **kwargs):
     """Show available subscriptions (excluding trial)"""
@@ -742,7 +742,7 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
             status='completed'
         )
         
-        # НОВОЕ: Формируем сообщение с URL из API
+        # Формируем сообщение с URL из API
         success_text = f"✅ Подписка успешно создана!\n\n"
         success_text += f"📋 Подписка: {subscription.name}\n"
         success_text += f"⏰ Действует до: {format_date(expires_at, user.language)}\n"
@@ -776,7 +776,7 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
             reply_markup=main_menu_keyboard(user.language, user.is_admin)
         )
 
-# My subscriptions - ОБНОВЛЕНО для показа URLs из API
+# My subscriptions 
 @router.callback_query(F.data == "my_subscriptions")
 async def my_subscriptions_callback(callback: CallbackQuery, db: Database, **kwargs):
     """Show user's subscriptions with URLs from API"""
@@ -1119,7 +1119,6 @@ async def confirm_extend_subscription_callback(callback: CallbackQuery, db: Data
             reply_markup=main_menu_keyboard(user.language, user.is_admin)
         )
 
-# ОБНОВЛЕННЫЙ обработчик для получения ссылки подключения
 @router.callback_query(F.data.startswith("get_connection_"))
 async def get_connection_callback(callback: CallbackQuery, db: Database, **kwargs):
     """Get connection link from API - ПОЛНОСТЬЮ ПЕРЕРАБОТАН"""
@@ -1143,7 +1142,6 @@ async def get_connection_callback(callback: CallbackQuery, db: Database, **kwarg
             await callback.answer("❌ Данные подписки недоступны")
             return
         
-        # НОВОЕ: Получаем URL из API
         connection_url = None
         if api:
             try:
@@ -1185,10 +1183,7 @@ async def get_connection_callback(callback: CallbackQuery, db: Database, **kwarg
         logger.error(f"Error getting connection link: {e}")
         await callback.answer(t('error_occurred', user.language))
 
-# УДАЛЯЕМ старый обработчик connect_sub_ - он больше не нужен
-# @router.callback_query(F.data.startswith("connect_sub_"))
-
-# Support и Promocode handlers - БЕЗ ИЗМЕНЕНИЙ
+# Support и Promocode handlers 
 @router.callback_query(F.data == "support")
 async def support_callback(callback: CallbackQuery, **kwargs):
     """Show support info"""
