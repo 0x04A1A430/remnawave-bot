@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 @dataclass
 class Config:
@@ -13,8 +13,8 @@ class Config:
     DEFAULT_LANGUAGE: str
     SUPPORT_USERNAME: str
     
-    # Subscription URL settings
-    SUBSCRIPTION_BASE_URL: str
+    # Subscription URL settings - ТЕПЕРЬ ОПЦИОНАЛЬНЫЙ
+    SUBSCRIPTION_BASE_URL: Optional[str]
     
     # Trial subscription settings
     TRIAL_ENABLED: bool
@@ -39,12 +39,7 @@ def load_config() -> Config:
         except ValueError:
             admin_ids = []
     
-    # Get subscription base URL - 
-    subscription_base_url = os.getenv('SUBSCRIPTION_BASE_URL', '')
-    
-    # Если SUBSCRIPTION_BASE_URL не установлен, используем значение по умолчанию
-    if not subscription_base_url:
-        subscription_base_url = 'https://sub.fring.tech'
+    subscription_base_url = os.getenv('SUBSCRIPTION_BASE_URL')
     
     return Config(
         BOT_TOKEN=os.getenv('BOT_TOKEN', ''),
@@ -56,7 +51,7 @@ def load_config() -> Config:
         DEFAULT_LANGUAGE=os.getenv('DEFAULT_LANGUAGE', 'ru'),
         SUPPORT_USERNAME=os.getenv('SUPPORT_USERNAME', 'support'),
         
-        # Subscription URL
+        # Subscription URL - ТЕПЕРЬ МОЖЕТ БЫТЬ None
         SUBSCRIPTION_BASE_URL=subscription_base_url,
         
         # Trial subscription settings
