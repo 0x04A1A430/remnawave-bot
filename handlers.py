@@ -22,28 +22,48 @@ class BotStates(StatesGroup):
     waiting_language = State()
     waiting_amount = State()
     waiting_promocode = State()
+    waiting_topup_amount = State()
     
-    # Admin states
+    # Admin subscription management
     admin_create_sub_name = State()
     admin_create_sub_desc = State()
     admin_create_sub_price = State()
     admin_create_sub_days = State()
     admin_create_sub_traffic = State()
     admin_create_sub_squad = State()
+    admin_create_sub_squad_select = State()
+    admin_edit_sub_value = State()
     
+    # Admin balance management
     admin_add_balance_user = State()
     admin_add_balance_amount = State()
     admin_payment_history_page = State()
     
+    # Admin promocode management
     admin_create_promo_code = State()
     admin_create_promo_discount = State()
     admin_create_promo_limit = State()
-    admin_edit_sub_value = State()
+    
+    # Admin messaging
     admin_send_message_user = State()
     admin_send_message_text = State()
     admin_broadcast_text = State()
-    admin_create_sub_squad_select = State()
+    
+    # Admin user management
+    admin_search_user_uuid = State()
+    admin_search_user_any = State()
+    admin_edit_user_expiry = State()
+    admin_edit_user_traffic = State()
+    
+    # Admin monitoring
     admin_test_monitor_user = State()
+
+    admin_sync_single_user = State()
+
+    admin_debug_user_structure = State()
+
+    admin_rename_plans_confirm = State()
+
 
 router = Router()
 
