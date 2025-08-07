@@ -67,7 +67,7 @@ class BotStates(StatesGroup):
 
 router = Router()
 
-# Start command
+# Start command - БЕЗ ИЗМЕНЕНИЙ
 @router.message(Command("start"))
 async def start_command(message: Message, state: FSMContext, db: Database, **kwargs):
     """Handle /start command"""
@@ -92,7 +92,7 @@ async def start_command(message: Message, state: FSMContext, db: Database, **kwa
     else:
         await show_main_menu(message, user.language, user.is_admin, user.telegram_id, db, config)
 
-# Language selection
+# Language selection - БЕЗ ИЗМЕНЕНИЙ
 @router.callback_query(F.data.startswith("lang_"))
 async def language_callback(callback: CallbackQuery, state: FSMContext, db: Database, **kwargs):
     """Handle language selection"""
@@ -159,7 +159,7 @@ async def show_main_menu(message: Message, lang: str, is_admin: bool = False, us
         logger.error(f"Error showing main menu: {e}")
         await message.answer("❌ Ошибка отображения меню")
 
-# Main menu handlers
+# Main menu handlers - БЕЗ ИЗМЕНЕНИЙ
 @router.callback_query(F.data == "main_menu")
 async def main_menu_callback(callback: CallbackQuery, **kwargs):
     """Return to main menu"""
@@ -186,6 +186,7 @@ async def main_menu_callback(callback: CallbackQuery, **kwargs):
         reply_markup=main_menu_keyboard(user.language, user.is_admin, show_trial)
     )
 
+# Trial subscription handlers - НЕБОЛЬШИЕ ИЗМЕНЕНИЯ
 @router.callback_query(F.data == "trial_subscription")
 async def trial_subscription_callback(callback: CallbackQuery, db: Database, **kwargs):
     """Show trial subscription info"""
@@ -222,7 +223,7 @@ async def trial_subscription_callback(callback: CallbackQuery, db: Database, **k
 
 @router.callback_query(F.data == "confirm_trial")
 async def confirm_trial_callback(callback: CallbackQuery, db: Database, **kwargs):
-    """Confirm and create trial subscription"""
+    """Confirm and create trial subscription - ДОБАВЛЕНА ПОДДЕРЖКА URL ИЗ API"""
     user = kwargs.get('user')
     api = kwargs.get('api')
     config = kwargs.get('config')
@@ -312,9 +313,9 @@ async def confirm_trial_callback(callback: CallbackQuery, db: Database, **kwargs
             )
             return
 
-        # Создаем временную тестовую подписку, которая НЕ будет отображаться в админке
+        # Создаем временную тестовую подписку
         trial_subscription = await db.create_subscription(
-            name=f"Trial_{user.telegram_id}_{int(datetime.utcnow().timestamp())}",  # Уникальное имя
+            name=f"Trial_{user.telegram_id}_{int(datetime.utcnow().timestamp())}",
             description="Автоматически созданная тестовая подписка",
             price=0,
             duration_days=config.TRIAL_DURATION_DAYS,
@@ -349,9 +350,22 @@ async def confirm_trial_callback(callback: CallbackQuery, db: Database, **kwargs
             status='completed'
         )
         
+        # НОВОЕ: Получаем subscription URL и показываем пользователю
+        success_text = t('trial_success', user.language)
+        
+        try:
+            subscription_url = await api.get_subscription_url(short_uuid)
+            if subscription_url:
+                success_text += f"\n\n🔗 <a href='{subscription_url}'>Нажмите для подключения</a>"
+                success_text += f"\n📱 Скопируйте ссылку и импортируйте конфигурацию в ваше VPN приложение"
+        except Exception as e:
+            logger.warning(f"Could not get trial subscription URL: {e}")
+        
         await callback.message.edit_text(
-            t('trial_success', user.language),
-            reply_markup=main_menu_keyboard(user.language, user.is_admin)
+            success_text,
+            reply_markup=main_menu_keyboard(user.language, user.is_admin),
+            parse_mode='HTML',
+            disable_web_page_preview=True
         )
         
         log_user_action(user.telegram_id, "trial_subscription_activated", "Free trial")
@@ -363,6 +377,7 @@ async def confirm_trial_callback(callback: CallbackQuery, db: Database, **kwargs
             reply_markup=main_menu_keyboard(user.language, user.is_admin)
         )
 
+# Balance handlers - БЕЗ ИЗМЕНЕНИЙ
 @router.callback_query(F.data == "change_language")
 async def change_language_callback(callback: CallbackQuery, **kwargs):
     """Show language selection for changing language"""
@@ -530,7 +545,7 @@ async def payment_history_callback(callback: CallbackQuery, db: Database, **kwar
         logger.error(f"Error getting payment history: {e}")
         await callback.answer(t('error_occurred', user.language))
 
-# Subscriptions
+# Subscription handlers - БЕЗ ИЗМЕНЕНИЙ ДО confirm_purchase
 @router.callback_query(F.data == "buy_subscription")
 async def buy_subscription_callback(callback: CallbackQuery, db: Database, **kwargs):
     """Show available subscriptions (excluding trial)"""
@@ -607,7 +622,7 @@ async def buy_subscription_detail(callback: CallbackQuery, db: Database, **kwarg
 
 @router.callback_query(F.data.startswith("confirm_buy_"))
 async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
-    """Confirm subscription purchase"""
+    """Confirm subscription purchase - ДОБАВЛЕНА ПОДДЕРЖКА URL ИЗ API"""
     user = kwargs.get('user')
     api = kwargs.get('api')
     
@@ -637,9 +652,7 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
             )
             return
 
-        # ИСПРАВЛЕНИЕ: Всегда создавать НОВЫЙ пользователь в RemnaWave для каждой подписки
-        # Это позволит избежать дублирования short_uuid и даст каждой подписке уникальную ссылку
-        
+        # Создаем нового пользователя в RemnaWave для каждой подписки
         username = generate_username()
         password = generate_password()
         
@@ -654,7 +667,7 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
             activeInternalSquads=[subscription.squad_uuid]
         )
 
-        # Handle API response which may use 'data' or 'response' key
+        # Handle API response
         if remna_user:
             if 'data' in remna_user and 'uuid' in remna_user['data']:
                 user_uuid = remna_user['data']['uuid']
@@ -710,13 +723,13 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
         user.balance -= subscription.price
         await db.update_user(user)
 
-        # Create user subscription record with the NEW short_uuid
+        # Create user subscription record
         expires_at = datetime.utcnow() + timedelta(days=subscription.duration_days)
         
         await db.create_user_subscription(
             user_id=user.telegram_id,
             subscription_id=subscription.id,
-            short_uuid=short_uuid,  # Это НОВЫЙ уникальный shortUuid
+            short_uuid=short_uuid,
             expires_at=expires_at
         )
         
@@ -729,9 +742,29 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
             status='completed'
         )
         
+        # НОВОЕ: Формируем сообщение с URL из API
+        success_text = f"✅ Подписка успешно создана!\n\n"
+        success_text += f"📋 Подписка: {subscription.name}\n"
+        success_text += f"⏰ Действует до: {format_date(expires_at, user.language)}\n"
+        success_text += f"💰 Стоимость: {subscription.price} руб.\n\n"
+        
+        # Получаем subscription URL из API
+        try:
+            subscription_url = await api.get_subscription_url(short_uuid)
+            if subscription_url:
+                success_text += f"🔗 <a href='{subscription_url}'>Нажмите для подключения</a>\n\n"
+                success_text += "📱 Скопируйте ссылку и импортируйте конфигурацию в ваше VPN приложение"
+            else:
+                success_text += "⚠️ Ссылка для подключения будет доступна в разделе 'Мои подписки'"
+        except Exception as e:
+            logger.warning(f"Could not get subscription URL: {e}")
+            success_text += "⚠️ Ссылка для подключения будет доступна в разделе 'Мои подписки'"
+        
         await callback.message.edit_text(
-            t('subscription_purchased', user.language),
-            reply_markup=main_menu_keyboard(user.language, user.is_admin)
+            success_text,
+            reply_markup=main_menu_keyboard(user.language, user.is_admin),
+            parse_mode='HTML',
+            disable_web_page_preview=True
         )
         
         log_user_action(user.telegram_id, "subscription_purchased", f"Sub: {subscription.name}")
@@ -743,10 +776,13 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
             reply_markup=main_menu_keyboard(user.language, user.is_admin)
         )
 
+# My subscriptions - ОБНОВЛЕНО для показа URLs из API
 @router.callback_query(F.data == "my_subscriptions")
 async def my_subscriptions_callback(callback: CallbackQuery, db: Database, **kwargs):
-    """Show user's subscriptions"""
+    """Show user's subscriptions with URLs from API"""
     user = kwargs.get('user')
+    api = kwargs.get('api')
+    
     if not user:
         await callback.answer("❌ Ошибка пользователя")
         return
@@ -761,7 +797,42 @@ async def my_subscriptions_callback(callback: CallbackQuery, db: Database, **kwa
             )
             return
         
-        # Get subscription details
+        text = t('your_subscriptions', user.language) + "\n\n"
+        
+        for i, user_sub in enumerate(user_subs, 1):
+            subscription = await db.get_subscription_by_id(user_sub.subscription_id)
+            if not subscription:
+                continue
+            
+            # Определяем статус
+            now = datetime.utcnow()
+            if user_sub.expires_at < now:
+                status = "❌ Истекла"
+            elif not user_sub.is_active:
+                status = "⏸ Неактивна" 
+            else:
+                days_left = (user_sub.expires_at - now).days
+                status = f"✅ Активна ({days_left} дн.)"
+            
+            text += f"{i}. {subscription.name}\n"
+            text += f"   {status}\n"
+            text += f"   До: {format_date(user_sub.expires_at, user.language)}\n"
+            
+            # НОВОЕ: Получаем URL из API
+            if user_sub.short_uuid and api:
+                try:
+                    subscription_url = await api.get_subscription_url(user_sub.short_uuid)
+                    if subscription_url:
+                        text += f"   🔗 <a href='{subscription_url}'>Подключить</a>\n"
+                    else:
+                        text += f"   🔗 URL недоступен\n"
+                except Exception as e:
+                    logger.warning(f"Could not get subscription URL for {user_sub.short_uuid}: {e}")
+                    text += f"   🔗 URL недоступен\n"
+            
+            text += "\n"
+        
+        # Convert to old format for keyboard
         sub_list = []
         for user_sub in user_subs:
             subscription = await db.get_subscription_by_id(user_sub.subscription_id)
@@ -772,17 +843,22 @@ async def my_subscriptions_callback(callback: CallbackQuery, db: Database, **kwa
                 })
         
         await callback.message.edit_text(
-            t('my_subscriptions', user.language),
-            reply_markup=user_subscriptions_keyboard(sub_list, user.language)
+            text,
+            reply_markup=user_subscriptions_keyboard(sub_list, user.language),
+            parse_mode='HTML',
+            disable_web_page_preview=True
         )
+        
     except Exception as e:
         logger.error(f"Error getting user subscriptions: {e}")
         await callback.answer(t('error_occurred', user.language))
 
 @router.callback_query(F.data.startswith("view_sub_"))
 async def view_subscription_detail(callback: CallbackQuery, db: Database, **kwargs):
-    """View subscription details"""
+    """View subscription details with URL from API"""
     user = kwargs.get('user')
+    api = kwargs.get('api')
+    
     if not user:
         await callback.answer("❌ Ошибка пользователя")
         return
@@ -810,29 +886,38 @@ async def view_subscription_detail(callback: CallbackQuery, db: Database, **kwar
             'description': subscription.description or ''
         }
         
-        # Check if subscription is expiring soon (within 3 days)
-        from datetime import datetime, timedelta
+        # Check if subscription is expiring soon
         now = datetime.utcnow()
         days_until_expiry = (user_sub.expires_at - now).days
         
-        # ИСПРАВЛЕНИЕ: Запрещаем продление тестовых подписок
         show_extend = (0 <= days_until_expiry <= 3 and 
                       user_sub.is_active and 
-                      not subscription.is_trial)  # Добавили проверку на тестовую подписку
+                      not subscription.is_trial)
         
         text = format_user_subscription_info(user_sub.__dict__, sub_dict, user_sub.expires_at, user.language)
         
-        # Add expiry warning if subscription expires soon (but don't show for trial)
+        # НОВОЕ: Добавляем URL из API в детальный просмотр
+        if user_sub.short_uuid and api:
+            try:
+                subscription_url = await api.get_subscription_url(user_sub.short_uuid)
+                if subscription_url:
+                    text += f"\n\n🔗 <a href='{subscription_url}'>Ссылка для подключения</a>"
+            except Exception as e:
+                logger.warning(f"Could not get subscription URL: {e}")
+        
+        # Add expiry warning if subscription expires soon
         if show_extend:
             text += f"\n\n⚠️ {t('subscription_expires_soon', user.language, days=days_until_expiry)}"
         elif subscription.is_trial and 0 <= days_until_expiry <= 3:
-            # Специальное сообщение для тестовых подписок
-            text += f"\n\n ℹ️ Тестовая подписка истекает через {days_until_expiry} дн. Продление недоступно."
+            text += f"\n\nℹ️ Тестовая подписка истекает через {days_until_expiry} дн. Продление недоступно."
         
         await callback.message.edit_text(
             text,
-            reply_markup=user_subscription_detail_keyboard(user_sub_id, user.language, show_extend)
+            reply_markup=user_subscription_detail_keyboard(user_sub_id, user.language, show_extend),
+            parse_mode='HTML',
+            disable_web_page_preview=True
         )
+        
     except Exception as e:
         logger.error(f"Error viewing subscription detail: {e}")
         await callback.answer(t('error_occurred', user.language))
@@ -849,7 +934,6 @@ async def extend_subscription_callback(callback: CallbackQuery, db: Database, **
     try:
         user_sub_id = int(callback.data.split("_")[2])
         
-        # Получаем все подписки пользователя и находим нужную
         user_subs = await db.get_user_subscriptions(user.telegram_id)
         user_sub = next((sub for sub in user_subs if sub.id == user_sub_id), None)
         
@@ -857,18 +941,15 @@ async def extend_subscription_callback(callback: CallbackQuery, db: Database, **
             await callback.answer(t('subscription_not_found', user.language))
             return
         
-        # Get subscription details
         subscription = await db.get_subscription_by_id(user_sub.subscription_id)
         if not subscription:
             await callback.answer(t('subscription_not_found', user.language))
             return
         
-        # Check if subscription is trial (can't extend trial)
         if subscription.is_trial:
             await callback.answer("❌ Тестовую подписку нельзя продлить")
             return
         
-        # Check if user has enough balance
         if user.balance < subscription.price:
             needed = subscription.price - user.balance
             text = f"❌ Недостаточно средств для продления!\n\n"
@@ -904,7 +985,7 @@ async def extend_subscription_callback(callback: CallbackQuery, db: Database, **
 
 @router.callback_query(F.data.startswith("confirm_extend_"))
 async def confirm_extend_subscription_callback(callback: CallbackQuery, db: Database, **kwargs):
-    """Confirm subscription extension"""
+    """Confirm subscription extension - ДОБАВЛЕНА ПОДДЕРЖКА URL ИЗ API"""
     user = kwargs.get('user')
     api = kwargs.get('api')
     
@@ -915,7 +996,6 @@ async def confirm_extend_subscription_callback(callback: CallbackQuery, db: Data
     try:
         user_sub_id = int(callback.data.split("_")[2])
         
-        # Получаем все подписки пользователя и находим нужную
         user_subs = await db.get_user_subscriptions(user.telegram_id)
         user_sub = next((sub for sub in user_subs if sub.id == user_sub_id), None)
         
@@ -923,75 +1003,57 @@ async def confirm_extend_subscription_callback(callback: CallbackQuery, db: Data
             await callback.answer(t('subscription_not_found', user.language))
             return
         
-        # Get subscription details
         subscription = await db.get_subscription_by_id(user_sub.subscription_id)
         if not subscription:
             await callback.answer(t('subscription_not_found', user.language))
             return
         
-        # Check if subscription is trial (can't extend trial)
         if subscription.is_trial:
             await callback.answer("❌ Тестовую подписку нельзя продлить")
             return
         
-        # Check balance again
         if user.balance < subscription.price:
             await callback.answer("❌ Недостаточно средств")
             return
         
         # Calculate new expiry date
-        from datetime import datetime, timedelta
         now = datetime.utcnow()
         
-        # ИСПРАВЛЕНИЕ: Правильное вычисление новой даты истечения
-        # Если подписка все еще активна, продлеваем от текущей даты истечения
-        # Если истекла, продлеваем от текущего момента
         if user_sub.expires_at > now:
             new_expiry = user_sub.expires_at + timedelta(days=subscription.duration_days)
         else:
             new_expiry = now + timedelta(days=subscription.duration_days)
         
-        # ГЛАВНОЕ ИСПРАВЛЕНИЕ: Обновляем подписку в RemnaWave с правильными полями
+        # Update in RemnaWave
         if api and user_sub.short_uuid:
             try:
                 logger.info(f"Updating RemnaWave subscription for shortUuid: {user_sub.short_uuid}")
                 
-                # Сначала получаем информацию о пользователе по short_uuid
                 remna_user_details = await api.get_user_by_short_uuid(user_sub.short_uuid)
                 if remna_user_details:
                     user_uuid = remna_user_details.get('uuid')
                     if user_uuid:
-                        # ИСПРАВЛЕНИЕ: Используем правильное поле для даты истечения
-                        # В RemnaWave API может использоваться 'expireAt' или 'expiryTime'
                         expiry_str = new_expiry.isoformat() + 'Z'
                         
-                        # Попробуем оба варианта поля даты истечения
-                        update_data_v1 = {
+                        update_data = {
                             'enable': True,
-                            'expireAt': expiry_str  # Вариант 1
-                        }
-                        
-                        update_data_v2 = {
-                            'enable': True,
-                            'expiryTime': expiry_str  # Вариант 2
+                            'expireAt': expiry_str
                         }
                         
                         logger.info(f"Updating user {user_uuid} with new expiry: {expiry_str}")
                         
-                        # Пробуем первый вариант
-                        result = await api.update_user(user_uuid, update_data_v1)
+                        result = await api.update_user(user_uuid, update_data)
                         
                         if not result:
-                            # Если первый не сработал, пробуем второй
-                            logger.info("Trying alternative field name 'expiryTime'")
-                            result = await api.update_user(user_uuid, update_data_v2)
+                            # Try alternative field name
+                            update_data['expiryTime'] = expiry_str
+                            result = await api.update_user(user_uuid, update_data)
                         
                         if result:
-                            logger.info(f"Successfully updated RemnaWave user expiry to {expiry_str}")
+                            logger.info(f"Successfully updated RemnaWave user expiry")
                         else:
-                            logger.warning(f"Failed to update user in RemnaWave - trying direct API call")
+                            logger.warning(f"Failed to update user in RemnaWave")
                             
-                            # ДОПОЛНИТЕЛЬНАЯ ПОПЫТКА: Используем специальный метод для обновления даты истечения
                             if hasattr(api, 'update_user_expiry'):
                                 result = await api.update_user_expiry(user_sub.short_uuid, expiry_str)
                                 if result:
@@ -1003,7 +1065,6 @@ async def confirm_extend_subscription_callback(callback: CallbackQuery, db: Data
                     
             except Exception as e:
                 logger.error(f"Failed to update expiry in RemnaWave: {e}")
-                # НЕ прерываем выполнение, продолжаем обновление в локальной БД
         
         # Update local database
         user_sub.expires_at = new_expiry
@@ -1029,12 +1090,24 @@ async def confirm_extend_subscription_callback(callback: CallbackQuery, db: Data
         success_text += f"💰 Списано: {subscription.price} руб.\n"
         success_text += f"💳 Остаток на балансе: {user.balance} руб."
         
+        # НОВОЕ: Получаем обновленный URL из API
+        if api and user_sub.short_uuid:
+            try:
+                subscription_url = await api.get_subscription_url(user_sub.short_uuid)
+                if subscription_url:
+                    success_text += f"\n\n🔗 <a href='{subscription_url}'>Обновленная ссылка для подключения</a>"
+                    success_text += f"\n📱 Можете использовать прежнюю конфигурацию или обновить по ссылке"
+            except Exception as e:
+                logger.warning(f"Could not get updated subscription URL: {e}")
+        
         await callback.message.edit_text(
             success_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📋 Мои подписки", callback_data="my_subscriptions")],
                 [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
-            ])
+            ]),
+            parse_mode='HTML',
+            disable_web_page_preview=True
         )
         
         log_user_action(user.telegram_id, "subscription_extended", f"Sub: {subscription.name}")
@@ -1046,13 +1119,12 @@ async def confirm_extend_subscription_callback(callback: CallbackQuery, db: Data
             reply_markup=main_menu_keyboard(user.language, user.is_admin)
         )
 
-
+# ОБНОВЛЕННЫЙ обработчик для получения ссылки подключения
 @router.callback_query(F.data.startswith("get_connection_"))
 async def get_connection_callback(callback: CallbackQuery, db: Database, **kwargs):
-    """Get connection link"""
+    """Get connection link from API - ПОЛНОСТЬЮ ПЕРЕРАБОТАН"""
     user = kwargs.get('user')
     api = kwargs.get('api')
-    config = kwargs.get('config')
     
     if not user:
         await callback.answer("❌ Ошибка пользователя")
@@ -1067,73 +1139,56 @@ async def get_connection_callback(callback: CallbackQuery, db: Database, **kwarg
             await callback.answer("❌ Подписка не найдена")
             return
         
-        # Используем shortUuid напрямую
-        short_uuid = user_sub.short_uuid
+        if not user_sub.short_uuid:
+            await callback.answer("❌ Данные подписки недоступны")
+            return
         
-        # ИСПРАВЛЕНИЕ: Приоритет config.SUBSCRIPTION_BASE_URL
-        if config and config.SUBSCRIPTION_BASE_URL:
-            connection_url = f"{config.SUBSCRIPTION_BASE_URL.rstrip('/')}/sub/{short_uuid}"
-            logger.info(f"Using config SUBSCRIPTION_BASE_URL: {connection_url}")
-        elif api:
-            # Если конфиг недоступен, используем API
-            connection_url = await api.get_subscription_url(short_uuid)
-            logger.info(f"Using API subscription URL: {connection_url}")
-        else:
-            # Последний fallback
-            connection_url = f"{config.SUBSCRIPTION_BASE_URL.rstrip('/')}/sub/{short_uuid}"
-            logger.warning(f"Using hardcoded fallback URL: {connection_url}")
+        # НОВОЕ: Получаем URL из API
+        connection_url = None
+        if api:
+            try:
+                connection_url = await api.get_subscription_url(user_sub.short_uuid)
+                logger.info(f"Got subscription URL from API: {connection_url}")
+            except Exception as e:
+                logger.error(f"Failed to get URL from API: {e}")
         
-        text = t('connection_link', user.language, link=connection_url)
+        if not connection_url:
+            await callback.message.edit_text(
+                "❌ Не удалось получить ссылку для подключения\n\nПопробуйте позже или обратитесь в поддержку",
+                reply_markup=back_keyboard("my_subscriptions", user.language)
+            )
+            return
+        
+        text = f"🔗 Ссылка для подключения готова!\n\n"
+        text += f"📋 Подписка: {user_sub.id}\n"
+        text += f"🔗 Ссылка: <code>{connection_url}</code>\n\n"
+        text += f"📱 Инструкция:\n"
+        text += f"1. Скопируйте ссылку выше\n"
+        text += f"2. Откройте ваше VPN приложение\n"
+        text += f"3. Добавьте конфигурацию по ссылке\n\n"
+        text += f"💡 Или нажмите кнопку ниже для автоматического подключения"
         
         # Создаем клавиатуру с кнопкой подключения
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔗 Подключиться", web_app=WebAppInfo(url=connection_url))],
-            [InlineKeyboardButton(text=t('back', user.language), callback_data="my_subscriptions")]
+            [InlineKeyboardButton(text="🚀 Подключиться автоматически", url=connection_url)],
+            [InlineKeyboardButton(text="📋 Мои подписки", callback_data="my_subscriptions")],
+            [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
         ])
         
         await callback.message.edit_text(
             text,
             reply_markup=keyboard,
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
+        
     except Exception as e:
         logger.error(f"Error getting connection link: {e}")
         await callback.answer(t('error_occurred', user.language))
 
-@router.callback_query(F.data.startswith("connect_sub_"))
-async def connect_subscription_callback(callback: CallbackQuery, db: Database, api: RemnaWaveAPI, **kwargs):
-    """Handle subscription connection button"""
-    user = kwargs.get('user')
-    config = kwargs.get('config')
-    if not user:
-        await callback.answer("❌ Ошибка пользователя")
-        return
-    
-    try:
-        user_subs = await db.get_user_subscriptions(user.telegram_id)
-        
-        sub_id = int(callback.data.split("_")[2])
-        user_sub = next((s for s in user_subs if s.id == sub_id), None)
-        if not user_sub:
-            await callback.answer("❌ Подписка не найдена")
-            return
-        
-        # Получаем ссылку из RemnaWave API
-        connection_url = await api.get_subscription_by_short_uuid(user_sub.short_uuid)
-        
-        if not connection_url:
-            # Используем config.SUBSCRIPTION_BASE_URL
-            subscription_base_url = config.SUBSCRIPTION_BASE_URL if config else "http://localhost"
-            connection_url = f"{subscription_base_url.rstrip('/')}/sub/{user_sub.short_uuid}"
-        
-        # Открываем ссылку через URL кнопку
-        await callback.answer(url=connection_url)
-        
-    except Exception as e:
-        logger.error(f"Error connecting to subscription: {e}")
-        await callback.answer(t('error_occurred', user.language))
+# УДАЛЯЕМ старый обработчик connect_sub_ - он больше не нужен
+# @router.callback_query(F.data.startswith("connect_sub_"))
 
-# Support
+# Support и Promocode handlers - БЕЗ ИЗМЕНЕНИЙ
 @router.callback_query(F.data == "support")
 async def support_callback(callback: CallbackQuery, **kwargs):
     """Show support info"""
@@ -1152,7 +1207,6 @@ async def support_callback(callback: CallbackQuery, **kwargs):
         reply_markup=back_keyboard("main_menu", user.language)
     )
 
-# Promocode
 @router.callback_query(F.data == "promocode")
 async def promocode_callback(callback: CallbackQuery, state: FSMContext, **kwargs):
     """Handle promocode input"""
