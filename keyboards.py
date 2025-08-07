@@ -1,6 +1,6 @@
 from database import Subscription
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from typing import List, Optional
+from typing import List, Optional, Dict
 from translations import t
 
 def language_keyboard() -> InlineKeyboardMarkup:
@@ -177,9 +177,14 @@ def admin_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="💰 " + t('manage_balance', lang), callback_data="admin_balance"),
             InlineKeyboardButton(text="🎁 " + t('manage_promocodes', lang), callback_data="admin_promocodes")
         ],
-        # Третий ряд - коммуникации и аналитика
+        # Третий ряд - коммуникации и система
         [
             InlineKeyboardButton(text="📨 " + t('send_message', lang), callback_data="admin_messages"),
+            InlineKeyboardButton(text="🖥 Система RemnaWave", callback_data="admin_system")  # НОВОЕ!
+        ],
+        # Четвертый ряд - мониторинг и статистика
+        [
+            InlineKeyboardButton(text="🔍 Мониторинг подписок", callback_data="admin_monitor"),
             InlineKeyboardButton(text="📊 " + t('statistics', lang), callback_data="admin_stats")
         ],
         # Назад
@@ -347,27 +352,156 @@ def admin_monitor_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     ])
     return keyboard
 
-def admin_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
-    """Beautiful admin menu keyboard"""
+def admin_system_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Beautiful admin system management keyboard"""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        # Первый ряд - управление контентом
+        [InlineKeyboardButton(text="📊 Системная статистика", callback_data="system_stats")],
+        [InlineKeyboardButton(text="🖥 Управление нодами", callback_data="nodes_management")],
+        [InlineKeyboardButton(text="👥 Пользователи системы", callback_data="system_users")],
+        [InlineKeyboardButton(text="🔄 Синхронизация с RemnaWave", callback_data="sync_remnawave")],
+        [InlineKeyboardButton(text="🔍 Отладка API", callback_data="debug_api_comprehensive")],
+        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="admin_panel")]
+    ])
+    return keyboard
+
+def system_stats_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """System statistics keyboard with refresh"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Обновить статистику", callback_data="refresh_system_stats")],
+        [InlineKeyboardButton(text="🖥 Ноды", callback_data="nodes_management")],
+        [InlineKeyboardButton(text="👥 Системные пользователи", callback_data="system_users")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_system")]
+    ])
+    return keyboard
+
+def nodes_management_keyboard(nodes: List[Dict], lang: str = 'ru', timestamp: int = None) -> InlineKeyboardMarkup:
+    """Improved nodes management keyboard"""
+    buttons = []
+    
+    if nodes:
+        # Statistics row
+        online_count = len([n for n in nodes if n.get('status') == 'online'])
+        total_count = len(nodes)
+        
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"📊 Ноды: {online_count}/{total_count} онлайн",
+                callback_data="noop"
+            )
+        ])
+        
+        # Show first 5 nodes with improved display
+        for i, node in enumerate(nodes[:5]):
+            status = node.get('status', 'unknown')
+            
+            # Status emoji based on actual status
+            if status == 'online':
+                status_emoji = "🟢"
+            elif status == 'disabled':
+                status_emoji = "⚫"
+            elif status == 'disconnected':
+                status_emoji = "🔴"
+            elif status == 'xray_stopped':
+                status_emoji = "🟡"
+            else:
+                status_emoji = "⚪"
+            
+            node_name = node.get('name', f'Node-{i+1}')
+            node_id = node.get('id', node.get('uuid'))
+            
+            # Truncate long names
+            if len(node_name) > 20:
+                display_name = node_name[:17] + "..."
+            else:
+                display_name = node_name
+            
+            # CPU/Memory usage if available
+            usage_info = ""
+            if node.get('cpuUsage'):
+                usage_info += f" CPU:{node['cpuUsage']:.0f}%"
+            if node.get('memUsage'):
+                usage_info += f" MEM:{node['memUsage']:.0f}%"
+            
+            buttons.append([
+                InlineKeyboardButton(
+                    text=f"{status_emoji} {display_name}{usage_info}",
+                    callback_data=f"node_details_{node_id}"
+                ),
+                InlineKeyboardButton(
+                    text="🔄",
+                    callback_data=f"restart_node_{node_id}"
+                ),
+                InlineKeyboardButton(
+                    text="⚙️",
+                    callback_data=f"node_settings_{node_id}"
+                )
+            ])
+        
+        if len(nodes) > 5:
+            buttons.append([
+                InlineKeyboardButton(
+                    text=f"... и еще {len(nodes) - 5} нод",
+                    callback_data="show_all_nodes"
+                )
+            ])
+    else:
+        buttons.append([
+            InlineKeyboardButton(
+                text="❌ Ноды не найдены",
+                callback_data="noop"
+            )
+        ])
+    
+    # Action buttons
+    buttons.append([
+        InlineKeyboardButton(text="🔄 Перезагрузить все", callback_data="restart_all_nodes"),
+        InlineKeyboardButton(text="📊 Статистика", callback_data="nodes_statistics")
+    ])
+    
+    # Refresh button
+    refresh_callback = f"refresh_nodes_stats_{timestamp}" if timestamp else "refresh_nodes_stats"
+    buttons.append([
+        InlineKeyboardButton(text="🔄 Обновить", callback_data=refresh_callback)
+    ])
+    
+    # Back button
+    buttons.append([
+        InlineKeyboardButton(text="🔙 Назад", callback_data="admin_system")
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def system_users_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """System users management keyboard - ИСПРАВЛЕНО"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика пользователей", callback_data="users_statistics")],
+        [InlineKeyboardButton(text="👥 Список всех пользователей", callback_data="list_all_system_users")],
+        [InlineKeyboardButton(text="🔍 Поиск пользователя", callback_data="search_user_uuid")],
+        [InlineKeyboardButton(text="🔍 Отладка API пользователей", callback_data="debug_users_api")],
+        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="admin_system")]
+    ])
+    return keyboard
+
+def bulk_operations_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Bulk operations keyboard"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data="bulk_reset_traffic")],
+        [InlineKeyboardButton(text="❌ Отключить пользователей", callback_data="bulk_disable_users")],
+        [InlineKeyboardButton(text="✅ Включить пользователей", callback_data="bulk_enable_users")],
+        [InlineKeyboardButton(text="🗑 Удалить пользователей", callback_data="bulk_delete_users")],
+        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="system_users")]
+    ])
+    return keyboard
+
+def confirm_restart_keyboard(node_id: str = None, lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Confirmation keyboard for node restart"""
+    action = f"confirm_restart_node_{node_id}" if node_id else "confirm_restart_all_nodes"
+    back_action = f"node_details_{node_id}" if node_id else "nodes_management"
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="📦 " + t('manage_subscriptions', lang), callback_data="admin_subscriptions"),
-            InlineKeyboardButton(text="👥 " + t('manage_users', lang), callback_data="admin_users")
-        ],
-        # Второй ряд - финансы
-        [
-            InlineKeyboardButton(text="💰 " + t('manage_balance', lang), callback_data="admin_balance"),
-            InlineKeyboardButton(text="🎁 " + t('manage_promocodes', lang), callback_data="admin_promocodes")
-        ],
-        # Третий ряд - коммуникации и аналитика
-        [
-            InlineKeyboardButton(text="📨 " + t('send_message', lang), callback_data="admin_messages"),
-            InlineKeyboardButton(text="📊 " + t('statistics', lang), callback_data="admin_stats")
-        ],
-        # Четвертый ряд - мониторинг (НОВОЕ!)
-        [InlineKeyboardButton(text="🔍 Мониторинг подписок", callback_data="admin_monitor")],
-        # Назад
-        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="main_menu")]
+            InlineKeyboardButton(text="✅ Да, перезагрузить", callback_data=action),
+            InlineKeyboardButton(text="❌ Отмена", callback_data=back_action)
+        ]
     ])
     return keyboard
