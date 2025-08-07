@@ -65,7 +65,6 @@ URL и токен RemnaWave API
         REMNAWAVE_URL=https://your-remnawave-url.ru
         REMNAWAVE_MODE=remote/local
         REMNAWAVE_TOKEN=ваш_remnawave_token
-        SUBSCRIPTION_BASE_URL=https://
         DATABASE_URL=sqlite+aiosqlite:///bot.db
         ADMIN_IDS=123456789,987654321
         DEFAULT_LANGUAGE=ru
@@ -127,8 +126,6 @@ REMNAWAVE_MODE=remote
 REMNAWAVE_TOKEN — токен доступа к API RemnaWave.
 
 DATABASE_URL — строка подключения к базе данных.
-
-SUBSCRIPTION_BASE_URL=https://sub.example.com (без / на конце)
 
 ADMIN_IDS — через запятую Telegram ID администраторов.
 
