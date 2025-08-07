@@ -3344,7 +3344,6 @@ def sync_remnawave_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🌍 ИМПОРТ ВСЕХ по Telegram ID", callback_data="import_all_by_telegram")],
         [InlineKeyboardButton(text="👤 Синхронизировать одного", callback_data="sync_single_user")],
         [InlineKeyboardButton(text="📋 Просмотр планов", callback_data="view_imported_plans")],
-        [InlineKeyboardButton(text="🔍 Отладка всех планов", callback_data="debug_all_plans")],
         [InlineKeyboardButton(text="📊 Статус синхронизации", callback_data="sync_status_remnawave")],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_system")]
     ]
