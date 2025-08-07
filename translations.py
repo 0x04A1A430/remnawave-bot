@@ -64,6 +64,7 @@ TRANSLATIONS = {
         'subscription_expires': 'Истекает: {date}',
         'subscription_expired': 'Истекла',
         'subscription_active': 'Активна до: {date}',
+        'your_subscriptions': '👀 Список ваших подписок:',
         
         # Payments
         'payment_created': '✅ Заявка на пополнение создана.\nОбратитесь к @{support} для оплаты.',
