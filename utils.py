@@ -205,9 +205,10 @@ def format_bytes(bytes_value: int) -> str:
     else:
         return f"{value:.1f} {units[unit_index]}"
 
-def get_subscription_connection_url(base_url: str, short_uuid: str) -> str:
-    """Generate subscription connection URL"""
-    return f"{base_url.rstrip('/')}/api/sub/{short_uuid}"
+# УДАЛЯЕМ функцию get_subscription_connection_url - теперь URL берется из API
+# def get_subscription_connection_url(base_url: str, short_uuid: str) -> str:
+#     """Generate subscription connection URL"""
+#     return f"{base_url.rstrip('/')}/api/sub/{short_uuid}"
 
 def log_user_action(telegram_id: int, action: str, details: str = None):
     """Log user action for audit"""
@@ -259,6 +260,43 @@ def is_subscription_expiring_soon(expires_at: datetime, warning_days: int = 2) -
     """Check if subscription is expiring soon"""
     days_left = calculate_days_until_expiry(expires_at)
     return days_left <= warning_days
+
+# НОВАЯ ФУНКЦИЯ: Извлечение subscription URL из данных пользователя
+def extract_subscription_url(user_data: Dict[str, Any]) -> Optional[str]:
+    """Extract subscription URL from user data with fallback logic"""
+    if not user_data:
+        return None
+    
+    # Пробуем разные возможные поля для URL
+    url_fields = [
+        'subscriptionUrl',
+        'subscription_url',
+        'url',
+        'link',
+        'connectionUrl',
+        'connection_url'
+    ]
+    
+    for field in url_fields:
+        url = user_data.get(field)
+        if url and isinstance(url, str) and url.strip():
+            return url.strip()
+    
+    return None
+
+def format_subscription_url_display(subscription_url: str, lang: str = 'ru') -> str:
+    """Format subscription URL for display in messages"""
+    if not subscription_url:
+        return "❌ URL недоступен" if lang == 'ru' else "❌ URL unavailable"
+    
+    # Показываем только домен для безопасности
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(subscription_url)
+        domain = parsed.netloc or parsed.path.split('/')[0]
+        return f"🔗 {domain}"
+    except Exception:
+        return "🔗 Ссылка готова" if lang == 'ru' else "🔗 Link ready"
 
 class States:
     """State constants for FSM"""
