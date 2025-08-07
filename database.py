@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import BigInteger, String, Float, DateTime, Boolean, Text, Integer
+from sqlalchemy import BigInteger, String, Float, DateTime, Boolean, Text, Integer, text
 from datetime import datetime
 from typing import Optional, List
 import logging
@@ -38,6 +38,7 @@ class Subscription(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     is_trial: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_imported: Mapped[bool] = mapped_column(Boolean, default=False)
 
 class UserSubscription(Base):
     __tablename__ = 'user_subscriptions'
@@ -48,7 +49,9 @@ class UserSubscription(Base):
     short_uuid: Mapped[str] = mapped_column(String(255))  # УБРАНО unique=True
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    traffic_limit_gb: Mapped[Optional[int]] = mapped_column(Integer)  # Добавлено поле
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)  # Добавлено поле
 
 class Payment(Base):
     __tablename__ = 'payments'
@@ -99,6 +102,10 @@ class Database:
     async def init_db(self):
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+    
+        # Выполняем миграции
+        await self.migrate_user_subscriptions()
+        await self.migrate_subscription_imported_field()
     
     async def close(self):
         await self.engine.dispose()
@@ -166,7 +173,7 @@ class Database:
                 return False
     
     # Subscription methods
-    async def get_all_subscriptions(self, include_inactive: bool = False, exclude_trial: bool = True) -> List[Subscription]:
+    async def get_all_subscriptions(self, include_inactive: bool = False, exclude_trial: bool = True, exclude_imported: bool = True) -> List[Subscription]:
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select
@@ -175,12 +182,39 @@ class Database:
                     query = query.where(Subscription.is_active == True)
                 if exclude_trial:
                     query = query.where(Subscription.is_trial == False)
+                if exclude_imported:
+                    query = query.where(Subscription.is_imported == False)  # Исключаем импортированные
                 result = await session.execute(query)
                 return list(result.scalars().all())
             except Exception as e:
                 logger.error(f"Error getting subscriptions: {e}")
                 return []
 
+    async def get_all_subscriptions_admin(self) -> List[Subscription]:
+        """Get all subscriptions including imported ones (for admin purposes)"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select
+                result = await session.execute(select(Subscription))
+                return list(result.scalars().all())
+            except Exception as e:
+                logger.error(f"Error getting admin subscriptions: {e}")
+                return []
+
+    async def migrate_subscription_imported_field(self):
+        """Add is_imported field to subscriptions table"""
+        try:
+            async with self.engine.begin() as conn:
+                try:
+                    await conn.execute(text("""
+                        ALTER TABLE subscriptions 
+                        ADD COLUMN IF NOT EXISTS is_imported BOOLEAN DEFAULT FALSE
+                    """))
+                    logger.info("Successfully added is_imported field to subscriptions table")
+                except Exception as e:
+                    logger.info(f"Migration may have already been applied: {e}")
+        except Exception as e:
+            logger.error(f"Error during subscription migration: {e}")            
     
     async def get_subscription_by_id(self, subscription_id: int) -> Optional[Subscription]:
         async with self.session_factory() as session:
@@ -196,7 +230,7 @@ class Database:
     
     async def create_subscription(self, name: str, description: str, price: float,
                                 duration_days: int, traffic_limit_gb: int, 
-                                squad_uuid: str) -> Subscription:
+                                squad_uuid: str, is_imported: bool = False) -> Subscription:
         async with self.session_factory() as session:
             try:
                 subscription = Subscription(
@@ -205,7 +239,8 @@ class Database:
                     price=price,
                     duration_days=duration_days,
                     traffic_limit_gb=traffic_limit_gb,
-                    squad_uuid=squad_uuid
+                    squad_uuid=squad_uuid,
+                    is_imported=is_imported  # Добавляем поддержку is_imported
                 )
                 session.add(subscription)
                 await session.commit()
@@ -253,26 +288,47 @@ class Database:
                 logger.error(f"Error getting user subscriptions for {user_id}: {e}")
                 return []
     
-    async def create_user_subscription(self, user_id: int, subscription_id: int,
-                                     short_uuid: str, expires_at: datetime) -> UserSubscription:
+    async def create_user_subscription(self, user_id: int, subscription_id: int, 
+                                 short_uuid: str, expires_at: datetime, 
+                                 is_active: bool = True, traffic_limit_gb: int = None) -> Optional[UserSubscription]:
+        """Create user subscription with proper error handling"""
         async with self.session_factory() as session:
             try:
-                user_sub = UserSubscription(
+                # Проверяем что подписка не существует
+                from sqlalchemy import select
+                existing = await session.execute(
+                    select(UserSubscription).where(
+                        UserSubscription.user_id == user_id,
+                        UserSubscription.short_uuid == short_uuid
+                    )
+                )
+                existing_sub = existing.scalar_one_or_none()
+            
+                if existing_sub:
+                    logger.warning(f"Subscription with short_uuid {short_uuid} already exists for user {user_id}")
+                    return existing_sub
+            
+            # Создаем новую подписку
+                new_subscription = UserSubscription(
                     user_id=user_id,
                     subscription_id=subscription_id,
                     short_uuid=short_uuid,
-                    expires_at=expires_at
+                    expires_at=expires_at,
+                    is_active=is_active
                 )
-                session.add(user_sub)
+            
+                session.add(new_subscription)
                 await session.commit()
-                await session.refresh(user_sub)
-                return user_sub
+                await session.refresh(new_subscription)
+            
+                return new_subscription
+            
             except Exception as e:
                 logger.error(f"Error creating user subscription: {e}")
                 await session.rollback()
-                raise
+                return None
     
-    # Payment methods
+        # Payment methods
     async def create_payment(self, user_id: int, amount: float, payment_type: str,
                            description: str, status: str = 'pending') -> Payment:
         async with self.session_factory() as session:
@@ -467,17 +523,55 @@ class Database:
             except Exception as e:
                 logger.error(f"Error getting trial subscriptions: {e}")
                 return []
-    
-    async def update_user_subscription(self, user_sub: UserSubscription) -> UserSubscription:
+
+    async def get_user_subscription_by_short_uuid(self, user_id: int, short_uuid: str) -> Optional[UserSubscription]:
+        """Get user subscription by short_uuid"""
         async with self.session_factory() as session:
             try:
-                await session.merge(user_sub)
-                await session.commit()
-                return user_sub
+                from sqlalchemy import select
+                result = await session.execute(
+                    select(UserSubscription).where(
+                        UserSubscription.user_id == user_id,
+                        UserSubscription.short_uuid == short_uuid
+                    )
+                )
+                return result.scalar_one_or_none()
             except Exception as e:
-                logger.error(f"Error updating user subscription {user_sub.id}: {e}")
+                logger.error(f"Error getting user subscription by short_uuid: {e}")
+                return None
+    
+    async def update_user_subscription(self, user_subscription: UserSubscription) -> bool:
+        """Update user subscription"""
+        async with self.session_factory() as session:
+            try:
+                # Устанавливаем время обновления
+                user_subscription.updated_at = datetime.utcnow()
+            
+                # Обновляем подписку
+                await session.merge(user_subscription)
+                await session.commit()
+                return True
+            except Exception as e:
+                logger.error(f"Error updating user subscription: {e}")
                 await session.rollback()
-                raise
+                return False
+
+    async def migrate_user_subscriptions(self):
+        """Migrate user_subscriptions table to add missing columns"""
+        try:
+            async with self.engine.begin() as conn:
+                # Проверяем существование столбцов и добавляем их если нет
+                try:
+                    await conn.execute(text("""
+                        ALTER TABLE user_subscriptions 
+                        ADD COLUMN IF NOT EXISTS traffic_limit_gb INTEGER,
+                        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
+                    """))
+                    logger.info("Successfully migrated user_subscriptions table")
+                except Exception as e:
+                    logger.info(f"Migration may have already been applied or error occurred: {e}")
+        except Exception as e:
+            logger.error(f"Error during migration: {e}")
 
     async def get_expiring_subscriptions(self, user_id: int, days_threshold: int = 3) -> List[UserSubscription]:
         async with self.session_factory() as session:
@@ -611,3 +705,31 @@ class Database:
             except Exception as e:
                 logger.error(f"Error getting paginated payments by status: {e}")
                 return [], 0
+
+    async def get_user_subscriptions_by_plan_id(self, plan_id: int) -> List[UserSubscription]:
+        """Get all user subscriptions for a specific plan"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select
+                result = await session.execute(
+                    select(UserSubscription).where(UserSubscription.subscription_id == plan_id)
+                )
+                return list(result.scalars().all())
+            except Exception as e:
+                logger.error(f"Error getting user subscriptions for plan {plan_id}: {e}")
+                return []
+
+    async def delete_user_subscription(self, user_subscription_id: int) -> bool:
+        """Delete user subscription by ID"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import delete
+                result = await session.execute(
+                    delete(UserSubscription).where(UserSubscription.id == user_subscription_id)
+                )
+                await session.commit()
+                return result.rowcount > 0
+            except Exception as e:
+                logger.error(f"Error deleting user subscription {user_subscription_id}: {e}")
+                await session.rollback()
+                return False
