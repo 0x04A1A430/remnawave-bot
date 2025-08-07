@@ -11,7 +11,8 @@ class RemnaWaveAPI:
     def __init__(self, base_url: str, token: str, subscription_base_url: str = None):
         self.base_url = base_url.rstrip('/')
         self.token = token
-        self.subscription_base_url = subscription_base_url or base_url 
+        # УДАЛЯЕМ зависимость от subscription_base_url - теперь берем из API
+        self.subscription_base_url = subscription_base_url  # Оставляем для обратной совместимости
         self.session = None
         
     async def _get_session(self):
@@ -19,7 +20,7 @@ class RemnaWaveAPI:
             headers = {
                 'Authorization': f'Bearer {self.token}',
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'  # Явно запрашиваем JSON
+                'Accept': 'application/json'
             }
             timeout = aiohttp.ClientTimeout(total=30)
             self.session = aiohttp.ClientSession(
@@ -77,7 +78,138 @@ class RemnaWaveAPI:
             logger.error(f"Request error for {endpoint}: {e}")
             return None
 
-    # User management
+    async def get_subscription_info(self, short_uuid: str) -> Optional[Dict]:
+        """Get subscription info including URL from RemnaWave API"""
+        try:
+            logger.info(f"Getting subscription info for short_uuid: {short_uuid}")
+            
+            # Пробуем разные эндпоинты для получения информации о подписке
+            endpoints_to_try = [
+                f'/api/subscriptions/{short_uuid}',
+                f'/api/sub/{short_uuid}',
+                f'/api/subscription/{short_uuid}'
+            ]
+            
+            for endpoint in endpoints_to_try:
+                logger.debug(f"Trying endpoint: {endpoint}")
+                result = await self._make_request('GET', endpoint)
+                
+                if result:
+                    logger.info(f"Successfully got subscription info from {endpoint}")
+                    
+                    # Обрабатываем разные структуры ответа
+                    subscription_data = None
+                    
+                    if 'response' in result:
+                        subscription_data = result['response']
+                    elif 'data' in result:
+                        subscription_data = result['data']
+                    elif 'subscription' in result:
+                        subscription_data = result['subscription']
+                    else:
+                        subscription_data = result
+                    
+                    # Проверяем что получили нужные данные
+                    if subscription_data and (
+                        'subscriptionUrl' in subscription_data or 
+                        'url' in subscription_data or 
+                        'link' in subscription_data
+                    ):
+                        return subscription_data
+            
+            logger.warning(f"Could not get subscription info for {short_uuid} from any endpoint")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting subscription info for {short_uuid}: {e}")
+            return None
+
+    async def get_subscription_url(self, short_uuid: str) -> str:
+        """Get subscription URL from RemnaWave API - ОБНОВЛЕННЫЙ МЕТОД"""
+        try:
+            logger.info(f"Getting subscription URL for short_uuid: {short_uuid}")
+            
+            # Сначала пробуем получить URL из API
+            subscription_info = await self.get_subscription_info(short_uuid)
+            
+            if subscription_info:
+                # Ищем URL в разных возможных полях
+                subscription_url = (
+                    subscription_info.get('subscriptionUrl') or
+                    subscription_info.get('url') or
+                    subscription_info.get('link') or
+                    subscription_info.get('subscription_url')
+                )
+                
+                if subscription_url:
+                    logger.info(f"Got subscription URL from API: {subscription_url}")
+                    return subscription_url
+            
+            # Если не получилось через API, пробуем через пользователя
+            user_data = await self.get_user_by_short_uuid(short_uuid)
+            if user_data and 'subscriptionUrl' in user_data:
+                logger.info(f"Got subscription URL from user data: {user_data['subscriptionUrl']}")
+                return user_data['subscriptionUrl']
+            
+            # Последний fallback - формируем URL самостоятельно
+            if self.subscription_base_url:
+                fallback_url = f"{self.subscription_base_url.rstrip('/')}/sub/{short_uuid}"
+                logger.warning(f"Using fallback URL: {fallback_url}")
+                return fallback_url
+            else:
+                # Если нет даже fallback URL, пытаемся угадать из base_url
+                fallback_url = f"{self.base_url.rstrip('/')}/sub/{short_uuid}"
+                logger.warning(f"Using base_url fallback: {fallback_url}")
+                return fallback_url
+                
+        except Exception as e:
+            logger.error(f"Failed to get subscription URL for {short_uuid}: {e}")
+            # Последний resort
+            fallback_url = f"{self.base_url.rstrip('/')}/sub/{short_uuid}"
+            return fallback_url
+
+    async def get_all_subscriptions_with_urls(self) -> Optional[List]:
+        """Get all subscriptions with their URLs from RemnaWave API"""
+        try:
+            logger.info("Fetching all subscriptions with URLs from API")
+            result = await self._make_request('GET', '/api/subscriptions')
+            
+            if not result:
+                logger.error("Empty response from subscriptions API")
+                return []
+            
+            subscriptions_list = []
+            
+            # Extract subscriptions from response
+            if 'response' in result and 'subscriptions' in result['response']:
+                subscriptions_list = result['response']['subscriptions']
+            elif 'subscriptions' in result:
+                subscriptions_list = result['subscriptions']
+            elif 'data' in result:
+                subscriptions_list = result['data']
+            elif isinstance(result, list):
+                subscriptions_list = result
+            
+            # Process subscriptions to ensure they have URLs
+            processed_subscriptions = []
+            for subscription in subscriptions_list:
+                if subscription.get('isFound') and 'user' in subscription:
+                    user_data = subscription['user']
+                    
+                    # Добавляем URL если его нет
+                    if 'subscriptionUrl' not in subscription and user_data.get('shortUuid'):
+                        subscription['subscriptionUrl'] = await self.get_subscription_url(user_data['shortUuid'])
+                    
+                    processed_subscriptions.append(subscription)
+            
+            logger.info(f"Processed {len(processed_subscriptions)} subscriptions with URLs")
+            return processed_subscriptions
+                
+        except Exception as e:
+            logger.error(f"Exception in get_all_subscriptions_with_urls: {e}", exc_info=True)
+            return []
+
+    # User management - без изменений
     async def create_user(self, username: str, password: str = None, 
                          traffic_limit: int = 0, expiry_time: str = None,
                          telegram_id: int = None, email: str = None,
@@ -143,7 +275,6 @@ class RemnaWaveAPI:
             elif 'user' in result:
                 user_data = result['user']
             else:
-                # Если нет стандартных полей, возможно сам result - это пользователь
                 if 'telegramId' in result or 'username' in result:
                     user_data = result
         elif isinstance(result, list):
@@ -155,6 +286,16 @@ class RemnaWaveAPI:
             # Проверяем что это действительно нужный пользователь
             if user_data.get('telegramId') == telegram_id:
                 logger.info(f"Found user: {user_data.get('username')} for Telegram ID {telegram_id}")
+                
+                # НОВОЕ: Обогащаем данные пользователя URL подписки если есть short_uuid
+                if user_data.get('shortUuid') and 'subscriptionUrl' not in user_data:
+                    try:
+                        subscription_url = await self.get_subscription_url(user_data['shortUuid'])
+                        user_data['subscriptionUrl'] = subscription_url
+                        logger.debug(f"Added subscription URL to user data: {subscription_url}")
+                    except Exception as e:
+                        logger.warning(f"Could not get subscription URL for user: {e}")
+                
                 return user_data
             else:
                 logger.warning(f"Telegram ID mismatch: expected {telegram_id}, got {user_data.get('telegramId')}")
@@ -167,11 +308,23 @@ class RemnaWaveAPI:
         result = await self._make_request('GET', f'/api/users/{uuid}')
         
         if result:
+            user_data = None
             if 'response' in result:
-                return result['response']
+                user_data = result['response']
             elif 'data' in result:
-                return result['data']
-            return result
+                user_data = result['data']
+            else:
+                user_data = result
+                
+            # Добавляем subscription URL если его нет
+            if user_data and user_data.get('shortUuid') and 'subscriptionUrl' not in user_data:
+                try:
+                    subscription_url = await self.get_subscription_url(user_data['shortUuid'])
+                    user_data['subscriptionUrl'] = subscription_url
+                except Exception as e:
+                    logger.warning(f"Could not get subscription URL for user: {e}")
+                    
+            return user_data
         return None
     
     async def get_user_by_short_uuid(self, short_uuid: str) -> Optional[Dict]:
@@ -180,11 +333,23 @@ class RemnaWaveAPI:
         result = await self._make_request('GET', f'/api/users/by-short-uuid/{short_uuid}')
         
         if result:
+            user_data = None
             if 'response' in result:
-                return result['response']
+                user_data = result['response']
             elif 'data' in result:
-                return result['data']
-            return result
+                user_data = result['data']
+            else:
+                user_data = result
+                
+            # Добавляем subscription URL если его нет
+            if user_data and 'subscriptionUrl' not in user_data:
+                try:
+                    subscription_url = await self.get_subscription_url(short_uuid)
+                    user_data['subscriptionUrl'] = subscription_url
+                except Exception as e:
+                    logger.warning(f"Could not get subscription URL: {e}")
+                    
+            return user_data
         return None
     
     async def update_user(self, uuid: str, data: Dict) -> Optional[Dict]:
@@ -246,18 +411,8 @@ class RemnaWaveAPI:
             'trafficLimitBytes': traffic_bytes
         }
         return await self.update_user(uuid, update_data)
-    
-    async def get_subscription_url(self, short_uuid: str) -> str:
-        """Get subscription URL for a given short UUID"""
-        try:
-            subscription_url = f"{self.subscription_base_url.rstrip('/')}/sub/{short_uuid}"
-            logger.info(f"Generated subscription URL: {subscription_url}")
-            return subscription_url
-        except Exception as e:
-            logger.error(f"Failed to get subscription URL: {e}")
-            return f"{self.subscription_base_url.rstrip('/')}/sub/{short_uuid}"
 
-    # Nodes management - FIXED with proper endpoints
+    # Nodes management 
     async def get_all_nodes(self) -> Optional[List]:
         """Get all nodes with proper field mapping"""
         try:
@@ -381,7 +536,7 @@ class RemnaWaveAPI:
         """Disable specific node"""
         return await self._make_request('POST', f'/api/nodes/{node_id}/actions/disable')
 
-    # System stats
+    # System stats - без изменений
     async def get_system_stats(self) -> Optional[Dict]:
         """Get system statistics with proper parsing"""
         try:
@@ -432,13 +587,13 @@ class RemnaWaveAPI:
             return None
 
     async def get_all_system_users_full(self) -> Optional[List]:
-        """Get all system users without pagination - FIXED"""
+        """Get all system users with subscription URLs - ОБНОВЛЕННЫЙ МЕТОД"""
         try:
             all_users = []
             offset = 0
             limit = 100
         
-            logger.info("Starting to fetch all system users")
+            logger.info("Starting to fetch all system users with URLs")
         
             while True:
                 logger.debug(f"Fetching users batch: offset={offset}, limit={limit}")
@@ -484,12 +639,23 @@ class RemnaWaveAPI:
                 if not batch_users:
                     logger.info(f"No users in batch at offset {offset}, stopping")
                     break
-            
-                # Логируем первого пользователя для отладки структуры
-                if batch_users and offset == 0:
-                    logger.debug(f"First user structure: {list(batch_users[0].keys()) if batch_users[0] else 'empty'}")
-            
-                all_users.extend(batch_users)
+                
+                # НОВОЕ: Обогащаем каждого пользователя subscription URL
+                enriched_users = []
+                for user in batch_users:
+                    try:
+                        # Добавляем subscription URL если есть shortUuid и его еще нет
+                        if user.get('shortUuid') and 'subscriptionUrl' not in user:
+                            subscription_url = await self.get_subscription_url(user['shortUuid'])
+                            user['subscriptionUrl'] = subscription_url
+                            logger.debug(f"Added subscription URL for user {user.get('username', 'unknown')}")
+                        
+                        enriched_users.append(user)
+                    except Exception as e:
+                        logger.warning(f"Could not enrich user {user.get('username', 'unknown')} with URL: {e}")
+                        enriched_users.append(user)  # Добавляем пользователя даже без URL
+                
+                all_users.extend(enriched_users)
             
                 # Проверяем условия остановки
                 if len(batch_users) < limit:
@@ -511,7 +677,8 @@ class RemnaWaveAPI:
             # Финальная статистика
             if all_users:
                 active_users = len([u for u in all_users if str(u.get('status', '')).upper() == 'ACTIVE'])
-                logger.info(f"Successfully fetched {len(all_users)} users (Active: {active_users})")
+                users_with_urls = len([u for u in all_users if u.get('subscriptionUrl')])
+                logger.info(f"Successfully fetched {len(all_users)} users (Active: {active_users}, With URLs: {users_with_urls})")
             else:
                 logger.warning("No users found in system")
         
@@ -521,6 +688,9 @@ class RemnaWaveAPI:
             logger.error(f"Error getting all system users: {e}", exc_info=True)
             return []
 
+    # Остальные методы остаются без изменений...
+    # (Internal squads, user search, user actions, bulk operations, debug methods, health check, etc.)
+    
     # Internal squads
     async def get_internal_squads_list(self) -> Optional[List[Dict]]:
         """Get list of internal squads"""
@@ -561,7 +731,6 @@ class RemnaWaveAPI:
             return 0
 
     async def debug_users_api(self) -> Dict:
-        """Debug method to check users API response structure"""
         try:
             logger.info("=== DEBUGGING USERS API ===")
         
@@ -631,33 +800,69 @@ class RemnaWaveAPI:
         """Get user by username"""
         result = await self._make_request('GET', f'/api/users/by-username/{username}')
         if result:
+            user_data = None
             if 'response' in result:
-                return result['response']
+                user_data = result['response']
             elif 'data' in result:
-                return result['data']
-            return result
+                user_data = result['data']
+            else:
+                user_data = result
+                
+            # Добавляем subscription URL если его нет
+            if user_data and user_data.get('shortUuid') and 'subscriptionUrl' not in user_data:
+                try:
+                    subscription_url = await self.get_subscription_url(user_data['shortUuid'])
+                    user_data['subscriptionUrl'] = subscription_url
+                except Exception as e:
+                    logger.warning(f"Could not get subscription URL: {e}")
+                    
+            return user_data
         return None
     
     async def get_user_by_email(self, email: str) -> Optional[Dict]:
         """Get user by email"""
         result = await self._make_request('GET', f'/api/users/by-email/{email}')
         if result:
+            user_data = None
             if 'response' in result:
-                return result['response']
+                user_data = result['response']
             elif 'data' in result:
-                return result['data']
-            return result
+                user_data = result['data']
+            else:
+                user_data = result
+                
+            # Добавляем subscription URL если его нет
+            if user_data and user_data.get('shortUuid') and 'subscriptionUrl' not in user_data:
+                try:
+                    subscription_url = await self.get_subscription_url(user_data['shortUuid'])
+                    user_data['subscriptionUrl'] = subscription_url
+                except Exception as e:
+                    logger.warning(f"Could not get subscription URL: {e}")
+                    
+            return user_data
         return None
     
     async def get_user_by_tag(self, tag: str) -> Optional[Dict]:
         """Get user by tag"""
         result = await self._make_request('GET', f'/api/users/by-tag/{tag}')
         if result:
+            user_data = None
             if 'response' in result:
-                return result['response']
+                user_data = result['response']
             elif 'data' in result:
-                return result['data']
-            return result
+                user_data = result['data']
+            else:
+                user_data = result
+                
+            # Добавляем subscription URL если его нет
+            if user_data and user_data.get('shortUuid') and 'subscriptionUrl' not in user_data:
+                try:
+                    subscription_url = await self.get_subscription_url(user_data['shortUuid'])
+                    user_data['subscriptionUrl'] = subscription_url
+                except Exception as e:
+                    logger.warning(f"Could not get subscription URL: {e}")
+                    
+            return user_data
         return None
 
     # User actions
@@ -821,8 +1026,9 @@ class RemnaWaveAPI:
             logger.error(f"Error getting nodes statistics: {e}")
             return {'data': []}
 
+    # ОБНОВЛЯЕМ метод get_all_subscriptions чтобы правильно обрабатывать URLs
     async def get_all_subscriptions(self) -> Optional[List]:
-        """Get all subscriptions from RemnaWave"""
+        """Get all subscriptions from RemnaWave - ОБНОВЛЕННАЯ ВЕРСИЯ"""
         try:
             logger.info("Fetching all subscriptions from API")
             result = await self._make_request('GET', '/api/subscriptions')
@@ -859,9 +1065,19 @@ class RemnaWaveAPI:
                         'trafficUsed': user_data.get('trafficUsed', '0'),
                         'trafficLimit': user_data.get('trafficLimit', '0'),
                         'daysLeft': user_data.get('daysLeft', 0),
-                        'subscriptionUrl': subscription.get('subscriptionUrl'),
+                        # ВАЖНО: Используем subscriptionUrl из самой подписки, а не генерируем
+                        'subscriptionUrl': subscription.get('subscriptionUrl') or subscription.get('url'),
                         'links': subscription.get('links', [])
                     }
+                    
+                    # Если нет URL в подписке, пытаемся получить его
+                    if not processed_user.get('subscriptionUrl') and processed_user.get('shortUuid'):
+                        try:
+                            subscription_url = await self.get_subscription_url(processed_user['shortUuid'])
+                            processed_user['subscriptionUrl'] = subscription_url
+                        except Exception as e:
+                            logger.warning(f"Could not get subscription URL for {processed_user.get('username')}: {e}")
+                    
                     processed_users.append(processed_user)
             
             logger.info(f"Processed {len(processed_users)} active subscriptions")
@@ -870,85 +1086,6 @@ class RemnaWaveAPI:
         except Exception as e:
             logger.error(f"Exception in get_all_subscriptions: {e}", exc_info=True)
             return []
-    
-    async def get_all_system_users_full(self) -> Optional[List]:
-        """Get all system users - updated to use subscriptions API"""
-        try:
-            # Сначала пробуем получить через API пользователей
-            logger.info("Trying to get users via /api/users")
-            users_result = await self._get_users_paginated()
-            
-            if users_result:
-                logger.info(f"Got {len(users_result)} users from users API")
-                return users_result
-            
-            # Если не получилось, пробуем через подписки
-            logger.info("Fallback to subscriptions API")
-            subscriptions_users = await self.get_all_subscriptions()
-            
-            if subscriptions_users:
-                logger.info(f"Got {len(subscriptions_users)} users from subscriptions API")
-                return subscriptions_users
-            
-            logger.warning("No users found via any API endpoint")
-            return []
-                
-        except Exception as e:
-            logger.error(f"Error getting all system users: {e}", exc_info=True)
-            return []
-    
-    async def _get_users_paginated(self) -> Optional[List]:
-        """Get users via paginated API calls"""
-        try:
-            all_users = []
-            offset = 0
-            limit = 100
-            
-            while True:
-                logger.debug(f"Fetching users batch: offset={offset}, limit={limit}")
-                result = await self._make_request('GET', '/api/users', 
-                                                params={'offset': offset, 'limit': limit})
-                
-                if not result:
-                    break
-                
-                batch_users = []
-                
-                # Extract users from various response structures
-                if isinstance(result, dict):
-                    if 'users' in result:
-                        batch_users = result['users'] if isinstance(result['users'], list) else []
-                    elif 'data' in result:
-                        batch_users = result['data'] if isinstance(result['data'], list) else []
-                    elif 'response' in result:
-                        if isinstance(result['response'], dict):
-                            if 'users' in result['response']:
-                                batch_users = result['response']['users'] if isinstance(result['response']['users'], list) else []
-                            elif 'data' in result['response']:
-                                batch_users = result['response']['data'] if isinstance(result['response']['data'], list) else []
-                        elif isinstance(result['response'], list):
-                            batch_users = result['response']
-                elif isinstance(result, list):
-                    batch_users = result
-                
-                if not batch_users:
-                    break
-                
-                all_users.extend(batch_users)
-                
-                if len(batch_users) < limit:
-                    break
-                
-                offset += limit
-                
-                if offset > 10000:  # Safety limit
-                    break
-            
-            return all_users if all_users else None
-            
-        except Exception as e:
-            logger.error(f"Error in _get_users_paginated: {e}")
-            return None
     
     async def bulk_reset_all_traffic(self) -> Optional[Dict]:
         """Reset traffic for all users using the correct API endpoint"""
