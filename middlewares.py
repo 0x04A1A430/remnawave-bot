@@ -23,7 +23,7 @@ class DatabaseMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 class UserMiddleware(BaseMiddleware):
-    """Middleware for user management"""
+    """Middleware for user management - ИСПРАВЛЕНО: правильная инициализация языка"""
     
     def __init__(self, db: Database, config: Config):
         self.db = db
@@ -46,16 +46,16 @@ class UserMiddleware(BaseMiddleware):
                     # Check if user is admin
                     is_admin = telegram_user.id in self.config.ADMIN_IDS
                     
-                    # Create new user
+                    # ИСПРАВЛЕНО: Создаем пользователя с пустым языком для первоначальной настройки
                     user = await self.db.create_user(
                         telegram_id=telegram_user.id,
                         username=telegram_user.username,
                         first_name=telegram_user.first_name,
                         last_name=telegram_user.last_name,
-                        language=self.config.DEFAULT_LANGUAGE,
+                        language='',  # ИЗМЕНЕНО: пустой язык для нового пользователя
                         is_admin=is_admin
                     )
-                    logger.info(f"Created new user: {telegram_user.id}")
+                    logger.info(f"Created new user: {telegram_user.id} without language")
                 else:
                     # Update user info if changed
                     updated = False
@@ -79,7 +79,7 @@ class UserMiddleware(BaseMiddleware):
                         await self.db.update_user(user)
                 
                 data['user'] = user
-                data['lang'] = user.language if user else self.config.DEFAULT_LANGUAGE
+                data['lang'] = user.language if user.language and user.language != '' else self.config.DEFAULT_LANGUAGE
                 
             except Exception as e:
                 logger.error(f"Error in UserMiddleware: {e}")
