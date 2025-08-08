@@ -31,9 +31,12 @@ def main_menu_keyboard(lang: str = 'ru', is_admin: bool = False, show_trial: boo
 
     # Добавляем остальные кнопки
     buttons.extend([
-        # Дополнительные функции
+        # Реферальная программа и дополнительные функции
         [
             InlineKeyboardButton(text="🎁 " + t('promocode', lang), callback_data="promocode"),
+            InlineKeyboardButton(text="👥 Рефералы", callback_data="referral_program")  # НОВАЯ КНОПКА
+        ],
+        [
             InlineKeyboardButton(text="💬 " + t('support', lang), callback_data="support")
         ],
         # Последний ряд - настройки
@@ -59,7 +62,7 @@ def balance_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
 def topup_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     """Beautiful top up balance keyboard"""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 " + t('topup_card', lang), callback_data="topup_card")],
+        # [InlineKeyboardButton(text="💳 " + t('topup_card', lang), callback_data="topup_card")],
         [InlineKeyboardButton(text="👨‍💼 " + t('topup_support', lang), callback_data="topup_support")],
         [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="balance")]
     ])
@@ -122,16 +125,22 @@ def user_subscriptions_keyboard(user_subscriptions: List[dict], lang: str = 'ru'
     buttons.append([InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="main_menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-def user_subscription_detail_keyboard(subscription_id: int, lang: str = 'ru', show_extend: bool = False) -> InlineKeyboardMarkup:
-    """Beautiful user's subscription detail keyboard with connection and optional extend button"""
+def user_subscription_detail_keyboard(subscription_id: int, lang: str = 'ru', show_extend: bool = False, is_imported: bool = False) -> InlineKeyboardMarkup:
+    """Beautiful user's subscription detail keyboard with connection and optional extend button - ИСПРАВЛЕНО"""
     buttons = []
     
-    # Add extend button if subscription is expiring soon
-    if show_extend:
-        buttons.append([InlineKeyboardButton(text="⏰ " + t('extend_subscription', lang), callback_data=f"extend_sub_{subscription_id}")])
-    
-    # Connection button (главная кнопка)
-    buttons.append([InlineKeyboardButton(text="🔗 Получить ссылку подключения", callback_data=f"get_connection_{subscription_id}")])
+    # НОВОЕ: Разные кнопки в зависимости от типа подписки
+    if is_imported:
+        # Для импортированных подписок - только ссылка подключения и покупка новой
+        buttons.append([InlineKeyboardButton(text="🔗 Получить ссылку подключения", callback_data=f"get_connection_{subscription_id}")])
+        buttons.append([InlineKeyboardButton(text="🛒 Купить новую подписку", callback_data="buy_subscription")])
+    else:
+        # Для обычных подписок - кнопка продления если нужна
+        if show_extend:
+            buttons.append([InlineKeyboardButton(text="⏰ " + t('extend_subscription', lang), callback_data=f"extend_sub_{subscription_id}")])
+        
+        # Connection button (главная кнопка)
+        buttons.append([InlineKeyboardButton(text="🔗 Получить ссылку подключения", callback_data=f"get_connection_{subscription_id}")])
     
     # Back button
     buttons.append([InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="my_subscriptions")])
@@ -180,7 +189,10 @@ def admin_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         # Третий ряд - коммуникации и система
         [
             InlineKeyboardButton(text="📨 " + t('send_message', lang), callback_data="admin_messages"),
-            InlineKeyboardButton(text="🖥 Система RemnaWave", callback_data="admin_system")  # НОВОЕ!
+            InlineKeyboardButton(text="👥 Рефералы", callback_data="admin_referrals")  # НОВАЯ КНОПКА
+        ],
+        [
+            InlineKeyboardButton(text="🖥 Система RemnaWave", callback_data="admin_system")
         ],
         # Четвертый ряд - мониторинг и статистика
         [
@@ -503,5 +515,16 @@ def confirm_restart_keyboard(node_id: str = None, lang: str = 'ru') -> InlineKey
             InlineKeyboardButton(text="✅ Да, перезагрузить", callback_data=action),
             InlineKeyboardButton(text="❌ Отмена", callback_data=back_action)
         ]
+    ])
+    return keyboard
+
+def admin_referrals_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Admin referral management keyboard"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика рефералов", callback_data="referral_statistics")],
+        [InlineKeyboardButton(text="👥 Список рефереров", callback_data="list_referrers")],
+        [InlineKeyboardButton(text="💰 История выплат", callback_data="referral_payments")],
+        [InlineKeyboardButton(text="⚙️ Настройки программы", callback_data="referral_settings")],
+        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="admin_panel")]
     ])
     return keyboard
