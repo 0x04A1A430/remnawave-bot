@@ -1,191 +1,131 @@
-import re
-import uuid
+import logging
 import secrets
 import string
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any, Tuple
-import logging
+from typing import Tuple, Optional, Dict, Any
+from database import Database
+from database import ReferralProgram, ReferralEarning  # ДОБАВЛЕНО: импорт моделей
 
 logger = logging.getLogger(__name__)
 
-def generate_username() -> str:
-    """Generate random username for RemnaWave"""
-    return f"user_{secrets.token_hex(8)}"
-
-def generate_password() -> str:
-    """Generate random password"""
-    alphabet = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(alphabet) for _ in range(12))
-
-def generate_promocode() -> str:
-    """Generate random promocode"""
-    alphabet = string.ascii_uppercase + string.digits
-    return ''.join(secrets.choice(alphabet) for _ in range(8))
-
-def is_valid_email(email: str) -> bool:
-    """Validate email format"""
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return re.match(pattern, email) is not None
-
-def is_valid_amount(amount_str: str) -> Tuple[bool, float]:
-    """Validate and parse amount"""
+def is_valid_amount(text: str) -> Tuple[bool, float]:
+    """Validate amount input"""
     try:
-        amount = float(amount_str.replace(',', '.'))
+        # Remove spaces and replace comma with dot
+        text = text.strip().replace(' ', '').replace(',', '.')
+        
+        amount = float(text)
+        
+        # Check if amount is positive and reasonable
         if amount <= 0:
-            return False, 0
-        if amount > 100000:  # Max amount limit
-            return False, 0
+            return False, 0.0
+        
+        if amount > 1000000:  # Max 1M rubles
+            return False, 0.0
+        
+        # Round to 2 decimal places
+        amount = round(amount, 2)
+        
         return True, amount
-    except ValueError:
-        return False, 0
-
-def format_date(date: datetime, lang: str = 'ru') -> str:
-    """Format date for display"""
-    if lang == 'ru':
-        months = [
-            'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-            'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
-        ]
-        return f"{date.day} {months[date.month-1]} {date.year}"
-    else:
-        return date.strftime("%B %d, %Y")
-
-def format_datetime(date: datetime, lang: str = 'ru') -> str:
-    """Format datetime for display"""
-    if lang == 'ru':
-        return date.strftime("%d.%m.%Y %H:%M")
-    else:
-        return date.strftime("%m/%d/%Y %H:%M")
-
-def calculate_expiry_date(days: int) -> str:
-    """Calculate expiry date in ISO format"""
-    expiry = datetime.utcnow() + timedelta(days=days)
-    return expiry.isoformat() + 'Z'
-
-def parse_telegram_id(text: str) -> Optional[int]:
-    """Parse Telegram ID from text"""
-    try:
-        telegram_id = int(text.strip())
-        if telegram_id > 0:
-            return telegram_id
-    except ValueError:
-        pass
-    return None
-
-def format_traffic(gb: int, lang: str = 'ru') -> str:
-    """Format traffic limit for display"""
-    if gb == 0:
-        return "Безлимитный" if lang == 'ru' else "Unlimited"
-    else:
-        return f"{gb} ГБ" if lang == 'ru' else f"{gb} GB"
-
-def paginate_list(items: List[Any], page: int, per_page: int = 10) -> Tuple[List[Any], int]:
-    """Paginate list of items"""
-    total_pages = (len(items) + per_page - 1) // per_page
-    start_idx = (page - 1) * per_page
-    end_idx = start_idx + per_page
-    return items[start_idx:end_idx], total_pages
-
-def escape_markdown(text: str) -> str:
-    """Escape markdown special characters"""
-    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-    for char in special_chars:
-        text = text.replace(char, f'\\{char}')
-    return text
-
-def truncate_text(text: str, max_length: int = 4000) -> str:
-    """Truncate text to fit Telegram message limits"""
-    if len(text) <= max_length:
-        return text
-    return text[:max_length-3] + "..."
-
-def validate_squad_uuid(uuid_str: str) -> bool:
-    """Validate UUID format"""
-    try:
-        uuid.UUID(uuid_str)
-        return True
-    except ValueError:
-        return False
-
-def format_subscription_info(subscription: Dict[str, Any], lang: str = 'ru') -> str:
-    """Format subscription information for display"""
-    from translations import t
-    
-    traffic = format_traffic(subscription['traffic_limit_gb'], lang)
-    
-    info = t('subscription_info', lang,
-        name=subscription['name'],
-        price=subscription['price'],
-        days=subscription['duration_days'],
-        traffic=traffic,
-        description=subscription.get('description', '')
-    )
-    
-    return info
-
-def format_user_subscription_info(user_sub: Dict[str, Any], subscription: Dict[str, Any], 
-                                 expires_at: datetime, lang: str = 'ru') -> str:
-    """Format user subscription information"""
-    from translations import t
-    
-    traffic = format_traffic(subscription['traffic_limit_gb'], lang)
-    
-    # Check if expired
-    now = datetime.utcnow()
-    if expires_at < now:
-        status = t('subscription_expired', lang)
-    else:
-        status = t('subscription_active', lang, date=format_date(expires_at, lang))
-    
-    info = f"📋 {subscription['name']}\n"
-    info += f"⏱ {subscription['duration_days']} дней\n" if lang == 'ru' else f"⏱ {subscription['duration_days']} days\n"
-    info += f"📊 {traffic}\n"
-    info += f"🕒 {status}\n"
-    
-    if subscription.get('description'):
-        info += f"\n{subscription['description']}"
-    
-    return info
+        
+    except (ValueError, TypeError):
+        return False, 0.0
 
 def validate_promocode_format(code: str) -> bool:
     """Validate promocode format"""
     if not code:
         return False
+    
+    # Remove spaces and convert to uppercase
+    code = code.strip().upper()
+    
+    # Check length
     if len(code) < 3 or len(code) > 20:
         return False
-    if not re.match(r'^[A-Z0-9]+$', code.upper()):
+    
+    # Check that code contains only letters and numbers
+    if not code.replace('_', '').isalnum():
         return False
+    
     return True
 
-def calculate_discount(original_price: float, promocode: Dict[str, Any]) -> float:
-    """Calculate discount amount"""
-    if promocode.get('discount_percent'):
-        return original_price * (promocode['discount_percent'] / 100)
+def validate_squad_uuid(uuid: str) -> bool:
+    """Validate squad UUID format"""
+    if not uuid or not isinstance(uuid, str):
+        return False
+    
+    uuid = uuid.strip()
+    
+    # Basic UUID format validation
+    if len(uuid) < 8:
+        return False
+    
+    # UUID should contain only hex characters and hyphens
+    allowed_chars = set('0123456789abcdefABCDEF-')
+    if not all(c in allowed_chars for c in uuid):
+        return False
+    
+    return True
+
+def parse_telegram_id(text: str) -> Optional[int]:
+    """Parse Telegram ID from text"""
+    try:
+        # Remove spaces and common prefixes
+        text = text.strip().replace(' ', '')
+        
+        # Remove common prefixes
+        if text.startswith('@'):
+            text = text[1:]
+        
+        if text.startswith('id'):
+            text = text[2:]
+        
+        # Try to convert to int
+        telegram_id = int(text)
+        
+        # Validate that it's a reasonable Telegram ID
+        if telegram_id <= 0 or telegram_id > 9999999999:  # Max 10 digits
+            return None
+        
+        return telegram_id
+        
+    except (ValueError, TypeError):
+        return None
+
+def generate_username() -> str:
+    """Generate random username for RemnaWave"""
+    prefix = "user_"
+    random_part = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+    return prefix + random_part
+
+def generate_password() -> str:
+    """Generate random password for RemnaWave"""
+    return ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+
+def calculate_expiry_date(days: int) -> str:
+    """Calculate expiry date for subscription"""
+    expiry_date = datetime.now() + timedelta(days=days)
+    return expiry_date.isoformat() + 'Z'
+
+def format_datetime(dt: datetime, language: str = 'ru') -> str:
+    """Format datetime for display"""
+    if not dt:
+        return "N/A"
+    
+    if language == 'ru':
+        return dt.strftime('%d.%m.%Y %H:%M')
     else:
-        return min(promocode.get('discount_amount', 0), original_price)
+        return dt.strftime('%Y-%m-%d %H:%M')
 
-def format_payment_status(status: str, lang: str = 'ru') -> str:
-    """Format payment status for display"""
-    status_map = {
-        'pending': 'В ожидании' if lang == 'ru' else 'Pending',
-        'completed': 'Завершен' if lang == 'ru' else 'Completed',
-        'cancelled': 'Отменен' if lang == 'ru' else 'Cancelled',
-        'failed': 'Ошибка' if lang == 'ru' else 'Failed'
-    }
-    return status_map.get(status, status)
-
-def clean_phone_number(phone: str) -> str:
-    """Clean and format phone number"""
-    # Remove all non-digit characters
-    digits = re.sub(r'\D', '', phone)
+def format_date(dt: datetime, language: str = 'ru') -> str:
+    """Format date for display"""
+    if not dt:
+        return "N/A"
     
-    # Handle Russian phone numbers
-    if digits.startswith('8') and len(digits) == 11:
-        digits = '7' + digits[1:]
-    elif digits.startswith('9') and len(digits) == 10:
-        digits = '7' + digits
-    
-    return digits
+    if language == 'ru':
+        return dt.strftime('%d.%m.%Y')
+    else:
+        return dt.strftime('%Y-%m-%d')
 
 def format_bytes(bytes_value: int) -> str:
     """Format bytes to human readable format"""
@@ -200,121 +140,410 @@ def format_bytes(bytes_value: int) -> str:
         value /= 1024
         unit_index += 1
     
-    if unit_index == 0:
-        return f"{int(value)} {units[unit_index]}"
-    else:
+    if value >= 100:
+        return f"{value:.0f} {units[unit_index]}"
+    elif value >= 10:
         return f"{value:.1f} {units[unit_index]}"
-
-# УДАЛЯЕМ функцию get_subscription_connection_url - теперь URL берется из API
-# def get_subscription_connection_url(base_url: str, short_uuid: str) -> str:
-#     """Generate subscription connection URL"""
-#     return f"{base_url.rstrip('/')}/api/sub/{short_uuid}"
-
-def log_user_action(telegram_id: int, action: str, details: str = None):
-    """Log user action for audit"""
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    log_message = f"Admin action by {telegram_id}: {action}"
-    if details:
-        log_message += f" - {details}"
-    
-    logger.info(log_message)
-
-def format_subscription_status(expires_at: datetime, lang: str = 'ru') -> str:
-    """Format subscription status with emoji"""
-    now = datetime.utcnow()
-    
-    if expires_at < now:
-        return "❌ Истекла" if lang == 'ru' else "❌ Expired"
-    
-    days_left = (expires_at - now).days
-    
-    if days_left == 0:
-        return "⚠️ Истекает сегодня" if lang == 'ru' else "⚠️ Expires today"
-    elif days_left == 1:
-        return "⚠️ Истекает завтра" if lang == 'ru' else "⚠️ Expires tomorrow"
-    elif days_left <= 3:
-        return f"🔶 Осталось {days_left} дней" if lang == 'ru' else f"🔶 {days_left} days left"
     else:
-        return f"✅ Активна ({days_left} дней)" if lang == 'ru' else f"✅ Active ({days_left} days)"
+        return f"{value:.2f} {units[unit_index]}"
 
-def format_monitor_notification_type(notification_type: str, lang: str = 'ru') -> str:
-    """Format notification type for display"""
-    type_map = {
-        'expired': 'Истекла' if lang == 'ru' else 'Expired',
-        'expires_today': 'Истекает сегодня' if lang == 'ru' else 'Expires today',
-        'expires_tomorrow': 'Истекает завтра' if lang == 'ru' else 'Expires tomorrow',
-        'warning': 'Предупреждение' if lang == 'ru' else 'Warning',
-        'urgent': 'Срочно' if lang == 'ru' else 'Urgent'
+def format_payment_status(status: str, language: str = 'ru') -> str:
+    """Format payment status for display"""
+    status_map = {
+        'ru': {
+            'pending': 'Ожидает',
+            'completed': 'Завершен', 
+            'cancelled': 'Отменен',
+            'failed': 'Ошибка'
+        },
+        'en': {
+            'pending': 'Pending',
+            'completed': 'Completed',
+            'cancelled': 'Cancelled',
+            'failed': 'Failed'
+        }
     }
-    return type_map.get(notification_type, notification_type)
-
-def calculate_days_until_expiry(expires_at: datetime) -> int:
-    """Calculate days until expiry"""
-    now = datetime.utcnow()
-    delta = expires_at - now
-    return max(0, delta.days)
-
-def is_subscription_expiring_soon(expires_at: datetime, warning_days: int = 2) -> bool:
-    """Check if subscription is expiring soon"""
-    days_left = calculate_days_until_expiry(expires_at)
-    return days_left <= warning_days
-
-# НОВАЯ ФУНКЦИЯ: Извлечение subscription URL из данных пользователя
-def extract_subscription_url(user_data: Dict[str, Any]) -> Optional[str]:
-    """Extract subscription URL from user data with fallback logic"""
-    if not user_data:
-        return None
     
-    # Пробуем разные возможные поля для URL
-    url_fields = [
-        'subscriptionUrl',
-        'subscription_url',
-        'url',
-        'link',
-        'connectionUrl',
-        'connection_url'
-    ]
-    
-    for field in url_fields:
-        url = user_data.get(field)
-        if url and isinstance(url, str) and url.strip():
-            return url.strip()
-    
-    return None
+    return status_map.get(language, status_map['ru']).get(status, status)
 
-def format_subscription_url_display(subscription_url: str, lang: str = 'ru') -> str:
-    """Format subscription URL for display in messages"""
-    if not subscription_url:
-        return "❌ URL недоступен" if lang == 'ru' else "❌ URL unavailable"
+def format_subscription_info(subscription: Dict[str, Any], language: str = 'ru') -> str:
+    """Format subscription information for display"""
+    text = ""
     
-    # Показываем только домен для безопасности
+    if language == 'ru':
+        text += f"📋 **Подписка: {subscription['name']}**\n\n"
+        text += f"💰 Цена: {subscription['price']} руб.\n"
+        text += f"⏱ Длительность: {subscription['duration_days']} дн.\n"
+        
+        if subscription['traffic_limit_gb'] > 0:
+            text += f"📊 Лимит трафика: {subscription['traffic_limit_gb']} ГБ\n"
+        else:
+            text += f"📊 Лимит трафика: Безлимит\n"
+        
+        if subscription.get('description'):
+            text += f"\n📝 Описание:\n{subscription['description']}"
+    else:
+        text += f"📋 **Subscription: {subscription['name']}**\n\n"
+        text += f"💰 Price: ${subscription['price']}\n"
+        text += f"⏱ Duration: {subscription['duration_days']} days\n"
+        
+        if subscription['traffic_limit_gb'] > 0:
+            text += f"📊 Traffic limit: {subscription['traffic_limit_gb']} GB\n"
+        else:
+            text += f"📊 Traffic limit: Unlimited\n"
+        
+        if subscription.get('description'):
+            text += f"\n📝 Description:\n{subscription['description']}"
+    
+    return text
+
+def format_user_subscription_info(user_sub: Dict[str, Any], subscription: Dict[str, Any], 
+                                expires_at: datetime, language: str = 'ru') -> str:
+    """Format user subscription information for display - ИСПРАВЛЕНО: добавлены пометки для импортированных"""
+    text = ""
+    
+    if language == 'ru':
+        text += f"📋 **{subscription['name']}**\n\n"
+        
+        # Status
+        now = datetime.utcnow()
+        if expires_at < now:
+            status = "❌ Истекла"
+            days_left = 0
+        elif not user_sub.get('is_active', True):
+            status = "⏸ Приостановлена"
+            days_left = (expires_at - now).days
+        else:
+            days_left = (expires_at - now).days
+            status = f"✅ Активна"
+        
+        text += f"🔘 Статус: {status}\n"
+        text += f"📅 Истекает: {format_datetime(expires_at, language)}\n"
+        
+        if days_left > 0:
+            text += f"⏰ Осталось: {days_left} дн.\n"
+        
+        # Traffic info
+        if subscription['traffic_limit_gb'] > 0:
+            text += f"📊 Лимит трафика: {subscription['traffic_limit_gb']} ГБ\n"
+        else:
+            text += f"📊 Лимит трафика: Безлимит\n"
+        
+        if subscription.get('name') == "Старая подписка" or (subscription.get('description') and 'импорт' in subscription.get('description', '').lower()):
+            text += f"\n🔄 Тип: Импортированная из старой системы\n"
+            text += f"ℹ️ Продление недоступно"
+        
+        # Description
+        if subscription.get('description') and not ('импорт' in subscription.get('description', '').lower()):
+            text += f"\n📝 {subscription['description']}"
+    else:
+        text += f"📋 **{subscription['name']}**\n\n"
+        
+        # Status
+        now = datetime.utcnow()
+        if expires_at < now:
+            status = "❌ Expired"
+            days_left = 0
+        elif not user_sub.get('is_active', True):
+            status = "⏸ Suspended"
+            days_left = (expires_at - now).days
+        else:
+            days_left = (expires_at - now).days
+            status = f"✅ Active"
+        
+        text += f"🔘 Status: {status}\n"
+        text += f"📅 Expires: {format_datetime(expires_at, language)}\n"
+        
+        if days_left > 0:
+            text += f"⏰ Days left: {days_left}\n"
+        
+        # Traffic info
+        if subscription['traffic_limit_gb'] > 0:
+            text += f"📊 Traffic limit: {subscription['traffic_limit_gb']} GB\n"
+        else:
+            text += f"📊 Traffic limit: Unlimited\n"
+        
+        if subscription.get('name') == "Старая подписка" or (subscription.get('description') and 'import' in subscription.get('description', '').lower()):
+            text += f"\n🔄 Type: Imported from old system\n"
+            text += f"ℹ️ Extension not available"
+        
+        # Description
+        if subscription.get('description') and not ('import' in subscription.get('description', '').lower()):
+            text += f"\n📝 {subscription['description']}"
+    
+    return text
+
+def log_user_action(user_id: int, action: str, details: str = ""):
+    """Log user action"""
+    logger.info(f"USER_ACTION: {user_id} - {action}" + (f" - {details}" if details else ""))
+
+async def process_referral_rewards(user_id: int, amount: float, payment_id: int, db: Database, bot=None):
+    """Process referral rewards after successful payment - ИСПРАВЛЕНА СИГНАТУРА"""
     try:
-        from urllib.parse import urlparse
-        parsed = urlparse(subscription_url)
-        domain = parsed.netloc or parsed.path.split('/')[0]
-        return f"🔗 {domain}"
-    except Exception:
-        return "🔗 Ссылка готова" if lang == 'ru' else "🔗 Link ready"
+        # Получаем конфигурацию из переменных окружения напрямую
+        import os
+        
+        threshold = float(os.getenv('REFERRAL_THRESHOLD', '300.0'))
+        first_reward = float(os.getenv('REFERRAL_FIRST_REWARD', '150.0'))
+        referred_bonus = float(os.getenv('REFERRAL_REFERRED_BONUS', '150.0'))
+        percentage = float(os.getenv('REFERRAL_PERCENTAGE', '0.25'))
+        
+        # Проверяем есть ли у пользователя реферер
+        referral = await db.get_referral_by_referred_id(user_id)
+        
+        if not referral:
+            logger.debug(f"No referral found for user {user_id}")
+            return
+        
+        # Получаем информацию о пользователе
+        user = await db.get_user_by_telegram_id(user_id)
+        if not user:
+            logger.error(f"User {user_id} not found")
+            return
+        
+        logger.info(f"Processing referral rewards for user {user_id}, amount {amount}, referrer {referral.referrer_id}")
+        
+        if not referral.first_reward_paid and user.balance >= threshold:
+            logger.info(f"Processing first reward for referral {referral.id} (threshold: {threshold}, reward: {first_reward})")
+            
+            await db.add_balance(referral.referrer_id, first_reward)
+            
+            # Создаем запись о платеже для реферера
+            await db.create_payment(
+                user_id=referral.referrer_id,
+                amount=first_reward,
+                payment_type='referral',
+                description=f'Первая награда за реферала ID:{user_id}',
+                status='completed'
+            )
+            
+            # Выплачиваем первую награду рефереру (записываем в историю)
+            success = await db.create_referral_earning(
+                referrer_id=referral.referrer_id,
+                referred_id=user_id,
+                amount=first_reward,
+                earning_type='first_reward',
+                related_payment_id=payment_id
+            )
+            
+            if success:
+                logger.info(f"First reward paid: {first_reward}₽ to referrer {referral.referrer_id}")
+                
+                if bot:
+                    try:
+                        # Уведомляем реферера
+                        await bot.send_message(
+                            referral.referrer_id,
+                            f"🎉 Поздравляем! Ваш реферал пополнил баланс на {threshold}₽+\n\n"
+                            f"💰 Вам начислено {first_reward}₽ за приведенного друга!\n"
+                            f"Теперь вы будете получать {percentage*100:.0f}% с каждого его следующего платежа."
+                        )
+                        
+                        # Уведомляем самого пользователя
+                        await bot.send_message(
+                            user_id,
+                            f"🎁 Бонус активирован! Вам начислено {referred_bonus}₽ за переход по реферальной ссылке!"
+                        )
+                        
+                        # Добавляем бонус рефералу
+                        await db.add_balance(user_id, referred_bonus)
+                        await db.create_payment(
+                            user_id=user_id,
+                            amount=referred_bonus,
+                            payment_type='referral',
+                            description='Бонус за переход по реферальной ссылке',
+                            status='completed'
+                        )
+                        
+                        logger.info(f"Referral bonus notifications sent and balance updated")
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to send referral notifications: {e}")
+            else:
+                logger.error(f"Failed to create first reward earning")
+        
+        if amount > 0 and referral.first_reward_paid:  # ИЗМЕНЕНО: добавлено условие first_reward_paid
+            percentage_reward = amount * percentage
+            
+            if percentage_reward >= 0.01:  # Минимум 1 копейка
+                await db.add_balance(referral.referrer_id, percentage_reward)
+                
+                # Создаем запись о платеже для реферера
+                await db.create_payment(
+                    user_id=referral.referrer_id,
+                    amount=percentage_reward,
+                    payment_type='referral',
+                    description=f'{percentage*100:.0f}% дохода от реферала ID:{user_id}',
+                    status='completed'
+                )
+                
+                success = await db.create_referral_earning(
+                    referrer_id=referral.referrer_id,
+                    referred_id=user_id,
+                    amount=percentage_reward,
+                    earning_type='percentage',
+                    related_payment_id=payment_id
+                )
+                
+                if success:
+                    logger.info(f"Percentage reward paid: {percentage_reward:.2f}₽ ({percentage*100:.0f}%) to referrer {referral.referrer_id}")
+                    
+                    if bot and percentage_reward >= 1.0:  # Уведомляем только если сумма >= 1₽
+                        try:
+                            await bot.send_message(
+                                referral.referrer_id,
+                                f"💰 Реферальный доход!\n\n"
+                                f"Ваш реферал совершил платеж на {amount:.2f}₽\n"
+                                f"Вам начислено: {percentage_reward:.2f}₽ ({percentage*100:.0f}%)"
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to send percentage notification: {e}")
+                else:
+                    logger.error(f"Failed to create percentage earning")
+        elif amount > 0 and not referral.first_reward_paid:
+            logger.info(f"Skipping percentage reward for user {user_id} - first reward not yet paid")
+    
+    except Exception as e:
+        logger.error(f"Error processing referral rewards: {e}")
 
-class States:
-    """State constants for FSM"""
-    WAITING_LANGUAGE = "waiting_language"
-    WAITING_AMOUNT = "waiting_amount"
-    WAITING_PROMOCODE = "waiting_promocode"
+async def create_referral_from_start_param(user_telegram_id: int, start_param: str, db: Database, bot=None):
+    """Create referral relationship from start parameter"""
+    try:
+        if not start_param.startswith("ref_"):
+            return False
+        
+        referrer_id = int(start_param.replace("ref_", ""))
+        
+        # Проверяем что это не тот же пользователь
+        if referrer_id == user_telegram_id:
+            logger.warning(f"User {user_telegram_id} tried to refer themselves")
+            return False
+        
+        # Проверяем что у пользователя еще нет реферера
+        existing_referral = await db.get_referral_by_referred_id(user_telegram_id)
+        
+        if existing_referral:
+            logger.info(f"User {user_telegram_id} already has referrer")
+            return False
+        
+        # Генерируем промокод реферера
+        referral_code = await db.generate_unique_referral_code(referrer_id)
+        
+        # Создаем реферальную связь
+        referral = await db.create_referral(referrer_id, user_telegram_id, referral_code)
+        
+        if referral:
+            logger.info(f"Created referral: {referrer_id} -> {user_telegram_id} with code {referral_code}")
+            
+            # Уведомляем реферера
+            if bot:
+                try:
+                    referrer = await db.get_user_by_telegram_id(referrer_id)
+                    if referrer:
+                        await bot.send_message(
+                            referrer_id,
+                            f"🎉 Отлично! По вашей ссылке зарегистрировался новый пользователь!\n\n"
+                            f"Вы получите 150₽ после того, как он пополнит баланс на 300₽.\n"
+                            f"И будете получать 25% с каждого его платежа!"
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to notify referrer: {e}")
+            
+            return True
+        
+        return False
+        
+    except (ValueError, TypeError) as e:
+        logger.warning(f"Invalid referral parameter: {start_param}")
+        return False
+    except Exception as e:
+        logger.error(f"Error creating referral from start param: {e}")
+        return False
+
+async def create_referral_from_promocode(user_telegram_id: int, referral_code: str, db: Database, bot=None):
+    """Create referral relationship from promocode - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    try:
+        if not referral_code.startswith("REF"):
+            return False
+        
+        logger.info(f"Trying to use referral code {referral_code} for user {user_telegram_id}")
+        
+        # Ищем реферера по коду - ИСПРАВЛЕНО: используем правильный импорт
+        async with db.session_factory() as session:
+            from sqlalchemy import select
+            result = await session.execute(
+                select(ReferralProgram).where(ReferralProgram.referral_code == referral_code)
+            )
+            referral_record = result.scalar_one_or_none()
+            
+            if not referral_record:
+                logger.warning(f"No referrer found for code {referral_code}")
+                return False
+            
+            referrer_id = referral_record.referrer_id
+            
+            # Проверяем что пользователь не пытается использовать свой код
+            if referrer_id == user_telegram_id:
+                logger.warning(f"User {user_telegram_id} tried to use own referral code")
+                return False
+            
+            # Проверяем что у пользователя еще нет реферера
+            existing_referral = await db.get_referral_by_referred_id(user_telegram_id)
+            
+            if existing_referral:
+                logger.info(f"User {user_telegram_id} already has referrer")
+                return False
+            
+            # Создаем реферальную связь
+            referral = await db.create_referral(referrer_id, user_telegram_id, referral_code)
+            
+            if referral:
+                logger.info(f"Created referral from promocode: {referrer_id} -> {user_telegram_id}")
+                
+                # Уведомляем реферера
+                if bot:
+                    try:
+                        await bot.send_message(
+                            referrer_id,
+                            f"🎉 По вашему промокоду {referral_code} зарегистрировался новый пользователь!\n\n"
+                            f"Вы получите 150₽ после того, как он пополнит баланс на 300₽."
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to notify referrer: {e}")
+                
+                return True
+            
+            return False
+        
+    except Exception as e:
+        logger.error(f"Error creating referral from promocode: {e}")
+        return False
+
+def generate_referral_link(bot_username: str, user_id: int) -> str:
+    """Generate referral link for user"""
+    if not bot_username:
+        return ""
     
-    # Admin states
-    ADMIN_CREATE_SUB_NAME = "admin_create_sub_name"
-    ADMIN_CREATE_SUB_DESC = "admin_create_sub_desc"
-    ADMIN_CREATE_SUB_PRICE = "admin_create_sub_price"
-    ADMIN_CREATE_SUB_DAYS = "admin_create_sub_days"
-    ADMIN_CREATE_SUB_TRAFFIC = "admin_create_sub_traffic"
-    ADMIN_CREATE_SUB_SQUAD = "admin_create_sub_squad"
+    if bot_username.startswith('@'):
+        bot_username = bot_username[1:]
     
-    ADMIN_ADD_BALANCE_USER = "admin_add_balance_user"
-    ADMIN_ADD_BALANCE_AMOUNT = "admin_add_balance_amount"
-    
-    ADMIN_CREATE_PROMO_CODE = "admin_create_promo_code"
-    ADMIN_CREATE_PROMO_DISCOUNT = "admin_create_promo_discount"
-    ADMIN_CREATE_PROMO_LIMIT = "admin_create_promo_limit"
+    return f"https://t.me/{bot_username}?start=ref_{user_id}"
+
+def validate_referral_code(code: str) -> bool:
+    """Validate referral code format"""
+    if not code or not code.startswith("REF"):
+        return False
+    if len(code) < 4 or len(code) > 20:
+        return False
+    return True
+
+def format_referral_stats(stats: dict, lang: str = 'ru') -> str:
+    """Format referral statistics for display"""
+    if lang == 'ru':
+        return (f"👥 Приглашено: {stats['total_referrals']}\n"
+                f"✅ Активных: {stats['active_referrals']}\n"
+                f"💰 Заработано: {stats['total_earned']:.2f}₽")
+    else:
+        return (f"👥 Invited: {stats['total_referrals']}\n"
+                f"✅ Active: {stats['active_referrals']}\n"
+                f"💰 Earned: ${stats['total_earned']:.2f}")
