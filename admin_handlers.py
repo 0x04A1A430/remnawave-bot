@@ -13,6 +13,7 @@ from keyboards import *
 from translations import t
 from utils import *
 from handlers import BotStates
+from referral_utils import process_referral_rewards
 try:
     from api_error_handlers import (
         APIErrorHandler, safe_get_nodes, safe_get_system_users, 
@@ -152,7 +153,7 @@ async def create_subscription_callback(callback: CallbackQuery, user: User, stat
 async def handle_sub_name(message: Message, state: FSMContext, user: User, **kwargs):
     """Handle subscription name input"""
     name = message.text.strip()
-    if len(name) < 3 or len(name) > 100:
+    if not (3 <= len(name) <= 100):
         await message.answer("❌ Название должно быть от 3 до 100 символов")
         return
     
@@ -920,7 +921,7 @@ async def noop_callback(callback: CallbackQuery, **kwargs):
 # Payment approval handlers
 @admin_router.callback_query(F.data.startswith("approve_payment_"))
 async def approve_payment(callback: CallbackQuery, user: User, db: Database, **kwargs):
-    """Approve payment"""
+    """Approve payment with referral rewards - ИСПРАВЛЕНА"""
     if not await check_admin_access(callback, user):
         return
     
@@ -944,12 +945,14 @@ async def approve_payment(callback: CallbackQuery, user: User, db: Database, **k
             payment.status = 'completed'
             await db.update_payment(payment)
             
+            bot = kwargs.get('bot')
+            await process_referral_rewards(payment.user_id, payment.amount, payment.id, db, bot)
+            
             await callback.message.edit_text(
                 f"✅ Платеж одобрен!\n💰 Пользователю {payment.user_id} добавлено {payment.amount} руб."
             )
             
             # Notify user about successful payment
-            bot = kwargs.get('bot')
             if bot:
                 try:
                     await bot.send_message(
@@ -3338,11 +3341,11 @@ async def sync_remnawave_callback(callback: CallbackQuery, user: User, **kwargs)
 def sync_remnawave_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
     """Keyboard for RemnaWave sync options"""
     buttons = [
-        [InlineKeyboardButton(text="👥 Синхронизировать пользователей", callback_data="sync_users_remnawave")],
-        [InlineKeyboardButton(text="📋 Синхронизировать подписки", callback_data="sync_subscriptions_remnawave")],
+        #[InlineKeyboardButton(text="👥 Синхронизировать пользователей", callback_data="sync_users_remnawave")],
+        #[InlineKeyboardButton(text="📋 Синхронизировать подписки", callback_data="sync_subscriptions_remnawave")],
         [InlineKeyboardButton(text="🔄 Полная синхронизация", callback_data="sync_full_remnawave")],
-        [InlineKeyboardButton(text="🌍 ИМПОРТ ВСЕХ по Telegram ID", callback_data="import_all_by_telegram")],
         [InlineKeyboardButton(text="👤 Синхронизировать одного", callback_data="sync_single_user")],
+        [InlineKeyboardButton(text="🌍 ИМПОРТ ВСЕХ по Telegram ID", callback_data="import_all_by_telegram")],
         [InlineKeyboardButton(text="📋 Просмотр планов", callback_data="view_imported_plans")],
         [InlineKeyboardButton(text="📊 Статус синхронизации", callback_data="sync_status_remnawave")],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_system")]
@@ -3890,24 +3893,24 @@ async def sync_status_remnawave_callback(callback: CallbackQuery, user: User, ap
         # Build status text
         text = "📊 **Статус синхронизации**\n\n"
         
-        text += "**RemnaWave:**\n"
+        text += "RemnaWave:\n"
         text += f"• Всего пользователей: {len(remna_users)}\n"
         text += f"• С Telegram ID: {remna_with_tg}\n"
         text += f"• Без Telegram ID: {remna_without_tg}\n\n"
         
-        text += "**Бот:**\n"
+        text += "Бот:\n"
         text += f"• Всего пользователей: {len(bot_users)}\n"
         text += f"• С RemnaWave UUID: {bot_with_uuid}\n"
         text += f"• Без RemnaWave UUID: {bot_without_uuid}\n\n"
         
-        text += "**Подписки:**\n"
+        text += "Подписки:\n"
         text += f"• Всего в боте: {total_bot_subs}\n"
         text += f"• Синхронизировано: {synced_subs}\n"
         text += f"• Не синхронизировано: {total_bot_subs - synced_subs}\n\n"
         
         # Recommendations
         if bot_without_uuid > 0 or remna_without_tg > 0 or (total_bot_subs - synced_subs) > 0:
-            text += "⚠️ **Рекомендации:**\n"
+            text += "⚠️ Рекомендации:\n"
             if bot_without_uuid > 0:
                 text += f"• {bot_without_uuid} пользователей бота не связаны с RemnaWave\n"
             if remna_without_tg > 0:
@@ -3916,7 +3919,7 @@ async def sync_status_remnawave_callback(callback: CallbackQuery, user: User, ap
                 text += f"• {total_bot_subs - synced_subs} подписок не синхронизированы\n"
             text += "\n💡 Рекомендуется выполнить полную синхронизацию\n"
         else:
-            text += "✅ **Все данные синхронизированы**\n"
+            text += "✅ Все данные синхронизированы\n"
         
         text += f"\n🕐 _Проверено: {format_datetime(datetime.now(), user.language)}_"
         
@@ -3935,7 +3938,6 @@ async def sync_status_remnawave_callback(callback: CallbackQuery, user: User, ap
 # User filtering handlers
 @admin_router.callback_query(F.data == "filter_users_active")
 async def filter_users_active_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Show only active users - ИСПРАВЛЕНО"""
     if not await check_admin_access(callback, user):
         return
     
@@ -5638,3 +5640,78 @@ async def debug_all_plans_callback(callback: CallbackQuery, user: User, db: Data
     except Exception as e:
         logger.error(f"Error debugging all plans: {e}")
         await callback.answer("❌ Ошибка анализа планов", show_alert=True)
+
+@admin_router.callback_query(F.data == "admin_referrals")
+async def admin_referrals_callback(callback: CallbackQuery, user: User, **kwargs):
+    """Show referral management"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    await callback.message.edit_text(
+        "👥 Управление реферальной программой",
+        reply_markup=admin_referrals_keyboard(user.language)
+    )
+
+@admin_router.callback_query(F.data == "referral_statistics")
+async def referral_statistics_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    """Show referral statistics"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        # Получаем общую статистику
+        async with db.session_factory() as session:
+            from sqlalchemy import select, func
+            
+            # Общее количество рефералов
+            total_referrals = await session.execute(
+                select(func.count(ReferralProgram.id))
+            )
+            total_referrals = total_referrals.scalar() or 0
+            
+            # Активные рефералы (получившие первую награду)
+            active_referrals = await session.execute(
+                select(func.count(ReferralProgram.id))
+                .where(ReferralProgram.first_reward_paid == True)
+            )
+            active_referrals = active_referrals.scalar() or 0
+            
+            # Общая сумма выплат
+            total_paid = await session.execute(
+                select(func.sum(ReferralEarning.amount))
+            )
+            total_paid = total_paid.scalar() or 0.0
+            
+            # Топ рефереров
+            top_referrers = await session.execute(
+                select(ReferralProgram.referrer_id, func.count(ReferralProgram.id).label('count'))
+                .group_by(ReferralProgram.referrer_id)
+                .order_by(func.count(ReferralProgram.id).desc())
+                .limit(5)
+            )
+            top_referrers = list(top_referrers.fetchall())
+        
+        text = "📊 Статистика реферальной программы\n\n"
+        text += f"👥 Всего рефералов: {total_referrals}\n"
+        text += f"✅ Активных рефералов: {active_referrals}\n"
+        text += f"💰 Выплачено всего: {total_paid:.2f}₽\n"
+        text += f"📈 Конверсия: {(active_referrals/total_referrals*100):.1f}%" if total_referrals > 0 else "📈 Конверсия: 0%"
+        
+        if top_referrers:
+            text += f"\n\n🏆 Топ рефереров:\n"
+            for i, (referrer_id, count) in enumerate(top_referrers, 1):
+                referrer = await db.get_user_by_telegram_id(referrer_id)
+                username = referrer.username if referrer and referrer.username else "Unknown"
+                text += f"{i}. @{username}: {count} рефералов\n"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=back_keyboard("admin_referrals", user.language)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting referral statistics: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка получения статистики",
+            reply_markup=back_keyboard("admin_referrals", user.language)
+        )
