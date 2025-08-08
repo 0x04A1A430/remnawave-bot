@@ -7,8 +7,20 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-# Import our modules
-from config import load_config
+# ДОБАВЛЯЕМ ДЕБАГ ЗАГРУЗКИ .env ПЕРЕД ИМПОРТОМ CONFIG
+print("🚀 Запуск бота...")
+print(f"📍 Рабочая директория: {os.getcwd()}")
+print(f"📁 Файлы в директории: {os.listdir('.')}")
+
+# Проверяем наличие .env файла
+if os.path.exists('.env'):
+    print("✅ Файл .env найден")
+else:
+    print("❌ Файл .env НЕ НАЙДЕН!")
+    print("💡 Создайте файл .env в корне проекта")
+
+# Import our modules ПОСЛЕ проверки .env
+from config import load_config, debug_environment
 from database import Database
 from remnawave_api import RemnaWaveAPI
 from subscription_monitor import create_subscription_monitor
@@ -40,8 +52,18 @@ class BotApplication:
         
     async def initialize(self):
         """Initialize all components"""
+        
+        # ДЕБАГ: проверяем переменные окружения
+        debug_environment()
+        
         # Load configuration
         self.config = load_config()
+        
+        # ДЕБАГ: проверяем что загрузилось
+        print(f"🔧 Загруженная конфигурация:")
+        print(f"   BOT_USERNAME: '{self.config.BOT_USERNAME}'")
+        print(f"   REFERRAL_FIRST_REWARD: {self.config.REFERRAL_FIRST_REWARD}")
+        print(f"   ADMIN_IDS: {self.config.ADMIN_IDS}")
         
         # Validate required environment variables
         if not self.config.BOT_TOKEN:
@@ -52,9 +74,15 @@ class BotApplication:
             logger.error("REMNAWAVE_URL and REMNAWAVE_TOKEN are required")
             raise ValueError("REMNAWAVE_URL and REMNAWAVE_TOKEN are required")
         
+        # ПРЕДУПРЕЖДЕНИЕ если BOT_USERNAME не установлен
+        if not self.config.BOT_USERNAME:
+            logger.warning("⚠️  BOT_USERNAME не установлен! Реферальные ссылки работать не будут!")
+            print("💡 Добавьте BOT_USERNAME=your_bot_username в .env файл")
+        
         logger.info("Starting RemnaWave Bot...")
         logger.info(f"RemnaWave URL: {self.config.REMNAWAVE_URL}")
         logger.info(f"Admin IDs: {self.config.ADMIN_IDS}")
+        logger.info(f"Bot Username: {self.config.BOT_USERNAME}")
         
         # Initialize database
         self.db = Database(self.config.DATABASE_URL)
@@ -117,6 +145,13 @@ class BotApplication:
         try:
             bot_info = await self.bot.get_me()
             logger.info(f"Bot started: @{bot_info.username} ({bot_info.first_name})")
+            
+            # АВТОМАТИЧЕСКИ обновляем BOT_USERNAME если он не был установлен
+            if not self.config.BOT_USERNAME and bot_info.username:
+                self.config.BOT_USERNAME = bot_info.username
+                logger.info(f"✅ BOT_USERNAME автоматически установлен: {bot_info.username}")
+                print("💡 Добавьте BOT_USERNAME в .env файл для постоянного сохранения")
+            
         except Exception as e:
             logger.error(f"Invalid bot token or network error: {e}")
             raise
@@ -180,6 +215,13 @@ class BotApplication:
     async def start(self):
         """Start bot polling"""
         logger.info("Bot polling started successfully")
+        
+        # ФИНАЛЬНАЯ ПРОВЕРКА конфигурации
+        if self.config.BOT_USERNAME:
+            logger.info(f"🎁 Реферальная система активна! Ссылки: https://t.me/{self.config.BOT_USERNAME}?start=ref_USERID")
+        else:
+            logger.warning("⚠️  Реферальная система неактивна! Установите BOT_USERNAME")
+        
         try:
             await self.dp.start_polling(self.bot)
         except Exception as e:
