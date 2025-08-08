@@ -1,503 +1,309 @@
-"""
-Subscription Monitor Service
-Сервис для мониторинга подписок, уведомлений пользователей и предложений продления
-"""
-
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
-from dataclasses import dataclass
-import traceback
-
-from aiogram import Bot
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
-from database import Database, UserSubscription, Subscription, User
+from typing import Optional, List
+from database import Database
 from remnawave_api import RemnaWaveAPI
-from translations import t
-from keyboards import extend_subscription_keyboard, main_menu_keyboard
-from utils import format_datetime, log_user_action
-from config import Config
 
-# Настройка логирования
 logger = logging.getLogger(__name__)
 
-@dataclass
-class NotificationResult:
-    """Результат отправки уведомления"""
-    success: bool
-    user_id: int
-    message: str
-    error: Optional[str] = None
-
 class SubscriptionMonitorService:
-    """Сервис мониторинга подписок"""
+    """Service for monitoring subscriptions and sending notifications"""
     
-    def __init__(self, bot: Bot, db: Database, config: Config, api: Optional[RemnaWaveAPI] = None):
+    def __init__(self, bot, db: Database, config, api: RemnaWaveAPI = None):
         self.bot = bot
         self.db = db
         self.config = config
         self.api = api
         self.is_running = False
-        self._monitor_task: Optional[asyncio.Task] = None
-    
-        # Настройки уведомлений из конфига
-        self.WARNING_DAYS = config.MONITOR_WARNING_DAYS  # За сколько дней предупреждать
-        self.CHECK_INTERVAL = config.MONITOR_CHECK_INTERVAL  # Интервал проверки (в секундах)
-        self.DAILY_CHECK_HOUR = config.MONITOR_DAILY_CHECK_HOUR  # В какой час дня делать основную 
+        self._monitor_task = None
+        self._daily_task = None
         
     async def start(self):
-        """Запуск сервиса мониторинга"""
+        """Start the monitoring service"""
         if self.is_running:
-            logger.warning("Subscription monitor service is already running")
+            logger.warning("Monitor service is already running")
             return
-            
+        
         self.is_running = True
+        
+        # Start periodic monitoring task
         self._monitor_task = asyncio.create_task(self._monitor_loop())
+        
+        # Start daily cleanup task
+        self._daily_task = asyncio.create_task(self._daily_loop())
+        
         logger.info("Subscription monitor service started")
         
     async def stop(self):
-        """Остановка сервиса мониторинга"""
+        """Stop the monitoring service"""
         if not self.is_running:
             return
-            
+        
         self.is_running = False
+        
+        # Cancel tasks
         if self._monitor_task:
             self._monitor_task.cancel()
             try:
                 await self._monitor_task
             except asyncio.CancelledError:
                 pass
-                
+        
+        if self._daily_task:
+            self._daily_task.cancel()
+            try:
+                await self._daily_task
+            except asyncio.CancelledError:
+                pass
+        
         logger.info("Subscription monitor service stopped")
         
     async def _monitor_loop(self):
-        """Основной цикл мониторинга"""
-        logger.info(f"Starting monitor loop with {self.CHECK_INTERVAL}s interval")
-        
+        """Main monitoring loop"""
         while self.is_running:
             try:
-                current_time = datetime.utcnow()
-                
-                # Основная проверка раз в день в определенное время
-                if current_time.hour == self.DAILY_CHECK_HOUR:
-                    await self._daily_check()
-                
-                # Дополнительная проверка каждый час для критических случаев
-                await self._hourly_check()
-                
-                # Ожидание до следующей проверки
-                await asyncio.sleep(self.CHECK_INTERVAL)
-                
+                await self._check_expiring_subscriptions()
+                await asyncio.sleep(self.config.MONITOR_CHECK_INTERVAL)
             except asyncio.CancelledError:
-                logger.info("Monitor loop cancelled")
                 break
             except Exception as e:
                 logger.error(f"Error in monitor loop: {e}")
-                logger.error(traceback.format_exc())
-                # Продолжаем работу даже при ошибках
-                await asyncio.sleep(60)  # Короткая пауза при ошибке
+                await asyncio.sleep(60)  # Wait 1 minute before retry
                 
-    async def _daily_check(self):
-        """Ежедневная проверка всех подписок"""
-        logger.info("Starting daily subscription check")
-        
+    async def _daily_loop(self):
+        """Daily cleanup loop"""
+        while self.is_running:
+            try:
+                now = datetime.now()
+                
+                # Wait until the specified hour
+                if now.hour == self.config.MONITOR_DAILY_CHECK_HOUR:
+                    await self.force_daily_check()
+                    
+                    # Wait until next day
+                    tomorrow = now.replace(hour=self.config.MONITOR_DAILY_CHECK_HOUR, minute=0, second=0, microsecond=0) + timedelta(days=1)
+                    sleep_time = (tomorrow - now).total_seconds()
+                else:
+                    # Calculate time until next check
+                    target_time = now.replace(hour=self.config.MONITOR_DAILY_CHECK_HOUR, minute=0, second=0, microsecond=0)
+                    if target_time < now:
+                        target_time += timedelta(days=1)
+                    sleep_time = (target_time - now).total_seconds()
+                
+                await asyncio.sleep(min(sleep_time, 3600))  # Check at least every hour
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in daily loop: {e}")
+                await asyncio.sleep(3600)  # Wait 1 hour before retry
+                
+    async def _check_expiring_subscriptions(self):
+        """Check for expiring subscriptions and send warnings"""
         try:
-            # Получаем все активные подписки пользователей
+            # Get all users
             all_users = await self.db.get_all_users()
-            total_notifications = 0
             
             for user in all_users:
                 try:
-                    user_subs = await self.db.get_user_subscriptions(user.telegram_id)
-                    active_subs = [sub for sub in user_subs if sub.is_active]
+                    # Get expiring subscriptions for this user
+                    expiring_subs = await self.db.get_expiring_subscriptions(
+                        user.telegram_id, 
+                        self.config.MONITOR_WARNING_DAYS
+                    )
                     
-                    for user_sub in active_subs:
-                        # Проверяем каждую подписку
-                        notification_sent = await self._check_and_notify_subscription(user, user_sub)
-                        if notification_sent:
-                            total_notifications += 1
-                            
-                        # Небольшая пауза между уведомлениями
-                        await asyncio.sleep(0.1)
+                    for user_sub in expiring_subs:
+                        await self._send_expiry_warning(user, user_sub)
                         
                 except Exception as e:
                     logger.error(f"Error checking subscriptions for user {user.telegram_id}: {e}")
-                    continue
-                    
-            logger.info(f"Daily check completed. Sent {total_notifications} notifications")
-            
-        except Exception as e:
-            logger.error(f"Error in daily check: {e}")
-            logger.error(traceback.format_exc())
-            
-    async def _hourly_check(self):
-        """Часовая проверка критических подписок (истекают сегодня)"""
-        try:
-            now = datetime.utcnow()
-            tomorrow = now + timedelta(days=1)
-            
-            # Получаем подписки, которые истекают в ближайшие 24 часа
-            all_users = await self.db.get_all_users()
-            
-            for user in all_users:
-                try:
-                    user_subs = await self.db.get_user_subscriptions(user.telegram_id)
-                    
-                    for user_sub in user_subs:
-                        if (user_sub.is_active and 
-                            user_sub.expires_at <= tomorrow and 
-                            user_sub.expires_at > now):
-                            
-                            await self._check_and_notify_subscription(user, user_sub, urgent=True)
-                            await asyncio.sleep(0.1)
-                            
-                except Exception as e:
-                    logger.error(f"Error in hourly check for user {user.telegram_id}: {e}")
-                    continue
                     
         except Exception as e:
-            logger.error(f"Error in hourly check: {e}")
+            logger.error(f"Error in check_expiring_subscriptions: {e}")
             
-    async def _check_and_notify_subscription(self, user: User, user_sub: UserSubscription, urgent: bool = False) -> bool:
-        """
-        Проверить подписку и отправить уведомление если нужно
-        Returns: True если уведомление было отправлено
-        """
+    async def _send_expiry_warning(self, user, user_subscription):
+        """Send expiry warning to user"""
         try:
-            now = datetime.utcnow()
-            days_until_expiry = (user_sub.expires_at - now).days
-            hours_until_expiry = (user_sub.expires_at - now).total_seconds() / 3600
+            days_left = (user_subscription.expires_at - datetime.utcnow()).days
             
-            # Получаем информацию о подписке
-            subscription = await self.db.get_subscription_by_id(user_sub.subscription_id)
+            subscription = await self.db.get_subscription_by_id(user_subscription.subscription_id)
             if not subscription:
-                logger.warning(f"Subscription {user_sub.subscription_id} not found")
-                return False
+                return
             
-            notification_type = None
+            # Don't send warnings for trial subscriptions
+            if subscription.is_trial:
+                return
             
-            # Определяем тип уведомления
-            if user_sub.expires_at <= now:
-                # Подписка истекла
-                notification_type = "expired"
-            elif days_until_expiry <= 0 and hours_until_expiry <= 24:
-                # Истекает сегодня
-                notification_type = "expires_today"
-            elif days_until_expiry == 1:
-                # Истекает завтра
-                notification_type = "expires_tomorrow"
-            elif days_until_expiry == self.WARNING_DAYS:
-                # Предупреждение за 2 дня
-                notification_type = "warning"
-            elif urgent and days_until_expiry <= 1:
-                # Срочное уведомление
-                notification_type = "urgent"
+            message = self._format_expiry_message(subscription.name, days_left, user.language)
             
-            if notification_type:
-                return await self._send_notification(user, user_sub, subscription, notification_type)
-                
-            return False
+            await self.bot.send_message(user.telegram_id, message)
+            logger.info(f"Sent expiry warning to user {user.telegram_id} for subscription {subscription.name}")
             
         except Exception as e:
-            logger.error(f"Error checking subscription {user_sub.id}: {e}")
-            return False
+            logger.error(f"Error sending expiry warning: {e}")
             
-    async def _send_notification(self, user: User, user_sub: UserSubscription, 
-                               subscription: Subscription, notification_type: str) -> bool:
-        """Отправить уведомление пользователю"""
-        try:
-            # Проверяем, не является ли подписка тестовой (для тестовых другая логика)
-            if subscription.is_trial and notification_type in ["warning", "expires_tomorrow"]:
-                # Для тестовых подписок не предлагаем продление
-                return await self._send_trial_expiry_notification(user, user_sub, subscription, notification_type)
-            
-            # Формируем текст уведомления
-            message_text = self._format_notification_message(user, user_sub, subscription, notification_type)
-            
-            # Формируем клавиатуру
-            keyboard = self._create_notification_keyboard(user, user_sub, subscription, notification_type)
-            
-            # Отправляем уведомление
-            await self.bot.send_message(
-                chat_id=user.telegram_id,
-                text=message_text,
-                reply_markup=keyboard,
-                parse_mode='Markdown'
-            )
-            
-            # Логируем действие
-            log_user_action(user.telegram_id, f"notification_sent_{notification_type}", f"Sub: {subscription.name}")
-            
-            logger.info(f"Sent {notification_type} notification to user {user.telegram_id} for subscription {subscription.name}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error sending notification to user {user.telegram_id}: {e}")
-            return False
-            
-    async def _send_trial_expiry_notification(self, user: User, user_sub: UserSubscription, 
-                                            subscription: Subscription, notification_type: str) -> bool:
-        """Отправить уведомление об истечении тестовой подписки"""
-        try:
-            now = datetime.utcnow()
-            days_until_expiry = (user_sub.expires_at - now).days
-            hours_until_expiry = (user_sub.expires_at - now).total_seconds() / 3600
-            
-            if notification_type == "expires_today" or hours_until_expiry <= 24:
-                message_text = (
-                    f"⏰ *Ваша тестовая подписка истекает сегодня!*\n\n"
-                    f"📋 Подписка: *{subscription.name}*\n"
-                    f"⏳ Осталось: *{int(hours_until_expiry)} часов*\n\n"
-                    f"💡 Чтобы продолжить пользоваться сервисом, приобретите полную подписку!"
-                )
-            elif notification_type == "expires_tomorrow" or days_until_expiry == 1:
-                message_text = (
-                    f"⚠️ *Ваша тестовая подписка истекает завтра!*\n\n"
-                    f"📋 Подписка: *{subscription.name}*\n"
-                    f"📅 Истекает: *{format_datetime(user_sub.expires_at, user.language)}*\n\n"
-                    f"💡 Не забудьте приобрести полную подписку, чтобы продолжить пользоваться сервисом!"
-                )
+    def _format_expiry_message(self, subscription_name: str, days_left: int, language: str = 'ru') -> str:
+        """Format expiry warning message"""
+        if language == 'ru':
+            if days_left <= 0:
+                return f"⚠️ Ваша подписка '{subscription_name}' истекла!\n\nДля продления перейдите в раздел 'Мои подписки'."
+            elif days_left == 1:
+                return f"⚠️ Ваша подписка '{subscription_name}' истекает завтра!\n\nНе забудьте продлить её в разделе 'Мои подписки'."
             else:
-                return False
-            
-            # Клавиатура для тестовой подписки
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(
-                    text="💳 Купить подписку",
-                    callback_data="buy_subscription"
-                )],
-                [InlineKeyboardButton(
-                    text="💰 Пополнить баланс",
-                    callback_data="topup_balance"
-                )],
-                [InlineKeyboardButton(
-                    text="🏠 Главное меню",
-                    callback_data="main_menu"
-                )]
-            ])
-            
-            await self.bot.send_message(
-                chat_id=user.telegram_id,
-                text=message_text,
-                reply_markup=keyboard,
-                parse_mode='Markdown'
-            )
-            
-            log_user_action(user.telegram_id, f"trial_notification_sent_{notification_type}", f"Sub: {subscription.name}")
-            logger.info(f"Sent trial {notification_type} notification to user {user.telegram_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error sending trial notification to user {user.telegram_id}: {e}")
-            return False
-            
-    def _format_notification_message(self, user: User, user_sub: UserSubscription, 
-                                   subscription: Subscription, notification_type: str) -> str:
-        """Форматировать текст уведомления"""
-        now = datetime.utcnow()
-        days_until_expiry = (user_sub.expires_at - now).days
-        hours_until_expiry = (user_sub.expires_at - now).total_seconds() / 3600
-        
-        base_info = (
-            f"📋 Подписка: *{subscription.name}*\n"
-            f"📅 Истекает: *{format_datetime(user_sub.expires_at, user.language)}*\n"
-            f"💰 Цена продления: *{subscription.price} руб.*"
-        )
-        
-        if notification_type == "expired":
-            return (
-                f"❌ *Ваша подписка истекла!*\n\n"
-                f"{base_info}\n\n"
-                f"🔄 Продлите подписку, чтобы продолжить пользоваться сервисом."
-            )
-        elif notification_type == "expires_today" or notification_type == "urgent":
-            return (
-                f"⏰ *Ваша подписка истекает сегодня!*\n\n"
-                f"{base_info}\n"
-                f"⏳ Осталось: *{int(hours_until_expiry)} часов*\n\n"
-                f"🔄 Продлите подписку прямо сейчас!"
-            )
-        elif notification_type == "expires_tomorrow":
-            return (
-                f"⚠️ *Ваша подписка истекает завтра!*\n\n"
-                f"{base_info}\n\n"
-                f"🔄 Рекомендуем продлить подписку заранее."
-            )
-        elif notification_type == "warning":
-            return (
-                f"📢 *Напоминание о подписке*\n\n"
-                f"{base_info}\n"
-                f"⏳ Осталось: *{days_until_expiry} дней*\n\n"
-                f"💡 Не забудьте продлить подписку вовремя!"
-            )
+                return f"⚠️ Ваша подписка '{subscription_name}' истекает через {days_left} дн.!\n\nРекомендуем продлить её заранее в разделе 'Мои подписки'."
         else:
-            return f"🔔 Уведомление о подписке *{subscription.name}*"
-            
-    def _create_notification_keyboard(self, user: User, user_sub: UserSubscription, 
-                                    subscription: Subscription, notification_type: str) -> InlineKeyboardMarkup:
-        """Создать клавиатуру для уведомления"""
-        buttons = []
-        
-        # Кнопка продления (только для не-тестовых подписок)
-        if not subscription.is_trial:
-            if user.balance >= subscription.price:
-                buttons.append([InlineKeyboardButton(
-                    text=f"🔄 Продлить за {subscription.price} руб.",
-                    callback_data=f"extend_sub_{user_sub.id}"
-                )])
+            if days_left <= 0:
+                return f"⚠️ Your subscription '{subscription_name}' has expired!\n\nTo renew, go to 'My Subscriptions'."
+            elif days_left == 1:
+                return f"⚠️ Your subscription '{subscription_name}' expires tomorrow!\n\nDon't forget to renew it in 'My Subscriptions'."
             else:
-                buttons.append([InlineKeyboardButton(
-                    text=f"💰 Пополнить баланс (нужно {subscription.price - user.balance} руб.)",
-                    callback_data="topup_balance"
-                )])
-        
-        # Кнопка покупки новой подписки
-        buttons.append([InlineKeyboardButton(
-            text="💳 Купить подписку",
-            callback_data="buy_subscription"
-        )])
-        
-        # Кнопка "Мои подписки"
-        buttons.append([InlineKeyboardButton(
-            text="📋 Мои подписки",
-            callback_data="my_subscriptions"
-        )])
-        
-        # Кнопка главного меню
-        buttons.append([InlineKeyboardButton(
-            text="🏠 Главное меню",
-            callback_data="main_menu"
-        )])
-        
-        return InlineKeyboardMarkup(inline_keyboard=buttons)
-        
-    async def check_single_user(self, user_id: int) -> List[NotificationResult]:
-        """Проверить подписки конкретного пользователя (для тестирования)"""
-        results = []
-        
-        try:
-            user = await self.db.get_user_by_telegram_id(user_id)
-            if not user:
-                return [NotificationResult(False, user_id, "User not found")]
-                
-            user_subs = await self.db.get_user_subscriptions(user_id)
-            
-            for user_sub in user_subs:
-                if user_sub.is_active:
-                    try:
-                        sent = await self._check_and_notify_subscription(user, user_sub)
-                        subscription = await self.db.get_subscription_by_id(user_sub.subscription_id)
-                        sub_name = subscription.name if subscription else "Unknown"
-                        
-                        results.append(NotificationResult(
-                            success=sent,
-                            user_id=user_id,
-                            message=f"Subscription: {sub_name}, Sent: {sent}"
-                        ))
-                    except Exception as e:
-                        results.append(NotificationResult(
-                            success=False,
-                            user_id=user_id,
-                            message=f"Error checking subscription {user_sub.id}",
-                            error=str(e)
-                        ))
-                        
-        except Exception as e:
-            results.append(NotificationResult(
-                success=False,
-                user_id=user_id,
-                message="Error checking user",
-                error=str(e)
-            ))
-            
-        return results
-        
-    async def get_service_status(self) -> dict:
-        """Получить статус сервиса"""
-        return {
-            "is_running": self.is_running,
-            "check_interval": self.CHECK_INTERVAL,
-            "daily_check_hour": self.DAILY_CHECK_HOUR,
-            "warning_days": self.WARNING_DAYS,
-            "last_check": datetime.utcnow().isoformat() if self.is_running else None
-        }
-        
+                return f"⚠️ Your subscription '{subscription_name}' expires in {days_left} days!\n\nWe recommend renewing it in advance in 'My Subscriptions'."
+    
     async def force_daily_check(self):
-        """Принудительно запустить ежедневную проверку"""
-        logger.info("Force starting daily check")
-        await self._daily_check()
-        
-    async def deactivate_expired_subscriptions(self):
-        """Деактивировать истекшие подписки"""
+        """Force daily check and cleanup"""
         try:
-            now = datetime.utcnow()
+            logger.info("Starting daily check and cleanup")
+            
+            # Deactivate expired subscriptions
+            deactivated_count = await self.deactivate_expired_subscriptions()
+            
+            # Send final expiry notifications
+            await self._send_final_expiry_notifications()
+            
+            logger.info(f"Daily check completed. Deactivated {deactivated_count} expired subscriptions")
+            
+        except Exception as e:
+            logger.error(f"Error in force_daily_check: {e}")
+            
+    async def deactivate_expired_subscriptions(self) -> int:
+        """Deactivate expired subscriptions"""
+        try:
+            count = 0
             all_users = await self.db.get_all_users()
-            deactivated_count = 0
             
             for user in all_users:
                 user_subs = await self.db.get_user_subscriptions(user.telegram_id)
                 
                 for user_sub in user_subs:
-                    if user_sub.is_active and user_sub.expires_at <= now:
-                        # Деактивируем подписку
+                    if user_sub.is_active and user_sub.expires_at < datetime.utcnow():
                         user_sub.is_active = False
                         await self.db.update_user_subscription(user_sub)
+                        count += 1
                         
-                        # Деактивируем в RemnaWave если API доступно
+                        # Also try to deactivate in RemnaWave if possible
                         if self.api and user_sub.short_uuid:
                             try:
-                                remna_user_details = await self.api.get_user_by_short_uuid(user_sub.short_uuid)
-                                if remna_user_details:
-                                    user_uuid = remna_user_details.get('uuid')
-                                    if user_uuid:
-                                        # Блокируем пользователя в RemnaWave
-                                        await self.api.update_user(user_uuid, {"enable": False})
-                                        logger.info(f"Disabled user {user_uuid} in RemnaWave")
+                                user_data = await self.api.get_user_by_short_uuid(user_sub.short_uuid)
+                                if user_data and user_data.get('uuid'):
+                                    await self.api.update_user(user_data['uuid'], {'status': 'EXPIRED'})
                             except Exception as e:
-                                logger.error(f"Failed to disable user in RemnaWave: {e}")
-                        
-                        deactivated_count += 1
-                        log_user_action(user.telegram_id, "subscription_expired", f"SubID: {user_sub.id}")
-                        
-            logger.info(f"Deactivated {deactivated_count} expired subscriptions")
-            return deactivated_count
+                                logger.warning(f"Could not deactivate user in RemnaWave: {e}")
+            
+            return count
             
         except Exception as e:
             logger.error(f"Error deactivating expired subscriptions: {e}")
             return 0
+            
+    async def _send_final_expiry_notifications(self):
+        """Send final notifications for just-expired subscriptions"""
+        try:
+            # Get subscriptions that expired today
+            all_users = await self.db.get_all_users()
+            
+            for user in all_users:
+                user_subs = await self.db.get_user_subscriptions(user.telegram_id)
+                
+                for user_sub in user_subs:
+                    # Check if subscription expired today (within last 24 hours)
+                    time_since_expiry = datetime.utcnow() - user_sub.expires_at
+                    
+                    if (time_since_expiry.total_seconds() > 0 and 
+                        time_since_expiry.total_seconds() <= 86400):  # 24 hours
+                        
+                        subscription = await self.db.get_subscription_by_id(user_sub.subscription_id)
+                        if subscription and not subscription.is_trial:
+                            message = self._format_expiry_message(subscription.name, 0, user.language)
+                            await self.bot.send_message(user.telegram_id, message)
+                            
+        except Exception as e:
+            logger.error(f"Error sending final expiry notifications: {e}")
+            
+    async def check_single_user(self, user_id: int):
+        """Check subscriptions for a single user (for testing)"""
+        try:
+            results = []
+            
+            user = await self.db.get_user_by_telegram_id(user_id)
+            if not user:
+                results.append({
+                    'success': False,
+                    'message': f'User {user_id} not found',
+                    'error': None
+                })
+                return results
+            
+            # Get user subscriptions
+            user_subs = await self.db.get_user_subscriptions(user_id)
+            
+            if not user_subs:
+                results.append({
+                    'success': True,
+                    'message': f'User {user_id} has no subscriptions',
+                    'error': None
+                })
+                return results
+            
+            for user_sub in user_subs:
+                try:
+                    subscription = await self.db.get_subscription_by_id(user_sub.subscription_id)
+                    
+                    days_left = (user_sub.expires_at - datetime.utcnow()).days
+                    
+                    if days_left <= self.config.MONITOR_WARNING_DAYS:
+                        # Send test notification
+                        message = self._format_expiry_message(subscription.name, days_left, user.language)
+                        await self.bot.send_message(user_id, f"[ТЕСТ] {message}")
+                        
+                        results.append({
+                            'success': True,
+                            'message': f'Sent warning for subscription "{subscription.name}" (expires in {days_left} days)',
+                            'error': None
+                        })
+                    else:
+                        results.append({
+                            'success': True,
+                            'message': f'Subscription "{subscription.name}" is OK (expires in {days_left} days)',
+                            'error': None
+                        })
+                        
+                except Exception as e:
+                    results.append({
+                        'success': False,
+                        'message': f'Error checking subscription ID {user_sub.id}',
+                        'error': str(e)
+                    })
+            
+            return results
+            
+        except Exception as e:
+            return [{
+                'success': False,
+                'message': f'Error checking user {user_id}',
+                'error': str(e)
+            }]
+            
+    async def get_service_status(self) -> dict:
+        """Get service status information"""
+        return {
+            'is_running': self.is_running,
+            'check_interval': self.config.MONITOR_CHECK_INTERVAL,
+            'daily_check_hour': self.config.MONITOR_DAILY_CHECK_HOUR,
+            'warning_days': self.config.MONITOR_WARNING_DAYS,
+            'last_check': datetime.now().strftime("%Y-%m-%d %H:%M:%S") if self.is_running else None
+        }
 
-
-# Функция для инициализации и запуска сервиса
-async def create_subscription_monitor(bot: Bot, db: Database, config: Config, 
-                                    api: Optional[RemnaWaveAPI] = None) -> SubscriptionMonitorService:
-    """Создать и настроить сервис мониторинга подписок"""
-    service = SubscriptionMonitorService(bot, db, config, api)
-    return service
-
-
-# Пример использования в основном файле бота
-"""
-from subscription_monitor import create_subscription_monitor
-
-async def main():
-    # Инициализация бота, базы данных, конфига
-    bot = Bot(token=config.BOT_TOKEN)
-    db = Database(config.DATABASE_URL)
-    api = RemnaWaveAPI(config.REMNAWAVE_API_URL, config.REMNAWAVE_API_KEY)
-    
-    # Создание и запуск сервиса мониторинга
-    monitor_service = await create_subscription_monitor(bot, db, config, api)
-    await monitor_service.start()
-    
-    try:
-        # Запуск бота
-        await dp.start_polling(bot)
-    finally:
-        # Остановка сервиса при завершении
-        await monitor_service.stop()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-"""
+async def create_subscription_monitor(bot, db: Database, config, api: RemnaWaveAPI = None) -> SubscriptionMonitorService:
+    """Create and return subscription monitor service"""
+    return SubscriptionMonitorService(bot, db, config, api)
