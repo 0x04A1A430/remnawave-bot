@@ -1,5 +1,3 @@
-# api_error_handlers.py - Дополнительные утилиты для обработки ошибок API
-
 import logging
 from typing import Optional, Dict, Any, Callable
 from aiogram.types import CallbackQuery
