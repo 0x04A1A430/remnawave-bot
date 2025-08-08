@@ -11,7 +11,8 @@ class RemnaWaveAPI:
     def __init__(self, base_url: str, token: str, subscription_base_url: str = None):
         self.base_url = base_url.rstrip('/')
         self.token = token
-        self.subscription_base_url = subscription_base_url  
+        # УДАЛЯЕМ зависимость от subscription_base_url - теперь берем из API
+        self.subscription_base_url = subscription_base_url  # Оставляем для обратной совместимости
         self.session = None
         
     async def _get_session(self):
