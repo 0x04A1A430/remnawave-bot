@@ -20,7 +20,6 @@ try:
         safe_restart_nodes, check_api_health, handle_api_errors
     )
 except ImportError:
-    # Fallback функции если api_error_handlers не найден
     logger.warning("api_error_handlers module not found, using fallback functions")
     
     async def safe_get_nodes(api):
@@ -96,7 +95,7 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
         
         text = t('stats_info', user.language,
             users=db_stats['total_users'],
-            subscriptions=db_stats['total_subscriptions_non_trial'],  # Изменено
+            subscriptions=db_stats['total_subscriptions_non_trial'], 
             revenue=db_stats['total_revenue']
         )
         
@@ -139,7 +138,6 @@ async def admin_subscriptions_callback(callback: CallbackQuery, user: User, **kw
 
 @admin_router.callback_query(F.data == "create_subscription")
 async def create_subscription_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
-    """Start subscription creation"""
     if not await check_admin_access(callback, user):
         return
     
@@ -151,7 +149,6 @@ async def create_subscription_callback(callback: CallbackQuery, user: User, stat
 
 @admin_router.message(StateFilter(BotStates.admin_create_sub_name))
 async def handle_sub_name(message: Message, state: FSMContext, user: User, **kwargs):
-    """Handle subscription name input"""
     name = message.text.strip()
     if not (3 <= len(name) <= 100):
         await message.answer("❌ Название должно быть от 3 до 100 символов")
@@ -166,7 +163,6 @@ async def handle_sub_name(message: Message, state: FSMContext, user: User, **kwa
 
 @admin_router.message(StateFilter(BotStates.admin_create_sub_desc))
 async def handle_sub_description(message: Message, state: FSMContext, user: User, **kwargs):
-    """Handle subscription description input"""
     description = message.text.strip()
     if len(description) > 500:
         await message.answer("❌ Описание не должно превышать 500 символов")
@@ -181,7 +177,6 @@ async def handle_sub_description(message: Message, state: FSMContext, user: User
 
 @admin_router.message(StateFilter(BotStates.admin_create_sub_price))
 async def handle_sub_price(message: Message, state: FSMContext, user: User, **kwargs):
-    """Handle subscription price input"""
     is_valid, price = is_valid_amount(message.text)
     
     if not is_valid:
@@ -197,7 +192,6 @@ async def handle_sub_price(message: Message, state: FSMContext, user: User, **kw
 
 @admin_router.message(StateFilter(BotStates.admin_create_sub_days))
 async def handle_sub_days(message: Message, state: FSMContext, user: User, **kwargs):
-    """Handle subscription duration input"""
     try:
         days = int(message.text.strip())
         if days <= 0 or days > 365:
@@ -216,7 +210,6 @@ async def handle_sub_days(message: Message, state: FSMContext, user: User, **kwa
 
 @admin_router.message(StateFilter(BotStates.admin_create_sub_traffic))
 async def handle_sub_traffic(message: Message, state: FSMContext, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Handle subscription traffic limit input"""
     try:
         traffic_gb = int(message.text.strip())
         if traffic_gb < 0 or traffic_gb > 10000:
@@ -228,7 +221,6 @@ async def handle_sub_traffic(message: Message, state: FSMContext, user: User, ap
     
     await state.update_data(traffic_gb=traffic_gb)
     
-    # Try to get squads from RemnaWave API
     if api:
         try:
             logger.info("Attempting to fetch squads from API")
@@ -250,7 +242,6 @@ async def handle_sub_traffic(message: Message, state: FSMContext, user: User, ap
     else:
         logger.warning("No API instance provided")
     
-    # Fallback to manual input if API fails
     logger.info("Falling back to manual squad UUID input")
     await message.answer(
         t('enter_squad_uuid', user.language),
@@ -259,14 +250,12 @@ async def handle_sub_traffic(message: Message, state: FSMContext, user: User, ap
     await state.set_state(BotStates.admin_create_sub_squad)
 
 def squad_selection_keyboard(squads: List[Dict], language: str = 'ru') -> InlineKeyboardMarkup:
-    """Create keyboard for squad selection"""
     logger.info(f"Creating squad selection keyboard for {len(squads)} squads")
     buttons = []
     
     for squad in squads:
         logger.debug(f"Processing squad: {squad}")
         
-        # Получаем название и UUID squad'а с проверкой
         squad_name = squad.get('name', 'Unknown Squad')
         squad_uuid = squad.get('uuid', '')
         
@@ -274,13 +263,11 @@ def squad_selection_keyboard(squads: List[Dict], language: str = 'ru') -> Inline
             logger.warning(f"Squad without UUID: {squad}")
             continue
         
-        # Truncate name if too long
         if len(squad_name) > 30:
             display_name = squad_name[:27] + "..."
         else:
             display_name = squad_name
         
-        # Добавляем информацию о количестве участников если есть
         info_text = ""
         if 'info' in squad:
             members_count = squad['info'].get('membersCount', 0)
@@ -299,7 +286,6 @@ def squad_selection_keyboard(squads: List[Dict], language: str = 'ru') -> Inline
     
     if not buttons:
         logger.warning("No valid squads found for keyboard")
-        # Добавляем кнопку ручного ввода как единственную опцию
         buttons.append([
             InlineKeyboardButton(
                 text="✏️ Ввести UUID вручную",
@@ -307,7 +293,6 @@ def squad_selection_keyboard(squads: List[Dict], language: str = 'ru') -> Inline
             )
         ])
     else:
-        # Add manual input button as alternative
         buttons.append([
             InlineKeyboardButton(
                 text="✏️ Ввести UUID вручную",
@@ -315,7 +300,6 @@ def squad_selection_keyboard(squads: List[Dict], language: str = 'ru') -> Inline
             )
         ])
     
-    # Add cancel button
     buttons.append([
         InlineKeyboardButton(
             text=t('cancel', language),
@@ -328,7 +312,6 @@ def squad_selection_keyboard(squads: List[Dict], language: str = 'ru') -> Inline
 
 @admin_router.callback_query(F.data == "manual_squad_input")
 async def manual_squad_input(callback: CallbackQuery, state: FSMContext, user: User, **kwargs):
-    """Switch to manual squad UUID input"""
     if not await check_admin_access(callback, user):
         return
     
@@ -340,22 +323,18 @@ async def manual_squad_input(callback: CallbackQuery, state: FSMContext, user: U
 
 @admin_router.callback_query(F.data.startswith("select_squad_"))
 async def handle_squad_selection(callback: CallbackQuery, state: FSMContext, user: User, db: Database, **kwargs):
-    """Handle squad selection from inline keyboard"""
     if not await check_admin_access(callback, user):
         return
     
     try:
         squad_uuid = callback.data.replace("select_squad_", "")
         
-        # Validate UUID format
         if not validate_squad_uuid(squad_uuid):
             await callback.answer("❌ Неверный формат UUID")
             return
         
-        # Get all state data
         data = await state.get_data()
         
-        # Create subscription in database
         subscription = await db.create_subscription(
             name=data['name'],
             description=data['description'],
@@ -383,18 +362,15 @@ async def handle_squad_selection(callback: CallbackQuery, state: FSMContext, use
 
 @admin_router.message(StateFilter(BotStates.admin_create_sub_squad))
 async def handle_sub_squad(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
-    """Handle subscription squad UUID manual input (fallback)"""
     squad_uuid = message.text.strip()
     
     if not validate_squad_uuid(squad_uuid):
         await message.answer("❌ Неверный формат UUID")
         return
     
-    # Get all state data
     data = await state.get_data()
     
     try:
-        # Create subscription in database
         subscription = await db.create_subscription(
             name=data['name'],
             description=data['description'],
@@ -422,7 +398,6 @@ async def handle_sub_squad(message: Message, state: FSMContext, user: User, db: 
 
 @admin_router.callback_query(F.data == "list_admin_subscriptions")
 async def list_admin_subscriptions(callback: CallbackQuery, user: User, db: Database, **kwargs):
-    """List all subscriptions for admin"""
     if not await check_admin_access(callback, user):
         return
     
@@ -446,7 +421,6 @@ async def list_admin_subscriptions(callback: CallbackQuery, user: User, db: Data
 
 @admin_router.callback_query(F.data.startswith("toggle_sub_"))
 async def toggle_subscription(callback: CallbackQuery, user: User, db: Database, **kwargs):
-    """Toggle subscription active status"""
     if not await check_admin_access(callback, user):
         return
     
@@ -474,7 +448,6 @@ async def toggle_subscription(callback: CallbackQuery, user: User, db: Database,
 
 @admin_router.callback_query(F.data.startswith("edit_sub_"))
 async def edit_sub_menu(callback: CallbackQuery, state: FSMContext, user: User, **kwargs):
-    """Show subscription edit menu"""
     if not await check_admin_access(callback, user):
         return
     
@@ -498,7 +471,6 @@ async def edit_sub_menu(callback: CallbackQuery, state: FSMContext, user: User, 
 
 @admin_router.callback_query(F.data.startswith("edit_field_"))
 async def ask_new_value(callback: CallbackQuery, state: FSMContext, user: User, **kwargs):
-    """Ask for new field value"""
     if not await check_admin_access(callback, user):
         return
     
@@ -521,7 +493,6 @@ async def ask_new_value(callback: CallbackQuery, state: FSMContext, user: User, 
     await state.set_state(BotStates.admin_edit_sub_value)
 @admin_router.message(StateFilter(BotStates.admin_edit_sub_value))
 async def handle_edit_value(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
-    """Handle new value for subscription field"""
     data = await state.get_data()
     sub_id = data.get('edit_sub_id')
     field = data.get('edit_field')
@@ -534,7 +505,6 @@ async def handle_edit_value(message: Message, state: FSMContext, user: User, db:
             await state.clear()
             return
         
-        # Validate and set new value
         if field == 'name':
             if len(new_value) < 3 or len(new_value) > 100:
                 await message.answer("❌ Название должно быть от 3 до 100 символов")
@@ -588,7 +558,6 @@ async def handle_edit_value(message: Message, state: FSMContext, user: User, db:
 
 @admin_router.callback_query(F.data.startswith("delete_sub_"))
 async def delete_subscription_confirm(callback: CallbackQuery, user: User, **kwargs):
-    """Show subscription deletion confirmation"""
     if not await check_admin_access(callback, user):
         return
     
@@ -644,10 +613,8 @@ async def delete_subscription(callback: CallbackQuery, user: User, db: Database,
         logger.error(f"Error deleting subscription: {e}")
         await callback.answer(t('error_occurred', user.language))
 
-# User management
 @admin_router.callback_query(F.data == "admin_users")
 async def admin_users_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show user management"""
     if not await check_admin_access(callback, user):
         return
     
@@ -658,7 +625,6 @@ async def admin_users_callback(callback: CallbackQuery, user: User, **kwargs):
 
 @admin_router.callback_query(F.data == "list_users")
 async def list_users_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
-    """List all users"""
     if not await check_admin_access(callback, user):
         return
     
@@ -698,7 +664,6 @@ async def list_users_callback(callback: CallbackQuery, user: User, db: Database,
 # Balance management
 @admin_router.callback_query(F.data == "admin_balance")
 async def admin_balance_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show balance management"""
     if not await check_admin_access(callback, user):
         return
     
@@ -784,7 +749,6 @@ async def handle_balance_amount(message: Message, state: FSMContext, user: User,
 
 @admin_router.callback_query(F.data == "admin_payment_history")
 async def admin_payment_history_callback(callback: CallbackQuery, user: User, db: Database, state: FSMContext, **kwargs):
-    """Show payment history (first page) - ADMIN VERSION"""
     logger.info(f"admin_payment_history_callback called for user {user.telegram_id}")
     
     if not await check_admin_access(callback, user):
@@ -792,18 +756,16 @@ async def admin_payment_history_callback(callback: CallbackQuery, user: User, db
         return
     
     logger.info("Admin access granted, clearing state and showing payment history")
-    await state.clear()  # Очищаем состояние для новой пагинации
+    await state.clear() 
     await show_payment_history_page(callback, user, db, state, page=0)
 
 async def show_payment_history_page(callback: CallbackQuery, user: User, db: Database, state: FSMContext, page: int = 0):
-    """Show payment history page with pagination"""
     logger.info(f"show_payment_history_page called: page={page}, user={user.telegram_id}")
 
     try:
         page_size = 10
         offset = page * page_size
         
-        # Получаем все платежи с пагинацией
         payments, total_count = await db.get_all_payments_paginated(offset=offset, limit=page_size)
 
         logger.info(f"Got {len(payments) if payments else 0} payments, total_count={total_count}")
@@ -815,30 +777,25 @@ async def show_payment_history_page(callback: CallbackQuery, user: User, db: Dat
             )
             return
         
-        # Если страница пустая, но не первая - возвращаемся на предыдущую
         if not payments and page > 0:
             await show_payment_history_page(callback, user, db, state, page - 1)
             return
         
-        # Формируем текст
         total_pages = (total_count + page_size - 1) // page_size
         text = f"💳 История платежей (стр. {page + 1}/{total_pages})\n"
         text += f"📊 Всего записей: {total_count}\n\n"
         
         for payment in payments:
-            # Получаем информацию о пользователе
             payment_user = await db.get_user_by_telegram_id(payment.user_id)
             username = payment_user.username if payment_user and payment_user.username else "N/A"
             first_name = payment_user.first_name if payment_user and payment_user.first_name else "N/A"
             
-            # Форматируем статус
             status_emoji = {
                 'completed': '✅',
                 'pending': '⏳',
                 'cancelled': '❌'
             }.get(payment.status, '❓')
             
-            # Форматируем тип платежа
             type_emoji = {
                 'topup': '💰',
                 'subscription': '📱',
@@ -856,11 +813,9 @@ async def show_payment_history_page(callback: CallbackQuery, user: User, db: Dat
             text += f"📝 {payment.description}\n"
             text += f"📅 {date_str}\n\n"
         
-        # Сохраняем текущую страницу в состояние
         await state.update_data(current_page=page)
         await state.set_state(BotStates.admin_payment_history_page)
         
-        # Создаем клавиатуру с пагинацией
         keyboard = create_pagination_keyboard(page, total_pages, "payment_history", user.language)
         
         await callback.message.edit_text(
@@ -876,10 +831,8 @@ async def show_payment_history_page(callback: CallbackQuery, user: User, db: Dat
         )
 
 def create_pagination_keyboard(current_page: int, total_pages: int, callback_prefix: str, language: str) -> InlineKeyboardMarkup:
-    """Create pagination keyboard"""
     buttons = []
     
-    # Кнопки навигации
     nav_buttons = []
     
     if current_page > 0:
@@ -891,18 +844,15 @@ def create_pagination_keyboard(current_page: int, total_pages: int, callback_pre
     if nav_buttons:
         buttons.append(nav_buttons)
     
-    # Индикатор страницы
     if total_pages > 1:
         buttons.append([InlineKeyboardButton(text=f"📄 {current_page + 1}/{total_pages}", callback_data="noop")])
     
-    # Кнопка "Назад"
     buttons.append([InlineKeyboardButton(text=t('back', language), callback_data="admin_balance")])
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 @admin_router.callback_query(F.data.startswith("payment_history_page_"))
 async def payment_history_page_callback(callback: CallbackQuery, user: User, db: Database, state: FSMContext, **kwargs):
-    """Handle payment history pagination"""
     if not await check_admin_access(callback, user):
         return
     
@@ -915,13 +865,11 @@ async def payment_history_page_callback(callback: CallbackQuery, user: User, db:
 
 @admin_router.callback_query(F.data == "noop")
 async def noop_callback(callback: CallbackQuery, **kwargs):
-    """Handle no-operation callback (for page indicator)"""
     await callback.answer()
 
 # Payment approval handlers
 @admin_router.callback_query(F.data.startswith("approve_payment_"))
 async def approve_payment(callback: CallbackQuery, user: User, db: Database, **kwargs):
-    """Approve payment with referral rewards - ИСПРАВЛЕНА"""
     if not await check_admin_access(callback, user):
         return
     
@@ -937,11 +885,9 @@ async def approve_payment(callback: CallbackQuery, user: User, db: Database, **k
             await callback.answer("❌ Платеж уже обработан")
             return
         
-        # Add balance to user
         success = await db.add_balance(payment.user_id, payment.amount)
         
         if success:
-            # Update payment status
             payment.status = 'completed'
             await db.update_payment(payment)
             
@@ -952,7 +898,6 @@ async def approve_payment(callback: CallbackQuery, user: User, db: Database, **k
                 f"✅ Платеж одобрен!\n💰 Пользователю {payment.user_id} добавлено {payment.amount} руб."
             )
             
-            # Notify user about successful payment
             if bot:
                 try:
                     await bot.send_message(
@@ -972,7 +917,6 @@ async def approve_payment(callback: CallbackQuery, user: User, db: Database, **k
 
 @admin_router.callback_query(F.data.startswith("reject_payment_"))
 async def reject_payment(callback: CallbackQuery, user: User, db: Database, **kwargs):
-    """Reject payment"""
     if not await check_admin_access(callback, user):
         return
     
@@ -988,7 +932,6 @@ async def reject_payment(callback: CallbackQuery, user: User, db: Database, **kw
             await callback.answer("❌ Платеж уже обработан")
             return
         
-        # Update payment status
         payment.status = 'cancelled'
         await db.update_payment(payment)
         
@@ -996,7 +939,6 @@ async def reject_payment(callback: CallbackQuery, user: User, db: Database, **kw
             f"❌ Платеж отклонен!\n💰 Платеж пользователя {payment.user_id} на сумму {payment.amount} руб. отклонен."
         )
         
-        # Notify user about rejected payment
         bot = kwargs.get('bot')
         if bot:
             try:
@@ -1016,7 +958,6 @@ async def reject_payment(callback: CallbackQuery, user: User, db: Database, **kw
 # Promocode management
 @admin_router.callback_query(F.data == "admin_promocodes")
 async def admin_promocodes_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show promocode management"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1027,7 +968,6 @@ async def admin_promocodes_callback(callback: CallbackQuery, user: User, **kwarg
 
 @admin_router.callback_query(F.data == "create_promocode")
 async def create_promocode_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
-    """Start promocode creation"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1039,14 +979,12 @@ async def create_promocode_callback(callback: CallbackQuery, user: User, state: 
 
 @admin_router.message(StateFilter(BotStates.admin_create_promo_code))
 async def handle_promo_code(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
-    """Handle promocode input"""
     code = message.text.strip().upper()
     
     if not validate_promocode_format(code):
         await message.answer("❌ Промокод должен содержать только буквы и цифры (3-20 символов)")
         return
     
-    # Check if promocode already exists
     existing = await db.get_promocode_by_code(code)
     if existing:
         await message.answer(t('promocode_exists', user.language))
@@ -1061,7 +999,6 @@ async def handle_promo_code(message: Message, state: FSMContext, user: User, db:
 
 @admin_router.message(StateFilter(BotStates.admin_create_promo_discount))
 async def handle_promo_discount(message: Message, state: FSMContext, user: User, **kwargs):
-    """Handle promocode discount input"""
     is_valid, discount = is_valid_amount(message.text)
     
     if not is_valid:
@@ -1076,8 +1013,7 @@ async def handle_promo_discount(message: Message, state: FSMContext, user: User,
     await state.set_state(BotStates.admin_create_promo_limit)
 
 @admin_router.message(StateFilter(BotStates.admin_create_promo_limit))
-async def handle_promo_limit(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
-    """Handle promocode usage limit input"""
+async def handle_promo_limit(message: Message, state: FSMContext, user: User, **kwargs):
     try:
         limit = int(message.text.strip())
         if limit <= 0 or limit > 10000:
@@ -1087,27 +1023,89 @@ async def handle_promo_limit(message: Message, state: FSMContext, user: User, db
         await message.answer("❌ Введите число")
         return
     
-    data = await state.get_data()
+    await state.update_data(limit=limit)
+    
+    await message.answer(
+        "⏰ Введите срок действия промокода:\n\n"
+        "• Дату в формате YYYY-MM-DD (например: 2025-12-31)\n"
+        "• Количество дней (например: 30)\n"
+        "• Или напишите 'нет' для бессрочного промокода\n\n"
+        "📝 Введите значение:",
+        reply_markup=cancel_keyboard(user.language)
+    )
+    await state.set_state(BotStates.admin_create_promo_expiry)
+
+@admin_router.message(StateFilter(BotStates.admin_create_promo_expiry))
+async def handle_promo_expiry(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
+    expiry_input = message.text.strip().lower()
+    expires_at = None
     
     try:
-        # Create promocode
-        promocode = await db.create_promocode(
-            code=data['code'],
-            discount_amount=data['discount'],
-            usage_limit=limit
-        )
+        if expiry_input in ['нет', 'no', 'none', '']:
+            expires_at = None
+        else:
+            try:
+                days = int(expiry_input)
+                if days <= 0 or days > 3650:  # Максимум 10 лет
+                    await message.answer("❌ Количество дней должно быть от 1 до 3650")
+                    return
+                expires_at = datetime.utcnow() + timedelta(days=days)
+            except ValueError:
+                try:
+                    expires_at = datetime.strptime(expiry_input, "%Y-%m-%d")
+                    
+                    if expires_at <= datetime.utcnow():
+                        await message.answer("❌ Дата должна быть в будущем")
+                        return
+                        
+                except ValueError:
+                    await message.answer(
+                        "❌ Неверный формат даты\n\n"
+                        "Используйте:\n"
+                        "• YYYY-MM-DD (например: 2025-12-31)\n"
+                        "• Количество дней (например: 30)\n"
+                        "• 'нет' для бессрочного"
+                    )
+                    return
         
-        await message.answer(
-            t('promocode_created', user.language),
-            reply_markup=admin_menu_keyboard(user.language)
-        )
+        data = await state.get_data()
         
-        log_user_action(user.telegram_id, "promocode_created", data['code'])
+        try:
+            promocode = await db.create_promocode(
+                code=data['code'],
+                discount_amount=data['discount'],
+                usage_limit=data['limit'],
+                expires_at=expires_at
+            )
+            
+            success_text = "✅ Промокод создан успешно!\n\n"
+            success_text += f"🎫 Код: {data['code']}\n"
+            success_text += f"💰 Скидка: {data['discount']}₽\n"
+            success_text += f"📊 Лимит: {data['limit']} использований\n"
+            
+            if expires_at:
+                success_text += f"⏰ Действует до: {format_datetime(expires_at, user.language)}\n"
+            else:
+                success_text += f"⏰ Срок: Бессрочный\n"
+            
+            await message.answer(
+                success_text,
+                reply_markup=admin_menu_keyboard(user.language)
+            )
+            
+            log_user_action(user.telegram_id, "promocode_created", data['code'])
+            
+        except Exception as e:
+            logger.error(f"Error creating promocode: {e}")
+            await message.answer(
+                t('error_occurred', user.language),
+                reply_markup=admin_menu_keyboard(user.language)
+            )
         
     except Exception as e:
-        logger.error(f"Error creating promocode: {e}")
+        logger.error(f"Error parsing promocode expiry: {e}")
         await message.answer(
-            t('error_occurred', user.language),
+            "❌ Ошибка обработки срока действия",
             reply_markup=admin_menu_keyboard(user.language)
         )
     
@@ -1115,7 +1113,6 @@ async def handle_promo_limit(message: Message, state: FSMContext, user: User, db
 
 @admin_router.callback_query(F.data == "list_promocodes")
 async def list_promocodes_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
-    """List all promocodes"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1129,29 +1126,590 @@ async def list_promocodes_callback(callback: CallbackQuery, user: User, db: Data
             )
             return
         
-        text = "📋 Список промокодов:\n\n"
+        regular_promocodes = []
+        referral_codes = []
         
-        for promo in promocodes[:10]:  # Show first 10
-            status = "🟢" if promo.is_active else "🔴"
-            expiry = ""
-            if promo.expires_at:
-                expiry = f" (до {format_date(promo.expires_at, user.language)})"
-            
-            text += f"{status} `{promo.code}` - {promo.discount_amount}р.\n"
-            text += f"   Использовано: {promo.used_count}/{promo.usage_limit}{expiry}\n\n"
+        current_time = datetime.utcnow()
         
-        if len(promocodes) > 10:
-            text += f"... и еще {len(promocodes) - 10} промокодов"
+        for promo in promocodes:
+            if promo.code.startswith('REF'):
+                referral_codes.append(promo)
+            else:
+                regular_promocodes.append(promo)
         
-        await callback.message.edit_text(
-            text,
-            reply_markup=back_keyboard("admin_promocodes", user.language),
-            parse_mode='Markdown'
-        )
+        expired_count = 0
+        active_count = 0
+        
+        for promo in regular_promocodes:
+            if promo.expires_at and promo.expires_at < current_time:
+                expired_count += 1
+            elif promo.is_active:
+                active_count += 1
+        
+        current_time_str = current_time.strftime("%H:%M:%S")
+        
+        text = "📋 Управление промокодами\n\n"
+        text += f"📊 Статистика:\n"
+        text += f"• Всего промокодов: {len(regular_promocodes)}\n"
+        text += f"• Активных: {active_count}\n"
+        text += f"• Истекших: {expired_count}\n"
+        text += f"• Реферальных кодов: {len(referral_codes)}\n\n"
+        
+        if regular_promocodes:
+            text += "🎫 Нажмите на промокод для управления\n\n"
+        else:
+            text += "🎫 Обычных промокодов нет\n\n"
+        
+        if referral_codes:
+            text += f"👥 Реферальных кодов: {len(referral_codes)} (автоматические)\n"
+        
+        text += f"\n🕐 Обновлено: {current_time_str}"
+        
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=promocodes_management_keyboard(regular_promocodes, user.language)
+            )
+        except Exception as edit_error:
+            if "message is not modified" in str(edit_error).lower():
+                await callback.answer("✅ Список обновлен", show_alert=False)
+            else:
+                logger.error(f"Error editing promocodes message: {edit_error}")
+                await callback.answer("❌ Ошибка обновления", show_alert=True)
         
     except Exception as e:
         logger.error(f"Error listing promocodes: {e}")
         await callback.answer(t('error_occurred', user.language))
+
+def promocodes_management_keyboard(promocodes: List, language: str = 'ru') -> InlineKeyboardMarkup:
+    buttons = []
+    
+    for promo in promocodes[:10]: 
+        status_icon = "🟢" if promo.is_active else "🔴"
+        
+        if promo.expires_at and promo.expires_at < datetime.utcnow():
+            status_icon = "⏰" 
+        
+        promo_text = f"{status_icon} {promo.code} ({promo.used_count}/{promo.usage_limit})"
+        buttons.append([
+            InlineKeyboardButton(
+                text=promo_text,
+                callback_data=f"promo_info_{promo.id}"
+            )
+        ])
+    
+    if len(promocodes) > 10:
+        buttons.append([
+            InlineKeyboardButton(text=f"... и еще {len(promocodes) - 10}", callback_data="noop")
+        ])
+    
+    buttons.extend([
+        [
+            InlineKeyboardButton(text="🎫 Создать промокод", callback_data="create_promocode"),
+            InlineKeyboardButton(text="📊 Статистика", callback_data="promocodes_stats")
+        ],
+        [
+            InlineKeyboardButton(text="🧹 Очистить истекшие", callback_data="cleanup_expired_promos"),
+            InlineKeyboardButton(text="🔄 Обновить", callback_data="list_promocodes")
+        ],
+        [InlineKeyboardButton(text=t('back', language), callback_data="admin_promocodes")]
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+@admin_router.callback_query(F.data.startswith("toggle_promo_"))
+async def toggle_promocode_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        promo_id = int(callback.data.split("_")[2])
+        
+        promocode = await db.get_promocode_by_id(promo_id)
+        if not promocode:
+            await callback.answer("❌ Промокод не найден")
+            return
+        
+        if promocode.code.startswith('REF'):
+            await callback.answer("❌ Нельзя изменять реферальные коды")
+            return
+        
+        promocode.is_active = not promocode.is_active
+        await db.update_promocode(promocode)
+        
+        status_text = "активирован" if promocode.is_active else "деактивирован"
+        await callback.answer(f"✅ Промокод {promocode.code} {status_text}")
+        
+        log_user_action(user.telegram_id, "promocode_toggled", f"Code: {promocode.code}, Active: {promocode.is_active}")
+        
+        await list_promocodes_callback(callback, user, db, **kwargs)
+        
+    except Exception as e:
+        logger.error(f"Error toggling promocode: {e}")
+        await callback.answer(t('error_occurred', user.language))
+
+@admin_router.callback_query(F.data.startswith("edit_promo_field_"))
+async def edit_promocode_field_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    db = kwargs.get('db')
+    if not db:
+        await callback.answer("❌ База данных недоступна", show_alert=True)
+        return
+    
+    try:
+        parts = callback.data.split("_")
+        logger.info(f"Parsing callback data: {callback.data}, parts: {parts}")
+        
+        if len(parts) < 5:
+            await callback.answer("❌ Неверный формат данных", show_alert=True)
+            return
+            
+        promo_id = int(parts[3])
+        field = parts[4]
+        
+        logger.info(f"Editing promocode {promo_id}, field {field}")
+        
+        await state.update_data(edit_promo_id=promo_id, edit_promo_field=field)
+        
+        field_names = {
+            'discount': 'размер скидки (₽)',
+            'limit': 'лимит использований', 
+            'expiry': 'дату истечения (YYYY-MM-DD или пусто)'
+        }
+        
+        field_name = field_names.get(field, field)
+        
+        await callback.message.edit_text(
+            f"✏️ Введите новое значение для поля '{field_name}':",
+            reply_markup=cancel_keyboard(user.language)
+        )
+        await state.set_state(BotStates.admin_edit_promo_value)
+        
+    except Exception as e:
+        logger.error(f"Error editing promocode field: {e}")
+        await callback.answer(t('error_occurred', user.language))
+
+@admin_router.callback_query(F.data.startswith("edit_promo_"))
+async def edit_promocode_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    db = kwargs.get('db')
+    if not db:
+        await callback.answer("❌ База данных недоступна", show_alert=True)
+        return
+    
+    try:
+        if "edit_promo_field_" in callback.data:
+            await edit_promocode_field_callback(callback, user, state, **kwargs)
+            return
+        
+        promo_id = int(callback.data.split("_")[2])
+        await state.update_data(edit_promo_id=promo_id)
+        
+        promocode = await db.get_promocode_by_id(promo_id)
+        if not promocode:
+            await callback.answer("❌ Промокод не найден")
+            return
+        
+        if promocode.code.startswith('REF'):
+            await callback.answer("❌ Нельзя редактировать реферальные коды")
+            return
+        
+        text = f"✏️ Редактирование промокода\n\n"
+        text += f"📋 Код: `{promocode.code}`\n"
+        text += f"💰 Скидка: {promocode.discount_amount}₽\n"
+        text += f"📊 Лимит: {promocode.usage_limit}\n"
+        text += f"🔘 Статус: {'Активен' if promocode.is_active else 'Неактивен'}\n"
+        text += f"📈 Использовано: {promocode.used_count}\n"
+        
+        if promocode.expires_at:
+            text += f"⏰ Истекает: {format_datetime(promocode.expires_at, user.language)}\n"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=promocode_edit_keyboard(promo_id, user.language),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing promocode edit: {e}")
+        await callback.answer(t('error_occurred', user.language))
+
+@admin_router.message(StateFilter(BotStates.admin_edit_promo_value))
+async def handle_edit_promocode_value(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
+    data = await state.get_data()
+    promo_id = data.get('edit_promo_id')
+    field = data.get('edit_promo_field')
+    new_value = message.text.strip()
+    
+    try:
+        promocode = await db.get_promocode_by_id(promo_id)
+        if not promocode:
+            await message.answer("❌ Промокод не найден")
+            await state.clear()
+            return
+        
+        if promocode.code.startswith('REF'):
+            await message.answer("❌ Нельзя редактировать реферальные коды")
+            await state.clear()
+            return
+        
+        if field == 'discount':
+            is_valid, amount = is_valid_amount(new_value)
+            if not is_valid:
+                await message.answer(t('invalid_amount', user.language))
+                return
+            promocode.discount_amount = amount
+            
+        elif field == 'limit':
+            try:
+                limit = int(new_value)
+                if limit <= 0:
+                    await message.answer("❌ Лимит должен быть больше 0")
+                    return
+                promocode.usage_limit = limit
+            except ValueError:
+                await message.answer("❌ Введите число")
+                return
+                
+        elif field == 'expiry':
+            if new_value.lower() in ['', 'нет', 'no', 'none']:
+                promocode.expires_at = None
+            else:
+                try:
+                    expire_date = datetime.strptime(new_value, "%Y-%m-%d")
+                    if expire_date < datetime.utcnow():
+                        await message.answer("❌ Дата не может быть в прошлом")
+                        return
+                    promocode.expires_at = expire_date
+                except ValueError:
+                    await message.answer("❌ Неверный формат даты. Используйте YYYY-MM-DD")
+                    return
+        
+        await db.update_promocode(promocode)
+        
+        await message.answer(
+            "✅ Промокод обновлен",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📋 К списку промокодов", callback_data="list_promocodes")],
+                [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
+            ])
+        )
+        
+        log_user_action(user.telegram_id, "promocode_edited", f"Code: {promocode.code}, Field: {field}")
+        
+    except Exception as e:
+        logger.error(f"Error updating promocode: {e}")
+        await message.answer(t('error_occurred', user.language))
+    
+    await state.clear()
+
+@admin_router.callback_query(F.data.startswith("delete_promo_"))
+async def delete_promocode_confirm_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    db = kwargs.get('db')
+    if not db:
+        await callback.answer("❌ База данных недоступна", show_alert=True)
+        return
+    
+    try:
+        promo_id = int(callback.data.split("_")[2])
+        
+        promocode = await db.get_promocode_by_id(promo_id)
+        if not promocode:
+            await callback.answer("❌ Промокод не найден")
+            return
+        
+        if promocode.code.startswith('REF'):
+            await callback.answer("❌ Нельзя удалять реферальные коды")
+            return
+        
+        text = f"⚠️ Удаление промокода\n\n"
+        text += f"📋 Код: `{promocode.code}`\n"
+        text += f"💰 Скидка: {promocode.discount_amount}₽\n"
+        text += f"📊 Использован: {promocode.used_count}/{promocode.usage_limit} раз\n\n"
+        text += f"❗️ Это действие нельзя отменить!"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Да, удалить", callback_data=f"confirm_delete_promo_{promo_id}"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="list_promocodes")
+            ]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing delete confirmation: {e}")
+        await callback.answer(t('error_occurred', user.language))
+
+@admin_router.callback_query(F.data.startswith("confirm_delete_promo_"))
+async def confirm_delete_promocode_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        promo_id = int(callback.data.split("_")[3])
+        
+        promocode = await db.get_promocode_by_id(promo_id)
+        if not promocode:
+            await callback.answer("❌ Промокод не найден")
+            return
+        
+        if promocode.code.startswith('REF'):
+            await callback.answer("❌ Нельзя удалять реферальные коды")
+            return
+        
+        success = await db.delete_promocode(promo_id)
+        
+        if success:
+            await callback.answer(f"✅ Промокод {promocode.code} удален")
+            log_user_action(user.telegram_id, "promocode_deleted", promocode.code)
+        else:
+            await callback.answer("❌ Ошибка удаления промокода")
+        
+        await list_promocodes_callback(callback, user, db, **kwargs)
+        
+    except Exception as e:
+        logger.error(f"Error deleting promocode: {e}")
+        await callback.answer(t('error_occurred', user.language))
+
+@admin_router.callback_query(F.data.startswith("promo_info_"))
+async def promocode_info_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        promo_id = int(callback.data.split("_")[2])
+        
+        promocode = await db.get_promocode_by_id(promo_id)
+        if not promocode:
+            await callback.answer("❌ Промокод не найден")
+            return
+        
+        usage_records = await db.get_promocode_usage_by_id(promo_id)
+        
+        text = f"📋 Детальная информация о промокоде\n\n"
+        text += f"🎫 Код: `{promocode.code}`\n"
+        text += f"💰 Скидка: {promocode.discount_amount}₽\n"
+        text += f"📊 Лимит: {promocode.usage_limit}\n"
+        text += f"📈 Использовано: {promocode.used_count}\n"
+        text += f"🔘 Статус: {'🟢 Активен' if promocode.is_active else '🔴 Неактивен'}\n"
+        
+        if promocode.expires_at:
+            try:
+                current_time = datetime.utcnow()
+                if promocode.expires_at < current_time:
+                    text += f"⏰ Истек: {format_datetime(promocode.expires_at, user.language)}\n"
+                else:
+                    text += f"⏰ Истекает: {format_datetime(promocode.expires_at, user.language)}\n"
+            except Exception as date_error:
+                logger.error(f"Error formatting expiry date: {date_error}")
+                text += f"⏰ Срок: Ошибка отображения даты\n"
+        else:
+            text += f"⏰ Срок: Бессрочный\n"
+        
+        text += f"📅 Создан: {format_datetime(promocode.created_at, user.language)}\n"
+        
+        total_discount = promocode.discount_amount * promocode.used_count
+        text += f"\n💸 Общая сумма скидок: {total_discount}₽\n"
+        
+        if promocode.usage_limit > 0:
+            usage_percent = (promocode.used_count / promocode.usage_limit) * 100
+            text += f"📊 Использовано: {usage_percent:.1f}%\n"
+        
+        if usage_records:
+            text += f"\n📜 Последние использования:\n"
+            for i, usage in enumerate(usage_records[:5], 1):
+                usage_date = format_datetime(usage.used_at, user.language)
+                text += f"{i}. ID:{usage.user_id} - {usage_date}\n"
+            
+            if len(usage_records) > 5:
+                text += f"... и еще {len(usage_records) - 5} использований\n"
+        else:
+            text += f"\n📜 Промокод еще не использовался\n"
+        
+        is_referral = promocode.code.startswith('REF')
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=promocode_info_keyboard(promo_id, is_referral, user.language),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing promocode info: {e}")
+        await callback.answer(t('error_occurred', user.language))
+
+@admin_router.callback_query(F.data == "cleanup_expired_promos")
+async def cleanup_expired_promos_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        db = kwargs.get('db')
+        expired_promos = await db.get_expired_promocodes()
+        
+        if not expired_promos:
+            await callback.answer("✅ Нет истекших промокодов для удаления", show_alert=True)
+            return
+        
+        text = f"🧹 Очистка истекших промокодов\n\n"
+        text += f"Найдено истекших промокодов: {len(expired_promos)}\n\n"
+        
+        text += f"Примеры:\n"
+        for i, promo in enumerate(expired_promos[:5], 1):
+            expired_days = (datetime.utcnow() - promo.expires_at).days
+            text += f"{i}. `{promo.code}` (истек {expired_days} дн. назад)\n"
+        
+        if len(expired_promos) > 5:
+            text += f"... и еще {len(expired_promos) - 5}\n"
+        
+        text += f"\n⚠️ Все истекшие промокоды будут удалены без возможности восстановления!"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Да, удалить все", callback_data="confirm_cleanup_expired"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="list_promocodes")
+            ]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing cleanup confirmation: {e}")
+        await callback.answer(t('error_occurred', user.language))
+
+@admin_router.callback_query(F.data == "confirm_cleanup_expired")
+async def confirm_cleanup_expired_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        await callback.answer("🧹 Удаляю истекшие промокоды...")
+        
+        deleted_count = await db.cleanup_expired_promocodes()
+        
+        if deleted_count > 0:
+            text = f"✅ Очистка завершена!\n\n"
+            text += f"Удалено истекших промокодов: {deleted_count}"
+            
+            log_user_action(user.telegram_id, "expired_promocodes_cleaned", f"Count: {deleted_count}")
+        else:
+            text = f"ℹ️ Истекших промокодов не найдено"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📋 К списку промокодов", callback_data="list_promocodes")],
+                [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
+            ])
+        )
+        
+    except Exception as e:
+        logger.error(f"Error cleaning up expired promocodes: {e}")
+        await callback.message.edit_text(
+            f"❌ Ошибка при удалении истекших промокодов",
+            reply_markup=back_keyboard("list_promocodes", user.language)
+        )
+
+@admin_router.callback_query(F.data == "promocodes_stats")
+async def promocodes_stats_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        await callback.answer("📊 Собираю статистику...")
+        
+        stats = await db.get_promocode_stats()
+        
+        text = f"📊 Статистика промокодов\n\n"
+        
+        text += f"📋 Общая информация:\n"
+        text += f"• Всего промокодов: {stats['total_promocodes']}\n"
+        text += f"• Активных: {stats['active_promocodes']}\n"
+        text += f"• Истекших: {stats['expired_promocodes']}\n"
+        text += f"• Неактивных: {stats['total_promocodes'] - stats['active_promocodes'] - stats['expired_promocodes']}\n\n"
+        
+        text += f"📈 Использование:\n"
+        text += f"• Всего использований: {stats['total_usage']}\n"
+        text += f"• Общая сумма скидок: {stats['total_discount_amount']:.2f}₽\n"
+        
+        if stats['total_promocodes'] > 0:
+            avg_usage = stats['total_usage'] / stats['total_promocodes']
+            text += f"• Среднее использований на промокод: {avg_usage:.1f}\n"
+        
+        if stats['top_promocodes']:
+            text += f"\n🏆 Топ-5 популярных промокодов:\n"
+            for i, (code, used_count, discount) in enumerate(stats['top_promocodes'], 1):
+                if used_count > 0:
+                    total_discount = used_count * discount
+                    text += f"{i}. `{code}` - {used_count} исп. ({total_discount:.0f}₽)\n"
+        
+        text += f"\n🕐 Обновлено: {format_datetime(datetime.utcnow(), user.language)}"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Обновить", callback_data="promocodes_stats")],
+            [InlineKeyboardButton(text="🧹 Очистить истекшие", callback_data="cleanup_expired_promos")],
+            [InlineKeyboardButton(text="📋 К списку", callback_data="list_promocodes")]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting promocodes stats: {e}")
+        await callback.answer(t('error_occurred', user.language))
+
+@admin_router.callback_query(F.data == "confirm_deactivate_all")
+async def confirm_deactivate_all_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        await callback.answer("🔴 Деактивирую все промокоды...")
+        
+        deactivated_count = await db.deactivate_all_regular_promocodes()
+        
+        if deactivated_count > 0:
+            text = f"✅ Деактивация завершена!\n\n"
+            text += f"Деактивировано промокодов: {deactivated_count}\n\n"
+            text += f"ℹ️ Реферальные коды не затронуты"
+            
+            log_user_action(user.telegram_id, "all_promocodes_deactivated", f"Count: {deactivated_count}")
+        else:
+            text = f"ℹ️ Нет активных промокодов для деактивации"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📋 К списку промокодов", callback_data="list_promocodes")],
+                [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
+            ])
+        )
+        
+    except Exception as e:
+        logger.error(f"Error deactivating all promocodes: {e}")
+        await callback.message.edit_text(
+            f"❌ Ошибка при деактивации промокодов",
+            reply_markup=back_keyboard("list_promocodes", user.language)
+        )
 
 @admin_router.callback_query(F.data == "main_menu", StateFilter(
     BotStates.admin_create_sub_name,
@@ -1165,19 +1723,19 @@ async def list_promocodes_callback(callback: CallbackQuery, user: User, db: Data
     BotStates.admin_create_promo_code,
     BotStates.admin_create_promo_discount,
     BotStates.admin_create_promo_limit,
+    BotStates.admin_edit_promo_value,
     BotStates.admin_edit_sub_value,
     BotStates.admin_send_message_user,
     BotStates.admin_send_message_text,
     BotStates.admin_broadcast_text,
     BotStates.admin_payment_history_page,
-    BotStates.admin_search_user_any,  # Добавляем новый state
+    BotStates.admin_search_user_any,  
     BotStates.admin_edit_user_expiry,
     BotStates.admin_edit_user_traffic,
     BotStates.admin_test_monitor_user,
     BotStates.admin_rename_plans_confirm
 ))
 async def cancel_admin_action(callback: CallbackQuery, state: FSMContext, user: User, **kwargs):
-    """Cancel admin action and return to main menu"""
     await state.clear()
     await callback.message.edit_text(
         t('main_menu', user.language),
@@ -1186,7 +1744,6 @@ async def cancel_admin_action(callback: CallbackQuery, state: FSMContext, user: 
 
 @admin_router.callback_query(F.data == "admin_messages")
 async def admin_messages_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show message management"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1197,7 +1754,6 @@ async def admin_messages_callback(callback: CallbackQuery, user: User, **kwargs)
 
 @admin_router.callback_query(F.data == "admin_send_to_user")
 async def admin_send_to_user_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
-    """Start sending message to specific user"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1209,14 +1765,12 @@ async def admin_send_to_user_callback(callback: CallbackQuery, user: User, state
 
 @admin_router.message(StateFilter(BotStates.admin_send_message_user))
 async def handle_message_user_id(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
-    """Handle user ID input for message sending"""
     telegram_id = parse_telegram_id(message.text)
     
     if not telegram_id:
         await message.answer("❌ Неверный Telegram ID")
         return
     
-    # Check if user exists
     target_user = await db.get_user_by_telegram_id(telegram_id)
     if not target_user:
         await message.answer(t('user_not_found', user.language))
@@ -1229,10 +1783,8 @@ async def handle_message_user_id(message: Message, state: FSMContext, user: User
     )
     await state.set_state(BotStates.admin_send_message_text)
 
-# Monitor service management
 @admin_router.callback_query(F.data == "admin_monitor")
 async def admin_monitor_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show monitor service management"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1243,7 +1795,6 @@ async def admin_monitor_callback(callback: CallbackQuery, user: User, **kwargs):
 
 @admin_router.callback_query(F.data == "monitor_status")
 async def monitor_status_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show monitor service status"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1281,7 +1832,6 @@ async def monitor_status_callback(callback: CallbackQuery, user: User, **kwargs)
 
 @admin_router.callback_query(F.data == "monitor_force_check")
 async def monitor_force_check_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Force daily check"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1307,7 +1857,6 @@ async def monitor_force_check_callback(callback: CallbackQuery, user: User, **kw
 
 @admin_router.callback_query(F.data == "monitor_deactivate_expired")
 async def monitor_deactivate_expired_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Deactivate expired subscriptions"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1336,7 +1885,6 @@ async def monitor_deactivate_expired_callback(callback: CallbackQuery, user: Use
 
 @admin_router.callback_query(F.data == "monitor_test_user")
 async def monitor_test_user_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
-    """Test monitor for specific user"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1348,7 +1896,6 @@ async def monitor_test_user_callback(callback: CallbackQuery, user: User, state:
 
 @admin_router.message(StateFilter(BotStates.admin_test_monitor_user))
 async def handle_monitor_test_user(message: Message, state: FSMContext, user: User, **kwargs):
-    """Handle user ID for monitor testing"""
     telegram_id = parse_telegram_id(message.text)
     
     if not telegram_id:
@@ -1369,11 +1916,28 @@ async def handle_monitor_test_user(message: Message, state: FSMContext, user: Us
         else:
             text = f"📊 Результаты тестирования для пользователя {telegram_id}:\n\n"
             
-            for result in results:
-                status = "✅" if result.success else "❌"
-                text += f"{status} {result.message}\n"
-                if result.error:
-                    text += f"   Ошибка: {result.error}\n"
+            for i, result in enumerate(results, 1):
+                success = result.get('success', False)
+                message_text = result.get('message', 'No message')
+                error = result.get('error', None)
+                
+                status = "✅" if success else "❌"
+                text += f"{i}. {status} {message_text}\n"
+                
+                if error:
+                    text += f"   ⚠️ Ошибка: {error}\n"
+                
+                text += "\n"
+            
+            try:
+                config = kwargs.get('config')
+                if config:
+                    text += f"⚙️ Настройки мониторинга:\n"
+                    text += f"• Предупреждение за: {config.MONITOR_WARNING_DAYS} дней\n"
+                    text += f"• Интервал проверки: {config.MONITOR_CHECK_INTERVAL} сек\n"
+                    text += f"• Ежедневная проверка: {config.MONITOR_DAILY_CHECK_HOUR}:00\n"
+            except Exception as config_error:
+                logger.warning(f"Could not get config info: {config_error}")
             
             await message.answer(
                 text,
@@ -1390,7 +1954,6 @@ async def handle_monitor_test_user(message: Message, state: FSMContext, user: Us
 
 @admin_router.message(StateFilter(BotStates.admin_send_message_text))
 async def handle_send_message(message: Message, state: FSMContext, user: User, **kwargs):
-    """Handle message text input and send message"""
     message_text = message.text.strip()
     
     if len(message_text) < 1:
@@ -1419,7 +1982,6 @@ async def handle_send_message(message: Message, state: FSMContext, user: User, *
 
 @admin_router.callback_query(F.data == "admin_send_to_all")
 async def admin_send_to_all_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
-    """Start broadcast message"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1431,7 +1993,6 @@ async def admin_send_to_all_callback(callback: CallbackQuery, user: User, state:
 
 @admin_router.callback_query(F.data == "main_menu", StateFilter(BotStates.admin_test_monitor_user))
 async def cancel_monitor_test(callback: CallbackQuery, state: FSMContext, user: User, **kwargs):
-    """Cancel monitor test"""
     await state.clear()
     await callback.message.edit_text(
         t('main_menu', user.language),
@@ -1440,7 +2001,6 @@ async def cancel_monitor_test(callback: CallbackQuery, state: FSMContext, user: 
 
 @admin_router.message(StateFilter(BotStates.admin_broadcast_text))
 async def handle_broadcast_message(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
-    """Handle broadcast message"""
     message_text = message.text.strip()
     
     if len(message_text) < 1:
@@ -1448,7 +2008,6 @@ async def handle_broadcast_message(message: Message, state: FSMContext, user: Us
         return
     
     try:
-        # Get all users
         users = await db.get_all_users()
         
         if not users:
@@ -1465,10 +2024,8 @@ async def handle_broadcast_message(message: Message, state: FSMContext, user: Us
         sent_count = 0
         error_count = 0
         
-        # Show progress message
         progress_msg = await message.answer(f"📤 Отправка сообщения {len(users)} пользователям...")
         
-        # Send to all users
         for target_user in users:
             try:
                 await bot.send_message(target_user.telegram_id, message_text)
@@ -1477,10 +2034,8 @@ async def handle_broadcast_message(message: Message, state: FSMContext, user: Us
                 logger.warning(f"Failed to send broadcast to {target_user.telegram_id}: {e}")
                 error_count += 1
             
-            # Small delay to avoid rate limits
             await asyncio.sleep(0.05)
         
-        # Update progress message with results
         await progress_msg.edit_text(
             t('broadcast_sent', user.language) + "\n" + 
             t('broadcast_stats', user.language, sent=sent_count, errors=error_count),
@@ -1501,7 +2056,6 @@ async def handle_broadcast_message(message: Message, state: FSMContext, user: Us
 # System management handlers
 @admin_router.callback_query(F.data == "admin_system")
 async def admin_system_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show system management menu"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1512,7 +2066,6 @@ async def admin_system_callback(callback: CallbackQuery, user: User, **kwargs):
 
 @admin_router.callback_query(F.data == "system_stats")
 async def system_stats_callback(callback: CallbackQuery, user: User, db: Database, api: RemnaWaveAPI = None, **kwargs):
-    """Show detailed system statistics"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1520,207 +2073,14 @@ async def system_stats_callback(callback: CallbackQuery, user: User, db: Databas
 
 @admin_router.callback_query(F.data == "refresh_system_stats")
 async def refresh_system_stats_callback(callback: CallbackQuery, user: User, db: Database, api: RemnaWaveAPI = None, **kwargs):
-    """Refresh system statistics"""
     if not await check_admin_access(callback, user):
         return
     
     await callback.answer("🔄 Обновляю статистику...")
     await show_system_stats(callback, user, db, api)
 
-async def show_system_stats(callback: CallbackQuery, user: User, db: Database, api: RemnaWaveAPI = None, force_refresh: bool = False):
-    """Display comprehensive system statistics with correct node status"""
-    try:
-        # Get database stats
-        db_stats = await db.get_stats()
-        current_time = datetime.now()
-        
-        text = "📊 Системная статистика\n\n"
-        
-        # Database statistics
-        text += "💾 База данных бота:\n"
-        text += f"👥 Пользователей: {db_stats['total_users']}\n"
-        text += f"📋 Подписок: {db_stats['total_subscriptions_non_trial']}\n"
-        text += f"💰 Доходы: {db_stats['total_revenue']} руб.\n"
-        
-        # RemnaWave API status
-        if api:
-            text += "\n🔗 API RemnaWave: 🟢 Подключен\n"
-            
-            try:
-                logger.info("=== FETCHING SYSTEM STATS ===")
-                
-                # Получаем статистику пользователей - ИСПРАВЛЕНО
-                await callback.answer("📊 Загружаю статистику пользователей...")
-                
-                # Сначала пробуем получить полный список пользователей
-                all_users = await api.get_all_system_users_full()
-                logger.info(f"Got {len(all_users) if all_users else 0} users from get_all_system_users_full")
-                
-                # Если не получилось, пробуем другой метод
-                if not all_users:
-                    logger.warning("get_all_system_users_full returned empty, trying alternative method")
-                    try:
-                        # Пробуем получить через системную статистику
-                        system_stats = await api.get_system_stats()
-                        logger.info(f"System stats response: {system_stats}")
-                        
-                        # Пробуем альтернативный метод получения пользователей
-                        users_count = await api.get_users_count()
-                        logger.info(f"Users count from API: {users_count}")
-                        
-                    except Exception as alt_error:
-                        logger.error(f"Alternative user fetching failed: {alt_error}")
-                
-                # Получаем статистику нод
-                await callback.answer("🖥 Загружаю статистику нод...")
-                all_nodes = await api.get_all_nodes()
-                logger.info(f"Got {len(all_nodes) if all_nodes else 0} nodes from API")
-                
-                text += "\n🖥 Система RemnaWave:\n"
-                
-                # === ПОЛЬЗОВАТЕЛИ - ИСПРАВЛЕННАЯ ЛОГИКА ===
-                if all_users:
-                    total_users = len(all_users)
-                    active_users = len([u for u in all_users if str(u.get('status', '')).upper() == 'ACTIVE'])
-                    inactive_users = total_users - active_users
-                    
-                    text += f"👤 Пользователей в системе: {total_users}\n"
-                    text += f"✅ Активных: {active_users}\n"
-                    text += f"❌ Неактивных: {inactive_users}\n"
-                    
-                    logger.info(f"Users stats: Total={total_users}, Active={active_users}, Inactive={inactive_users}")
-                else:
-                    # Если список пользователей пустой, пробуем получить count
-                    try:
-                        users_count = await api.get_users_count()
-                        if users_count is not None and users_count > 0:
-                            text += f"👤 Пользователей в системе: {users_count}\n"
-                            text += "⚠️ Детальная статистика недоступна\n"
-                        else:
-                            text += "👤 Пользователи: Нет данных или пустая система\n"
-                            # Добавляем диагностическую информацию
-                            text += "🔍 Возможные причины:\n"
-                            text += "• Система только установлена\n"
-                            text += "• Проблема с API доступом\n"
-                            text += "• Ошибка в структуре данных API\n"
-                    except Exception as count_error:
-                        logger.error(f"Failed to get users count: {count_error}")
-                        text += "👤 Пользователи: ❌ Ошибка получения данных\n"
-                
-                # === НОДЫ ===
-                if all_nodes:
-                    total_nodes = len(all_nodes)
-                    online_nodes = 0
-                    offline_nodes = 0
-                    disabled_nodes = 0
-                    
-                    text += f"\n📡 Ноды ({total_nodes} шт.):\n"
-                    
-                    for i, node in enumerate(all_nodes):
-                        node_name = node.get('name', f'Node-{i+1}')
-                        status = node.get('status', 'unknown')
-                        
-                        logger.debug(f"Node '{node_name}': status='{status}'")
-                        
-                        if status == 'online':
-                            online_nodes += 1
-                            status_emoji = "🟢"
-                        elif status == 'disabled':
-                            disabled_nodes += 1
-                            status_emoji = "⚫"
-                        else:
-                            offline_nodes += 1
-                            status_emoji = "🔴"
-                        
-                        # Показываем первые 5 нод
-                        if i < 5:
-                            display_name = node_name[:20] + "..." if len(node_name) > 20 else node_name
-                            text += f"{status_emoji} {display_name}\n"
-                    
-                    if total_nodes > 5:
-                        text += f"... и еще {total_nodes - 5} нод\n"
-                    
-                    text += f"\n🖥 Итого нод:\n"
-                    text += f"• Всего: {total_nodes}\n"
-                    text += f"• 🟢 Онлайн: {online_nodes}\n"
-                    text += f"• 🔴 Оффлайн: {offline_nodes}\n"
-                    if disabled_nodes > 0:
-                        text += f"• ⚫ Отключено: {disabled_nodes}\n"
-                    
-                    logger.info(f"Nodes stats: Total={total_nodes}, Online={online_nodes}, Offline={offline_nodes}, Disabled={disabled_nodes}")
-                    
-                    # Определяем общее состояние системы
-                    if online_nodes == total_nodes:
-                        system_status = "🟢 Нормальное"
-                    elif online_nodes == 0:
-                        system_status = "🔴 Критическое"
-                    elif online_nodes < total_nodes / 2:
-                        system_status = "🟠 Система работает частично"
-                    else:
-                        system_status = "🟡 Предупреждение"
-                    
-                    text += f"\n🏥 Состояние: {system_status}\n"
-                else:
-                    text += "\n⚠️ Ноды: данные недоступны\n"
-                
-                # === ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ ===
-                try:
-                    # Пытаемся получить системную статистику для трафика
-                    system_stats = await api.get_system_stats()
-                    if system_stats and 'bandwidth' in system_stats:
-                        bandwidth = system_stats['bandwidth']
-                        
-                        # Ищем актуальные данные о трафике
-                        if 'bandwidthCurrentYear' in bandwidth:
-                            current_year = bandwidth['bandwidthCurrentYear'].get('current', '0')
-                            if current_year != '0':
-                                text += f"\n📊 Трафик за год: {current_year}\n"
-                        
-                        if 'bandwidthCalendarMonth' in bandwidth:
-                            current_month = bandwidth['bandwidthCalendarMonth'].get('current', '0')
-                            if current_month != '0':
-                                text += f"📊 Трафик за месяц: {current_month}\n"
-                        
-                except Exception as e:
-                    logger.warning(f"Failed to get additional system stats: {e}")
-                
-            except Exception as api_error:
-                logger.error(f"Failed to get RemnaWave stats: {api_error}", exc_info=True)
-                text += "\n❌ Ошибка получения статистики RemnaWave\n"
-                text += f"Детали: {str(api_error)[:60]}...\n"
-        else:
-            text += "\n🔗 API RemnaWave: 🔴 Недоступен\n"
-        
-        # Add timestamp
-        text += f"\n🕐 Обновлено: {format_datetime(current_time, user.language)}"
-        
-        # Create keyboard
-        keyboard = system_stats_keyboard(user.language, timestamp=int(current_time.timestamp()) if force_refresh else None)
-        
-        try:
-            await callback.message.edit_text(text, reply_markup=keyboard)
-        except Exception as edit_error:
-            if "message is not modified" in str(edit_error).lower():
-                await callback.answer("✅ Статистика обновлена", show_alert=False)
-            else:
-                logger.error(f"Failed to edit system stats message: {edit_error}")
-                raise edit_error
-        
-    except Exception as e:
-        logger.error(f"Critical error in show_system_stats: {e}", exc_info=True)
-        try:
-            await callback.message.edit_text(
-                f"❌ Критическая ошибка получения статистики\n\n"
-                f"Детали: {str(e)[:100]}{'...' if len(str(e)) > 100 else ''}\n\n"
-                f"Обратитесь к администратору для решения проблемы.",
-                reply_markup=admin_system_keyboard(user.language)
-            )
-        except:
-            await callback.answer("❌ Критическая ошибка системы", show_alert=True)
-
 @admin_router.callback_query(F.data == "debug_users_api")
 async def debug_users_api_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Debug users API to check response structure"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1731,7 +2091,6 @@ async def debug_users_api_callback(callback: CallbackQuery, user: User, api: Rem
     try:
         await callback.answer("🔍 Анализирую структуру API...")
         
-        # Используем debug метод
         debug_info = await api.debug_users_api()
         
         text = "🔬 **Отладка API пользователей**\n\n"
@@ -1761,7 +2120,6 @@ async def debug_users_api_callback(callback: CallbackQuery, user: User, api: Rem
                 text += f"\n📊 Всего пользователей: {debug_info['total_count']}\n"
                 text += f"📍 Поле счетчика: `{debug_info.get('total_count_field', 'unknown')}`\n"
         
-        # Попробуем получить пользователей обычным методом
         text += "\n--- **Тест получения пользователей** ---\n"
         
         users = await api.get_all_system_users_full()
@@ -1800,7 +2158,6 @@ async def debug_users_api_callback(callback: CallbackQuery, user: User, api: Rem
 
 @admin_router.callback_query(F.data == "debug_api_comprehensive")
 async def debug_api_comprehensive_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Comprehensive API debugging with detailed analysis"""
     if not await check_admin_access(callback, user):
         return
     
@@ -1813,7 +2170,6 @@ async def debug_api_comprehensive_callback(callback: CallbackQuery, user: User, 
     
     await callback.answer("🔍 Запуск полной диагностики API...")
     
-    # Тестируем основные эндпоинты
     endpoints_to_test = [
         ('/api/nodes', 'GET', 'Ноды'),
         ('/api/users?limit=3', 'GET', 'Пользователи'),
@@ -1843,11 +2199,9 @@ async def debug_api_comprehensive_callback(callback: CallbackQuery, user: User, 
                         count = debug_result['data_count']
                         diagnostic_text += f"   📈 Количество: {count}\n"
                 
-                # Анализируем конкретно данные нод
                 if 'nodes' in endpoint and debug_result.get('json'):
                     await analyze_nodes_response(debug_result['json'], diagnostic_text)
                 
-                # Анализируем данные пользователей
                 if 'users' in endpoint and debug_result.get('json'):
                     await analyze_users_response(debug_result['json'], diagnostic_text)
                     
@@ -1861,7 +2215,6 @@ async def debug_api_comprehensive_callback(callback: CallbackQuery, user: User, 
         except Exception as e:
             diagnostic_text += f"   💥 Исключение: {str(e)[:50]}...\n\n"
     
-    # Добавляем рекомендации
     diagnostic_text += "💡 Рекомендации:\n"
     diagnostic_text += "• Проверьте токен авторизации\n"
     diagnostic_text += "• Убедитесь в корректности base_url\n"
@@ -1876,7 +2229,6 @@ async def debug_api_comprehensive_callback(callback: CallbackQuery, user: User, 
         [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_system")]
     ])
     
-    # Обрезаем текст если он слишком длинный
     if len(diagnostic_text) > 4000:
         diagnostic_text = diagnostic_text[:3900] + "\n\n... (текст обрезан)"
     
@@ -1887,7 +2239,6 @@ async def debug_api_comprehensive_callback(callback: CallbackQuery, user: User, 
         await callback.answer("❌ Ошибка отправки результатов диагностики", show_alert=True)
 
 async def analyze_nodes_response(json_data, diagnostic_text):
-    """Analyze nodes response for debugging"""
     try:
         nodes_list = []
         
@@ -1909,7 +2260,6 @@ async def analyze_nodes_response(json_data, diagnostic_text):
             
             diagnostic_text += f"   📊 Статусы: {dict(status_counts)}\n"
             
-            # Показываем первые 2 ноды для примера
             for i, node in enumerate(nodes_list[:2]):
                 name = node.get('name', f'Node-{i+1}')
                 status = node.get('status', 'unknown')
@@ -1919,7 +2269,6 @@ async def analyze_nodes_response(json_data, diagnostic_text):
         diagnostic_text += f"   ⚠️ Ошибка анализа нод: {str(e)[:30]}...\n"
 
 async def analyze_users_response(json_data, diagnostic_text):
-    """Analyze users response for debugging"""
     try:
         users_list = []
         
@@ -1937,7 +2286,6 @@ async def analyze_users_response(json_data, diagnostic_text):
             active_count = len([u for u in users_list if str(u.get('status', '')).upper() == 'ACTIVE'])
             diagnostic_text += f"   ✅ Активных: {active_count}\n"
             
-            # Показываем примеры статусов
             statuses = [str(u.get('status', 'N/A')).upper() for u in users_list[:3]]
             diagnostic_text += f"   📊 Примеры статусов: {', '.join(statuses)}\n"
         
@@ -1946,14 +2294,12 @@ async def analyze_users_response(json_data, diagnostic_text):
 
 @admin_router.callback_query(F.data == "nodes_management")
 async def nodes_management_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Show improved nodes management interface"""
     if not await check_admin_access(callback, user):
         return
     
     await show_nodes_management_improved(callback, user, api)
 
 async def show_nodes_management_improved(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None):
-    """Show nodes management with improved display and error handling"""
     try:
         if not api:
             await callback.message.edit_text(
@@ -1965,7 +2311,6 @@ async def show_nodes_management_improved(callback: CallbackQuery, user: User, ap
         
         await callback.answer("🖥 Загружаю информацию о нодах...")
         
-        # Get nodes with improved API call
         nodes = await api.get_all_nodes()
         
         if not nodes:
@@ -1979,7 +2324,6 @@ async def show_nodes_management_improved(callback: CallbackQuery, user: User, ap
             )
             return
         
-        # Calculate statistics
         online_nodes = []
         offline_nodes = []
         disabled_nodes = []
@@ -1993,17 +2337,17 @@ async def show_nodes_management_improved(callback: CallbackQuery, user: User, ap
             else:
                 offline_nodes.append(node)
         
-        # Build display text
+        from datetime import datetime
+        current_time = datetime.now().strftime("%H:%M:%S")
+        
         text = "🖥 **Управление нодами**\n\n"
         
-        # Overall statistics
         text += "📊 **Общая статистика:**\n"
         text += f"├ Всего нод: {len(nodes)}\n"
         text += f"├ 🟢 Онлайн: {len(online_nodes)}\n"
         text += f"├ 🔴 Оффлайн: {len(offline_nodes)}\n"
         text += f"└ ⚫ Отключено: {len(disabled_nodes)}\n\n"
         
-        # System health indicator
         if len(online_nodes) == len(nodes):
             text += "🟢 **Система работает нормально**\n\n"
         elif len(online_nodes) >= len(nodes) * 0.7:
@@ -2015,7 +2359,6 @@ async def show_nodes_management_improved(callback: CallbackQuery, user: User, ap
         
         text += "━━━━━━━━━━━━━━━━━━━━\n\n"
         
-        # Show online nodes first
         if online_nodes:
             text += "🟢 **Активные ноды:**\n"
             for i, node in enumerate(online_nodes[:3], 1):
@@ -2024,7 +2367,6 @@ async def show_nodes_management_improved(callback: CallbackQuery, user: User, ap
                 text += f"   _... и еще {len(online_nodes) - 3} активных нод_\n"
             text += "\n"
         
-        # Show offline nodes
         if offline_nodes:
             text += "🔴 **Оффлайн ноды:**\n"
             for i, node in enumerate(offline_nodes[:2], 1):
@@ -2033,7 +2375,6 @@ async def show_nodes_management_improved(callback: CallbackQuery, user: User, ap
                 text += f"   _... и еще {len(offline_nodes) - 2} оффлайн нод_\n"
             text += "\n"
         
-        # Show disabled nodes
         if disabled_nodes:
             text += "⚫ **Отключенные ноды:**\n"
             for i, node in enumerate(disabled_nodes[:2], 1):
@@ -2041,16 +2382,22 @@ async def show_nodes_management_improved(callback: CallbackQuery, user: User, ap
             if len(disabled_nodes) > 2:
                 text += f"   _... и еще {len(disabled_nodes) - 2} отключенных нод_\n"
         
-        text += f"\n🕐 _Обновлено: {format_datetime(datetime.now(), user.language)}_"
+        text += f"\n🕐 _Обновлено: {current_time}_"
         
-        # Create improved keyboard
         keyboard = nodes_management_keyboard(nodes, user.language)
         
-        await callback.message.edit_text(
-            text,
-            reply_markup=keyboard,
-            parse_mode='Markdown'
-        )
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+        except Exception as edit_error:
+            if "message is not modified" in str(edit_error).lower():
+                await callback.answer("✅ Информация о нодах актуальна", show_alert=False)
+            else:
+                logger.error(f"Error editing nodes management message: {edit_error}")
+                await callback.answer("❌ Ошибка обновления", show_alert=True)
         
     except Exception as e:
         logger.error(f"Error in show_nodes_management_improved: {e}", exc_info=True)
@@ -2061,11 +2408,9 @@ async def show_nodes_management_improved(callback: CallbackQuery, user: User, ap
         )
 
 def format_node_info(node: Dict, index: int) -> str:
-    """Format node information for display"""
     name = node.get('name', f'Node-{index}')
     address = node.get('address', 'N/A')
     
-    # Truncate long values
     if len(name) > 25:
         name = name[:22] + "..."
     if len(address) > 30:
@@ -2076,7 +2421,9 @@ def format_node_info(node: Dict, index: int) -> str:
     if address != 'N/A':
         text += f"   📍 {address}\n"
     
-    # Add resource usage if available
+    if node.get('countryCode'):
+        text += f"   🌍 {node['countryCode']}\n"
+    
     if node.get('cpuUsage') or node.get('memUsage'):
         text += "   💻 "
         if node.get('cpuUsage'):
@@ -2089,15 +2436,34 @@ def format_node_info(node: Dict, index: int) -> str:
             text += f"MEM: {mem_emoji} {mem:.0f}%"
         text += "\n"
     
-    # Add users count if available
     if node.get('usersCount'):
         text += f"   👥 Пользователей: {node['usersCount']}\n"
     
+    if node.get('trafficUsedBytes'):
+        traffic_used = format_bytes(node['trafficUsedBytes'])
+        text += f"   📊 Трафик: {traffic_used}\n"
+    
     return text
+
+@admin_router.callback_query(F.data == "refresh_nodes_stats")
+async def refresh_nodes_stats_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    await callback.answer("🔄 Обновляю информацию о нодах...")
+    await show_nodes_management_improved(callback, user, api)
+
+@admin_router.callback_query(F.data.startswith("refresh_nodes_stats_"))
+async def refresh_nodes_stats_with_timestamp_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    await callback.answer("🔄 Обновляю информацию о нодах...")
+    await show_nodes_management_improved(callback, user, api)
+
 
 @admin_router.callback_query(F.data == "restart_all_nodes")
 async def restart_all_nodes_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show confirmation for restarting all nodes"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2109,12 +2475,10 @@ async def restart_all_nodes_callback(callback: CallbackQuery, user: User, **kwar
 
 @admin_router.callback_query(F.data == "confirm_restart_all_nodes")
 async def confirm_restart_all_nodes_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Confirm and restart all nodes with improved error handling - ИСПРАВЛЕНО"""
     if not await check_admin_access(callback, user):
         return
     
     try:
-        # Проверяем доступность API
         if not api:
             await callback.message.edit_text(
                 "❌ API недоступен\n\n"
@@ -2124,10 +2488,8 @@ async def confirm_restart_all_nodes_callback(callback: CallbackQuery, user: User
             )
             return
         
-        # Показываем индикатор загрузки
         await callback.answer("🔄 Отправляю команду перезагрузки всех нод...")
         
-        # Выполняем перезагрузку
         logger.info("Attempting to restart all nodes via API")
         result = await api.restart_all_nodes()
         logger.debug(f"Restart all nodes result: {result}")
@@ -2161,7 +2523,6 @@ async def confirm_restart_all_nodes_callback(callback: CallbackQuery, user: User
 
 @admin_router.callback_query(F.data.startswith("node_details_"))
 async def node_details_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Show detailed node information"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2172,7 +2533,6 @@ async def node_details_callback(callback: CallbackQuery, user: User, api: RemnaW
             await callback.answer("❌ API недоступен", show_alert=True)
             return
         
-        # Get all nodes and find the specific one
         nodes = await api.get_all_nodes()
         node = None
         
@@ -2185,13 +2545,11 @@ async def node_details_callback(callback: CallbackQuery, user: User, api: RemnaW
             await callback.answer("❌ Нода не найдена", show_alert=True)
             return
         
-        # Build detailed information
         text = "🖥 **Детальная информация о ноде**\n\n"
         
         text += f"📛 **Название:** {node.get('name', 'Unknown')}\n"
         text += f"🆔 **ID:** `{node.get('id', node.get('uuid', 'N/A'))}`\n"
         
-        # Status with detailed info
         status = node.get('status', 'unknown')
         status_emoji = {
             'online': '🟢',
@@ -2203,20 +2561,38 @@ async def node_details_callback(callback: CallbackQuery, user: User, api: RemnaW
         
         text += f"🔘 **Статус:** {status_emoji} {status.upper()}\n\n"
         
-        # Connection details
         text += "📡 **Подключение:**\n"
         text += f"├ Подключена: {'✅' if node.get('isConnected') else '❌'}\n"
         text += f"├ Включена: {'✅' if not node.get('isDisabled') else '❌'}\n"
         text += f"├ Нода онлайн: {'✅' if node.get('isNodeOnline') else '❌'}\n"
         text += f"└ Xray работает: {'✅' if node.get('isXrayRunning') else '❌'}\n\n"
         
-        # Address
+        text += "🌍 **Местоположение:**\n"
+        if node.get('countryCode'):
+            text += f"├ Страна: {node['countryCode']}\n"
         if node.get('address'):
-            text += f"🌐 **Адрес:** `{node['address']}`\n\n"
+            text += f"└ Адрес: `{node['address']}`\n"
+        text += "\n"
         
-        # Resource usage
+        text += "💻 **Информация о системе:**\n"
+        if node.get('cpuModel'):
+            cpu_model = node['cpuModel']
+            if len(cpu_model) > 40:
+                cpu_model = cpu_model[:37] + "..."
+            text += f"├ CPU: {cpu_model}\n"
+        
+        if node.get('totalRam'):
+            text += f"├ RAM: {node['totalRam']}\n"
+        
+        if node.get('nodeVersion'):
+            text += f"├ Версия ноды: {node['nodeVersion']}\n"
+        
+        if node.get('xrayVersion'):
+            text += f"└ Версия Xray: {node['xrayVersion']}\n"
+        text += "\n"
+        
         if node.get('cpuUsage') or node.get('memUsage'):
-            text += "💻 **Использование ресурсов:**\n"
+            text += "📊 **Использование ресурсов:**\n"
             if node.get('cpuUsage'):
                 cpu = node['cpuUsage']
                 cpu_bar = create_progress_bar(cpu)
@@ -2227,33 +2603,248 @@ async def node_details_callback(callback: CallbackQuery, user: User, api: RemnaW
                 text += f"└ RAM: {mem_bar} {mem:.1f}%\n"
             text += "\n"
         
-        # Users
-        if node.get('usersCount') is not None:
-            text += f"👥 **Пользователей:** {node['usersCount']}\n\n"
+        text += "⏱ **Время работы и трафик:**\n"
+        if node.get('xrayUptime'):
+            uptime_seconds = int(node['xrayUptime'])
+            uptime_hours = uptime_seconds // 3600
+            uptime_days = uptime_hours // 24
+            uptime_hours = uptime_hours % 24
+            
+            if uptime_days > 0:
+                text += f"├ Время работы Xray: {uptime_days}д {uptime_hours}ч\n"
+            else:
+                text += f"├ Время работы Xray: {uptime_hours}ч {(uptime_seconds % 3600) // 60}м\n"
         
-        # Create action keyboard
+        if node.get('trafficUsedBytes'):
+            traffic_used = format_bytes(node['trafficUsedBytes'])
+            text += f"├ Использовано трафика: {traffic_used}\n"
+        
+        if node.get('usersCount') is not None:
+            text += f"└ Активных пользователей: {node['usersCount']}\n"
+        text += "\n"
+        
+        if node.get('viewPosition'):
+            text += f"📌 **Позиция в списке:** {node['viewPosition']}\n\n"
+        
         keyboard = create_node_actions_keyboard(node_id, status, user.language)
         
         await callback.message.edit_text(
             text,
-            reply_markup=keyboard
+            reply_markup=keyboard,
+            parse_mode='Markdown'
         )
         
     except Exception as e:
         logger.error(f"Error showing node details: {e}")
         await callback.answer("❌ Ошибка загрузки информации", show_alert=True)
 
+async def show_system_stats(callback: CallbackQuery, user: User, db: Database, api: RemnaWaveAPI = None, force_refresh: bool = False):
+    try:
+        db_stats = await db.get_stats()
+        current_time = datetime.now()
+        
+        text = "📊 Системная статистика\n\n"
+        
+        text += "💾 База данных бота:\n"
+        text += f"👥 Пользователей: {db_stats['total_users']}\n"
+        text += f"📋 Подписок: {db_stats['total_subscriptions_non_trial']}\n"
+        text += f"💰 Доходы: {db_stats['total_revenue']} руб.\n\n"
+        
+        if api:
+            text += "🔗 API RemnaWave: 🟢 Подключен\n\n"
+            
+            try:
+                logger.info("=== FETCHING ENHANCED SYSTEM STATS ===")
+                
+                await callback.answer("📊 Загружаю статистику системы...")
+                
+                system_stats = await api.get_system_stats()
+                
+                if system_stats:
+                    text += "🖥 Система RemnaWave:\n"
+                    
+                    total_users = system_stats.get('total_users', 0)
+                    active_users = system_stats.get('active_users', 0)
+                    disabled_users = system_stats.get('disabled_users', 0)
+                    limited_users = system_stats.get('limited_users', 0)
+                    expired_users = system_stats.get('expired_users', 0)
+                    
+                    text += f"👤 Пользователей в системе: {total_users}\n"
+                    text += f"✅ Активных: {active_users}\n"
+                    
+                    online_stats = system_stats.get('online_stats', {})
+                    if online_stats:
+                        online_now = online_stats.get('online_now', 0)
+                        last_day = online_stats.get('last_day', 0)
+                        last_week = online_stats.get('last_week', 0)
+                        never_online = online_stats.get('never_online', 0)
+                        
+                        text += f"🟢 Онлайн сейчас: {online_now}\n"
+                        text += f"📅 За сутки: {last_day}\n"
+                        text += f"📅 За неделю: {last_week}\n"
+                        
+                        if never_online > 0:
+                            text += f"⚫ Никогда не подключались: {never_online}\n"
+                    
+                    if disabled_users > 0 or limited_users > 0 or expired_users > 0:
+                        text += f"❌ Неактивных: {disabled_users + limited_users + expired_users}\n"
+                        if disabled_users > 0:
+                            text += f"  • Отключено: {disabled_users}\n"
+                        if limited_users > 0:
+                            text += f"  • Ограничено: {limited_users}\n"
+                        if expired_users > 0:
+                            text += f"  • Истекло: {expired_users}\n"
+                    
+                    nodes_info = system_stats.get('nodes', {})
+                    if nodes_info:
+                        total_nodes = nodes_info.get('total', 0)
+                        online_nodes = nodes_info.get('online', 0)
+                        offline_nodes = nodes_info.get('offline', 0)
+                        
+                        text += f"\n📡 Ноды ({total_nodes} шт.):\n"
+                        text += f"🟢 Онлайн: {online_nodes}\n"
+                        if offline_nodes > 0:
+                            text += f"🔴 Оффлайн: {offline_nodes}\n"
+                        
+                        if total_nodes > 0:
+                            if online_nodes >= total_nodes:
+                                health_status = "🟢 Отличное"
+                            else:
+                                health_percent = (online_nodes / total_nodes) * 100
+                                if health_percent >= 80:
+                                    health_status = "🟡 Хорошее"
+                                elif health_percent >= 50:
+                                    health_status = "🟠 Удовлетворительное"
+                                else:
+                                    health_status = "🔴 Критическое"
+                            
+                            text += f"🏥 Состояние: {health_status}\n"
+                    
+                    system_resources = system_stats.get('system_resources', {})
+                    if system_resources:
+                        text += f"\n💻 Системные ресурсы:\n"
+                        
+                        cpu_info = system_resources.get('cpu', {})
+                        if cpu_info.get('cores'):
+                            cores = cpu_info.get('cores', 0)
+                            physical_cores = cpu_info.get('physical_cores', 0)
+                            text += f"🔧 CPU: {cores} ядер"
+                            if physical_cores != cores:
+                                text += f" ({physical_cores} физических)"
+                            text += "\n"
+                        
+                        memory_info = system_resources.get('memory', {})
+                        if memory_info.get('total_gb'):
+                            total_gb = memory_info.get('total_gb', 0)
+                            active_gb = memory_info.get('active_gb', 0)
+                            available_gb = memory_info.get('available_gb', 0)
+                            usage_percent = memory_info.get('usage_percent', 0)
+                            
+                            text += f"💾 RAM: {active_gb:.1f}/{total_gb:.1f} ГБ ({usage_percent:.1f}%)\n"
+                            text += f"📈 Доступно: {available_gb:.1f} ГБ\n"
+                        
+                        uptime = system_resources.get('uptime', 0)
+                        if uptime > 0:
+                            uptime_hours = int(uptime // 3600)
+                            uptime_days = uptime_hours // 24
+                            uptime_hours = uptime_hours % 24
+                            
+                            if uptime_days > 0:
+                                text += f"⏱ Время работы: {uptime_days}д {uptime_hours}ч\n"
+                            else:
+                                text += f"⏱ Время работы: {uptime_hours}ч\n"
+                    
+                    total_traffic = system_stats.get('total_traffic_bytes', '0')
+                    if total_traffic and total_traffic != '0':
+                        try:
+                            traffic_bytes = int(total_traffic)
+                            traffic_formatted = format_bytes(traffic_bytes)
+                            text += f"\n📊 Общий трафик пользователей: {traffic_formatted}\n"
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    bandwidth_stats = system_stats.get('bandwidth', {})
+                    if bandwidth_stats:
+                        text += f"\n📈 **Трафик системы:**\n"
+                        
+                        if 'bandwidthLastTwoDays' in bandwidth_stats:
+                            daily_data = bandwidth_stats['bandwidthLastTwoDays']
+                            current_day = daily_data.get('current', '0')
+                            previous_day = daily_data.get('previous', '0')
+                            difference = daily_data.get('difference', '0')
+                            
+                            if current_day != '0':
+                                text += f"• За сегодня: {current_day}\n"
+                                if previous_day != '0':
+                                    text += f"• За вчера: {previous_day}\n"
+                                    
+                                    if difference.startswith('-'):
+                                        diff_emoji = "📉"
+                                        diff_text = difference[1:]
+                                    elif difference.startswith('+') or not difference.startswith('0'):
+                                        diff_emoji = "📈"
+                                        diff_text = difference.replace('+', '')
+                                    else:
+                                        diff_emoji = "➡️"
+                                        diff_text = "без изменений"
+                                    
+                                    text += f"• Изменение: {diff_emoji} {diff_text}\n"
+                        
+                        if 'bandwidthCalendarMonth' in bandwidth_stats:
+                            current_month = bandwidth_stats['bandwidthCalendarMonth'].get('current', '0')
+                            if current_month != '0':
+                                text += f"• За месяц: {current_month}\n"
+                        
+                        if 'bandwidthCurrentYear' in bandwidth_stats:
+                            current_year = bandwidth_stats['bandwidthCurrentYear'].get('current', '0')
+                            if current_year != '0':
+                                text += f"• За год: {current_year}\n"
+                    
+                    logger.info(f"Users stats: Total={total_users}, Active={active_users}, Online={online_stats.get('online_now', 0) if online_stats else 0}")
+                    
+                else:
+                    text += "\n❌ Ошибка получения статистики RemnaWave\n"
+                    
+            except Exception as api_error:
+                logger.error(f"Failed to get RemnaWave stats: {api_error}", exc_info=True)
+                text += "\n❌ Ошибка получения статистики RemnaWave\n"
+                text += f"Детали: {str(api_error)[:60]}...\n"
+        else:
+            text += "\n🔗 API RemnaWave: 🔴 Недоступен\n"
+        
+        text += f"\n🕐 Обновлено: {format_datetime(current_time, user.language)}"
+        
+        keyboard = system_stats_keyboard(user.language, timestamp=int(current_time.timestamp()) if force_refresh else None)
+        
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        except Exception as edit_error:
+            if "message is not modified" in str(edit_error).lower():
+                await callback.answer("✅ Статистика обновлена", show_alert=False)
+            else:
+                logger.error(f"Failed to edit system stats message: {edit_error}")
+                raise edit_error
+        
+    except Exception as e:
+        logger.error(f"Critical error in show_system_stats: {e}", exc_info=True)
+        try:
+            await callback.message.edit_text(
+                f"❌ Критическая ошибка получения статистики\n\n"
+                f"Детали: {str(e)[:100]}{'...' if len(str(e)) > 100 else ''}\n\n"
+                f"Обратитесь к администратору для решения проблемы.",
+                reply_markup=admin_system_keyboard(user.language)
+            )
+        except:
+            await callback.answer("❌ Критическая ошибка системы", show_alert=True)
+
 def create_progress_bar(percent: float, length: int = 10) -> str:
-    """Create a text progress bar"""
     filled = int(percent / 100 * length)
     bar = '█' * filled + '░' * (length - filled)
     return f"[{bar}]"
 
 def create_node_actions_keyboard(node_id: str, status: str, language: str = 'ru') -> InlineKeyboardMarkup:
-    """Create keyboard for node actions"""
     buttons = []
     
-    # Status control
     if status == 'disabled':
         buttons.append([
             InlineKeyboardButton(text="✅ Включить ноду", callback_data=f"enable_node_{node_id}")
@@ -2263,17 +2854,14 @@ def create_node_actions_keyboard(node_id: str, status: str, language: str = 'ru'
             InlineKeyboardButton(text="⚫ Отключить ноду", callback_data=f"disable_node_{node_id}")
         ])
     
-    # Restart button
     buttons.append([
         InlineKeyboardButton(text="🔄 Перезагрузить ноду", callback_data=f"restart_node_{node_id}")
     ])
     
-    # Refresh button
     buttons.append([
         InlineKeyboardButton(text="🔄 Обновить информацию", callback_data=f"refresh_node_{node_id}")
     ])
     
-    # Back button
     buttons.append([
         InlineKeyboardButton(text="🔙 Назад к списку нод", callback_data="nodes_management")
     ])
@@ -2282,7 +2870,6 @@ def create_node_actions_keyboard(node_id: str, status: str, language: str = 'ru'
 
 @admin_router.callback_query(F.data.startswith("enable_node_"))
 async def enable_node_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Enable specific node"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2301,7 +2888,6 @@ async def enable_node_callback(callback: CallbackQuery, user: User, api: RemnaWa
             await callback.answer("✅ Нода успешно включена", show_alert=True)
             log_user_action(user.telegram_id, "node_enabled", f"Node ID: {node_id}")
             
-            # Refresh node details
             await node_details_callback(callback, user, api=api)
         else:
             await callback.answer("❌ Ошибка включения ноды", show_alert=True)
@@ -2312,7 +2898,6 @@ async def enable_node_callback(callback: CallbackQuery, user: User, api: RemnaWa
 
 @admin_router.callback_query(F.data.startswith("disable_node_"))
 async def disable_node_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Disable specific node"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2331,7 +2916,6 @@ async def disable_node_callback(callback: CallbackQuery, user: User, api: RemnaW
             await callback.answer("✅ Нода успешно отключена", show_alert=True)
             log_user_action(user.telegram_id, "node_disabled", f"Node ID: {node_id}")
             
-            # Refresh node details
             await node_details_callback(callback, user, api=api)
         else:
             await callback.answer("❌ Ошибка отключения ноды", show_alert=True)
@@ -2342,7 +2926,6 @@ async def disable_node_callback(callback: CallbackQuery, user: User, api: RemnaW
 
 @admin_router.callback_query(F.data.startswith("restart_node_"))
 async def restart_node_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show confirmation for restarting specific node"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2355,7 +2938,6 @@ async def restart_node_callback(callback: CallbackQuery, user: User, **kwargs):
 
 @admin_router.callback_query(F.data.startswith("confirm_restart_node_"))
 async def confirm_restart_node_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Confirm and restart specific node"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2363,10 +2945,7 @@ async def confirm_restart_node_callback(callback: CallbackQuery, user: User, api
         node_id = callback.data.replace("confirm_restart_node_", "")
         await callback.answer("🔄 Перезагружаю ноду...")
         
-        # Здесь нужно добавить метод restart_node в RemnaWaveAPI если его нет
-        # Пока используем заглушку
         if api:
-            # result = await api.restart_node(node_id)  # Метод нужно добавить в API
             await callback.message.edit_text(
                 f"✅ Команда перезагрузки ноды {node_id} отправлена!",
                 reply_markup=admin_system_keyboard(user.language)
@@ -2385,9 +2964,139 @@ async def confirm_restart_node_callback(callback: CallbackQuery, user: User, api
             reply_markup=admin_system_keyboard(user.language)
         )
 
+@admin_router.callback_query(F.data.startswith("refresh_node_"))
+async def refresh_node_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        node_id = callback.data.replace("refresh_node_", "")
+        
+        if not api:
+            await callback.answer("❌ API недоступен", show_alert=True)
+            return
+        
+        await callback.answer("🔄 Обновляю информацию о ноде...")
+        
+        nodes = await api.get_all_nodes()
+        node = None
+        
+        for n in nodes:
+            if str(n.get('id')) == node_id or str(n.get('uuid')) == node_id:
+                node = n
+                break
+        
+        if not node:
+            await callback.answer("❌ Нода не найдена", show_alert=True)
+            return
+        
+        from datetime import datetime
+        current_time = datetime.now().strftime("%H:%M:%S")
+        
+        text = "🖥 **Детальная информация о ноде**\n\n"
+        
+        text += f"📛 **Название:** {node.get('name', 'Unknown')}\n"
+        text += f"🆔 **ID:** `{node.get('id', node.get('uuid', 'N/A'))}`\n"
+        
+        status = node.get('status', 'unknown')
+        status_emoji = {
+            'online': '🟢',
+            'offline': '🔴',
+            'disabled': '⚫',
+            'disconnected': '🔴',
+            'xray_stopped': '🟡'
+        }.get(status, '⚪')
+        
+        text += f"🔘 **Статус:** {status_emoji} {status.upper()}\n\n"
+        
+        text += "📡 **Подключение:**\n"
+        text += f"├ Подключена: {'✅' if node.get('isConnected') else '❌'}\n"
+        text += f"├ Включена: {'✅' if not node.get('isDisabled') else '❌'}\n"
+        text += f"├ Нода онлайн: {'✅' if node.get('isNodeOnline') else '❌'}\n"
+        text += f"└ Xray работает: {'✅' if node.get('isXrayRunning') else '❌'}\n\n"
+        
+        text += "🌍 **Местоположение:**\n"
+        if node.get('countryCode'):
+            text += f"├ Страна: {node['countryCode']}\n"
+        if node.get('address'):
+            text += f"└ Адрес: `{node['address']}`\n"
+        text += "\n"
+        
+        text += "💻 **Информация о системе:**\n"
+        if node.get('cpuModel'):
+            cpu_model = node['cpuModel']
+            if len(cpu_model) > 40:
+                cpu_model = cpu_model[:37] + "..."
+            text += f"├ CPU: {cpu_model}\n"
+        
+        if node.get('totalRam'):
+            text += f"├ RAM: {node['totalRam']}\n"
+        
+        if node.get('nodeVersion'):
+            text += f"├ Версия ноды: {node['nodeVersion']}\n"
+        
+        if node.get('xrayVersion'):
+            text += f"└ Версия Xray: {node['xrayVersion']}\n"
+        text += "\n"
+        
+        if node.get('cpuUsage') or node.get('memUsage'):
+            text += "📊 **Использование ресурсов:**\n"
+            if node.get('cpuUsage'):
+                cpu = node['cpuUsage']
+                cpu_bar = create_progress_bar(cpu)
+                text += f"├ CPU: {cpu_bar} {cpu:.1f}%\n"
+            if node.get('memUsage'):
+                mem = node['memUsage']
+                mem_bar = create_progress_bar(mem)
+                text += f"└ RAM: {mem_bar} {mem:.1f}%\n"
+            text += "\n"
+        
+        text += "⏱ **Время работы и трафик:**\n"
+        if node.get('xrayUptime'):
+            uptime_seconds = int(node['xrayUptime'])
+            uptime_hours = uptime_seconds // 3600
+            uptime_days = uptime_hours // 24
+            uptime_hours = uptime_hours % 24
+            
+            if uptime_days > 0:
+                text += f"├ Время работы Xray: {uptime_days}д {uptime_hours}ч\n"
+            else:
+                text += f"├ Время работы Xray: {uptime_hours}ч {(uptime_seconds % 3600) // 60}м\n"
+        
+        if node.get('trafficUsedBytes'):
+            traffic_used = format_bytes(node['trafficUsedBytes'])
+            text += f"├ Использовано трафика: {traffic_used}\n"
+        
+        if node.get('usersCount') is not None:
+            text += f"└ Активных пользователей: {node['usersCount']}\n"
+        text += "\n"
+        
+        if node.get('viewPosition'):
+            text += f"📌 **Позиция в списке:** {node['viewPosition']}\n\n"
+        
+        text += f"🕐 _Обновлено: {current_time}_"
+        
+        keyboard = create_node_actions_keyboard(node_id, status, user.language)
+        
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+        except Exception as edit_error:
+            if "message is not modified" in str(edit_error).lower():
+                await callback.answer("✅ Информация актуальна", show_alert=False)
+            else:
+                logger.error(f"Error editing node details message: {edit_error}")
+                await callback.answer("❌ Ошибка обновления", show_alert=True)
+        
+    except Exception as e:
+        logger.error(f"Error refreshing node details: {e}")
+        await callback.answer("❌ Ошибка обновления", show_alert=True)
+
 @admin_router.callback_query(F.data == "system_users")
 async def system_users_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show system users management - ИСПРАВЛЕНО"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2404,10 +3113,8 @@ async def system_users_callback(callback: CallbackQuery, user: User, **kwargs):
         
     except Exception as e:
         logger.error(f"Error in system_users_callback: {e}")
-        # Если редактирование не удается, отвечаем на callback
         await callback.answer("Меню пользователей системы", show_alert=False)
         
-        # Попробуем отправить новое сообщение
         try:
             await callback.message.answer(
                 "👥 Управление пользователями системы RemnaWave\n\nВыберите действие:",
@@ -2417,7 +3124,6 @@ async def system_users_callback(callback: CallbackQuery, user: User, **kwargs):
             logger.error(f"Failed to send new message: {send_error}")
 
 async def safe_edit_message(callback: CallbackQuery, text: str, reply_markup=None, parse_mode=None, answer_text="✅ Обновлено"):
-    """Безопасное редактирование сообщения с обработкой 'message is not modified'"""
     try:
         await callback.message.edit_text(
             text, 
@@ -2429,17 +3135,14 @@ async def safe_edit_message(callback: CallbackQuery, text: str, reply_markup=Non
             await callback.answer(answer_text, show_alert=False)
         else:
             logger.error(f"Error editing message: {e}")
-            # Попробуем просто ответить на callback
             try:
                 await callback.answer(answer_text, show_alert=False)
             except:
-                pass  # Игнорируем если и это не работает
-
+                pass 
 
 
 @admin_router.callback_query(F.data == "bulk_operations")
 async def bulk_operations_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show bulk operations menu"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2451,7 +3154,6 @@ async def bulk_operations_callback(callback: CallbackQuery, user: User, **kwargs
 
 @admin_router.callback_query(F.data == "bulk_reset_traffic")
 async def bulk_reset_traffic_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Reset traffic for all users"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2469,7 +3171,6 @@ async def bulk_reset_traffic_callback(callback: CallbackQuery, user: User, api: 
 
 @admin_router.callback_query(F.data == "confirm_bulk_reset_traffic")
 async def confirm_bulk_reset_traffic_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Confirm bulk traffic reset"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2477,10 +3178,8 @@ async def confirm_bulk_reset_traffic_callback(callback: CallbackQuery, user: Use
         await callback.answer("🔄 Сбрасываю трафик для всех пользователей...")
         
         if api:
-            # Показываем прогресс
             await callback.message.edit_text("⏳ Выполняется массовый сброс трафика...")
             
-            # Выполняем сброс трафика
             result = await api.bulk_reset_all_traffic()
             
             if result:
@@ -2507,15 +3206,12 @@ async def confirm_bulk_reset_traffic_callback(callback: CallbackQuery, user: Use
             reply_markup=bulk_operations_keyboard(user.language)
         )
 
-# Обновить существующую функцию admin_stats_callback
 @admin_router.callback_query(F.data == "admin_stats")
 async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database, api: RemnaWaveAPI = None, **kwargs):
-    """Show statistics with link to detailed system stats"""
     if not await check_admin_access(callback, user):
         return
     
     try:
-        # Get database stats
         db_stats = await db.get_stats()
         
         text = "📊 Краткая статистика\n\n"
@@ -2524,7 +3220,6 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
         text += f"📋 Подписок: {db_stats['total_subscriptions_non_trial']}\n"
         text += f"💰 Доходы: {db_stats['total_revenue']} руб.\n"
         
-        # Quick RemnaWave info
         if api:
             try:
                 nodes_stats = await api.get_nodes_statistics()
@@ -2552,16 +3247,13 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
 
 @admin_router.callback_query(F.data == "list_all_system_users")
 async def list_all_system_users_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, state: FSMContext = None, **kwargs):
-    """List all system users with improved display"""
     if not await check_admin_access(callback, user):
         return
     
-    # Сброс состояния для пагинации
     if state:
         await state.clear()
         await state.update_data(users_page=0)
     
-    # Проверяем наличие API
     if not api:
         await callback.message.edit_text(
             "❌ API RemnaWave недоступен\n\n"
@@ -2575,7 +3267,6 @@ async def list_all_system_users_callback(callback: CallbackQuery, user: User, ap
 
 async def show_system_users_list_paginated(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, 
                                            state: FSMContext = None, page: int = 0):
-    """Show paginated system users list with better formatting - ИСПРАВЛЕНО"""
     try:
         if not api:
             await callback.message.edit_text(
@@ -2586,7 +3277,6 @@ async def show_system_users_list_paginated(callback: CallbackQuery, user: User, 
         
         await callback.answer("📋 Загружаю список пользователей...")
         
-        # Get all users
         all_users = await api.get_all_system_users_full()
         if not all_users:
             await callback.message.edit_text(
@@ -2595,25 +3285,21 @@ async def show_system_users_list_paginated(callback: CallbackQuery, user: User, 
             )
             return
         
-        # Sort users by status and creation date
         all_users.sort(key=lambda x: (
             0 if x.get('status') == 'ACTIVE' else 1,
             x.get('createdAt', ''),
         ), reverse=True)
         
-        # Pagination
         users_per_page = 8
         total_pages = (len(all_users) + users_per_page - 1) // users_per_page
         start_idx = page * users_per_page
         end_idx = min(start_idx + users_per_page, len(all_users))
         page_users = all_users[start_idx:end_idx]
         
-        # Statistics
         active_count = len([u for u in all_users if u.get('status') == 'ACTIVE'])
         disabled_count = len(all_users) - active_count
         with_telegram = len([u for u in all_users if u.get('telegramId')])
         
-        # Build display text - БЕЗ MARKDOWN форматирования
         text = f"👥 Пользователи системы RemnaWave\n"
         text += f"📄 Страница {page + 1} из {total_pages}\n\n"
         
@@ -2625,9 +3311,7 @@ async def show_system_users_list_paginated(callback: CallbackQuery, user: User, 
         
         text += "━━━━━━━━━━━━━━━━━━━━\n\n"
         
-        # Display users with improved formatting
         for i, sys_user in enumerate(page_users, start=start_idx + 1):
-            # Status icon
             status = sys_user.get('status', 'UNKNOWN')
             if status == 'ACTIVE':
                 status_icon = "🟢"
@@ -2640,24 +3324,19 @@ async def show_system_users_list_paginated(callback: CallbackQuery, user: User, 
             else:
                 status_icon = "⚪"
             
-            # User info - ОЧИЩАЕМ от специальных символов
             username = sys_user.get('username', 'N/A')
-            # Удаляем или экранируем специальные символы Markdown
             username = username.replace('*', '').replace('_', '').replace('[', '').replace(']', '').replace('`', '')
             
             short_uuid = sys_user.get('shortUuid', '')[:8] + "..." if sys_user.get('shortUuid') else 'N/A'
             
-            text += f"{i}. {status_icon} {username}\n"  # Убрали ** для жирного текста
+            text += f"{i}. {status_icon} {username}\n" 
             
-            # Telegram info
             if sys_user.get('telegramId'):
                 telegram_id = str(sys_user['telegramId'])
-                text += f"   📱 TG: {telegram_id}\n"  # Убрали ` для моноширинного шрифта
+                text += f"   📱 TG: {telegram_id}\n" 
             
-            # UUID info
             text += f"   🔗 {short_uuid}\n"
             
-            # Expiry info
             if sys_user.get('expireAt'):
                 try:
                     expire_dt = datetime.fromisoformat(sys_user['expireAt'].replace('Z', '+00:00'))
@@ -2675,7 +3354,6 @@ async def show_system_users_list_paginated(callback: CallbackQuery, user: User, 
                     expire_date = sys_user['expireAt'][:10] if sys_user['expireAt'] else 'N/A'
                     text += f"   ⏰ {expire_date}\n"
             
-            # Traffic info
             traffic_limit = sys_user.get('trafficLimitBytes', 0)
             used_traffic = sys_user.get('usedTrafficBytes', 0)
             
@@ -2697,14 +3375,11 @@ async def show_system_users_list_paginated(callback: CallbackQuery, user: User, 
             
             text += "\n"
         
-        # Create pagination keyboard
         keyboard = create_users_pagination_keyboard(page, total_pages, user.language)
         
-        # Отправляем БЕЗ parse_mode
         await callback.message.edit_text(
             text,
             reply_markup=keyboard
-            # Убрали parse_mode='Markdown'
         )
         
     except Exception as e:
@@ -2718,47 +3393,37 @@ async def show_system_users_list_paginated(callback: CallbackQuery, user: User, 
             await callback.answer("❌ Ошибка загрузки пользователей", show_alert=True)
 
 def create_users_pagination_keyboard(current_page: int, total_pages: int, language: str = 'ru') -> InlineKeyboardMarkup:
-    """Create pagination keyboard for users list"""
     buttons = []
     
-    # Quick actions row
     buttons.append([
         InlineKeyboardButton(text="🔍 Поиск", callback_data="search_user_uuid"),
         InlineKeyboardButton(text="🔄 Обновить", callback_data=f"refresh_users_page_{current_page}")
     ])
     
-    # Pagination row
     if total_pages > 1:
         nav_row = []
         
-        # First page button
         if current_page > 0:
             nav_row.append(InlineKeyboardButton(text="⏮", callback_data="users_page_0"))
         
-        # Previous button
         if current_page > 0:
             nav_row.append(InlineKeyboardButton(text="◀️", callback_data=f"users_page_{current_page - 1}"))
         
-        # Current page indicator
         nav_row.append(InlineKeyboardButton(text=f"{current_page + 1}/{total_pages}", callback_data="noop"))
         
-        # Next button
         if current_page < total_pages - 1:
             nav_row.append(InlineKeyboardButton(text="▶️", callback_data=f"users_page_{current_page + 1}"))
         
-        # Last page button
         if current_page < total_pages - 1:
             nav_row.append(InlineKeyboardButton(text="⏭", callback_data=f"users_page_{total_pages - 1}"))
         
         buttons.append(nav_row)
     
-    # Filter buttons
     buttons.append([
         InlineKeyboardButton(text="✅ Только активные", callback_data="filter_users_active"),
         InlineKeyboardButton(text="📱 С Telegram", callback_data="filter_users_telegram")
     ])
     
-    # Back button
     buttons.append([
         InlineKeyboardButton(text="🔙 Назад", callback_data="system_users")
     ])
@@ -2767,7 +3432,6 @@ def create_users_pagination_keyboard(current_page: int, total_pages: int, langua
 
 @admin_router.callback_query(F.data.startswith("users_page_"))
 async def users_page_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, state: FSMContext = None, **kwargs):
-    """Handle users list pagination"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2780,15 +3444,12 @@ async def users_page_callback(callback: CallbackQuery, user: User, api: RemnaWav
 
 @admin_router.callback_query(F.data.startswith("refresh_system_users_"))
 async def refresh_system_users_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Handle refresh system users with timestamp"""
     if not await check_admin_access(callback, user):
         return
     
     await show_system_users_list(callback, user, api, force_refresh=True)
 
-# Helper function to create keyboards with timestamps
 def system_stats_keyboard(language: str, timestamp: int = None) -> InlineKeyboardMarkup:
-    """Create system stats keyboard with optional timestamp"""
     refresh_callback = f"refresh_system_stats_{timestamp}" if timestamp else "refresh_system_stats"
     
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -2800,12 +3461,9 @@ def system_stats_keyboard(language: str, timestamp: int = None) -> InlineKeyboar
     ])
 
 def nodes_management_keyboard(nodes: List[Dict], language: str, timestamp: int = None) -> InlineKeyboardMarkup:
-    """Create nodes management keyboard with optional timestamp"""
     buttons = []
     
-    # Node action buttons
     if nodes:
-        # Add individual node buttons (first 3)
         for i, node in enumerate(nodes[:3]):
             node_id = node.get('id', f'{i}')
             node_name = node.get('name', f'Node-{i+1}')
@@ -2822,35 +3480,23 @@ def nodes_management_keyboard(nodes: List[Dict], language: str, timestamp: int =
                 )
             ])
         
-        # Restart all nodes button
         buttons.append([
             InlineKeyboardButton(text="🔄 Перезагрузить все ноды", callback_data="restart_all_nodes")
         ])
     
-    # Refresh button with timestamp if provided
     refresh_callback = f"refresh_nodes_stats_{timestamp}" if timestamp else "refresh_nodes_stats"
     buttons.append([
         InlineKeyboardButton(text="🔄 Обновить", callback_data=refresh_callback)
     ])
     
-    # Back button
     buttons.append([
         InlineKeyboardButton(text="🔙 Назад", callback_data="admin_system")
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-@admin_router.callback_query(F.data.startswith("refresh_nodes_stats_"))
-async def refresh_nodes_stats_with_timestamp_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Handle refresh nodes stats with timestamp"""
-    if not await check_admin_access(callback, user):
-        return
-    
-    await show_nodes_management(callback, user, api, force_refresh=True)
-
 @admin_router.callback_query(F.data.startswith("refresh_system_stats_"))
 async def refresh_system_stats_with_timestamp_callback(callback: CallbackQuery, user: User, db: Database, api: RemnaWaveAPI = None, **kwargs):
-    """Handle refresh system stats with timestamp"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2858,7 +3504,6 @@ async def refresh_system_stats_with_timestamp_callback(callback: CallbackQuery, 
 
 @admin_router.callback_query(F.data == "users_statistics")
 async def users_statistics_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Show detailed users statistics"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2872,7 +3517,6 @@ async def users_statistics_callback(callback: CallbackQuery, user: User, api: Re
         
         await callback.answer("📊 Собираю статистику...")
         
-        # Получаем базовую системную статистику
         system_stats = await api.get_system_stats()
         users_count = await api.get_users_count()
         
@@ -2892,7 +3536,6 @@ async def users_statistics_callback(callback: CallbackQuery, user: User, api: Re
                     text += f"• Загружено: {format_bytes(bandwidth.get('downlink', 0))}\n"
                     text += f"• Отдано: {format_bytes(bandwidth.get('uplink', 0))}\n"
         
-        # Получаем информацию о состоянии системы
         health_info = await api.get_system_health()
         if health_info:
             text += f"\n🏥 Состояние системы: {health_info.get('status', 'unknown')}\n"
@@ -2918,7 +3561,6 @@ async def users_statistics_callback(callback: CallbackQuery, user: User, api: Re
 
 @admin_router.callback_query(F.data == "search_user_uuid")
 async def search_user_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
-    """Start universal user search"""
     if not await check_admin_access(callback, user):
         return
     
@@ -2937,7 +3579,6 @@ async def search_user_callback(callback: CallbackQuery, user: User, state: FSMCo
 
 @admin_router.message(StateFilter(BotStates.admin_search_user_any))
 async def handle_search_user_any(message: Message, state: FSMContext, user: User, api: RemnaWaveAPI = None, db: Database = None, **kwargs):
-    """Handle universal user search"""
     search_input = message.text.strip()
     
     if not api:
@@ -2953,13 +3594,10 @@ async def handle_search_user_any(message: Message, state: FSMContext, user: User
         user_data = None
         search_method = None
         
-        # Try different search methods
-        # 1. Check if it's a UUID
         if validate_squad_uuid(search_input):
             user_data = await api.get_user_by_uuid(search_input)
             search_method = "UUID"
         
-        # 2. Try as Telegram ID
         if not user_data:
             try:
                 telegram_id = int(search_input)
@@ -2968,17 +3606,14 @@ async def handle_search_user_any(message: Message, state: FSMContext, user: User
             except ValueError:
                 pass
         
-        # 3. Try as Short UUID
         if not user_data:
             user_data = await api.get_user_by_short_uuid(search_input)
             search_method = "Short UUID"
         
-        # 4. Try as Username
         if not user_data:
             user_data = await api.get_user_by_username(search_input)
             search_method = "Username"
         
-        # 5. Try as Email
         if not user_data and '@' in search_input:
             user_data = await api.get_user_by_email(search_input)
             search_method = "Email"
@@ -3000,16 +3635,13 @@ async def handle_search_user_any(message: Message, state: FSMContext, user: User
             await state.clear()
             return
         
-        # Get local user info if exists
         local_user = None
         if user_data.get('telegramId') and db:
             local_user = await db.get_user_by_telegram_id(user_data['telegramId'])
         
-        # Format user information
         text = f"👤 Информация о пользователе\n"
         text += f"🔍 Найден по: {search_method}\n\n"
         
-        # Basic info
         text += f"📛 Username: `{user_data.get('username', 'N/A')}`\n"
         text += f"🆔 UUID: `{user_data.get('uuid', 'N/A')}`\n"
         text += f"🔗 Short UUID: `{user_data.get('shortUuid', 'N/A')}`\n"
@@ -3022,17 +3654,14 @@ async def handle_search_user_any(message: Message, state: FSMContext, user: User
         if user_data.get('email'):
             text += f"📧 Email: {user_data.get('email')}\n"
         
-        # Status
         status = user_data.get('status', 'UNKNOWN')
         status_emoji = "✅" if status == 'ACTIVE' else "❌"
         text += f"\n🔘 Статус: {status_emoji} {status}\n"
         
-        # Subscription info
         if user_data.get('expireAt'):
             expire_date = user_data['expireAt']
             text += f"⏰ Истекает: {expire_date[:10]}\n"
             
-            # Calculate days left
             try:
                 expire_dt = datetime.fromisoformat(expire_date.replace('Z', '+00:00'))
                 days_left = (expire_dt - datetime.now()).days
@@ -3043,7 +3672,6 @@ async def handle_search_user_any(message: Message, state: FSMContext, user: User
             except:
                 pass
         
-        # Traffic info
         traffic_limit = user_data.get('trafficLimitBytes', 0)
         used_traffic = user_data.get('usedTrafficBytes', 0)
         
@@ -3056,7 +3684,6 @@ async def handle_search_user_any(message: Message, state: FSMContext, user: User
             text += f"\n📊 Лимит трафика: Безлимитный\n"
             text += f"📈 Использовано: {format_bytes(used_traffic)}\n"
         
-        # Create management keyboard
         keyboard = create_user_management_keyboard(user_data.get('uuid'), user_data.get('status'), user.language)
         
         await search_msg.edit_text(text, reply_markup=keyboard)
@@ -3065,10 +3692,8 @@ async def handle_search_user_any(message: Message, state: FSMContext, user: User
         logger.error(f"Error searching user: {e}")
 
 def create_user_management_keyboard(user_uuid: str, status: str, language: str = 'ru') -> InlineKeyboardMarkup:
-    """Create keyboard for user management"""
     buttons = []
     
-    # Status control buttons
     if status == 'ACTIVE':
         buttons.append([
             InlineKeyboardButton(text="❌ Отключить", callback_data=f"disable_user_{user_uuid}"),
@@ -3080,19 +3705,16 @@ def create_user_management_keyboard(user_uuid: str, status: str, language: str =
             InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data=f"reset_user_traffic_{user_uuid}")
         ])
     
-    # Edit buttons
     buttons.append([
         InlineKeyboardButton(text="📅 Изменить срок", callback_data=f"edit_user_expiry_{user_uuid}"),
         InlineKeyboardButton(text="📊 Изменить трафик", callback_data=f"edit_user_traffic_{user_uuid}")
     ])
     
-    # Additional info
     buttons.append([
         InlineKeyboardButton(text="📈 Статистика", callback_data=f"user_usage_stats_{user_uuid}"),
         InlineKeyboardButton(text="🔄 Обновить", callback_data=f"refresh_user_{user_uuid}")
     ])
     
-    # Navigation
     buttons.append([
         InlineKeyboardButton(text="🔍 Новый поиск", callback_data="search_user_uuid"),
         InlineKeyboardButton(text="🔙 Назад", callback_data="system_users")
@@ -3102,7 +3724,6 @@ def create_user_management_keyboard(user_uuid: str, status: str, language: str =
 
 @admin_router.callback_query(F.data.startswith("edit_user_expiry_"))
 async def edit_user_expiry_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
-    """Start editing user expiry date"""
     if not await check_admin_access(callback, user):
         return
     
@@ -3121,7 +3742,6 @@ async def edit_user_expiry_callback(callback: CallbackQuery, user: User, state: 
 
 @admin_router.message(StateFilter(BotStates.admin_edit_user_expiry))
 async def handle_edit_user_expiry(message: Message, state: FSMContext, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Handle user expiry date edit - ИСПРАВЛЕНО"""
     if not api:
         await message.answer("❌ API недоступен")
         await state.clear()
@@ -3132,16 +3752,13 @@ async def handle_edit_user_expiry(message: Message, state: FSMContext, user: Use
     input_value = message.text.strip()
     
     try:
-        # Parse input
         new_expiry = None
         
-        # Try as number of days
         try:
             days = int(input_value)
             if days > 0:
                 new_expiry = datetime.now() + timedelta(days=days)
         except ValueError:
-            # Try as date
             try:
                 new_expiry = datetime.strptime(input_value, "%Y-%m-%d")
             except ValueError:
@@ -3152,7 +3769,6 @@ async def handle_edit_user_expiry(message: Message, state: FSMContext, user: Use
             await message.answer("❌ Не удалось определить дату")
             return
         
-        # Update user in RemnaWave - правильный формат для API
         expiry_str = new_expiry.replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
         result = await api.update_user(user_uuid, {'expireAt': expiry_str, 'status': 'ACTIVE'})
         
@@ -3177,7 +3793,6 @@ async def handle_edit_user_expiry(message: Message, state: FSMContext, user: Use
 
 @admin_router.message(StateFilter(BotStates.admin_edit_user_expiry))
 async def handle_edit_user_expiry(message: Message, state: FSMContext, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Handle user expiry date edit"""
     if not api:
         await message.answer("❌ API недоступен")
         await state.clear()
@@ -3188,16 +3803,13 @@ async def handle_edit_user_expiry(message: Message, state: FSMContext, user: Use
     input_value = message.text.strip()
     
     try:
-        # Parse input
         new_expiry = None
         
-        # Try as number of days
         try:
             days = int(input_value)
             if days > 0:
                 new_expiry = datetime.now() + timedelta(days=days)
         except ValueError:
-            # Try as date
             try:
                 new_expiry = datetime.strptime(input_value, "%Y-%m-%d")
             except ValueError:
@@ -3208,7 +3820,6 @@ async def handle_edit_user_expiry(message: Message, state: FSMContext, user: Use
             await message.answer("❌ Не удалось определить дату")
             return
         
-        # Update user in RemnaWave
         expiry_str = new_expiry.isoformat() + 'Z'
         result = await api.update_user(user_uuid, {'expireAt': expiry_str, 'status': 'ACTIVE'})
         
@@ -3233,7 +3844,6 @@ async def handle_edit_user_expiry(message: Message, state: FSMContext, user: Use
 
 @admin_router.callback_query(F.data.startswith("edit_user_traffic_"))
 async def edit_user_traffic_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
-    """Start editing user traffic limit"""
     if not await check_admin_access(callback, user):
         return
     
@@ -3252,7 +3862,6 @@ async def edit_user_traffic_callback(callback: CallbackQuery, user: User, state:
 
 @admin_router.message(StateFilter(BotStates.admin_edit_user_traffic))
 async def handle_edit_user_traffic(message: Message, state: FSMContext, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Handle user traffic limit edit"""
     if not api:
         await message.answer("❌ API недоступен")
         await state.clear()
@@ -3267,7 +3876,6 @@ async def handle_edit_user_traffic(message: Message, state: FSMContext, user: Us
             await message.answer("❌ Значение не может быть отрицательным")
             return
         
-        # Update user traffic limit
         result = await api.update_user_traffic_limit(user_uuid, traffic_gb)
         
         if result:
@@ -3294,7 +3902,6 @@ async def handle_edit_user_traffic(message: Message, state: FSMContext, user: Us
 
 @admin_router.callback_query(F.data.startswith("refresh_user_"))
 async def refresh_user_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Refresh user information"""
     if not await check_admin_access(callback, user):
         return
     
@@ -3307,15 +3914,12 @@ async def refresh_user_callback(callback: CallbackQuery, user: User, api: RemnaW
     try:
         await callback.answer("🔄 Обновляю информацию...")
         
-        # Get updated user data
         user_data = await api.get_user_by_uuid(user_uuid)
         if not user_data:
             await callback.answer("❌ Пользователь не найден", show_alert=True)
             return
         
-        # Format updated information (reuse the same format as in search)
         text = f"👤 Информация о пользователе (обновлено)\n\n"
-        # ... (same formatting as in search result)
         
         keyboard = create_user_management_keyboard(user_uuid, user_data.get('status'), user.language)
         
@@ -3325,10 +3929,8 @@ async def refresh_user_callback(callback: CallbackQuery, user: User, api: RemnaW
         logger.error(f"Error refreshing user: {e}")
         await callback.answer("❌ Ошибка обновления", show_alert=True)
 
-# Синхронизация с RemnaWave
 @admin_router.callback_query(F.data == "sync_remnawave")
 async def sync_remnawave_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show RemnaWave synchronization menu"""
     if not await check_admin_access(callback, user):
         return
     
@@ -3339,7 +3941,6 @@ async def sync_remnawave_callback(callback: CallbackQuery, user: User, **kwargs)
     )
 
 def sync_remnawave_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
-    """Keyboard for RemnaWave sync options"""
     buttons = [
         #[InlineKeyboardButton(text="👥 Синхронизировать пользователей", callback_data="sync_users_remnawave")],
         #[InlineKeyboardButton(text="📋 Синхронизировать подписки", callback_data="sync_subscriptions_remnawave")],
@@ -3354,7 +3955,6 @@ def sync_remnawave_keyboard(language: str = 'ru') -> InlineKeyboardMarkup:
 
 @admin_router.callback_query(F.data == "sync_users_remnawave")
 async def sync_users_remnawave_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, db: Database = None, **kwargs):
-    """Sync users between bot and RemnaWave"""
     if not await check_admin_access(callback, user):
         return
     
@@ -3365,10 +3965,8 @@ async def sync_users_remnawave_callback(callback: CallbackQuery, user: User, api
     try:
         await callback.answer("🔄 Запускаю синхронизацию пользователей...")
         
-        # Show progress message
         progress_msg = await callback.message.edit_text("⏳ Синхронизация пользователей...\n\n0% выполнено")
         
-        # Get all users from RemnaWave
         remna_users = await api.get_all_system_users_full()
         if not remna_users:
             await progress_msg.edit_text(
@@ -3385,7 +3983,6 @@ async def sync_users_remnawave_callback(callback: CallbackQuery, user: User, api
         
         for i, remna_user in enumerate(remna_users):
             try:
-                # Update progress every 10 users
                 if i % 10 == 0:
                     progress = (i / total_users) * 100
                     await progress_msg.edit_text(
@@ -3398,11 +3995,9 @@ async def sync_users_remnawave_callback(callback: CallbackQuery, user: User, api
                 if not telegram_id:
                     continue
                 
-                # Check if user exists in bot database
                 bot_user = await db.get_user_by_telegram_id(telegram_id)
                 
                 if not bot_user:
-                    # Create new user in bot database
                     bot_user = await db.create_user(
                         telegram_id=telegram_id,
                         username=remna_user.get('username'),
@@ -3411,7 +4006,6 @@ async def sync_users_remnawave_callback(callback: CallbackQuery, user: User, api
                     )
                     created += 1
                 
-                # Update user's RemnaWave UUID if not set
                 if not bot_user.remnawave_uuid:
                     bot_user.remnawave_uuid = remna_user.get('uuid')
                     await db.update_user(bot_user)
@@ -3423,7 +4017,6 @@ async def sync_users_remnawave_callback(callback: CallbackQuery, user: User, api
                 logger.error(f"Error syncing user {remna_user.get('username')}: {e}")
                 errors += 1
         
-        # Final result
         result_text = (
             f"✅ Синхронизация пользователей завершена!\n\n"
             f"📊 Результаты:\n"
@@ -3450,7 +4043,6 @@ async def sync_users_remnawave_callback(callback: CallbackQuery, user: User, api
 
 @admin_router.callback_query(F.data == "sync_subscriptions_remnawave")
 async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, db: Database = None, **kwargs):
-    """Sync subscriptions between bot and RemnaWave - УЛУЧШЕННАЯ ВЕРСИЯ с логированием"""
     if not await check_admin_access(callback, user):
         return
     
@@ -3463,7 +4055,6 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
         
         progress_msg = await callback.message.edit_text("⏳ Синхронизация подписок...\n\nЭтап 1/4: Получение данных...")
         
-        # Получаем всех пользователей из RemnaWave
         logger.info("=== STARTING SUBSCRIPTION SYNC ===")
         remna_users = await api.get_all_system_users_full()
         
@@ -3480,7 +4071,6 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
         users_with_tg = [u for u in remna_users if u.get('telegramId')]
         logger.info(f"Found {len(users_with_tg)} RemnaWave users with Telegram ID")
         
-        # Логируем структуру первого пользователя для отладки
         if users_with_tg:
             first_user = users_with_tg[0]
             logger.info(f"Sample user structure: {list(first_user.keys())}")
@@ -3490,14 +4080,12 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                        f"shortUuid={first_user.get('shortUuid')}, "
                        f"expireAt={first_user.get('expireAt')}")
         
-        # Статистика
         created_subs = 0
         updated_subs = 0
         created_users = 0
         updated_users = 0
         errors = 0
         
-        # Этап 1: Создание пользователей бота если их нет
         await progress_msg.edit_text("⏳ Синхронизация подписок...\n\nЭтап 1/4: Создание пользователей...")
         
         for i, remna_user in enumerate(users_with_tg):
@@ -3508,19 +4096,17 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                 bot_user = await db.get_user_by_telegram_id(telegram_id)
                 
                 if not bot_user:
-                    # Создаем пользователя в боте
                     is_admin = telegram_id in (kwargs.get('config', {}).ADMIN_IDS if 'config' in kwargs else [])
                     bot_user = await db.create_user(
                         telegram_id=telegram_id,
                         username=remna_user.get('username'),
-                        first_name=remna_user.get('username'),  # Используем username как first_name
+                        first_name=remna_user.get('username'),
                         language='ru',
                         is_admin=is_admin
                     )
                     created_users += 1
                     logger.info(f"Created bot user for Telegram ID: {telegram_id}")
                 
-                # Обновляем RemnaWave UUID если не установлен
                 if not bot_user.remnawave_uuid and remna_user.get('uuid'):
                     bot_user.remnawave_uuid = remna_user['uuid']
                     await db.update_user(bot_user)
@@ -3533,7 +4119,6 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
         
         logger.info(f"User creation phase: created={created_users}, updated={updated_users}, errors={errors}")
         
-        # Этап 2: Синхронизация подписок
         await progress_msg.edit_text("⏳ Синхронизация подписок...\n\nЭтап 2/4: Поиск подписок...")
         
         for i, remna_user in enumerate(users_with_tg):
@@ -3551,7 +4136,6 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                     logger.warning(f"Bot user {telegram_id} not found during subscription sync")
                     continue
                 
-                # Проверяем есть ли у пользователя активная подписка в RemnaWave
                 is_active_in_remna = status == 'ACTIVE'
                 has_expiry = bool(expire_at)
                 
@@ -3559,14 +4143,11 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                     logger.debug(f"User {telegram_id} has no shortUuid, skipping")
                     continue
                 
-                # Ищем подписку в боте по short_uuid
                 existing_sub = await db.get_user_subscription_by_short_uuid(telegram_id, short_uuid)
                 
                 if existing_sub:
-                    # ОБНОВЛЯЕМ СУЩЕСТВУЮЩУЮ ПОДПИСКУ
                     logger.debug(f"Found existing subscription for user {telegram_id}")
                     
-                    # Обновляем дату истечения
                     if has_expiry:
                         try:
                             if remna_user['expireAt'].endswith('Z'):
@@ -3574,16 +4155,13 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                             else:
                                 expire_dt = datetime.fromisoformat(remna_user['expireAt'])
                             
-                            # Конвертируем в naive datetime для БД
                             expire_dt_naive = expire_dt.replace(tzinfo=None) if expire_dt.tzinfo else expire_dt
                             existing_sub.expires_at = expire_dt_naive
                         except Exception as date_error:
                             logger.error(f"Error parsing date for user {telegram_id}: {date_error}")
                     
-                    # Обновляем статус
                     existing_sub.is_active = is_active_in_remna
                     
-                    # Обновляем лимит трафика если есть
                     if remna_user.get('trafficLimitBytes') is not None:
                         traffic_gb = remna_user['trafficLimitBytes'] // (1024 * 1024 * 1024) if remna_user['trafficLimitBytes'] > 0 else 0
                         existing_sub.traffic_limit_gb = traffic_gb
@@ -3592,19 +4170,15 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                     updated_subs += 1
                     
                 else:
-                    # СОЗДАЕМ НОВУЮ ПОДПИСКУ
                     logger.debug(f"No existing subscription found for user {telegram_id}, creating new one")
                     
-                    # Подписки нет в боте - создаем новую
                     if is_active_in_remna or has_expiry:
                         logger.info(f"Creating new subscription for user {telegram_id}")
                         
-                        # Определяем squad_uuid
                         squad_uuid = None
                         active_squads = remna_user.get('activeInternalSquads', [])
                         
                         if active_squads:
-                            # Берем первый активный squad
                             first_squad = active_squads[0]
                             if isinstance(first_squad, dict):
                                 squad_uuid = first_squad.get('uuid') or first_squad.get('id')
@@ -3612,7 +4186,6 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                                 squad_uuid = str(first_squad)
                         
                         if not squad_uuid:
-                            # Fallback: берем из internalSquads
                             internal_squads = remna_user.get('internalSquads', [])
                             if internal_squads:
                                 first_squad = internal_squads[0]
@@ -3621,11 +4194,9 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                                 else:
                                     squad_uuid = str(first_squad)
                         
-                        # Ищем или создаем план подписки
                         subscription_plan = None
                         
                         if squad_uuid:
-                            # Ищем существующий план с таким squad_uuid
                             all_plans = await db.get_all_subscriptions(include_inactive=True, exclude_trial=False)
                             for plan in all_plans:
                                 if plan.squad_uuid == squad_uuid:
@@ -3633,7 +4204,6 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                                     break
                         
                         if not subscription_plan:
-                            # Создаем новый план подписки
                             traffic_gb = 0
                             if remna_user.get('trafficLimitBytes'):
                                 traffic_gb = remna_user['trafficLimitBytes'] // (1024 * 1024 * 1024)
@@ -3645,14 +4215,13 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                             subscription_plan = await db.create_subscription(
                                 name=plan_name,
                                 description=f"Автоматически импортированная подписка из RemnaWave",
-                                price=0,  # Цена неизвестна, ставим 0
-                                duration_days=30,  # Стандартная длительность
+                                price=0,
+                                duration_days=30,
                                 traffic_limit_gb=traffic_gb,
                                 squad_uuid=squad_uuid or ''
                             )
                             logger.info(f"Created new subscription plan: {plan_name}")
                         
-                        # Создаем пользовательскую подписку
                         expire_dt_naive = None
                         if has_expiry:
                             try:
@@ -3662,7 +4231,6 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                                     expire_dt = datetime.fromisoformat(remna_user['expireAt'])
                                 expire_dt_naive = expire_dt.replace(tzinfo=None) if expire_dt.tzinfo else expire_dt
                             except:
-                                # Fallback: 30 дней от сегодня
                                 expire_dt_naive = datetime.now() + timedelta(days=30)
                         else:
                             expire_dt_naive = datetime.now() + timedelta(days=30)
@@ -3686,7 +4254,6 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                 logger.error(f"Error syncing subscription for user {telegram_id}: {e}")
                 errors += 1
         
-        # Этап 3: Проверка консистентности
         await progress_msg.edit_text("⏳ Синхронизация подписок...\n\nЭтап 3/4: Проверка консистентности...")
         
         consistency_fixes = 0
@@ -3696,12 +4263,10 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
                 user_subs = await db.get_user_subscriptions(telegram_id)
                 
                 for user_sub in user_subs:
-                    # Проверяем истек ли срок подписки
                     if user_sub.expires_at < datetime.now() and user_sub.is_active:
                         user_sub.is_active = False
                         await db.update_user_subscription(user_sub)
                         
-                        # Также деактивируем в RemnaWave
                         if remna_user.get('uuid'):
                             await api.update_user(remna_user['uuid'], {'status': 'EXPIRED'})
                         
@@ -3710,10 +4275,8 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
             except Exception as e:
                 logger.error(f"Error in consistency check for user {telegram_id}: {e}")
         
-        # Этап 4: Финальная проверка
         await progress_msg.edit_text("⏳ Синхронизация подписок...\n\nЭтап 4/4: Финальная проверка...")
         
-        # Подсчитываем финальную статистику
         total_bot_users = len(await db.get_all_users())
         total_bot_subs = 0
         active_bot_subs = 0
@@ -3724,7 +4287,6 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
             total_bot_subs += len(user_subs)
             active_bot_subs += len([s for s in user_subs if s.is_active])
         
-        # Формируем отчет
         result_text = (
             "✅ Улучшенная синхронизация подписок завершена!\n\n"
             "📊 Результаты синхронизации:\n\n"
@@ -3758,10 +4320,8 @@ async def sync_subscriptions_remnawave_callback(callback: CallbackQuery, user: U
             reply_markup=sync_remnawave_keyboard(user.language)
         )
 
-# Обработчики действий с конкретными пользователями
 @admin_router.callback_query(F.data.startswith("reset_user_traffic_"))
 async def reset_user_traffic_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Reset traffic for specific user with confirmation"""
     if not await check_admin_access(callback, user):
         return
     
@@ -3780,7 +4340,6 @@ async def reset_user_traffic_callback(callback: CallbackQuery, user: User, api: 
             await callback.answer("✅ Трафик пользователя успешно сброшен", show_alert=True)
             log_user_action(user.telegram_id, "reset_user_traffic", f"UUID: {user_uuid}")
             
-            # Обновляем информацию о пользователе
             try:
                 updated_user = await api.get_user_by_uuid(user_uuid)
                 if updated_user:
@@ -3789,7 +4348,7 @@ async def reset_user_traffic_callback(callback: CallbackQuery, user: User, api: 
                         reply_markup=callback.message.reply_markup
                     )
             except:
-                pass  # Не критично если не удалось обновить
+                pass
         else:
             await callback.answer("❌ Ошибка сброса трафика", show_alert=True)
     
@@ -3799,7 +4358,6 @@ async def reset_user_traffic_callback(callback: CallbackQuery, user: User, api: 
 
 @admin_router.callback_query(F.data.startswith("disable_user_"))
 async def disable_user_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Disable specific user with confirmation"""
     if not await check_admin_access(callback, user):
         return
     
@@ -3826,7 +4384,6 @@ async def disable_user_callback(callback: CallbackQuery, user: User, api: RemnaW
 
 @admin_router.callback_query(F.data.startswith("enable_user_"))
 async def enable_user_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Enable specific user with confirmation"""
     if not await check_admin_access(callback, user):
         return
     
@@ -3853,7 +4410,6 @@ async def enable_user_callback(callback: CallbackQuery, user: User, api: RemnaWa
 
 @admin_router.callback_query(F.data == "sync_status_remnawave")
 async def sync_status_remnawave_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, db: Database = None, **kwargs):
-    """Show synchronization status"""
     if not await check_admin_access(callback, user):
         return
     
@@ -3864,18 +4420,15 @@ async def sync_status_remnawave_callback(callback: CallbackQuery, user: User, ap
     try:
         await callback.answer("📊 Проверяю статус синхронизации...")
         
-        # Get statistics
         remna_users = await api.get_all_system_users_full()
         bot_users = await db.get_all_users()
         
-        # Count statistics
         remna_with_tg = len([u for u in remna_users if u.get('telegramId')])
         remna_without_tg = len(remna_users) - remna_with_tg
         
         bot_with_uuid = len([u for u in bot_users if u.remnawave_uuid])
         bot_without_uuid = len(bot_users) - bot_with_uuid
         
-        # Check subscriptions sync
         total_bot_subs = 0
         synced_subs = 0
         
@@ -3884,13 +4437,11 @@ async def sync_status_remnawave_callback(callback: CallbackQuery, user: User, ap
             total_bot_subs += len(user_subs)
             
             for user_sub in user_subs:
-                # Check if subscription exists in RemnaWave
                 for remna_user in remna_users:
                     if remna_user.get('shortUuid') == user_sub.short_uuid:
                         synced_subs += 1
                         break
         
-        # Build status text
         text = "📊 **Статус синхронизации**\n\n"
         
         text += "RemnaWave:\n"
@@ -3908,7 +4459,6 @@ async def sync_status_remnawave_callback(callback: CallbackQuery, user: User, ap
         text += f"• Синхронизировано: {synced_subs}\n"
         text += f"• Не синхронизировано: {total_bot_subs - synced_subs}\n\n"
         
-        # Recommendations
         if bot_without_uuid > 0 or remna_without_tg > 0 or (total_bot_subs - synced_subs) > 0:
             text += "⚠️ Рекомендации:\n"
             if bot_without_uuid > 0:
@@ -3935,7 +4485,6 @@ async def sync_status_remnawave_callback(callback: CallbackQuery, user: User, ap
             reply_markup=sync_remnawave_keyboard(user.language)
         )
 
-# User filtering handlers
 @admin_router.callback_query(F.data == "filter_users_active")
 async def filter_users_active_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
     if not await check_admin_access(callback, user):
@@ -3958,20 +4507,18 @@ async def filter_users_active_callback(callback: CallbackQuery, user: User, api:
             )
             return
         
-        # Display filtered users - БЕЗ MARKDOWN
         text = f"✅ Активные пользователи ({len(active_users)})\n\n"
         
         for i, sys_user in enumerate(active_users[:10], 1):
             username = sys_user.get('username', 'N/A')
-            # Очищаем username от специальных символов
             username = username.replace('*', '').replace('_', '').replace('[', '').replace(']', '').replace('`', '')
             
             telegram_id = sys_user.get('telegramId', 'N/A')
             short_uuid = sys_user.get('shortUuid', '')[:8] + "..."
             
-            text += f"{i}. {username}\n"  # Убрали **
+            text += f"{i}. {username}\n"
             if telegram_id != 'N/A':
-                text += f"   📱 TG: {telegram_id}\n"  # Убрали `
+                text += f"   📱 TG: {telegram_id}\n"
             text += f"   🔗 {short_uuid}\n"
             
             if sys_user.get('expireAt'):
@@ -3982,7 +4529,6 @@ async def filter_users_active_callback(callback: CallbackQuery, user: User, api:
         if len(active_users) > 10:
             text += f"... и еще {len(active_users) - 10} активных пользователей"
         
-        # Create keyboard with clear filter button
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❌ Сбросить фильтр", callback_data="list_all_system_users")],
             [InlineKeyboardButton(text="📱 С Telegram", callback_data="filter_users_telegram")],
@@ -3992,7 +4538,6 @@ async def filter_users_active_callback(callback: CallbackQuery, user: User, api:
         await callback.message.edit_text(
             text,
             reply_markup=keyboard
-            # Убрали parse_mode='Markdown'
         )
         
     except Exception as e:
@@ -4001,7 +4546,6 @@ async def filter_users_active_callback(callback: CallbackQuery, user: User, api:
 
 @admin_router.callback_query(F.data == "filter_users_telegram")
 async def filter_users_telegram_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Show only users with Telegram ID"""
     if not await check_admin_access(callback, user):
         return
     
@@ -4022,7 +4566,6 @@ async def filter_users_telegram_callback(callback: CallbackQuery, user: User, ap
             )
             return
         
-        # Display filtered users
         text = f"📱 **Пользователи с Telegram ID** ({len(tg_users)})\n\n"
         
         for i, sys_user in enumerate(tg_users[:10], 1):
@@ -4045,7 +4588,6 @@ async def filter_users_telegram_callback(callback: CallbackQuery, user: User, ap
         if len(tg_users) > 10:
             text += f"_... и еще {len(tg_users) - 10} пользователей с Telegram_"
         
-        # Create keyboard
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❌ Сбросить фильтр", callback_data="list_all_system_users")],
             [InlineKeyboardButton(text="✅ Только активные", callback_data="filter_users_active")],
@@ -4063,7 +4605,6 @@ async def filter_users_telegram_callback(callback: CallbackQuery, user: User, ap
 
 @admin_router.callback_query(F.data == "show_all_nodes")
 async def show_all_nodes_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, state: FSMContext = None, **kwargs):
-    """Show all nodes with pagination"""
     if not await check_admin_access(callback, user):
         return
     
@@ -4079,7 +4620,6 @@ async def show_all_nodes_callback(callback: CallbackQuery, user: User, api: Remn
 
 async def show_nodes_paginated(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, 
                                state: FSMContext = None, page: int = 0):
-    """Show paginated nodes list"""
     try:
         nodes = await api.get_all_nodes()
         if not nodes:
@@ -4089,20 +4629,17 @@ async def show_nodes_paginated(callback: CallbackQuery, user: User, api: RemnaWa
             )
             return
         
-        # Sort nodes by status
         nodes.sort(key=lambda x: (
             0 if x.get('status') == 'online' else 1,
             x.get('name', '')
         ))
         
-        # Pagination
         nodes_per_page = 10
         total_pages = (len(nodes) + nodes_per_page - 1) // nodes_per_page
         start_idx = page * nodes_per_page
         end_idx = min(start_idx + nodes_per_page, len(nodes))
         page_nodes = nodes[start_idx:end_idx]
         
-        # Build text
         text = f"🖥 **Все ноды системы**\n"
         text += f"📄 Страница {page + 1} из {total_pages}\n\n"
         
@@ -4130,10 +4667,8 @@ async def show_nodes_paginated(callback: CallbackQuery, user: User, api: RemnaWa
             
             text += "\n"
         
-        # Create pagination keyboard
         buttons = []
         
-        # Navigation
         if total_pages > 1:
             nav_row = []
             if page > 0:
@@ -4164,7 +4699,6 @@ async def show_nodes_paginated(callback: CallbackQuery, user: User, api: RemnaWa
 
 @admin_router.callback_query(F.data.startswith("nodes_page_"))
 async def nodes_page_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, state: FSMContext = None, **kwargs):
-    """Handle nodes pagination"""
     if not await check_admin_access(callback, user):
         return
     
@@ -4175,10 +4709,8 @@ async def nodes_page_callback(callback: CallbackQuery, user: User, api: RemnaWav
         logger.error(f"Error in nodes pagination: {e}")
         await callback.answer("❌ Ошибка навигации", show_alert=True)
 
-# Правильный декоратор для следующей функции
 @admin_router.callback_query(F.data == "sync_full_remnawave")
 async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, db: Database = None, **kwargs):
-    """Full synchronization between bot and RemnaWave - УЛУЧШЕННАЯ ВЕРСИЯ"""
     if not await check_admin_access(callback, user):
         return
     
@@ -4194,13 +4726,11 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
             "Этап 1/5: Получение данных..."
         )
         
-        # Получаем данные
         remna_users = await api.get_all_system_users_full()
         users_with_tg = [u for u in remna_users if u.get('telegramId')]
         
         logger.info(f"Starting full sync for {len(users_with_tg)} users with Telegram ID")
         
-        # Статистика
         users_created = 0
         users_updated = 0
         subs_created = 0
@@ -4209,7 +4739,6 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
         statuses_updated = 0
         errors = 0
         
-        # Этап 1: Синхронизация пользователей
         await progress_msg.edit_text(
             "⏳ Полная синхронизация RemnaWave\n\n"
             "Этап 1/5: Синхронизация пользователей..."
@@ -4221,7 +4750,6 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
                 bot_user = await db.get_user_by_telegram_id(telegram_id)
                 
                 if not bot_user:
-                    # Создаем пользователя
                     is_admin = telegram_id in (kwargs.get('config', {}).ADMIN_IDS if 'config' in kwargs else [])
                     bot_user = await db.create_user(
                         telegram_id=telegram_id,
@@ -4233,7 +4761,6 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
                     users_created += 1
                     logger.info(f"Created user {telegram_id}")
                 
-                # Обновляем RemnaWave UUID
                 if not bot_user.remnawave_uuid and remna_user.get('uuid'):
                     bot_user.remnawave_uuid = remna_user['uuid']
                     await db.update_user(bot_user)
@@ -4243,13 +4770,11 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
                 logger.error(f"Error syncing user {telegram_id}: {e}")
                 errors += 1
         
-        # Этап 2: Создание планов подписок
         await progress_msg.edit_text(
             "⏳ Полная синхронизация RemnaWave\n\n"
             "Этап 2/5: Создание планов подписок..."
         )
         
-        # Собираем уникальные squad_uuid из RemnaWave
         unique_squads = set()
         for remna_user in users_with_tg:
             active_squads = remna_user.get('activeInternalSquads', [])
@@ -4267,7 +4792,6 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
         
         logger.info(f"Found {len(unique_squads)} unique squads")
         
-        # Создаем планы для отсутствующих squad_uuid
         existing_plans = await db.get_all_subscriptions(include_inactive=True, exclude_trial=False)
         existing_squad_uuids = {plan.squad_uuid for plan in existing_plans if plan.squad_uuid}
         
@@ -4289,7 +4813,6 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
                     logger.error(f"Error creating plan for squad {squad_uuid}: {e}")
                     errors += 1
         
-        # Этап 3: Синхронизация подписок
         await progress_msg.edit_text(
             "⏳ Полная синхронизация RemnaWave\n\n"
             "Этап 3/5: Синхронизация подписок..."
@@ -4303,11 +4826,9 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
                 if not short_uuid:
                     continue
                 
-                # Ищем существующую подписку
                 existing_sub = await db.get_user_subscription_by_short_uuid(telegram_id, short_uuid)
                 
                 if existing_sub:
-                    # Обновляем существующую
                     if remna_user.get('expireAt'):
                         try:
                             expire_dt = datetime.fromisoformat(remna_user['expireAt'].replace('Z', '+00:00'))
@@ -4320,9 +4841,7 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
                     subs_updated += 1
                     
                 else:
-                    # Создаем новую подписку
                     if remna_user.get('status') == 'ACTIVE' or remna_user.get('expireAt'):
-                        # Находим подходящий план
                         squad_uuid = None
                         active_squads = remna_user.get('activeInternalSquads', [])
                         
@@ -4333,7 +4852,6 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
                             else:
                                 squad_uuid = str(first_squad)
                         
-                        # Ищем план подписки
                         subscription_plan = None
                         all_plans = await db.get_all_subscriptions(include_inactive=True, exclude_trial=False)
                         
@@ -4343,7 +4861,6 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
                                 break
                         
                         if subscription_plan:
-                            # Парсим дату истечения
                             expire_dt = None
                             if remna_user.get('expireAt'):
                                 try:
@@ -4354,7 +4871,6 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
                             else:
                                 expire_dt = datetime.now() + timedelta(days=30)
                             
-                            # Создаем подписку
                             user_sub = await db.create_user_subscription(
                                 user_id=telegram_id,
                                 subscription_id=subscription_plan.id,
@@ -4371,13 +4887,11 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
                 logger.error(f"Error syncing subscription for user {telegram_id}: {e}")
                 errors += 1
         
-        # Этап 4: Обновление статусов
         await progress_msg.edit_text(
             "⏳ Полная синхронизация RemnaWave\n\n"
             "Этап 4/5: Обновление статусов..."
         )
         
-        # Деактивируем истекшие подписки
         all_bot_users = await db.get_all_users()
         for bot_user in all_bot_users:
             user_subs = await db.get_user_subscriptions(bot_user.telegram_id)
@@ -4388,20 +4902,17 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
                     await db.update_user_subscription(user_sub)
                     statuses_updated += 1
                     
-                    # Обновляем в RemnaWave
                     if bot_user.remnawave_uuid:
                         try:
                             await api.update_user(bot_user.remnawave_uuid, {'status': 'EXPIRED'})
                         except:
                             pass
         
-        # Этап 5: Финальная статистика
         await progress_msg.edit_text(
             "⏳ Полная синхронизация RemnaWave\n\n"
             "Этап 5/5: Подсчет результатов..."
         )
         
-        # Собираем финальную статистику
         total_bot_users = len(await db.get_all_users())
         total_subscriptions = 0
         active_subscriptions = 0
@@ -4411,7 +4922,6 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
             total_subscriptions += len(user_subs)
             active_subscriptions += len([s for s in user_subs if s.is_active])
         
-        # Отчет
         result_text = (
             "✅ Полная синхронизация завершена!\n\n"
             "📊 Результаты операции:\n\n"
@@ -4450,7 +4960,6 @@ async def sync_full_remnawave_callback(callback: CallbackQuery, user: User, api:
 
 @admin_router.callback_query(F.data == "sync_single_user")
 async def sync_single_user_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
-    """Start single user sync"""
     if not await check_admin_access(callback, user):
         return
     
@@ -4464,7 +4973,6 @@ async def sync_single_user_callback(callback: CallbackQuery, user: User, state: 
 @admin_router.message(StateFilter(BotStates.admin_sync_single_user))
 async def handle_sync_single_user(message: Message, state: FSMContext, user: User, 
                                  api: RemnaWaveAPI = None, db: Database = None, **kwargs):
-    """Handle single user sync - ИСПРАВЛЕНО"""
     if not api or not db:
         await message.answer("❌ API или база данных недоступны")
         await state.clear()
@@ -4479,7 +4987,6 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
     try:
         progress_msg = await message.answer("🔄 Синхронизирую пользователя...")
         
-        # Получаем данные из RemnaWave - ИСПРАВЛЕНИЕ
         remna_user_result = await api.get_user_by_telegram_id(telegram_id)
         
         logger.info(f"API result type: {type(remna_user_result)}")
@@ -4487,11 +4994,9 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
         
         remna_user = None
         
-        # Обрабатываем разные типы ответов от API
         if isinstance(remna_user_result, dict):
             remna_user = remna_user_result
         elif isinstance(remna_user_result, list):
-            # Если API вернул список, берем первого пользователя
             if remna_user_result:
                 remna_user = remna_user_result[0]
             else:
@@ -4511,11 +5016,9 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
         
         result_details = []
         
-        # Проверяем/создаем пользователя в боте
         bot_user = await db.get_user_by_telegram_id(telegram_id)
         
         if not bot_user:
-            # Создаем пользователя
             is_admin = telegram_id in (kwargs.get('config', {}).ADMIN_IDS if 'config' in kwargs else [])
             bot_user = await db.create_user(
                 telegram_id=telegram_id,
@@ -4528,20 +5031,17 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
         else:
             result_details.append("ℹ️ Пользователь уже существует в боте")
         
-        # Обновляем RemnaWave UUID
         if not bot_user.remnawave_uuid and remna_user.get('uuid'):
             bot_user.remnawave_uuid = remna_user['uuid']
             await db.update_user(bot_user)
             result_details.append("✅ Обновлен RemnaWave UUID")
         
-        # Проверяем подписку
         short_uuid = remna_user.get('shortUuid')
         
         if short_uuid:
             existing_sub = await db.get_user_subscription_by_short_uuid(telegram_id, short_uuid)
             
             if existing_sub:
-                # Обновляем существующую подписку
                 if remna_user.get('expireAt'):
                     try:
                         expire_str = remna_user['expireAt']
@@ -4558,12 +5058,9 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
                         result_details.append(f"❌ Ошибка обновления подписки: {str(e)[:50]}")
                         logger.error(f"Error updating subscription: {e}")
             else:
-                # Создаем новую подписку
                 if remna_user.get('status') == 'ACTIVE' or remna_user.get('expireAt'):
-                    # Определяем squad_uuid - ИСПРАВЛЕНИЕ
                     squad_uuid = None
                     
-                    # Проверяем activeInternalSquads
                     active_squads = remna_user.get('activeInternalSquads', [])
                     if active_squads and isinstance(active_squads, list):
                         first_squad = active_squads[0]
@@ -4572,7 +5069,6 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
                         elif isinstance(first_squad, str):
                             squad_uuid = first_squad
                     
-                    # Если не нашли, проверяем internalSquads
                     if not squad_uuid:
                         internal_squads = remna_user.get('internalSquads', [])
                         if internal_squads and isinstance(internal_squads, list):
@@ -4582,7 +5078,6 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
                             elif isinstance(first_squad, str):
                                 squad_uuid = first_squad
                     
-                    # Ищем план подписки
                     subscription_plan = None
                     if squad_uuid:
                         all_plans = await db.get_all_subscriptions(include_inactive=True, exclude_trial=False)
@@ -4592,7 +5087,6 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
                                 break
                     
                     if not subscription_plan and squad_uuid:
-                        # Создаем план
                         traffic_gb = 0
                         if remna_user.get('trafficLimitBytes'):
                             traffic_gb = remna_user['trafficLimitBytes'] // (1024 * 1024 * 1024)
@@ -4608,7 +5102,6 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
                         result_details.append("✅ Создан новый план подписки")
                     
                     if subscription_plan:
-                        # Парсим дату
                         expire_dt = datetime.now() + timedelta(days=30)
                         if remna_user.get('expireAt'):
                             try:
@@ -4621,7 +5114,6 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
                             except Exception as date_error:
                                 logger.error(f"Error parsing date {remna_user.get('expireAt')}: {date_error}")
                         
-                        # Создаем подписку
                         user_sub = await db.create_user_subscription(
                             user_id=telegram_id,
                             subscription_id=subscription_plan.id,
@@ -4641,7 +5133,6 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
         else:
             result_details.append("ℹ️ У пользователя нет short_uuid")
         
-        # Формируем отчет
         status_emoji = "🟢" if remna_user.get('status') == 'ACTIVE' else "🔴"
         username = remna_user.get('username', 'N/A')
         
@@ -4656,7 +5147,6 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
             expire_date = remna_user['expireAt'][:10]
             report_text += f"Действует до: {expire_date}\n"
         
-        # Информация о squad
         active_squads = remna_user.get('activeInternalSquads', [])
         if active_squads:
             report_text += f"Активных squad: {len(active_squads)}\n"
@@ -4683,7 +5173,6 @@ async def handle_sync_single_user(message: Message, state: FSMContext, user: Use
 
 @admin_router.callback_query(F.data == "import_all_by_telegram")
 async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, db: Database = None, **kwargs):
-    """Import ALL subscriptions from RemnaWave by Telegram ID - ИСПРАВЛЕННАЯ ВЕРСИЯ для множественных подписок"""
     if not await check_admin_access(callback, user):
         return
     
@@ -4699,7 +5188,6 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
             "Этап 1/5: Получение всех записей из RemnaWave..."
         )
         
-        # Получаем ВСЕХ пользователей из RemnaWave (каждая запись = отдельная подписка)
         all_remna_records = await api.get_all_system_users_full()
         
         if not all_remna_records:
@@ -4711,12 +5199,10 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
         
         logger.info(f"Got {len(all_remna_records)} total records from RemnaWave")
         
-        # Фильтруем только записи с Telegram ID
         records_with_telegram = [r for r in all_remna_records if r.get('telegramId')]
         
         logger.info(f"Found {len(records_with_telegram)} records with Telegram ID")
         
-        # Группируем по Telegram ID для статистики
         users_by_telegram = {}
         for record in records_with_telegram:
             tg_id = record['telegramId']
@@ -4726,7 +5212,6 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
         
         logger.info(f"Found {len(users_by_telegram)} unique Telegram users with {len(records_with_telegram)} total subscriptions")
         
-        # Статистика
         bot_users_created = 0
         bot_users_updated = 0
         plans_created = 0
@@ -4735,7 +5220,6 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
         errors = 0
         skipped_no_shortuid = 0
         
-        # Этап 1: Создание пользователей бота (по уникальным Telegram ID)
         await progress_msg.edit_text(
             "⏳ Массовый импорт подписок по Telegram ID\n\n"
             "Этап 1/5: Создание пользователей бота..."
@@ -4745,21 +5229,16 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
             try:
                 logger.info(f"Processing Telegram user {telegram_id} with {len(user_records)} subscriptions")
                 
-                # Берем последнюю (самую свежую) запись для создания пользователя
                 latest_record = max(user_records, key=lambda x: x.get('updatedAt', x.get('createdAt', '')))
                 
-                # Создаем/обновляем пользователя бота
                 bot_user = await db.get_user_by_telegram_id(telegram_id)
                 
                 if not bot_user:
-                    # Создаем нового пользователя
                     is_admin = telegram_id in (kwargs.get('config', {}).ADMIN_IDS if 'config' in kwargs else [])
                     
-                    # Используем лучшее имя из всех записей
                     best_username = None
                     for record in user_records:
                         username = record.get('username', '')
-                        # Предпочитаем "человеческие" имена перед автогенерированными
                         if username and not username.startswith('user_'):
                             best_username = username
                             break
@@ -4777,7 +5256,6 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
                     bot_users_created += 1
                     logger.info(f"Created bot user for TG {telegram_id} with username {best_username}")
                 
-                # Обновляем RemnaWave UUID (используем последний)
                 if latest_record.get('uuid') and bot_user.remnawave_uuid != latest_record['uuid']:
                     bot_user.remnawave_uuid = latest_record['uuid']
                     await db.update_user(bot_user)
@@ -4787,7 +5265,6 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
                 logger.error(f"Error processing Telegram user {telegram_id}: {e}")
                 errors += 1
         
-        # Этап 2: Сбор всех уникальных squad UUID
         await progress_msg.edit_text(
             "⏳ Массовый импорт подписок по Telegram ID\n\n"
             "Этап 2/5: Анализ squad'ов..."
@@ -4799,7 +5276,6 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
         for i, record in enumerate(records_with_telegram):
             logger.debug(f"Analyzing record {i+1}/{len(records_with_telegram)}: {record.get('username')}")
             
-            # Извлекаем squad UUID из activeInternalSquads
             active_squads = record.get('activeInternalSquads', [])
             if active_squads and isinstance(active_squads, list):
                 for squad in active_squads:
@@ -4813,13 +5289,11 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
         
         logger.info(f"Found {len(all_squads)} unique squad UUIDs: {list(all_squads)}")
         
-        # Этап 3: Создание планов подписок
         await progress_msg.edit_text(
             "⏳ Массовый импорт подписок по Telegram ID\n\n"
             "Этап 3/5: Создание планов подписок..."
         )
         
-        # Получаем существующие планы
         existing_plans = await db.get_all_subscriptions_admin()
         existing_squad_uuids = {plan.squad_uuid for plan in existing_plans if plan.squad_uuid}
         
@@ -4834,7 +5308,7 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
                     logger.info(f"Creating plan for squad {squad_uuid}: {plan_name}")
                     
                     new_plan = await db.create_subscription(
-                        name="Старая подписка",  # ИЗМЕНЕНО: стандартное название
+                        name="Старая подписка",
                         description=f"Импортированная подписка из RemnaWave (squad: {squad_name})",
                         price=0,
                         duration_days=30,
@@ -4851,7 +5325,6 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
             else:
                 logger.info(f"Plan for squad {squad_uuid} already exists")
         
-        # Этап 4: Импорт каждой подписки отдельно
         await progress_msg.edit_text(
             "⏳ Массовый импорт подписок по Telegram ID\n\n"
             "Этап 4/5: Импорт подписок..."
@@ -4868,24 +5341,19 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
                 logger.info(f"=== IMPORTING SUBSCRIPTION {i+1}/{len(records_with_telegram)} ===")
                 logger.info(f"TG={telegram_id}, Username={username}, shortUuid={short_uuid}, status={status}")
                 
-                # Пропускаем если нет shortUuid
                 if not short_uuid:
                     skipped_no_shortuid += 1
                     logger.warning(f"❌ Skipping record: no shortUuid")
                     continue
                 
-                # Проверяем есть ли уже такая подписка в боте
                 existing_sub = await db.get_user_subscription_by_short_uuid(telegram_id, short_uuid)
                 
                 if existing_sub:
-                    # Проверяем что план подписки еще существует
                     existing_plan = await db.get_subscription_by_id(existing_sub.subscription_id)
                     
                     if existing_plan:
-                        # Подписка и план существуют - обновляем
                         logger.info(f"Updating existing subscription for TG {telegram_id}, shortUuid {short_uuid}")
                         
-                        # Обновляем дату истечения
                         if expire_at:
                             try:
                                 if expire_at.endswith('Z'):
@@ -4896,10 +5364,8 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
                             except Exception as date_error:
                                 logger.error(f"Error parsing date: {date_error}")
                         
-                        # Обновляем статус
                         existing_sub.is_active = (status == 'ACTIVE')
                         
-                        # Обновляем лимит трафика
                         if record.get('trafficLimitBytes') is not None:
                             traffic_gb = record['trafficLimitBytes'] // (1024 * 1024 * 1024) if record['trafficLimitBytes'] > 0 else 0
                             existing_sub.traffic_limit_gb = traffic_gb
@@ -4907,19 +5373,15 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
                         await db.update_user_subscription(existing_sub)
                         subscriptions_updated += 1
                     else:
-                        # Подписка существует но план удален - удаляем "осиротевшую" подписку
                         logger.warning(f"Found orphaned subscription {existing_sub.id} for user {telegram_id}, deleting...")
                         await db.delete_user_subscription(existing_sub.id)
                         
-                        # И создаем новую подписку (переходим к блоку создания)
                         logger.info(f"Creating new subscription after cleaning orphaned one")
-                        existing_sub = None  # Сбрасываем чтобы перейти к созданию
+                        existing_sub = None 
                 
                 if not existing_sub:
-                    # Создаем новую подписку
                     logger.info(f"Creating new subscription for TG {telegram_id}, shortUuid {short_uuid}")
                     
-                    # Извлекаем squad_uuid из activeInternalSquads
                     squad_uuid = None
                     active_squads = record.get('activeInternalSquads', [])
                     
@@ -4934,7 +5396,6 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
                         errors += 1
                         continue
                     
-                    # Ищем план подписки
                     all_plans = await db.get_all_subscriptions_admin()
                     subscription_plan = None
                     
@@ -4949,7 +5410,6 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
                         errors += 1
                         continue
                     
-                    # Парсим дату истечения
                     expire_dt_naive = datetime.now() + timedelta(days=30)  # Дефолт
                     if expire_at:
                         try:
@@ -4961,7 +5421,6 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
                         except Exception as date_error:
                             logger.error(f"Error parsing expiry date: {date_error}")
                     
-                    # Создаем подписку
                     traffic_gb = 0
                     if record.get('trafficLimitBytes'):
                         traffic_gb = record['trafficLimitBytes'] // (1024 * 1024 * 1024)
@@ -4986,13 +5445,11 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
                 logger.error(f"❌ Error importing subscription for record {i+1}: {e}")
                 errors += 1
         
-        # Этап 5: Финальная статистика
         await progress_msg.edit_text(
             "⏳ Массовый импорт подписок по Telegram ID\n\n"
             "Этап 5/5: Подсчет результатов..."
         )
         
-        # Подсчитываем итоговую статистику
         final_bot_users = len(await db.get_all_users())
         final_subscriptions = 0
         final_active_subs = 0
@@ -5003,7 +5460,6 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
             final_subscriptions += len(user_subs)
             final_active_subs += len([s for s in user_subs if s.is_active])
         
-        # Формируем детальный отчет
         result_text = (
             "✅ Массовый импорт подписок завершен!\n\n"
             "📊 Результаты импорта:\n\n"
@@ -5043,7 +5499,6 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
 
 @admin_router.message(StateFilter(BotStates.admin_debug_user_structure))
 async def handle_debug_user_structure(message: Message, state: FSMContext, user: User, api: RemnaWaveAPI = None, **kwargs):
-    """Handle user structure debugging"""
     if not api:
         await message.answer("❌ API недоступен")
         await state.clear()
@@ -5056,7 +5511,6 @@ async def handle_debug_user_structure(message: Message, state: FSMContext, user:
         return
     
     try:
-        # Получаем пользователя
         remna_user = await api.get_user_by_telegram_id(telegram_id)
         
         if not remna_user:
@@ -5067,10 +5521,8 @@ async def handle_debug_user_structure(message: Message, state: FSMContext, user:
             await state.clear()
             return
         
-        # Создаем детальный анализ
         analysis = f"🔍 Структура пользователя {telegram_id}\n\n"
         
-        # Основные поля
         analysis += "📋 Основные поля:\n"
         for key in ['uuid', 'username', 'shortUuid', 'status', 'expireAt', 'telegramId']:
             value = remna_user.get(key, 'N/A')
@@ -5078,7 +5530,6 @@ async def handle_debug_user_structure(message: Message, state: FSMContext, user:
         
         analysis += "\n"
         
-        # Squad поля
         analysis += "🏷 Squad поля:\n"
         squad_fields = ['activeInternalSquads', 'internalSquads', 'squads', 'squad', 'squadUuid', 'squadId']
         
@@ -5087,7 +5538,6 @@ async def handle_debug_user_structure(message: Message, state: FSMContext, user:
                 value = remna_user[field]
                 analysis += f"• {field}: {value}\n"
                 
-                # Детальный анализ squad полей
                 if isinstance(value, list) and value:
                     for i, item in enumerate(value):
                         analysis += f"  [{i}]: {item}\n"
@@ -5099,16 +5549,13 @@ async def handle_debug_user_structure(message: Message, state: FSMContext, user:
         
         analysis += "\n"
         
-        # Все остальные поля
         analysis += "📝 Все поля пользователя:\n"
         for key, value in remna_user.items():
             if key not in ['uuid', 'username', 'shortUuid', 'status', 'expireAt', 'telegramId'] + squad_fields:
-                # Обрезаем длинные значения
                 if isinstance(value, str) and len(value) > 50:
                     value = value[:47] + "..."
                 analysis += f"• {key}: {value}\n"
         
-        # Если текст слишком длинный, разбиваем на части
         if len(analysis) > 4000:
             parts = [analysis[i:i+4000] for i in range(0, len(analysis), 4000)]
             for i, part in enumerate(parts):
@@ -5135,7 +5582,6 @@ async def handle_debug_user_structure(message: Message, state: FSMContext, user:
 
 @admin_router.callback_query(F.data == "rename_imported_plans")
 async def rename_imported_plans_callback(callback: CallbackQuery, user: User, db: Database = None, state: FSMContext = None, **kwargs):
-    """Rename all imported subscription plans to 'Старая подписка'"""
     if not await check_admin_access(callback, user):
         return
     
@@ -5150,48 +5596,38 @@ async def rename_imported_plans_callback(callback: CallbackQuery, user: User, db
             "⏳ Поиск и переименование импортированных планов..."
         )
         
-        # Получаем все планы
         all_plans = await db.get_all_subscriptions_admin()
         
-        # Ищем планы которые выглядят как импортированные
         imported_plans = []
         
         for plan in all_plans:
-            # Пропускаем планы которые уже называются "Старая подписка"
             if plan.name == "Старая подписка":
                 continue
             
-            # Пропускаем настоящие триальные планы (помеченные как is_trial = True)
             if getattr(plan, 'is_trial', False):
                 logger.debug(f"Skipping trial plan: {plan.name}")
                 continue
             
-            # Критерии импортированного плана:
             is_imported_plan = False
             
-            # 1. Явно помеченные как импортированные
             if getattr(plan, 'is_imported', False):
                 is_imported_plan = True
                 logger.debug(f"Plan {plan.name} marked as imported")
             
-            # 2. Планы с автогенерированными названиями для импорта
             elif plan.name.startswith(('Import_', 'Auto_', 'Imported_')):
                 is_imported_plan = True
                 logger.debug(f"Plan {plan.name} has import prefix")
             
-            # 3. Планы с названиями Trial_ которые НЕ являются настоящими триальными
             elif plan.name.startswith('Trial_') and not getattr(plan, 'is_trial', False):
                 is_imported_plan = True
                 logger.debug(f"Plan {plan.name} looks like imported trial")
             
-            # 4. Планы с подозрительными характеристиками импорта
             elif (plan.price == 0 and 
                   any(keyword in plan.name.lower() for keyword in ['user_', 'default', 'squad']) and
                   not getattr(plan, 'is_trial', False)):
                 is_imported_plan = True
                 logger.debug(f"Plan {plan.name} has suspicious import characteristics")
             
-            # 5. Планы с squad в описании (характерно для импорта)
             elif (plan.description and 
                   'squad' in plan.description.lower() and 
                   not getattr(plan, 'is_trial', False)):
@@ -5212,9 +5648,8 @@ async def rename_imported_plans_callback(callback: CallbackQuery, user: User, db
             )
             return
         
-        # Показываем найденные планы для подтверждения
         plans_list = []
-        for plan in imported_plans[:10]:  # Показываем первые 10
+        for plan in imported_plans[:10]:
             squad_short = plan.squad_uuid[:8] + "..." if plan.squad_uuid else "No Squad"
             plans_list.append(f"• {plan.name} ({squad_short})")
         
@@ -5234,7 +5669,6 @@ async def rename_imported_plans_callback(callback: CallbackQuery, user: User, db
             ]
         ])
         
-        # Сохраняем список планов в состояние FSM
         if state:
             plan_ids = [plan.id for plan in imported_plans]
             await state.update_data(plans_to_rename=plan_ids)
@@ -5251,7 +5685,6 @@ async def rename_imported_plans_callback(callback: CallbackQuery, user: User, db
 
 @admin_router.callback_query(F.data == "confirm_rename_plans", StateFilter(BotStates.admin_rename_plans_confirm))
 async def confirm_rename_plans_callback(callback: CallbackQuery, user: User, db: Database = None, state: FSMContext = None, **kwargs):
-    """Confirm renaming of found plans"""
     if not await check_admin_access(callback, user):
         return
     
@@ -5264,7 +5697,6 @@ async def confirm_rename_plans_callback(callback: CallbackQuery, user: User, db:
         
         progress_msg = await callback.message.edit_text("⏳ Переименование планов...")
         
-        # Получаем список планов для переименования из состояния
         state_data = await state.get_data()
         plan_ids = state_data.get('plans_to_rename', [])
         
@@ -5288,10 +5720,9 @@ async def confirm_rename_plans_callback(callback: CallbackQuery, user: User, db:
                 
                 old_name = plan.name
                 
-                # Переименовываем план
                 plan.name = "Старая подписка"
                 plan.description = f"Импортированная подписка из RemnaWave (было: {old_name})"
-                plan.is_imported = True  # Помечаем как импортированный
+                plan.is_imported = True
                 
                 await db.update_subscription(plan)
                 renamed_count += 1
@@ -5302,10 +5733,8 @@ async def confirm_rename_plans_callback(callback: CallbackQuery, user: User, db:
                 logger.error(f"Error renaming plan {plan_id}: {e}")
                 errors += 1
         
-        # Очищаем состояние
         await state.clear()
         
-        # Результат
         result_text = (
             f"✅ Переименование завершено!\n\n"
             f"📊 Результаты:\n"
@@ -5315,7 +5744,6 @@ async def confirm_rename_plans_callback(callback: CallbackQuery, user: User, db:
             f"🕐 Завершено: {format_datetime(datetime.now(), user.language)}"
         )
         
-        # Показываем детали если планов немного
         if renamed_count <= 5 and renamed_plans:
             result_text += f"\n📋 Переименованные планы:\n" + "\n".join(f"• {plan}" for plan in renamed_plans)
         
@@ -5342,7 +5770,6 @@ async def cancel_rename_plans(callback: CallbackQuery, state: FSMContext, user: 
 
 @admin_router.callback_query(F.data == "main_menu", StateFilter(BotStates.admin_rename_plans_confirm))
 async def cancel_rename_to_main(callback: CallbackQuery, state: FSMContext, user: User, **kwargs):
-    """Cancel rename and return to main menu"""
     await state.clear()
     await callback.message.edit_text(
         t('main_menu', user.language),
@@ -5351,7 +5778,6 @@ async def cancel_rename_to_main(callback: CallbackQuery, state: FSMContext, user
 
 @admin_router.callback_query(F.data == "view_imported_plans")
 async def view_imported_plans_callback(callback: CallbackQuery, user: User, db: Database = None, **kwargs):
-    """View all imported subscription plans"""
     if not await check_admin_access(callback, user):
         return
     
@@ -5360,13 +5786,11 @@ async def view_imported_plans_callback(callback: CallbackQuery, user: User, db: 
         return
     
     try:
-        # Получаем все планы
         all_plans = await db.get_all_subscriptions_admin()
         
-        # Классифицируем планы
         regular_plans = []
         imported_plans = []
-        suspicious_plans = []  # Планы которые выглядят как импортированные, но не помечены
+        suspicious_plans = []
         
         for plan in all_plans:
             if getattr(plan, 'is_imported', False):
@@ -5382,7 +5806,6 @@ async def view_imported_plans_callback(callback: CallbackQuery, user: User, db: 
         
         text = f"📋 Анализ планов подписок\n\n"
         
-        # Обычные планы (для покупки)
         text += f"🛒 Обычные планы (для покупки): {len(regular_plans)}\n"
         if regular_plans:
             for plan in regular_plans[:3]:
@@ -5392,7 +5815,6 @@ async def view_imported_plans_callback(callback: CallbackQuery, user: User, db: 
                 text += f"... и еще {len(regular_plans) - 3}\n"
         text += "\n"
         
-        # Помеченные импортированные планы
         text += f"📦 Импортированные планы: {len(imported_plans)}\n"
         if imported_plans:
             for plan in imported_plans[:3]:
@@ -5403,7 +5825,6 @@ async def view_imported_plans_callback(callback: CallbackQuery, user: User, db: 
                 text += f"... и еще {len(imported_plans) - 3}\n"
         text += "\n"
         
-        # Подозрительные планы
         if suspicious_plans:
             text += f"⚠️ Возможно импортированные: {len(suspicious_plans)}\n"
             for plan in suspicious_plans[:3]:
@@ -5414,7 +5835,6 @@ async def view_imported_plans_callback(callback: CallbackQuery, user: User, db: 
                 text += f"... и еще {len(suspicious_plans) - 3}\n"
             text += "\n"
         
-        # Статистика
         text += f"📊 Итого:\n"
         text += f"• Всего планов: {len(all_plans)}\n"
         text += f"• Обычных: {len(regular_plans)}\n"
@@ -5422,7 +5842,6 @@ async def view_imported_plans_callback(callback: CallbackQuery, user: User, db: 
         if suspicious_plans:
             text += f"• Нужно проверить: {len(suspicious_plans)}\n"
         
-        # Клавиатура
         buttons = []
         
         if suspicious_plans or any(plan.name != "Старая подписка" for plan in imported_plans):
@@ -5446,7 +5865,6 @@ async def view_imported_plans_callback(callback: CallbackQuery, user: User, db: 
 
 @admin_router.callback_query(F.data == "delete_imported_plans")
 async def delete_imported_plans_callback(callback: CallbackQuery, user: User, db: Database = None, **kwargs):
-    """Delete all imported plans with confirmation"""
     if not await check_admin_access(callback, user):
         return
     
@@ -5469,7 +5887,6 @@ async def delete_imported_plans_callback(callback: CallbackQuery, user: User, db
 
 @admin_router.callback_query(F.data == "confirm_delete_imported")
 async def confirm_delete_imported_callback(callback: CallbackQuery, user: User, db: Database = None, **kwargs):
-    """Confirm deletion of imported plans with proper cleanup"""
     if not await check_admin_access(callback, user):
         return
     
@@ -5482,11 +5899,9 @@ async def confirm_delete_imported_callback(callback: CallbackQuery, user: User, 
         
         progress_msg = await callback.message.edit_text("⏳ Удаление импортированных планов и связанных подписок...")
         
-        # Получаем импортированные планы
         all_plans = await db.get_all_subscriptions_admin()
         imported_plans = [plan for plan in all_plans if getattr(plan, 'is_imported', False)]
         
-        # Также ищем планы которые выглядят как импортированные
         for plan in all_plans:
             if (plan.name == "Старая подписка" and 
                 plan not in imported_plans):
@@ -5498,7 +5913,6 @@ async def confirm_delete_imported_callback(callback: CallbackQuery, user: User, 
         
         for plan in imported_plans:
             try:
-                # ВАЖНО: Сначала удаляем все пользовательские подписки связанные с этим планом
                 user_subscriptions = await db.get_user_subscriptions_by_plan_id(plan.id)
                 
                 for user_sub in user_subscriptions:
@@ -5511,7 +5925,6 @@ async def confirm_delete_imported_callback(callback: CallbackQuery, user: User, 
                         logger.error(f"Error deleting user subscription {user_sub.id}: {e}")
                         errors += 1
                 
-                # Теперь удаляем сам план
                 success = await db.delete_subscription(plan.id)
                 if success:
                     deleted_plans += 1
@@ -5549,7 +5962,6 @@ async def confirm_delete_imported_callback(callback: CallbackQuery, user: User, 
 
 @admin_router.callback_query(F.data == "debug_all_plans")
 async def debug_all_plans_callback(callback: CallbackQuery, user: User, db: Database = None, **kwargs):
-    """Debug all subscription plans"""
     if not await check_admin_access(callback, user):
         return
     
@@ -5560,7 +5972,6 @@ async def debug_all_plans_callback(callback: CallbackQuery, user: User, db: Data
     try:
         await callback.answer("🔍 Анализирую все планы...")
         
-        # Получаем все планы
         all_plans = await db.get_all_subscriptions_admin()
         
         if not all_plans:
@@ -5590,7 +6001,6 @@ async def debug_all_plans_callback(callback: CallbackQuery, user: User, db: Data
                 desc_short = plan.description[:50] + "..." if len(plan.description) > 50 else plan.description
                 analysis += f"Описание: {desc_short}\n"
             
-            # Анализ критериев
             looks_imported = (
                 getattr(plan, 'is_imported', False) or
                 plan.name.startswith(('Import_', 'Auto_', 'Imported_', 'Trial_')) or
@@ -5601,7 +6011,6 @@ async def debug_all_plans_callback(callback: CallbackQuery, user: User, db: Data
             analysis += f"Создан: {plan.created_at.strftime('%Y-%m-%d %H:%M') if plan.created_at else 'N/A'}\n"
             analysis += "\n"
         
-        # Если текст слишком длинный, разбиваем на части
         max_length = 4000
         if len(analysis) > max_length:
             parts = []
@@ -5625,7 +6034,6 @@ async def debug_all_plans_callback(callback: CallbackQuery, user: User, db: Data
         else:
             await callback.message.edit_text(analysis)
         
-        # Итоговая клавиатура
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🏷 Переименовать Trial_", callback_data="rename_imported_plans")],
             [InlineKeyboardButton(text="📋 Просмотр планов", callback_data="view_imported_plans")],
@@ -5643,7 +6051,6 @@ async def debug_all_plans_callback(callback: CallbackQuery, user: User, db: Data
 
 @admin_router.callback_query(F.data == "admin_referrals")
 async def admin_referrals_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show referral management"""
     if not await check_admin_access(callback, user):
         return
     
@@ -5654,38 +6061,49 @@ async def admin_referrals_callback(callback: CallbackQuery, user: User, **kwargs
 
 @admin_router.callback_query(F.data == "referral_statistics")
 async def referral_statistics_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
-    """Show referral statistics"""
     if not await check_admin_access(callback, user):
         return
     
     try:
-        # Получаем общую статистику
         async with db.session_factory() as session:
-            from sqlalchemy import select, func
+            from sqlalchemy import select, func, and_
             
-            # Общее количество рефералов
             total_referrals = await session.execute(
-                select(func.count(ReferralProgram.id))
+                select(func.count(ReferralProgram.id)).where(
+                    and_(
+                        ReferralProgram.referred_id < 900000000,
+                        ReferralProgram.referred_id > 0
+                    )
+                )
             )
             total_referrals = total_referrals.scalar() or 0
             
-            # Активные рефералы (получившие первую награду)
             active_referrals = await session.execute(
-                select(func.count(ReferralProgram.id))
-                .where(ReferralProgram.first_reward_paid == True)
+                select(func.count(ReferralProgram.id)).where(
+                    and_(
+                        ReferralProgram.first_reward_paid == True,
+                        ReferralProgram.referred_id < 900000000,
+                        ReferralProgram.referred_id > 0
+                    )
+                )
             )
             active_referrals = active_referrals.scalar() or 0
             
-            # Общая сумма выплат
             total_paid = await session.execute(
                 select(func.sum(ReferralEarning.amount))
             )
             total_paid = total_paid.scalar() or 0.0
             
-            # Топ рефереров
             top_referrers = await session.execute(
-                select(ReferralProgram.referrer_id, func.count(ReferralProgram.id).label('count'))
-                .group_by(ReferralProgram.referrer_id)
+                select(
+                    ReferralProgram.referrer_id, 
+                    func.count(ReferralProgram.id).label('count')
+                ).where(
+                    and_(
+                        ReferralProgram.referred_id < 900000000,
+                        ReferralProgram.referred_id > 0
+                    )
+                ).group_by(ReferralProgram.referrer_id)
                 .order_by(func.count(ReferralProgram.id).desc())
                 .limit(5)
             )
@@ -5695,14 +6113,55 @@ async def referral_statistics_callback(callback: CallbackQuery, user: User, db: 
         text += f"👥 Всего рефералов: {total_referrals}\n"
         text += f"✅ Активных рефералов: {active_referrals}\n"
         text += f"💰 Выплачено всего: {total_paid:.2f}₽\n"
-        text += f"📈 Конверсия: {(active_referrals/total_referrals*100):.1f}%" if total_referrals > 0 else "📈 Конверсия: 0%"
+        
+        if total_referrals > 0:
+            conversion = (active_referrals / total_referrals * 100)
+            text += f"📈 Конверсия: {conversion:.1f}%\n"
+        else:
+            text += f"📈 Конверсия: 0%\n"
         
         if top_referrers:
-            text += f"\n\n🏆 Топ рефереров:\n"
+            text += f"\n🏆 Топ рефереров:\n"
             for i, (referrer_id, count) in enumerate(top_referrers, 1):
-                referrer = await db.get_user_by_telegram_id(referrer_id)
-                username = referrer.username if referrer and referrer.username else "Unknown"
-                text += f"{i}. @{username}: {count} рефералов\n"
+                try:
+                    referrer = await db.get_user_by_telegram_id(referrer_id)
+                    if referrer:
+                        display_name = ""
+                        if referrer.first_name:
+                            display_name = referrer.first_name
+                        if referrer.username:
+                            display_name += f" (@{referrer.username})" if display_name else f"@{referrer.username}"
+                        if not display_name:
+                            display_name = f"Пользователь {referrer_id}"
+                        
+                        text += f"{i}. {display_name}: {count} рефералов\n"
+                    else:
+                        text += f"{i}. ID:{referrer_id}: {count} рефералов\n"
+                except Exception as e:
+                    logger.error(f"Error getting referrer info for {referrer_id}: {e}")
+                    text += f"{i}. ID:{referrer_id}: {count} рефералов\n"
+        
+        try:
+            async with db.session_factory() as session:
+                first_rewards = await session.execute(
+                    select(func.count(ReferralEarning.id), func.sum(ReferralEarning.amount))
+                    .where(ReferralEarning.earning_type == 'first_reward')
+                )
+                first_rewards_data = first_rewards.fetchone()
+                
+                percentage_rewards = await session.execute(
+                    select(func.count(ReferralEarning.id), func.sum(ReferralEarning.amount))
+                    .where(ReferralEarning.earning_type == 'percentage')
+                )
+                percentage_rewards_data = percentage_rewards.fetchone()
+                
+                text += f"\n💸 Детализация выплат:\n"
+                if first_rewards_data and first_rewards_data[0]:
+                    text += f"• Первые награды: {first_rewards_data[0]} шт. ({first_rewards_data[1]:.2f}₽)\n"
+                if percentage_rewards_data and percentage_rewards_data[0]:
+                    text += f"• Процентные: {percentage_rewards_data[0]} шт. ({percentage_rewards_data[1]:.2f}₽)\n"
+        except Exception as e:
+            logger.error(f"Error getting payment stats: {e}")
         
         await callback.message.edit_text(
             text,
@@ -5713,5 +6172,208 @@ async def referral_statistics_callback(callback: CallbackQuery, user: User, db: 
         logger.error(f"Error getting referral statistics: {e}")
         await callback.message.edit_text(
             "❌ Ошибка получения статистики",
+            reply_markup=back_keyboard("admin_referrals", user.language)
+        )
+
+@admin_router.callback_query(F.data == "list_referrers")
+async def list_referrers_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        async with db.session_factory() as session:
+            from sqlalchemy import select, func, and_, case
+            
+            top_referrers = await session.execute(
+                select(
+                    ReferralProgram.referrer_id,
+                    func.count(ReferralProgram.id).label('total_referrals'),
+                    func.count(case((ReferralProgram.first_reward_paid == True, 1))).label('active_referrals'),
+                    func.sum(ReferralProgram.total_earned).label('total_earned')
+                ).where(
+                    and_(
+                        ReferralProgram.referred_id < 900000000,
+                        ReferralProgram.referred_id > 0
+                    )
+                ).group_by(ReferralProgram.referrer_id)
+                .order_by(func.count(ReferralProgram.id).desc())
+                .limit(10)
+            )
+            referrers_data = list(top_referrers.fetchall())
+        
+        if not referrers_data:
+            await callback.message.edit_text(
+                "📊 Список рефереров пуст\n\nПока никто не пригласил пользователей.",
+                reply_markup=back_keyboard("admin_referrals", user.language)
+            )
+            return
+        
+        text = f"👥 Топ-{len(referrers_data)} рефереров:\n\n"
+        
+        for i, (referrer_id, total_refs, active_refs, total_earned) in enumerate(referrers_data, 1):
+            try:
+                referrer = await db.get_user_by_telegram_id(referrer_id)
+                
+                if referrer:
+                    # Формируем имя
+                    display_name = ""
+                    if referrer.first_name:
+                        display_name = referrer.first_name[:15]
+                    if referrer.username:
+                        username_part = f"@{referrer.username}"
+                        if display_name:
+                            display_name += f" ({username_part})"
+                        else:
+                            display_name = username_part
+                    if not display_name:
+                        display_name = f"Пользователь {referrer_id}"
+                else:
+                    display_name = f"ID:{referrer_id}"
+                
+                text += f"{i}. {display_name}\n"
+                text += f"   👥 Всего: {total_refs} | ✅ Активных: {active_refs or 0}\n"
+                text += f"   💰 Заработано: {total_earned or 0:.2f}₽\n\n"
+                
+            except Exception as e:
+                logger.error(f"Error processing referrer {referrer_id}: {e}")
+                text += f"{i}. ID:{referrer_id}\n"
+                text += f"   👥 Всего: {total_refs} | ✅ Активных: {active_refs or 0}\n"
+                text += f"   💰 Заработано: {total_earned or 0:.2f}₽\n\n"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Обновить", callback_data="list_referrers")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_referrals")]
+        ])
+        
+        await callback.message.edit_text(text, reply_markup=keyboard)
+        
+    except Exception as e:
+        logger.error(f"Error listing referrers: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка получения списка рефереров",
+            reply_markup=back_keyboard("admin_referrals", user.language)
+        )
+
+@admin_router.callback_query(F.data == "referral_payments")
+async def referral_payments_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        async with db.session_factory() as session:
+            from sqlalchemy import select, desc
+            
+            recent_earnings = await session.execute(
+                select(ReferralEarning)
+                .order_by(desc(ReferralEarning.created_at))
+                .limit(15)
+            )
+            earnings = list(recent_earnings.scalars().all())
+        
+        if not earnings:
+            await callback.message.edit_text(
+                "💰 История выплат пуста\n\nРеферальных выплат пока не было.",
+                reply_markup=back_keyboard("admin_referrals", user.language)
+            )
+            return
+        
+        text = f"💰 Последние {len(earnings)} выплат:\n\n"
+        
+        for earning in earnings:
+            try:
+                referrer = await db.get_user_by_telegram_id(earning.referrer_id)
+                referred = await db.get_user_by_telegram_id(earning.referred_id)
+                
+                referrer_name = "Unknown"
+                if referrer:
+                    if referrer.username:
+                        referrer_name = f"@{referrer.username}"
+                    elif referrer.first_name:
+                        referrer_name = referrer.first_name[:10]
+                    else:
+                        referrer_name = f"ID:{earning.referrer_id}"
+                
+                referred_name = "Unknown"
+                if referred:
+                    if referred.username:
+                        referred_name = f"@{referred.username}"
+                    elif referred.first_name:
+                        referred_name = referred.first_name[:10]
+                    else:
+                        referred_name = f"ID:{earning.referred_id}"
+                
+                earning_type_emoji = "🎁" if earning.earning_type == "first_reward" else "💵"
+                earning_type_name = "Первая награда" if earning.earning_type == "first_reward" else "Процент"
+                
+                date_str = earning.created_at.strftime("%d.%m %H:%M")
+                
+                text += f"{earning_type_emoji} {earning.amount:.2f}₽ - {earning_type_name}\n"
+                text += f"   От: {referrer_name} ← {referred_name}\n"
+                text += f"   📅 {date_str}\n\n"
+                
+            except Exception as e:
+                logger.error(f"Error processing earning {earning.id}: {e}")
+                text += f"💰 {earning.amount:.2f}₽ - {earning.earning_type}\n"
+                text += f"   ID: {earning.referrer_id} ← {earning.referred_id}\n\n"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Обновить", callback_data="referral_payments")],
+            [InlineKeyboardButton(text="📊 Статистика", callback_data="referral_statistics")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_referrals")]
+        ])
+        
+        await callback.message.edit_text(text, reply_markup=keyboard)
+        
+    except Exception as e:
+        logger.error(f"Error getting referral payments: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка получения истории выплат",
+            reply_markup=back_keyboard("admin_referrals", user.language)
+        )
+
+@admin_router.callback_query(F.data == "referral_settings")
+async def referral_settings_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        import os
+        
+        first_reward = float(os.getenv('REFERRAL_FIRST_REWARD', '150.0'))
+        referred_bonus = float(os.getenv('REFERRAL_REFERRED_BONUS', '150.0'))
+        threshold = float(os.getenv('REFERRAL_THRESHOLD', '300.0'))
+        percentage = float(os.getenv('REFERRAL_PERCENTAGE', '0.25'))
+        
+        text = "⚙️ Настройки реферальной программы\n\n"
+        text += "📋 Текущие параметры:\n\n"
+        text += f"💰 Первая награда рефереру: {first_reward:.0f}₽\n"
+        text += f"🎁 Бонус приглашенному: {referred_bonus:.0f}₽\n"
+        text += f"💳 Порог активации: {threshold:.0f}₽\n"
+        text += f"📊 Процент с платежей: {percentage*100:.0f}%\n\n"
+        
+        text += "ℹ️ Как это работает:\n"
+        text += f"1. Пользователь регистрируется по ссылке\n"
+        text += f"2. Пополняет баланс на {threshold:.0f}₽ или больше\n"
+        text += f"3. Реферер получает {first_reward:.0f}₽, новичок {referred_bonus:.0f}₽\n"
+        text += f"4. С каждого платежа новичка реферер получает {percentage*100:.0f}%\n\n"
+        
+        text += "⚠️ Для изменения настроек отредактируйте .env файл:\n"
+        text += "• REFERRAL_FIRST_REWARD\n"
+        text += "• REFERRAL_REFERRED_BONUS\n"
+        text += "• REFERRAL_THRESHOLD\n"
+        text += "• REFERRAL_PERCENTAGE"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📊 Статистика", callback_data="referral_statistics")],
+            [InlineKeyboardButton(text="👥 Рефереры", callback_data="list_referrers")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_referrals")]
+        ])
+        
+        await callback.message.edit_text(text, reply_markup=keyboard)
+        
+    except Exception as e:
+        logger.error(f"Error showing referral settings: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка получения настроек",
             reply_markup=back_keyboard("admin_referrals", user.language)
         )
