@@ -46,8 +46,8 @@
 ### 1. Клонирование репозитория
 
 ```bash
-git clone https://github.com/your-repo/remnawave-telegram-bot.git
-cd remnawave-telegram-bot
+git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot.git
+cd remnawave-bedolaga-telegram-bot
 ```
 
 ### 2. Настройка переменных окружения
