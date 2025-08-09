@@ -5,7 +5,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue?logo=postgresql)](https://postgresql.org)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-![RemnaWave Bedolaga Bot Logo](./assets/logo.svg)
+
 
 Современный Telegram бот для управления VPN подписками через RemnaWave API с полным функционалом управления пользователями, платежами и администрированием.
 
