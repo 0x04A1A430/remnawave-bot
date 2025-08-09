@@ -977,8 +977,7 @@ async def view_subscription_detail(callback: CallbackQuery, db: Database, **kwar
                 logger.warning(f"Could not get subscription URL: {e}")
         
         if is_imported and 0 <= days_until_expiry <= 3:
-            text += f"\n\n⚠️ Это импортированная подписка из старой системы.\n"
-            text += f"📅 Истекает через {days_until_expiry} дн.\n"
+            text += f"\n\n📅 Истекает через {days_until_expiry} дн.\n"
             text += f"🛒 Для продолжения работы приобретите новый тарифный план."
         elif is_trial and 0 <= days_until_expiry <= 3:
             text += f"\n\nℹ️ Тестовая подписка истекает через {days_until_expiry} дн.\n"
