@@ -8,18 +8,11 @@ from translations import t
 logger = logging.getLogger(__name__)
 
 class APIErrorHandler:
-    """Класс для обработки ошибок API и предоставления пользователю понятной информации"""
     
     @staticmethod
     async def handle_api_error(callback: CallbackQuery, error: Exception, 
                              operation: str, user_language: str = 'ru',
                              fallback_keyboard=None) -> bool:
-        """
-        Обработка ошибок API с отправкой понятного сообщения пользователю
-        
-        Returns:
-            bool: True если ошибка была обработана, False если нужно перепробросить
-        """
         error_message = str(error).lower()
         
         if "timeout" in error_message or "connection" in error_message:
@@ -66,12 +59,6 @@ class APIErrorHandler:
 
     @staticmethod
     async def safe_api_call(api_method: Callable, *args, **kwargs) -> tuple[bool, Any]:
-        """
-        Безопасный вызов метода API с обработкой ошибок
-        
-        Returns:
-            tuple: (success: bool, result: Any)
-        """
         try:
             result = await api_method(*args, **kwargs)
             return True, result
@@ -79,15 +66,11 @@ class APIErrorHandler:
             logger.error(f"API call failed: {api_method.__name__} - {e}")
             return False, str(e)
 
-# Дополнительные обработчики для исправления конкретных проблем
 def create_error_recovery_keyboard(error_context: str, language: str = 'ru'):
-    """Создание клавиатуры для восстановления после ошибки"""
     from keyboards import error_recovery_keyboard
     return error_recovery_keyboard(error_context, language)
 
-# Улучшенные функции для работы с RemnaWave API
 async def safe_get_nodes(api: RemnaWaveAPI) -> tuple[bool, list]:
-    """Безопасное получение списка нод"""
     try:
         logger.info("Attempting to fetch nodes from API...")
         nodes = await api.get_all_nodes()
@@ -108,7 +91,6 @@ async def safe_get_nodes(api: RemnaWaveAPI) -> tuple[bool, list]:
         return False, []
 
 async def safe_get_system_users(api: RemnaWaveAPI) -> tuple[bool, list]:
-    """Безопасное получение списка пользователей системы"""
     try:
         logger.info("Attempting to fetch system users from API...")
         users = await api.get_all_system_users_full()
@@ -129,7 +111,6 @@ async def safe_get_system_users(api: RemnaWaveAPI) -> tuple[bool, list]:
         return False, []
 
 async def safe_restart_nodes(api: RemnaWaveAPI, all_nodes: bool = True, node_id: str = None) -> tuple[bool, str]:
-    """Безопасная перезагрузка нод"""
     try:
         if all_nodes:
             logger.info("Attempting to restart all nodes...")
@@ -151,9 +132,7 @@ async def safe_restart_nodes(api: RemnaWaveAPI, all_nodes: bool = True, node_id:
         logger.error(f"Error restarting nodes: {e}")
         return False, str(e)
 
-# Функции для проверки состояния API
 async def check_api_health(api: RemnaWaveAPI) -> Dict[str, Any]:
-    """Проверка состояния API"""
     health_info = {
         'api_available': False,
         'nodes_accessible': False,
@@ -166,9 +145,7 @@ async def check_api_health(api: RemnaWaveAPI) -> Dict[str, Any]:
         health_info['errors'].append("API instance is None")
         return health_info
     
-    # Проверяем доступность API
     try:
-        # Простая проверка через получение нод (обычно быстрая операция)
         success, nodes = await safe_get_nodes(api)
         if success:
             health_info['api_available'] = True
@@ -178,7 +155,6 @@ async def check_api_health(api: RemnaWaveAPI) -> Dict[str, Any]:
     except Exception as e:
         health_info['errors'].append(f"Nodes check failed: {e}")
     
-    # Проверяем доступность пользователей
     try:
         success, users = await safe_get_system_users(api)
         if success:
@@ -188,7 +164,6 @@ async def check_api_health(api: RemnaWaveAPI) -> Dict[str, Any]:
     except Exception as e:
         health_info['errors'].append(f"Users check failed: {e}")
     
-    # Проверяем системную статистику
     try:
         stats = await api.get_system_stats()
         if stats:
@@ -200,9 +175,7 @@ async def check_api_health(api: RemnaWaveAPI) -> Dict[str, Any]:
     
     return health_info
 
-# Декоратор для автоматической обработки ошибок API
 def handle_api_errors(operation_name: str):
-    """Декоратор для автоматической обработки ошибок API в handler'ах"""
     def decorator(func):
         async def wrapper(callback: CallbackQuery, user, *args, **kwargs):
             try:
@@ -210,11 +183,9 @@ def handle_api_errors(operation_name: str):
             except Exception as e:
                 logger.error(f"Error in {func.__name__}: {e}")
                 
-                # Получаем API из kwargs если есть
                 api = kwargs.get('api')
                 fallback_keyboard = None
                 
-                # Создаем fallback клавиатуру в зависимости от операции
                 if 'nodes' in operation_name.lower():
                     from keyboards import admin_system_keyboard
                     fallback_keyboard = admin_system_keyboard(user.language)
@@ -222,7 +193,6 @@ def handle_api_errors(operation_name: str):
                     from keyboards import system_users_keyboard
                     fallback_keyboard = system_users_keyboard(user.language)
                 
-                # Обрабатываем ошибку
                 await APIErrorHandler.handle_api_error(
                     callback, e, operation_name, user.language, fallback_keyboard
                 )
