@@ -8,7 +8,6 @@ from config import Config
 logger = logging.getLogger(__name__)
 
 class DatabaseMiddleware(BaseMiddleware):
-    """Middleware for database operations"""
     
     def __init__(self, db: Database):
         self.db = db
@@ -23,7 +22,6 @@ class DatabaseMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 class UserMiddleware(BaseMiddleware):
-    """Middleware for user management - ИСПРАВЛЕНО: правильная инициализация языка"""
     
     def __init__(self, db: Database, config: Config):
         self.db = db
@@ -39,25 +37,21 @@ class UserMiddleware(BaseMiddleware):
         
         if telegram_user and not telegram_user.is_bot:
             try:
-                # Get or create user
                 user = await self.db.get_user_by_telegram_id(telegram_user.id)
                 
                 if not user:
-                    # Check if user is admin
                     is_admin = telegram_user.id in self.config.ADMIN_IDS
                     
-                    # ИСПРАВЛЕНО: Создаем пользователя с пустым языком для первоначальной настройки
                     user = await self.db.create_user(
                         telegram_id=telegram_user.id,
                         username=telegram_user.username,
                         first_name=telegram_user.first_name,
                         last_name=telegram_user.last_name,
-                        language='',  # ИЗМЕНЕНО: пустой язык для нового пользователя
+                        language='',
                         is_admin=is_admin
                     )
                     logger.info(f"Created new user: {telegram_user.id} without language")
                 else:
-                    # Update user info if changed
                     updated = False
                     if user.username != telegram_user.username:
                         user.username = telegram_user.username
@@ -69,7 +63,6 @@ class UserMiddleware(BaseMiddleware):
                         user.last_name = telegram_user.last_name
                         updated = True
                     
-                    # Check admin status
                     should_be_admin = telegram_user.id in self.config.ADMIN_IDS
                     if user.is_admin != should_be_admin:
                         user.is_admin = should_be_admin
@@ -83,7 +76,6 @@ class UserMiddleware(BaseMiddleware):
                 
             except Exception as e:
                 logger.error(f"Error in UserMiddleware: {e}")
-                # Create a minimal user object with defaults if database fails
                 class FallbackUser:
                     def __init__(self, telegram_id: int, username: str = None, config: Config = None):
                         self.telegram_id = telegram_id
@@ -95,7 +87,6 @@ class UserMiddleware(BaseMiddleware):
                         self.is_admin = telegram_id in (config.ADMIN_IDS if config else [])
                         self.remnawave_uuid = None
                 
-                # Try to use fallback, but if database is completely broken, set None
                 try:
                     fallback_user = FallbackUser(telegram_user.id, telegram_user.username, self.config)
                     data['user'] = fallback_user
@@ -110,7 +101,6 @@ class UserMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 class LoggingMiddleware(BaseMiddleware):
-    """Middleware for logging"""
     
     async def __call__(
         self,
@@ -134,7 +124,6 @@ class LoggingMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 class ThrottlingMiddleware(BaseMiddleware):
-    """Simple throttling middleware"""
     
     def __init__(self, rate_limit: float = 1.0):
         self.rate_limit = rate_limit
@@ -163,7 +152,6 @@ class ThrottlingMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 class WorkflowDataMiddleware(BaseMiddleware):
-    """Middleware to pass workflow data to handlers"""
     
     async def __call__(
         self,
@@ -171,20 +159,17 @@ class WorkflowDataMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
-        # Get dispatcher from event
         if hasattr(event, 'bot'):
             dp = getattr(event.bot, '_dispatcher', None)
             if dp and hasattr(dp, 'workflow_data'):
-                # Add workflow data to handler data
                 workflow_data = dp.workflow_data
                 for key, value in workflow_data.items():
-                    if key not in data:  # Don't override existing data
+                    if key not in data: 
                         data[key] = value
         
         return await handler(event, data)
 
 class BotMiddleware(BaseMiddleware):
-    """Middleware to add bot instance to handler data"""
     
     def __init__(self, bot):
         self.bot = bot
