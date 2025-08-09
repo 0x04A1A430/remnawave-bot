@@ -1,8 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import BigInteger, String, Float, DateTime, Boolean, Text, Integer, text
-from datetime import datetime
-from typing import Optional, List, Dict
+from sqlalchemy import BigInteger, String, Float, DateTime, Boolean, Text, Integer, text, select, func, and_
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any
 import logging
 
 logger = logging.getLogger(__name__)
@@ -69,12 +69,12 @@ class UserSubscription(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     subscription_id: Mapped[int] = mapped_column(Integer, index=True)
-    short_uuid: Mapped[str] = mapped_column(String(255))  # УБРАНО unique=True
+    short_uuid: Mapped[str] = mapped_column(String(255))  
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    traffic_limit_gb: Mapped[Optional[int]] = mapped_column(Integer)  # Добавлено поле
+    traffic_limit_gb: Mapped[Optional[int]] = mapped_column(Integer)  
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)  # Добавлено поле
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)  
 
 class Payment(Base):
     __tablename__ = 'payments'
@@ -82,9 +82,9 @@ class Payment(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     amount: Mapped[float] = mapped_column(Float)
-    payment_type: Mapped[str] = mapped_column(String(50))  # 'topup', 'subscription'
+    payment_type: Mapped[str] = mapped_column(String(50)) 
     description: Mapped[str] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(50), default='pending')  # 'pending', 'completed', 'cancelled'
+    status: Mapped[str] = mapped_column(String(50), default='pending')  
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 class Promocode(Base):
@@ -108,6 +108,17 @@ class PromocodeUsage(Base):
     promocode_id: Mapped[int] = mapped_column(Integer, index=True)
     used_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+class LuckyGame(Base):
+    __tablename__ = 'lucky_games'
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    chosen_number: Mapped[int] = mapped_column(Integer)
+    winning_numbers: Mapped[str] = mapped_column(String(255))  # JSON строка с выигрышными номерами
+    is_winner: Mapped[bool] = mapped_column(Boolean, default=False)
+    reward_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    played_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
 class Database:
     def __init__(self, database_url: str):
         self.engine = create_async_engine(
@@ -126,16 +137,13 @@ class Database:
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
     
-        # Выполняем миграции
         await self.migrate_user_subscriptions()
         await self.migrate_subscription_imported_field()
-        await self.migrate_referral_tables()  # НОВАЯ МИГРАЦИЯ
+        await self.migrate_referral_tables() 
 
     async def migrate_referral_tables(self):
-        """Create referral system tables if they don't exist"""
         try:
             async with self.engine.begin() as conn:
-                # Создаем таблицы реферальной системы
                 await conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS referral_programs (
                         id SERIAL PRIMARY KEY,
@@ -176,7 +184,6 @@ class Database:
     async def close(self):
         await self.engine.dispose()
     
-    # User methods
     async def get_user_by_telegram_id(self, telegram_id: int) -> Optional[User]:
         async with self.session_factory() as session:
             try:
@@ -238,7 +245,6 @@ class Database:
                 await session.rollback()
                 return False
     
-    # Subscription methods
     async def get_all_subscriptions(self, include_inactive: bool = False, exclude_trial: bool = True, exclude_imported: bool = True) -> List[Subscription]:
         async with self.session_factory() as session:
             try:
@@ -249,7 +255,7 @@ class Database:
                 if exclude_trial:
                     query = query.where(Subscription.is_trial == False)
                 if exclude_imported:
-                    query = query.where(Subscription.is_imported == False)  # Исключаем импортированные
+                    query = query.where(Subscription.is_imported == False)
                 result = await session.execute(query)
                 return list(result.scalars().all())
             except Exception as e:
@@ -257,7 +263,6 @@ class Database:
                 return []
 
     async def get_all_subscriptions_admin(self) -> List[Subscription]:
-        """Get all subscriptions including imported ones (for admin purposes)"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select
@@ -268,7 +273,6 @@ class Database:
                 return []
 
     async def migrate_subscription_imported_field(self):
-        """Add is_imported field to subscriptions table"""
         try:
             async with self.engine.begin() as conn:
                 try:
@@ -306,7 +310,7 @@ class Database:
                     duration_days=duration_days,
                     traffic_limit_gb=traffic_limit_gb,
                     squad_uuid=squad_uuid,
-                    is_imported=is_imported  # Добавляем поддержку is_imported
+                    is_imported=is_imported  
                 )
                 session.add(subscription)
                 await session.commit()
@@ -357,10 +361,8 @@ class Database:
     async def create_user_subscription(self, user_id: int, subscription_id: int, 
                                  short_uuid: str, expires_at: datetime, 
                                  is_active: bool = True, traffic_limit_gb: int = None) -> Optional[UserSubscription]:
-        """Create user subscription with proper error handling"""
         async with self.session_factory() as session:
             try:
-                # Проверяем что подписка не существует
                 from sqlalchemy import select
                 existing = await session.execute(
                     select(UserSubscription).where(
@@ -374,7 +376,6 @@ class Database:
                     logger.warning(f"Subscription with short_uuid {short_uuid} already exists for user {user_id}")
                     return existing_sub
             
-            # Создаем новую подписку
                 new_subscription = UserSubscription(
                     user_id=user_id,
                     subscription_id=subscription_id,
@@ -394,7 +395,6 @@ class Database:
                 await session.rollback()
                 return None
     
-        # Payment methods
     async def create_payment(self, user_id: int, amount: float, payment_type: str,
                            description: str, status: str = 'pending') -> Payment:
         async with self.session_factory() as session:
@@ -452,7 +452,6 @@ class Database:
                 logger.error(f"Error getting user payments for {user_id}: {e}")
                 return []
     
-    # Promocode methods
     async def get_promocode_by_code(self, code: str) -> Optional[Promocode]:
         async with self.session_factory() as session:
             try:
@@ -489,7 +488,6 @@ class Database:
     async def use_promocode(self, user_id: int, promocode: Promocode) -> bool:
         async with self.session_factory() as session:
             try:
-                # Check if already used
                 from sqlalchemy import select
                 existing = await session.execute(
                     select(PromocodeUsage).where(
@@ -500,11 +498,9 @@ class Database:
                 if existing.scalar_one_or_none():
                     return False
                 
-                # Create usage record
                 usage = PromocodeUsage(user_id=user_id, promocode_id=promocode.id)
                 session.add(usage)
                 
-                # Update promocode used count
                 promocode.used_count += 1
                 await session.merge(promocode)
                 
@@ -525,7 +521,6 @@ class Database:
                 logger.error(f"Error getting promocodes: {e}")
                 return []
     
-    # Admin methods
     async def get_all_users(self) -> List[User]:
         async with self.session_factory() as session:
             try:
@@ -541,13 +536,11 @@ class Database:
             try:
                 from sqlalchemy import select, func
             
-                # Total users
                 total_users = await session.execute(
                     select(func.count(User.id))
                 )
                 total_users = total_users.scalar()
             
-                # Total subscriptions (excluding trial)
                 total_subs_non_trial = await session.execute(
                     select(func.count(UserSubscription.id))
                     .join(Subscription, UserSubscription.subscription_id == Subscription.id)
@@ -555,11 +548,10 @@ class Database:
                 )
                 total_subs_non_trial = total_subs_non_trial.scalar()
             
-                # Total payments (excluding trial payments)
                 total_payments = await session.execute(
                     select(func.sum(Payment.amount)).where(
                         Payment.status == 'completed',
-                        Payment.payment_type != 'trial'  # Исключаем тестовые платежи
+                        Payment.payment_type != 'trial'  
                     )
                 )
                 total_payments = total_payments.scalar() or 0
@@ -578,7 +570,6 @@ class Database:
             }
 
     async def get_trial_subscriptions(self) -> List[Subscription]:
-        """Get only trial subscriptions"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select
@@ -591,7 +582,6 @@ class Database:
                 return []
 
     async def get_user_subscription_by_short_uuid(self, user_id: int, short_uuid: str) -> Optional[UserSubscription]:
-        """Get user subscription by short_uuid"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select
@@ -607,7 +597,6 @@ class Database:
                 return None
     
     async def update_user_subscription(self, user_subscription: UserSubscription) -> bool:
-        """Update user subscription"""
         async with self.session_factory() as session:
             try:
                 # Устанавливаем время обновления
@@ -623,10 +612,8 @@ class Database:
                 return False
 
     async def migrate_user_subscriptions(self):
-        """Migrate user_subscriptions table to add missing columns"""
         try:
             async with self.engine.begin() as conn:
-                # Проверяем существование столбцов и добавляем их если нет
                 try:
                     await conn.execute(text("""
                         ALTER TABLE user_subscriptions 
@@ -690,18 +677,15 @@ class Database:
                 return False
 
     async def get_all_payments_paginated(self, offset: int = 0, limit: int = 10) -> tuple[List[Payment], int]:
-        """Get all payments with pagination"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select, desc, func
         
-                # Получаем общее количество записей
                 count_result = await session.execute(
                     select(func.count(Payment.id))
                 )
                 total_count = count_result.scalar()
         
-                # Получаем платежи с пагинацией
                 result = await session.execute(
                     select(Payment)
                     .order_by(desc(Payment.created_at))
@@ -717,18 +701,15 @@ class Database:
                 return [], 0
 
     async def get_payments_by_type_paginated(self, payment_type: str, offset: int = 0, limit: int = 10) -> tuple[List[Payment], int]:
-        """Get payments by type with pagination"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select, desc, func
         
-                # Получаем общее количество записей
                 count_result = await session.execute(
                     select(func.count(Payment.id)).where(Payment.payment_type == payment_type)
                 )
                 total_count = count_result.scalar()
         
-                # Получаем платежи с пагинацией
                 result = await session.execute(
                     select(Payment)
                     .where(Payment.payment_type == payment_type)
@@ -745,18 +726,15 @@ class Database:
                 return [], 0
 
     async def get_payments_by_status_paginated(self, status: str, offset: int = 0, limit: int = 10) -> tuple[List[Payment], int]:
-        """Get payments by status with pagination"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select, desc, func
             
-                # Получаем общее количество записей
                 count_result = await session.execute(
                     select(func.count(Payment.id)).where(Payment.status == status)
                 )
                 total_count = count_result.scalar()
             
-                # Получаем платежи с пагинацией
                 result = await session.execute(
                     select(Payment)
                     .where(Payment.status == status)
@@ -773,7 +751,6 @@ class Database:
                 return [], 0
 
     async def get_user_subscriptions_by_plan_id(self, plan_id: int) -> List[UserSubscription]:
-        """Get all user subscriptions for a specific plan"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select
@@ -786,7 +763,6 @@ class Database:
                 return []
 
     async def delete_user_subscription(self, user_subscription_id: int) -> bool:
-        """Delete user subscription by ID"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import delete
@@ -801,16 +777,13 @@ class Database:
                 return False
 
     async def create_referral(self, referrer_id: int, referred_id: int, referral_code: str) -> Optional[ReferralProgram]:
-        """Create referral relationship - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select
         
                 if referred_id == 0:
-                    # Генерируем уникальный placeholder ID для хранения кода
-                    placeholder_id = 999999999 - referrer_id  # Уникальный ID на основе referrer_id
+                    placeholder_id = 999999999 - referrer_id  
             
-                    # Проверяем что код еще не существует для этого пользователя
                     existing = await session.execute(
                         select(ReferralProgram).where(
                             ReferralProgram.referrer_id == referrer_id,
@@ -823,10 +796,9 @@ class Database:
                         logger.info(f"Referral code already exists for user {referrer_id}")
                         return existing_referral
             
-                    # Создаем запись для хранения кода
                     referral = ReferralProgram(
                         referrer_id=referrer_id,
-                        referred_id=placeholder_id,  # Уникальный placeholder
+                        referred_id=placeholder_id,  
                         referral_code=referral_code
                     )
                     session.add(referral)
@@ -835,24 +807,21 @@ class Database:
                     logger.info(f"Created referral code storage for user {referrer_id}")
                     return referral
             
-                # Обычная логика для реальных рефералов
                 existing = await session.execute(
                     select(ReferralProgram).where(
                         ReferralProgram.referred_id == referred_id,
-                        ReferralProgram.referred_id < 900000000,  # Исключаем placeholder
-                        ReferralProgram.referred_id > 0  # Исключаем нулевые
+                        ReferralProgram.referred_id < 900000000, 
+                        ReferralProgram.referred_id > 0  
                     )
                 )
                 if existing.scalar_one_or_none():
                     logger.info(f"User {referred_id} already has a real referrer")
                     return None
     
-                # Проверяем что пользователь не приглашает сам себя
                 if referrer_id == referred_id:
                     logger.warning(f"User {referrer_id} tried to refer themselves")
                     return None
     
-                # Создаем реальную реферальную связь
                 referral = ReferralProgram(
                     referrer_id=referrer_id,
                     referred_id=referred_id,
@@ -871,7 +840,6 @@ class Database:
                 return None
 
     async def get_referral_by_referred_id(self, referred_id: int) -> Optional[ReferralProgram]:
-        """Get referral info by referred user ID"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select
@@ -884,7 +852,6 @@ class Database:
                 return None
 
     async def get_user_referrals(self, referrer_id: int) -> List[ReferralProgram]:
-        """Get all referrals for a user - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select, and_
@@ -892,7 +859,6 @@ class Database:
                     select(ReferralProgram).where(
                         and_(
                             ReferralProgram.referrer_id == referrer_id,
-                            # ИСПРАВЛЕНО: исключаем placeholder записи для хранения кодов
                             ReferralProgram.referred_id < 900000000,
                             ReferralProgram.referred_id > 0
                         )
@@ -906,17 +872,13 @@ class Database:
                 return []
 
     async def create_referral(self, referrer_id: int, referred_id: int, referral_code: str) -> Optional[ReferralProgram]:
-        """Create referral relationship - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select
         
-                # Специальный случай: создание кода для самого пользователя
                 if referred_id == 0:
-                    # Генерируем уникальный placeholder ID для хранения кода
-                    placeholder_id = 999999999 - referrer_id  # Уникальный ID на основе referrer_id
+                    placeholder_id = 999999999 - referrer_id  
             
-                    # Проверяем что код еще не существует для этого пользователя
                     existing = await session.execute(
                         select(ReferralProgram).where(
                             ReferralProgram.referrer_id == referrer_id,
@@ -929,10 +891,9 @@ class Database:
                         logger.info(f"Referral code already exists for user {referrer_id}")
                         return existing_referral
             
-                    # Создаем запись для хранения кода
                     referral = ReferralProgram(
                         referrer_id=referrer_id,
-                        referred_id=placeholder_id,  # Уникальный placeholder
+                        referred_id=placeholder_id,  
                         referral_code=referral_code
                     )
                     session.add(referral)
@@ -940,7 +901,6 @@ class Database:
                     await session.refresh(referral)
                     return referral
         
-                # Обычная логика для реальных рефералов
                 existing = await session.execute(
                     select(ReferralProgram).where(ReferralProgram.referred_id == referred_id)
                 )
@@ -948,7 +908,6 @@ class Database:
                     logger.info(f"User {referred_id} already has a referrer")
                     return None
     
-                # Проверяем что пользователь не приглашает сам себя
                 if referrer_id == referred_id:
                     logger.warning(f"User {referrer_id} tried to refer themselves")
                     return None
@@ -968,39 +927,35 @@ class Database:
                 return None
 
     async def get_user_referral_stats(self, user_id: int) -> Dict:
-        """Get user referral statistics - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select, func, and_, or_
         
                 placeholder_id = 999999999 - user_id
             
-                # Количество приглашенных (исключаем только конкретный placeholder этого пользователя)
                 referrals_count = await session.execute(
                     select(func.count(ReferralProgram.id))
                     .where(
                         and_(
                             ReferralProgram.referrer_id == user_id,
-                            ReferralProgram.referred_id != placeholder_id,  # Исключаем только наш placeholder
-                            ReferralProgram.referred_id != 0  # Исключаем нулевые записи
+                            ReferralProgram.referred_id != placeholder_id,  
+                            ReferralProgram.referred_id != 0  
                         )
                     )
                 )
         
-                # Количество тех, кто получил первую награду (исключаем placeholder)
                 active_referrals = await session.execute(
                     select(func.count(ReferralProgram.id))
                     .where(
                         and_(
                             ReferralProgram.referrer_id == user_id,
                             ReferralProgram.first_reward_paid == True,
-                            ReferralProgram.referred_id != placeholder_id,  # Исключаем только наш placeholder
-                            ReferralProgram.referred_id != 0  # Исключаем нулевые записи
+                            ReferralProgram.referred_id != placeholder_id,  
+                            ReferralProgram.referred_id != 0  
                         )
                     )
                 )
             
-                # Общий заработок
                 total_earned = await session.execute(
                     select(func.sum(ReferralEarning.amount))
                     .where(ReferralEarning.referrer_id == user_id)
@@ -1024,13 +979,11 @@ class Database:
                 }
 
     async def generate_unique_referral_code(self, user_id: int) -> str:
-        """Generate unique referral code for user"""
         async with self.session_factory() as session:
             try:
                 import secrets
                 import string
             
-                # Сначала пытаемся создать код на основе user_id
                 base_code = f"REF{user_id}"
             
                 from sqlalchemy import select
@@ -1041,7 +994,6 @@ class Database:
                 if not existing.scalar_one_or_none():
                     return base_code
             
-                # Если код уже существует, добавляем случайные символы
                 for _ in range(10):
                     random_suffix = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
                     code = f"REF{user_id}{random_suffix}"
@@ -1053,7 +1005,6 @@ class Database:
                     if not existing.scalar_one_or_none():
                         return code
             
-                # Если все еще не удалось, используем полностью случайный код
                 return f"REF{''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))}"
             
             except Exception as e:
@@ -1061,7 +1012,6 @@ class Database:
                 return f"REF{user_id}ERR"
 
     async def get_user_referrals(self, referrer_id: int) -> List[ReferralProgram]:
-        """Get all referrals for a user - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
         async with self.session_factory() as session:
             try:
                 from sqlalchemy import select, and_
@@ -1072,16 +1022,15 @@ class Database:
                     select(ReferralProgram).where(
                         and_(
                             ReferralProgram.referrer_id == referrer_id,
-                            ReferralProgram.referred_id != placeholder_id,  # Исключаем только наш placeholder
-                            ReferralProgram.referred_id != 0  # Исключаем нулевые записи
+                            ReferralProgram.referred_id != placeholder_id,
+                            ReferralProgram.referred_id != 0
                         )
-                    ).order_by(ReferralProgram.created_at.desc())  # Сортируем по дате создания
+                    ).order_by(ReferralProgram.created_at.desc()) 
                 )
                 referrals = list(result.scalars().all())
             
                 logger.info(f"Found {len(referrals)} real referrals for user {referrer_id} (excluding placeholder {placeholder_id})")
             
-                # Дополнительно логируем каждого реферала для отладки
                 for ref in referrals:
                     logger.debug(f"Referral: referrer={ref.referrer_id}, referred={ref.referred_id}, "
                                f"first_reward_paid={ref.first_reward_paid}, total_earned={ref.total_earned}")
@@ -1094,7 +1043,6 @@ class Database:
     async def create_referral_earning(self, referrer_id: int, referred_id: int, 
                                      amount: float, earning_type: str, 
                                      related_payment_id: Optional[int] = None) -> bool:
-        """Create referral earning record"""
         async with self.session_factory() as session:
             try:
                 earning = ReferralEarning(
@@ -1106,10 +1054,8 @@ class Database:
                 )
                 session.add(earning)
                 
-                # Обновляем общий заработок и статус первой награды в реферальной программе
                 from sqlalchemy import select, update
                 
-                # Найти запись реферальной программы
                 referral = await session.execute(
                     select(ReferralProgram).where(
                         ReferralProgram.referrer_id == referrer_id,
@@ -1119,10 +1065,8 @@ class Database:
                 referral_record = referral.scalar_one_or_none()
                 
                 if referral_record:
-                    # Обновляем total_earned
                     referral_record.total_earned += amount
                     
-                    # Если это первая награда, помечаем как выплаченную
                     if earning_type == 'first_reward':
                         referral_record.first_reward_paid = True
                         referral_record.first_reward_at = datetime.utcnow()
@@ -1136,3 +1080,357 @@ class Database:
                 logger.error(f"Error creating referral earning: {e}")
                 await session.rollback()
                 return False
+
+    async def get_promocode_by_id(self, promocode_id: int) -> Optional[Promocode]:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select
+                result = await session.execute(
+                    select(Promocode).where(Promocode.id == promocode_id)
+                )
+                return result.scalar_one_or_none()
+            except Exception as e:
+                logger.error(f"Error getting promocode by ID {promocode_id}: {e}")
+                return None
+
+    async def update_promocode(self, promocode: Promocode) -> Promocode:
+        async with self.session_factory() as session:
+            try:
+                await session.merge(promocode)
+                await session.commit()
+                return promocode
+            except Exception as e:
+                logger.error(f"Error updating promocode {promocode.id}: {e}")
+                await session.rollback()
+                raise
+
+    async def delete_promocode(self, promocode_id: int) -> bool:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import delete
+            
+                await session.execute(
+                    delete(PromocodeUsage).where(PromocodeUsage.promocode_id == promocode_id)
+                )
+            
+                result = await session.execute(
+                    delete(Promocode).where(Promocode.id == promocode_id)
+                )
+            
+                await session.commit()
+                return result.rowcount > 0
+            except Exception as e:
+                logger.error(f"Error deleting promocode {promocode_id}: {e}")
+                await session.rollback()
+                return False
+
+    async def get_regular_promocodes(self, include_inactive: bool = True) -> List[Promocode]:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, and_
+            
+                query = select(Promocode).where(~Promocode.code.startswith('REF'))
+            
+                if not include_inactive:
+                    query = query.where(Promocode.is_active == True)
+            
+                result = await session.execute(query.order_by(Promocode.created_at.desc()))
+                return list(result.scalars().all())
+            except Exception as e:
+                logger.error(f"Error getting regular promocodes: {e}")
+                return []
+
+    async def get_expired_promocodes(self) -> List[Promocode]:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, and_
+                from datetime import datetime
+            
+                result = await session.execute(
+                    select(Promocode).where(
+                        and_(
+                            Promocode.expires_at < datetime.utcnow(),
+                            ~Promocode.code.startswith('REF')
+                        )
+                    )
+                )
+                return list(result.scalars().all())
+            except Exception as e:
+                logger.error(f"Error getting expired promocodes: {e}")
+                return []
+
+    async def cleanup_expired_promocodes(self) -> int:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import delete, and_
+                from datetime import datetime
+            
+                expired_promos = await session.execute(
+                    select(Promocode.id).where(
+                        and_(
+                            Promocode.expires_at < datetime.utcnow(),
+                            ~Promocode.code.startswith('REF')
+                        )
+                    )
+                )
+                expired_ids = [row[0] for row in expired_promos.fetchall()]
+            
+                if not expired_ids:
+                    return 0
+            
+                await session.execute(
+                    delete(PromocodeUsage).where(PromocodeUsage.promocode_id.in_(expired_ids))
+                )
+            
+                result = await session.execute(
+                    delete(Promocode).where(Promocode.id.in_(expired_ids))
+                )
+            
+                await session.commit()
+                return result.rowcount
+            
+            except Exception as e:
+                logger.error(f"Error cleaning up expired promocodes: {e}")
+                await session.rollback()
+                return 0
+
+    async def deactivate_all_regular_promocodes(self) -> int:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import update, and_
+            
+                result = await session.execute(
+                    update(Promocode)
+                    .where(
+                        and_(
+                            ~Promocode.code.startswith('REF'),  # Исключаем реферальные
+                            Promocode.is_active == True
+                        )
+                    )
+                    .values(is_active=False)
+                )
+            
+                await session.commit()
+                return result.rowcount
+                
+            except Exception as e:
+                logger.error(f"Error deactivating all promocodes: {e}")
+                await session.rollback()
+                return 0
+
+    async def get_promocode_stats(self) -> Dict:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, func, and_
+                from datetime import datetime
+            
+                total_promos = await session.execute(
+                    select(func.count(Promocode.id)).where(~Promocode.code.startswith('REF'))
+                )
+                total_count = total_promos.scalar() or 0
+            
+                active_promos = await session.execute(
+                    select(func.count(Promocode.id)).where(
+                        and_(
+                            ~Promocode.code.startswith('REF'),
+                            Promocode.is_active == True
+                        )
+                    )
+                )
+                active_count = active_promos.scalar() or 0
+                
+                expired_promos = await session.execute(
+                    select(func.count(Promocode.id)).where(
+                        and_(
+                            ~Promocode.code.startswith('REF'),
+                            Promocode.expires_at < datetime.utcnow()
+                        )
+                    )
+                )
+                expired_count = expired_promos.scalar() or 0
+            
+                total_usage = await session.execute(
+                    select(func.sum(Promocode.used_count)).where(~Promocode.code.startswith('REF'))
+                )
+                usage_count = total_usage.scalar() or 0
+            
+                total_discount = await session.execute(
+                    select(func.sum(Promocode.discount_amount * Promocode.used_count)).where(
+                        ~Promocode.code.startswith('REF')
+                    )
+                )
+                discount_amount = total_discount.scalar() or 0.0
+            
+                top_promos = await session.execute(
+                    select(Promocode.code, Promocode.used_count, Promocode.discount_amount)
+                    .where(~Promocode.code.startswith('REF'))
+                    .order_by(Promocode.used_count.desc())
+                    .limit(5)
+                )
+                top_promocodes = list(top_promos.fetchall())
+            
+                return {
+                    'total_promocodes': total_count,
+                    'active_promocodes': active_count,
+                    'expired_promocodes': expired_count,
+                    'total_usage': usage_count,
+                    'total_discount_amount': discount_amount,
+                    'top_promocodes': top_promocodes
+                }
+            
+            except Exception as e:
+                logger.error(f"Error getting promocode stats: {e}")
+                return {
+                    'total_promocodes': 0,
+                    'active_promocodes': 0,
+                    'expired_promocodes': 0,
+                    'total_usage': 0,
+                    'total_discount_amount': 0.0,
+                    'top_promocodes': []
+                }
+
+    async def get_promocode_usage_by_id(self, promocode_id: int) -> List[PromocodeUsage]:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select
+            
+                result = await session.execute(
+                    select(PromocodeUsage)
+                    .where(PromocodeUsage.promocode_id == promocode_id)
+                    .order_by(PromocodeUsage.used_at.desc())
+                )
+                return list(result.scalars().all())
+            except Exception as e:
+                logger.error(f"Error getting promocode usage for {promocode_id}: {e}")
+                return []
+
+    async def create_lucky_game(self, user_id: int, chosen_number: int, 
+                               winning_numbers: List[int], is_winner: bool, 
+                               reward_amount: float = 0.0) -> Optional[LuckyGame]:
+        async with self.session_factory() as session:
+            try:
+                import json
+                
+                game = LuckyGame(
+                    user_id=user_id,
+                    chosen_number=chosen_number,
+                    winning_numbers=json.dumps(winning_numbers),
+                    is_winner=is_winner,
+                    reward_amount=reward_amount
+                )
+                session.add(game)
+                await session.commit()
+                await session.refresh(game)
+                return game
+            except Exception as e:
+                logger.error(f"Error creating lucky game: {e}")
+                await session.rollback()
+                return None
+
+    async def get_user_last_game_today(self, user_id: int) -> Optional[LuckyGame]:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, and_
+                from datetime import date
+                
+                today = date.today()
+                result = await session.execute(
+                    select(LuckyGame)
+                    .where(
+                        and_(
+                            LuckyGame.user_id == user_id,
+                            LuckyGame.played_at >= datetime.combine(today, datetime.min.time()),
+                            LuckyGame.played_at < datetime.combine(today + timedelta(days=1), datetime.min.time())
+                        )
+                    )
+                    .order_by(LuckyGame.played_at.desc())
+                    .limit(1)
+                )
+                return result.scalar_one_or_none()
+            except Exception as e:
+                logger.error(f"Error getting user last game today: {e}")
+                return None
+
+    async def get_user_game_stats(self, user_id: int) -> Dict[str, Any]:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, func, and_ 
+            
+                # Общее количество игр
+                games_count = await session.execute(
+                    select(func.count(LuckyGame.id))
+                    .where(LuckyGame.user_id == user_id)
+                )
+                total_games = games_count.scalar() or 0
+            
+                # Количество выигрышей
+                wins_count = await session.execute(
+                    select(func.count(LuckyGame.id))
+                    .where(
+                        and_(  # Вот здесь используется and_
+                            LuckyGame.user_id == user_id,
+                            LuckyGame.is_winner == True
+                        )
+                    )
+                )
+                total_wins = wins_count.scalar() or 0
+                
+                total_reward = await session.execute(
+                    select(func.sum(LuckyGame.reward_amount))
+                    .where(LuckyGame.user_id == user_id)
+                )
+                total_won = total_reward.scalar() or 0.0
+                
+                return {
+                    'total_games': total_games,
+                    'total_wins': total_wins,
+                    'total_won': total_won,
+                    'win_rate': (total_wins / total_games * 100) if total_games > 0 else 0
+                }
+            except Exception as e:
+                logger.error(f"Error getting user game stats: {e}")
+                return {
+                    'total_games': 0,
+                    'total_wins': 0, 
+                    'total_won': 0.0,
+                    'win_rate': 0
+                }
+
+    async def get_user_game_history(self, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select
+                import json
+                
+                result = await session.execute(
+                    select(LuckyGame)
+                    .where(LuckyGame.user_id == user_id)
+                    .order_by(LuckyGame.played_at.desc())
+                    .limit(limit)
+                )
+                games = result.scalars().all()
+                
+                history = []
+                for game in games:
+                    winning_numbers = json.loads(game.winning_numbers) if game.winning_numbers else []
+                    history.append({
+                        'id': game.id,
+                        'chosen_number': game.chosen_number,
+                        'winning_numbers': winning_numbers,
+                        'is_winner': game.is_winner,
+                        'reward_amount': game.reward_amount,
+                        'played_at': game.played_at
+                    })
+                
+                return history
+            except Exception as e:
+                logger.error(f"Error getting user game history: {e}")
+                return []
+
+    async def can_play_lucky_game_today(self, user_id: int) -> bool:
+        try:
+            last_game = await self.get_user_last_game_today(user_id)
+            return last_game is None
+        except Exception as e:
+            logger.error(f"Error checking can play today: {e}")
+            return True 
