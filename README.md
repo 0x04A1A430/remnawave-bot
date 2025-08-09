@@ -68,7 +68,7 @@ nano .env
 | `BOT_TOKEN` | Токен Telegram бота | `123456:ABC-DEF1234ghIkl-zyx` |
 | `BOT_USERNAME` | Username бота (без @) | `your_bot_username` |
 | `REMNAWAVE_URL` | URL панели RemnaWave | `https://panel.example.com` |
-| `REMNAWAVE_MODE` | Тип подключения | `remote` |
+| `REMNAWAVE_MODE` | Тип подключения | `remote/local` |
 | `REMNAWAVE_TOKEN` | API токен RemnaWave | `your_api_token` |
 | `ADMIN_IDS` | ID администраторов (через запятую) | `123456789,987654321` |
 
