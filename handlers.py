@@ -8,7 +8,7 @@ import logging
 import secrets
 from typing import Optional, Dict, Any
 
-from database import Database, User
+from database import Database, User, ReferralProgram
 from remnawave_api import RemnaWaveAPI
 from keyboards import *
 from translations import t
@@ -122,79 +122,6 @@ async def start_command(message: Message, state: FSMContext, db: Database, **kwa
     else:
         await show_main_menu(message, user.language, user.is_admin, user.telegram_id, db, config)
 
-
-async def process_referral_rewards(user_id: int, amount: float, payment_id: int, db: Database, bot=None):
-    try:
-        referral = await db.get_referral_by_referred_id(user_id)
-        
-        if not referral:
-            return
-        
-        user = await db.get_user_by_telegram_id(user_id)
-        if not user:
-            return
-        
-        if not referral.first_reward_paid and user.balance >= 300:
-            success = await db.create_referral_earning(
-                referrer_id=referral.referrer_id,
-                referred_id=user_id,
-                amount=150.0,
-                earning_type='first_reward',
-                related_payment_id=payment_id
-            )
-            
-            if success and bot:
-                try:
-                    await bot.send_message(
-                        referral.referrer_id,
-                        f"🎉 Поздравляем! Ваш реферал пополнил баланс на 300₽+\n\n"
-                        f"💰 Вам начислено 150₽ за приведенного друга!\n"
-                        f"Также вы будете получать 25% с каждого его платежа."
-                    )
-                    
-                    await bot.send_message(
-                        user_id,
-                        f"🎁 Бонус активирован! Вам начислено 150₽ за переход по реферальной ссылке!"
-                    )
-                    
-                    await db.add_balance(user_id, 150.0)
-                    await db.create_payment(
-                        user_id=user_id,
-                        amount=150.0,
-                        payment_type='referral',
-                        description='Бонус за переход по реферальной ссылке',
-                        status='completed'
-                    )
-                    
-                except Exception as e:
-                    logger.error(f"Failed to send referral notifications: {e}")
-        
-        if amount > 0: 
-            percentage_reward = amount * 0.25
-            
-            success = await db.create_referral_earning(
-                referrer_id=referral.referrer_id,
-                referred_id=user_id,
-                amount=percentage_reward,
-                earning_type='percentage',
-                related_payment_id=payment_id
-            )
-            
-            if success and bot and percentage_reward >= 1.0:
-                try:
-                    await bot.send_message(
-                        referral.referrer_id,
-                        f"💰 Реферальный доход!\n\n"
-                        f"Ваш реферал совершил платеж на {amount:.2f}₽\n"
-                        f"Вам начислено: {percentage_reward:.2f}₽ (25%)"
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to send percentage notification: {e}")
-    
-    except Exception as e:
-        logger.error(f"Error processing referral rewards: {e}")
-
-# Language selection 
 @router.callback_query(F.data.startswith("lang_"))
 async def language_callback(callback: CallbackQuery, state: FSMContext, db: Database, **kwargs):
     user = kwargs.get('user')
@@ -242,13 +169,12 @@ async def language_callback(callback: CallbackQuery, state: FSMContext, db: Data
 async def show_main_menu(message: Message, lang: str, is_admin: bool = False, user_id: int = None, db: Database = None, config: Config = None):
     try:
         show_trial = False
-        show_lucky_game = True  # По умолчанию показываем игру
+        show_lucky_game = True 
         
         if config and config.TRIAL_ENABLED and user_id and db:
             has_used = await db.has_used_trial(user_id)
             show_trial = not has_used
         
-        # Проверяем, включена ли игра удачи в конфиге
         if config:
             show_lucky_game = getattr(config, 'LUCKY_GAME_ENABLED', True)
         
@@ -546,7 +472,7 @@ async def handle_amount(message: Message, state: FSMContext, db: Database, **kwa
         payment = await db.create_payment(
             user_id=user.telegram_id,
             amount=amount,
-            payment_type='topup',
+            payment_type='topup', 
             description=f'Пополнение баланса на {amount} руб.'
         )
         
@@ -600,7 +526,7 @@ async def payment_history_callback(callback: CallbackQuery, db: Database, **kwar
             text = t('no_payments', user.language)
         else:
             text = "📊 " + t('payment_history', user.language) + ":\n\n"
-            for payment in payments[:10]:  # Show last 10 payments
+            for payment in payments[:10]: 
                 date_str = format_datetime(payment.created_at, user.language)
                 status = format_payment_status(payment.status, user.language)
                 text += t('payment_item', user.language,
@@ -800,14 +726,12 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
         
         payment = await db.create_payment(
             user_id=user.telegram_id,
-            amount=-subscription.price,
-            payment_type='subscription',
+            amount=-subscription.price, 
+            payment_type='subscription', 
             description=f'Покупка подписки: {subscription.name}',
             status='completed'
         )
         
-        bot = kwargs.get('bot')
-        await process_referral_rewards(user.telegram_id, subscription.price, payment.id, db, bot)
         
         success_text = f"✅ Подписка успешно создана!\n\n"
         success_text += f"📋 Подписка: {subscription.name}\n"
@@ -879,7 +803,7 @@ async def my_subscriptions_callback(callback: CallbackQuery, db: Database, **kwa
             
             subscription_name = subscription.name
             if subscription.is_imported or subscription.name == "Старая подписка":
-                subscription_name += " 🔄"  # Добавляем иконку импорта
+                subscription_name += " 🔄" 
             
             text += f"{i}. {subscription_name}\n"
             text += f"   {status}\n"
@@ -1153,13 +1077,14 @@ async def confirm_extend_subscription_callback(callback: CallbackQuery, db: Data
         user.balance -= subscription.price
         await db.update_user(user)
         
-        await db.create_payment(
+        payment = await db.create_payment(
             user_id=user.telegram_id,
-            amount=-subscription.price,
-            payment_type='subscription_extend',
+            amount=-subscription.price, 
+            payment_type='subscription_extend', 
             description=f'Продление подписки: {subscription.name}',
             status='completed'
         )
+        
         
         success_text = f"✅ Подписка успешно продлена!\n\n"
         success_text += f"📋 Подписка: {subscription.name}\n"
@@ -1423,7 +1348,7 @@ async def referral_program_callback(callback: CallbackQuery, db: Database, **kwa
         
         text += f"• Приведи друга и получи **{first_reward:.0f}₽** на баланс\n"
         text += f"• Твой друг получит **{referred_bonus:.0f}₽** после пополнения на {threshold:.0f}₽\n"  
-        text += f"• С каждого платежа друга ты получаешь **{percentage*100:.0f}%**\n\n"
+        text += f"• С каждого **пополнения баланса** друга ты получаешь **{percentage*100:.0f}%**\n\n"
         
         text += "**📊 Твоя статистика:**\n"
         text += f"• Приглашено: {stats['total_referrals']} человек\n"
