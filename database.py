@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import BigInteger, String, Float, DateTime, Boolean, Text, Integer, text, select, func, and_
+from sqlalchemy import BigInteger, String, Float, DateTime, Boolean, Text, Integer, text, select, func, and_, Column
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 import logging
@@ -56,7 +56,7 @@ class Subscription(Base):
     description: Mapped[Optional[str]] = mapped_column(Text)
     price: Mapped[float] = mapped_column(Float)
     duration_days: Mapped[int] = mapped_column(Integer)
-    traffic_limit_gb: Mapped[int] = mapped_column(Integer, default=0)  # 0 = unlimited
+    traffic_limit_gb: Mapped[int] = mapped_column(Integer, default=0) 
     squad_uuid: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -124,12 +124,23 @@ class StarPayment(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
-    stars_amount: Mapped[int] = mapped_column(Integer)  # Количество звезд
-    rub_amount: Mapped[float] = mapped_column(Float)    # Сумма в рублях
-    status: Mapped[str] = mapped_column(String(50), default='pending')  # pending, completed, cancelled
-    telegram_payment_charge_id: Mapped[Optional[str]] = mapped_column(String(255))  # ID платежа от Telegram
+    stars_amount: Mapped[int] = mapped_column(Integer)  
+    rub_amount: Mapped[float] = mapped_column(Float)    
+    status: Mapped[str] = mapped_column(String(50), default='pending')  
+    telegram_payment_charge_id: Mapped[Optional[str]] = mapped_column(String(255)) 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+class ServiceRule(Base):
+    __tablename__ = 'service_rules'
+    
+    id = Column(Integer, primary_key=True)
+    title = Column(String(200), nullable=False) 
+    content = Column(Text, nullable=False) 
+    page_order = Column(Integer, nullable=False, default=1) 
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 class Database:
     def __init__(self, database_url: str):
@@ -612,10 +623,8 @@ class Database:
     async def update_user_subscription(self, user_subscription: UserSubscription) -> bool:
         async with self.session_factory() as session:
             try:
-                # Устанавливаем время обновления
                 user_subscription.updated_at = datetime.utcnow()
             
-                # Обновляем подписку
                 await session.merge(user_subscription)
                 await session.commit()
                 return True
@@ -1216,7 +1225,7 @@ class Database:
                     update(Promocode)
                     .where(
                         and_(
-                            ~Promocode.code.startswith('REF'),  # Исключаем реферальные
+                            ~Promocode.code.startswith('REF'), 
                             Promocode.is_active == True
                         )
                     )
@@ -1607,4 +1616,202 @@ class Database:
                 logger.info("Successfully created star_payments table")
         except Exception as e:
             logger.error(f"Error creating star_payments table: {e}")
+            pass
+
+    async def create_service_rule(self, title: str, content: str, page_order: int = None) -> ServiceRule:
+        async with self.session_factory() as session:
+            if page_order is None:
+                result = await session.execute(
+                    select(func.max(ServiceRule.page_order)).where(ServiceRule.is_active == True)
+                )
+                max_order = result.scalar() or 0
+                page_order = max_order + 1
+        
+            rule = ServiceRule(
+                title=title,
+                content=content,
+                page_order=page_order
+            )
+            session.add(rule)
+            await session.commit()
+            await session.refresh(rule)
+            return rule
+
+    async def get_all_service_rules(self, active_only: bool = True) -> List[ServiceRule]:
+        async with self.session_factory() as session:
+            query = select(ServiceRule).order_by(ServiceRule.page_order)
+            if active_only:
+                query = query.where(ServiceRule.is_active == True)
+        
+            result = await session.execute(query)
+            return result.scalars().all()
+
+    async def get_service_rule_by_id(self, rule_id: int) -> Optional[ServiceRule]:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(ServiceRule).where(ServiceRule.id == rule_id)
+            )
+            return result.scalar_one_or_none()
+
+    async def update_service_rule(self, rule: ServiceRule) -> bool:
+        try:
+            async with self.session_factory() as session:
+                await session.merge(rule)
+                await session.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error updating service rule: {e}")
+            return False
+
+    async def delete_service_rule(self, rule_id: int) -> bool:
+        try:
+            async with self.session_factory() as session:
+                result = await session.execute(
+                    select(ServiceRule).where(ServiceRule.id == rule_id)
+                )
+                rule = result.scalar_one_or_none()
+                if rule:
+                    await session.delete(rule)
+                    await session.commit()
+                    return True
+                return False
+        except Exception as e:
+            logger.error(f"Error deleting service rule: {e}")
+            return False
+
+    async def reorder_service_rules(self, rule_orders: List[tuple]) -> bool:
+        try:
+            async with self.session_factory() as session:
+                for rule_id, new_order in rule_orders:
+                    await session.execute(
+                        update(ServiceRule).where(ServiceRule.id == rule_id).values(page_order=new_order)
+                    )
+                await session.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Error reordering service rules: {e}")
+            return False
+
+    async def migrate_service_rules_table(self):
+        try:
+            async with self.engine.begin() as conn:
+                db_type = str(conn.get_dialect().name).lower()
+            
+                if db_type == 'postgresql':
+                    await conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS service_rules (
+                            id SERIAL PRIMARY KEY,
+                            title VARCHAR(200) NOT NULL,
+                            content TEXT NOT NULL,
+                            page_order INTEGER NOT NULL DEFAULT 1,
+                            is_active BOOLEAN DEFAULT TRUE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                
+                    await conn.execute(text("""
+                        CREATE INDEX IF NOT EXISTS idx_service_rules_order ON service_rules(page_order)
+                    """))
+                    await conn.execute(text("""
+                        CREATE INDEX IF NOT EXISTS idx_service_rules_active ON service_rules(is_active)
+                    """))
+                    
+                    await conn.execute(text("""
+                        CREATE OR REPLACE FUNCTION update_updated_at_column()
+                        RETURNS TRIGGER AS $
+                        BEGIN
+                            NEW.updated_at = CURRENT_TIMESTAMP;
+                            RETURN NEW;
+                        END;
+                        $ language 'plpgsql'
+                    """))
+                    
+                    await conn.execute(text("""
+                        DROP TRIGGER IF EXISTS update_service_rules_updated_at ON service_rules
+                    """))
+                    
+                    await conn.execute(text("""
+                        CREATE TRIGGER update_service_rules_updated_at 
+                            BEFORE UPDATE ON service_rules 
+                            FOR EACH ROW 
+                            EXECUTE FUNCTION update_updated_at_column()
+                    """))
+                    
+                    check_result = await conn.execute(text("SELECT COUNT(*) FROM service_rules"))
+                    count = check_result.scalar()
+                    
+                    if count == 0:
+                        await conn.execute(text("""
+                            INSERT INTO service_rules (title, content, page_order) VALUES 
+                            ('Общие положения', 
+                            '**1. Общие положения**
+
+Настоящие Правила определяют условия использования VPN-сервиса.
+
+**1.1** Используя наш сервис, вы соглашаетесь с данными правилами.
+
+**1.2** Мы оставляем за собой право изменять правила в любое время.
+
+**1.3** Продолжение использования сервиса после изменений означает ваше согласие с новыми условиями.', 
+                            1),
+
+                            ('Права и обязанности', 
+                            '**2. Права и обязанности пользователей**
+
+**2.1 Права пользователя:**
+• Использовать VPN-сервис в соответствии с тарифным планом
+• Получать техническую поддержку
+• Защиту персональных данных
+
+**2.2 Обязанности пользователя:**
+• Не использовать сервис для незаконной деятельности
+• Не передавать данные доступа третьим лицам
+• Своевременно оплачивать услуги
+
+**2.3 Запрещается:**
+• Попытки взлома или нарушения работы сервиса
+• Спам и рассылка нежелательных сообщений
+• Нарушение авторских прав', 
+                            2),
+
+                            ('Оплата и возврат средств', 
+                            '**3. Условия оплаты и возврата**
+
+**3.1 Оплата:**
+• Все платежи производятся в российских рублях
+• Доступны различные способы оплаты
+• Средства зачисляются автоматически или в течение 24 часов
+
+**3.2 Возврат средств:**
+• Возврат возможен в течение 7 дней с момента оплаты
+• При технических проблемах возврат производится полностью
+• Обращайтесь в поддержку для возврата
+
+**3.3 Скидки и промокоды:**
+• Действуют ограничения по времени и количеству использований
+• Нельзя комбинировать несколько скидок', 
+                            3)
+                        """))
+                        logger.info("Inserted default service rules")
+                
+                else:
+                    await conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS service_rules (
+                            id SERIAL PRIMARY KEY,
+                            title VARCHAR(200) NOT NULL,
+                            content TEXT NOT NULL,
+                            page_order INTEGER NOT NULL DEFAULT 1,
+                            is_active BOOLEAN DEFAULT TRUE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                            
+                            INDEX idx_service_rules_order (page_order),
+                            INDEX idx_service_rules_active (is_active)
+                        )
+                    """))
+            
+                logger.info("Successfully created service_rules table")
+        except Exception as e:
+            logger.error(f"Error creating service_rules table: {e}")
             pass
