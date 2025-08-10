@@ -17,7 +17,6 @@ stars_router = Router()
 
 @stars_router.callback_query(F.data == "topup_stars")
 async def topup_stars_callback(callback: CallbackQuery, **kwargs):
-    """Показать варианты пополнения через звезды"""
     user = kwargs.get('user')
     config = kwargs.get('config')
     
@@ -70,7 +69,6 @@ async def topup_stars_callback(callback: CallbackQuery, **kwargs):
 
 @stars_router.callback_query(F.data.startswith("buy_stars_"))
 async def buy_stars_callback(callback: CallbackQuery, db: Database, **kwargs):
-    """Обработка покупки звезд"""
     user = kwargs.get('user')
     config = kwargs.get('config')
     bot = kwargs.get('bot')
@@ -117,8 +115,8 @@ async def buy_stars_callback(callback: CallbackQuery, db: Database, **kwargs):
                     f"💳 **Оплата через Telegram Stars**\n\n"
                     f"⭐ Количество звезд: {stars_amount}\n"
                     f"💰 Сумма пополнения: {rub_amount:.0f}₽\n\n"
-                    f"👆 Нажмите кнопку \"Оплатить\" в инвойсе выше\n\n"
-                    f"❌ Если передумали - нажмите кнопку ниже",
+                    f"👆 Нажмите кнопку \"Оплатить\" в инвойсе ниже⤵️\n\n"
+                    f"Если передумали - нажмите кнопку ниже \n\n❌ Отменить платеж",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="❌ Отменить платеж", callback_data=f"cancel_star_payment_{star_payment.id}")],
                         [InlineKeyboardButton(text="🔙 Назад к выбору", callback_data="topup_stars")]
@@ -130,7 +128,7 @@ async def buy_stars_callback(callback: CallbackQuery, db: Database, **kwargs):
                     f"💳 **Оплата через Telegram Stars**\n\n"
                     f"⭐ Количество звезд: {stars_amount}\n"
                     f"💰 Сумма пополнения: {rub_amount:.0f}₽\n\n"
-                    f"👆 Нажмите кнопку \"Оплатить\" в инвойсе выше",
+                    f"👆 Нажмите кнопку \"Оплатить\" в инвойсе ниже⤵️",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="❌ Отменить платеж", callback_data=f"cancel_star_payment_{star_payment.id}")],
                         [InlineKeyboardButton(text="🔙 Назад к выбору", callback_data="topup_stars")]
@@ -164,7 +162,6 @@ async def buy_stars_callback(callback: CallbackQuery, db: Database, **kwargs):
 
 @stars_router.pre_checkout_query()
 async def pre_checkout_query_handler(pre_checkout_query: PreCheckoutQuery, db: Database, **kwargs):
-    """Обработка pre-checkout запроса для звезд"""
     try:
         if not pre_checkout_query.invoice_payload.startswith("star_payment_"):
             await pre_checkout_query.answer(ok=False, error_message="Неверный формат платежа")
@@ -194,7 +191,6 @@ async def pre_checkout_query_handler(pre_checkout_query: PreCheckoutQuery, db: D
 
 @stars_router.message(F.successful_payment)
 async def successful_payment_handler(message: Message, db: Database, **kwargs):
-    """Обработка успешного платежа звездами"""
     user = kwargs.get('user')
     bot = kwargs.get('bot')
     
@@ -267,7 +263,6 @@ async def successful_payment_handler(message: Message, db: Database, **kwargs):
         await message.answer("❌ Произошла ошибка при обработке платежа. Обратитесь в поддержку.")
 
 def get_stars_rate_info(stars_rates: Dict[int, float], lang: str = 'ru') -> str:
-    """Получить информацию о курсах звезд"""
     if not stars_rates:
         return "Курсы не настроены"
     
@@ -284,6 +279,7 @@ def get_stars_rate_info(stars_rates: Dict[int, float], lang: str = 'ru') -> str:
 async def cancel_star_payment_callback(callback: CallbackQuery, db: Database, **kwargs):
     user = kwargs.get('user')
     config = kwargs.get('config')
+    bot = kwargs.get('bot') 
     
     if not user:
         await callback.answer("❌ Ошибка пользователя")
@@ -311,30 +307,101 @@ async def cancel_star_payment_callback(callback: CallbackQuery, db: Database, **
         if success:
             await callback.answer("✅ Платеж отменен", show_alert=True)
             
-            if config and config.STARS_RATES:
+            if bot:
+                invoice_deleted = False
                 try:
-                    await callback.message.edit_text(
-                        "❌ Платеж отменен\n\n⭐ **Пополнение через Telegram Stars**\n\nВыберите другой вариант:",
-                        reply_markup=stars_topup_keyboard(config.STARS_RATES, user.language),
-                        parse_mode='Markdown'
+                    await bot.delete_message(
+                        chat_id=callback.message.chat.id,
+                        message_id=callback.message.message_id
                     )
-                except TelegramBadRequest:
-                    await callback.message.answer(
-                        "❌ Платеж отменен\n\n⭐ **Пополнение через Telegram Stars**\n\nВыберите другой вариант:",
-                        reply_markup=stars_topup_keyboard(config.STARS_RATES, user.language),
-                        parse_mode='Markdown'
-                    )
+                    invoice_deleted = True
+                    logger.info(f"Deleted invoice message {callback.message.message_id} for cancelled payment {payment_id}")
+                except TelegramBadRequest as e:
+                    logger.warning(f"Failed to delete invoice message: {e}")
+                except Exception as e:
+                    logger.error(f"Unexpected error deleting invoice message: {e}")
+                
+                if invoice_deleted:
+                    try:
+                        if config and config.STARS_RATES:
+                            text = "❌ Платеж отменен\n\n⭐ **Пополнение через Telegram Stars**\n\n"
+                            text += "🚀 **Преимущества:**\n"
+                            text += "• Мгновенное зачисление\n"
+                            text += "• Безопасные платежи через Telegram\n"
+                            text += "• Без комиссий и скрытых платежей\n\n"
+                            text += "💎 **Доступные варианты:**\n"
+                            
+                            sorted_rates = sorted(config.STARS_RATES.items())
+                            for stars, rubles in sorted_rates:
+                                if stars >= 500:
+                                    bonus_text = " 🔥 Выгодно!"
+                                elif stars >= 250:
+                                    bonus_text = " 💎 Хорошо!"
+                                else:
+                                    bonus_text = ""
+                                text += f"• {stars} ⭐ → {rubles:.0f}₽{bonus_text}\n"
+                            
+                            text += f"\n💡 Выберите другой вариант:"
+                            
+                            await bot.send_message(
+                                chat_id=callback.message.chat.id,
+                                text=text,
+                                reply_markup=stars_topup_keyboard(config.STARS_RATES, user.language),
+                                parse_mode='Markdown'
+                            )
+                        else:
+                            await bot.send_message(
+                                chat_id=callback.message.chat.id,
+                                text="❌ Платеж отменен\n\n💰 Управление балансом:",
+                                reply_markup=balance_keyboard(user.language)
+                            )
+                    except Exception as e:
+                        logger.error(f"Failed to send menu after invoice deletion: {e}")
+                else:
+                    try:
+                        if config and config.STARS_RATES:
+                            await callback.message.edit_text(
+                                "❌ Платеж отменен\n\n⭐ **Пополнение через Telegram Stars**\n\nВыберите другой вариант:",
+                                reply_markup=stars_topup_keyboard(config.STARS_RATES, user.language),
+                                parse_mode='Markdown'
+                            )
+                        else:
+                            await callback.message.edit_text(
+                                "❌ Платеж отменен",
+                                reply_markup=balance_keyboard(user.language)
+                            )
+                    except TelegramBadRequest:
+                        try:
+                            if config and config.STARS_RATES:
+                                await bot.send_message(
+                                    chat_id=callback.message.chat.id,
+                                    text="❌ Платеж отменен\n\n⭐ **Пополнение через Telegram Stars**\n\nВыберите другой вариант:",
+                                    reply_markup=stars_topup_keyboard(config.STARS_RATES, user.language),
+                                    parse_mode='Markdown'
+                                )
+                            else:
+                                await bot.send_message(
+                                    chat_id=callback.message.chat.id,
+                                    text="❌ Платеж отменен",
+                                    reply_markup=balance_keyboard(user.language)
+                                )
+                        except Exception as e:
+                            logger.error(f"Failed to send fallback message: {e}")
             else:
                 try:
-                    await callback.message.edit_text(
-                        "❌ Платеж отменен",
-                        reply_markup=balance_keyboard(user.language)
-                    )
+                    if config and config.STARS_RATES:
+                        await callback.message.edit_text(
+                            "❌ Платеж отменен\n\n⭐ **Пополнение через Telegram Stars**\n\nВыберите другой вариант:",
+                            reply_markup=stars_topup_keyboard(config.STARS_RATES, user.language),
+                            parse_mode='Markdown'
+                        )
+                    else:
+                        await callback.message.edit_text(
+                            "❌ Платеж отменен",
+                            reply_markup=balance_keyboard(user.language)
+                        )
                 except TelegramBadRequest:
-                    await callback.message.answer(
-                        "❌ Платеж отменен",
-                        reply_markup=balance_keyboard(user.language)
-                    )
+                    logger.warning("Failed to edit message when bot instance not available")
             
             log_user_action(user.telegram_id, "stars_payment_cancelled", f"Payment ID: {payment_id}")
         else:
