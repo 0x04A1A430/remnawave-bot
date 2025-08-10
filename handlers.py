@@ -14,6 +14,7 @@ from keyboards import *
 from translations import t
 from utils import *
 from config import *
+from stars_handlers import stars_router
 import base64
 import json
 from referral_utils import (
@@ -415,13 +416,25 @@ async def balance_callback(callback: CallbackQuery, **kwargs):
 @router.callback_query(F.data == "topup_balance")
 async def topup_balance_callback(callback: CallbackQuery, **kwargs):
     user = kwargs.get('user')
+    config = kwargs.get('config')
+    
     if not user:
         await callback.answer("❌ Ошибка пользователя")
         return
     
+    # Проверяем, включены ли Telegram Stars
+    stars_enabled = config and config.STARS_ENABLED and config.STARS_RATES
+    
+    text = t('topup_balance', user.language)
+    
+    if stars_enabled:
+        text += "\n\n⭐ **Новинка!** Теперь можно пополнять баланс через Telegram Stars!"
+        text += "\n💎 Быстро, безопасно, без комиссий!"
+    
     await callback.message.edit_text(
-        t('topup_balance', user.language),
-        reply_markup=topup_keyboard(user.language)
+        text,
+        reply_markup=topup_keyboard(user.language),
+        parse_mode='Markdown'
     )
 
 @router.callback_query(F.data == "topup_card")
@@ -520,21 +533,56 @@ async def payment_history_callback(callback: CallbackQuery, db: Database, **kwar
         return
     
     try:
+        # Получаем обычные платежи
         payments = await db.get_user_payments(user.telegram_id)
         
-        if not payments:
+        # Получаем платежи через звезды
+        star_payments = await db.get_user_star_payments(user.telegram_id, 5)
+        
+        if not payments and not star_payments:
             text = t('no_payments', user.language)
         else:
             text = "📊 " + t('payment_history', user.language) + ":\n\n"
-            for payment in payments[:10]: 
-                date_str = format_datetime(payment.created_at, user.language)
-                status = format_payment_status(payment.status, user.language)
-                text += t('payment_item', user.language,
-                    date=date_str,
-                    amount=payment.amount,
-                    description=payment.description,
-                    status=status
-                ) + "\n"
+            
+            # Объединяем и сортируем все платежи по дате
+            all_payments = []
+            
+            for payment in payments[:10]:
+                all_payments.append({
+                    'type': 'regular',
+                    'date': payment.created_at,
+                    'amount': payment.amount,
+                    'description': payment.description,
+                    'status': payment.status
+                })
+            
+            for star_payment in star_payments:
+                if star_payment.status == 'completed':
+                    all_payments.append({
+                        'type': 'stars',
+                        'date': star_payment.completed_at or star_payment.created_at,
+                        'amount': star_payment.rub_amount,
+                        'description': f'Пополнение через Stars ({star_payment.stars_amount} ⭐)',
+                        'status': star_payment.status,
+                        'stars': star_payment.stars_amount
+                    })
+            
+            # Сортируем по дате (новые сначала)
+            all_payments.sort(key=lambda x: x['date'], reverse=True)
+            
+            # Показываем последние 10 платежей
+            for payment in all_payments[:10]:
+                date_str = format_datetime(payment['date'], user.language)
+                status = format_payment_status(payment['status'], user.language)
+                
+                if payment['type'] == 'stars':
+                    text += f"⭐ +{payment['amount']:.0f}₽ ({payment['stars']} ⭐)\n"
+                else:
+                    amount_str = f"+{payment['amount']}" if payment['amount'] > 0 else str(payment['amount'])
+                    text += f"💳 {amount_str}₽\n"
+                
+                text += f"   📅 {date_str} | {status}\n"
+                text += f"   📝 {payment['description']}\n\n"
         
         await callback.message.edit_text(
             text,
