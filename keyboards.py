@@ -35,7 +35,8 @@ def main_menu_keyboard(lang: str = 'ru', is_admin: bool = False, show_trial: boo
         [
             InlineKeyboardButton(text="💬 " + t('support', lang), callback_data="support")
         ],
-        [InlineKeyboardButton(text="🌐 " + t('change_language', lang), callback_data="change_language")]
+        [InlineKeyboardButton(text="🌐 " + t('change_language', lang), callback_data="change_language")],
+        [InlineKeyboardButton(text="📜 Правила сервиса", callback_data="service_rules")]
     ])
 
     if is_admin:
@@ -162,6 +163,7 @@ def admin_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="👥 Рефералы", callback_data="admin_referrals")  # НОВАЯ КНОПКА
         ],
         [
+            InlineKeyboardButton(text="📜 Правила сервиса", callback_data="admin_rules"),  # НОВАЯ КНОПКА
             InlineKeyboardButton(text="🖥 Система RemnaWave", callback_data="admin_system")
         ],
         [
@@ -613,19 +615,15 @@ def topup_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     return keyboard
 
 def stars_topup_keyboard(stars_rates: Dict[int, float], lang: str = 'ru') -> InlineKeyboardMarkup:
-    """Клавиатура с вариантами пополнения через звезды"""
     buttons = []
     
-    # Сортируем по количеству звезд
     sorted_rates = sorted(stars_rates.items())
     
-    # Создаем кнопки по 2 в ряд
     for i in range(0, len(sorted_rates), 2):
         row = []
         for j in range(2):
             if i + j < len(sorted_rates):
                 stars, rubles = sorted_rates[i + j]
-                # Определяем выгодность предложения
                 if stars >= 500:
                     emoji = "🔥"  # Выгодное предложение
                 elif stars >= 250:
@@ -646,8 +644,78 @@ def stars_topup_keyboard(stars_rates: Dict[int, float], lang: str = 'ru') -> Inl
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def stars_payment_keyboard(stars_amount: int, rub_amount: float, lang: str = 'ru') -> InlineKeyboardMarkup:
-    """Клавиатура подтверждения платежа через звезды (не используется в send_invoice)"""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❌ Отмена", callback_data="topup_stars")]
+    ])
+    return keyboard
+
+def service_rules_keyboard(current_page: int, total_pages: int, lang: str = 'ru') -> InlineKeyboardMarkup:
+    buttons = []
+    
+    if total_pages > 1:
+        nav_row = []
+        
+        if current_page > 0:
+            nav_row.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"rules_page_{current_page - 1}"))
+        
+        nav_row.append(InlineKeyboardButton(text=f"{current_page + 1}/{total_pages}", callback_data="noop"))
+        
+        if current_page < total_pages - 1:
+            nav_row.append(InlineKeyboardButton(text="Вперед ➡️", callback_data=f"rules_page_{current_page + 1}"))
+        
+        buttons.append(nav_row)
+    
+    buttons.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def admin_rules_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📋 Список правил", callback_data="admin_rules_list")],
+        [InlineKeyboardButton(text="➕ Добавить страницу", callback_data="admin_rules_create")],
+        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="admin_panel")]
+    ])
+    return keyboard
+
+def admin_rules_list_keyboard(rules, lang: str = 'ru') -> InlineKeyboardMarkup:
+    buttons = []
+    
+    for rule in rules:
+        status_emoji = "🟢" if rule.is_active else "🔴"
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"{status_emoji} {rule.page_order}. {rule.title}",
+                callback_data=f"admin_rule_view_{rule.id}"
+            )
+        ])
+    
+    buttons.extend([
+        [InlineKeyboardButton(text="➕ Добавить страницу", callback_data="admin_rules_create")],
+        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="admin_rules")]
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def admin_rule_edit_keyboard(rule_id: int, lang: str = 'ru') -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✏️ Редактировать заголовок", callback_data=f"admin_rule_edit_title_{rule_id}"),
+            InlineKeyboardButton(text="📝 Редактировать содержимое", callback_data=f"admin_rule_edit_content_{rule_id}")
+        ],
+        [
+            InlineKeyboardButton(text="🔄 Изменить порядок", callback_data=f"admin_rule_edit_order_{rule_id}"),
+            InlineKeyboardButton(text="🟢/🔴 Вкл/Выкл", callback_data=f"admin_rule_toggle_{rule_id}")
+        ],
+        [InlineKeyboardButton(text="🗑 Удалить", callback_data=f"admin_rule_delete_{rule_id}")],
+        [InlineKeyboardButton(text="🔙 К списку", callback_data="admin_rules_list")]
+    ])
+    return keyboard
+
+def admin_rule_delete_confirm_keyboard(rule_id: int, lang: str = 'ru') -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Да, удалить", callback_data=f"admin_rule_confirm_delete_{rule_id}"),
+            InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_rule_view_{rule_id}")
+        ]
     ])
     return keyboard
