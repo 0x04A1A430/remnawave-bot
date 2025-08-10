@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 from typing import List, Dict
 
-from database import Database, User
+from database import Database, User, ReferralProgram, ReferralEarning
 from remnawave_api import RemnaWaveAPI
 from keyboards import *
 from translations import t
@@ -6285,6 +6285,8 @@ async def referral_statistics_callback(callback: CallbackQuery, user: User, db: 
         async with db.session_factory() as session:
             from sqlalchemy import select, func, and_
             
+            from database import ReferralProgram, ReferralEarning
+            
             total_referrals = await session.execute(
                 select(func.count(ReferralProgram.id)).where(
                     and_(
@@ -6401,6 +6403,8 @@ async def list_referrers_callback(callback: CallbackQuery, user: User, db: Datab
         async with db.session_factory() as session:
             from sqlalchemy import select, func, and_, case
             
+            from database import ReferralProgram
+            
             top_referrers = await session.execute(
                 select(
                     ReferralProgram.referrer_id,
@@ -6432,7 +6436,6 @@ async def list_referrers_callback(callback: CallbackQuery, user: User, db: Datab
                 referrer = await db.get_user_by_telegram_id(referrer_id)
                 
                 if referrer:
-                    # Формируем имя
                     display_name = ""
                     if referrer.first_name:
                         display_name = referrer.first_name[:15]
@@ -6479,6 +6482,8 @@ async def referral_payments_callback(callback: CallbackQuery, user: User, db: Da
     try:
         async with db.session_factory() as session:
             from sqlalchemy import select, desc
+            
+            from database import ReferralEarning
             
             recent_earnings = await session.execute(
                 select(ReferralEarning)
@@ -6594,3 +6599,253 @@ async def referral_settings_callback(callback: CallbackQuery, user: User, **kwar
             "❌ Ошибка получения настроек",
             reply_markup=back_keyboard("admin_referrals", user.language)
         )
+
+@admin_router.callback_query(F.data == "admin_stars_payments")
+async def admin_stars_payments_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    """Управление платежами через Stars"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    await callback.message.edit_text(
+        "⭐ Управление Telegram Stars платежами",
+        reply_markup=admin_stars_keyboard(user.language)
+    )
+
+def admin_stars_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Клавиатура управления Stars"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика Stars", callback_data="admin_stars_stats")],
+        [InlineKeyboardButton(text="📋 Последние платежи", callback_data="admin_stars_recent")],
+        [InlineKeyboardButton(text="⚙️ Настройки курсов", callback_data="admin_stars_settings")],
+        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="admin_balance")]
+    ])
+    return keyboard
+
+@admin_router.callback_query(F.data == "admin_stars_stats")
+async def admin_stars_stats_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    """Статистика Stars платежей"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        async with db.session_factory() as session:
+            from sqlalchemy import text
+            
+            stats_query = await session.execute(text("""
+                SELECT 
+                    COUNT(*) as total_payments,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_payments,
+                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_payments,
+                    COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_payments,
+                    SUM(CASE WHEN status = 'completed' THEN stars_amount ELSE 0 END) as total_stars,
+                    SUM(CASE WHEN status = 'completed' THEN rub_amount ELSE 0 END) as total_rubles
+                FROM star_payments
+            """))
+            
+            stats = stats_query.fetchone()
+            
+            daily_query = await session.execute(text("""
+                SELECT 
+                    DATE(created_at) as payment_date,
+                    COUNT(*) as daily_count,
+                    SUM(CASE WHEN status = 'completed' THEN rub_amount ELSE 0 END) as daily_amount
+                FROM star_payments 
+                WHERE created_at >= (CURRENT_DATE - INTERVAL '7 days')
+                GROUP BY DATE(created_at)
+                ORDER BY payment_date DESC
+            """))
+            
+            daily_stats = daily_query.fetchall()
+        
+        text = "📊 Статистика Telegram Stars\n\n"
+        
+        if stats:
+            text += "💫 Общая статистика:\n"
+            text += f"• Всего платежей: {stats.total_payments or 0}\n"
+            text += f"• Завершенных: {stats.completed_payments or 0}\n"
+            text += f"• В ожидании: {stats.pending_payments or 0}\n"
+            text += f"• Отмененных: {stats.cancelled_payments or 0}\n\n"
+            
+            text += f"💰 Финансовая статистика:\n"
+            text += f"• Всего звезд получено: {stats.total_stars or 0} ⭐\n"
+            text += f"• Общая сумма: {stats.total_rubles or 0:.0f}₽\n\n"
+            
+            if stats.total_payments and stats.total_payments > 0:
+                conversion = (stats.completed_payments or 0) / stats.total_payments * 100
+                text += f"📈 Конверсия: {conversion:.1f}%\n\n"
+        
+        if daily_stats:
+            text += "📅 За последние 7 дней:\n"
+            for day in daily_stats:
+                date_str = day.payment_date.strftime('%d.%m')
+                text += f"• {date_str}: {day.daily_count} платежей на {day.daily_amount:.0f}₽\n"
+        else:
+            text += "📅 За последние 7 дней: нет данных\n"
+        
+        text += f"\n🕐 Обновлено: {format_datetime(datetime.now(), user.language)}"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_stars_stats")],
+            [InlineKeyboardButton(text="📋 Последние платежи", callback_data="admin_stars_recent")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_stars_payments")]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting stars stats: {e}")
+        try:
+            await callback.message.edit_text(
+                "❌ Ошибка получения статистики",
+                reply_markup=admin_stars_keyboard(user.language)
+            )
+        except Exception as edit_error:
+            await callback.answer("❌ Ошибка получения статистики", show_alert=True)
+
+
+@admin_router.callback_query(F.data == "admin_stars_recent")
+async def admin_stars_recent_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    """Последние Stars платежи"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        async with db.session_factory() as session:
+            from sqlalchemy import select, desc
+            from database import StarPayment, User
+            
+            query = select(
+                StarPayment,
+                User.username,
+                User.first_name
+            ).outerjoin(
+                User, StarPayment.user_id == User.telegram_id
+            ).order_by(
+                desc(StarPayment.created_at)
+            ).limit(15)
+            
+            result = await session.execute(query)
+            payments_data = result.fetchall()
+        
+        if not payments_data:
+            text = "📋 История Stars платежей пуста"
+        else:
+            text = f"📋 Последние Stars платежи ({len(payments_data)}):\n\n"
+            
+            for row in payments_data:
+                payment = row[0]  
+                username = row[1]  
+                first_name = row[2] 
+                
+                if payment.status == 'completed':
+                    status_emoji = "✅"
+                elif payment.status == 'pending':
+                    status_emoji = "⏳"
+                elif payment.status == 'cancelled':
+                    status_emoji = "❌"
+                else:
+                    status_emoji = "❓"
+                
+                user_name = "Unknown"
+                if first_name:
+                    user_name = first_name.replace('*', '').replace('_', '').replace('[', '').replace(']', '').replace('`', '')
+                if username:
+                    clean_username = username.replace('*', '').replace('_', '').replace('[', '').replace(']', '').replace('`', '')
+                    if user_name != "Unknown":
+                        user_name += f" (@{clean_username})"
+                    else:
+                        user_name = f"@{clean_username}"
+                
+                payment_date = payment.completed_at if payment.completed_at else payment.created_at
+                date_str = payment_date.strftime('%d.%m %H:%M')
+                
+                text += f"{status_emoji} {payment.stars_amount} ⭐ → {payment.rub_amount:.0f}₽\n"
+                text += f"   👤 {user_name} (ID: {payment.user_id})\n"
+                text += f"   📅 {date_str}\n"
+                
+                if payment.telegram_payment_charge_id:
+                    charge_short = payment.telegram_payment_charge_id[:20] + "..."
+                    text += f"   🧾 {charge_short}\n"
+                
+                text += "\n"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_stars_recent")],
+            [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stars_stats")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_stars_payments")]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting recent stars payments: {e}")
+        try:
+            await callback.message.edit_text(
+                "❌ Ошибка получения платежей",
+                reply_markup=admin_stars_keyboard(user.language)
+            )
+        except Exception as edit_error:
+            await callback.answer("❌ Ошибка получения платежей", show_alert=True)
+
+@admin_router.callback_query(F.data == "admin_stars_settings")
+async def admin_stars_settings_callback(callback: CallbackQuery, user: User, **kwargs):
+    """Настройки курсов Stars"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    config = kwargs.get('config')
+    
+    text = "⚙️ Настройки Telegram Stars\n\n"
+    
+    if config and config.STARS_ENABLED:
+        text += "✅ Статус: Включено\n\n"
+        
+        if config.STARS_RATES:
+            text += "💱 Текущие курсы:\n"
+            sorted_rates = sorted(config.STARS_RATES.items())
+            for stars, rubles in sorted_rates:
+                rate_per_star = rubles / stars
+                text += f"• {stars} ⭐ = {rubles:.0f}₽ (курс: {rate_per_star:.2f}₽/⭐)\n"
+            
+            text += "\n📈 Анализ выгодности:\n"
+            base_rate = sorted_rates[0][1] / sorted_rates[0][0] if sorted_rates else 0
+            for stars, rubles in sorted_rates:
+                current_rate = rubles / stars
+                if current_rate < base_rate:
+                    savings = (base_rate - current_rate) / base_rate * 100
+                    text += f"• {stars} ⭐: выгода {savings:.1f}%\n"
+        else:
+            text += "❌ Курсы не настроены\n"
+    else:
+        text += "❌ Статус: Отключено\n"
+    
+    text += "\n⚙️ Настройка через .env файл:\n"
+    text += "\nSTARS_ENABLED=true\n"
+    text += "STARS_100_RATE=150\n"
+    text += "STARS_150_RATE=220\n"
+    text += "STARS_250_RATE=400\n"
+    text += "STARS_350_RATE=500\n"
+    text += "STARS_500_RATE=800\n"
+    text += "STARS_750_RATE=1150\n"
+    text += "STARS_1000_RATE=1500\n"
+    
+    text += "\n💡 Рекомендации:\n"
+    text += "• Большие пакеты должны быть выгоднее\n"
+    text += "• Курс должен покрывать комиссии Telegram\n"
+    text += "• Регулярно анализируйте конверсию\n"
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stars_stats")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_stars_payments")]
+    ])
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=keyboard
+    )
