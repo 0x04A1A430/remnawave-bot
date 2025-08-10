@@ -147,12 +147,9 @@ class SubscriptionMonitorService:
                 break
             except Exception as e:
                 logger.error(f"❌ Error in daily loop: {e}", exc_info=True)
-                await asyncio.sleep(3600)  # Wait 1 hour before retry
+                await asyncio.sleep(3600)  
 
     async def delete_expired_trial_subscriptions(self, force: bool = False) -> Dict[str, Any]:
-        """
-        Удаляет истекшие триальные подписки
-        """
         try:
             logger.info("🗑️ Starting deletion of expired trial subscriptions...")
             
@@ -179,12 +176,10 @@ class SubscriptionMonitorService:
                     for user_sub in user_subs:
                         results['total_checked'] += 1
                         
-                        # Получаем информацию о подписке
                         subscription = await self.db.get_subscription_by_id(user_sub.subscription_id)
                         if not subscription or not subscription.is_trial:
                             continue
                         
-                        # Проверяем, истекла ли подписка достаточно давно
                         expires_at_utc = user_sub.expires_at
                         if expires_at_utc.tzinfo is None:
                             expires_at_utc = expires_at_utc.replace(tzinfo=None)
@@ -192,12 +187,11 @@ class SubscriptionMonitorService:
                             expires_at_utc = expires_at_utc.astimezone(timezone.utc).replace(tzinfo=None)
                         
                         if expires_at_utc > cutoff_date and not force:
-                            continue  # Подписка еще не готова к удалению
+                            continue  
                         
                         logger.info(f"🗑️ Deleting expired trial subscription '{subscription.name}' for user {user.telegram_id} "
                                   f"(expired: {expires_at_utc}, cutoff: {cutoff_date})")
                         
-                        # Удаляем из RemnaWave API
                         api_deleted = False
                         if self.api and user_sub.short_uuid:
                             try:
@@ -213,7 +207,6 @@ class SubscriptionMonitorService:
                                 results['errors'].append(f"API error for {user_sub.short_uuid}: {str(api_error)}")
                                 logger.error(f"❌ API error deleting {user_sub.short_uuid}: {api_error}")
                         
-                        # Удаляем из базы данных
                         db_deleted = await self.db.delete_user_subscription(user_sub.id)
                         if db_deleted:
                             results['deleted_from_db'] += 1
@@ -248,9 +241,6 @@ class SubscriptionMonitorService:
             }
 
     async def delete_expired_regular_subscriptions(self, force: bool = False) -> Dict[str, Any]:
-        """
-        Удаляет истекшие обычные подписки
-        """
         try:
             logger.info("🗑️ Starting deletion of expired regular subscriptions...")
             
@@ -277,16 +267,13 @@ class SubscriptionMonitorService:
                     for user_sub in user_subs:
                         results['total_checked'] += 1
                         
-                        # Получаем информацию о подписке
                         subscription = await self.db.get_subscription_by_id(user_sub.subscription_id)
                         if not subscription or subscription.is_trial:
                             continue
                         
-                        # Пропускаем импортированные подписки (они не удаляются)
                         if getattr(subscription, 'is_imported', False) or subscription.name == "Старая подписка":
                             continue
                         
-                        # Проверяем, истекла ли подписка достаточно давно
                         expires_at_utc = user_sub.expires_at
                         if expires_at_utc.tzinfo is None:
                             expires_at_utc = expires_at_utc.replace(tzinfo=None)
@@ -294,12 +281,11 @@ class SubscriptionMonitorService:
                             expires_at_utc = expires_at_utc.astimezone(timezone.utc).replace(tzinfo=None)
                         
                         if expires_at_utc > cutoff_date and not force:
-                            continue  # Подписка еще не готова к удалению
+                            continue 
                         
                         logger.info(f"🗑️ Deleting expired regular subscription '{subscription.name}' for user {user.telegram_id} "
                                   f"(expired: {expires_at_utc}, cutoff: {cutoff_date})")
                         
-                        # Удаляем из RemnaWave API
                         api_deleted = False
                         if self.api and user_sub.short_uuid:
                             try:
@@ -315,7 +301,6 @@ class SubscriptionMonitorService:
                                 results['errors'].append(f"API error for {user_sub.short_uuid}: {str(api_error)}")
                                 logger.error(f"❌ API error deleting {user_sub.short_uuid}: {api_error}")
                         
-                        # Удаляем из базы данных
                         db_deleted = await self.db.delete_user_subscription(user_sub.id)
                         if db_deleted:
                             results['deleted_from_db'] += 1
@@ -536,7 +521,6 @@ class SubscriptionMonitorService:
             deactivated_count = await self.deactivate_expired_subscriptions()
             logger.info(f"🔄 Deactivated {deactivated_count} expired subscriptions")
             
-            # Автоматическое удаление, если включено в конфиге
             deleted_trials = 0
             deleted_regular = 0
             if getattr(self.config, 'AUTO_DELETE_ENABLED', False):
