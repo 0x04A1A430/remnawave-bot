@@ -7,6 +7,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from lucky_game import lucky_game_router
+from stars_handlers import stars_router
 
 print("🚀 Запуск бота...")
 print(f"📍 Рабочая директория: {os.getcwd()}")
@@ -96,6 +97,24 @@ class BotApplication:
         self._setup_dispatcher()
         
         await self._init_monitor_service()
+
+        if self.config.STARS_ENABLED:
+            logger.info("✅ Telegram Stars пополнение включено")
+            logger.info(f"📊 Настроенные курсы: {self.config.STARS_RATES}")
+        
+            if not self.config.STARS_RATES or len(self.config.STARS_RATES) == 0:
+                logger.warning("⚠️  STARS_RATES пустые! Telegram Stars будут недоступны")
+                self.config.STARS_ENABLED = False
+            else:
+                valid_rates = all(
+                    isinstance(stars, int) and isinstance(rubles, (int, float)) and stars > 0 and rubles > 0
+                    for stars, rubles in self.config.STARS_RATES.items()
+                )
+                if not valid_rates:
+                    logger.warning("⚠️  Неверные STARS_RATES! Telegram Stars будут недоступны")
+                    self.config.STARS_ENABLED = False
+        else:
+            logger.info("❌ Telegram Stars пополнение отключено")
         
     async def _init_database(self):
         max_retries = 3
@@ -167,6 +186,7 @@ class BotApplication:
         self.dp.include_router(router)
         self.dp.include_router(admin_router)
         self.dp.include_router(lucky_game_router)
+        self.dp.include_router(stars_router)
         
     async def _init_monitor_service(self):
         try:
