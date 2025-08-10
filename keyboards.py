@@ -410,9 +410,6 @@ def trial_subscription_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
 def admin_monitor_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статус сервиса", callback_data="monitor_status")],
-        [InlineKeyboardButton(text="🔄 Принудительная проверка", callback_data="monitor_force_check")],
-        [InlineKeyboardButton(text="⚰️ Деактивировать истекшие", callback_data="monitor_deactivate_expired")],
-        [InlineKeyboardButton(text="👤 Тест для пользователя", callback_data="monitor_test_user")],
         [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="admin_panel")]
     ])
     return keyboard
