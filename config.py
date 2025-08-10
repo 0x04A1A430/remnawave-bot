@@ -4,50 +4,35 @@ from typing import List, Dict
 
 @dataclass
 class Config:
-    # Bot configuration
     BOT_TOKEN: str
     BOT_USERNAME: str
-    
-    # Database
     DATABASE_URL: str
-    
-    # RemnaWave API
     REMNAWAVE_URL: str
     REMNAWAVE_TOKEN: str
     SUBSCRIPTION_BASE_URL: str
-    
-    # Admin configuration
     ADMIN_IDS: List[int]
     SUPPORT_USERNAME: str
     DEFAULT_LANGUAGE: str
-    
-    # Trial subscription
     TRIAL_ENABLED: bool
     TRIAL_DURATION_DAYS: int
     TRIAL_TRAFFIC_GB: int
     TRIAL_SQUAD_UUID: str
-    
-    # Referral system 
     REFERRAL_FIRST_REWARD: float
     REFERRAL_REFERRED_BONUS: float
     REFERRAL_THRESHOLD: float
     REFERRAL_PERCENTAGE: float
-    
-    # Конфигурация мониторинга подписок
     MONITOR_ENABLED: bool = True
-    MONITOR_CHECK_INTERVAL: int = 3600  # 1 час
-    MONITOR_DAILY_CHECK_HOUR: int = 10  # 10:00 утра
-    MONITOR_WARNING_DAYS: int = 3  # предупреждать за 3 дня
-    
-    # Новые настройки для удаления истекших подписок
-    DELETE_EXPIRED_TRIAL_DAYS: int = 1  # Удалять триальные через 1 день после истечения
-    DELETE_EXPIRED_REGULAR_DAYS: int = 7  # Удалять обычные через 7 дней после истечения
-    AUTO_DELETE_ENABLED: bool = False  # Автоматическое удаление при ежедневной проверке
+    MONITOR_CHECK_INTERVAL: int = 3600  
+    MONITOR_DAILY_CHECK_HOUR: int = 10  
+    MONITOR_WARNING_DAYS: int = 3  
+    DELETE_EXPIRED_TRIAL_DAYS: int = 1  
+    DELETE_EXPIRED_REGULAR_DAYS: int = 7  
+    AUTO_DELETE_ENABLED: bool = False 
 
     LUCKY_GAME_ENABLED: bool = True
-    LUCKY_GAME_REWARD: float = 50.0  # Размер награды за выигрыш
-    LUCKY_GAME_NUMBERS: int = 30     # Общее количество чисел (1-30)
-    LUCKY_GAME_WINNING_COUNT: int = 3  # Количество выигрышных чисел
+    LUCKY_GAME_REWARD: float = 50.0 
+    LUCKY_GAME_NUMBERS: int = 30    
+    LUCKY_GAME_WINNING_COUNT: int = 3 
     
     STARS_ENABLED: bool = True
     STARS_RATES: Dict[int, float] = None  
@@ -79,7 +64,6 @@ def load_config() -> Config:
             return default
     
     def parse_stars_rates() -> Dict[int, float]:
-        """Парсинг курсов звезд из переменных окружения"""
         default_rates = {
             100: 150.0,
             150: 220.0,
@@ -106,49 +90,32 @@ def load_config() -> Config:
     return Config(
         BOT_TOKEN=os.getenv('BOT_TOKEN', ''),
         BOT_USERNAME=os.getenv('BOT_USERNAME', ''),
-        
-        # Database
         DATABASE_URL=os.getenv('DATABASE_URL', 'sqlite+aiosqlite:///bot.db'),
-        
-        # RemnaWave API
         REMNAWAVE_URL=os.getenv('REMNAWAVE_URL', ''),
         REMNAWAVE_TOKEN=os.getenv('REMNAWAVE_TOKEN', ''),
         SUBSCRIPTION_BASE_URL=os.getenv('SUBSCRIPTION_BASE_URL', ''),
-        
-        # Admin configuration
         ADMIN_IDS=parse_admin_ids(os.getenv('ADMIN_IDS', '')),
         SUPPORT_USERNAME=os.getenv('SUPPORT_USERNAME', 'support'),
         DEFAULT_LANGUAGE=os.getenv('DEFAULT_LANGUAGE', 'ru'),
-        
-        # Trial subscription
         TRIAL_ENABLED=get_bool('TRIAL_ENABLED', False),
         TRIAL_DURATION_DAYS=get_int('TRIAL_DURATION_DAYS', 3),
         TRIAL_TRAFFIC_GB=get_int('TRIAL_TRAFFIC_GB', 2),
         TRIAL_SQUAD_UUID=os.getenv('TRIAL_SQUAD_UUID', ''),
-        
-        # Referral system
         REFERRAL_FIRST_REWARD=get_float('REFERRAL_FIRST_REWARD', 150.0),
         REFERRAL_REFERRED_BONUS=get_float('REFERRAL_REFERRED_BONUS', 150.0), 
         REFERRAL_THRESHOLD=get_float('REFERRAL_THRESHOLD', 300.0),
         REFERRAL_PERCENTAGE=get_float('REFERRAL_PERCENTAGE', 0.25),
-        
         MONITOR_ENABLED=get_bool('MONITOR_ENABLED', True),
-        MONITOR_CHECK_INTERVAL=get_int('MONITOR_CHECK_INTERVAL', 3600),  # 1 час по умолчанию
-        MONITOR_DAILY_CHECK_HOUR=get_int('MONITOR_DAILY_CHECK_HOUR', 10),  # 10 утра
-        MONITOR_WARNING_DAYS=get_int('MONITOR_WARNING_DAYS', 3),  # за 3 дня
-
-        # Новые настройки для удаления истекших подписок
+        MONITOR_CHECK_INTERVAL=get_int('MONITOR_CHECK_INTERVAL', 3600),  
+        MONITOR_DAILY_CHECK_HOUR=get_int('MONITOR_DAILY_CHECK_HOUR', 10),  
+        MONITOR_WARNING_DAYS=get_int('MONITOR_WARNING_DAYS', 3),  
         DELETE_EXPIRED_TRIAL_DAYS=get_int('DELETE_EXPIRED_TRIAL_DAYS', 1),
         DELETE_EXPIRED_REGULAR_DAYS=get_int('DELETE_EXPIRED_REGULAR_DAYS', 7),
         AUTO_DELETE_ENABLED=get_bool('AUTO_DELETE_ENABLED', False),
-
-        # Игра удачи
         LUCKY_GAME_ENABLED=get_bool('LUCKY_GAME_ENABLED', True),
         LUCKY_GAME_REWARD=get_float('LUCKY_GAME_REWARD', 50.0),
         LUCKY_GAME_NUMBERS=get_int('LUCKY_GAME_NUMBERS', 30),
         LUCKY_GAME_WINNING_COUNT=get_int('LUCKY_GAME_WINNING_COUNT', 3),
-        
-        # Telegram Stars
         STARS_ENABLED=get_bool('STARS_ENABLED', True),
         STARS_RATES=parse_stars_rates()
     )
