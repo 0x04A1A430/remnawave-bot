@@ -192,6 +192,7 @@ def admin_balance_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💸 Пополнить баланс пользователю", callback_data="admin_add_balance")],
         [InlineKeyboardButton(text="📊 История платежей", callback_data="admin_payment_history")],
+        [InlineKeyboardButton(text="⭐ Telegram Stars", callback_data="admin_stars_payments")],
         [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="admin_panel")]
     ])
     return keyboard
@@ -602,3 +603,51 @@ def lucky_game_result_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📈 История игр", callback_data="lucky_game_history")],
         [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
     ])
+
+def topup_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⭐ Telegram Stars", callback_data="topup_stars")],
+        [InlineKeyboardButton(text="👨‍💼 " + t('topup_support', lang), callback_data="topup_support")],
+        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="balance")]
+    ])
+    return keyboard
+
+def stars_topup_keyboard(stars_rates: Dict[int, float], lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Клавиатура с вариантами пополнения через звезды"""
+    buttons = []
+    
+    # Сортируем по количеству звезд
+    sorted_rates = sorted(stars_rates.items())
+    
+    # Создаем кнопки по 2 в ряд
+    for i in range(0, len(sorted_rates), 2):
+        row = []
+        for j in range(2):
+            if i + j < len(sorted_rates):
+                stars, rubles = sorted_rates[i + j]
+                # Определяем выгодность предложения
+                if stars >= 500:
+                    emoji = "🔥"  # Выгодное предложение
+                elif stars >= 250:
+                    emoji = "💎"  # Хорошее предложение
+                else:
+                    emoji = "⭐"  # Базовое предложение
+                
+                button_text = f"{emoji} {stars} ⭐ → {rubles:.0f}₽"
+                row.append(InlineKeyboardButton(
+                    text=button_text,
+                    callback_data=f"buy_stars_{stars}"
+                ))
+        buttons.append(row)
+    
+    # Добавляем кнопку назад
+    buttons.append([InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="topup_balance")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def stars_payment_keyboard(stars_amount: int, rub_amount: float, lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Клавиатура подтверждения платежа через звезды (не используется в send_invoice)"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="topup_stars")]
+    ])
+    return keyboard
