@@ -14,23 +14,23 @@ class ReferralProgram(Base):
     __tablename__ = 'referral_programs'
     
     id: Mapped[int] = mapped_column(primary_key=True)
-    referrer_id: Mapped[int] = mapped_column(BigInteger, index=True)  # Кто пригласил
-    referred_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)  # Кто был приглашен
-    referral_code: Mapped[str] = mapped_column(String(20), index=True)  # Промокод реферера
-    first_reward_paid: Mapped[bool] = mapped_column(Boolean, default=False)  # Выплачена ли разовая награда
-    total_earned: Mapped[float] = mapped_column(Float, default=0.0)  # Всего заработано
+    referrer_id: Mapped[int] = mapped_column(BigInteger, index=True)  
+    referred_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True) 
+    referral_code: Mapped[str] = mapped_column(String(20), index=True)  
+    first_reward_paid: Mapped[bool] = mapped_column(Boolean, default=False) 
+    total_earned: Mapped[float] = mapped_column(Float, default=0.0) 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    first_reward_at: Mapped[Optional[datetime]] = mapped_column(DateTime)  # Когда выплатили первую награду
+    first_reward_at: Mapped[Optional[datetime]] = mapped_column(DateTime) 
 
 class ReferralEarning(Base):
     __tablename__ = 'referral_earnings'
     
     id: Mapped[int] = mapped_column(primary_key=True)
-    referrer_id: Mapped[int] = mapped_column(BigInteger, index=True)  # Кто получил награду
-    referred_id: Mapped[int] = mapped_column(BigInteger, index=True)  # От кого получена награда
-    amount: Mapped[float] = mapped_column(Float)  # Размер награды
-    earning_type: Mapped[str] = mapped_column(String(20))  # 'first_reward', 'percentage'
-    related_payment_id: Mapped[Optional[int]] = mapped_column(Integer)  # Связанный платеж
+    referrer_id: Mapped[int] = mapped_column(BigInteger, index=True) 
+    referred_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    amount: Mapped[float] = mapped_column(Float) 
+    earning_type: Mapped[str] = mapped_column(String(20)) 
+    related_payment_id: Mapped[Optional[int]] = mapped_column(Integer)  
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 class User(Base):
@@ -114,7 +114,7 @@ class LuckyGame(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, index=True)
     chosen_number: Mapped[int] = mapped_column(Integer)
-    winning_numbers: Mapped[str] = mapped_column(String(255))  # JSON строка с выигрышными номерами
+    winning_numbers: Mapped[str] = mapped_column(String(255))  
     is_winner: Mapped[bool] = mapped_column(Boolean, default=False)
     reward_amount: Mapped[float] = mapped_column(Float, default=0.0)
     played_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
