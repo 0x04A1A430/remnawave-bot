@@ -25,7 +25,6 @@ lucky_game_router = Router()
 
 @lucky_game_router.callback_query(F.data == "lucky_game")
 async def lucky_game_menu_callback(callback: CallbackQuery, db: Database, **kwargs):
-    """Главное меню игры удачи"""
     user = kwargs.get('user')
     config = kwargs.get('config')
     
@@ -34,15 +33,12 @@ async def lucky_game_menu_callback(callback: CallbackQuery, db: Database, **kwar
         return
     
     try:
-        # Получаем настройки игры из конфига
         reward_amount = getattr(config, 'LUCKY_GAME_REWARD', 50.0)
         numbers_count = getattr(config, 'LUCKY_GAME_NUMBERS', 30)
         winning_numbers = getattr(config, 'LUCKY_GAME_WINNING_COUNT', 3)
         
-        # Проверяем, можно ли играть сегодня
         can_play, next_game_time = await check_can_play_today(db, user.telegram_id)
         
-        # Получаем статистику игр пользователя
         games_played, total_won, win_count = await get_user_game_stats(db, user.telegram_id)
         
         text = "🎰 **Проверь свою удачу!**\n\n"
@@ -61,13 +57,11 @@ async def lucky_game_menu_callback(callback: CallbackQuery, db: Database, **kwar
             win_rate = (win_count / games_played) * 100
             text += f"• Процент побед: {win_rate:.1f}%\n"
         
-        # Создаем клавиатуру
         buttons = []
         
         if can_play:
             buttons.append([InlineKeyboardButton(text="🎲 Играть!", callback_data="start_lucky_game")])
         else:
-            # Вычисляем оставшееся время
             now = datetime.utcnow()
             time_left = next_game_time - now
             hours_left = int(time_left.total_seconds() // 3600)
@@ -108,19 +102,16 @@ async def start_lucky_game_callback(callback: CallbackQuery, db: Database, state
         return
     
     try:
-        # Проверяем, можно ли играть
         can_play, next_game_time = await check_can_play_today(db, user.telegram_id)
         
         if not can_play:
             await callback.answer("⏰ Вы уже играли сегодня! Приходите завтра.", show_alert=True)
             return
         
-        # Получаем настройки
         numbers_count = getattr(config, 'LUCKY_GAME_NUMBERS', 30)
         winning_numbers = getattr(config, 'LUCKY_GAME_WINNING_COUNT', 3)
         reward_amount = getattr(config, 'LUCKY_GAME_REWARD', 50.0)
         
-        # Генерируем выигрышные числа заранее и сохраняем в состоянии
         winning_nums = random.sample(range(1, numbers_count + 1), winning_numbers)
         
         await state.update_data(
@@ -135,7 +126,6 @@ async def start_lucky_game_callback(callback: CallbackQuery, db: Database, state
         text += f"🍀 Удачных чисел: {winning_numbers} из {numbers_count}\n\n"
         text += "Нажмите на число, чтобы испытать удачу!"
         
-        # Создаем кнопки с числами (5 в ряд)
         buttons = []
         for i in range(0, numbers_count, 5):
             row = []
@@ -175,24 +165,18 @@ async def choose_number_callback(callback: CallbackQuery, db: Database, state: F
     try:
         chosen_number = int(callback.data.split("_")[2])
         
-        # Получаем данные из состояния
         state_data = await state.get_data()
         winning_numbers = state_data['winning_numbers']
         reward_amount = state_data['reward_amount']
         numbers_count = state_data['numbers_count']
         
-        # Проверяем, выиграл ли пользователь
         is_winner = chosen_number in winning_numbers
         
-        # Сохраняем результат игры в БД
         await save_game_result(db, user.telegram_id, chosen_number, winning_numbers, is_winner, reward_amount if is_winner else 0.0)
         
-        # Формируем сообщение с результатом
         if is_winner:
-            # Начисляем награду
             await db.add_balance(user.telegram_id, reward_amount)
             
-            # Создаем платеж
             await db.create_payment(
                 user_id=user.telegram_id,
                 amount=reward_amount,
@@ -211,7 +195,6 @@ async def choose_number_callback(callback: CallbackQuery, db: Database, state: F
             text += f"🍀 Выигрышные числа: **{', '.join(map(str, sorted(winning_numbers)))}**\n\n"
             text += "🔄 Попробуйте завтра!"
         
-        # Показываем все выигрышные числа
         winning_nums_str = ', '.join(map(str, sorted(winning_numbers)))
         text += f"\n🎲 Сегодняшние удачные числа: {winning_nums_str}"
         text += f"\n\n⏰ Следующая игра будет доступна завтра!"
@@ -227,7 +210,6 @@ async def choose_number_callback(callback: CallbackQuery, db: Database, state: F
             parse_mode='Markdown'
         )
         
-        # Логируем действие
         log_user_action(user.telegram_id, "lucky_game_played", 
                        f"Number: {chosen_number}, Winner: {is_winner}, Reward: {reward_amount if is_winner else 0}")
         
@@ -239,7 +221,6 @@ async def choose_number_callback(callback: CallbackQuery, db: Database, state: F
 
 @lucky_game_router.callback_query(F.data == "lucky_game_history")
 async def lucky_game_history_callback(callback: CallbackQuery, db: Database, **kwargs):
-    """Показать историю игр пользователя"""
     user = kwargs.get('user')
     
     if not user:
@@ -247,7 +228,6 @@ async def lucky_game_history_callback(callback: CallbackQuery, db: Database, **k
         return
     
     try:
-        # Получаем последние 10 игр
         games = await get_user_game_history(db, user.telegram_id, limit=10)
         
         if not games:
@@ -289,8 +269,7 @@ async def lucky_game_history_callback(callback: CallbackQuery, db: Database, **k
 async def noop_callback(callback: CallbackQuery, **kwargs):
     """Пустая операция для неактивных кнопок"""
     await callback.answer()
-
-# Вспомогательные функции
+    
 
 async def check_can_play_today(db: Database, user_id: int) -> tuple[bool, Optional[datetime]]:
     """Проверяет, может ли пользователь играть сегодня"""
@@ -298,7 +277,6 @@ async def check_can_play_today(db: Database, user_id: int) -> tuple[bool, Option
         can_play = await db.can_play_lucky_game_today(user_id)
         
         if not can_play:
-            # Вычисляем время следующей игры (завтра в 00:00)
             now = datetime.utcnow()
             tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
             return False, tomorrow
