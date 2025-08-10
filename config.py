@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict
 
 @dataclass
 class Config:
@@ -48,6 +48,9 @@ class Config:
     LUCKY_GAME_REWARD: float = 50.0  # Размер награды за выигрыш
     LUCKY_GAME_NUMBERS: int = 30     # Общее количество чисел (1-30)
     LUCKY_GAME_WINNING_COUNT: int = 3  # Количество выигрышных чисел
+    
+    STARS_ENABLED: bool = True
+    STARS_RATES: Dict[int, float] = None  
 
 def load_config() -> Config:
     
@@ -75,8 +78,32 @@ def load_config() -> Config:
         except (ValueError, TypeError):
             return default
     
+    def parse_stars_rates() -> Dict[int, float]:
+        """Парсинг курсов звезд из переменных окружения"""
+        default_rates = {
+            100: 150.0,
+            150: 220.0,
+            250: 400.0,
+            350: 500.0,
+            500: 800.0,
+            750: 1150.0,
+            1000: 1500.0
+        }
+        
+        custom_rates = {}
+        
+        for stars in [100, 150, 250, 350, 500, 750, 1000]:
+            env_key = f"STARS_{stars}_RATE"
+            rate = get_float(env_key, 0.0)
+            if rate > 0:
+                custom_rates[stars] = rate
+        
+        if custom_rates:
+            return custom_rates
+        
+        return default_rates
+    
     return Config(
-        # Bot configuration
         BOT_TOKEN=os.getenv('BOT_TOKEN', ''),
         BOT_USERNAME=os.getenv('BOT_USERNAME', ''),
         
@@ -119,7 +146,11 @@ def load_config() -> Config:
         LUCKY_GAME_ENABLED=get_bool('LUCKY_GAME_ENABLED', True),
         LUCKY_GAME_REWARD=get_float('LUCKY_GAME_REWARD', 50.0),
         LUCKY_GAME_NUMBERS=get_int('LUCKY_GAME_NUMBERS', 30),
-        LUCKY_GAME_WINNING_COUNT=get_int('LUCKY_GAME_WINNING_COUNT', 3)
+        LUCKY_GAME_WINNING_COUNT=get_int('LUCKY_GAME_WINNING_COUNT', 3),
+        
+        # Telegram Stars
+        STARS_ENABLED=get_bool('STARS_ENABLED', True),
+        STARS_RATES=parse_stars_rates()
     )
 
 def debug_environment():
@@ -129,7 +160,8 @@ def debug_environment():
         'REFERRAL_FIRST_REWARD', 'REFERRAL_THRESHOLD',
         'MONITOR_ENABLED', 'MONITOR_CHECK_INTERVAL',
         'DELETE_EXPIRED_TRIAL_DAYS', 'DELETE_EXPIRED_REGULAR_DAYS', 'AUTO_DELETE_ENABLED',
-        'LUCKY_GAME_ENABLED', 'LUCKY_GAME_REWARD' 
+        'LUCKY_GAME_ENABLED', 'LUCKY_GAME_REWARD',
+        'STARS_ENABLED', 'STARS_100_RATE', 'STARS_500_RATE', 'STARS_1000_RATE'
     ]
     
     print("📋 Environment variables:")
