@@ -38,6 +38,11 @@ class Config:
     MONITOR_CHECK_INTERVAL: int = 3600  # 1 час
     MONITOR_DAILY_CHECK_HOUR: int = 10  # 10:00 утра
     MONITOR_WARNING_DAYS: int = 3  # предупреждать за 3 дня
+    
+    # Новые настройки для удаления истекших подписок
+    DELETE_EXPIRED_TRIAL_DAYS: int = 1  # Удалять триальные через 1 день после истечения
+    DELETE_EXPIRED_REGULAR_DAYS: int = 7  # Удалять обычные через 7 дней после истечения
+    AUTO_DELETE_ENABLED: bool = False  # Автоматическое удаление при ежедневной проверке
 
     LUCKY_GAME_ENABLED: bool = True
     LUCKY_GAME_REWARD: float = 50.0  # Размер награды за выигрыш
@@ -105,6 +110,11 @@ def load_config() -> Config:
         MONITOR_DAILY_CHECK_HOUR=get_int('MONITOR_DAILY_CHECK_HOUR', 10),  # 10 утра
         MONITOR_WARNING_DAYS=get_int('MONITOR_WARNING_DAYS', 3),  # за 3 дня
 
+        # Новые настройки для удаления истекших подписок
+        DELETE_EXPIRED_TRIAL_DAYS=get_int('DELETE_EXPIRED_TRIAL_DAYS', 1),
+        DELETE_EXPIRED_REGULAR_DAYS=get_int('DELETE_EXPIRED_REGULAR_DAYS', 7),
+        AUTO_DELETE_ENABLED=get_bool('AUTO_DELETE_ENABLED', False),
+
         # Игра удачи
         LUCKY_GAME_ENABLED=get_bool('LUCKY_GAME_ENABLED', True),
         LUCKY_GAME_REWARD=get_float('LUCKY_GAME_REWARD', 50.0),
@@ -118,6 +128,7 @@ def debug_environment():
         'REMNAWAVE_URL', 'REMNAWAVE_TOKEN', 'ADMIN_IDS',
         'REFERRAL_FIRST_REWARD', 'REFERRAL_THRESHOLD',
         'MONITOR_ENABLED', 'MONITOR_CHECK_INTERVAL',
+        'DELETE_EXPIRED_TRIAL_DAYS', 'DELETE_EXPIRED_REGULAR_DAYS', 'AUTO_DELETE_ENABLED',
         'LUCKY_GAME_ENABLED', 'LUCKY_GAME_REWARD' 
     ]
     
