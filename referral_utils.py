@@ -5,9 +5,17 @@ from database import ReferralProgram, ReferralEarning
 
 logger = logging.getLogger(__name__)
 
-async def process_referral_rewards(user_id: int, amount: float, payment_id: int, db: Database, bot=None):
+async def process_referral_rewards(user_id: int, amount: float, payment_id: int, db: Database, bot=None, payment_type: str = None):
     try:
         import os
+        
+        if payment_type not in ['topup', 'admin_topup']:
+            logger.debug(f"Skipping referral rewards for payment type: {payment_type}")
+            return
+        
+        if amount <= 0:
+            logger.debug(f"Skipping referral rewards for non-positive amount: {amount}")
+            return
         
         threshold = float(os.getenv('REFERRAL_THRESHOLD', '300.0'))
         first_reward = float(os.getenv('REFERRAL_FIRST_REWARD', '150.0'))
@@ -25,7 +33,7 @@ async def process_referral_rewards(user_id: int, amount: float, payment_id: int,
             logger.error(f"User {user_id} not found")
             return
         
-        logger.info(f"Processing referral rewards for user {user_id}, amount {amount}, referrer {referral.referrer_id}")
+        logger.info(f"Processing referral rewards for topup: user {user_id}, amount {amount}, referrer {referral.referrer_id}")
         
         if not referral.first_reward_paid and user.balance >= threshold:
             logger.info(f"Processing first reward for referral {referral.id} (threshold: {threshold}, reward: {first_reward})")
@@ -57,7 +65,7 @@ async def process_referral_rewards(user_id: int, amount: float, payment_id: int,
                             referral.referrer_id,
                             f"🎉 Поздравляем! Ваш реферал пополнил баланс на {threshold}₽+\n\n"
                             f"💰 Вам начислено {first_reward}₽ за приведенного друга!\n"
-                            f"Теперь вы будете получать {percentage*100:.0f}% с каждого его следующего платежа."
+                            f"Теперь вы будете получать {percentage*100:.0f}% с каждого его пополнения баланса."
                         )
                         
                         await bot.send_message(
@@ -81,7 +89,7 @@ async def process_referral_rewards(user_id: int, amount: float, payment_id: int,
             else:
                 logger.error(f"Failed to create first reward earning")
         
-        if amount > 0 and referral.first_reward_paid: 
+        if referral.first_reward_paid:
             percentage_reward = amount * percentage
             
             if percentage_reward >= 0.01: 
@@ -91,7 +99,7 @@ async def process_referral_rewards(user_id: int, amount: float, payment_id: int,
                     user_id=referral.referrer_id,
                     amount=percentage_reward,
                     payment_type='referral',
-                    description=f'{percentage*100:.0f}% дохода от реферала ID:{user_id}',
+                    description=f'{percentage*100:.0f}% от пополнения реферала ID:{user_id}',
                     status='completed'
                 )
                 
@@ -106,19 +114,19 @@ async def process_referral_rewards(user_id: int, amount: float, payment_id: int,
                 if success:
                     logger.info(f"Percentage reward paid: {percentage_reward:.2f}₽ ({percentage*100:.0f}%) to referrer {referral.referrer_id}")
                     
-                    if bot and percentage_reward >= 1.0: 
+                    if bot and percentage_reward >= 1.0:
                         try:
                             await bot.send_message(
                                 referral.referrer_id,
                                 f"💰 Реферальный доход!\n\n"
-                                f"Ваш реферал совершил платеж на {amount:.2f}₽\n"
+                                f"Ваш реферал пополнил баланс на {amount:.2f}₽\n"
                                 f"Вам начислено: {percentage_reward:.2f}₽ ({percentage*100:.0f}%)"
                             )
                         except Exception as e:
                             logger.error(f"Failed to send percentage notification: {e}")
                 else:
                     logger.error(f"Failed to create percentage earning")
-        elif amount > 0 and not referral.first_reward_paid:
+        else:
             logger.info(f"Skipping percentage reward for user {user_id} - first reward not yet paid")
     
     except Exception as e:
@@ -166,7 +174,7 @@ async def create_referral_from_start_param(user_telegram_id: int, start_param: s
                             referrer_id,
                             f"🎉 Отлично! По вашей ссылке зарегистрировался новый пользователь!\n\n"
                             f"Вы получите {first_reward:.0f}₽ после того, как он пополнит баланс на {threshold:.0f}₽.\n"
-                            f"И будете получать {percentage*100:.0f}% с каждого его платежа!"
+                            f"И будете получать {percentage*100:.0f}% с каждого его пополнения баланса!"
                         )
                 except Exception as e:
                     logger.error(f"Failed to notify referrer: {e}")
