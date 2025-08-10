@@ -52,7 +52,7 @@ class RemnaWaveAPI:
                     logger.debug(f"HTML Response (first 500 chars): {response_text[:500]}")
                     return None
                 
-                if response.status in [200, 201]:
+                if response.status in [200, 201, 204]:
                     if response_text:
                         try:
                             return await response.json()
@@ -60,7 +60,7 @@ class RemnaWaveAPI:
                             logger.error(f"Failed to decode JSON from {url}: {e}")
                             logger.debug(f"Raw response: {response_text[:500]}")
                             return None
-                    return None
+                    return {'success': True}  # Для статуса 204 (No Content)
                 elif response.status == 404:
                     logger.warning(f"API 404 for {endpoint}")
                     return None
@@ -74,121 +74,115 @@ class RemnaWaveAPI:
             logger.error(f"Request error for {endpoint}: {e}")
             return None
 
-    async def get_subscription_info(self, short_uuid: str) -> Optional[Dict]:
+    async def delete_user(self, uuid: str) -> Optional[Dict]:
+        """
+        Удаляет пользователя по полному UUID
+        """
         try:
-            logger.info(f"Getting subscription info for short_uuid: {short_uuid}")
+            logger.info(f"Deleting user with UUID: {uuid}")
+            result = await self._make_request('DELETE', f'/api/users/{uuid}')
             
-            endpoints_to_try = [
-                f'/api/subscriptions/{short_uuid}',
-                f'/api/sub/{short_uuid}',
-                f'/api/subscription/{short_uuid}'
-            ]
-            
-            for endpoint in endpoints_to_try:
-                logger.debug(f"Trying endpoint: {endpoint}")
-                result = await self._make_request('GET', endpoint)
-                
-                if result:
-                    logger.info(f"Successfully got subscription info from {endpoint}")
-                    
-                    subscription_data = None
-                    
-                    if 'response' in result:
-                        subscription_data = result['response']
-                    elif 'data' in result:
-                        subscription_data = result['data']
-                    elif 'subscription' in result:
-                        subscription_data = result['subscription']
-                    else:
-                        subscription_data = result
-                    
-                    if subscription_data and (
-                        'subscriptionUrl' in subscription_data or 
-                        'url' in subscription_data or 
-                        'link' in subscription_data
-                    ):
-                        return subscription_data
-            
-            logger.warning(f"Could not get subscription info for {short_uuid} from any endpoint")
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error getting subscription info for {short_uuid}: {e}")
-            return None
-
-    async def get_subscription_url(self, short_uuid: str) -> str:
-        try:
-            logger.info(f"Getting subscription URL for short_uuid: {short_uuid}")
-            
-            subscription_info = await self.get_subscription_info(short_uuid)
-            
-            if subscription_info:
-                subscription_url = (
-                    subscription_info.get('subscriptionUrl') or
-                    subscription_info.get('url') or
-                    subscription_info.get('link') or
-                    subscription_info.get('subscription_url')
-                )
-                
-                if subscription_url:
-                    logger.info(f"Got subscription URL from API: {subscription_url}")
-                    return subscription_url
-            
-            user_data = await self.get_user_by_short_uuid(short_uuid)
-            if user_data and 'subscriptionUrl' in user_data:
-                logger.info(f"Got subscription URL from user data: {user_data['subscriptionUrl']}")
-                return user_data['subscriptionUrl']
-            
-            if self.subscription_base_url:
-                fallback_url = f"{self.subscription_base_url.rstrip('/')}/sub/{short_uuid}"
-                logger.warning(f"Using fallback URL: {fallback_url}")
-                return fallback_url
+            if result is not None:
+                logger.info(f"Successfully deleted user {uuid}")
+                return result
             else:
-                fallback_url = f"{self.base_url.rstrip('/')}/sub/{short_uuid}"
-                logger.warning(f"Using base_url fallback: {fallback_url}")
-                return fallback_url
+                logger.error(f"Failed to delete user {uuid}")
+                return None
                 
         except Exception as e:
-            logger.error(f"Failed to get subscription URL for {short_uuid}: {e}")
-            fallback_url = f"{self.base_url.rstrip('/')}/sub/{short_uuid}"
-            return fallback_url
+            logger.error(f"Error deleting user {uuid}: {e}")
+            return None
 
-    async def get_all_subscriptions_with_urls(self) -> Optional[List]:
+    async def delete_user_by_short_uuid(self, short_uuid: str) -> Optional[Dict]:
+        """
+        Удаляет пользователя по short_uuid (сначала получает полный UUID, затем удаляет)
+        """
         try:
-            logger.info("Fetching all subscriptions with URLs from API")
-            result = await self._make_request('GET', '/api/subscriptions')
+            logger.info(f"Deleting user by short UUID: {short_uuid}")
             
-            if not result:
-                logger.error("Empty response from subscriptions API")
-                return []
+            # Сначала получаем полную информацию о пользователе
+            user_data = await self.get_user_by_short_uuid(short_uuid)
             
-            subscriptions_list = []
+            if not user_data:
+                logger.warning(f"User with short_uuid {short_uuid} not found")
+                return None
             
-            if 'response' in result and 'subscriptions' in result['response']:
-                subscriptions_list = result['response']['subscriptions']
-            elif 'subscriptions' in result:
-                subscriptions_list = result['subscriptions']
-            elif 'data' in result:
-                subscriptions_list = result['data']
-            elif isinstance(result, list):
-                subscriptions_list = result
+            full_uuid = user_data.get('uuid')
+            if not full_uuid:
+                logger.error(f"Could not get full UUID for short_uuid {short_uuid}")
+                return None
             
-            processed_subscriptions = []
-            for subscription in subscriptions_list:
-                if subscription.get('isFound') and 'user' in subscription:
-                    user_data = subscription['user']
-                    
-                    if 'subscriptionUrl' not in subscription and user_data.get('shortUuid'):
-                        subscription['subscriptionUrl'] = await self.get_subscription_url(user_data['shortUuid'])
-                    
-                    processed_subscriptions.append(subscription)
+            # Удаляем пользователя по полному UUID
+            result = await self.delete_user(full_uuid)
             
-            logger.info(f"Processed {len(processed_subscriptions)} subscriptions with URLs")
-            return processed_subscriptions
+            if result:
+                logger.info(f"Successfully deleted user {short_uuid} (UUID: {full_uuid})")
+                return {
+                    'success': True,
+                    'short_uuid': short_uuid,
+                    'full_uuid': full_uuid,
+                    'username': user_data.get('username', 'unknown')
+                }
+            else:
+                logger.error(f"Failed to delete user {short_uuid}")
+                return None
                 
         except Exception as e:
-            logger.error(f"Exception in get_all_subscriptions_with_urls: {e}", exc_info=True)
-            return []
+            logger.error(f"Error deleting user by short UUID {short_uuid}: {e}")
+            return None
+
+    async def bulk_delete_users_by_short_uuids(self, short_uuids: List[str]) -> Dict[str, Any]:
+        """
+        Массовое удаление пользователей по списку short_uuid
+        """
+        try:
+            logger.info(f"Bulk deleting {len(short_uuids)} users by short UUIDs")
+            
+            results = {
+                'total': len(short_uuids),
+                'success': 0,
+                'failed': 0,
+                'errors': [],
+                'deleted_users': []
+            }
+            
+            for short_uuid in short_uuids:
+                try:
+                    result = await self.delete_user_by_short_uuid(short_uuid)
+                    
+                    if result and result.get('success'):
+                        results['success'] += 1
+                        results['deleted_users'].append({
+                            'short_uuid': short_uuid,
+                            'full_uuid': result.get('full_uuid'),
+                            'username': result.get('username')
+                        })
+                        logger.debug(f"Successfully deleted user {short_uuid}")
+                    else:
+                        results['failed'] += 1
+                        results['errors'].append(f"Failed to delete {short_uuid}")
+                        logger.warning(f"Failed to delete user {short_uuid}")
+                    
+                    # Небольшая пауза между запросами, чтобы не перегружать API
+                    await asyncio.sleep(0.1)
+                    
+                except Exception as e:
+                    results['failed'] += 1
+                    results['errors'].append(f"Error deleting {short_uuid}: {str(e)}")
+                    logger.error(f"Error deleting user {short_uuid}: {e}")
+            
+            logger.info(f"Bulk deletion completed: {results['success']} success, {results['failed']} failed")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error in bulk_delete_users_by_short_uuids: {e}")
+            return {
+                'total': len(short_uuids),
+                'success': 0,
+                'failed': len(short_uuids),
+                'errors': [f"Critical error: {str(e)}"],
+                'deleted_users': []
+            }
 
     async def create_user(self, username: str, password: str = None, 
                          traffic_limit: int = 0, expiry_time: str = None,
@@ -298,7 +292,86 @@ class RemnaWaveAPI:
                     
             return user_data
         return None
-    
+
+    async def get_subscription_info(self, short_uuid: str) -> Optional[Dict]:
+        try:
+            logger.info(f"Getting subscription info for short_uuid: {short_uuid}")
+            
+            endpoints_to_try = [
+                f'/api/subscriptions/{short_uuid}',
+                f'/api/sub/{short_uuid}',
+                f'/api/subscription/{short_uuid}'
+            ]
+            
+            for endpoint in endpoints_to_try:
+                logger.debug(f"Trying endpoint: {endpoint}")
+                result = await self._make_request('GET', endpoint)
+                
+                if result:
+                    logger.info(f"Successfully got subscription info from {endpoint}")
+                    
+                    subscription_data = None
+                    
+                    if 'response' in result:
+                        subscription_data = result['response']
+                    elif 'data' in result:
+                        subscription_data = result['data']
+                    elif 'subscription' in result:
+                        subscription_data = result['subscription']
+                    else:
+                        subscription_data = result
+                    
+                    if subscription_data and (
+                        'subscriptionUrl' in subscription_data or 
+                        'url' in subscription_data or 
+                        'link' in subscription_data
+                    ):
+                        return subscription_data
+            
+            logger.warning(f"Could not get subscription info for {short_uuid} from any endpoint")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting subscription info for {short_uuid}: {e}")
+            return None
+
+    async def get_subscription_url(self, short_uuid: str) -> str:
+        try:
+            logger.info(f"Getting subscription URL for short_uuid: {short_uuid}")
+            
+            subscription_info = await self.get_subscription_info(short_uuid)
+            
+            if subscription_info:
+                subscription_url = (
+                    subscription_info.get('subscriptionUrl') or
+                    subscription_info.get('url') or
+                    subscription_info.get('link') or
+                    subscription_info.get('subscription_url')
+                )
+                
+                if subscription_url:
+                    logger.info(f"Got subscription URL from API: {subscription_url}")
+                    return subscription_url
+            
+            user_data = await self.get_user_by_short_uuid(short_uuid)
+            if user_data and 'subscriptionUrl' in user_data:
+                logger.info(f"Got subscription URL from user data: {user_data['subscriptionUrl']}")
+                return user_data['subscriptionUrl']
+            
+            if self.subscription_base_url:
+                fallback_url = f"{self.subscription_base_url.rstrip('/')}/sub/{short_uuid}"
+                logger.warning(f"Using fallback URL: {fallback_url}")
+                return fallback_url
+            else:
+                fallback_url = f"{self.base_url.rstrip('/')}/sub/{short_uuid}"
+                logger.warning(f"Using base_url fallback: {fallback_url}")
+                return fallback_url
+                
+        except Exception as e:
+            logger.error(f"Failed to get subscription URL for {short_uuid}: {e}")
+            fallback_url = f"{self.base_url.rstrip('/')}/sub/{short_uuid}"
+            return fallback_url
+
     async def get_user_by_short_uuid(self, short_uuid: str) -> Optional[Dict]:
         logger.debug(f"Getting user by short UUID: {short_uuid}")
         result = await self._make_request('GET', f'/api/users/by-short-uuid/{short_uuid}')
@@ -321,6 +394,43 @@ class RemnaWaveAPI:
                     
             return user_data
         return None
+
+    async def get_all_subscriptions_with_urls(self) -> Optional[List]:
+        try:
+            logger.info("Fetching all subscriptions with URLs from API")
+            result = await self._make_request('GET', '/api/subscriptions')
+            
+            if not result:
+                logger.error("Empty response from subscriptions API")
+                return []
+            
+            subscriptions_list = []
+            
+            if 'response' in result and 'subscriptions' in result['response']:
+                subscriptions_list = result['response']['subscriptions']
+            elif 'subscriptions' in result:
+                subscriptions_list = result['subscriptions']
+            elif 'data' in result:
+                subscriptions_list = result['data']
+            elif isinstance(result, list):
+                subscriptions_list = result
+            
+            processed_subscriptions = []
+            for subscription in subscriptions_list:
+                if subscription.get('isFound') and 'user' in subscription:
+                    user_data = subscription['user']
+                    
+                    if 'subscriptionUrl' not in subscription and user_data.get('shortUuid'):
+                        subscription['subscriptionUrl'] = await self.get_subscription_url(user_data['shortUuid'])
+                    
+                    processed_subscriptions.append(subscription)
+            
+            logger.info(f"Processed {len(processed_subscriptions)} subscriptions with URLs")
+            return processed_subscriptions
+                
+        except Exception as e:
+            logger.error(f"Exception in get_all_subscriptions_with_urls: {e}", exc_info=True)
+            return []
     
     async def update_user(self, uuid: str, data: Dict) -> Optional[Dict]:
         update_data = {'uuid': uuid}
