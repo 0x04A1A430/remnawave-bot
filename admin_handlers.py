@@ -51,7 +51,6 @@ logger = logging.getLogger(__name__)
 
 admin_router = Router()
 
-# Admin panel access check
 async def check_admin_access(callback: CallbackQuery, user: User) -> bool:
     """Check if user has admin access"""  
     if not user.is_admin:
@@ -59,7 +58,6 @@ async def check_admin_access(callback: CallbackQuery, user: User) -> bool:
         return False
     return True
 
-# Admin panel main menu
 @admin_router.callback_query(F.data == "admin_panel")
 async def admin_panel_callback(callback: CallbackQuery, user: User, **kwargs):
     """Show admin panel"""
@@ -71,7 +69,6 @@ async def admin_panel_callback(callback: CallbackQuery, user: User, **kwargs):
         reply_markup=admin_menu_keyboard(user.language)
     )
 
-# Statistics
 @admin_router.callback_query(F.data == "admin_stats")
 async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database, api: RemnaWaveAPI = None, **kwargs):
     """Show statistics"""
@@ -79,10 +76,8 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
         return
     
     try:
-        # Get database stats
         db_stats = await db.get_stats()
         
-        # Get RemnaWave system stats (optional)
         system_stats = None
         nodes_stats = None
         
@@ -124,10 +119,8 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
             reply_markup=back_keyboard("admin_panel", user.language)
         )
 
-# Subscription management
 @admin_router.callback_query(F.data == "admin_subscriptions")
 async def admin_subscriptions_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show subscription management"""
     if not await check_admin_access(callback, user):
         return
     
@@ -577,7 +570,6 @@ async def delete_subscription_confirm(callback: CallbackQuery, user: User, **kwa
 
 @admin_router.callback_query(F.data.startswith("confirm_delete_sub_"))
 async def delete_subscription(callback: CallbackQuery, user: User, db: Database, **kwargs):
-    """Delete subscription"""
     if not await check_admin_access(callback, user):
         return
     
@@ -640,7 +632,6 @@ async def list_users_callback(callback: CallbackQuery, user: User, db: Database,
         
         text = t('user_list', user.language) + "\n\n"
         
-        # Show first 20 users
         for u in users[:20]:
             username = u.username or "N/A"
             text += t('user_item', user.language,
@@ -661,7 +652,6 @@ async def list_users_callback(callback: CallbackQuery, user: User, db: Database,
         logger.error(f"Error listing users: {e}")
         await callback.answer(t('error_occurred', user.language))
 
-# Balance management
 @admin_router.callback_query(F.data == "admin_balance")
 async def admin_balance_callback(callback: CallbackQuery, user: User, **kwargs):
     if not await check_admin_access(callback, user):
@@ -674,7 +664,6 @@ async def admin_balance_callback(callback: CallbackQuery, user: User, **kwargs):
 
 @admin_router.callback_query(F.data == "admin_add_balance")
 async def admin_add_balance_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
-    """Start adding balance to user"""
     if not await check_admin_access(callback, user):
         return
     
@@ -686,7 +675,6 @@ async def admin_add_balance_callback(callback: CallbackQuery, user: User, state:
 
 @admin_router.message(StateFilter(BotStates.admin_add_balance_user))
 async def handle_balance_user_id(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
-    """Handle user ID input for balance addition"""
     telegram_id = parse_telegram_id(message.text)
     
     if not telegram_id:
@@ -708,7 +696,6 @@ async def handle_balance_user_id(message: Message, state: FSMContext, user: User
 
 @admin_router.message(StateFilter(BotStates.admin_add_balance_amount))
 async def handle_balance_amount(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
-    """Handle balance amount input"""
     is_valid, amount = is_valid_amount(message.text)
     
     if not is_valid:
@@ -719,17 +706,25 @@ async def handle_balance_amount(message: Message, state: FSMContext, user: User,
     target_user_id = data['target_user_id']
     
     try:
-        # Add balance
         success = await db.add_balance(target_user_id, amount)
         
         if success:
-            # Create payment record
-            await db.create_payment(
+            payment = await db.create_payment(
                 user_id=target_user_id,
                 amount=amount,
-                payment_type='admin_topup',
+                payment_type='admin_topup', 
                 description=f'Пополнение администратором (ID: {user.telegram_id})',
                 status='completed'
+            )
+            
+            bot = kwargs.get('bot')
+            await process_referral_rewards(
+                target_user_id, 
+                amount, 
+                payment.id, 
+                db, 
+                bot, 
+                payment_type='admin_topup'
             )
             
             await message.answer(
@@ -867,7 +862,6 @@ async def payment_history_page_callback(callback: CallbackQuery, user: User, db:
 async def noop_callback(callback: CallbackQuery, **kwargs):
     await callback.answer()
 
-# Payment approval handlers
 @admin_router.callback_query(F.data.startswith("approve_payment_"))
 async def approve_payment(callback: CallbackQuery, user: User, db: Database, **kwargs):
     if not await check_admin_access(callback, user):
@@ -892,7 +886,14 @@ async def approve_payment(callback: CallbackQuery, user: User, db: Database, **k
             await db.update_payment(payment)
             
             bot = kwargs.get('bot')
-            await process_referral_rewards(payment.user_id, payment.amount, payment.id, db, bot)
+            await process_referral_rewards(
+                payment.user_id, 
+                payment.amount, 
+                payment.id, 
+                db, 
+                bot, 
+                payment_type=payment.payment_type
+            )
             
             await callback.message.edit_text(
                 f"✅ Платеж одобрен!\n💰 Пользователю {payment.user_id} добавлено {payment.amount} руб."
@@ -955,7 +956,6 @@ async def reject_payment(callback: CallbackQuery, user: User, db: Database, **kw
         logger.error(f"Error rejecting payment: {e}")
         await callback.answer(t('error_occurred', user.language))
 
-# Promocode management
 @admin_router.callback_query(F.data == "admin_promocodes")
 async def admin_promocodes_callback(callback: CallbackQuery, user: User, **kwargs):
     if not await check_admin_access(callback, user):
@@ -1809,19 +1809,46 @@ async def monitor_status_callback(callback: CallbackQuery, user: User, **kwargs)
     try:
         status = await monitor_service.get_service_status()
         
-        status_text = "🔍 Статус сервиса мониторинга:\n\n"
-        status_text += f"🟢 Работает: {'Да' if status['is_running'] else 'Нет'}\n"
-        status_text += f"⏱ Интервал проверки: {status['check_interval']} сек\n"
-        status_text += f"🕙 Время ежедневной проверки: {status['daily_check_hour']}:00\n"
-        status_text += f"⚠️ Предупреждение за: {status['warning_days']} дней\n"
+        status_text = "🔍 **Статус сервиса мониторинга:**\n\n"
+        
+        if status['is_running']:
+            status_text += "✅ **Статус:** Работает\n"
+        else:
+            status_text += "❌ **Статус:** Остановлен\n"
+        
+        status_text += f"⚙️ **Настройки:**\n"
+        status_text += f"• Включен: {'✅' if status['monitor_enabled'] else '❌'}\n"
+        status_text += f"• Интервал проверки: {status['check_interval']} сек\n"
+        status_text += f"• Ежедневная проверка: {status['daily_check_hour']}:00\n"
+        status_text += f"• Предупреждение за: {status['warning_days']} дн.\n\n"
+        
+        status_text += f"🗑️ **Настройки удаления:**\n"
+        status_text += f"• Удалять триальные через: {status['delete_trial_days']} дн.\n"
+        status_text += f"• Удалять обычные через: {status['delete_regular_days']} дн.\n"
+        status_text += f"• Автоудаление: {'✅' if status['auto_delete_enabled'] else '❌'}\n\n"
+        
+        status_text += f"📊 **Состояние задач:**\n"
+        status_text += f"• Мониторинг: {status['task_status']['monitor_task']}\n"
+        status_text += f"• Ежедневная: {status['task_status']['daily_task']}\n"
         
         if status['last_check']:
-            status_text += f"🕐 Последняя проверка: {status['last_check']}"
+            status_text += f"\n⏰ **Последняя проверка:** {status['last_check']}"
+
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
         
-        await callback.message.edit_text(
-            status_text,
-            reply_markup=back_keyboard("admin_monitor", user.language)
-        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🧪 Тест пользователя", callback_data="monitor_test_user"),
+                InlineKeyboardButton(text="🚀 Принудительная проверка", callback_data="monitor_force_check")
+            ],
+            [
+                InlineKeyboardButton(text="🗑️ Удалить истекшие триальные", callback_data="delete_expired_trials"),
+                InlineKeyboardButton(text="🗑️ Удалить истекшие обычные", callback_data="delete_expired_regular")
+            ],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_monitor")]
+        ])
+        
+        await callback.message.edit_text(status_text, reply_markup=keyboard)
         
     except Exception as e:
         logger.error(f"Error getting monitor status: {e}")
@@ -1829,6 +1856,197 @@ async def monitor_status_callback(callback: CallbackQuery, user: User, **kwargs)
             "❌ Ошибка получения статуса",
             reply_markup=back_keyboard("admin_monitor", user.language)
         )
+
+@admin_router.callback_query(F.data == "delete_expired_trials")
+async def delete_expired_trials_handler(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+
+    monitor_service = kwargs.get('monitor_service')
+    if not monitor_service:
+        await callback.answer("❌ Сервис мониторинга недоступен", show_alert=True)
+        return
+
+    try:
+        text = "⚠️ **УДАЛЕНИЕ ИСТЕКШИХ ТРИАЛЬНЫХ ПОДПИСОК**\n\n"
+        text += "Вы собираетесь удалить все истекшие триальные подписки.\n\n"
+        text += "🗑️ **Что будет удалено:**\n"
+        text += f"• Триальные подписки, истекшие более {getattr(monitor_service.config, 'DELETE_EXPIRED_TRIAL_DAYS', 1)} дн. назад\n"
+        text += "• Данные будут удалены из базы бота\n"
+        text += "• Пользователи будут удалены из панели RemnaWave\n\n"
+        text += "❗ **Это действие НЕОБРАТИМО!**\n\n"
+        text += "Продолжить?"
+
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Да, удалить", callback_data="confirm_delete_trials"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="monitor_status")
+            ]
+        ])
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Error in delete_expired_trials_handler: {e}")
+        await callback.answer("❌ Ошибка", show_alert=True)
+
+@admin_router.callback_query(F.data == "confirm_delete_trials")
+async def confirm_delete_trials_handler(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+
+    monitor_service = kwargs.get('monitor_service')
+    if not monitor_service:
+        await callback.answer("❌ Сервис мониторинга недоступен", show_alert=True)
+        return
+
+    try:
+        processing_text = "🗑️ **Удаление истекших триальных подписок...**\n\n"
+        processing_text += "⏳ Поиск и удаление подписок...\n"
+        processing_text += "Пожалуйста, подождите..."
+
+        await callback.message.edit_text(processing_text)
+        await callback.answer("🗑️ Начинаю удаление триальных подписок...")
+
+        result = await monitor_service.delete_expired_trial_subscriptions(force=False)
+
+        text = "🗑️ **Удаление триальных подписок завершено**\n\n"
+        text += f"📊 **Результаты:**\n"
+        text += f"• Проверено: {result['total_checked']}\n"
+        text += f"• Удалено из БД: {result['deleted_from_db']}\n"
+        text += f"• Удалено из API: {result['deleted_from_api']}\n"
+        text += f"• Ошибки: {len(result['errors'])}\n\n"
+
+        if result['deleted_subscriptions']:
+            text += f"✅ **Удаленные подписки:**\n"
+            for sub in result['deleted_subscriptions'][:10]: 
+                text += f"• {sub['subscription_name']} (пользователь {sub['user_id']})\n"
+            
+            if len(result['deleted_subscriptions']) > 10:
+                text += f"• ... и еще {len(result['deleted_subscriptions']) - 10}\n"
+        
+        if result['errors']:
+            text += f"\n❌ **Ошибки:**\n"
+            for error in result['errors'][:5]: 
+                text += f"• {error}\n"
+            
+            if len(result['errors']) > 5:
+                text += f"• ... и еще {len(result['errors']) - 5}\n"
+
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 К статусу мониторинга", callback_data="monitor_status")]
+        ])
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+
+    except Exception as e:
+        logger.error(f"Error in confirm_delete_trials_handler: {e}")
+        error_text = f"❌ **Ошибка удаления триальных подписок**\n\n{str(e)}"
+        
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 К статусу мониторинга", callback_data="monitor_status")]
+        ])
+        await callback.message.edit_text(error_text, reply_markup=keyboard)
+
+@admin_router.callback_query(F.data == "delete_expired_regular")
+async def delete_expired_regular_handler(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+
+    monitor_service = kwargs.get('monitor_service')
+    if not monitor_service:
+        await callback.answer("❌ Сервис мониторинга недоступен", show_alert=True)
+        return
+
+    try:
+        text = "⚠️ **УДАЛЕНИЕ ИСТЕКШИХ ОБЫЧНЫХ ПОДПИСОК**\n\n"
+        text += "Вы собираетесь удалить все истекшие обычные подписки.\n\n"
+        text += "🗑️ **Что будет удалено:**\n"
+        text += f"• Обычные подписки, истекшие более {getattr(monitor_service.config, 'DELETE_EXPIRED_REGULAR_DAYS', 7)} дн. назад\n"
+        text += "• Данные будут удалены из базы бота\n"
+        text += "• Пользователи будут удалены из панели RemnaWave\n"
+        text += "• Импортированные подписки НЕ затрагиваются\n\n"
+        text += "❗ **Это действие НЕОБРАТИМО!**\n\n"
+        text += "Продолжить?"
+
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Да, удалить", callback_data="confirm_delete_regular"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="monitor_status")
+            ]
+        ])
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+        await callback.answer()
+
+    except Exception as e:
+        logger.error(f"Error in delete_expired_regular_handler: {e}")
+        await callback.answer("❌ Ошибка", show_alert=True)
+
+@admin_router.callback_query(F.data == "confirm_delete_regular")
+async def confirm_delete_regular_handler(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+
+    monitor_service = kwargs.get('monitor_service')
+    if not monitor_service:
+        await callback.answer("❌ Сервис мониторинга недоступен", show_alert=True)
+        return
+
+    try:
+        processing_text = "🗑️ **Удаление истекших обычных подписок...**\n\n"
+        processing_text += "⏳ Поиск и удаление подписок...\n"
+        processing_text += "Пожалуйста, подождите..."
+
+        await callback.message.edit_text(processing_text)
+        await callback.answer("🗑️ Начинаю удаление обычных подписок...")
+
+        result = await monitor_service.delete_expired_regular_subscriptions(force=False)
+
+        text = "🗑️ **Удаление обычных подписок завершено**\n\n"
+        text += f"📊 **Результаты:**\n"
+        text += f"• Проверено: {result['total_checked']}\n"
+        text += f"• Удалено из БД: {result['deleted_from_db']}\n"
+        text += f"• Удалено из API: {result['deleted_from_api']}\n"
+        text += f"• Ошибки: {len(result['errors'])}\n\n"
+
+        if result['deleted_subscriptions']:
+            text += f"✅ **Удаленные подписки:**\n"
+            for sub in result['deleted_subscriptions'][:10]: 
+                text += f"• {sub['subscription_name']} (пользователь {sub['user_id']})\n"
+            
+            if len(result['deleted_subscriptions']) > 10:
+                text += f"• ... и еще {len(result['deleted_subscriptions']) - 10}\n"
+        
+        if result['errors']:
+            text += f"\n❌ **Ошибки:**\n"
+            for error in result['errors'][:5]: 
+                text += f"• {error}\n"
+            
+            if len(result['errors']) > 5:
+                text += f"• ... и еще {len(result['errors']) - 5}\n"
+
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 К статусу мониторинга", callback_data="monitor_status")]
+        ])
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+
+    except Exception as e:
+        logger.error(f"Error in confirm_delete_regular_handler: {e}")
+        error_text = f"❌ **Ошибка удаления обычных подписок**\n\n{str(e)}"
+        
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 К статусу мониторинга", callback_data="monitor_status")]
+        ])
+        await callback.message.edit_text(error_text, reply_markup=keyboard)
 
 @admin_router.callback_query(F.data == "monitor_force_check")
 async def monitor_force_check_callback(callback: CallbackQuery, user: User, **kwargs):
@@ -2053,7 +2271,6 @@ async def handle_broadcast_message(message: Message, state: FSMContext, user: Us
     
     await state.clear()
 
-# System management handlers
 @admin_router.callback_query(F.data == "admin_system")
 async def admin_system_callback(callback: CallbackQuery, user: User, **kwargs):
     if not await check_admin_access(callback, user):
@@ -5796,7 +6013,7 @@ async def view_imported_plans_callback(callback: CallbackQuery, user: User, db: 
             if getattr(plan, 'is_imported', False):
                 imported_plans.append(plan)
             elif plan.is_trial:
-                continue  # Пропускаем триальные
+                continue 
             elif (plan.name.startswith(('Import_', 'Auto_', 'Imported_')) or 
                   (plan.price == 0 and any(keyword in plan.name.lower() for keyword in 
                       ['импорт', 'default', 'squad', 'user_']))):
