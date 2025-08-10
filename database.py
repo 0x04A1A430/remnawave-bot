@@ -119,6 +119,18 @@ class LuckyGame(Base):
     reward_amount: Mapped[float] = mapped_column(Float, default=0.0)
     played_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+class StarPayment(Base):
+    __tablename__ = 'star_payments'
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    stars_amount: Mapped[int] = mapped_column(Integer)  # Количество звезд
+    rub_amount: Mapped[float] = mapped_column(Float)    # Сумма в рублях
+    status: Mapped[str] = mapped_column(String(50), default='pending')  # pending, completed, cancelled
+    telegram_payment_charge_id: Mapped[Optional[str]] = mapped_column(String(255))  # ID платежа от Telegram
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
 class Database:
     def __init__(self, database_url: str):
         self.engine = create_async_engine(
@@ -140,6 +152,7 @@ class Database:
         await self.migrate_user_subscriptions()
         await self.migrate_subscription_imported_field()
         await self.migrate_referral_tables() 
+        await self.migrate_star_payments_table()
 
     async def migrate_referral_tables(self):
         try:
@@ -1356,18 +1369,16 @@ class Database:
             try:
                 from sqlalchemy import select, func, and_ 
             
-                # Общее количество игр
                 games_count = await session.execute(
                     select(func.count(LuckyGame.id))
                     .where(LuckyGame.user_id == user_id)
                 )
                 total_games = games_count.scalar() or 0
             
-                # Количество выигрышей
                 wins_count = await session.execute(
                     select(func.count(LuckyGame.id))
                     .where(
-                        and_(  # Вот здесь используется and_
+                        and_(  
                             LuckyGame.user_id == user_id,
                             LuckyGame.is_winner == True
                         )
@@ -1434,3 +1445,166 @@ class Database:
         except Exception as e:
             logger.error(f"Error checking can play today: {e}")
             return True 
+
+    async def create_star_payment(self, user_id: int, stars_amount: int, rub_amount: float) -> StarPayment:
+        """Создать платеж через звезды"""
+        async with self.session_factory() as session:
+            try:
+                payment = StarPayment(
+                    user_id=user_id,
+                    stars_amount=stars_amount,
+                    rub_amount=rub_amount,
+                    status='pending'
+                )
+                session.add(payment)
+                await session.commit()
+                await session.refresh(payment)
+                return payment
+            except Exception as e:
+                logger.error(f"Error creating star payment: {e}")
+                await session.rollback()
+                raise
+
+    async def get_star_payment_by_id(self, payment_id: int) -> Optional[StarPayment]:
+        """Получить платеж через звезды по ID"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select
+                result = await session.execute(
+                    select(StarPayment).where(StarPayment.id == payment_id)
+                )
+                return result.scalar_one_or_none()
+            except Exception as e:
+                logger.error(f"Error getting star payment {payment_id}: {e}")
+                return None
+
+    async def complete_star_payment(self, payment_id: int, telegram_payment_charge_id: str) -> bool:
+        """Завершить платеж через звезды"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import update
+            
+                result = await session.execute(
+                    update(StarPayment)
+                    .where(StarPayment.id == payment_id)
+                    .values(
+                        status='completed',
+                        telegram_payment_charge_id=telegram_payment_charge_id,
+                        completed_at=datetime.utcnow()
+                    )
+                )
+            
+                if result.rowcount == 0:
+                    return False
+            
+                payment_result = await session.execute(
+                    select(StarPayment).where(StarPayment.id == payment_id)
+                )
+                payment = payment_result.scalar_one_or_none()
+            
+                if not payment:
+                    return False
+            
+                balance_result = await session.execute(
+                    update(User)
+                    .where(User.telegram_id == payment.user_id)
+                    .values(balance=User.balance + payment.rub_amount)
+                )
+            
+                regular_payment = Payment(
+                    user_id=payment.user_id,
+                    amount=payment.rub_amount,
+                    payment_type='stars',
+                    description=f'Пополнение через Telegram Stars ({payment.stars_amount} ⭐)',
+                    status='completed'
+                )
+                session.add(regular_payment)
+            
+                await session.commit()
+                return True
+            
+            except Exception as e:
+                logger.error(f"Error completing star payment {payment_id}: {e}")
+                await session.rollback()
+                return False
+
+    async def cancel_star_payment(self, payment_id: int) -> bool:
+        """Отменить платеж через звезды"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import update
+                result = await session.execute(
+                    update(StarPayment)
+                    .where(StarPayment.id == payment_id)
+                    .values(status='cancelled')
+                )
+                await session.commit()
+                return result.rowcount > 0
+            except Exception as e:
+                logger.error(f"Error cancelling star payment {payment_id}: {e}")
+                await session.rollback()
+                return False
+
+    async def get_user_star_payments(self, user_id: int, limit: int = 10) -> List[StarPayment]:
+        """Получить платежи пользователя через звезды"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, desc
+                result = await session.execute(
+                    select(StarPayment)
+                    .where(StarPayment.user_id == user_id)
+                    .order_by(desc(StarPayment.created_at))
+                    .limit(limit)
+                )
+                return list(result.scalars().all())
+            except Exception as e:
+                logger.error(f"Error getting user star payments for {user_id}: {e}")
+                return []
+
+    async def migrate_star_payments_table(self):
+        """Создание таблицы для платежей через звезды"""
+        try:
+            async with self.engine.begin() as conn:
+                db_type = str(conn.get_dialect().name).lower()
+            
+                if db_type == 'postgresql':
+                    await conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS star_payments (
+                            id SERIAL PRIMARY KEY,
+                            user_id BIGINT NOT NULL,
+                            stars_amount INTEGER NOT NULL,
+                            rub_amount DOUBLE PRECISION NOT NULL,
+                            status VARCHAR(50) DEFAULT 'pending',
+                            telegram_payment_charge_id VARCHAR(255),
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            completed_at TIMESTAMP
+                        )
+                    """))
+                
+                    await conn.execute(text("""
+                        CREATE INDEX IF NOT EXISTS idx_star_payments_user ON star_payments(user_id)
+                    """))
+                    await conn.execute(text("""
+                        CREATE INDEX IF NOT EXISTS idx_star_payments_status ON star_payments(status)
+                    """))
+                else:
+                    await conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS star_payments (
+                            id SERIAL PRIMARY KEY,
+                            user_id BIGINT NOT NULL,
+                            stars_amount INTEGER NOT NULL,
+                            rub_amount DOUBLE PRECISION NOT NULL,
+                            status VARCHAR(50) DEFAULT 'pending',
+                            telegram_payment_charge_id VARCHAR(255),
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            completed_at TIMESTAMP,
+                            
+                            INDEX idx_star_payments_user (user_id),
+                            INDEX idx_star_payments_status (status)
+                        )
+                    """))
+            
+                logger.info("Successfully created star_payments table")
+        except Exception as e:
+            logger.error(f"Error creating star_payments table: {e}")
+            pass
