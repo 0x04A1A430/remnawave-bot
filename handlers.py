@@ -8,7 +8,7 @@ import logging
 import secrets
 from typing import Optional, Dict, Any
 
-from database import Database, User, ReferralProgram
+from database import Database, User, ReferralProgram, ServiceRule
 from remnawave_api import RemnaWaveAPI
 from keyboards import *
 from translations import t
@@ -60,6 +60,12 @@ class BotStates(StatesGroup):
     admin_debug_user_structure = State()
     admin_rename_plans_confirm = State()
     waiting_number_choice = State()
+    waiting_rule_title = State()
+    waiting_rule_content = State()
+    waiting_rule_order = State()
+    waiting_rule_edit_title = State()
+    waiting_rule_edit_content = State()
+    waiting_rule_edit_order = State()
 
 
 router = Router()
@@ -92,10 +98,9 @@ async def start_command(message: Message, state: FSMContext, db: Database, **kwa
                     success = await create_referral_from_start_param(user.telegram_id, start_param, db, bot)
                     
                     if success:
-                        import os
-                        threshold = float(os.getenv('REFERRAL_THRESHOLD', '300.0'))
-                        referred_bonus = float(os.getenv('REFERRAL_REFERRED_BONUS', '150.0'))
-                        
+                        threshold = config.REFERRAL_THRESHOLD if config else 300.0
+                        referred_bonus = config.REFERRAL_REFERRED_BONUS if config else 150.0
+    
                         await message.answer(
                             "🎁 Добро пожаловать!\n\n"
                             f"Вы перешли по реферальной ссылке! После пополнения баланса на {threshold:.0f}₽ "
@@ -422,7 +427,6 @@ async def topup_balance_callback(callback: CallbackQuery, **kwargs):
         await callback.answer("❌ Ошибка пользователя")
         return
     
-    # Проверяем, включены ли Telegram Stars
     stars_enabled = config and config.STARS_ENABLED and config.STARS_RATES
     
     text = t('topup_balance', user.language)
@@ -533,10 +537,8 @@ async def payment_history_callback(callback: CallbackQuery, db: Database, **kwar
         return
     
     try:
-        # Получаем обычные платежи
         payments = await db.get_user_payments(user.telegram_id)
         
-        # Получаем платежи через звезды
         star_payments = await db.get_user_star_payments(user.telegram_id, 5)
         
         if not payments and not star_payments:
@@ -544,7 +546,6 @@ async def payment_history_callback(callback: CallbackQuery, db: Database, **kwar
         else:
             text = "📊 " + t('payment_history', user.language) + ":\n\n"
             
-            # Объединяем и сортируем все платежи по дате
             all_payments = []
             
             for payment in payments[:10]:
@@ -567,10 +568,8 @@ async def payment_history_callback(callback: CallbackQuery, db: Database, **kwar
                         'stars': star_payment.stars_amount
                     })
             
-            # Сортируем по дате (новые сначала)
             all_payments.sort(key=lambda x: x['date'], reverse=True)
             
-            # Показываем последние 10 платежей
             for payment in all_payments[:10]:
                 date_str = format_datetime(payment['date'], user.language)
                 status = format_payment_status(payment['status'], user.language)
@@ -1254,23 +1253,48 @@ async def promocode_callback(callback: CallbackQuery, state: FSMContext, **kwarg
         await callback.answer("❌ Ошибка пользователя")
         return
     
-    await callback.message.edit_text(
-        t('enter_promocode', user.language),
+    await state.clear()
+    
+    edited_message = await callback.message.edit_text(
+        "🎁 Введите промокод:\n\n"
+        "• Обычные промокоды (скидки)\n"
+        "• Реферальные коды (REF...)\n\n"
+        "ℹ️ После ввода вы вернетесь в главное меню",
         reply_markup=cancel_keyboard(user.language)
     )
+    
+    await state.update_data(promocode_message_id=edited_message.message_id)
     await state.set_state(BotStates.waiting_promocode)
 
 @router.message(StateFilter(BotStates.waiting_promocode))
 async def handle_promocode(message: Message, state: FSMContext, db: Database, **kwargs):
     user = kwargs.get('user')
+    config = kwargs.get('config')
+    bot = kwargs.get('bot')
+    
     if not user:
         await message.answer("❌ Ошибка пользователя")
+        await state.clear()
         return
     
     code = message.text.strip().upper()
     
+    state_data = await state.get_data()
+    promocode_message_id = state_data.get('promocode_message_id')
+    
     if not validate_promocode_format(code):
-        await message.answer(t('invalid_input', user.language))
+        response_msg = await message.answer(
+            "❌ Неверный формат промокода",
+            reply_markup=main_menu_keyboard(user.language, user.is_admin)
+        )
+        
+        if bot and promocode_message_id:
+            try:
+                await bot.delete_message(chat_id=message.chat.id, message_id=promocode_message_id)
+            except Exception as e:
+                logger.warning(f"Could not delete promocode request message: {e}")
+        
+        await state.clear()
         return
     
     try:
@@ -1278,17 +1302,50 @@ async def handle_promocode(message: Message, state: FSMContext, db: Database, **
         
         if promocode and promocode.is_active:
             if promocode.expires_at and promocode.expires_at < datetime.utcnow():
-                await message.answer(t('promocode_expired', user.language))
+                response_msg = await message.answer(
+                    "❌ Промокод истек",
+                    reply_markup=main_menu_keyboard(user.language, user.is_admin)
+                )
+                
+                if bot and promocode_message_id:
+                    try:
+                        await bot.delete_message(chat_id=message.chat.id, message_id=promocode_message_id)
+                    except:
+                        pass
+                        
+                await state.clear()
                 return
             
             if promocode.used_count >= promocode.usage_limit:
-                await message.answer(t('promocode_limit', user.language))
+                response_msg = await message.answer(
+                    "❌ Лимит использования промокода исчерпан",
+                    reply_markup=main_menu_keyboard(user.language, user.is_admin)
+                )
+                
+                if bot and promocode_message_id:
+                    try:
+                        await bot.delete_message(chat_id=message.chat.id, message_id=promocode_message_id)
+                    except:
+                        pass
+                        
+                await state.clear()
                 return
             
             success = await db.use_promocode(user.telegram_id, promocode)
             
             if not success:
-                await message.answer(t('promocode_used', user.language))
+                response_msg = await message.answer(
+                    "❌ Вы уже использовали этот промокод",
+                    reply_markup=main_menu_keyboard(user.language, user.is_admin)
+                )
+                
+                if bot and promocode_message_id:
+                    try:
+                        await bot.delete_message(chat_id=message.chat.id, message_id=promocode_message_id)
+                    except:
+                        pass
+                        
+                await state.clear()
                 return
             
             await db.add_balance(user.telegram_id, promocode.discount_amount)
@@ -1302,18 +1359,23 @@ async def handle_promocode(message: Message, state: FSMContext, db: Database, **
             )
             
             discount_text = f"{promocode.discount_amount} руб."
-            await message.answer(
+            success_msg = await message.answer(
                 t('promocode_success', user.language, discount=discount_text),
                 reply_markup=main_menu_keyboard(user.language, user.is_admin)
             )
+            
+            if bot and promocode_message_id:
+                try:
+                    await bot.delete_message(chat_id=message.chat.id, message_id=promocode_message_id)
+                    logger.info(f"Deleted promocode request message {promocode_message_id}")
+                except Exception as e:
+                    logger.warning(f"Could not delete promocode request message: {e}")
             
             await state.clear()
             log_user_action(user.telegram_id, "promocode_used", code)
             return
         
         if code.startswith("REF"):
-            bot = kwargs.get('bot')
-            
             async with db.session_factory() as session:
                 from sqlalchemy import select
                 result = await session.execute(
@@ -1326,20 +1388,39 @@ async def handle_promocode(message: Message, state: FSMContext, db: Database, **
                     
                     existing_reverse_referral = await db.get_referral_by_referred_id(referrer_id)
                     if existing_reverse_referral and existing_reverse_referral.referrer_id == user.telegram_id:
-                        await message.answer(
+                        response_msg = await message.answer(
                             "❌ Нельзя использовать код человека, которого вы пригласили!\n\n"
-                            "Взаимные рефералы не допускаются."
+                            "Взаимные рефералы не допускаются.",
+                            reply_markup=main_menu_keyboard(user.language, user.is_admin)
                         )
+                        
+                        if bot and promocode_message_id:
+                            try:
+                                await bot.delete_message(chat_id=message.chat.id, message_id=promocode_message_id)
+                            except:
+                                pass
+                                
+                        await state.clear()
                         return
             
             success = await create_referral_from_promocode(user.telegram_id, code, db, bot)
             
             if success:
-                await message.answer(
-                    "🎉 Реферальный код активирован!\n\n"
-                    "После пополнения баланса на 200₽ вы получите бонус 150₽!",
+                threshold = config.REFERRAL_THRESHOLD if config else 300.0
+                referred_bonus = config.REFERRAL_REFERRED_BONUS if config else 150.0
+                
+                success_msg = await message.answer(
+                    f"🎉 Реферальный код активирован!\n\n"
+                    f"После пополнения баланса на {threshold:.0f}₽ вы получите бонус {referred_bonus:.0f}₽!",
                     reply_markup=main_menu_keyboard(user.language, user.is_admin)
                 )
+                
+                if bot and promocode_message_id:
+                    try:
+                        await bot.delete_message(chat_id=message.chat.id, message_id=promocode_message_id)
+                        logger.info(f"Deleted promocode request message {promocode_message_id}")
+                    except Exception as e:
+                        logger.warning(f"Could not delete promocode request message: {e}")
                 
                 await state.clear()
                 log_user_action(user.telegram_id, "referral_code_used", code)
@@ -1347,21 +1428,53 @@ async def handle_promocode(message: Message, state: FSMContext, db: Database, **
             else:
                 existing_referral = await db.get_referral_by_referred_id(user.telegram_id)
                 if existing_referral:
-                    await message.answer("❌ Вы уже использовали реферальный код!")
+                    error_text = "❌ Вы уже использовали реферальный код!"
                 else:
-                    await message.answer("❌ Неверный реферальный код!")
+                    error_text = "❌ Неверный реферальный код!"
+                
+                response_msg = await message.answer(
+                    error_text,
+                    reply_markup=main_menu_keyboard(user.language, user.is_admin)
+                )
+                
+                if bot and promocode_message_id:
+                    try:
+                        await bot.delete_message(chat_id=message.chat.id, message_id=promocode_message_id)
+                    except:
+                        pass
+                        
+                await state.clear()
                 return
         
-        await message.answer(t('promocode_not_found', user.language))
+        response_msg = await message.answer(
+            "❌ Промокод не найден\n\n"
+            "Проверьте правильность ввода и попробуйте снова через главное меню.",
+            reply_markup=main_menu_keyboard(user.language, user.is_admin)
+        )
+        
+        if bot and promocode_message_id:
+            try:
+                await bot.delete_message(chat_id=message.chat.id, message_id=promocode_message_id)
+                logger.info(f"Deleted promocode request message {promocode_message_id}")
+            except Exception as e:
+                logger.warning(f"Could not delete promocode request message: {e}")
+        
+        await state.clear()
         
     except Exception as e:
         logger.error(f"Error handling promocode: {e}")
-        await message.answer(
-            t('error_occurred', user.language),
+        response_msg = await message.answer(
+            "❌ Произошла ошибка при обработке промокода",
             reply_markup=main_menu_keyboard(user.language, user.is_admin)
         )
-    
-    await state.clear()
+        
+        if bot and promocode_message_id:
+            try:
+                await bot.delete_message(chat_id=message.chat.id, message_id=promocode_message_id)
+            except:
+                pass
+                
+        await state.clear()
 
 @router.callback_query(F.data == "referral_program")
 async def referral_program_callback(callback: CallbackQuery, db: Database, **kwargs):
@@ -1545,3 +1658,119 @@ async def my_referrals_callback(callback: CallbackQuery, db: Database, **kwargs)
     except Exception as e:
         logger.error(f"Error showing referrals: {e}")
         await callback.answer("❌ Ошибка загрузки")
+
+@router.callback_query(F.data == "service_rules")
+async def service_rules_callback(callback: CallbackQuery, db: Database, **kwargs):
+    user = kwargs.get('user')
+    if not user:
+        await callback.answer("❌ Ошибка пользователя")
+        return
+    
+    try:
+        rules = await db.get_all_service_rules(active_only=True)
+        
+        if not rules:
+            await callback.message.edit_text(
+                "📜 Правила сервиса пока не добавлены администратором.",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
+                ])
+            )
+            return
+        
+        await show_rules_page(callback, rules, 0, user.language)
+        
+    except Exception as e:
+        logger.error(f"Error showing service rules: {e}")
+        await callback.answer("❌ Ошибка загрузки правил")
+
+async def show_rules_page(callback: CallbackQuery, rules: List[ServiceRule], page_index: int, lang: str = 'ru'):
+    if page_index < 0 or page_index >= len(rules):
+        page_index = 0
+    
+    rule = rules[page_index]
+    total_pages = len(rules)
+    
+    safe_title = rule.title.replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]').replace('`', '\\`')
+    text = f"📜 **{safe_title}**\n\n"
+    text += rule.content
+    
+    if total_pages > 1:
+        text += f"\n\n📄 Страница {page_index + 1} из {total_pages}"
+    
+    if len(text) > 4000:
+        text = text[:3950] + "\n\n... (текст обрезан)"
+    
+    try:
+        await callback.message.edit_text(
+            text,
+            reply_markup=service_rules_keyboard(page_index, total_pages, lang),
+            parse_mode='Markdown'
+        )
+    except Exception as markdown_error:
+        logger.warning(f"Markdown parsing failed in user rules, retrying without markdown: {markdown_error}")
+        try:
+            clean_text = text.replace('**', '').replace('*', '').replace('_', '').replace('`', '')
+            await callback.message.edit_text(
+                clean_text,
+                reply_markup=service_rules_keyboard(page_index, total_pages, lang)
+            )
+        except Exception as edit_error:
+            await callback.message.answer(
+                clean_text,
+                reply_markup=service_rules_keyboard(page_index, total_pages, lang)
+            )
+
+@router.callback_query(F.data.startswith("rules_page_"))
+async def rules_page_callback(callback: CallbackQuery, db: Database, **kwargs):
+    user = kwargs.get('user')
+    if not user:
+        await callback.answer("❌ Ошибка пользователя")
+        return
+    
+    try:
+        page_index = int(callback.data.split("_")[-1])
+        rules = await db.get_all_service_rules(active_only=True)
+        
+        if not rules:
+            await callback.answer("❌ Правила не найдены")
+            return
+        
+        await show_rules_page(callback, rules, page_index, user.language)
+        
+    except (ValueError, IndexError) as e:
+        logger.error(f"Error parsing rules page number: {e}")
+        await callback.answer("❌ Ошибка навигации")
+    except Exception as e:
+        logger.error(f"Error switching rules page: {e}")
+        await callback.answer("❌ Ошибка загрузки страницы")
+
+@router.callback_query(F.data == "cancel", StateFilter(BotStates.waiting_promocode))
+async def cancel_promocode_callback(callback: CallbackQuery, state: FSMContext, **kwargs):
+    user = kwargs.get('user')
+    config = kwargs.get('config')
+    db = kwargs.get('db')
+    
+    if not user:
+        await callback.answer("❌ Ошибка пользователя")
+        return
+    
+    await state.clear()
+    
+    show_trial = False
+    show_lucky_game = True
+    
+    if config and config.TRIAL_ENABLED and db:
+        try:
+            has_used = await db.has_used_trial(user.telegram_id)
+            show_trial = not has_used
+        except Exception as e:
+            logger.error(f"Error checking trial availability: {e}")
+    
+    if config:
+        show_lucky_game = getattr(config, 'LUCKY_GAME_ENABLED', True)
+    
+    await callback.message.edit_text(
+        t('main_menu', user.language),
+        reply_markup=main_menu_keyboard(user.language, user.is_admin, show_trial, show_lucky_game)
+    )
