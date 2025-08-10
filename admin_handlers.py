@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 from typing import List, Dict
 
-from database import Database, User, ReferralProgram, ReferralEarning
+from database import Database, User, ReferralProgram, ReferralEarning, ServiceRule
 from remnawave_api import RemnaWaveAPI
 from keyboards import *
 from translations import t
@@ -430,7 +430,6 @@ async def toggle_subscription(callback: CallbackQuery, user: User, db: Database,
         status = t('enabled', user.language) if sub.is_active else t('disabled', user.language)
         await callback.answer(f"✅ Подписка «{sub.name}» {status}")
         
-        # Update the list
         subs = await db.get_all_subscriptions(include_inactive=True)
         await callback.message.edit_reply_markup(
             reply_markup=admin_subscriptions_list_keyboard(subs, user.language)
@@ -589,7 +588,6 @@ async def delete_subscription(callback: CallbackQuery, user: User, db: Database,
         else:
             await callback.answer("❌ Ошибка удаления")
         
-        # Return to list
         subs = await db.get_all_subscriptions(include_inactive=True)
         if subs:
             await callback.message.edit_text(
@@ -681,7 +679,6 @@ async def handle_balance_user_id(message: Message, state: FSMContext, user: User
         await message.answer("❌ Неверный Telegram ID")
         return
     
-    # Check if user exists
     target_user = await db.get_user_by_telegram_id(telegram_id)
     if not target_user:
         await message.answer(t('user_not_found', user.language))
@@ -1046,7 +1043,7 @@ async def handle_promo_expiry(message: Message, state: FSMContext, user: User, d
         else:
             try:
                 days = int(expiry_input)
-                if days <= 0 or days > 3650:  # Максимум 10 лет
+                if days <= 0 or days > 3650: 
                     await message.answer("❌ Количество дней должно быть от 1 до 3650")
                     return
                 expires_at = datetime.utcnow() + timedelta(days=days)
@@ -1733,8 +1730,22 @@ async def confirm_deactivate_all_callback(callback: CallbackQuery, user: User, d
     BotStates.admin_edit_user_expiry,
     BotStates.admin_edit_user_traffic,
     BotStates.admin_test_monitor_user,
-    BotStates.admin_rename_plans_confirm
+    BotStates.admin_rename_plans_confirm,
+    BotStates.waiting_rule_title,
+    BotStates.waiting_rule_content,
+    BotStates.waiting_rule_order,
+    BotStates.waiting_rule_edit_title,
+    BotStates.waiting_rule_edit_content,
+    BotStates.waiting_rule_edit_order
 ))
+async def cancel_rule_editing(callback: CallbackQuery, state: FSMContext, user: User, **kwargs):
+    """Отмена редактирования правил"""
+    await state.clear()
+    await callback.message.edit_text(
+        t('main_menu', user.language),
+        reply_markup=main_menu_keyboard(user.language, user.is_admin)
+    )
+    
 async def cancel_admin_action(callback: CallbackQuery, state: FSMContext, user: User, **kwargs):
     await state.clear()
     await callback.message.edit_text(
@@ -5627,7 +5638,7 @@ async def import_all_by_telegram_callback(callback: CallbackQuery, user: User, a
                         errors += 1
                         continue
                     
-                    expire_dt_naive = datetime.now() + timedelta(days=30)  # Дефолт
+                    expire_dt_naive = datetime.now() + timedelta(days=30)  
                     if expire_at:
                         try:
                             if expire_at.endswith('Z'):
@@ -6849,3 +6860,470 @@ async def admin_stars_settings_callback(callback: CallbackQuery, user: User, **k
         text,
         reply_markup=keyboard
     )
+
+@admin_router.callback_query(F.data == "admin_rules")
+async def admin_rules_callback(callback: CallbackQuery, user: User, **kwargs):
+    """Главное меню управления правилами"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    await callback.message.edit_text(
+        "📜 Управление правилами сервиса\n\n"
+        "Здесь вы можете создавать, редактировать и управлять страницами правил сервиса, "
+        "которые видят пользователи в главном меню.",
+        reply_markup=admin_rules_keyboard(user.language)
+    )
+
+@admin_router.callback_query(F.data == "admin_rules_list")
+async def admin_rules_list_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        rules = await db.get_all_service_rules(active_only=False)
+        
+        if not rules:
+            await callback.message.edit_text(
+                "📜 Правила сервиса не созданы\n\n"
+                "Создайте первую страницу правил для пользователей.",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="➕ Создать первую страницу", callback_data="admin_rules_create")],
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_rules")]
+                ])
+            )
+            return
+        
+        text = f"📜 Список правил сервиса ({len(rules)} страниц)\n\n"
+        
+        for rule in rules:
+            status = "🟢 Активна" if rule.is_active else "🔴 Отключена"
+            text += f"{rule.page_order}. **{rule.title}**\n"
+            text += f"   {status}\n"
+            text += f"   Создано: {rule.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=admin_rules_list_keyboard(rules, user.language),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error listing service rules: {e}")
+        await callback.answer("❌ Ошибка загрузки правил")
+
+@admin_router.callback_query(F.data == "admin_rules_create")
+async def admin_rules_create_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    await callback.message.edit_text(
+        "📝 Создание новой страницы правил\n\n"
+        "Введите заголовок страницы (например: 'Общие положения', 'Правила использования'):",
+        reply_markup=cancel_keyboard(user.language)
+    )
+    await state.set_state(BotStates.waiting_rule_title)
+
+@admin_router.message(StateFilter(BotStates.waiting_rule_title))
+async def handle_rule_title(message: Message, state: FSMContext, user: User, **kwargs):
+    title = message.text.strip()
+    
+    if len(title) < 3 or len(title) > 200:
+        await message.answer("❌ Заголовок должен быть от 3 до 200 символов")
+        return
+    
+    await state.update_data(rule_title=title)
+    await message.answer(
+        f"✅ Заголовок установлен: **{title}**\n\n"
+        "📝 Теперь введите содержимое страницы правил:\n\n"
+        "💡 Вы можете использовать форматирование Markdown:\n"
+        "• **жирный текст**\n"
+        "• *курсив*\n"
+        "• `код`\n"
+        "• [ссылка](url)\n\n"
+        "Максимальная длина: 3500 символов",
+        reply_markup=cancel_keyboard(user.language),
+        parse_mode='Markdown'
+    )
+    await state.set_state(BotStates.waiting_rule_content)
+
+@admin_router.message(StateFilter(BotStates.waiting_rule_content))
+async def handle_rule_content(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
+    content = message.text.strip()
+    
+    if len(content) < 10:
+        await message.answer("❌ Содержимое должно быть не менее 10 символов")
+        return
+    
+    if len(content) > 3500:
+        await message.answer("❌ Содержимое слишком длинное. Максимум 3500 символов.")
+        return
+    
+    try:
+        data = await state.get_data()
+        title = data.get('rule_title')
+        
+        rule = await db.create_service_rule(title=title, content=content)
+        
+        await message.answer(
+            f"✅ Страница правил создана!\n\n"
+            f"📋 Заголовок: {title}\n"
+            f"📄 Порядок: {rule.page_order}\n"
+            f"📊 Статус: {'🟢 Активна' if rule.is_active else '🔴 Отключена'}\n\n"
+            f"Пользователи смогут увидеть эту страницу в меню 'Правила сервиса'.",
+            reply_markup=admin_menu_keyboard(user.language)
+        )
+        
+        log_user_action(user.telegram_id, "service_rule_created", f"Title: {title}")
+        
+    except Exception as e:
+        logger.error(f"Error creating service rule: {e}")
+        await message.answer(
+            "❌ Ошибка создания страницы правил",
+            reply_markup=admin_menu_keyboard(user.language)
+        )
+    
+    await state.clear()
+
+
+@admin_router.callback_query(F.data.startswith("admin_rule_view_"))
+async def admin_rule_view_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        rule_id = int(callback.data.split("_")[-1])
+        rule = await db.get_service_rule_by_id(rule_id)
+        
+        if not rule:
+            await callback.answer("❌ Правило не найдено")
+            return
+        
+        safe_title = rule.title.replace('*', '\\*').replace('_', '\\_').replace('[', '\\[').replace(']', '\\]').replace('`', '\\`')
+        
+        text = f"📜 **{safe_title}**\n\n"
+        text += f"📄 Порядок: {rule.page_order}\n"
+        text += f"📊 Статус: {'🟢 Активна' if rule.is_active else '🔴 Отключена'}\n"
+        
+        created_date = rule.created_at.strftime('%d.%m.%Y %H:%M') if rule.created_at else 'N/A'
+        updated_date = rule.updated_at.strftime('%d.%m.%Y %H:%M') if rule.updated_at else 'N/A'
+        
+        text += f"📅 Создано: {created_date}\n"
+        text += f"📝 Изменено: {updated_date}\n\n"
+        
+        content_preview = rule.content[:200]
+        safe_preview = (content_preview
+                       .replace('*', '')
+                       .replace('_', '')
+                       .replace('[', '')
+                       .replace(']', '')
+                       .replace('`', '')
+                       .replace('#', ''))
+        
+        if len(rule.content) > 200:
+            safe_preview += "..."
+        
+        text += f"**Превью содержимого:**\n{safe_preview}"
+        
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=admin_rule_edit_keyboard(rule_id, user.language),
+                parse_mode='Markdown'
+            )
+        except Exception as markdown_error:
+            logger.warning(f"Markdown parsing failed, sending without formatting: {markdown_error}")
+            
+            simple_text = f"📜 {rule.title}\n\n"
+            simple_text += f"📄 Порядок: {rule.page_order}\n"
+            simple_text += f"📊 Статус: {'🟢 Активна' if rule.is_active else '🔴 Отключена'}\n"
+            simple_text += f"📅 Создано: {created_date}\n"
+            simple_text += f"📝 Изменено: {updated_date}\n\n"
+            simple_text += f"Превью содержимого:\n{safe_preview}"
+            
+            await callback.message.edit_text(
+                simple_text,
+                reply_markup=admin_rule_edit_keyboard(rule_id, user.language)
+            )
+        
+    except Exception as e:
+        logger.error(f"Error viewing service rule: {e}")
+        await callback.answer("❌ Ошибка загрузки правила")
+
+@admin_router.callback_query(F.data.startswith("admin_rule_edit_title_"))
+async def admin_rule_edit_title_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    rule_id = int(callback.data.split("_")[-1])
+    await state.update_data(edit_rule_id=rule_id)
+    
+    await callback.message.edit_text(
+        "✏️ Редактирование заголовка\n\n"
+        "Введите новый заголовок страницы (3-200 символов):",
+        reply_markup=cancel_keyboard(user.language)
+    )
+    await state.set_state(BotStates.waiting_rule_edit_title)
+
+@admin_router.message(StateFilter(BotStates.waiting_rule_edit_title))
+async def handle_rule_edit_title(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
+    new_title = message.text.strip()
+    
+    if len(new_title) < 3 or len(new_title) > 200:
+        await message.answer("❌ Заголовок должен быть от 3 до 200 символов")
+        return
+    
+    try:
+        data = await state.get_data()
+        rule_id = data.get('edit_rule_id')
+        
+        rule = await db.get_service_rule_by_id(rule_id)
+        if not rule:
+            await message.answer("❌ Правило не найдено")
+            await state.clear()
+            return
+        
+        old_title = rule.title
+        rule.title = new_title
+        success = await db.update_service_rule(rule)
+        
+        if success:
+            await message.answer(
+                f"✅ Заголовок обновлен!\n\n"
+                f"Было: {old_title}\n"
+                f"Стало: {new_title}",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📜 К правилу", callback_data=f"admin_rule_view_{rule_id}")],
+                    [InlineKeyboardButton(text="📋 К списку", callback_data="admin_rules_list")]
+                ])
+            )
+            
+            log_user_action(user.telegram_id, "service_rule_title_edited", 
+                          f"ID: {rule_id}, New: {new_title}")
+        else:
+            await message.answer("❌ Ошибка обновления заголовка")
+        
+    except Exception as e:
+        logger.error(f"Error updating rule title: {e}")
+        await message.answer("❌ Ошибка обновления")
+    
+    await state.clear()
+
+@admin_router.callback_query(F.data.startswith("admin_rule_edit_content_"))
+async def admin_rule_edit_content_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    rule_id = int(callback.data.split("_")[-1])
+    await state.update_data(edit_rule_id=rule_id)
+    
+    await callback.message.edit_text(
+        "📝 Редактирование содержимого\n\n"
+        "Введите новое содержимое страницы правил:\n\n"
+        "💡 Поддерживается Markdown форматирование\n"
+        "Максимальная длина: 3500 символов",
+        reply_markup=cancel_keyboard(user.language)
+    )
+    await state.set_state(BotStates.waiting_rule_edit_content)
+
+@admin_router.message(StateFilter(BotStates.waiting_rule_edit_content))
+async def handle_rule_edit_content(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
+    new_content = message.text.strip()
+    
+    if len(new_content) < 10:
+        await message.answer("❌ Содержимое должно быть не менее 10 символов")
+        return
+    
+    if len(new_content) > 3500:
+        await message.answer("❌ Содержимое слишком длинное. Максимум 3500 символов.")
+        return
+    
+    try:
+        data = await state.get_data()
+        rule_id = data.get('edit_rule_id')
+        
+        rule = await db.get_service_rule_by_id(rule_id)
+        if not rule:
+            await message.answer("❌ Правило не найдено")
+            await state.clear()
+            return
+        
+        rule.content = new_content
+        success = await db.update_service_rule(rule)
+        
+        if success:
+            await message.answer(
+                f"✅ Содержимое обновлено!\n\n"
+                f"📜 Правило: {rule.title}\n"
+                f"📝 Новый размер: {len(new_content)} символов",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📜 К правилу", callback_data=f"admin_rule_view_{rule_id}")],
+                    [InlineKeyboardButton(text="📋 К списку", callback_data="admin_rules_list")]
+                ])
+            )
+            
+            log_user_action(user.telegram_id, "service_rule_content_edited", 
+                          f"ID: {rule_id}, Length: {len(new_content)}")
+        else:
+            await message.answer("❌ Ошибка обновления содержимого")
+        
+    except Exception as e:
+        logger.error(f"Error updating rule content: {e}")
+        await message.answer("❌ Ошибка обновления")
+    
+    await state.clear()
+
+@admin_router.callback_query(F.data.startswith("admin_rule_edit_order_"))
+async def admin_rule_edit_order_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    rule_id = int(callback.data.split("_")[-1])
+    await state.update_data(edit_rule_id=rule_id)
+    
+    await callback.message.edit_text(
+        "🔄 Изменение порядка страницы\n\n"
+        "Введите новый номер позиции страницы (число от 1 до 100):\n\n"
+        "💡 Страницы с меньшим номером показываются раньше",
+        reply_markup=cancel_keyboard(user.language)
+    )
+    await state.set_state(BotStates.waiting_rule_edit_order)
+
+@admin_router.message(StateFilter(BotStates.waiting_rule_edit_order))
+async def handle_rule_edit_order(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
+    try:
+        new_order = int(message.text.strip())
+        
+        if new_order < 1 or new_order > 100:
+            await message.answer("❌ Порядок должен быть от 1 до 100")
+            return
+        
+        data = await state.get_data()
+        rule_id = data.get('edit_rule_id')
+        
+        rule = await db.get_service_rule_by_id(rule_id)
+        if not rule:
+            await message.answer("❌ Правило не найдено")
+            await state.clear()
+            return
+        
+        old_order = rule.page_order
+        rule.page_order = new_order
+        success = await db.update_service_rule(rule)
+        
+        if success:
+            await message.answer(
+                f"✅ Порядок страницы изменен!\n\n"
+                f"📜 Правило: {rule.title}\n"
+                f"📄 Было: {old_order}\n"
+                f"📄 Стало: {new_order}",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📜 К правилу", callback_data=f"admin_rule_view_{rule_id}")],
+                    [InlineKeyboardButton(text="📋 К списку", callback_data="admin_rules_list")]
+                ])
+            )
+            
+            log_user_action(user.telegram_id, "service_rule_order_changed", 
+                          f"ID: {rule_id}, Order: {old_order}->{new_order}")
+        else:
+            await message.answer("❌ Ошибка изменения порядка")
+        
+    except ValueError:
+        await message.answer("❌ Введите корректное число")
+    except Exception as e:
+        logger.error(f"Error updating rule order: {e}")
+        await message.answer("❌ Ошибка обновления")
+    
+    await state.clear()
+
+@admin_router.callback_query(F.data.startswith("admin_rule_toggle_"))
+async def admin_rule_toggle_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        rule_id = int(callback.data.split("_")[-1])
+        rule = await db.get_service_rule_by_id(rule_id)
+        
+        if not rule:
+            await callback.answer("❌ Правило не найдено")
+            return
+        
+        rule.is_active = not rule.is_active
+        success = await db.update_service_rule(rule)
+        
+        if success:
+            status_text = "активирована" if rule.is_active else "отключена"
+            await callback.answer(f"✅ Страница '{rule.title}' {status_text}")
+            
+            await admin_rule_view_callback(callback, user, db, **kwargs)
+            
+            log_user_action(user.telegram_id, "service_rule_toggled", 
+                          f"ID: {rule_id}, Active: {rule.is_active}")
+        else:
+            await callback.answer("❌ Ошибка обновления статуса")
+        
+    except Exception as e:
+        logger.error(f"Error toggling service rule: {e}")
+        await callback.answer("❌ Ошибка изменения статуса")
+
+@admin_router.callback_query(F.data.startswith("admin_rule_delete_"))
+async def admin_rule_delete_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        rule_id = int(callback.data.split("_")[-1])
+        rule = await db.get_service_rule_by_id(rule_id)
+        
+        if not rule:
+            await callback.answer("❌ Правило не найдено")
+            return
+        
+        await callback.message.edit_text(
+            f"⚠️ Удаление страницы правил\n\n"
+            f"📜 Заголовок: **{rule.title}**\n"
+            f"📄 Порядок: {rule.page_order}\n\n"
+            f"❗️ Это действие нельзя отменить!\n"
+            f"Пользователи больше не увидят эту страницу.",
+            reply_markup=admin_rule_delete_confirm_keyboard(rule_id, user.language),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing delete confirmation: {e}")
+        await callback.answer("❌ Ошибка")
+
+@admin_router.callback_query(F.data.startswith("admin_rule_confirm_delete_"))
+async def admin_rule_confirm_delete_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    """Окончательное удаление страницы правил"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        rule_id = int(callback.data.split("_")[-1])
+        rule = await db.get_service_rule_by_id(rule_id)
+        
+        if not rule:
+            await callback.answer("❌ Правило не найдено")
+            return
+        
+        rule_title = rule.title
+        success = await db.delete_service_rule(rule_id)
+        
+        if success:
+            await callback.message.edit_text(
+                f"✅ Страница правил удалена\n\n"
+                f"📜 Была удалена: {rule_title}",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📋 К списку правил", callback_data="admin_rules_list")],
+                    [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
+                ])
+            )
+            
+            log_user_action(user.telegram_id, "service_rule_deleted", f"Title: {rule_title}")
+        else:
+            await callback.answer("❌ Ошибка удаления")
+        
+    except Exception as e:
+        logger.error(f"Error deleting service rule: {e}")
+        await callback.answer("❌ Ошибка удаления")
