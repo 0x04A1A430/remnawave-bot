@@ -1885,32 +1885,38 @@ class Database:
             async with self.engine.begin() as conn:
                 try:
                     await conn.execute(text("SELECT auto_pay_enabled FROM user_subscriptions LIMIT 1"))
-                    logger.info("Autopay fields already exist")
-                    return
+                    logger.info("auto_pay_enabled field already exists")
                 except Exception:
-                    pass
-                
+                    try:
+                        await conn.execute(text("""
+                            ALTER TABLE user_subscriptions 
+                            ADD COLUMN auto_pay_enabled BOOLEAN DEFAULT FALSE
+                        """))
+                        logger.info("Added auto_pay_enabled column")
+                    except Exception as e:
+                        logger.error(f"Error adding auto_pay_enabled column: {e}")
+                        pass
+        
+            async with self.engine.begin() as conn:
                 try:
-                    await conn.execute(text("""
-                        ALTER TABLE user_subscriptions 
-                        ADD COLUMN auto_pay_enabled BOOLEAN DEFAULT FALSE
-                    """))
-                    logger.info("Added auto_pay_enabled column")
-                except Exception as e:
-                    logger.warning(f"Column auto_pay_enabled may already exist: {e}")
-            
-                try:
-                    await conn.execute(text("""
-                        ALTER TABLE user_subscriptions 
-                        ADD COLUMN auto_pay_days_before INTEGER DEFAULT 3
-                    """))
-                    logger.info("Added auto_pay_days_before column")
-                except Exception as e:
-                    logger.warning(f"Column auto_pay_days_before may already exist: {e}")
-            
-                logger.info("Successfully added autopay fields to user_subscriptions table")
+                    await conn.execute(text("SELECT auto_pay_days_before FROM user_subscriptions LIMIT 1"))
+                    logger.info("auto_pay_days_before field already exists")
+                except Exception:
+                    try:
+                        await conn.execute(text("""
+                            ALTER TABLE user_subscriptions 
+                            ADD COLUMN auto_pay_days_before INTEGER DEFAULT 3
+                        """))
+                        logger.info("Added auto_pay_days_before column")
+                    except Exception as e:
+                        logger.error(f"Error adding auto_pay_days_before column: {e}")
+                        pass
+        
+            logger.info("Successfully completed autopay fields migration")
+        
         except Exception as e:
-            logger.error(f"Error adding autopay fields: {e}")
+            logger.error(f"Error during autopay migration: {e}")
+
 
     async def get_autopay_history(self, limit: int = 50) -> List[Dict[str, Any]]:
         async with self.session_factory() as session:
