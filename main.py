@@ -8,6 +8,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from lucky_game import lucky_game_router
 from stars_handlers import stars_router
+from autopay_service import AutoPayService
 
 print("🚀 Запуск бота...")
 print(f"📍 Рабочая директория: {os.getcwd()}")
@@ -46,6 +47,40 @@ class BotApplication:
         self.bot = None
         self.dp = None
         self.monitor_service = None
+        self.autopay_service = None
+
+    async def _init_autopay_service(self):
+        """Инициализирует сервис автоплатежей"""
+        try:
+            logger.info("🔧 Initializing autopay service...")
+            
+            if not self.bot:
+                logger.error("❌ Bot instance is None, cannot initialize autopay")
+                return
+            
+            if not self.db:
+                logger.error("❌ Database instance is None, cannot initialize autopay")
+                return
+            
+            self.autopay_service = AutoPayService(self.db, self.api, self.bot)
+            
+            self.dp.workflow_data["autopay_service"] = self.autopay_service
+            logger.info("✅ Autopay service added to workflow_data")
+            
+            logger.info("🚀 Starting autopay service...")
+            await self.autopay_service.start()
+            
+            status = await self.autopay_service.get_service_status()
+            if status['is_running']:
+                logger.info("✅ Autopay service started successfully")
+                logger.info(f"📊 Autopay status: interval=30min")
+            else:
+                logger.warning("⚠️ Autopay service created but not running")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize autopay service: {e}", exc_info=True)
+            logger.warning("⚠️ Continuing without autopay service")
+            self.autopay_service = None
         
     async def initialize(self):
         
@@ -97,6 +132,7 @@ class BotApplication:
         self._setup_dispatcher()
         
         await self._init_monitor_service()
+        await self._init_autopay_service()
 
         if self.config.STARS_ENABLED:
             logger.info("✅ Telegram Stars пополнение включено")
@@ -249,6 +285,13 @@ class BotApplication:
             
     async def shutdown(self):
         logger.info("Shutting down bot...")
+
+        if self.autopay_service: 
+            try:
+                await self.autopay_service.stop()
+                logger.info("Autopay service stopped")
+            except Exception as e:
+                logger.error(f"Error stopping autopay service: {e}")
         
         if self.monitor_service:
             try:
