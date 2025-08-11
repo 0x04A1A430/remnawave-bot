@@ -593,7 +593,6 @@ docker build -t remnawave-bot .
 ### Рекомендации
 
 - ✅ Измените пароли PostgreSQL в `docker-compose.yml`
-- ✅ Не публикуйте файл `.env` в репозитории
 - ✅ Используйте HTTPS для Remnawave API
 - ✅ Регулярно создавайте backup базы данных
 - ✅ Ограничьте доступ к серверу через firewall
