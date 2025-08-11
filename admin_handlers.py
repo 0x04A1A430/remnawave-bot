@@ -7295,7 +7295,6 @@ async def admin_rule_delete_callback(callback: CallbackQuery, user: User, db: Da
 
 @admin_router.callback_query(F.data.startswith("admin_rule_confirm_delete_"))
 async def admin_rule_confirm_delete_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
-    """Окончательное удаление страницы правил"""
     if not await check_admin_access(callback, user):
         return
     
@@ -7327,3 +7326,416 @@ async def admin_rule_confirm_delete_callback(callback: CallbackQuery, user: User
     except Exception as e:
         logger.error(f"Error deleting service rule: {e}")
         await callback.answer("❌ Ошибка удаления")
+
+@admin_router.callback_query(F.data == "admin_autopay")
+async def admin_autopay_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    await callback.message.edit_text(
+        "🔄 Управление автоплатежами\n\n"
+        "Здесь вы можете просматривать статистику и управлять сервисом автоматических платежей.",
+        reply_markup=admin_autopay_keyboard(user.language)
+    )
+
+@admin_router.callback_query(F.data == "autopay_status")
+async def autopay_status_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    autopay_service = kwargs.get('autopay_service')
+    db = kwargs.get('db')
+    
+    if not autopay_service:
+        await callback.message.edit_text(
+            "❌ Сервис автоплатежей недоступен",
+            reply_markup=back_keyboard("admin_autopay", user.language)
+        )
+        return
+    
+    try:
+        status = await autopay_service.get_service_status()
+        
+        subscriptions_with_autopay = await db.get_subscriptions_for_autopay()
+        
+        text = "🔄 **Статус сервиса автоплатежей**\n\n"
+        
+        if status['is_running']:
+            text += "✅ **Статус:** Работает\n"
+        else:
+            text += "❌ **Статус:** Остановлен\n"
+        
+        text += f"⚙️ **Настройки:**\n"
+        text += f"• Интервал проверки: {status['check_interval']//60} мин\n"
+        text += f"• API подключен: {'✅' if status['has_api'] else '❌'}\n"
+        text += f"• Бот подключен: {'✅' if status['has_bot'] else '❌'}\n\n"
+        
+        text += f"📊 **Статистика:**\n"
+        text += f"• Подписок с автоплатежом: {len(subscriptions_with_autopay)}\n"
+        
+        days_stats = {}
+        for sub in subscriptions_with_autopay:
+            days = sub.auto_pay_days_before
+            days_stats[days] = days_stats.get(days, 0) + 1
+        
+        if days_stats:
+            text += f"• Распределение по дням:\n"
+            for days in sorted(days_stats.keys()):
+                text += f"  - За {days} дн.: {days_stats[days]} подписок\n"
+        
+        text += f"\n🕐 Обновлено: {format_datetime(datetime.now(), user.language)}"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Обновить", callback_data="autopay_status")],
+            [InlineKeyboardButton(text="🚀 Принудительная проверка", callback_data="autopay_force_check")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_autopay")]
+        ])
+        
+        await callback.message.edit_text(text, reply_markup=keyboard)
+        
+    except Exception as e:
+        logger.error(f"Error getting autopay status: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка получения статуса",
+            reply_markup=back_keyboard("admin_autopay", user.language)
+        )
+
+@admin_router.callback_query(F.data == "autopay_force_check")
+async def autopay_force_check_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    autopay_service = kwargs.get('autopay_service')
+    
+    if not autopay_service:
+        await callback.answer("❌ Сервис автоплатежей недоступен")
+        return
+    
+    try:
+        await callback.answer("⏳ Запускаю проверку автоплатежей...")
+        
+        stats = await autopay_service.process_autopayments()
+        
+        text = "✅ Принудительная проверка автоплатежей завершена!\n\n"
+        text += f"📊 Результаты:\n"
+        text += f"• Обработано: {stats['processed']}\n"
+        text += f"• Успешно: {stats['successful']}\n"
+        text += f"• Недостаточно средств: {stats['insufficient_balance']}\n"
+        text += f"• Ошибки: {stats['failed']}\n"
+        
+        if stats['errors']:
+            text += f"\n❌ Детали ошибок:\n"
+            for error in stats['errors'][:5]:
+                text += f"• {error}\n"
+            if len(stats['errors']) > 5:
+                text += f"... и еще {len(stats['errors']) - 5}\n"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=back_keyboard("admin_autopay", user.language)
+        )
+        
+        log_user_action(user.telegram_id, "autopay_force_check", 
+                       f"Processed: {stats['processed']}, Successful: {stats['successful']}")
+        
+    except Exception as e:
+        logger.error(f"Error in force autopay check: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка при выполнении проверки",
+            reply_markup=back_keyboard("admin_autopay", user.language)
+        )
+
+def admin_autopay_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статус сервиса", callback_data="autopay_status")],
+        [InlineKeyboardButton(text="🚀 Принудительная проверка", callback_data="autopay_force_check")],
+        [InlineKeyboardButton(text="📈 Статистика автоплатежей", callback_data="autopay_statistics")],
+        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="admin_panel")]
+    ])
+    return keyboard
+
+@admin_router.callback_query(F.data == "autopay_statistics") 
+async def autopay_statistics_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    db = kwargs.get('db')
+    if not db:
+        await callback.answer("❌ База данных недоступна", show_alert=True)
+        return
+    
+    try:
+        await callback.answer("📊 Собираю статистику автоплатежей...")
+        
+        stats = await db.get_autopay_statistics()
+        
+        insufficient_balance_users = await db.get_users_with_insufficient_autopay_balance()
+        
+        autopay_history = await db.get_autopay_history(10)
+        
+        text = "📈 **Статистика автоплатежей**\n\n"
+        
+        text += "📊 **Общая информация:**\n"
+        text += f"• Всего подписок с автоплатежом: {stats['total_autopay_subscriptions']}\n"
+        text += f"• Активных: {stats['active_autopay_subscriptions']}\n"
+        text += f"• Просроченных: {stats['expired_autopay_subscriptions']}\n\n"
+        
+        if stats['ready_for_autopay']:
+            text += "🔄 **Готовы к автоплатежу:**\n"
+            total_ready = 0
+            for ready_info in stats['ready_for_autopay']:
+                count = ready_info['count']
+                days = ready_info['days']
+                total_ready += count
+                if count > 0:
+                    text += f"• За {days} дн.: {count} подписок\n"
+            
+            if total_ready == 0:
+                text += "• Нет подписок, готовых к продлению\n"
+            text += "\n"
+        
+        if insufficient_balance_users:
+            text += f"⚠️ **Недостаточно средств ({len(insufficient_balance_users)}):**\n"
+            for user_info in insufficient_balance_users[:5]:
+                username = user_info.get('username', 'N/A')
+                needed = user_info['needed_amount']
+                days = user_info['expires_in_days']
+                text += f"• @{username}: нужно {needed:.0f}₽ (через {days}д)\n"
+            
+            if len(insufficient_balance_users) > 5:
+                text += f"• ... и еще {len(insufficient_balance_users) - 5}\n"
+            text += "\n"
+        
+        if autopay_history:
+            text += f"💳 **Последние автоплатежи:**\n"
+            for payment in autopay_history[:5]:
+                username = payment.get('username', 'N/A')
+                amount = abs(payment['amount']) 
+                date_str = payment['created_at'].strftime('%d.%m %H:%M')
+                status_emoji = "✅" if payment['status'] == 'completed' else "❌"
+                text += f"• {status_emoji} @{username}: {amount:.0f}₽ ({date_str})\n"
+            text += "\n"
+        
+        autopay_service = kwargs.get('autopay_service')
+        if autopay_service:
+            service_status = await autopay_service.get_service_status()
+            status_emoji = "✅" if service_status['is_running'] else "❌"
+            text += f"🔧 **Статус сервиса:** {status_emoji}\n"
+            text += f"• Интервал проверки: {service_status['check_interval']//60} мин\n"
+        else:
+            text += f"🔧 **Статус сервиса:** ❌ Недоступен\n"
+        
+        text += f"\n🕐 Обновлено: {format_datetime(datetime.now(), user.language)}"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=autopay_statistics_keyboard(user.language),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting detailed autopay statistics: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка получения статистики",
+            reply_markup=back_keyboard("admin_autopay", user.language)
+        )
+
+@admin_router.callback_query(F.data == "autopay_insufficient_balance_users")
+async def autopay_insufficient_balance_users_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    db = kwargs.get('db')
+    if not db:
+        await callback.answer("❌ База данных недоступна", show_alert=True)
+        return
+    
+    try:
+        insufficient_users = await db.get_users_with_insufficient_autopay_balance()
+        
+        if not insufficient_users:
+            text = "✅ **Все пользователи с автоплатежом имеют достаточный баланс**\n\n"
+            text += "Проблемных автоплатежей не обнаружено."
+        else:
+            text = f"⚠️ **Пользователи с недостаточным балансом ({len(insufficient_users)})**\n\n"
+            
+            insufficient_users.sort(key=lambda x: x['expires_in_days'])
+            
+            for user_info in insufficient_users:
+                username = user_info.get('username', 'N/A')
+                first_name = user_info.get('first_name', 'N/A')
+                current_balance = user_info['current_balance']
+                needed = user_info['needed_amount']
+                price = user_info['subscription_price']
+                days = user_info['expires_in_days']
+                sub_name = user_info['subscription_name']
+                
+                display_name = first_name
+                if username != 'N/A':
+                    display_name += f" (@{username})"
+                
+                urgency_emoji = "🔴" if days <= 1 else "🟡" if days <= 3 else "🟠"
+                
+                text += f"{urgency_emoji} **{display_name}**\n"
+                text += f"   💳 Баланс: {current_balance:.2f}₽ / {price:.2f}₽\n"
+                text += f"   💸 Нужно: {needed:.2f}₽\n"
+                text += f"   📋 {sub_name}\n"
+                text += f"   ⏰ Истекает через: {days} дн.\n\n"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Обновить", callback_data="autopay_insufficient_balance_users")],
+            [InlineKeyboardButton(text="📊 Статистика", callback_data="autopay_statistics")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_autopay")]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting insufficient balance users: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка получения списка пользователей",
+            reply_markup=back_keyboard("admin_autopay", user.language)
+        )
+
+@admin_router.callback_query(F.data == "autopay_subscriptions_list")
+async def autopay_subscriptions_list_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    db = kwargs.get('db')
+    if not db:
+        await callback.answer("❌ База данных недоступна", show_alert=True)
+        return
+    
+    try:
+        subscriptions_with_autopay = await db.get_subscriptions_for_autopay()
+        
+        subscriptions_data = []
+        
+        from datetime import datetime
+        current_time = datetime.utcnow()
+        
+        for user_sub in subscriptions_with_autopay:
+            try:
+                user_obj = await db.get_user_by_telegram_id(user_sub.user_id)
+                username = user_obj.username if user_obj else 'N/A'
+                
+                expires_in_days = (user_sub.expires_at - current_time).days
+                
+                subscriptions_data.append({
+                    'user_id': user_sub.user_id,
+                    'username': username,
+                    'auto_pay_days_before': user_sub.auto_pay_days_before,
+                    'expires_in_days': expires_in_days,
+                    'subscription_id': user_sub.id
+                })
+                
+            except Exception as e:
+                logger.warning(f"Error processing subscription {user_sub.id}: {e}")
+                continue
+        
+        subscriptions_data.sort(key=lambda x: x['expires_in_days'])
+        
+        text = f"📋 Подписки с автоплатежом ({len(subscriptions_data)})\n\n"
+        
+        if subscriptions_data:
+            expired = [s for s in subscriptions_data if s['expires_in_days'] <= 0]
+            due_soon = [s for s in subscriptions_data if 0 < s['expires_in_days'] <= s['auto_pay_days_before']]
+            normal = [s for s in subscriptions_data if s['expires_in_days'] > s['auto_pay_days_before']]
+            
+            text += f"📊 Статус:\n"
+            text += f"• ❌ Истекли: {len(expired)}\n"
+            text += f"• ⚠️ Скоро продление: {len(due_soon)}\n"
+            text += f"• ✅ Нормальные: {len(normal)}\n\n"
+            
+            text += "👥 Нажмите на пользователя для подробностей:"
+        else:
+            text += "📭 Нет подписок с включенным автоплатежом"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=autopay_subscriptions_keyboard(subscriptions_data, user.language)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting autopay subscriptions: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка получения списка подписок",
+            reply_markup=back_keyboard("admin_autopay", user.language)
+        )
+
+@admin_router.callback_query(F.data.startswith("autopay_user_detail_"))
+async def autopay_user_detail_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    db = kwargs.get('db')
+    if not db:
+        await callback.answer("❌ База данных недоступна", show_alert=True)
+        return
+    
+    try:
+        user_id = int(callback.data.split("_")[-1])
+        
+        target_user = await db.get_user_by_telegram_id(user_id)
+        if not target_user:
+            await callback.answer("❌ Пользователь не найден")
+            return
+        
+        user_subs = await db.get_user_subscriptions(user_id)
+        autopay_subs = [sub for sub in user_subs if sub.auto_pay_enabled]
+        
+        from datetime import datetime
+        current_time = datetime.utcnow()
+        
+        text = f"👤 Пользователь с автоплатежом\n\n"
+        
+        display_name = target_user.first_name or "N/A"
+        if target_user.username:
+            display_name += f" (@{target_user.username})"
+        
+        text += f"📛 Имя: {display_name}\n"
+        text += f"🆔 ID: {user_id}\n"
+        text += f"💰 Баланс: {target_user.balance:.2f}₽\n\n"
+        
+        text += f"🔄 Подписки с автоплатежом ({len(autopay_subs)}):\n\n"
+        
+        for sub in autopay_subs:
+            subscription = await db.get_subscription_by_id(sub.subscription_id)
+            if not subscription:
+                continue
+            
+            days_left = (sub.expires_at - current_time).days
+            
+            if days_left <= 0:
+                status = "❌ Истекла"
+            elif days_left <= sub.auto_pay_days_before:
+                status = "⚠️ Скоро продление"
+            else:
+                status = "✅ Активна"
+            
+            text += f"📋 {subscription.name}\n"
+            text += f"   {status} (через {days_left} дн.)\n"
+            text += f"   💰 Цена продления: {subscription.price}₽\n"
+            text += f"   📅 Продлять за: {sub.auto_pay_days_before} дн.\n"
+            
+            if target_user.balance < subscription.price:
+                needed = subscription.price - target_user.balance
+                text += f"   ⚠️ Нужно еще {needed:.2f}₽\n"
+            else:
+                text += f"   ✅ Средств достаточно\n"
+            
+            text += "\n"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=autopay_user_detail_keyboard(user_id, user.language)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing autopay user detail: {e}")
+        await callback.answer("❌ Ошибка получения информации")
