@@ -261,7 +261,7 @@
         text-anchor="middle" 
         fill="url(#mainGradient)" 
         filter="url(#glow)">
-    RemnaWave
+    Remnawave
   </text>
   
   <text x="200" y="345" 
