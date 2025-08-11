@@ -110,21 +110,51 @@ def user_subscriptions_keyboard(user_subscriptions: List[dict], lang: str = 'ru'
     buttons.append([InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="main_menu")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-def user_subscription_detail_keyboard(subscription_id: int, lang: str = 'ru', show_extend: bool = False, is_imported: bool = False) -> InlineKeyboardMarkup:
+def user_subscription_detail_keyboard(subscription_id: int, lang: str = 'ru', 
+                                   show_extend: bool = False, is_imported: bool = False, 
+                                   is_trial: bool = False, autopay_enabled: bool = False) -> InlineKeyboardMarkup:
     buttons = []
     
     if is_imported:
         buttons.append([InlineKeyboardButton(text="🔗 Получить ссылку подключения", callback_data=f"get_connection_{subscription_id}")])
         buttons.append([InlineKeyboardButton(text="🛒 Купить новую подписку", callback_data="buy_subscription")])
+    elif is_trial:
+        buttons.append([InlineKeyboardButton(text="🔗 Получить ссылку подключения", callback_data=f"get_connection_{subscription_id}")])
+        buttons.append([InlineKeyboardButton(text="🛒 Купить полную подписку", callback_data="buy_subscription")])
     else:
         if show_extend:
             buttons.append([InlineKeyboardButton(text="⏰ " + t('extend_subscription', lang), callback_data=f"extend_sub_{subscription_id}")])
         
         buttons.append([InlineKeyboardButton(text="🔗 Получить ссылку подключения", callback_data=f"get_connection_{subscription_id}")])
+        
+        if autopay_enabled:
+            autopay_text = "🔄✅ Настроить автоплатеж"
+        else:
+            autopay_text = "🔄❌ Настроить автоплатеж"
+        
+        buttons.append([InlineKeyboardButton(text=autopay_text, callback_data=f"autopay_settings_{subscription_id}")])
     
     buttons.append([InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="my_subscriptions")])
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def autopay_confirmation_keyboard(subscription_id: int, action: str, lang: str = 'ru') -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Да", callback_data=f"confirm_autopay_{action}_{subscription_id}"),
+            InlineKeyboardButton(text="❌ Нет", callback_data=f"autopay_settings_{subscription_id}")
+        ]
+    ])
+    return keyboard
+
+def autopay_help_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Клавиатура помощи по автоплатежам"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="topup_balance")],
+        [InlineKeyboardButton(text="📋 Мои подписки", callback_data="my_subscriptions")],
+        [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
+    ])
+    return keyboard
 
 def extend_subscription_keyboard(subscription_id: int, lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -160,14 +190,17 @@ def admin_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="📨 " + t('send_message', lang), callback_data="admin_messages"),
-            InlineKeyboardButton(text="👥 Рефералы", callback_data="admin_referrals")  # НОВАЯ КНОПКА
+            InlineKeyboardButton(text="👥 Рефералы", callback_data="admin_referrals")
         ],
         [
-            InlineKeyboardButton(text="📜 Правила сервиса", callback_data="admin_rules"),  # НОВАЯ КНОПКА
-            InlineKeyboardButton(text="🖥 Система RemnaWave", callback_data="admin_system")
+            InlineKeyboardButton(text="📜 Правила сервиса", callback_data="admin_rules"),
+            InlineKeyboardButton(text="🔄 Автоплатежи", callback_data="admin_autopay")
         ],
         [
-            InlineKeyboardButton(text="🔍 Мониторинг подписок", callback_data="admin_monitor"),
+            InlineKeyboardButton(text="🖥 Система RemnaWave", callback_data="admin_system"),
+            InlineKeyboardButton(text="🔍 Мониторинг подписок", callback_data="admin_monitor")
+        ],
+        [
             InlineKeyboardButton(text="📊 " + t('statistics', lang), callback_data="admin_stats")
         ],
         [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="main_menu")]
@@ -638,7 +671,6 @@ def stars_topup_keyboard(stars_rates: Dict[int, float], lang: str = 'ru') -> Inl
                 ))
         buttons.append(row)
     
-    # Добавляем кнопку назад
     buttons.append([InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="topup_balance")])
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -717,5 +749,108 @@ def admin_rule_delete_confirm_keyboard(rule_id: int, lang: str = 'ru') -> Inline
             InlineKeyboardButton(text="✅ Да, удалить", callback_data=f"admin_rule_confirm_delete_{rule_id}"),
             InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_rule_view_{rule_id}")
         ]
+    ])
+    return keyboard
+
+def autopay_settings_keyboard(user_sub_id: int, user_sub, lang: str = 'ru') -> InlineKeyboardMarkup:
+    buttons = []
+    
+    if user_sub.auto_pay_enabled:
+        toggle_text = "❌ Отключить автоплатеж"
+        toggle_callback = f"toggle_autopay_{user_sub_id}"
+    else:
+        toggle_text = "✅ Включить автоплатеж"
+        toggle_callback = f"toggle_autopay_{user_sub_id}"
+    
+    buttons.append([InlineKeyboardButton(text=toggle_text, callback_data=toggle_callback)])
+    
+    if user_sub.auto_pay_enabled:
+        buttons.append([InlineKeyboardButton(text="📅 Настроить дни до продления", callback_data="noop")])
+        
+        days_row = []
+        for days in [1, 3, 5, 7]:
+            emoji = "🔹" if user_sub.auto_pay_days_before == days else "⚪"
+            days_row.append(InlineKeyboardButton(
+                text=f"{emoji} {days}д",
+                callback_data=f"autopay_days_{user_sub_id}_{days}"
+            ))
+        buttons.append(days_row)
+    
+    buttons.append([InlineKeyboardButton(text="🔙 К подписке", callback_data=f"view_sub_{user_sub_id}")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def autopay_status_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Обновить", callback_data="autopay_status")],
+        [InlineKeyboardButton(text="🚀 Принудительная проверка", callback_data="autopay_force_check")],
+        [InlineKeyboardButton(text="📋 Список подписок", callback_data="autopay_subscriptions_list")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_autopay")]
+    ])
+    return keyboard
+
+def autopay_subscriptions_keyboard(subscriptions_data: List[Dict], lang: str = 'ru') -> InlineKeyboardMarkup:
+    buttons = []
+    
+    expired = [s for s in subscriptions_data if s['expires_in_days'] <= 0]
+    due_soon = [s for s in subscriptions_data if 0 < s['expires_in_days'] <= s['auto_pay_days_before']]
+    
+    critical_subs = expired + due_soon
+    
+    for sub_data in critical_subs[:8]: 
+        username = sub_data['username'] if sub_data['username'] != 'N/A' else f"ID:{sub_data['user_id']}"
+        days = sub_data['expires_in_days']
+        
+        if days <= 0:
+            status_emoji = "❌"
+            status_text = f"Истекла"
+        elif days <= sub_data['auto_pay_days_before']:
+            status_emoji = "⚠️"
+            status_text = f"Через {days}д"
+        else:
+            status_emoji = "✅"
+            status_text = f"Через {days}д"
+        
+        button_text = f"{status_emoji} @{username} ({status_text})"
+        
+        buttons.append([
+            InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"autopay_user_detail_{sub_data['user_id']}"
+            )
+        ])
+    
+    if len(subscriptions_data) > 8:
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"... и еще {len(subscriptions_data) - 8}",
+                callback_data="noop"
+            )
+        ])
+    
+    buttons.extend([
+        [InlineKeyboardButton(text="🔄 Обновить", callback_data="autopay_subscriptions_list")],
+        [InlineKeyboardButton(text="📊 Статистика", callback_data="autopay_statistics")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_autopay")]
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def autopay_user_detail_keyboard(user_id: int, lang: str = 'ru') -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 Добавить баланс", callback_data=f"admin_add_balance_to_{user_id}")],
+        [InlineKeyboardButton(text="📋 Управление подписками", callback_data=f"admin_user_subscriptions_{user_id}")],
+        [InlineKeyboardButton(text="🔄 Обновить", callback_data=f"autopay_user_detail_{user_id}")],
+        [InlineKeyboardButton(text="🔙 К списку", callback_data="autopay_subscriptions_list")]
+    ])
+    return keyboard
+
+
+def autopay_statistics_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚠️ Недостаточно средств", callback_data="autopay_insufficient_balance_users")],
+        [InlineKeyboardButton(text="📋 Список подписок", callback_data="autopay_subscriptions_list")],
+        [InlineKeyboardButton(text="🔄 Обновить", callback_data="autopay_statistics")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_autopay")]
     ])
     return keyboard
