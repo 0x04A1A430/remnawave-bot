@@ -939,6 +939,20 @@ async def view_subscription_detail(callback: CallbackQuery, db: Database, **kwar
         
         text = format_user_subscription_info(user_sub.__dict__, sub_dict, user_sub.expires_at, user.language)
         
+        if not is_trial and not is_imported and subscription.price > 0:
+            text += f"\n\n🔄 **Автоплатеж:**\n"
+            if user_sub.auto_pay_enabled:
+                text += f"✅ Включен (за {user_sub.auto_pay_days_before} дн. до истечения)\n"
+                text += f"💰 Стоимость продления: {subscription.price} руб.\n"
+                text += f"💳 Ваш баланс: {user.balance} руб."
+                
+                if user.balance < subscription.price:
+                    needed = subscription.price - user.balance
+                    text += f"\n⚠️ Недостаточно средств! Нужно еще {needed} руб."
+            else:
+                text += f"❌ Отключен\n"
+                text += f"💡 Включите для автоматического продления"
+        
         if user_sub.short_uuid and api:
             try:
                 subscription_url = await api.get_subscription_url(user_sub.short_uuid)
@@ -958,7 +972,14 @@ async def view_subscription_detail(callback: CallbackQuery, db: Database, **kwar
         
         await callback.message.edit_text(
             text,
-            reply_markup=user_subscription_detail_keyboard(user_sub_id, user.language, show_extend, is_imported),
+            reply_markup=user_subscription_detail_keyboard(
+                user_sub_id, 
+                user.language, 
+                show_extend, 
+                is_imported, 
+                is_trial,
+                user_sub.auto_pay_enabled 
+            ),
             parse_mode='HTML',
             disable_web_page_preview=True
         )
@@ -1774,3 +1795,226 @@ async def cancel_promocode_callback(callback: CallbackQuery, state: FSMContext, 
         t('main_menu', user.language),
         reply_markup=main_menu_keyboard(user.language, user.is_admin, show_trial, show_lucky_game)
     )
+
+@router.callback_query(F.data.startswith("toggle_autopay_"))
+async def toggle_autopay_callback(callback: CallbackQuery, db: Database, **kwargs):
+    user = kwargs.get('user')
+    if not user:
+        await callback.answer("❌ Ошибка пользователя")
+        return
+    
+    try:
+        user_sub_id = int(callback.data.split("_")[2])
+        
+        user_subs = await db.get_user_subscriptions(user.telegram_id)
+        user_sub = next((sub for sub in user_subs if sub.id == user_sub_id), None)
+        
+        if not user_sub:
+            await callback.answer("❌ Подписка не найдена")
+            return
+        
+        subscription = await db.get_subscription_by_id(user_sub.subscription_id)
+        if not subscription:
+            await callback.answer("❌ План подписки не найден")
+            return
+        
+        if subscription.is_trial:
+            await callback.answer("❌ Автоплатеж недоступен для тестовых подписок")
+            return
+        
+        if subscription.is_imported or subscription.price == 0:
+            await callback.answer("❌ Автоплатеж недоступен для импортированных подписок")
+            return
+        
+        new_state = not user_sub.auto_pay_enabled
+        success = await db.toggle_autopay(user_sub_id, new_state)
+        
+        if success:
+            status_text = "включен" if new_state else "отключен"
+            await callback.answer(f"✅ Автоплатеж {status_text}")
+            
+            updated_subs = await db.get_user_subscriptions(user.telegram_id)
+            updated_sub = next((sub for sub in updated_subs if sub.id == user_sub_id), None)
+            
+            if updated_sub:
+                await autopay_settings_callback(callback, db, user=user)
+        else:
+            await callback.answer("❌ Ошибка изменения настроек")
+        
+    except Exception as e:
+        logger.error(f"Error toggling autopay: {e}")
+        await callback.answer("❌ Ошибка операции")
+
+@router.callback_query(F.data == "autopay_help")
+async def autopay_help_callback(callback: CallbackQuery, **kwargs):
+    user = kwargs.get('user')
+    if not user:
+        await callback.answer("❌ Ошибка пользователя")
+        return
+    
+    text = "🔄 **Автоплатеж - как это работает?**\n\n"
+    
+    text += "**🎯 Что такое автоплатеж:**\n"
+    text += "Автоматическое продление подписки за несколько дней до истечения срока действия.\n\n"
+    
+    text += "**⚙️ Как настроить:**\n"
+    text += "1. Перейдите в 'Мои подписки'\n"
+    text += "2. Выберите нужную подписку\n"
+    text += "3. Нажмите 'Настроить автоплатеж'\n"
+    text += "4. Включите автоплатеж и выберите за сколько дней до истечения продлевать\n\n"
+    
+    text += "**💰 Требования:**\n"
+    text += "• На балансе должно быть достаточно средств\n"
+    text += "• Подписка должна быть активной\n"
+    text += "• Автоплатеж работает только с обычными подписками\n\n"
+    
+    text += "**📅 Варианты продления:**\n"
+    text += "• За 1 день - для тех, кто следит за балансом\n"
+    text += "• За 3 дня - рекомендуемый вариант\n"
+    text += "• За 5 дней - для подстраховки\n"
+    text += "• За 7 дней - максимальный запас времени\n\n"
+    
+    text += "**🔔 Уведомления:**\n"
+    text += "Вы получите уведомление при успешном продлении или если недостаточно средств.\n\n"
+    
+    text += "**❓ Проблемы:**\n"
+    text += "Если автоплатеж не сработал, проверьте баланс и обратитесь в поддержку."
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=autopay_help_keyboard(user.language),
+        parse_mode='Markdown'
+    )
+
+@router.callback_query(F.data == "autopay_insufficient_balance_help")
+async def autopay_insufficient_balance_help_callback(callback: CallbackQuery, **kwargs):
+    user = kwargs.get('user')
+    if not user:
+        await callback.answer("❌ Ошибка пользователя")
+        return
+    
+    text = "⚠️ **Недостаточно средств для автоплатежа**\n\n"
+    
+    text += f"💳 **Ваш текущий баланс:** {user.balance}₽\n\n"
+    
+    text += "**🔄 Что происходит:**\n"
+    text += "Система пыталась автоматически продлить вашу подписку, но на балансе недостаточно средств.\n\n"
+    
+    text += "**✅ Что нужно сделать:**\n"
+    text += "1. Пополните баланс на нужную сумму\n"
+    text += "2. Автоплатеж попробует снова при следующей проверке\n"
+    text += "3. Или продлите подписку вручную\n\n"
+    
+    text += "**⏰ Важно:**\n"
+    text += "Пополните баланс до истечения срока подписки, иначе доступ будет приостановлен."
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=autopay_help_keyboard(user.language),
+        parse_mode='Markdown'
+    )
+
+@router.callback_query(F.data.startswith("autopay_settings_"))
+async def autopay_settings_callback(callback: CallbackQuery, db: Database, **kwargs):
+    user = kwargs.get('user')
+    if not user:
+        await callback.answer("❌ Ошибка пользователя")
+        return
+    
+    try:
+        user_sub_id = int(callback.data.split("_")[2])
+        
+        user_subs = await db.get_user_subscriptions(user.telegram_id)
+        user_sub = next((sub for sub in user_subs if sub.id == user_sub_id), None)
+        
+        if not user_sub:
+            await callback.answer("❌ Подписка не найдена")
+            return
+        
+        subscription = await db.get_subscription_by_id(user_sub.subscription_id)
+        if not subscription:
+            await callback.answer("❌ План подписки не найден")
+            return
+        
+        if subscription.is_trial:
+            await callback.answer("❌ Автоплатеж недоступен для тестовых подписок")
+            return
+        
+        if subscription.is_imported or subscription.price == 0:
+            await callback.answer("❌ Автоплатеж недоступен для импортированных подписок")
+            return
+        
+        from datetime import datetime
+        now = datetime.utcnow()
+        days_left = (user_sub.expires_at - now).days
+        
+        text = f"⚙️ Настройки автоплатежа\n\n"
+        text += f"📋 Подписка: {subscription.name}\n"
+        text += f"💰 Цена продления: {subscription.price} руб.\n"
+        text += f"⏱ Длительность: {subscription.duration_days} дн.\n"
+        text += f"📅 Истекает через: {days_left} дн.\n\n"
+        
+        status_emoji = "✅" if user_sub.auto_pay_enabled else "❌"
+        status_text = "Включен" if user_sub.auto_pay_enabled else "Отключен"
+        text += f"🔄 Автоплатеж: {status_emoji} {status_text}\n"
+        
+        if user_sub.auto_pay_enabled:
+            text += f"📅 Продлять за: {user_sub.auto_pay_days_before} дн. до истечения\n\n"
+            
+            if user.balance >= subscription.price:
+                text += f"✅ На балансе достаточно средств ({user.balance}₽)\n"
+                text += f"💡 Подписка будет автоматически продлена"
+            else:
+                needed = subscription.price - user.balance
+                text += f"⚠️ Недостаточно средств на балансе!\n"
+                text += f"💳 Ваш баланс: {user.balance}₽\n"
+                text += f"💸 Нужно еще: {needed}₽\n"
+                text += f"💡 Пополните баланс для автоматического продления"
+        else:
+            text += f"\n💡 Включите автоплатеж для автоматического продления подписки\n"
+            text += f"🎯 Рекомендуем включить за 3 дня до истечения"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=autopay_settings_keyboard(user_sub_id, user_sub, user.language)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing autopay settings: {e}")
+        await callback.answer("❌ Ошибка загрузки настроек")
+
+@router.callback_query(F.data.startswith("autopay_days_"))
+async def autopay_days_callback(callback: CallbackQuery, db: Database, **kwargs):
+    user = kwargs.get('user')
+    if not user:
+        await callback.answer("❌ Ошибка пользователя")
+        return
+    
+    try:
+        parts = callback.data.split("_")
+        user_sub_id = int(parts[2])
+        days = int(parts[3])
+        
+        user_subs = await db.get_user_subscriptions(user.telegram_id)
+        user_sub = next((sub for sub in user_subs if sub.id == user_sub_id), None)
+        
+        if not user_sub:
+            await callback.answer("❌ Подписка не найдена")
+            return
+        
+        success = await db.set_autopay_days(user_sub_id, days)
+        
+        if success:
+            await callback.answer(f"✅ Установлено: продлять за {days} дн.")
+            
+            updated_subs = await db.get_user_subscriptions(user.telegram_id)
+            updated_sub = next((sub for sub in updated_subs if sub.id == user_sub_id), None)
+            
+            if updated_sub:
+                await autopay_settings_callback(callback, db, user=user)
+        else:
+            await callback.answer("❌ Ошибка обновления настроек")
+        
+    except Exception as e:
+        logger.error(f"Error setting autopay days: {e}")
+        await callback.answer("❌ Ошибка операции")
