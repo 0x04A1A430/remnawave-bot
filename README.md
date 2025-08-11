@@ -1,4 +1,4 @@
-# 🤖 RemnaWave Telegram Bot
+# 🤖 Remnawave Telegram Bot
 
 [![Docker Image](https://img.shields.io/badge/Docker-fr1ngg/remnawave--bedolaga--telegram--bot-blue?logo=docker)](https://hub.docker.com/r/fr1ngg/remnawave-bedolaga-telegram-bot)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)](https://python.org)
