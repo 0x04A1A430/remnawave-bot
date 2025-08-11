@@ -2,6 +2,7 @@ from database import Subscription
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from typing import List, Optional, Dict
 from translations import t
+from datetime import datetime
 
 def language_keyboard() -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -218,10 +219,83 @@ def admin_subscriptions_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
 def admin_users_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👥 Список пользователей", callback_data="list_users")],
+        [InlineKeyboardButton(text="📋 Все подписки пользователей", callback_data="admin_user_subscriptions_all")],
         [InlineKeyboardButton(text="🔍 Поиск пользователя", callback_data="search_user")],
         [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="admin_panel")]
     ])
     return keyboard
+
+def admin_users_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👥 Список пользователей", callback_data="list_users")],
+        [InlineKeyboardButton(text="📋 Все подписки пользователей", callback_data="admin_user_subscriptions_all")],
+        [InlineKeyboardButton(text="🔍 Поиск пользователя", callback_data="search_user")],
+        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="admin_panel")]
+    ])
+    return keyboard
+
+def admin_user_subscriptions_filters_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Клавиатура фильтров для подписок пользователей"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🟢 Активные", callback_data="filter_subs_active"),
+            InlineKeyboardButton(text="🔴 Истекшие", callback_data="filter_subs_expired")
+        ],
+        [
+            InlineKeyboardButton(text="🔄✅ С автоплатежом", callback_data="filter_subs_autopay"),
+            InlineKeyboardButton(text="⏰ Истекают скоро", callback_data="filter_subs_expiring")
+        ],
+        [
+            InlineKeyboardButton(text="🆓 Триальные", callback_data="filter_subs_trial"),
+            InlineKeyboardButton(text="📦 Импортированные", callback_data="filter_subs_imported")
+        ],
+        [
+            InlineKeyboardButton(text="📋 Все подписки", callback_data="admin_user_subscriptions_all"),
+            InlineKeyboardButton(text="🔙 Назад", callback_data="admin_users")
+        ]
+    ])
+    return keyboard
+
+def admin_user_subscription_detail_keyboard(subscription_id: int, user_id: int, lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Клавиатура для детального просмотра подписки пользователя"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_user_sub_{subscription_id}"),
+            InlineKeyboardButton(text="🔄 Обновить", callback_data=f"refresh_user_sub_{subscription_id}")
+        ],
+        [
+            InlineKeyboardButton(text="👤 К пользователю", callback_data=f"admin_user_detail_{user_id}"),
+            InlineKeyboardButton(text="📋 К списку подписок", callback_data="admin_user_subscriptions_all")
+        ],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_users")]
+    ])
+    return keyboard
+
+def user_subscriptions_pagination_keyboard(current_page: int, total_pages: int, 
+                                         filter_type: str = "all", lang: str = 'ru') -> InlineKeyboardMarkup:
+    buttons = []
+    
+    if total_pages > 1:
+        nav_row = []
+        
+        if current_page > 0:
+            nav_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"user_subs_page_{current_page - 1}_{filter_type}"))
+        
+        nav_row.append(InlineKeyboardButton(text=f"{current_page + 1}/{total_pages}", callback_data="noop"))
+        
+        if current_page < total_pages - 1:
+            nav_row.append(InlineKeyboardButton(text="➡️", callback_data=f"user_subs_page_{current_page + 1}_{filter_type}"))
+        
+        buttons.append(nav_row)
+    
+    buttons.append([
+        InlineKeyboardButton(text="🔍 Фильтры", callback_data="admin_user_subscriptions_filters"),
+        InlineKeyboardButton(text="🔄 Обновить", callback_data=f"refresh_user_subs_{filter_type}")
+    ])
+    
+    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_users")])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def admin_balance_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
