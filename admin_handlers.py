@@ -7739,3 +7739,567 @@ async def autopay_user_detail_callback(callback: CallbackQuery, user: User, **kw
     except Exception as e:
         logger.error(f"Error showing autopay user detail: {e}")
         await callback.answer("❌ Ошибка получения информации")
+
+@admin_router.callback_query(F.data == "admin_user_subscriptions_all")
+async def admin_user_subscriptions_all_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    await show_user_subscriptions_admin(callback, user, page=0, filter_type="all", **kwargs)
+
+@admin_router.callback_query(F.data == "admin_user_subscriptions_filters")
+async def admin_user_subscriptions_filters_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    db = kwargs.get('db')
+    if not db:
+        await callback.answer("❌ База данных недоступна", show_alert=True)
+        return
+    
+    try:
+        stats = await db.get_user_subscriptions_stats_admin()
+        
+        text = f"🔍 Фильтры подписок пользователей\n\n"
+        text += f"📊 Статистика:\n"
+        text += f"• Всего подписок: {stats['total_subscriptions']}\n"
+        text += f"• 🟢 Активных: {stats['active_subscriptions']}\n"
+        text += f"• 🔴 Истекших: {stats['expired_subscriptions']}\n"
+        text += f"• ⏰ Истекают скоро: {stats['expiring_subscriptions']}\n"
+        text += f"• 🔄 С автоплатежом: {stats['autopay_subscriptions']}\n"
+        text += f"• 🆓 Триальных: {stats['trial_subscriptions']}\n"
+        text += f"• 📦 Импортированных: {stats['imported_subscriptions']}\n\n"
+        text += f"Выберите фильтр для просмотра:"
+        
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=admin_user_subscriptions_filters_keyboard(user.language)
+            )
+        except Exception as edit_error:
+            if "message is not modified" in str(edit_error).lower():
+                await callback.answer("✅ Фильтры обновлены", show_alert=False)
+            else:
+                logger.error(f"Error editing filters message: {edit_error}")
+                await callback.answer("❌ Ошибка отображения фильтров", show_alert=True)
+        
+    except Exception as e:
+        logger.error(f"Error showing subscriptions filters: {e}")
+        await callback.answer("❌ Ошибка загрузки фильтров", show_alert=True)
+
+@admin_router.callback_query(F.data.startswith("filter_subs_"))
+async def filter_subscriptions_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    filter_type = callback.data.replace("filter_subs_", "")
+    await show_user_subscriptions_admin(callback, user, page=0, filter_type=filter_type, **kwargs)
+
+@admin_router.callback_query(F.data.startswith("user_subs_page_"))
+async def user_subscriptions_page_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        parts = callback.data.split("_")
+        page = int(parts[3])
+        filter_type = parts[4] if len(parts) > 4 else "all"
+        
+        await show_user_subscriptions_admin(callback, user, page=page, filter_type=filter_type, **kwargs)
+        
+    except Exception as e:
+        logger.error(f"Error in user subscriptions pagination: {e}")
+        await callback.answer("❌ Ошибка навигации", show_alert=True)
+
+@admin_router.callback_query(F.data.startswith("refresh_user_subs_"))
+async def refresh_user_subscriptions_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    filter_type = callback.data.replace("refresh_user_subs_", "")
+    await callback.answer("🔄 Обновляю список...")
+    await show_user_subscriptions_admin(callback, user, page=0, filter_type=filter_type, **kwargs)
+
+@admin_router.callback_query(F.data.startswith("admin_user_sub_detail_"))
+async def admin_user_subscription_detail_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    db = kwargs.get('db')
+    if not db:
+        await callback.answer("❌ База данных недоступна", show_alert=True)
+        return
+    
+    try:
+        subscription_id = int(callback.data.replace("admin_user_sub_detail_", ""))
+        
+        subscription_detail = await db.get_user_subscription_detail_admin(subscription_id)
+        if not subscription_detail:
+            await callback.answer("❌ Подписка не найдена", show_alert=True)
+            return
+        
+        def clean_text(text):
+            if not text:
+                return "N/A"
+            return str(text).replace('*', '').replace('_', '').replace('[', '').replace(']', '').replace('`', '')
+        
+        user_first_name = clean_text(subscription_detail['user_first_name'])
+        user_username = clean_text(subscription_detail['user_username'])
+        subscription_name = clean_text(subscription_detail['subscription_name'])
+        short_uuid = clean_text(subscription_detail['short_uuid'])
+        
+        text = f"📋 Детали подписки пользователя\n\n"
+        
+        text += f"👤 Пользователь:\n"
+        text += f"├ Имя: {user_first_name}\n"
+        text += f"├ Username: @{user_username}\n"
+        text += f"├ Telegram ID: {subscription_detail['user_id']}\n"
+        text += f"└ Баланс: {subscription_detail['user_balance']:.2f}₽\n\n"
+        
+        text += f"📦 Подписка:\n"
+        text += f"├ Название: {subscription_name}\n"
+        text += f"├ Цена: {subscription_detail['subscription_price']}₽\n"
+        text += f"├ Длительность: {subscription_detail['subscription_duration']} дн.\n"
+        text += f"└ Short UUID: {short_uuid}\n\n"
+        
+        status_emoji = subscription_detail['status_emoji']
+        text += f"🔘 Статус: {status_emoji} "
+        
+        if subscription_detail['status'] == "active":
+            text += f"Активна (осталось {subscription_detail['days_left']} дн.)\n"
+        elif subscription_detail['status'] == "expiring_soon":
+            text += f"Истекает через {subscription_detail['days_left']} дн.\n"
+        elif subscription_detail['status'] == "expired":
+            text += "Истекла\n"
+        elif subscription_detail['status'] == "inactive":
+            text += "Приостановлена\n"
+        
+        text += f"📅 Временные рамки:\n"
+        text += f"├ Создана: {format_datetime(subscription_detail['created_at'], user.language)}\n"
+        text += f"├ Истекает: {format_datetime(subscription_detail['expires_at'], user.language)}\n"
+        if subscription_detail['updated_at']:
+            text += f"└ Обновлена: {format_datetime(subscription_detail['updated_at'], user.language)}\n"
+        else:
+            text += f"└ Обновлена: Никогда\n"
+        
+        text += f"\n🔄 Автоплатеж:\n"
+        if subscription_detail['auto_pay_enabled']:
+            text += f"├ Статус: ✅ Включен\n"
+            text += f"└ Продлять за: {subscription_detail['auto_pay_days_before']} дн. до истечения\n"
+            
+            if subscription_detail['user_balance'] < subscription_detail['subscription_price']:
+                needed = subscription_detail['subscription_price'] - subscription_detail['user_balance']
+                text += f"⚠️ Недостаточно средств! Нужно еще {needed:.2f}₽\n"
+        else:
+            text += f"└ Статус: ❌ Отключен\n"
+        
+        if subscription_detail['is_trial']:
+            text += f"\n🆓 Тип: Триальная подписка\n"
+        elif subscription_detail['is_imported']:
+            text += f"\n📦 Тип: Импортированная подписка\n"
+        
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=admin_user_subscription_detail_keyboard(
+                    subscription_id, subscription_detail['user_id'], user.language
+                )
+            )
+        except Exception as edit_error:
+            if "message is not modified" in str(edit_error).lower():
+                await callback.answer("✅ Информация актуальна", show_alert=False)
+            else:
+                logger.error(f"Error editing detail message: {edit_error}")
+                await callback.answer("❌ Ошибка отображения деталей", show_alert=True)
+        
+    except Exception as e:
+        logger.error(f"Error showing user subscription detail: {e}")
+        await callback.answer("❌ Ошибка загрузки деталей", show_alert=True)
+
+
+async def show_user_subscriptions_admin(callback: CallbackQuery, user: User, page: int = 0, 
+                                      filter_type: str = "all", **kwargs):
+    db = kwargs.get('db')
+    if not db:
+        await callback.answer("❌ База данных недоступна", show_alert=True)
+        return
+    
+    try:
+        page_size = 10
+        offset = page * page_size
+        
+        subscriptions_data, total_count = await db.get_all_user_subscriptions_admin(
+            offset=offset, limit=page_size, filter_type=filter_type
+        )
+        
+        if not subscriptions_data and page == 0:
+            filter_names = {
+                "all": "подписок",
+                "active": "активных подписок",
+                "expired": "истекших подписок",
+                "expiring": "истекающих подписок",
+                "autopay": "подписок с автоплатежом",
+                "trial": "триальных подписок",
+                "imported": "импортированных подписок"
+            }
+            
+            await callback.message.edit_text(
+                f"📋 Список {filter_names.get(filter_type, 'подписок')} пуст",
+                reply_markup=admin_user_subscriptions_filters_keyboard(user.language)
+            )
+            return
+        
+        if not subscriptions_data and page > 0:
+            await show_user_subscriptions_admin(callback, user, page - 1, filter_type, **kwargs)
+            return
+        
+        filter_titles = {
+            "all": "Все подписки пользователей",
+            "active": "Активные подписки",
+            "expired": "Истекшие подписки", 
+            "expiring": "Истекающие подписки",
+            "autopay": "Подписки с автоплатежом",
+            "trial": "Триальные подписки",
+            "imported": "Импортированные подписки"
+        }
+        
+        total_pages = (total_count + page_size - 1) // page_size
+        
+        text = f"📋 {filter_titles.get(filter_type, 'Подписки')}\n"
+        text += f"📄 Страница {page + 1} из {total_pages} • Всего: {total_count}\n\n"
+        
+        for i, sub_data in enumerate(subscriptions_data, start=offset + 1):
+            status_emojis = {
+                "active": "🟢",
+                "expiring": "🟡", 
+                "expiring_soon": "🚨",
+                "expired": "❌",
+                "inactive": "⏸"
+            }
+            status_emoji = status_emojis.get(sub_data['status'], "⚪")
+            
+            user_display = sub_data['user_first_name'] or "Unknown"
+            user_display = user_display.replace('*', '').replace('_', '').replace('[', '').replace(']', '').replace('`', '')
+            
+            if sub_data['user_username'] != 'N/A':
+                clean_username = sub_data['user_username'].replace('*', '').replace('_', '').replace('[', '').replace(']', '').replace('`', '')
+                user_display += f" (@{clean_username})"
+            
+            subscription_name = sub_data['subscription_name'].replace('*', '').replace('_', '').replace('[', '').replace(']', '').replace('`', '')
+            
+            text += f"{i}. {status_emoji} {user_display}\n"
+            text += f"   📋 {subscription_name} — {sub_data['subscription_price']}₽\n"
+            text += f"   📅 Создана: {format_datetime(sub_data['created_at'], user.language)}\n"
+            
+            if sub_data['status'] == "active":
+                text += f"   ⏰ Истекает через {sub_data['days_left']} дн.\n"
+            elif sub_data['status'] in ["expiring", "expiring_soon"]:
+                text += f"   ⚠️ Истекает через {sub_data['days_left']} дн.\n"
+            elif sub_data['status'] == "expired":
+                text += f"   ❌ Истекла\n"
+            elif sub_data['status'] == "inactive":
+                text += f"   ⏸ Приостановлена\n"
+            
+            if sub_data['auto_pay_enabled']:
+                text += f"   🔄 Автоплатеж: за {sub_data['auto_pay_days_before']} дн.\n"
+            
+            labels = []
+            if sub_data['is_trial']:
+                labels.append("🆓 Trial")
+            if sub_data['is_imported']:
+                labels.append("📦 Import")
+            
+            if labels:
+                text += f"   🏷 {' • '.join(labels)}\n"
+            
+            text += "\n"
+        
+        additional_buttons = []
+        if len(subscriptions_data) <= 5:
+            for sub_data in subscriptions_data:
+                user_name = (sub_data['user_first_name'] or "User")[:10]
+                user_name = user_name.replace('*', '').replace('_', '').replace('[', '').replace(']', '').replace('`', '')
+                if len(user_name) > 10:
+                    user_name = user_name[:7] + "..."
+                
+                additional_buttons.append([
+                    InlineKeyboardButton(
+                        text=f"👤 {user_name}",
+                        callback_data=f"admin_user_sub_detail_{sub_data['id']}"
+                    )
+                ])
+            
+            if additional_buttons:
+                text += "👆 Нажмите на кнопку для просмотра деталей:"
+        
+        keyboard = user_subscriptions_pagination_keyboard(page, total_pages, filter_type, user.language)
+        
+        if additional_buttons:
+            nav_buttons = keyboard.inline_keyboard[0] if keyboard.inline_keyboard else []
+            other_buttons = keyboard.inline_keyboard[1:] if len(keyboard.inline_keyboard) > 1 else []
+            
+            new_keyboard_buttons = []
+            if nav_buttons:
+                new_keyboard_buttons.append(nav_buttons)
+            
+            for i in range(0, len(additional_buttons), 2):
+                row = []
+                for j in range(2):
+                    if i + j < len(additional_buttons):
+                        row.extend(additional_buttons[i + j])
+                if row:
+                    new_keyboard_buttons.append(row)
+            
+            new_keyboard_buttons.extend(other_buttons)
+            keyboard = InlineKeyboardMarkup(inline_keyboard=new_keyboard_buttons)
+        
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=keyboard
+            )
+        except Exception as edit_error:
+            if "message is not modified" in str(edit_error).lower():
+                await callback.answer("✅ Список обновлен", show_alert=False)
+            else:
+                logger.error(f"Error editing message: {edit_error}")
+                try:
+                    await callback.message.answer(
+                        text,
+                        reply_markup=keyboard
+                    )
+                except Exception as send_error:
+                    logger.error(f"Error sending new message: {send_error}")
+                    await callback.answer("❌ Ошибка отображения", show_alert=True)
+        
+    except Exception as e:
+        logger.error(f"Error showing user subscriptions admin: {e}")
+        try:
+            await callback.message.edit_text(
+                "❌ Ошибка загрузки подписок",
+                reply_markup=admin_user_subscriptions_filters_keyboard(user.language)
+            )
+        except:
+            await callback.answer("❌ Ошибка загрузки подписок", show_alert=True)
+
+
+@admin_router.callback_query(F.data.startswith("edit_user_sub_"))
+async def edit_user_subscription_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    db = kwargs.get('db')
+    if not db:
+        await callback.answer("❌ База данных недоступна", show_alert=True)
+        return
+    
+    try:
+        subscription_id = int(callback.data.replace("edit_user_sub_", ""))
+        
+        subscription_detail = await db.get_user_subscription_detail_admin(subscription_id)
+        if not subscription_detail:
+            await callback.answer("❌ Подписка не найдена", show_alert=True)
+            return
+        
+        text = f"✏️ **Редактирование подписки**\n\n"
+        text += f"👤 Пользователь: {subscription_detail['user_first_name']}\n"
+        text += f"📋 Подписка: {subscription_detail['subscription_name']}\n\n"
+        text += f"Что вы хотите изменить?"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="📅 Срок действия", callback_data=f"edit_sub_expiry_{subscription_id}"),
+                InlineKeyboardButton(text="🔘 Статус", callback_data=f"toggle_sub_status_{subscription_id}")
+            ],
+            [
+                InlineKeyboardButton(text="🔄 Автоплатеж", callback_data=f"edit_sub_autopay_{subscription_id}"),
+                InlineKeyboardButton(text="📊 Трафик", callback_data=f"edit_sub_traffic_{subscription_id}")
+            ],
+            [InlineKeyboardButton(text="🔙 К деталям", callback_data=f"admin_user_sub_detail_{subscription_id}")]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error editing user subscription: {e}")
+        await callback.answer("❌ Ошибка редактирования", show_alert=True)
+
+@admin_router.callback_query(F.data.startswith("refresh_user_sub_"))
+async def refresh_user_subscription_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    subscription_id = callback.data.replace("refresh_user_sub_", "")
+    await callback.answer("🔄 Обновляю информацию...")
+    
+    new_callback_data = f"admin_user_sub_detail_{subscription_id}"
+    callback.data = new_callback_data
+    await admin_user_subscription_detail_callback(callback, user, **kwargs)
+
+@admin_router.callback_query(F.data.startswith("edit_sub_traffic_"))
+async def edit_sub_traffic_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        subscription_id = int(callback.data.split("_")[-1]) 
+        
+        db = kwargs.get('db')
+        if not db:
+            await callback.answer("❌ База данных недоступна", show_alert=True)
+            return
+        
+        subscription_detail = await db.get_user_subscription_detail_admin(subscription_id)
+        if not subscription_detail:
+            await callback.answer("❌ Подписка не найдена", show_alert=True)
+            return
+        
+        text = f"📊 **Изменение лимита трафика**\n\n"
+        text += f"👤 Пользователь: {subscription_detail['user_first_name']}\n"
+        text += f"📋 Подписка: {subscription_detail['subscription_name']}\n\n"
+        text += f"Введите новый лимит трафика в ГБ (0 = безлимит):"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 К деталям", callback_data=f"admin_user_sub_detail_{subscription_id}")]
+            ]),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error editing subscription traffic: {e}")
+        await callback.answer("❌ Ошибка редактирования", show_alert=True)
+
+@admin_router.callback_query(F.data.startswith("edit_sub_expiry_"))
+async def edit_sub_expiry_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        subscription_id = int(callback.data.split("_")[-1])
+        
+        db = kwargs.get('db')
+        if not db:
+            await callback.answer("❌ База данных недоступна", show_alert=True)
+            return
+        
+        subscription_detail = await db.get_user_subscription_detail_admin(subscription_id)
+        if not subscription_detail:
+            await callback.answer("❌ Подписка не найдена", show_alert=True)
+            return
+        
+        text = f"📅 **Изменение срока действия**\n\n"
+        text += f"👤 Пользователь: {subscription_detail['user_first_name']}\n"
+        text += f"📋 Подписка: {subscription_detail['subscription_name']}\n\n"
+        text += f"Введите новую дату истечения (YYYY-MM-DD) или количество дней:"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 К деталям", callback_data=f"admin_user_sub_detail_{subscription_id}")]
+            ]),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error editing subscription expiry: {e}")
+        await callback.answer("❌ Ошибка редактирования", show_alert=True)
+
+@admin_router.callback_query(F.data.startswith("toggle_sub_status_"))
+async def toggle_subscription_status_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        subscription_id = int(callback.data.split("_")[-1])
+        
+        db = kwargs.get('db')
+        if not db:
+            await callback.answer("❌ База данных недоступна", show_alert=True)
+            return
+        
+        async with db.session_factory() as session:
+            from sqlalchemy import select, update
+            from database import UserSubscription
+            
+            result = await session.execute(
+                select(UserSubscription).where(UserSubscription.id == subscription_id)
+            )
+            user_subscription = result.scalar_one_or_none()
+            
+            if not user_subscription:
+                await callback.answer("❌ Подписка не найдена", show_alert=True)
+                return
+            
+            new_status = not user_subscription.is_active
+            
+            await session.execute(
+                update(UserSubscription)
+                .where(UserSubscription.id == subscription_id)
+                .values(is_active=new_status)
+            )
+            await session.commit()
+            
+            status_text = "активирована" if new_status else "деактивирована"
+            await callback.answer(f"✅ Подписка {status_text}")
+            
+            log_user_action(user.telegram_id, "subscription_status_toggled", 
+                          f"SubID: {subscription_id}, Active: {new_status}")
+            
+            await admin_user_subscription_detail_callback(callback, user, **kwargs)
+        
+    except Exception as e:
+        logger.error(f"Error toggling subscription status: {e}")
+        await callback.answer("❌ Ошибка изменения статуса", show_alert=True)
+
+@admin_router.callback_query(F.data.startswith("edit_sub_autopay_"))
+async def edit_sub_autopay_callback(callback: CallbackQuery, user: User, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        subscription_id = int(callback.data.split("_")[-1]) 
+        
+        db = kwargs.get('db')
+        if not db:
+            await callback.answer("❌ База данных недоступна", show_alert=True)
+            return
+        
+        subscription_detail = await db.get_user_subscription_detail_admin(subscription_id)
+        if not subscription_detail:
+            await callback.answer("❌ Подписка не найдена", show_alert=True)
+            return
+        
+        current_autopay = subscription_detail['auto_pay_enabled']
+        autopay_days = subscription_detail['auto_pay_days_before']
+        
+        text = f"🔄 **Настройки автоплатежа**\n\n"
+        text += f"👤 Пользователь: {subscription_detail['user_first_name']}\n"
+        text += f"📋 Подписка: {subscription_detail['subscription_name']}\n\n"
+        text += f"Текущее состояние: {'✅ Включен' if current_autopay else '❌ Отключен'}\n"
+        if current_autopay:
+            text += f"Продлевать за: {autopay_days} дней до истечения\n\n"
+        
+        buttons = []
+        if current_autopay:
+            buttons.append([InlineKeyboardButton(text="❌ Отключить автоплатеж", callback_data=f"disable_autopay_{subscription_id}")])
+            buttons.append([InlineKeyboardButton(text="📅 Изменить дни", callback_data=f"change_autopay_days_{subscription_id}")])
+        else:
+            buttons.append([InlineKeyboardButton(text="✅ Включить автоплатеж", callback_data=f"enable_autopay_{subscription_id}")])
+        
+        buttons.append([InlineKeyboardButton(text="🔙 К деталям", callback_data=f"admin_user_sub_detail_{subscription_id}")])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error editing subscription autopay: {e}")
+        await callback.answer("❌ Ошибка редактирования", show_alert=True)
