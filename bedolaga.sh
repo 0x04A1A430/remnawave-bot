@@ -290,7 +290,6 @@ EOF
 }
 
 # Создание .env файла
-# Создание .env файла
 create_env_file() {
     log "Настройка .env файла..."
     
@@ -833,6 +832,250 @@ diagnose_database() {
         echo -e "${RED}Не удается получить размер базы данных${NC}"
     }
 }
+
+# Функция экстренного исправления базы данных
+emergency_fix_database() {
+    log "Экстренное исправление базы данных..."
+    
+    cd "$BOT_DIR"
+    
+    # Проверяем, запущен ли контейнер бота
+    if ! docker compose ps bot | grep -q "Up"; then
+        warn "Контейнер бота не запущен. Запускаем бота..."
+        docker compose up -d bot
+        
+        # Ждем готовности бота
+        log "Ожидание готовности бота..."
+        for i in {1..60}; do
+            if docker compose logs bot 2>/dev/null | grep -q "Bot started successfully\|Application startup complete\|Bot is running"; then
+                log "Бот готов к работе"
+                break
+            fi
+            if [ $i -eq 60 ]; then
+                warn "Бот не запустился полностью, но попробуем выполнить исправление"
+                break
+            fi
+            sleep 2
+            echo -n "."
+        done
+        echo ""
+    fi
+    
+    # Создаем скрипт исправления во временном файле
+    EMERGENCY_SCRIPT="$BOT_DIR/emergency_fix.py"
+    
+    log "Создание скрипта экстренного исправления..."
+    cat > "$EMERGENCY_SCRIPT" << 'EOF'
+"""
+Экстренное исправление проблемы с отображением подписок
+Этот патч добавляет недостающие поля в таблицу user_subscriptions
+"""
+
+import asyncio
+import sys
+import os
+from pathlib import Path
+
+# Добавляем корневую директорию в путь
+sys.path.insert(0, str(Path(__file__).parent))
+
+try:
+    from config import load_config
+    from database import Database
+except ImportError:
+    # Если не можем импортировать, попробуем из app
+    sys.path.insert(0, '/app')
+    try:
+        from config import load_config
+        from database import Database
+    except ImportError:
+        print("❌ Не удается импортировать модули. Проверьте структуру проекта.")
+        sys.exit(1)
+
+from sqlalchemy import text
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+async def check_and_add_column(db, column_name, column_definition):
+    """Проверяет и добавляет колонку в таблицу"""
+    try:
+        # Отдельная транзакция для проверки
+        async with db.engine.begin() as conn:
+            await conn.execute(text(f"SELECT {column_name} FROM user_subscriptions LIMIT 1"))
+            logger.info(f"✅ Поле {column_name} уже существует")
+            return True
+    except Exception:
+        # Отдельная транзакция для добавления колонки
+        try:
+            async with db.engine.begin() as conn:
+                logger.info(f"➕ Добавляю поле {column_name}...")
+                await conn.execute(text(f"""
+                    ALTER TABLE user_subscriptions 
+                    ADD COLUMN {column_name} {column_definition}
+                """))
+                logger.info(f"✅ Поле {column_name} добавлено")
+                return True
+        except Exception as e:
+            logger.error(f"❌ Ошибка при добавлении {column_name}: {e}")
+            return False
+
+async def emergency_fix():
+    """Экстренное исправление базы данных"""
+    
+    try:
+        # Загружаем конфигурацию
+        config = load_config()
+        
+        # Подключаемся к базе данных  
+        db = Database(config.DATABASE_URL)
+        
+        logger.info("🔧 Выполняю экстренное исправление базы данных...")
+        
+        # Проверяем существование таблицы user_subscriptions
+        try:
+            async with db.engine.begin() as conn:
+                result = await conn.execute(text("SELECT COUNT(*) FROM user_subscriptions"))
+                count = result.scalar()
+                logger.info(f"📊 Найдено {count} подписок в таблице user_subscriptions")
+        except Exception as e:
+            logger.error(f"❌ Таблица user_subscriptions не найдена: {e}")
+            await db.close()
+            return
+
+        # Добавляем поля по одному в отдельных транзакциях
+        success1 = await check_and_add_column(db, "auto_pay_enabled", "BOOLEAN DEFAULT FALSE")
+        success2 = await check_and_add_column(db, "auto_pay_days_before", "INTEGER DEFAULT 3")
+        
+        # Финальная проверка в отдельной транзакции
+        if success1 and success2:
+            try:
+                async with db.engine.begin() as conn:
+                    result = await conn.execute(text("""
+                        SELECT id, auto_pay_enabled, auto_pay_days_before 
+                        FROM user_subscriptions LIMIT 1
+                    """))
+                    row = result.fetchone()
+                    if row:
+                        logger.info("✅ Все поля доступны для чтения")
+                        logger.info(f"🔍 Пример записи: id={row[0]}, auto_pay_enabled={row[1]}, auto_pay_days_before={row[2]}")
+                    else:
+                        logger.info("✅ Все поля доступны, но таблица пуста")
+                        
+            except Exception as e:
+                logger.error(f"❌ Поля все еще недоступны: {e}")
+        else:
+            logger.error("❌ Не удалось добавить все необходимые поля")
+                
+        await db.close()
+        logger.info("🎉 Экстренное исправление завершено!")
+        
+    except Exception as e:
+        logger.error(f"💥 Критическая ошибка: {e}")
+        raise
+
+if __name__ == "__main__":
+    asyncio.run(emergency_fix())
+EOF
+
+    # Копируем скрипт в контейнер и запускаем
+    log "Копирование скрипта в контейнер бота..."
+    if docker compose exec bot test -d /app; then
+        # Копируем скрипт в контейнер
+        docker compose cp "$EMERGENCY_SCRIPT" bot:/app/emergency_fix.py
+        
+        log "Запуск экстренного исправления в контейнере бота..."
+        if docker compose exec bot python emergency_fix.py; then
+            log "✅ Экстренное исправление выполнено успешно!"
+            
+            # Перезапускаем бота для применения изменений
+            log "Перезапуск бота для применения изменений..."
+            docker compose restart bot
+            log "✅ Бот перезапущен"
+        else
+            error "❌ Ошибка при выполнении экстренного исправления"
+            echo "Проверьте логи бота: docker compose logs bot"
+        fi
+        
+        # Удаляем временный скрипт из контейнера
+        docker compose exec bot rm -f /app/emergency_fix.py 2>/dev/null || true
+    else
+        error "❌ Не удается найти директорию /app в контейнере бота"
+        echo "Проверьте, что контейнер бота запущен правильно"
+    fi
+    
+    # Удаляем временный скрипт с хоста
+    rm -f "$EMERGENCY_SCRIPT"
+}
+
+# Альтернативный метод экстренного исправления через SQL
+emergency_fix_database_sql() {
+    log "Экстренное исправление базы данных через SQL..."
+    
+    cd "$BOT_DIR"
+    
+    # Проверяем, запущен ли контейнер postgres
+    if ! docker compose ps postgres | grep -q "Up"; then
+        log "Контейнер PostgreSQL не запущен. Запускаем PostgreSQL..."
+        docker compose up -d postgres
+        
+        # Ждем готовности базы данных
+        log "Ожидание готовности базы данных..."
+        for i in {1..30}; do
+            if docker compose exec postgres pg_isready -U remnawave_user -d remnawave_bot &>/dev/null; then
+                log "PostgreSQL готов к работе"
+                break
+            fi
+            if [ $i -eq 30 ]; then
+                error "PostgreSQL не запустился в течение 60 секунд"
+                return 1
+            fi
+            sleep 2
+            echo -n "."
+        done
+        echo ""
+    fi
+    
+    log "Проверка существования полей в таблице user_subscriptions..."
+    
+    # Проверяем auto_pay_enabled
+    if docker compose exec postgres psql -U remnawave_user -d remnawave_bot -c "SELECT auto_pay_enabled FROM user_subscriptions LIMIT 1" &>/dev/null; then
+        log "✅ Поле auto_pay_enabled уже существует"
+    else
+        log "➕ Добавление поля auto_pay_enabled..."
+        if docker compose exec postgres psql -U remnawave_user -d remnawave_bot -c "ALTER TABLE user_subscriptions ADD COLUMN auto_pay_enabled BOOLEAN DEFAULT FALSE" &>/dev/null; then
+            log "✅ Поле auto_pay_enabled добавлено"
+        else
+            error "❌ Ошибка при добавлении поля auto_pay_enabled"
+            return 1
+        fi
+    fi
+    
+    # Проверяем auto_pay_days_before
+    if docker compose exec postgres psql -U remnawave_user -d remnawave_bot -c "SELECT auto_pay_days_before FROM user_subscriptions LIMIT 1" &>/dev/null; then
+        log "✅ Поле auto_pay_days_before уже существует"
+    else
+        log "➕ Добавление поля auto_pay_days_before..."
+        if docker compose exec postgres psql -U remnawave_user -d remnawave_bot -c "ALTER TABLE user_subscriptions ADD COLUMN auto_pay_days_before INTEGER DEFAULT 3" &>/dev/null; then
+            log "✅ Поле auto_pay_days_before добавлено"
+        else
+            error "❌ Ошибка при добавлении поля auto_pay_days_before"
+            return 1
+        fi
+    fi
+    
+    log "✅ Экстренное исправление через SQL завершено!"
+    
+    # Перезапускаем бота если он запущен
+    if docker compose ps bot | grep -q "Up"; then
+        log "Перезапуск бота для применения изменений..."
+        docker compose restart bot
+        log "✅ Бот перезапущен"
+    fi
+}
+
+# Редактирование .env файла
 edit_env_file() {
     ensure_nano
     
@@ -950,8 +1193,10 @@ show_menu() {
         echo "7) Восстановить базу данных"
         echo "8) Редактировать .env файл"
         echo "9) Диагностика базы данных"
-        echo "10) Удалить базу данных"
-        echo "11) Полностью удалить бота"
+        echo "10) Экстренное исправление БД (Python)"
+        echo "11) Экстренное исправление БД (SQL)"
+        echo "12) Удалить базу данных"
+        echo "13) Полностью удалить бота"
         echo "0) Выход"
         
         read -p "Выберите действие: " choice
@@ -965,8 +1210,10 @@ show_menu() {
             7) restore_database; read -p "Нажмите Enter для продолжения..."; ;;
             8) edit_env_file; read -p "Нажмите Enter для продолжения..."; ;;
             9) diagnose_database; read -p "Нажмите Enter для продолжения..."; ;;
-            10) remove_database; read -p "Нажмите Enter для продолжения..."; ;;
-            11) remove_bot; ;;
+            10) emergency_fix_database; read -p "Нажмите Enter для продолжения..."; ;;
+            11) emergency_fix_database_sql; read -p "Нажмите Enter для продолжения..."; ;;
+            12) remove_database; read -p "Нажмите Enter для продолжения..."; ;;
+            13) remove_bot; ;;
             0) exit 0; ;;
             *) error "Неверный выбор"; read -p "Нажмите Enter для продолжения..."; ;;
         esac
@@ -979,8 +1226,10 @@ show_menu() {
         echo "5) Восстановить базу данных"
         echo "6) Редактировать .env файл"
         echo "7) Диагностика базы данных"
-        echo "8) Удалить базу данных"
-        echo "9) Полностью удалить бота"
+        echo "8) Экстренное исправление БД (Python)"
+        echo "9) Экстренное исправление БД (SQL)"
+        echo "10) Удалить базу данных"
+        echo "11) Полностью удалить бота"
         echo "0) Выход"
         
         read -p "Выберите действие: " choice
@@ -992,8 +1241,10 @@ show_menu() {
             5) restore_database; read -p "Нажмите Enter для продолжения..."; ;;
             6) edit_env_file; read -p "Нажмите Enter для продолжения..."; ;;
             7) diagnose_database; read -p "Нажмите Enter для продолжения..."; ;;
-            8) remove_database; read -p "Нажмите Enter для продолжения..."; ;;
-            9) remove_bot; ;;
+            8) emergency_fix_database; read -p "Нажмите Enter для продолжения..."; ;;
+            9) emergency_fix_database_sql; read -p "Нажмите Enter для продолжения..."; ;;
+            10) remove_database; read -p "Нажмите Enter для продолжения..."; ;;
+            11) remove_bot; ;;
             0) exit 0; ;;
             *) error "Неверный выбор"; read -p "Нажмите Enter для продолжения..."; ;;
         esac
