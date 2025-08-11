@@ -74,7 +74,9 @@ class UserSubscription(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     traffic_limit_gb: Mapped[Optional[int]] = mapped_column(Integer)  
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)  
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    auto_pay_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_pay_days_before: Mapped[int] = mapped_column(Integer, default=3)  
 
 class Payment(Base):
     __tablename__ = 'payments'
@@ -164,42 +166,140 @@ class Database:
         await self.migrate_subscription_imported_field()
         await self.migrate_referral_tables() 
         await self.migrate_star_payments_table()
+        await self.migrate_autopay_fields()
+
+    async def toggle_autopay(self, user_subscription_id: int, enabled: bool) -> bool:
+        """Включает/выключает автоплатеж для подписки"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import update
+                result = await session.execute(
+                    update(UserSubscription)
+                    .where(UserSubscription.id == user_subscription_id)
+                    .values(auto_pay_enabled=enabled)
+                )
+                await session.commit()
+                return result.rowcount > 0
+            except Exception as e:
+                logger.error(f"Error toggling autopay: {e}")
+                await session.rollback()
+                return False
+
+    async def set_autopay_days(self, user_subscription_id: int, days_before: int) -> bool:
+        """Устанавливает количество дней до истечения для автоплатежа"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import update
+                result = await session.execute(
+                    update(UserSubscription)
+                    .where(UserSubscription.id == user_subscription_id)
+                    .values(auto_pay_days_before=days_before)
+                )
+                await session.commit()
+                return result.rowcount > 0
+            except Exception as e:
+                logger.error(f"Error setting autopay days: {e}")
+                await session.rollback()
+                return False
+
+    async def get_subscriptions_for_autopay(self, days_threshold: int = None) -> List[UserSubscription]:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, and_
+                from datetime import datetime, timedelta
+            
+                if days_threshold is None:
+                    current_time = datetime.utcnow()
+                
+                    conditions = []
+                    for days in [1, 2, 3, 5, 7]:
+                        threshold_date = current_time + timedelta(days=days)
+                        conditions.append(
+                            and_(
+                                UserSubscription.auto_pay_days_before == days,
+                                UserSubscription.expires_at <= threshold_date,
+                                UserSubscription.expires_at > current_time
+                            )
+                        )
+                
+                    from sqlalchemy import or_
+                    query = select(UserSubscription).where(
+                        and_(
+                            UserSubscription.auto_pay_enabled == True,
+                            UserSubscription.is_active == True,
+                            or_(*conditions)
+                        )
+                    )
+                else:
+                    threshold_date = datetime.utcnow() + timedelta(days=days_threshold)
+                    query = select(UserSubscription).where(
+                        and_(
+                            UserSubscription.auto_pay_enabled == True,
+                            UserSubscription.is_active == True,
+                            UserSubscription.expires_at <= threshold_date,
+                            UserSubscription.expires_at > datetime.utcnow()
+                        )
+                    )
+            
+                result = await session.execute(query)
+                return list(result.scalars().all())
+            except Exception as e:
+                logger.error(f"Error getting subscriptions for autopay: {e}")
+                return []
 
     async def migrate_referral_tables(self):
         try:
             async with self.engine.begin() as conn:
-                await conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS referral_programs (
-                        id SERIAL PRIMARY KEY,
-                        referrer_id BIGINT NOT NULL,
-                        referred_id BIGINT UNIQUE NOT NULL,
-                        referral_code VARCHAR(20) NOT NULL,
-                        first_reward_paid BOOLEAN DEFAULT FALSE,
-                        total_earned DOUBLE PRECISION DEFAULT 0.0,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        first_reward_at TIMESTAMP,
-                    
-                        INDEX idx_referrer (referrer_id),
-                        INDEX idx_referred (referred_id),
-                        INDEX idx_referral_code (referral_code)
-                    )
-                """))
+                try:
+                    await conn.execute(text("SELECT 1 FROM referral_programs LIMIT 1"))
+                    logger.info("referral_programs table already exists")
+                except Exception:
+                    await conn.execute(text("""
+                        CREATE TABLE referral_programs (
+                            id SERIAL PRIMARY KEY,
+                            referrer_id BIGINT NOT NULL,
+                            referred_id BIGINT UNIQUE NOT NULL,
+                            referral_code VARCHAR(20) NOT NULL,
+                            first_reward_paid BOOLEAN DEFAULT FALSE,
+                            total_earned DOUBLE PRECISION DEFAULT 0.0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            first_reward_at TIMESTAMP
+                        )
+                    """))
+                
+                    try:
+                        await conn.execute(text("CREATE INDEX idx_referrer ON referral_programs(referrer_id)"))
+                        await conn.execute(text("CREATE INDEX idx_referred ON referral_programs(referred_id)"))
+                        await conn.execute(text("CREATE INDEX idx_referral_code ON referral_programs(referral_code)"))
+                    except Exception as e:
+                        logger.warning(f"Some referral_programs indexes may already exist: {e}")
+                
+                    logger.info("Created referral_programs table")
             
-                await conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS referral_earnings (
-                        id SERIAL PRIMARY KEY,
-                        referrer_id BIGINT NOT NULL,
-                        referred_id BIGINT NOT NULL,
-                        amount DOUBLE PRECISION NOT NULL,
-                        earning_type VARCHAR(20) NOT NULL,
-                        related_payment_id INTEGER,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    
-                        INDEX idx_referrer_earnings (referrer_id),
-                        INDEX idx_referred_earnings (referred_id),
-                        INDEX idx_earning_type (earning_type)
-                    )
-                """))
+                try:
+                    await conn.execute(text("SELECT 1 FROM referral_earnings LIMIT 1"))
+                    logger.info("referral_earnings table already exists")
+                except Exception:
+                    await conn.execute(text("""
+                        CREATE TABLE referral_earnings (
+                            id SERIAL PRIMARY KEY,
+                            referrer_id BIGINT NOT NULL,
+                            referred_id BIGINT NOT NULL,
+                            amount DOUBLE PRECISION NOT NULL,
+                            earning_type VARCHAR(20) NOT NULL,
+                            related_payment_id INTEGER,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                
+                    try:
+                        await conn.execute(text("CREATE INDEX idx_referrer_earnings ON referral_earnings(referrer_id)"))
+                        await conn.execute(text("CREATE INDEX idx_referred_earnings ON referral_earnings(referred_id)"))
+                        await conn.execute(text("CREATE INDEX idx_earning_type ON referral_earnings(earning_type)"))
+                    except Exception as e:
+                        logger.warning(f"Some referral_earnings indexes may already exist: {e}")
+                
+                    logger.info("Created referral_earnings table")
             
                 logger.info("Successfully created referral system tables")
         except Exception as e:
@@ -300,13 +400,17 @@ class Database:
         try:
             async with self.engine.begin() as conn:
                 try:
-                    await conn.execute(text("""
-                        ALTER TABLE subscriptions 
-                        ADD COLUMN IF NOT EXISTS is_imported BOOLEAN DEFAULT FALSE
-                    """))
-                    logger.info("Successfully added is_imported field to subscriptions table")
-                except Exception as e:
-                    logger.info(f"Migration may have already been applied: {e}")
+                    await conn.execute(text("SELECT is_imported FROM subscriptions LIMIT 1"))
+                    logger.info("is_imported field already exists")
+                except Exception:
+                    try:
+                        await conn.execute(text("""
+                            ALTER TABLE subscriptions 
+                            ADD COLUMN is_imported BOOLEAN DEFAULT FALSE
+                        """))
+                        logger.info("Successfully added is_imported field to subscriptions table")
+                    except Exception as e:
+                        logger.warning(f"Error adding is_imported field: {e}")
         except Exception as e:
             logger.error(f"Error during subscription migration: {e}")            
     
@@ -636,17 +740,27 @@ class Database:
     async def migrate_user_subscriptions(self):
         try:
             async with self.engine.begin() as conn:
-                try:
-                    await conn.execute(text("""
-                        ALTER TABLE user_subscriptions 
-                        ADD COLUMN IF NOT EXISTS traffic_limit_gb INTEGER,
-                        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP
-                    """))
-                    logger.info("Successfully migrated user_subscriptions table")
-                except Exception as e:
-                    logger.info(f"Migration may have already been applied or error occurred: {e}")
+                fields_to_add = [
+                    ("traffic_limit_gb", "INTEGER"),
+                    ("updated_at", "TIMESTAMP")
+                ]
+            
+                for field_name, field_type in fields_to_add:
+                    try:
+                        await conn.execute(text(f"SELECT {field_name} FROM user_subscriptions LIMIT 1"))
+                    except Exception:
+                        try:
+                            await conn.execute(text(f"""
+                                ALTER TABLE user_subscriptions 
+                                ADD COLUMN {field_name} {field_type}
+                            """))
+                            logger.info(f"Added {field_name} column to user_subscriptions")
+                        except Exception as e:
+                            logger.warning(f"Error adding {field_name} column: {e}")
+            
+                logger.info("Successfully migrated user_subscriptions table")
         except Exception as e:
-            logger.error(f"Error during migration: {e}")
+            logger.error(f"Error during user_subscriptions migration: {e}")
 
     async def get_expiring_subscriptions(self, user_id: int, days_threshold: int = 3) -> List[UserSubscription]:
         async with self.session_factory() as session:
@@ -1571,52 +1685,37 @@ class Database:
                 return []
 
     async def migrate_star_payments_table(self):
-        """Создание таблицы для платежей через звезды"""
         try:
             async with self.engine.begin() as conn:
-                db_type = str(conn.get_dialect().name).lower()
+                try:
+                    await conn.execute(text("SELECT 1 FROM star_payments LIMIT 1"))
+                    logger.info("star_payments table already exists")
+                    return
+                except Exception:
+                    pass
             
-                if db_type == 'postgresql':
-                    await conn.execute(text("""
-                        CREATE TABLE IF NOT EXISTS star_payments (
-                            id SERIAL PRIMARY KEY,
-                            user_id BIGINT NOT NULL,
-                            stars_amount INTEGER NOT NULL,
-                            rub_amount DOUBLE PRECISION NOT NULL,
-                            status VARCHAR(50) DEFAULT 'pending',
-                            telegram_payment_charge_id VARCHAR(255),
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            completed_at TIMESTAMP
-                        )
-                    """))
-                
-                    await conn.execute(text("""
-                        CREATE INDEX IF NOT EXISTS idx_star_payments_user ON star_payments(user_id)
-                    """))
-                    await conn.execute(text("""
-                        CREATE INDEX IF NOT EXISTS idx_star_payments_status ON star_payments(status)
-                    """))
-                else:
-                    await conn.execute(text("""
-                        CREATE TABLE IF NOT EXISTS star_payments (
-                            id SERIAL PRIMARY KEY,
-                            user_id BIGINT NOT NULL,
-                            stars_amount INTEGER NOT NULL,
-                            rub_amount DOUBLE PRECISION NOT NULL,
-                            status VARCHAR(50) DEFAULT 'pending',
-                            telegram_payment_charge_id VARCHAR(255),
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            completed_at TIMESTAMP,
-                            
-                            INDEX idx_star_payments_user (user_id),
-                            INDEX idx_star_payments_status (status)
-                        )
-                    """))
+                await conn.execute(text("""
+                    CREATE TABLE star_payments (
+                        id SERIAL PRIMARY KEY,
+                        user_id BIGINT NOT NULL,
+                        stars_amount INTEGER NOT NULL,
+                        rub_amount DOUBLE PRECISION NOT NULL,
+                        status VARCHAR(50) DEFAULT 'pending',
+                        telegram_payment_charge_id VARCHAR(255),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        completed_at TIMESTAMP
+                    )
+                """))
+            
+                try:
+                    await conn.execute(text("CREATE INDEX idx_star_payments_user ON star_payments(user_id)"))
+                    await conn.execute(text("CREATE INDEX idx_star_payments_status ON star_payments(status)"))
+                except Exception as e:
+                    logger.warning(f"Some indexes may already exist: {e}")
             
                 logger.info("Successfully created star_payments table")
         except Exception as e:
             logger.error(f"Error creating star_payments table: {e}")
-            pass
 
     async def create_service_rule(self, title: str, content: str, page_order: int = None) -> ServiceRule:
         async with self.session_factory() as session:
@@ -1695,123 +1794,352 @@ class Database:
     async def migrate_service_rules_table(self):
         try:
             async with self.engine.begin() as conn:
-                db_type = str(conn.get_dialect().name).lower()
+                try:
+                    await conn.execute(text("SELECT 1 FROM service_rules LIMIT 1"))
+                    logger.info("service_rules table already exists")
+                    return
+                except Exception:
+                    pass
+                
+                await conn.execute(text("""
+                    CREATE TABLE service_rules (
+                        id SERIAL PRIMARY KEY,
+                        title VARCHAR(200) NOT NULL,
+                        content TEXT NOT NULL,
+                        page_order INTEGER NOT NULL DEFAULT 1,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
             
-                if db_type == 'postgresql':
+                try:
+                    await conn.execute(text("CREATE INDEX idx_service_rules_order ON service_rules(page_order)"))
+                    await conn.execute(text("CREATE INDEX idx_service_rules_active ON service_rules(is_active)"))
+                except Exception as e:
+                    logger.warning(f"Some indexes may already exist: {e}")
+            
+                check_result = await conn.execute(text("SELECT COUNT(*) FROM service_rules"))
+                count = check_result.scalar()
+            
+                if count == 0:
                     await conn.execute(text("""
-                        CREATE TABLE IF NOT EXISTS service_rules (
-                            id SERIAL PRIMARY KEY,
-                            title VARCHAR(200) NOT NULL,
-                            content TEXT NOT NULL,
-                            page_order INTEGER NOT NULL DEFAULT 1,
-                            is_active BOOLEAN DEFAULT TRUE,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
+                        INSERT INTO service_rules (title, content, page_order) VALUES 
+                        ('Общие положения', 
+                        '**1. Общие положения**
+
+    Настоящие Правила определяют условия использования VPN-сервиса.
+
+    **1.1** Используя наш сервис, вы соглашаетесь с данными правилами.
+
+    **1.2** Мы оставляем за собой право изменять правила в любое время.
+
+    **1.3** Продолжение использования сервиса после изменений означает ваше согласие с новыми условиями.', 
+                        1),
+
+                        ('Права и обязанности', 
+                        '**2. Права и обязанности пользователей**
+
+    **2.1 Права пользователя:**
+    • Использовать VPN-сервис в соответствии с тарифным планом
+    • Получать техническую поддержку
+    • Защиту персональных данных
+
+    **2.2 Обязанности пользователя:**
+    • Не использовать сервис для незаконной деятельности
+    • Не передавать данные доступа третьим лицам
+    • Своевременно оплачивать услуги
+
+    **2.3 Запрещается:**
+    • Попытки взлома или нарушения работы сервиса
+    • Спам и рассылка нежелательных сообщений
+    • Нарушение авторских прав', 
+                        2),
+
+                        ('Оплата и возврат средств', 
+                        '**3. Условия оплаты и возврата**
+
+    **3.1 Оплата:**
+    • Все платежи производятся в российских рублях
+    • Доступны различные способы оплаты
+    • Средства зачисляются автоматически или в течение 24 часов
+
+    **3.2 Возврат средств:**
+    • Возврат возможен в течение 7 дней с момента оплаты
+    • При технических проблемах возврат производится полностью
+    • Обращайтесь в поддержку для возврата
+
+    **3.3 Скидки и промокоды:**
+    • Действуют ограничения по времени и количеству использований
+    • Нельзя комбинировать несколько скидок', 
+                        3)
                     """))
-                
-                    await conn.execute(text("""
-                        CREATE INDEX IF NOT EXISTS idx_service_rules_order ON service_rules(page_order)
-                    """))
-                    await conn.execute(text("""
-                        CREATE INDEX IF NOT EXISTS idx_service_rules_active ON service_rules(is_active)
-                    """))
-                    
-                    await conn.execute(text("""
-                        CREATE OR REPLACE FUNCTION update_updated_at_column()
-                        RETURNS TRIGGER AS $
-                        BEGIN
-                            NEW.updated_at = CURRENT_TIMESTAMP;
-                            RETURN NEW;
-                        END;
-                        $ language 'plpgsql'
-                    """))
-                    
-                    await conn.execute(text("""
-                        DROP TRIGGER IF EXISTS update_service_rules_updated_at ON service_rules
-                    """))
-                    
-                    await conn.execute(text("""
-                        CREATE TRIGGER update_service_rules_updated_at 
-                            BEFORE UPDATE ON service_rules 
-                            FOR EACH ROW 
-                            EXECUTE FUNCTION update_updated_at_column()
-                    """))
-                    
-                    check_result = await conn.execute(text("SELECT COUNT(*) FROM service_rules"))
-                    count = check_result.scalar()
-                    
-                    if count == 0:
-                        await conn.execute(text("""
-                            INSERT INTO service_rules (title, content, page_order) VALUES 
-                            ('Общие положения', 
-                            '**1. Общие положения**
-
-Настоящие Правила определяют условия использования VPN-сервиса.
-
-**1.1** Используя наш сервис, вы соглашаетесь с данными правилами.
-
-**1.2** Мы оставляем за собой право изменять правила в любое время.
-
-**1.3** Продолжение использования сервиса после изменений означает ваше согласие с новыми условиями.', 
-                            1),
-
-                            ('Права и обязанности', 
-                            '**2. Права и обязанности пользователей**
-
-**2.1 Права пользователя:**
-• Использовать VPN-сервис в соответствии с тарифным планом
-• Получать техническую поддержку
-• Защиту персональных данных
-
-**2.2 Обязанности пользователя:**
-• Не использовать сервис для незаконной деятельности
-• Не передавать данные доступа третьим лицам
-• Своевременно оплачивать услуги
-
-**2.3 Запрещается:**
-• Попытки взлома или нарушения работы сервиса
-• Спам и рассылка нежелательных сообщений
-• Нарушение авторских прав', 
-                            2),
-
-                            ('Оплата и возврат средств', 
-                            '**3. Условия оплаты и возврата**
-
-**3.1 Оплата:**
-• Все платежи производятся в российских рублях
-• Доступны различные способы оплаты
-• Средства зачисляются автоматически или в течение 24 часов
-
-**3.2 Возврат средств:**
-• Возврат возможен в течение 7 дней с момента оплаты
-• При технических проблемах возврат производится полностью
-• Обращайтесь в поддержку для возврата
-
-**3.3 Скидки и промокоды:**
-• Действуют ограничения по времени и количеству использований
-• Нельзя комбинировать несколько скидок', 
-                            3)
-                        """))
-                        logger.info("Inserted default service rules")
-                
-                else:
-                    await conn.execute(text("""
-                        CREATE TABLE IF NOT EXISTS service_rules (
-                            id SERIAL PRIMARY KEY,
-                            title VARCHAR(200) NOT NULL,
-                            content TEXT NOT NULL,
-                            page_order INTEGER NOT NULL DEFAULT 1,
-                            is_active BOOLEAN DEFAULT TRUE,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                            
-                            INDEX idx_service_rules_order (page_order),
-                            INDEX idx_service_rules_active (is_active)
-                        )
-                    """))
+                    logger.info("Inserted default service rules")
             
                 logger.info("Successfully created service_rules table")
         except Exception as e:
             logger.error(f"Error creating service_rules table: {e}")
-            pass
+
+    async def migrate_autopay_fields(self):
+        try:
+            async with self.engine.begin() as conn:
+                try:
+                    await conn.execute(text("SELECT auto_pay_enabled FROM user_subscriptions LIMIT 1"))
+                    logger.info("Autopay fields already exist")
+                    return
+                except Exception:
+                    pass
+                
+                try:
+                    await conn.execute(text("""
+                        ALTER TABLE user_subscriptions 
+                        ADD COLUMN auto_pay_enabled BOOLEAN DEFAULT FALSE
+                    """))
+                    logger.info("Added auto_pay_enabled column")
+                except Exception as e:
+                    logger.warning(f"Column auto_pay_enabled may already exist: {e}")
+            
+                try:
+                    await conn.execute(text("""
+                        ALTER TABLE user_subscriptions 
+                        ADD COLUMN auto_pay_days_before INTEGER DEFAULT 3
+                    """))
+                    logger.info("Added auto_pay_days_before column")
+                except Exception as e:
+                    logger.warning(f"Column auto_pay_days_before may already exist: {e}")
+            
+                logger.info("Successfully added autopay fields to user_subscriptions table")
+        except Exception as e:
+            logger.error(f"Error adding autopay fields: {e}")
+
+    async def get_autopay_history(self, limit: int = 50) -> List[Dict[str, Any]]:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, desc
+            
+                result = await session.execute(
+                    select(Payment)
+                    .where(Payment.payment_type == 'autopay')
+                    .order_by(desc(Payment.created_at))
+                    .limit(limit)
+                )
+                
+                payments = result.scalars().all()
+            
+                autopay_history = []
+                
+                for payment in payments:
+                    try:
+                        user_result = await session.execute(
+                            select(User).where(User.telegram_id == payment.user_id)
+                        )
+                        user_obj = user_result.scalar_one_or_none()
+                    
+                        autopay_history.append({
+                            'payment_id': payment.id,
+                            'user_id': payment.user_id,
+                            'username': user_obj.username if user_obj else 'N/A',
+                            'first_name': user_obj.first_name if user_obj else 'N/A',
+                            'amount': payment.amount,
+                            'description': payment.description,
+                            'status': payment.status,
+                            'created_at': payment.created_at
+                        })
+                    
+                    except Exception as e:
+                        logger.warning(f"Error processing autopay history for payment {payment.id}: {e}")
+                        continue
+            
+                return autopay_history
+            
+            except Exception as e:
+                logger.error(f"Error getting autopay history: {e}")
+                return []
+
+    async def disable_autopay_for_user(self, user_id: int) -> int:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import update
+            
+                result = await session.execute(
+                    update(UserSubscription)
+                    .where(
+                        and_(
+                            UserSubscription.user_id == user_id,
+                            UserSubscription.auto_pay_enabled == True
+                        )
+                    )
+                    .values(auto_pay_enabled=False)
+                )
+            
+                await session.commit()
+                return result.rowcount
+            
+            except Exception as e:
+                logger.error(f"Error disabling autopay for user {user_id}: {e}")
+                await session.rollback()
+                return 0
+
+    async def get_autopay_subscription_by_id(self, subscription_id: int) -> Optional[UserSubscription]:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select
+            
+                result = await session.execute(
+                    select(UserSubscription).where(
+                        and_(
+                            UserSubscription.id == subscription_id,
+                            UserSubscription.auto_pay_enabled == True
+                        )
+                    )
+                )
+            
+                return result.scalar_one_or_none()
+            
+            except Exception as e:
+                logger.error(f"Error getting autopay subscription {subscription_id}: {e}")
+                return None
+
+    async def get_autopay_statistics(self) -> Dict[str, Any]:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, func, and_, case
+                from datetime import datetime, timedelta
+            
+                total_autopay = await session.execute(
+                    select(func.count(UserSubscription.id))
+                    .where(UserSubscription.auto_pay_enabled == True)
+                )
+                total_autopay_subscriptions = total_autopay.scalar() or 0
+            
+                active_autopay = await session.execute(
+                    select(func.count(UserSubscription.id))
+                    .where(
+                        and_(
+                            UserSubscription.auto_pay_enabled == True,
+                            UserSubscription.is_active == True,
+                            UserSubscription.expires_at > datetime.utcnow()
+                        )
+                    )
+                )
+                active_autopay_subscriptions = active_autopay.scalar() or 0
+            
+                expired_autopay = await session.execute(
+                    select(func.count(UserSubscription.id))
+                    .where(
+                        and_(
+                            UserSubscription.auto_pay_enabled == True,
+                            UserSubscription.expires_at <= datetime.utcnow()
+                        )
+                    )
+                )
+                expired_autopay_subscriptions = expired_autopay.scalar() or 0
+            
+                ready_for_autopay = []
+                current_time = datetime.utcnow()
+            
+                for days in [1, 2, 3, 5, 7]:
+                    threshold_date = current_time + timedelta(days=days)
+                
+                    ready_count = await session.execute(
+                        select(func.count(UserSubscription.id))
+                        .where(
+                            and_(
+                                UserSubscription.auto_pay_enabled == True,
+                                UserSubscription.is_active == True,
+                                UserSubscription.auto_pay_days_before == days,
+                                UserSubscription.expires_at <= threshold_date,
+                                UserSubscription.expires_at > current_time
+                            )
+                        )
+                    )
+                
+                    count = ready_count.scalar() or 0
+                    ready_for_autopay.append({
+                        'days': days,
+                        'count': count
+                    })
+            
+                return {
+                    'total_autopay_subscriptions': total_autopay_subscriptions,
+                    'active_autopay_subscriptions': active_autopay_subscriptions,
+                    'expired_autopay_subscriptions': expired_autopay_subscriptions,
+                    'ready_for_autopay': ready_for_autopay
+                }
+            
+            except Exception as e:
+                logger.error(f"Error getting autopay statistics: {e}")
+                return {
+                    'total_autopay_subscriptions': 0,
+                    'active_autopay_subscriptions': 0,
+                    'expired_autopay_subscriptions': 0,
+                    'ready_for_autopay': []
+                }
+
+    async def get_users_with_insufficient_autopay_balance(self) -> List[Dict[str, Any]]:
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, and_
+                from datetime import datetime, timedelta
+            
+                current_time = datetime.utcnow()
+            
+                insufficient_users = []
+            
+                autopay_subs = await session.execute(
+                    select(UserSubscription)
+                    .where(
+                        and_(
+                            UserSubscription.auto_pay_enabled == True,
+                            UserSubscription.is_active == True,
+                            UserSubscription.expires_at > current_time
+                        )
+                    )
+                )
+            
+                for user_sub in autopay_subs.scalars().all():
+                    try:
+                        threshold_date = current_time + timedelta(days=user_sub.auto_pay_days_before)
+                    
+                        if user_sub.expires_at <= threshold_date:
+                            user_result = await session.execute(
+                                select(User).where(User.telegram_id == user_sub.user_id)
+                            )
+                            user_obj = user_result.scalar_one_or_none()
+                        
+                            if not user_obj:
+                                continue
+                        
+                            sub_result = await session.execute(
+                                select(Subscription).where(Subscription.id == user_sub.subscription_id)
+                            )
+                            subscription = sub_result.scalar_one_or_none()
+                        
+                            if not subscription:
+                                continue
+                        
+                            if user_obj.balance < subscription.price:
+                                days_left = (user_sub.expires_at - current_time).days
+                                needed_amount = subscription.price - user_obj.balance
+                            
+                                insufficient_users.append({
+                                    'user_id': user_obj.telegram_id,
+                                    'username': user_obj.username or 'N/A',
+                                    'first_name': user_obj.first_name or 'N/A',
+                                    'current_balance': user_obj.balance,
+                                    'subscription_price': subscription.price,
+                                    'needed_amount': needed_amount,
+                                    'subscription_name': subscription.name,
+                                    'expires_in_days': days_left,
+                                    'auto_pay_days_before': user_sub.auto_pay_days_before
+                                })
+                
+                    except Exception as e:
+                        logger.warning(f"Error processing user subscription {user_sub.id}: {e}")
+                        continue
+            
+                return insufficient_users
+            
+            except Exception as e:
+                logger.error(f"Error getting users with insufficient autopay balance: {e}")
+                return []
