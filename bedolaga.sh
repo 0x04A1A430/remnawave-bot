@@ -290,6 +290,7 @@ EOF
 }
 
 # Создание .env файла
+# Создание .env файла
 create_env_file() {
     log "Настройка .env файла..."
     
@@ -352,6 +353,42 @@ create_env_file() {
     read -p "Введите REFERRAL_THRESHOLD (сумму с .0 на конце): " REFERRAL_THRESHOLD
     read -p "Введите REFERRAL_PERCENTAGE (с 0. в начале): " REFERRAL_PERCENTAGE
     
+    # Настройки оплаты звездами Telegram
+    echo ""
+    echo -e "${YELLOW}=== Настройка оплаты звездами Telegram ===${NC}"
+    while true; do
+        read -p "Включить оплату звездами Telegram? (y/n): " stars_enabled
+        case $stars_enabled in
+            [Yy]*)
+                STARS_ENABLED="true"
+                echo ""
+                echo -e "${BLUE}Настройка курсов обмена звезд на рубли:${NC}"
+                echo -e "${YELLOW}Введите курс обмена для каждого пакета звезд${NC}"
+                echo -e "${YELLOW}(например, если 100 звезд = 150 рублей, введите 150)${NC}"
+                echo ""
+                
+                read -p "Курс для 100 звезд (в рублях): " STARS_100_RATE
+                read -p "Курс для 150 звезд (в рублях): " STARS_150_RATE
+                read -p "Курс для 250 звезд (в рублях): " STARS_250_RATE
+                read -p "Курс для 350 звезд (в рублях): " STARS_350_RATE
+                read -p "Курс для 500 звезд (в рублях): " STARS_500_RATE
+                break
+                ;;
+            [Nn]*)
+                STARS_ENABLED="false"
+                STARS_100_RATE=""
+                STARS_150_RATE=""
+                STARS_250_RATE=""
+                STARS_350_RATE=""
+                STARS_500_RATE=""
+                break
+                ;;
+            *)
+                error "Пожалуйста, ответьте y или n."
+                ;;
+        esac
+    done
+    
     # Настройки мониторинга
     read -p "Введите DELETE_EXPIRED_TRIAL_DAYS: " DELETE_EXPIRED_TRIAL_DAYS
     read -p "Введите DELETE_EXPIRED_REGULAR_DAYS: " DELETE_EXPIRED_REGULAR_DAYS
@@ -382,6 +419,43 @@ REFERRAL_FIRST_REWARD=$REFERRAL_FIRST_REWARD
 REFERRAL_REFERRED_BONUS=$REFERRAL_REFERRED_BONUS
 REFERRAL_THRESHOLD=$REFERRAL_THRESHOLD
 REFERRAL_PERCENTAGE=$REFERRAL_PERCENTAGE
+
+# Telegram Stars Payment Settings
+STARS_ENABLED=$STARS_ENABLED
+EOF
+
+    # Добавляем курсы звезд только если включена оплата звездами
+    if [ "$STARS_ENABLED" = "true" ]; then
+        cat >> "$ENV_FILE" << EOF
+# Курсы обмена звезд на рубли
+# 100 звёзд
+STARS_100_RATE=$STARS_100_RATE
+# 150 звёзд 
+STARS_150_RATE=$STARS_150_RATE
+# 250 звёзд
+STARS_250_RATE=$STARS_250_RATE
+# 350 звёзд
+STARS_350_RATE=$STARS_350_RATE
+# 500 звёзд
+STARS_500_RATE=$STARS_500_RATE
+EOF
+    else
+        cat >> "$ENV_FILE" << EOF
+# Курсы обмена звезд на рубли (отключено)
+# 100 звёзд
+STARS_100_RATE=
+# 150 звёзд 
+STARS_150_RATE=
+# 250 звёзд
+STARS_250_RATE=
+# 350 звёзд
+STARS_350_RATE=
+# 500 звёзд
+STARS_500_RATE=
+EOF
+    fi
+
+    cat >> "$ENV_FILE" << EOF
 
 # Monitor Service Settings
 MONITOR_ENABLED=true
