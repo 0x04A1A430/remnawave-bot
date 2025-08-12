@@ -19,7 +19,9 @@ class RemnaWaveAPI:
             headers = {
                 'Authorization': f'Bearer {self.token}',
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'X-Forwarded-Proto': 'https',  
+                'X-Forwarded-For': '127.0.0.1'  
             }
             timeout = aiohttp.ClientTimeout(total=30)
             self.session = aiohttp.ClientSession(
