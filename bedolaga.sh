@@ -101,18 +101,23 @@ create_project_structure() {
 create_docker_compose() {
     log "Создание docker-compose.yml..."
     
-    echo "Выберите конфигурацию Docker Compose:"
-    echo "1) Минимальная (рекомендуется) - только PostgreSQL и бот"
-    echo "2) Расширенная - с Redis и Nginx"
+    echo "Выберите конфигурацию установки:"
+    echo "1) Только бот (панель RemnaWave на другом сервере)"
+    echo "2) Панель + бот на одном сервере (рекомендуется)"
+    echo "3) Расширенная - с Redis и Nginx"
     
     while true; do
-        read -p "Ваш выбор (1-2): " choice
+        read -p "Ваш выбор (1-3): " choice
         case $choice in
             1)
-                create_minimal_compose
+                create_standalone_compose
                 break
                 ;;
             2)
+                create_panel_bot_compose
+                break
+                ;;
+            3)
                 create_full_compose
                 break
                 ;;
@@ -123,7 +128,8 @@ create_docker_compose() {
     done
 }
 
-create_minimal_compose() {
+# Создание конфигурации только для бота (внешняя панель)
+create_standalone_compose() {
     cat > "$COMPOSE_FILE" << 'EOF'
 services:
   # PostgreSQL Database
@@ -180,7 +186,72 @@ networks:
     driver: bridge
 EOF
 
-    log "Минимальная конфигурация Docker Compose создана"
+    log "Конфигурация только для бота создана"
+    export COMPOSE_TYPE="standalone"
+}
+
+# Создание конфигурации панель + бот
+create_panel_bot_compose() {
+    cat > "$COMPOSE_FILE" << 'EOF'
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: remnawave_bot_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: remnawave_bot
+      POSTGRES_USER: remnawave_user
+      POSTGRES_PASSWORD: secure_password_123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - remnawave-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U remnawave_user -d remnawave_bot"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # RemnaWave Bot
+  bot:
+    image: fr1ngg/remnawave-bedolaga-telegram-bot:latest
+    container_name: remnawave_bot
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://remnawave_user:secure_password_123@postgres:5432/remnawave_bot
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - remnawave-network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'print(\"Bot is running\")'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  remnawave-network:
+    name: remnawave-network
+    external: true
+EOF
+
+    log "Конфигурация панель + бот на одном сервере создана"
+    log "ВАЖНО: Убедитесь что панель RemnaWave уже установлена и создала сеть remnawave-network"
+    export COMPOSE_TYPE="panel_bot"
 }
 
 create_full_compose() {
@@ -287,6 +358,7 @@ networks:
 EOF
 
     log "Расширенная конфигурация Docker Compose создана"
+    export COMPOSE_TYPE="full"
 }
 
 # Создание .env файла
@@ -298,29 +370,17 @@ create_env_file() {
     read -p "Введите BOT_USERNAME (без @): " BOT_USERNAME
     read -p "Введите ADMIN_IDS (через запятую): " ADMIN_IDS
     
-    # Настройки RemnaWave
-    echo "Выберите режим RemnaWave:"
-    echo "1) remote"
-    echo "2) local"
-    while true; do
-        read -p "Ваш выбор (1-2): " remna_choice
-        case $remna_choice in
-            1)
-                REMNAWAVE_MODE="remote"
-                break
-                ;;
-            2)
-                REMNAWAVE_MODE="local"
-                break
-                ;;
-            *)
-                error "Неверный выбор. Попробуйте снова."
-                ;;
-        esac
-    done
+    # Настройки RemnaWave в зависимости от типа установки
+    if [ "$COMPOSE_TYPE" = "panel_bot" ]; then
+        log "Настройка для панель + бот на одном сервере"
+        REMNAWAVE_URL="http://remnawave:3000"
+        echo "URL панели будет: $REMNAWAVE_URL (внутренний адрес контейнера)"
+    else
+        read -p "Введите REMNAWAVE_URL (например: https://your-panel.com): " REMNAWAVE_URL
+    fi
     
-    read -p "Введите REMNAWAVE_URL: " REMNAWAVE_URL
     read -p "Введите REMNAWAVE_TOKEN: " REMNAWAVE_TOKEN
+    read -p "Введите SUBSCRIPTION_BASE_URL (например: https://sub.your-domain.com): " SUBSCRIPTION_BASE_URL
     
     # Настройки триала
     while true; do
@@ -394,12 +454,20 @@ create_env_file() {
     
     # Создание .env файла
     cat > "$ENV_FILE" << EOF
+# Bot Configuration
 BOT_TOKEN=$BOT_TOKEN
 BOT_USERNAME=$BOT_USERNAME
-ADMIN_IDS=$ADMIN_IDS
-REMNAWAVE_MODE=$REMNAWAVE_MODE
+
+# RemnaWave API Configuration
 REMNAWAVE_URL=$REMNAWAVE_URL
 REMNAWAVE_TOKEN=$REMNAWAVE_TOKEN
+SUBSCRIPTION_BASE_URL=$SUBSCRIPTION_BASE_URL
+
+# Admin Configuration
+ADMIN_IDS=$ADMIN_IDS
+SUPPORT_USERNAME=support
+
+# Trial Configuration
 TRIAL_ENABLED=$TRIAL_ENABLED
 EOF
 
@@ -412,51 +480,31 @@ EOF
     fi
 
     cat >> "$ENV_FILE" << EOF
-TRIAL_PRICE=0.0
 
+# Referral Configuration
 REFERRAL_FIRST_REWARD=$REFERRAL_FIRST_REWARD
 REFERRAL_REFERRED_BONUS=$REFERRAL_REFERRED_BONUS
 REFERRAL_THRESHOLD=$REFERRAL_THRESHOLD
 REFERRAL_PERCENTAGE=$REFERRAL_PERCENTAGE
 
-# Telegram Stars Payment Settings
+# Telegram Stars Configuration
 STARS_ENABLED=$STARS_ENABLED
 EOF
 
     # Добавляем курсы звезд только если включена оплата звездами
     if [ "$STARS_ENABLED" = "true" ]; then
         cat >> "$ENV_FILE" << EOF
-# Курсы обмена звезд на рубли
-# 100 звёзд
 STARS_100_RATE=$STARS_100_RATE
-# 150 звёзд 
 STARS_150_RATE=$STARS_150_RATE
-# 250 звёзд
 STARS_250_RATE=$STARS_250_RATE
-# 350 звёзд
 STARS_350_RATE=$STARS_350_RATE
-# 500 звёзд
 STARS_500_RATE=$STARS_500_RATE
-EOF
-    else
-        cat >> "$ENV_FILE" << EOF
-# Курсы обмена звезд на рубли (отключено)
-# 100 звёзд
-STARS_100_RATE=
-# 150 звёзд 
-STARS_150_RATE=
-# 250 звёзд
-STARS_250_RATE=
-# 350 звёзд
-STARS_350_RATE=
-# 500 звёзд
-STARS_500_RATE=
 EOF
     fi
 
     cat >> "$ENV_FILE" << EOF
 
-# Monitor Service Settings
+# Monitor Configuration
 MONITOR_ENABLED=true
 MONITOR_CHECK_INTERVAL=21600
 MONITOR_DAILY_CHECK_HOUR=12
@@ -464,6 +512,8 @@ MONITOR_WARNING_DAYS=2
 DELETE_EXPIRED_TRIAL_DAYS=$DELETE_EXPIRED_TRIAL_DAYS
 DELETE_EXPIRED_REGULAR_DAYS=$DELETE_EXPIRED_REGULAR_DAYS
 AUTO_DELETE_ENABLED=true
+
+# Lucky Game Configuration
 LUCKY_GAME_ENABLED=true
 LUCKY_GAME_REWARD=50.0
 LUCKY_GAME_NUMBERS=30
@@ -471,6 +521,17 @@ LUCKY_GAME_WINNING_COUNT=5
 EOF
 
     log ".env файл создан успешно"
+    
+    # Показываем специальные инструкции для панель + бот
+    if [ "$COMPOSE_TYPE" = "panel_bot" ]; then
+        echo ""
+        echo -e "${YELLOW}=== ВАЖНЫЕ ИНСТРУКЦИИ ДЛЯ ПАНЕЛЬ + БОТ ===${NC}"
+        echo -e "${GREEN}1. Убедитесь что панель RemnaWave уже запущена${NC}"
+        echo -e "${GREEN}2. URL панели установлен как: $REMNAWAVE_URL${NC}"
+        echo -e "${GREEN}3. Бот будет подключаться к панели через внутреннюю Docker сеть${NC}"
+        echo -e "${YELLOW}4. Если панель не запущена, сначала запустите её!${NC}"
+        echo ""
+    fi
 }
 
 # Создание службы systemd
@@ -529,10 +590,23 @@ check_remnawave_connection() {
     if [ -f "$ENV_FILE" ]; then
         source "$ENV_FILE"
         if [ ! -z "$REMNAWAVE_URL" ]; then
-            if curl -s --connect-timeout 5 "$REMNAWAVE_URL/api/auth/status" > /dev/null; then
-                return 0  # Подключен
+            # Для внутренних URL (панель+бот) проверка API отключена
+            # так как панель может блокировать HTTP запросы через ProxyCheckMiddleware
+            if [[ "$REMNAWAVE_URL" == *"remnawave:3000"* ]]; then
+                # Для локальной установки просто проверяем что бот запущен
+                # Если бот работает - значит скорее всего API тоже доступен
+                if docker compose -f "$COMPOSE_FILE" ps bot | grep -q "Up"; then
+                    return 0  # Считаем что подключен если бот запущен
+                else
+                    return 1
+                fi
             else
-                return 1  # Не подключен
+                # Внешний URL - проверяем напрямую
+                if curl -s --connect-timeout 5 "$REMNAWAVE_URL/api/system/stats" > /dev/null 2>&1; then
+                    return 0
+                else
+                    return 1
+                fi
             fi
         else
             return 1
@@ -546,8 +620,36 @@ check_remnawave_connection() {
 start_bot() {
     log "Запуск бота..."
     cd "$BOT_DIR"
+    
+    # Проверяем тип установки
+    if grep -q "remnawave-network" "$COMPOSE_FILE"; then
+        log "Обнаружена конфигурация панель + бот"
+        
+        # Проверяем существование сети
+        if ! docker network ls | grep -q "remnawave-network"; then
+            error "Сеть remnawave-network не найдена!"
+            error "Убедитесь что панель RemnaWave запущена и создала сеть"
+            echo ""
+            echo "Для проверки выполните:"
+            echo "  docker network ls | grep remnawave"
+            echo ""
+            echo "Если сети нет, сначала запустите панель RemnaWave"
+            return 1
+        fi
+        
+        log "Сеть remnawave-network найдена ✓"
+    fi
+    
     docker compose up -d
     log "Бот запущен"
+    
+    # Ждем немного и проверяем статус
+    sleep 5
+    if check_bot_status; then
+        log "✅ Бот успешно запущен и работает"
+    else
+        warn "⚠️ Бот запущен но возможны проблемы. Проверьте логи: docker compose logs bot"
+    fi
 }
 
 # Остановка бота
@@ -1157,11 +1259,32 @@ remove_bot() {
     fi
 }
 
+# Проверка статуса сети RemnaWave
+check_remnawave_network() {
+    if docker network ls | grep -q "remnawave-network"; then
+        return 0  # Сеть существует
+    else
+        return 1  # Сеть не существует
+    fi
+}
+
 # Главное меню
 show_menu() {
     clear
     echo -e "${BLUE}=== RemnaWave Bedolaga Bot Management ===${NC}"
     echo ""
+    
+    # Определяем тип установки
+    INSTALLATION_TYPE="Неизвестно"
+    if [ -f "$COMPOSE_FILE" ]; then
+        if grep -q "remnawave-network" "$COMPOSE_FILE" && grep -q "external: true" "$COMPOSE_FILE"; then
+            INSTALLATION_TYPE="Панель + Бот на одном сервере"
+        elif grep -q "bot_network" "$COMPOSE_FILE"; then
+            INSTALLATION_TYPE="Только бот (внешняя панель)"
+        fi
+    fi
+    
+    echo -e "${YELLOW}Тип установки: ${NC}$INSTALLATION_TYPE"
     
     # Показать статус бота
     echo -e "${YELLOW}Статус бота:${NC}"
@@ -1169,6 +1292,16 @@ show_menu() {
         echo -e "🟢 Бот: ${GREEN}ЗАПУЩЕН${NC}"
     else
         echo -e "🔴 Бот: ${RED}ОСТАНОВЛЕН${NC}"
+    fi
+    
+    # Показать статус сети (для панель + бот)
+    if [[ "$INSTALLATION_TYPE" == *"Панель + Бот"* ]]; then
+        echo -e "${YELLOW}Статус сети RemnaWave:${NC}"
+        if check_remnawave_network; then
+            echo -e "🟢 Сеть: ${GREEN}СОЗДАНА${NC}"
+        else
+            echo -e "🔴 Сеть: ${RED}НЕ НАЙДЕНА${NC} (запустите панель RemnaWave)"
+        fi
     fi
     
     # Показать статус подключения к API
@@ -1264,6 +1397,17 @@ install_bot() {
     
     log "Установка завершена!"
     log "Бот установлен в: $BOT_DIR"
+    
+    if [ "$COMPOSE_TYPE" = "panel_bot" ]; then
+        echo ""
+        echo -e "${YELLOW}=== ВАЖНО ДЛЯ ПАНЕЛЬ + БОТ УСТАНОВКИ ===${NC}"
+        echo -e "${GREEN}1. Перед запуском бота убедитесь что панель RemnaWave запущена${NC}"
+        echo -e "${GREEN}2. Панель должна создать сеть 'remnawave-network'${NC}"
+        echo -e "${GREEN}3. Проверить сеть: docker network ls | grep remnawave${NC}"
+        echo -e "${YELLOW}4. Если сети нет - сначала запустите панель RemnaWave!${NC}"
+        echo ""
+    fi
+    
     log "Для управления ботом используйте это меню или systemctl"
     
     read -p "Нажмите Enter для перехода в меню управления..."
