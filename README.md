@@ -8,6 +8,8 @@
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/Fr1ngg/remnawave-bedolaga-telegram-bot?style=social)](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/stargazers)
 
+![Logo](./assets/logo2.svg)
+
 **Современный Telegram-бот для управления VPN подписками через Remnawave API**
 
 *Полнофункциональное решение с управлением пользователями, платежами и администрированием*
