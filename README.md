@@ -75,7 +75,6 @@ nano .env
 | `BOT_TOKEN` | Токен Telegram бота | `123456:ABC-DEF1234ghIkl-zyx` |
 | `BOT_USERNAME` | Username бота (без @) | `your_bot_username` |
 | `REMNAWAVE_URL` | URL панели Remnawave | `https://panel.example.com` |
-| `REMNAWAVE_MODE` | Тип подключения | `remote/local` |
 | `REMNAWAVE_TOKEN` | API токен Remnawave | `your_api_token` |
 | `ADMIN_IDS` | ID администраторов (через запятую) | `123456789,987654321` |
 
@@ -278,9 +277,9 @@ docker stats
 docker volume ls
 ```
 
-### 4. Docker Compose конфигурация
+### 4. Docker Compose конфигурация (ЗАПУСК НА СЕРВЕРЕ ВНЕ ПАНЕЛИ REMNAWAVE)
 
-#### 🚀 Минимальная конфигурация (рекомендуется)
+#### 🚀 Минимальная конфигурация (рекомендуется) 
 
 Создайте файл `docker-compose.yml` для базового запуска:
 
@@ -444,6 +443,173 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
+```
+
+### 4.1 Docker Compose конфигурация (ЗАПУСК НА СЕРВЕРЕ C ПАНЕЛЬЮ REMNAWAVE)
+
+#### 🚀 Минимальная конфигурация (рекомендуется) 
+
+Создайте файл `docker-compose.yml` для базового запуска:
+
+```yaml
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: remnawave_bot_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: remnawave_bot
+      POSTGRES_USER: remnawave_user
+      POSTGRES_PASSWORD: secure_password_123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - remnawave-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U remnawave_user -d remnawave_bot"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Remnawave Bot
+  bot:
+    image: fr1ngg/remnawave-bedolaga-telegram-bot:latest
+    container_name: remnawave_bot
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://remnawave_user:secure_password_123@postgres:5432/remnawave_bot
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - remnawave-network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'print(\"Bot is running\")'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  remnawave-network:
+    name: remnawave-network
+    external: true
+```
+
+#### ⚡ Полная конфигурация (с дополнительными сервисами)
+
+Для расширенной настройки с Redis и Nginx создайте `docker-compose.full.yml`:
+
+```yaml
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: remnawave_bot_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: remnawave_bot
+      POSTGRES_USER: remnawave_user
+      POSTGRES_PASSWORD: secure_password_123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - remnawave-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U remnawave_user -d remnawave_bot"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Remnawave Bot
+  bot:
+    image: fr1ngg/remnawave-bedolaga-telegram-bot:latest
+    container_name: remnawave_bot
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://remnawave_user:secure_password_123@postgres:5432/remnawave_bot
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - remnawave-network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'print(\"Bot is running\")'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Redis (для кэширования и улучшения производительности)
+  redis:
+    image: redis:7-alpine
+    container_name: remnawave_bot_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass redis_password_123
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - remnawave-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    profiles:
+      - with-redis
+
+  # Nginx (для статических файлов или веб-интерфейса)
+  nginx:
+    image: nginx:alpine
+    container_name: remnawave_bot_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./static:/usr/share/nginx/html:ro
+    networks:
+      - remnawave-network
+    depends_on:
+      - bot
+    profiles:
+      - with-nginx
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  remnawave-network:
+    name: remnawave-network
+    external: true
 ```
 
 ### 5. Варианты запуска
