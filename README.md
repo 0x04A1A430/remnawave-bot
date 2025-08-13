@@ -173,6 +173,19 @@ curl -sSL https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/raw/main/bed
 
 </details>
 
+<details>
+<summary> Триал</summary>
+
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `TRIAL_ENABLED` | Включить триал | `true` |
+| `TRIAL_DURATION_DAYS` | Дней триала | `3` |
+| `TRIAL_SQUAD_UUID` | Сквад триальной подписки | `` |
+| `TRIAL_NOTIFICATION_ENABLED` | Уведомление об истечении триал подписки | `true` |
+| `TRIAL_NOTIFICATION_HOURS_AFTER` | Через сколько отсылать сообщение  | `1` |
+| `TRIAL_NOTIFICATION_HOURS_WINDOW` | Через сколько выслать повторно  | `` |
+
+</details>
 ### 🐳 Docker Compose примеры
 
 <details>
