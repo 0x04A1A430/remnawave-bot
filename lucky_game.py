@@ -299,6 +299,7 @@ async def get_user_game_stats(db: Database, user_id: int) -> tuple[int, float, i
 
 async def save_game_result(db: Database, user_id: int, chosen_number: int, 
                           winning_numbers: List[int], is_winner: bool, reward_amount: float):
+    """Сохраняет результат игры в базу данных"""
     try:
         game = await db.create_lucky_game(
             user_id=user_id,
