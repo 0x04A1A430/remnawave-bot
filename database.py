@@ -1442,25 +1442,27 @@ class Database:
 
     async def create_lucky_game(self, user_id: int, chosen_number: int, 
                                winning_numbers: List[int], is_winner: bool, 
-                               reward_amount: float = 0.0) -> Optional[LuckyGame]:
+                               reward_amount: float) -> Optional['LuckyGame']:
         async with self.session_factory() as session:
             try:
-                import json
-                
                 game = LuckyGame(
                     user_id=user_id,
                     chosen_number=chosen_number,
-                    winning_numbers=json.dumps(winning_numbers),
+                    winning_numbers=winning_numbers,
                     is_winner=is_winner,
                     reward_amount=reward_amount
                 )
+                
                 session.add(game)
                 await session.commit()
                 await session.refresh(game)
+            
+                logger.info(f"Lucky game created: user_id={user_id}, chosen_number={chosen_number}, is_winner={is_winner}")
                 return game
+            
             except Exception as e:
-                logger.error(f"Error creating lucky game: {e}")
                 await session.rollback()
+                logger.error(f"Error creating lucky game: {e}")
                 return None
 
     async def get_user_last_game_today(self, user_id: int) -> Optional[LuckyGame]:
@@ -2437,99 +2439,135 @@ class Database:
                 }
 
     async def get_lucky_game_admin_stats(self) -> dict:
-        try:
-            query = """
-            SELECT 
-                COUNT(*) as total_games,
-                COUNT(CASE WHEN is_winner = 1 THEN 1 END) as total_wins,
-                COUNT(DISTINCT user_id) as unique_players,
-                SUM(reward_amount) as total_rewards,
-                AVG(reward_amount) as avg_reward,
-                COUNT(CASE WHEN DATE(played_at) = DATE('now') THEN 1 END) as games_today,
-                COUNT(CASE WHEN DATE(played_at) = DATE('now') AND is_winner = 1 THEN 1 END) as wins_today,
-                MAX(played_at) as last_game,
-                MIN(played_at) as first_game
-            FROM lucky_games
-            """
-        
-            async with self.get_connection() as conn:
-                async with conn.execute(query) as cursor:
-                    row = await cursor.fetchone()
-                    
-                    if row:
-                        stats = {
-                            'total_games': row[0] or 0,
-                            'total_wins': row[1] or 0,
-                            'unique_players': row[2] or 0,
-                            'total_rewards': row[3] or 0.0,
-                            'avg_reward': row[4] or 0.0,
-                            'games_today': row[5] or 0,
-                            'wins_today': row[6] or 0,
-                            'last_game': row[7],
-                            'first_game': row[8]
-                        }
-                    
-                        if stats['total_games'] > 0:
-                            stats['win_rate'] = (stats['total_wins'] / stats['total_games']) * 100
-                            stats['win_rate_today'] = (stats['wins_today'] / stats['games_today']) * 100 if stats['games_today'] > 0 else 0
-                        else:
-                            stats['win_rate'] = 0
-                            stats['win_rate_today'] = 0
-                    
-                        return stats
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, func, case, and_
+                from datetime import date
+            
+                total_games_result = await session.execute(
+                    select(func.count(LuckyGame.id))
+                )
+                total_games = total_games_result.scalar() or 0
                 
-                    return {
-                        'total_games': 0, 'total_wins': 0, 'unique_players': 0,
-                        'total_rewards': 0.0, 'avg_reward': 0.0, 'games_today': 0,
-                        'wins_today': 0, 'win_rate': 0, 'win_rate_today': 0,
-                        'last_game': None, 'first_game': None
-                    }
+                total_wins_result = await session.execute(
+                    select(func.count(LuckyGame.id)).where(LuckyGame.is_winner == True)
+                )
+                total_wins = total_wins_result.scalar() or 0
+            
+                unique_players_result = await session.execute(
+                    select(func.count(func.distinct(LuckyGame.user_id)))
+                )
+                unique_players = unique_players_result.scalar() or 0
+            
+                total_rewards_result = await session.execute(
+                    select(func.sum(LuckyGame.reward_amount))
+                )
+                total_rewards = total_rewards_result.scalar() or 0.0
+            
+                avg_reward_result = await session.execute(
+                    select(func.avg(LuckyGame.reward_amount)).where(LuckyGame.is_winner == True)
+                )
+                avg_reward = avg_reward_result.scalar() or 0.0
+            
+                today = date.today()
+            
+                games_today_result = await session.execute(
+                    select(func.count(LuckyGame.id)).where(
+                        func.date(LuckyGame.played_at) == today
+                    )
+                )
+                games_today = games_today_result.scalar() or 0
+            
+                wins_today_result = await session.execute(
+                    select(func.count(LuckyGame.id)).where(
+                        and_(
+                            func.date(LuckyGame.played_at) == today,
+                            LuckyGame.is_winner == True
+                        )
+                    )
+                )
+                wins_today = wins_today_result.scalar() or 0
+            
+                last_game_result = await session.execute(
+                    select(func.max(LuckyGame.played_at))
+                )
+                last_game = last_game_result.scalar()
                 
-        except Exception as e:
-            logger.error(f"Error getting lucky game admin stats: {e}")
-            return {
-                'total_games': 0, 'total_wins': 0, 'unique_players': 0,
-                'total_rewards': 0.0, 'avg_reward': 0.0, 'games_today': 0,
-                'wins_today': 0, 'win_rate': 0, 'win_rate_today': 0,
-                'last_game': None, 'first_game': None
-            }
+                first_game_result = await session.execute(
+                    select(func.min(LuckyGame.played_at))
+                )
+                first_game = first_game_result.scalar()
+            
+                stats = {
+                    'total_games': total_games,
+                    'total_wins': total_wins,
+                    'unique_players': unique_players,
+                    'total_rewards': float(total_rewards),
+                    'avg_reward': float(avg_reward),
+                    'games_today': games_today,
+                    'wins_today': wins_today,
+                    'last_game': last_game.isoformat() if last_game else None,
+                    'first_game': first_game.isoformat() if first_game else None
+                }
+            
+                if stats['total_games'] > 0:
+                    stats['win_rate'] = (stats['total_wins'] / stats['total_games']) * 100
+                    stats['win_rate_today'] = (stats['wins_today'] / stats['games_today']) * 100 if stats['games_today'] > 0 else 0
+                else:
+                    stats['win_rate'] = 0
+                    stats['win_rate_today'] = 0
+            
+                return stats
+            
+            except Exception as e:
+                logger.error(f"Error getting lucky game admin stats: {e}")
+                return {
+                    'total_games': 0, 'total_wins': 0, 'unique_players': 0,
+                    'total_rewards': 0.0, 'avg_reward': 0.0, 'games_today': 0,
+                    'wins_today': 0, 'win_rate': 0, 'win_rate_today': 0,
+                    'last_game': None, 'first_game': None
+                }
 
-async def get_lucky_game_top_players(self, limit: int = 5) -> List[dict]:
-    try:
-        query = """
-        SELECT 
-            lg.user_id,
-            u.username,
-            u.first_name,
-            COUNT(*) as games_played,
-            COUNT(CASE WHEN lg.is_winner = 1 THEN 1 END) as wins,
-            SUM(lg.reward_amount) as total_won,
-            MAX(lg.played_at) as last_game
-        FROM lucky_games lg
-        LEFT JOIN users u ON lg.user_id = u.telegram_id
-        GROUP BY lg.user_id
-        ORDER BY total_won DESC, wins DESC
-        LIMIT ?
-        """
-        
-        async with self.get_connection() as conn:
-            async with conn.execute(query, (limit,)) as cursor:
-                rows = await cursor.fetchall()
-                
+    async def get_lucky_game_top_players(self, limit: int = 5) -> List[dict]:
+        """Получает топ игроков по выигрышам"""
+        async with self.session_factory() as session:
+            try:
+                from sqlalchemy import select, func, desc
+            
+                # Запрос с группировкой по пользователям
+                query = select(
+                    LuckyGame.user_id,
+                    User.username,
+                    User.first_name,
+                    func.count(LuckyGame.id).label('games_played'),
+                    func.count(case((LuckyGame.is_winner == True, 1))).label('wins'),
+                    func.sum(LuckyGame.reward_amount).label('total_won'),
+                    func.max(LuckyGame.played_at).label('last_game')
+                ).select_from(
+                    LuckyGame.__table__.join(User.__table__, LuckyGame.user_id == User.telegram_id, isouter=True)
+                ).group_by(
+                    LuckyGame.user_id, User.username, User.first_name
+                ).order_by(
+                    desc('total_won'), desc('wins')
+                ).limit(limit)
+            
+                result = await session.execute(query)
+                rows = result.all()
+            
                 return [
                     {
-                        'user_id': row[0],
-                        'username': row[1] or 'N/A',
-                        'first_name': row[2] or 'Unknown',
-                        'games_played': row[3],
-                        'wins': row[4],
-                        'total_won': row[5],
-                        'last_game': row[6],
-                        'win_rate': (row[4] / row[3]) * 100 if row[3] > 0 else 0
+                        'user_id': row.user_id,
+                        'username': row.username or 'N/A',
+                        'first_name': row.first_name or 'Unknown',
+                        'games_played': row.games_played,
+                        'wins': row.wins,
+                        'total_won': float(row.total_won or 0),
+                        'last_game': row.last_game.isoformat() if row.last_game else None,
+                        'win_rate': (row.wins / row.games_played) * 100 if row.games_played > 0 else 0
                     }
                     for row in rows
                 ]
-                
-    except Exception as e:
-        logger.error(f"Error getting lucky game top players: {e}")
-        return []
+            
+            except Exception as e:
+                logger.error(f"Error getting lucky game top players: {e}")
+                return []
