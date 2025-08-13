@@ -86,7 +86,7 @@ class SubscriptionMonitorService:
         logger.info("Subscription monitor service stopped")
         
     async def _monitor_loop(self):
-        logger.info("🔄 Starting monitor loop")
+        logger.info("🔥 Starting monitor loop")
         
         logger.info("⏰ Initial check in 10 seconds...")
         await asyncio.sleep(10)
@@ -96,8 +96,10 @@ class SubscriptionMonitorService:
                 logger.info("🔍 Running periodic subscription check...")
                 warnings_sent = await self._check_expiring_subscriptions()
                 
-                if warnings_sent > 0:
-                    logger.info(f"✅ Monitor check completed: {warnings_sent} warnings sent")
+                trial_notifications = await self._check_expired_trial_subscriptions()
+                
+                if warnings_sent > 0 or trial_notifications > 0:
+                    logger.info(f"✅ Monitor check completed: {warnings_sent} warnings sent, {trial_notifications} trial notifications sent")
                 else:
                     logger.info("✅ Monitor check completed: no warnings needed")
                 
@@ -147,7 +149,94 @@ class SubscriptionMonitorService:
                 break
             except Exception as e:
                 logger.error(f"❌ Error in daily loop: {e}", exc_info=True)
-                await asyncio.sleep(3600)  
+                await asyncio.sleep(3600)
+
+    async def _check_expired_trial_subscriptions(self) -> int:
+        try:
+            logger.info("🆓 Checking for expired trial subscriptions...")
+            
+            notifications_sent = 0
+            now_utc = datetime.utcnow()
+            
+            all_users = await self.db.get_all_users()
+            
+            for user in all_users:
+                try:
+                    user_subs = await self.db.get_user_subscriptions(user.telegram_id)
+                    
+                    for user_sub in user_subs:
+                        try:
+                            subscription = await self.db.get_subscription_by_id(user_sub.subscription_id)
+                            if not subscription:
+                                continue
+                            
+                            if not subscription.is_trial:
+                                continue
+                            
+                            expires_at_utc = user_sub.expires_at
+                            if expires_at_utc.tzinfo is None:
+                                expires_at_utc = expires_at_utc.replace(tzinfo=None)
+                            else:
+                                expires_at_utc = expires_at_utc.astimezone(timezone.utc).replace(tzinfo=None)
+                            
+                            time_diff = expires_at_utc - now_utc
+                            hours_since_expiry = -time_diff.total_seconds() / 3600
+                            
+                            if 1 <= hours_since_expiry <= 24 and user_sub.is_active:
+                                logger.info(f"🆓 Sending trial expiry notification to user {user.telegram_id}: "
+                                          f"trial '{subscription.name}' expired {hours_since_expiry:.1f} hours ago")
+                                
+                                try:
+                                    await self._send_trial_expiry_notification(user, subscription)
+                                    notifications_sent += 1
+                                    logger.info(f"✅ Trial expiry notification sent to user {user.telegram_id}")
+                                except Exception as notification_error:
+                                    logger.error(f"❌ Failed to send trial notification to user {user.telegram_id}: {notification_error}")
+                        
+                        except Exception as sub_error:
+                            logger.error(f"❌ Error checking trial subscription {user_sub.id}: {sub_error}")
+                
+                except Exception as user_error:
+                    logger.error(f"❌ Error checking trial subscriptions for user {user.telegram_id}: {user_error}")
+            
+            if notifications_sent > 0:
+                logger.info(f"🆓 Trial expiry check completed: {notifications_sent} notifications sent")
+            
+            return notifications_sent
+        
+        except Exception as e:
+            logger.error(f"❌ Critical error in check_expired_trial_subscriptions: {e}", exc_info=True)
+            return 0
+
+    async def _send_trial_expiry_notification(self, user, subscription):
+        try:
+            if not self.bot:
+                logger.error("❌ Bot instance is None, cannot send trial notification")
+                return
+            
+            from translations import t
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            
+            message = t('trial_subscription_expired', user.language, name=subscription.name)
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text=t('buy_subscription_btn', user.language), 
+                    callback_data="buy_subscription"
+                )],
+                [InlineKeyboardButton(
+                    text=t('my_subscriptions_btn', user.language), 
+                    callback_data="my_subscriptions"
+                )]
+            ])
+            
+            await self.bot.send_message(user.telegram_id, message, reply_markup=keyboard)
+            
+            logger.info(f"✅ Trial expiry notification sent to user {user.telegram_id} for subscription '{subscription.name}'")
+        
+        except Exception as e:
+            logger.error(f"❌ Error sending trial expiry notification to user {user.telegram_id}: {e}", exc_info=True)
+            raise
 
     async def delete_expired_trial_subscriptions(self, force: bool = False) -> Dict[str, Any]:
         try:
@@ -388,11 +477,11 @@ class SubscriptionMonitorService:
                                        f"threshold={self.config.MONITOR_WARNING_DAYS}")
                         
                             if subscription.is_trial:
-                                logger.debug(f"⏭️ Skipping trial subscription '{subscription.name}'")
+                                logger.debug(f"⭐️ Skipping trial subscription '{subscription.name}'")
                                 continue
                         
                             if getattr(subscription, 'is_imported', False) or subscription.name == "Старая подписка":
-                                logger.debug(f"⏭️ Skipping imported subscription '{subscription.name}'")
+                                logger.debug(f"⭐️ Skipping imported subscription '{subscription.name}'")
                                 continue
                         
                             should_warn = (
@@ -517,9 +606,13 @@ class SubscriptionMonitorService:
             warnings_sent = await self._check_expiring_subscriptions()
             logger.info(f"📢 Sent {warnings_sent} expiry warnings")
             
-            logger.info("🔄 Deactivating expired subscriptions...")
+            logger.info("🆓 Checking expired trial subscriptions...")
+            trial_notifications = await self._check_expired_trial_subscriptions()
+            logger.info(f"🆓 Sent {trial_notifications} trial expiry notifications")
+            
+            logger.info("🔥 Deactivating expired subscriptions...")
             deactivated_count = await self.deactivate_expired_subscriptions()
-            logger.info(f"🔄 Deactivated {deactivated_count} expired subscriptions")
+            logger.info(f"🔥 Deactivated {deactivated_count} expired subscriptions")
             
             deleted_trials = 0
             deleted_regular = 0
@@ -538,7 +631,7 @@ class SubscriptionMonitorService:
             await self._send_final_expiry_notifications()
             logger.info("📩 Final notifications sent")
             
-            logger.info(f"✅ Daily check completed successfully. Warnings: {warnings_sent}, Deactivated: {deactivated_count}, "
+            logger.info(f"✅ Daily check completed successfully. Warnings: {warnings_sent}, Trial notifications: {trial_notifications}, Deactivated: {deactivated_count}, "
                        f"Deleted trials: {deleted_trials}, Deleted regular: {deleted_regular}")
             return deactivated_count
             
@@ -590,7 +683,7 @@ class SubscriptionMonitorService:
                                             user_data = await self.api.get_user_by_short_uuid(user_sub.short_uuid)
                                             if user_data and user_data.get('uuid'):
                                                 await self.api.update_user(user_data['uuid'], {'status': 'EXPIRED'})
-                                                logger.debug(f"🔄 Also deactivated user {user_data['uuid']} in RemnaWave")
+                                                logger.debug(f"🔥 Also deactivated user {user_data['uuid']} in RemnaWave")
                                         except Exception as api_error:
                                             logger.warning(f"⚠️ Could not deactivate user in RemnaWave: {api_error}")
                                 else:
@@ -704,11 +797,30 @@ class SubscriptionMonitorService:
                     days_left = int(hours_left / 24)
             
                     if subscription.is_trial:
-                        results.append({
-                            'success': True,
-                            'message': f'Trial subscription "{subscription.name}" skipped (no warnings for trials)',
-                            'error': None
-                        })
+                        hours_since_expiry = -hours_left
+                        if 1 <= hours_since_expiry <= 24 and user_sub.is_active:
+                            test_message = f"🧪 [ТЕСТОВОЕ УВЕДОМЛЕНИЕ]\n\n🆓 Ваша триальная подписка '{subscription.name}' истекла! Купите новый тариф чтобы продолжить использование VPN."
+                            
+                            if self.bot:
+                                try:
+                                    await self.bot.send_message(user_id, test_message)
+                                    results.append({
+                                        'success': True,
+                                        'message': f'✅ Sent test trial expiry notification for "{subscription.name}" (expired {hours_since_expiry:.1f} hours ago)',
+                                        'error': None
+                                    })
+                                except Exception as send_error:
+                                    results.append({
+                                        'success': False,
+                                        'message': f'❌ Failed to send test trial notification for "{subscription.name}"',
+                                        'error': str(send_error)
+                                    })
+                        else:
+                            results.append({
+                                'success': True,
+                                'message': f'Trial subscription "{subscription.name}" - no notification needed (expired {hours_since_expiry:.1f} hours ago)',
+                                'error': None
+                            })
                         continue
                 
                     if getattr(subscription, 'is_imported', False) or subscription.name == "Старая подписка":
