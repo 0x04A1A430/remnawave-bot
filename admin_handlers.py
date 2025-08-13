@@ -75,6 +75,7 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
     try:
         db_stats = await db.get_stats()
         
+        # Статистика игры в удачу
         lucky_stats = await db.get_lucky_game_admin_stats()
         
         text = "📊 Расширенная статистика системы\n\n"
@@ -8400,3 +8401,4 @@ async def lucky_game_admin_details_callback(callback: CallbackQuery, user: User,
             "❌ Ошибка получения детальной статистики игры",
             reply_markup=back_keyboard("admin_stats", user.language)
         )
+
