@@ -52,7 +52,6 @@ logger = logging.getLogger(__name__)
 admin_router = Router()
 
 async def check_admin_access(callback: CallbackQuery, user: User) -> bool:
-    """Check if user has admin access"""  
     if not user.is_admin:
         await callback.answer(t('not_admin', user.language))
         return False
@@ -60,7 +59,6 @@ async def check_admin_access(callback: CallbackQuery, user: User) -> bool:
 
 @admin_router.callback_query(F.data == "admin_panel")
 async def admin_panel_callback(callback: CallbackQuery, user: User, **kwargs):
-    """Show admin panel"""
     if not await check_admin_access(callback, user):
         return
     
@@ -71,46 +69,62 @@ async def admin_panel_callback(callback: CallbackQuery, user: User, **kwargs):
 
 @admin_router.callback_query(F.data == "admin_stats")
 async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database, api: RemnaWaveAPI = None, **kwargs):
-    """Show statistics"""
     if not await check_admin_access(callback, user):
         return
     
     try:
         db_stats = await db.get_stats()
         
-        system_stats = None
-        nodes_stats = None
+        lucky_stats = await db.get_lucky_game_admin_stats()
+        
+        text = "📊 Расширенная статистика системы\n\n"
+        
+        text += "💾 База данных бота:\n"
+        text += f"👥 Пользователей: {db_stats['total_users']}\n"
+        text += f"📋 Подписок: {db_stats['total_subscriptions_non_trial']}\n"
+        text += f"💰 Доходы: {db_stats['total_revenue']} руб.\n\n"
+        
+        text += "🎰 Игра в удачу:\n"
+        if lucky_stats['total_games'] > 0:
+            text += f"🎲 Всего игр: {lucky_stats['total_games']}\n"
+            text += f"🏆 Выигрышей: {lucky_stats['total_wins']} ({lucky_stats['win_rate']:.1f}%)\n"
+            text += f"👥 Уникальных игроков: {lucky_stats['unique_players']}\n"
+            text += f"💎 Выплачено наград: {lucky_stats['total_rewards']:.0f}₽\n"
+            text += f"📈 Средняя награда: {lucky_stats['avg_reward']:.0f}₽\n\n"
+            
+            if lucky_stats['games_today'] > 0:
+                text += f"📅 За сегодня:\n"
+                text += f"  • Игр: {lucky_stats['games_today']}\n"
+                text += f"  • Выигрышей: {lucky_stats['wins_today']} ({lucky_stats['win_rate_today']:.1f}%)\n"
+                text += f"  • Выплачено: {lucky_stats['wins_today'] * lucky_stats['avg_reward']:.0f}₽\n\n"
+            
+            if lucky_stats['last_game']:
+                last_game_str = format_datetime(
+                    datetime.fromisoformat(lucky_stats['last_game']).replace(tzinfo=None), 
+                    user.language
+                )
+                text += f"🕐 Последняя игра: {last_game_str}\n\n"
+        else:
+            text += "🎯 Игр еще не было\n\n"
         
         if api:
             try:
-                system_stats = await api.get_system_stats()
                 nodes_stats = await api.get_nodes_statistics()
+                if nodes_stats and 'data' in nodes_stats:
+                    nodes = nodes_stats['data']
+                    online_nodes = len([n for n in nodes if n.get('status') == 'online'])
+                    text += f"🖥 Ноды RemnaWave: {online_nodes}/{len(nodes)} онлайн\n"
             except Exception as e:
                 logger.warning(f"Failed to get RemnaWave stats: {e}")
         
-        text = t('stats_info', user.language,
-            users=db_stats['total_users'],
-            subscriptions=db_stats['total_subscriptions_non_trial'], 
-            revenue=db_stats['total_revenue']
-        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🎰 Детали игры в удачу", callback_data="lucky_game_admin_details")],
+            [InlineKeyboardButton(text="🖥 Подробная системная статистика", callback_data="admin_system")],
+            [InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_stats")],
+            [InlineKeyboardButton(text="🔙 " + t('back', user.language), callback_data="admin_panel")]
+        ])
         
-        if system_stats:
-            text += "\n\n🖥 Системная статистика:"
-            if 'data' in system_stats:
-                data = system_stats['data']
-                if 'bandwidth' in data:
-                    bandwidth = data['bandwidth']
-                    text += f"\n📊 Трафик: ↓{format_bytes(bandwidth.get('downlink', 0))} ↑{format_bytes(bandwidth.get('uplink', 0))}"
-        
-        if nodes_stats and 'data' in nodes_stats:
-            nodes = nodes_stats['data']
-            online_nodes = len([n for n in nodes if n.get('status') == 'online'])
-            text += f"\n🖥 Нод: {online_nodes}/{len(nodes)} онлайн"
-        
-        await callback.message.edit_text(
-            text,
-            reply_markup=back_keyboard("admin_panel", user.language)
-        )
+        await callback.message.edit_text(text, reply_markup=keyboard)
         
     except Exception as e:
         logger.error(f"Error getting statistics: {e}")
@@ -8303,3 +8317,86 @@ async def edit_sub_autopay_callback(callback: CallbackQuery, user: User, **kwarg
     except Exception as e:
         logger.error(f"Error editing subscription autopay: {e}")
         await callback.answer("❌ Ошибка редактирования", show_alert=True)
+
+@admin_router.callback_query(F.data == "lucky_game_admin_details")
+async def lucky_game_admin_details_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        lucky_stats = await db.get_lucky_game_admin_stats()
+        top_players = await db.get_lucky_game_top_players(5)
+        
+        text = "🎰 **Детальная статистика игры в удачу**\n\n"
+        
+        if lucky_stats['total_games'] > 0:
+            text += "📊 **Общая статистика:**\n"
+            text += f"🎲 Всего игр сыграно: {lucky_stats['total_games']}\n"
+            text += f"🏆 Всего выигрышей: {lucky_stats['total_wins']}\n"
+            text += f"📈 Процент побед: {lucky_stats['win_rate']:.2f}%\n"
+            text += f"👥 Уникальных игроков: {lucky_stats['unique_players']}\n"
+            text += f"💎 Общая сумма выплат: {lucky_stats['total_rewards']:.0f}₽\n"
+            text += f"💰 Средняя выплата: {lucky_stats['avg_reward']:.1f}₽\n\n"
+            
+            text += "📅 **За сегодня:**\n"
+            text += f"🎯 Игр: {lucky_stats['games_today']}\n"
+            text += f"🎉 Выигрышей: {lucky_stats['wins_today']}\n"
+            if lucky_stats['games_today'] > 0:
+                text += f"📊 Процент побед: {lucky_stats['win_rate_today']:.1f}%\n"
+                today_payouts = lucky_stats['wins_today'] * lucky_stats['avg_reward']
+                text += f"💸 Выплачено сегодня: {today_payouts:.0f}₽\n"
+            text += "\n"
+            
+            if top_players:
+                text += "🏆 **Топ-5 игроков:**\n"
+                for i, player in enumerate(top_players, 1):
+                    name = player['first_name'] or player['username']
+                    text += f"{i}. {name} (ID: {player['user_id']})\n"
+                    text += f"   💰 Выиграл: {player['total_won']:.0f}₽\n"
+                    text += f"   🎯 Игр: {player['games_played']} | Побед: {player['wins']} ({player['win_rate']:.1f}%)\n"
+                    
+                    if player['last_game']:
+                        last_game = format_datetime(
+                            datetime.fromisoformat(player['last_game']).replace(tzinfo=None),
+                            user.language
+                        )
+                        text += f"   🕐 Последняя игра: {last_game}\n"
+                    text += "\n"
+            
+            if lucky_stats['first_game'] and lucky_stats['last_game']:
+                first_game = format_datetime(
+                    datetime.fromisoformat(lucky_stats['first_game']).replace(tzinfo=None),
+                    user.language
+                )
+                last_game = format_datetime(
+                    datetime.fromisoformat(lucky_stats['last_game']).replace(tzinfo=None),
+                    user.language
+                )
+                text += f"🕐 **Временные рамки:**\n"
+                text += f"🥇 Первая игра: {first_game}\n"
+                text += f"🕐 Последняя игра: {last_game}\n\n"
+            
+        else:
+            text += "🎯 В игру в удачу еще никто не играл.\n\n"
+            text += "Игроки смогут играть после активации функции в боте."
+        
+        text += f"🕕 _Обновлено: {format_datetime(datetime.now(), user.language)}_"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Обновить", callback_data="lucky_game_admin_details")],
+            [InlineKeyboardButton(text="📊 Общая статистика", callback_data="admin_stats")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_panel")]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting lucky game admin details: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка получения детальной статистики игры",
+            reply_markup=back_keyboard("admin_stats", user.language)
+        )
