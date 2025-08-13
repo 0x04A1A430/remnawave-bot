@@ -194,7 +194,10 @@ TRANSLATIONS = {
         'lucky_game_games_played': 'Игр сыграно: {count}',
         'lucky_game_wins': 'Выигрышей: {count}',
         'lucky_game_total_won': 'Всего выиграно: {amount}₽',
-        'lucky_game_win_rate': 'Процент побед: {rate}%'
+        'lucky_game_win_rate': 'Процент побед: {rate}%',
+        'trial_subscription_expired': '🆓 Ваша триальная подписка "{name}" истекла!\n\n'
+                             '💡 Чтобы продолжить использование VPN, купите полный тариф.\n\n'
+                             '✨ Доступны различные планы подписки с выгодными ценами!'
     },
     
     'en': {
@@ -246,6 +249,9 @@ TRANSLATIONS = {
         'subscription_expires_day_after_tomorrow': '⏰ Your subscription \'{name}\' expires in {days} days!\n\nWe recommend renewing it in advance in \'My Subscriptions\'.\n\n💰 Check your balance - you might want to top it up.',
         'subscription_expires_in_days': '⏳ Your subscription \'{name}\' expires in {days} days!\n\nYou can renew it in \'My Subscriptions\'.\n\n💡 Early renewal extends from current expiration date.',
         'extend_subscription_btn': '🔄 Extend Subscription',
+        'trial_subscription_expired': '🆓 Your trial subscription "{name}" has expired!\n\n'
+                             '💡 To continue using VPN, please purchase a full plan.\n\n'
+                             '✨ Various subscription plans with great prices are available!',
         'my_subscriptions_btn': '📋 My Subscriptions',
         'buy_new_subscription_btn': '🛒 Buy New Subscription',
         'restore_subscription_btn': '🔄 Restore Subscription',
