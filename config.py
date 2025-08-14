@@ -31,6 +31,12 @@ class Config:
     TRIAL_NOTIFICATION_ENABLED: bool = True  
     TRIAL_NOTIFICATION_HOURS_AFTER: int = 2  
     TRIAL_NOTIFICATION_HOURS_WINDOW: int = 22 
+    TRIBUTE_ENABLED: bool = False
+    TRIBUTE_API_KEY: str = ""
+    TRIBUTE_WEBHOOK_PORT: int = 8081
+    TRIBUTE_WEBHOOK_PATH: str = "/tribute-webhook"
+    TRIBUTE_DONATE_URL: str = "" 
+    TRIBUTE_DONATE_LINK: str = "" 
 
     LUCKY_GAME_ENABLED: bool = True
     LUCKY_GAME_REWARD: float = 50.0 
@@ -123,7 +129,13 @@ def load_config() -> Config:
         LUCKY_GAME_NUMBERS=get_int('LUCKY_GAME_NUMBERS', 30),
         LUCKY_GAME_WINNING_COUNT=get_int('LUCKY_GAME_WINNING_COUNT', 3),
         STARS_ENABLED=get_bool('STARS_ENABLED', True),
-        STARS_RATES=parse_stars_rates()
+        STARS_RATES=parse_stars_rates(),
+        TRIBUTE_ENABLED=get_bool('TRIBUTE_ENABLED', False),
+        TRIBUTE_API_KEY=os.getenv('TRIBUTE_API_KEY', ''),
+        TRIBUTE_WEBHOOK_PORT=get_int('TRIBUTE_WEBHOOK_PORT', 8081),
+        TRIBUTE_WEBHOOK_PATH=os.getenv('TRIBUTE_WEBHOOK_PATH', '/tribute-webhook'),
+        TRIBUTE_DONATE_URL=os.getenv('TRIBUTE_DONATE_URL', ''),
+        TRIBUTE_DONATE_LINK=os.getenv('TRIBUTE_DONATE_LINK', '')
     )
 
 def debug_environment():
