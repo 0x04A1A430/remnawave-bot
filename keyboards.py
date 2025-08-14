@@ -53,13 +53,54 @@ def balance_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     ])
     return keyboard
 
-def topup_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        # [InlineKeyboardButton(text="💳 " + t('topup_card', lang), callback_data="topup_card")],
-        [InlineKeyboardButton(text="👨‍💼 " + t('topup_support', lang), callback_data="topup_support")],
-        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="balance")]
+def topup_keyboard(lang: str, tribute_enabled: bool = False) -> InlineKeyboardMarkup:
+    keyboard = []
+    
+    if tribute_enabled:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="💳 Tribute (Карта/СБП)" if lang == 'ru' else "💳 Tribute (Card/SBP)",
+                callback_data="topup_tribute"
+            )
+        ])
+    
+    keyboard.extend([
+        [InlineKeyboardButton(
+            text="⭐ Telegram Stars" if lang == 'ru' else "⭐ Telegram Stars",
+            callback_data="topup_stars"
+        )],
+        [InlineKeyboardButton(
+            text="💬 Связаться с поддержкой" if lang == 'ru' else "💬 Contact Support",
+            callback_data="topup_support"
+        )],
+        [InlineKeyboardButton(
+            text="🔙 Назад" if lang == 'ru' else "🔙 Back",
+            callback_data="balance"
+        )]
     ])
-    return keyboard
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def tribute_amounts_keyboard(lang: str) -> InlineKeyboardMarkup:
+    keyboard = [
+        [
+            InlineKeyboardButton(text="💯 100₽", callback_data="tribute_amount_100"),
+            InlineKeyboardButton(text="💰 300₽", callback_data="tribute_amount_300")
+        ],
+        [
+            InlineKeyboardButton(text="💎 500₽", callback_data="tribute_amount_500"),
+            InlineKeyboardButton(text="🎯 1000₽", callback_data="tribute_amount_1000")
+        ],
+        [
+            InlineKeyboardButton(text="💸 2000₽", callback_data="tribute_amount_2000"),
+            InlineKeyboardButton(text="🏆 5000₽", callback_data="tribute_amount_5000")
+        ],
+        [InlineKeyboardButton(text="✏️ Своя сумма", callback_data="tribute_custom_amount")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="topup_balance")]
+    ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
 
 def subscriptions_keyboard(subscriptions: List[dict], lang: str = 'ru') -> InlineKeyboardMarkup:
     buttons = []
@@ -712,14 +753,6 @@ def lucky_game_result_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📈 История игр", callback_data="lucky_game_history")],
         [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
     ])
-
-def topup_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⭐ Telegram Stars", callback_data="topup_stars")],
-        [InlineKeyboardButton(text="👨‍💼 " + t('topup_support', lang), callback_data="topup_support")],
-        [InlineKeyboardButton(text="🔙 " + t('back', lang), callback_data="balance")]
-    ])
-    return keyboard
 
 def stars_topup_keyboard(stars_rates: Dict[int, float], lang: str = 'ru') -> InlineKeyboardMarkup:
     buttons = []
