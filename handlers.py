@@ -1,31 +1,26 @@
+from enum import Enum
+
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from datetime import datetime, timedelta
-import logging
-import secrets
-from typing import Optional, Dict, Any
+from aiogram.types import Message, CallbackQuery
 
-from database import Database, User, ReferralProgram, ServiceRule
-from remnawave_api import RemnaWaveAPI
+from config import *
+from database import Database, ReferralProgram, ServiceRule
 from keyboards import *
+from referral_utils import (
+    create_referral_from_start_param,
+    create_referral_from_promocode
+)
 from translations import t
 from utils import *
-from config import *
-from stars_handlers import stars_router
-import base64
-import json
-from referral_utils import (
-    process_referral_rewards, 
-    create_referral_from_start_param, 
-    create_referral_from_promocode,
-    generate_referral_link
-)
-from lucky_game import lucky_game_router, LuckyGameStates
 
 logger = logging.getLogger(__name__)
+
+class PaymentSystem(Enum):
+    STARS = 1
+    TRIBUTE = 2
 
 class BotStates(StatesGroup):
     waiting_language = State()
@@ -427,9 +422,16 @@ async def topup_balance_callback(callback: CallbackQuery, **kwargs):
     if not user:
         await callback.answer("❌ Ошибка пользователя")
         return
-    
+
     stars_enabled = config and config.STARS_ENABLED and config.STARS_RATES
     tribute_enabled = config and config.TRIBUTE_ENABLED
+    enabled_payment_types = list[PaymentSystem]()
+
+    if stars_enabled:
+        enabled_payment_types.append(PaymentSystem.STARS)
+
+    if tribute_enabled:
+        enabled_payment_types.append(PaymentSystem.TRIBUTE)
     
     text = "💰 Выберите способ пополнения баланса:"
     
@@ -440,7 +442,7 @@ async def topup_balance_callback(callback: CallbackQuery, **kwargs):
     
     await callback.message.edit_text(
         text,
-        reply_markup=topup_keyboard(user.language, tribute_enabled),
+        reply_markup=topup_keyboard(user.language, enabled_payment_types),
         parse_mode='Markdown'
     )
 
