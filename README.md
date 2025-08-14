@@ -256,8 +256,11 @@ curl -sSL https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/raw/main/bed
     }
 
 3.3 Рестартим Бота, рестратим Caddy/Nginx   
+
 4) Указываем ссылку на наш хук в настройках Tribute: https://test.example.com/tribute-webhook
+
 5) Делаем тест - если успешно, значит все настроили правильно. Не успешный тест - проверяй доступность хука, где-то ты что-то не так настроил
+   
 6) Тестируем пополнение через бота
 
 
