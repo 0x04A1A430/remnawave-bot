@@ -221,7 +221,7 @@ class SubscriptionMonitorService:
             
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
-                    text=t('buy_subscription', user.language), 
+                    text=t('buy_subscription_btn', user.language), 
                     callback_data="buy_subscription"
                 )],
                 [InlineKeyboardButton(
