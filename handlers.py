@@ -66,6 +66,7 @@ class BotStates(StatesGroup):
     waiting_rule_edit_title = State()
     waiting_rule_edit_content = State()
     waiting_rule_edit_order = State()
+    waiting_tribute_amount = State()
 
 
 router = Router()
@@ -428,16 +429,18 @@ async def topup_balance_callback(callback: CallbackQuery, **kwargs):
         return
     
     stars_enabled = config and config.STARS_ENABLED and config.STARS_RATES
+    tribute_enabled = config and config.TRIBUTE_ENABLED
     
-    text = t('topup_balance', user.language)
+    text = "💰 Выберите способ пополнения баланса:"
     
+    if tribute_enabled:
+        text += "\n\n💳 **Tribute** - карты, СБП, быстрые платежи"
     if stars_enabled:
-        text += "\n\n⭐ **Новинка!** Теперь можно пополнять баланс через Telegram Stars!"
-        text += "\n💎 Быстро, безопасно, без комиссий!"
+        text += "\n⭐ **Telegram Stars** - быстро и безопасно"
     
     await callback.message.edit_text(
         text,
-        reply_markup=topup_keyboard(user.language),
+        reply_markup=topup_keyboard(user.language, tribute_enabled),
         parse_mode='Markdown'
     )
 
@@ -2018,3 +2021,160 @@ async def autopay_days_callback(callback: CallbackQuery, db: Database, **kwargs)
     except Exception as e:
         logger.error(f"Error setting autopay days: {e}")
         await callback.answer("❌ Ошибка операции")
+
+@router.callback_query(F.data == "topup_tribute")
+async def topup_tribute_callback(callback: CallbackQuery, **kwargs):
+    user = kwargs.get('user')
+    config = kwargs.get('config')
+    
+    if not user:
+        await callback.answer("❌ Ошибка пользователя")
+        return
+    
+    if not config or not config.TRIBUTE_ENABLED:
+        await callback.answer("❌ Tribute платежи недоступны")
+        return
+    
+    text = (
+        "💳 **Пополнение через Tribute**\n\n"
+        "🔹 **Доступные способы оплаты:**\n"
+        "• 💳 Банковские карты (Visa, MasterCard, МИР)\n"
+        "• 📱 Система быстрых платежей (СБП)\n"
+        "• 🍎 Apple Pay, Google Pay\n\n"
+        "💰 **Выберите сумму пополнения:**"
+    )
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=tribute_amounts_keyboard(user.language),
+        parse_mode="Markdown"
+    )
+
+@router.callback_query(F.data.startswith("tribute_amount_"))
+async def tribute_amount_callback(callback: CallbackQuery, **kwargs):
+    user = kwargs.get('user')
+    config = kwargs.get('config')
+    
+    if not user:
+        await callback.answer("❌ Ошибка пользователя")
+        return
+    
+    amount_str = callback.data.split("_")[-1]
+    try:
+        amount = int(amount_str)
+    except ValueError:
+        await callback.answer("❌ Неверная сумма")
+        return
+    
+    await create_tribute_payment(callback, user, amount, config)
+
+@router.callback_query(F.data == "tribute_custom_amount")
+async def tribute_custom_amount_callback(callback: CallbackQuery, state: FSMContext, **kwargs):
+    user = kwargs.get('user')
+    
+    if not user:
+        await callback.answer("❌ Ошибка пользователя")
+        return
+    
+    await callback.message.edit_text(
+        "💰 Введите сумму для пополнения (100-15000 рублей):",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="topup_tribute")]
+        ])
+    )
+    await state.set_state(BotStates.waiting_tribute_amount)
+
+@router.message(StateFilter(BotStates.waiting_tribute_amount))
+async def handle_tribute_amount(message: Message, state: FSMContext, **kwargs):
+    user = kwargs.get('user')
+    config = kwargs.get('config')
+    
+    if not user:
+        await message.answer("❌ Ошибка пользователя")
+        return
+    
+    is_valid, amount = is_valid_amount(message.text)
+    
+    if not is_valid or amount < 100 or amount > 15000:
+        await message.answer(
+            "❌ Неверная сумма. Введите число от 100 до 15000:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отмена", callback_data="topup_tribute")]
+            ])
+        )
+        return
+    
+    await state.clear()
+    
+    class FakeCallback:
+        def __init__(self, message):
+            self.message = message
+            
+        async def answer(self, text, show_alert=False):
+            await self.message.answer(text)
+    
+    fake_callback = FakeCallback(message)
+    await create_tribute_payment(fake_callback, user, int(amount), config)
+
+async def create_tribute_payment(callback, user, amount: int, config):
+    try:
+        tribute_donate_link = config.TRIBUTE_DONATE_LINK
+        
+        text = (
+            f"💳 **Пополнение через Tribute**\n\n"
+            f"💰 Сумма: **{amount}₽**\n\n"
+            f"📋 **Инструкция:**\n"
+            f"1️⃣ Нажмите кнопку «Открыть Tribute»\n"
+            f"2️⃣ Введите сумму: **{amount}₽**\n"
+            f"3️⃣ Выберите способ оплаты (карта/СБП)\n"
+            f"4️⃣ Завершите платеж\n\n"
+            f"⏱️ После оплаты средства поступят на баланс автоматически в течение 1 минуты\n\n"
+            f"💡 Ваш аккаунт привязан автоматически, никаких дополнительных данных вводить не нужно"
+        )
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Открыть Tribute", url=tribute_donate_link)],
+            [InlineKeyboardButton(text="🔄 Проверить платеж", callback_data=f"check_tribute_{amount}")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="topup_balance")]
+        ])
+        
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+        
+    except Exception as e:
+        logger.error(f"Error creating Tribute payment: {e}")
+        await callback.answer("❌ Ошибка создания платежа")
+
+@router.callback_query(F.data.startswith("check_tribute_"))
+async def check_tribute_payment_callback(callback: CallbackQuery, db: Database, **kwargs):
+    user = kwargs.get('user')
+    
+    if not user:
+        await callback.answer("❌ Ошибка пользователя")
+        return
+    
+    try:
+        payments = await db.get_user_payments(user.telegram_id)
+        recent_tribute_payments = [
+            p for p in payments 
+            if p.payment_type == 'tribute' and p.status == 'completed'
+            and (datetime.utcnow() - p.created_at).total_seconds() < 1800 
+        ]
+        
+        if recent_tribute_payments:
+            await callback.answer("✅ Платеж найден! Средства зачислены на баланс", show_alert=True)
+            await callback.message.edit_text(
+                f"✅ **Платеж успешно обработан!**\n\n"
+                f"💰 Зачислено: {recent_tribute_payments[0].amount}₽\n"
+                f"💳 Текущий баланс: {user.balance}₽",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💰 Мой баланс", callback_data="balance")],
+                    [InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")]
+                ]),
+                parse_mode="Markdown"
+            )
+        else:
+            await callback.answer("⏳ Платеж еще не обработан. Попробуйте через минуту.", show_alert=True)
+            
+    except Exception as e:
+        logger.error(f"Error checking Tribute payment: {e}")
+        await callback.answer("❌ Ошибка проверки платежа")
