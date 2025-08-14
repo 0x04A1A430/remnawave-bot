@@ -199,12 +199,10 @@ curl -sSL https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/raw/main/bed
 | `TRIAL_NOTIFICATION_HOURS_WINDOW` | Через сколько выслать повторно  | `` |
 
 </details>
-
-### ⚙️ Настройка Telegram Tribute
-
 <details>
-<summary>Настройка кабинета и хука</summary>
+<summary>⚙️ Настройка Telegram Tribute</summary>
 
+0) Обновляемся до версии 1.4.0
 1) Регистрируемся и проходим верификацию в Tribute
 2) Создаем донат ссылку, копируем вставляем в .env бота, конфигурируем остальные параметры из .env.example для работы Tribute
 3) Настраиваем обратное прокси на /tribute-webhook
@@ -256,11 +254,11 @@ curl -sSL https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/raw/main/bed
             proxy_set_header X-Forwarded-Proto $scheme;
         }
     }
-   
-4) Указываем ссылку на наш хук в настройках Tribute: https://test.example.com/tribute-webhook
-5) Делаем тест - если успешно, значит все настроили правильно
-6) Тестируем пополнение через бота
 
+3.3 Рестартим Бота, рестратим Caddy/Nginx   
+4) Указываем ссылку на наш хук в настройках Tribute: https://test.example.com/tribute-webhook
+5) Делаем тест - если успешно, значит все настроили правильно. Не успешный тест - проверяй доступность хука, где-то ты что-то не так настроил
+6) Тестируем пополнение через бота
 
 
 </details>
