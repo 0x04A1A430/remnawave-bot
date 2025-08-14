@@ -48,9 +48,9 @@ class BotApplication:
         self.dp = None
         self.monitor_service = None
         self.autopay_service = None
+        self.webhook_server = None
 
     async def _init_autopay_service(self):
-        """Инициализирует сервис автоплатежей"""
         try:
             logger.info("🔧 Initializing autopay service...")
             
@@ -111,6 +111,7 @@ class BotApplication:
         logger.info(f"Bot Username: {self.config.BOT_USERNAME}")
         
         self.db = Database(self.config.DATABASE_URL)
+        
         await self._init_database()
         
         self.api = RemnaWaveAPI(
@@ -130,6 +131,17 @@ class BotApplication:
         await self._test_bot_token()
         
         self._setup_dispatcher()
+
+        await self._init_webhook_server()
+
+        if self.config.TRIBUTE_ENABLED:
+            logger.info("✅ Tribute платежи включены")
+            if not self.config.TRIBUTE_API_KEY:
+                logger.warning("⚠️ TRIBUTE_API_KEY не установлен!")
+            if not self.config.TRIBUTE_DONATE_URL:
+                logger.warning("⚠️ TRIBUTE_DONATE_URL не установлен!")
+        else:
+            logger.info("❌ Tribute платежи отключены")
         
         await self._init_monitor_service()
         await self._init_autopay_service()
@@ -151,18 +163,37 @@ class BotApplication:
                     self.config.STARS_ENABLED = False
         else:
             logger.info("❌ Telegram Stars пополнение отключено")
+
+    async def _init_webhook_server(self):
+        """Инициализация webhook сервера для Tribute"""
+        try:
+            logger.info("🔧 Initializing webhook server...")
+            
+            from webhook_server import WebhookServer
+            self.webhook_server = WebhookServer(self.bot, self.db, self.config)
+            
+            logger.info("🚀 Starting webhook server...")
+            await self.webhook_server.start()
+            
+            logger.info("✅ Webhook server started successfully")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize webhook server: {e}", exc_info=True)
+            logger.warning("⚠️ Continuing without webhook server")
+            self.webhook_server = None
         
     async def _init_database(self):
         max_retries = 3
         for attempt in range(max_retries):
             try:
+                logger.info(f"🗄️  Database initialization attempt {attempt + 1}/{max_retries}")
                 await self.db.init_db()
-                logger.info("Database initialized successfully")
+                logger.info("✅ Database initialized successfully with all migrations")
                 break
             except Exception as e:
-                logger.error(f"Database initialization attempt {attempt + 1} failed: {e}")
+                logger.error(f"❌ Database initialization attempt {attempt + 1} failed: {e}")
                 if attempt == max_retries - 1:
-                    logger.error("Failed to initialize database after all retries")
+                    logger.error("💥 Failed to initialize database after all retries")
                     raise
                 await asyncio.sleep(2)
                 
@@ -198,7 +229,8 @@ class BotApplication:
             "config": self.config,
             "api": self.api,
             "db": self.db,
-            "monitor_service": None
+            "monitor_service": None,
+            "autopay_service": None
         })
         
         self.dp.message.middleware(LoggingMiddleware())
@@ -285,6 +317,13 @@ class BotApplication:
             
     async def shutdown(self):
         logger.info("Shutting down bot...")
+
+        if self.webhook_server:
+            try:
+                await self.webhook_server.stop()
+                logger.info("Webhook server stopped")
+            except Exception as e:
+                logger.error(f"Error stopping webhook server: {e}")
 
         if self.autopay_service: 
             try:
