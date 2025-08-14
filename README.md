@@ -162,6 +162,19 @@ curl -sSL https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/raw/main/bed
 </details>
 
 <details>
+<summary>⭐ Telegram Tribute</summary>
+
+| Переменная | Описание | Пример |
+|------------|----------|---------|
+| `TRIBUTE_ENABLED` | Включить оплату с помощью доната на Tribute | `false` |
+| `TRIBUTE_API_KEY` | API ключ из настроек Tribute | `XXXXXXXXXXX` |
+| `TRIBUTE_WEBHOOK_PORT` | Порт | `8081` |
+| `TRIBUTE_WEBHOOK_PATH` | URL Webhook Path | `/tribute-webhook` |
+| `TRIBUTE_DONATE_LINK` | Ссылка на ваш донат из Tribute | `https://t.me/tribute/app?startapp=XXXXXXXXXXXXX` |
+
+</details>
+
+<details>
 <summary>🔍 Мониторинг подписок</summary>
 
 | Переменная | Описание | По умолчанию |
@@ -186,7 +199,73 @@ curl -sSL https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/raw/main/bed
 | `TRIAL_NOTIFICATION_HOURS_WINDOW` | Через сколько выслать повторно  | `` |
 
 </details>
-### 🐳 Docker Compose примеры
+
+### ⚙️ Настройка Telegram Tribute
+
+<details>
+<summary>Настройка кабинета и хука</summary>
+
+1) Регистрируемся и проходим верификацию в Tribute
+2) Создаем донат ссылку, копируем вставляем в .env бота, конфигурируем остальные параметры из .env.example для работы Tribute
+3) Настраиваем обратное прокси на /tribute-webhook
+
+3.1 Пример для докера Caddy 
+
+    https://test.example.com {
+        # Tribute webhook endpoint
+        handle /tribute-webhook* {
+            reverse_proxy localhost:8081 {
+                header_up Host {host}
+                header_up X-Real-IP {remote_host}
+            }
+        }
+    
+        # Health check для webhook сервиса
+        handle /webhook-health {
+            reverse_proxy localhost:8081/health {
+                header_up Host {host}
+                header_up X-Real-IP {remote_host}
+            }
+        }
+
+3.2 Пример для докера с Nginx 
+
+     server {
+        listen 80;
+        server_name yourdomain.com;
+
+        location /tribute-webhook {
+            proxy_pass http://127.0.0.1:8081;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
+        
+            client_max_body_size 10M;
+        }
+
+        location /webhook-health {
+            proxy_pass http://127.0.0.1:8081/health;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+   
+4) Указываем ссылку на наш хук в настройках Tribute: https://test.example.com/tribute-webhook
+5) Делаем тест - если успешно, значит все настроили правильно
+6) Тестируем пополнение через бота
+
+
+
+</details>
+
+🐳 Docker Compose примеры
 
 <details>
 <summary>🏠 Для локальной установки (панель + бот)</summary>
@@ -222,6 +301,8 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
+    ports:
+      - "8081:8081"
     networks:
       - remnawave-network
 
@@ -229,9 +310,11 @@ volumes:
   postgres_data:
 
 networks:
-  remnawave-network:
-    name: remnawave-network
-    external: true
+  bot_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 ```
 
 </details>
@@ -270,6 +353,8 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
+    ports:
+      - "8081:8081"
     networks:
       - bot_network
 
@@ -279,6 +364,9 @@ volumes:
 networks:
   bot_network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 ```
 
 </details>
