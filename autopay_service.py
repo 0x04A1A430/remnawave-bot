@@ -278,7 +278,7 @@ class AutoPayService:
     async def get_service_status(self) -> dict:
         return {
             'is_running': self.is_running,
-            'check_interval': 1800,  # 30 минут
+            'check_interval': 1800, 
             'has_api': self.api is not None,
             'has_bot': self.bot is not None
         }
