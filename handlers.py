@@ -2047,73 +2047,8 @@ async def topup_tribute_callback(callback: CallbackQuery, **kwargs):
     ])
     
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
-    
-@router.callback_query(F.data.startswith("tribute_amount_"))
-async def tribute_amount_callback(callback: CallbackQuery, **kwargs):
-    user = kwargs.get('user')
-    config = kwargs.get('config')
-    
-    if not user:
-        await callback.answer("❌ Ошибка пользователя")
-        return
-    
-    amount_str = callback.data.split("_")[-1]
-    try:
-        amount = int(amount_str)
-    except ValueError:
-        await callback.answer("❌ Неверная сумма")
-        return
-    
-    await create_tribute_payment(callback, user, amount, config)
-
-@router.callback_query(F.data == "tribute_custom_amount")
-async def tribute_custom_amount_callback(callback: CallbackQuery, state: FSMContext, **kwargs):
-    user = kwargs.get('user')
-    
-    if not user:
-        await callback.answer("❌ Ошибка пользователя")
-        return
-    
-    await callback.message.edit_text(
-        "💰 Введите сумму для пополнения (100-15000 рублей):",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отмена", callback_data="topup_tribute")]
-        ])
-    )
-    await state.set_state(BotStates.waiting_tribute_amount)
 
 @router.message(StateFilter(BotStates.waiting_tribute_amount))
-async def handle_tribute_amount(message: Message, state: FSMContext, **kwargs):
-    user = kwargs.get('user')
-    config = kwargs.get('config')
-    
-    if not user:
-        await message.answer("❌ Ошибка пользователя")
-        return
-    
-    is_valid, amount = is_valid_amount(message.text)
-    
-    if not is_valid or amount < 100 or amount > 15000:
-        await message.answer(
-            "❌ Неверная сумма. Введите число от 100 до 15000:",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Отмена", callback_data="topup_tribute")]
-            ])
-        )
-        return
-    
-    await state.clear()
-    
-    class FakeCallback:
-        def __init__(self, message):
-            self.message = message
-            
-        async def answer(self, text, show_alert=False):
-            await self.message.answer(text)
-    
-    fake_callback = FakeCallback(message)
-    await create_tribute_payment(fake_callback, user, int(amount), config)
-
 async def create_tribute_payment(callback, user, amount: int, config):
     try:
         tribute_donate_link = config.TRIBUTE_DONATE_LINK
