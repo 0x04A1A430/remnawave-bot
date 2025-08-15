@@ -592,6 +592,8 @@ emergency-fix:
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Fr1ngg/remnawave-bedolaga-telegram-bot&type=Date)](https://star-history.com/#Fr1ngg/remnawave-bedolaga-telegram-bot&Date)
 
+---
+
 ### 💝 Донатеры
 
 Спасибо всем, кто поддерживает проект!
