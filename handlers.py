@@ -176,14 +176,14 @@ async def language_callback(callback: CallbackQuery, state: FSMContext, db: Data
 async def show_main_menu(message: Message, lang: str, is_admin: bool = False, user_id: int = None, db: Database = None, config: Config = None):
     try:
         show_trial = False
-        show_lucky_game = True 
+        show_lucky_game = False 
         
         if config and config.TRIAL_ENABLED and user_id and db:
             has_used = await db.has_used_trial(user_id)
             show_trial = not has_used
         
-        if config:
-            show_lucky_game = getattr(config, 'LUCKY_GAME_ENABLED', True)
+        if config and hasattr(config, 'LUCKY_GAME_ENABLED'):
+            show_lucky_game = config.LUCKY_GAME_ENABLED
         
         await message.answer(
             t('main_menu', lang),
@@ -192,6 +192,22 @@ async def show_main_menu(message: Message, lang: str, is_admin: bool = False, us
     except Exception as e:
         logger.error(f"Error showing main menu: {e}")
         await message.answer("❌ Ошибка отображения меню")
+
+def get_main_menu_keyboard(lang: str, is_admin: bool = False, config: Config = None, db: Database = None, user_id: int = None):
+    show_trial = False
+    show_lucky_game = False 
+    
+    if config and config.TRIAL_ENABLED and user_id and db:
+        try:
+            pass
+        except:
+            pass
+    
+    if config and hasattr(config, 'LUCKY_GAME_ENABLED'):
+        show_lucky_game = config.LUCKY_GAME_ENABLED
+    
+    return main_menu_keyboard(lang, is_admin, show_trial, show_lucky_game)
+
 
 @router.callback_query(F.data == "main_menu")
 async def main_menu_callback(callback: CallbackQuery, **kwargs):
@@ -204,6 +220,7 @@ async def main_menu_callback(callback: CallbackQuery, **kwargs):
         return
     
     show_trial = False
+    show_lucky_game = False 
     
     if config and config.TRIAL_ENABLED and db:
         try:
@@ -212,9 +229,12 @@ async def main_menu_callback(callback: CallbackQuery, **kwargs):
         except Exception as e:
             logger.error(f"Error checking trial availability: {e}")
     
+    if config and hasattr(config, 'LUCKY_GAME_ENABLED'):
+        show_lucky_game = config.LUCKY_GAME_ENABLED
+    
     await callback.message.edit_text(
         t('main_menu', user.language),
-        reply_markup=main_menu_keyboard(user.language, user.is_admin, show_trial)
+        reply_markup=main_menu_keyboard(user.language, user.is_admin, show_trial, show_lucky_game)
     )
 
 @router.callback_query(F.data == "trial_subscription")
