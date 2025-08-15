@@ -269,6 +269,7 @@ TRANSLATIONS = {
         'total_referrals': 'Total invited',
         'active_referrals': 'Active referrals',
         'total_earned': 'Total earned',
+        'language_changed': 'Language chanched ✅',
         'my_referrals': 'My referrals',
         'referral_reward_referrer': 'For each invited: $150',
         'referral_reward_referred': 'Newbie bonus: $150 after topping up $300',
