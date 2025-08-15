@@ -80,15 +80,15 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
         lucky_stats = await db.get_lucky_game_admin_stats()
         
         recent_topups = await get_recent_topups(db)
-        
         recent_lucky_games = await get_recent_lucky_games(db)
+        recent_ref_earnings = await get_recent_referral_earnings(db)
         
         text = "📊 Расширенная статистика системы\n\n"
         
         text += "💾 База данных бота:\n"
         text += f"👥 Пользователей: {db_stats['total_users']}\n"
         text += f"📋 Подписок: {db_stats['total_subscriptions_non_trial']}\n"
-        text += f"💰 Доходы (только пополнения): {db_stats['total_revenue']:.1f}₽\n\n"
+        text += f"💰 Доходы: {db_stats['total_revenue']:.1f}₽\n\n"
         
         text += "👥 Реферальная программа:\n"
         text += f"🎁 Всего выплачено: {referral_stats['total_paid']:.1f}₽\n"
@@ -96,13 +96,13 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
         text += f"🔥 Всего рефералов: {referral_stats['total_referrals']}\n\n"
         
         text += "🎰 Игра в удачу:\n"
-        if lucky_stats['total_games'] > 0:
+        if lucky_stats and lucky_stats['total_games'] > 0:
             text += f"🎲 Всего игр: {lucky_stats['total_games']}\n"
             text += f"🏆 Выигрышей: {lucky_stats['total_wins']} ({lucky_stats['win_rate']:.1f}%)\n"
             text += f"👥 Уникальных игроков: {lucky_stats['unique_players']}\n"
             text += f"💎 Выплачено наград: {lucky_stats['total_rewards']:.1f}₽\n"
             
-            if lucky_stats['games_today'] > 0:
+            if lucky_stats.get('games_today', 0) > 0:
                 text += f"📅 За сегодня: {lucky_stats['games_today']} игр, {lucky_stats['wins_today']} побед\n"
         else:
             text += "🎯 Игр еще не было\n"
@@ -111,28 +111,36 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
         if recent_topups:
             text += "💰 Последние 5 пополнений:\n"
             for topup in recent_topups:
-                username = topup['username'] or 'N/A'
-                date_str = format_datetime(topup['created_at'], user.language)
+                username = topup.get('username') or 'N/A'
+                try:
+                    date_str = format_datetime(topup['created_at'], user.language)
+                except Exception:
+                    date_str = str(topup['created_at'])[:16]
                 text += f"• @{username}: {topup['amount']:.0f}₽ ({date_str})\n"
             text += "\n"
         
         if recent_lucky_games:
             text += "🎰 Последние 5 игр в удачу:\n"
             for game in recent_lucky_games:
-                username = game['username'] or 'N/A'
-                result = "🏆" if game['is_winner'] else "❌"
-                reward = f" +{game['reward_amount']:.0f}₽" if game['is_winner'] else ""
-                date_str = format_datetime(game['played_at'], user.language)
+                username = game.get('username') or 'N/A'
+                result = "🏆" if game.get('is_winner') else "❌"
+                reward = f" +{game['reward_amount']:.0f}₽" if game.get('is_winner') else ""
+                try:
+                    date_str = format_datetime(game['played_at'], user.language)
+                except Exception:
+                    date_str = str(game['played_at'])[:16]
                 text += f"• {result} @{username}: #{game['chosen_number']}{reward} ({date_str})\n"
             text += "\n"
         
-        recent_ref_earnings = await get_recent_referral_earnings(db)
         if recent_ref_earnings:
             text += "🎁 Последние 5 реферальных выплат:\n"
             for earning in recent_ref_earnings:
-                referrer_name = earning['referrer_name'] or 'N/A'
-                earning_type = "🎁" if earning['earning_type'] == 'first_reward' else "💵"
-                date_str = format_datetime(earning['created_at'], user.language)
+                referrer_name = earning.get('referrer_name') or 'N/A'
+                earning_type = "🎁" if earning.get('earning_type') == 'first_reward' else "💵"
+                try:
+                    date_str = format_datetime(earning['created_at'], user.language)
+                except Exception:
+                    date_str = str(earning['created_at'])[:16]
                 text += f"• {earning_type} @{referrer_name}: {earning['amount']:.0f}₽ ({date_str})\n"
             text += "\n"
         
@@ -149,7 +157,7 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🎰 Детали игры в удачу", callback_data="lucky_game_admin_details")],
             [InlineKeyboardButton(text="👥 Реферальная статистика", callback_data="referral_statistics")],
-            [InlineKeyboardButton(text="🖥 Подробная системная статистика", callback_data="admin_system")],
+            [InlineKeyboardButton(text="🖥 Системная статистика", callback_data="admin_system")],
             [InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_stats")],
             [InlineKeyboardButton(text="🔙 " + t('back', user.language), callback_data="admin_panel")]
         ])
@@ -159,7 +167,7 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
     except Exception as e:
         logger.error(f"Error getting statistics: {e}")
         await callback.message.edit_text(
-            t('error_occurred', user.language),
+            "❌ " + t('error_occurred', user.language),
             reply_markup=back_keyboard("admin_panel", user.language)
         )
 
@@ -8500,58 +8508,83 @@ async def lucky_game_admin_details_callback(callback: CallbackQuery, user: User,
         
         text = "🎰 **Детальная статистика игры в удачу**\n\n"
         
-        if lucky_stats['total_games'] > 0:
+        if lucky_stats and lucky_stats.get('total_games', 0) > 0:
             text += "📊 **Общая статистика:**\n"
             text += f"🎲 Всего игр сыграно: {lucky_stats['total_games']}\n"
             text += f"🏆 Всего выигрышей: {lucky_stats['total_wins']}\n"
             text += f"📈 Процент побед: {lucky_stats['win_rate']:.2f}%\n"
             text += f"👥 Уникальных игроков: {lucky_stats['unique_players']}\n"
             text += f"💎 Общая сумма выплат: {lucky_stats['total_rewards']:.0f}₽\n"
-            text += f"💰 Средняя выплата: {lucky_stats['avg_reward']:.1f}₽\n\n"
+            
+            if lucky_stats.get('avg_reward', 0) > 0:
+                text += f"💰 Средняя выплата: {lucky_stats['avg_reward']:.1f}₽\n"
+            text += "\n"
             
             text += "📅 **За сегодня:**\n"
-            text += f"🎯 Игр: {lucky_stats['games_today']}\n"
-            text += f"🎉 Выигрышей: {lucky_stats['wins_today']}\n"
-            if lucky_stats['games_today'] > 0:
-                text += f"📊 Процент побед: {lucky_stats['win_rate_today']:.1f}%\n"
-                today_payouts = lucky_stats['wins_today'] * lucky_stats['avg_reward']
-                text += f"💸 Выплачено сегодня: {today_payouts:.0f}₽\n"
+            text += f"🎯 Игр: {lucky_stats.get('games_today', 0)}\n"
+            text += f"🎉 Выигрышей: {lucky_stats.get('wins_today', 0)}\n"
+            if lucky_stats.get('games_today', 0) > 0:
+                text += f"📊 Процент побед: {lucky_stats.get('win_rate_today', 0):.1f}%\n"
             text += "\n"
             
             if top_players:
                 text += "🏆 **Топ-5 игроков:**\n"
                 for i, player in enumerate(top_players, 1):
-                    name = player['first_name'] or player['username']
-                    text += f"{i}. {name} (ID: {player['user_id']})\n"
-                    text += f"   💰 Выиграл: {player['total_won']:.0f}₽\n"
-                    text += f"   🎯 Игр: {player['games_played']} | Побед: {player['wins']} ({player['win_rate']:.1f}%)\n"
+                    name = player.get('first_name', 'Unknown')
+                    if not name or name == 'Unknown':
+                        name = player.get('username', 'N/A')
                     
-                    if player['last_game']:
-                        last_game = format_datetime(
-                            datetime.fromisoformat(player['last_game']).replace(tzinfo=None),
-                            user.language
-                        )
-                        text += f"   🕐 Последняя игра: {last_game}\n"
+                    text += f"{i}. {name}\n"
+                    text += f"   💰 Выиграл: {player.get('total_won', 0):.0f}₽\n"
+                    text += f"   🎯 Игр: {player.get('games_played', 0)} | "
+                    text += f"Побед: {player.get('wins', 0)} ({player.get('win_rate', 0):.1f}%)\n"
+                    
+                    if player.get('last_game'):
+                        try:
+                            if isinstance(player['last_game'], str):
+                                last_game_dt = datetime.fromisoformat(player['last_game']).replace(tzinfo=None)
+                            else:
+                                last_game_dt = player['last_game']
+                            
+                            last_game = format_datetime(last_game_dt, user.language)
+                            text += f"   🕐 Последняя игра: {last_game}\n"
+                        except Exception as e:
+                            logger.warning(f"Error formatting last_game: {e}")
+                            text += f"   🕐 Последняя игра: {str(player['last_game'])[:16]}\n"
                     text += "\n"
             
-            if lucky_stats['first_game'] and lucky_stats['last_game']:
-                first_game = format_datetime(
-                    datetime.fromisoformat(lucky_stats['first_game']).replace(tzinfo=None),
-                    user.language
-                )
-                last_game = format_datetime(
-                    datetime.fromisoformat(lucky_stats['last_game']).replace(tzinfo=None),
-                    user.language
-                )
+            first_game = lucky_stats.get('first_game')
+            last_game = lucky_stats.get('last_game')
+            
+            if first_game and last_game:
                 text += f"🕐 **Временные рамки:**\n"
-                text += f"🥇 Первая игра: {first_game}\n"
-                text += f"🕐 Последняя игра: {last_game}\n\n"
+                try:
+                    if isinstance(first_game, str):
+                        first_game_dt = datetime.fromisoformat(first_game).replace(tzinfo=None)
+                    else:
+                        first_game_dt = first_game
+                    
+                    if isinstance(last_game, str):
+                        last_game_dt = datetime.fromisoformat(last_game).replace(tzinfo=None)
+                    else:
+                        last_game_dt = last_game
+                    
+                    first_game_str = format_datetime(first_game_dt, user.language)
+                    last_game_str = format_datetime(last_game_dt, user.language)
+                    
+                    text += f"🥇 Первая игра: {first_game_str}\n"
+                    text += f"🕐 Последняя игра: {last_game_str}\n\n"
+                except Exception as e:
+                    logger.warning(f"Error formatting game times: {e}")
+                    text += f"🥇 Первая игра: {str(first_game)[:16]}\n"
+                    text += f"🕐 Последняя игра: {str(last_game)[:16]}\n\n"
             
         else:
             text += "🎯 В игру в удачу еще никто не играл.\n\n"
-            text += "Игроки смогут играть после активации функции в боте."
+            text += "Игроки смогут играть после активации функции в боте.\n\n"
         
-        text += f"🕕 _Обновлено: {format_datetime(datetime.now(), user.language)}_"
+        current_time = datetime.now()
+        text += f"🕕 _Обновлено: {format_datetime(current_time, user.language)}_"
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔄 Обновить", callback_data="lucky_game_admin_details")],
