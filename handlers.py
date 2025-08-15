@@ -428,8 +428,8 @@ async def topup_balance_callback(callback: CallbackQuery, **kwargs):
         await callback.answer("❌ Ошибка пользователя")
         return
     
-    stars_enabled = config and config.STARS_ENABLED and config.STARS_RATES
     tribute_enabled = config and config.TRIBUTE_ENABLED
+    stars_enabled = config and config.STARS_ENABLED and config.STARS_RATES
     
     text = "💰 Выберите способ пополнения баланса:"
     
@@ -440,7 +440,7 @@ async def topup_balance_callback(callback: CallbackQuery, **kwargs):
     
     await callback.message.edit_text(
         text,
-        reply_markup=topup_keyboard(user.language, tribute_enabled),
+        reply_markup=topup_keyboard(user.language, tribute_enabled, stars_enabled),
         parse_mode='Markdown'
     )
 
