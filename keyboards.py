@@ -59,7 +59,7 @@ def topup_keyboard(lang: str, tribute_enabled: bool = False) -> InlineKeyboardMa
     if tribute_enabled:
         keyboard.append([
             InlineKeyboardButton(
-                text="💳 Tribute (Карта/СБП)" if lang == 'ru' else "💳 Tribute (Card/SBP)",
+                text="💳 Tribute (Карта)" if lang == 'ru' else "💳 Tribute (Card/SBP)",
                 callback_data="topup_tribute"
             )
         ])
@@ -80,27 +80,6 @@ def topup_keyboard(lang: str, tribute_enabled: bool = False) -> InlineKeyboardMa
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-def tribute_amounts_keyboard(lang: str) -> InlineKeyboardMarkup:
-    keyboard = [
-        [
-            InlineKeyboardButton(text="💯 100₽", callback_data="tribute_amount_100"),
-            InlineKeyboardButton(text="💰 300₽", callback_data="tribute_amount_300")
-        ],
-        [
-            InlineKeyboardButton(text="💎 500₽", callback_data="tribute_amount_500"),
-            InlineKeyboardButton(text="🎯 1000₽", callback_data="tribute_amount_1000")
-        ],
-        [
-            InlineKeyboardButton(text="💸 2000₽", callback_data="tribute_amount_2000"),
-            InlineKeyboardButton(text="🏆 5000₽", callback_data="tribute_amount_5000")
-        ],
-        [InlineKeyboardButton(text="✏️ Своя сумма", callback_data="tribute_custom_amount")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="topup_balance")]
-    ]
-    
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
 
 def subscriptions_keyboard(subscriptions: List[dict], lang: str = 'ru') -> InlineKeyboardMarkup:
     buttons = []
