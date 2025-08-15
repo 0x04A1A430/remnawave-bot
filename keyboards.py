@@ -1,12 +1,8 @@
-from datetime import datetime
-from typing import List, Dict
-
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
 from database import Subscription
-from handlers import PaymentSystem
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from typing import List, Optional, Dict
 from translations import t
-
+from datetime import datetime
 
 def language_keyboard() -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -57,26 +53,22 @@ def balance_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     ])
     return keyboard
 
-def topup_keyboard(lang: str, enabled_payment_types: list[PaymentSystem]) -> InlineKeyboardMarkup:
+def topup_keyboard(lang: str, tribute_enabled: bool = False) -> InlineKeyboardMarkup:
     keyboard = []
     
-    if PaymentSystem.TRIBUTE in enabled_payment_types:
+    if tribute_enabled:
         keyboard.append([
             InlineKeyboardButton(
                 text="💳 Tribute (Карта/СБП)" if lang == 'ru' else "💳 Tribute (Card/SBP)",
                 callback_data="topup_tribute"
             )
         ])
-
-    if PaymentSystem.STARS in enabled_payment_types:
-        keyboard.append([
-            InlineKeyboardButton(
-                text="⭐ Telegram Stars" if lang == 'ru' else "⭐ Telegram Stars",
-                callback_data="topup_stars"
-            )
-        ])
     
     keyboard.extend([
+        [InlineKeyboardButton(
+            text="⭐ Telegram Stars" if lang == 'ru' else "⭐ Telegram Stars",
+            callback_data="topup_stars"
+        )],
         [InlineKeyboardButton(
             text="💬 Связаться с поддержкой" if lang == 'ru' else "💬 Contact Support",
             callback_data="topup_support"
