@@ -2540,39 +2540,44 @@ class Database:
 
     async def get_lucky_game_top_players(self, limit: int = 5) -> List[dict]:
         try:
-            query = """
-            SELECT 
-                lg.user_id,
-                u.username,
-                u.first_name,
-                COUNT(*) as games_played,
-                COUNT(CASE WHEN lg.is_winner = 1 THEN 1 END) as wins,
-                SUM(lg.reward_amount) as total_won,
-                MAX(lg.played_at) as last_game
-            FROM lucky_games lg
-            LEFT JOIN users u ON lg.user_id = u.telegram_id
-            GROUP BY lg.user_id
-            ORDER BY total_won DESC, wins DESC
-            LIMIT ?
-            """
-        
-            async with self.get_connection() as conn:
-                async with conn.execute(query, (limit,)) as cursor:
-                    rows = await cursor.fetchall()
-                    
-                    return [
-                        {
-                            'user_id': row[0],
-                            'username': row[1] or 'N/A',
-                            'first_name': row[2] or 'Unknown',
-                            'games_played': row[3],
-                            'wins': row[4],
-                            'total_won': row[5],
-                            'last_game': row[6],
-                            'win_rate': (row[4] / row[3]) * 100 if row[3] > 0 else 0
-                        }
-                        for row in rows
-                    ]
+            async with self.session_factory() as session:
+                from sqlalchemy import select, func, case, desc
+                from database import LuckyGame, User
+            
+                query = select(
+                    LuckyGame.user_id,
+                    User.username,
+                    User.first_name,
+                    func.count(LuckyGame.id).label('games_played'),
+                    func.count(case((LuckyGame.is_winner == True, 1))).label('wins'),
+                    func.sum(LuckyGame.reward_amount).label('total_won'),
+                    func.max(LuckyGame.played_at).label('last_game')
+                ).select_from(
+                    LuckyGame.__table__.join(User.__table__, LuckyGame.user_id == User.telegram_id)
+                ).group_by(
+                    LuckyGame.user_id, User.username, User.first_name
+                ).order_by(
+                    desc(func.sum(LuckyGame.reward_amount)), 
+                    desc(func.count(case((LuckyGame.is_winner == True, 1))))
+                ).limit(limit)
+            
+                result = await session.execute(query)
+                players = []
+            
+                for row in result.fetchall():
+                    win_rate = (row.wins / row.games_played) * 100 if row.games_played > 0 else 0
+                    players.append({
+                        'user_id': row.user_id,
+                        'username': row.username or 'N/A',
+                        'first_name': row.first_name or 'Unknown',
+                        'games_played': row.games_played,
+                        'wins': row.wins,
+                        'total_won': row.total_won or 0.0,
+                        'last_game': row.last_game.isoformat() if row.last_game else None,
+                        'win_rate': win_rate
+                    })
+            
+                return players
                 
         except Exception as e:
             logger.error(f"Error getting lucky game top players: {e}")
