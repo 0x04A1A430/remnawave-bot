@@ -5,7 +5,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from datetime import datetime, timedelta, timezone
 import logging
-from typing import List, Dict
+from typing import List, Dict, Any
 
 from database import Database, User, ReferralProgram, ReferralEarning, ServiceRule
 from remnawave_api import RemnaWaveAPI
@@ -75,38 +75,66 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
     try:
         db_stats = await db.get_stats()
         
-        # Статистика игры в удачу
+        referral_stats = await get_referral_stats(db)
+        
         lucky_stats = await db.get_lucky_game_admin_stats()
+        
+        recent_topups = await get_recent_topups(db)
+        
+        recent_lucky_games = await get_recent_lucky_games(db)
         
         text = "📊 Расширенная статистика системы\n\n"
         
         text += "💾 База данных бота:\n"
         text += f"👥 Пользователей: {db_stats['total_users']}\n"
         text += f"📋 Подписок: {db_stats['total_subscriptions_non_trial']}\n"
-        text += f"💰 Доходы: {db_stats['total_revenue']} руб.\n\n"
+        text += f"💰 Доходы (только пополнения): {db_stats['total_revenue']:.1f}₽\n\n"
+        
+        text += "👥 Реферальная программа:\n"
+        text += f"🎁 Всего выплачено: {referral_stats['total_paid']:.1f}₽\n"
+        text += f"👤 Активных рефереров: {referral_stats['active_referrers']}\n"
+        text += f"🔥 Всего рефералов: {referral_stats['total_referrals']}\n\n"
         
         text += "🎰 Игра в удачу:\n"
         if lucky_stats['total_games'] > 0:
             text += f"🎲 Всего игр: {lucky_stats['total_games']}\n"
             text += f"🏆 Выигрышей: {lucky_stats['total_wins']} ({lucky_stats['win_rate']:.1f}%)\n"
             text += f"👥 Уникальных игроков: {lucky_stats['unique_players']}\n"
-            text += f"💎 Выплачено наград: {lucky_stats['total_rewards']:.0f}₽\n"
-            text += f"📈 Средняя награда: {lucky_stats['avg_reward']:.0f}₽\n\n"
+            text += f"💎 Выплачено наград: {lucky_stats['total_rewards']:.1f}₽\n"
             
             if lucky_stats['games_today'] > 0:
-                text += f"📅 За сегодня:\n"
-                text += f"  • Игр: {lucky_stats['games_today']}\n"
-                text += f"  • Выигрышей: {lucky_stats['wins_today']} ({lucky_stats['win_rate_today']:.1f}%)\n"
-                text += f"  • Выплачено: {lucky_stats['wins_today'] * lucky_stats['avg_reward']:.0f}₽\n\n"
-            
-            if lucky_stats['last_game']:
-                last_game_str = format_datetime(
-                    datetime.fromisoformat(lucky_stats['last_game']).replace(tzinfo=None), 
-                    user.language
-                )
-                text += f"🕐 Последняя игра: {last_game_str}\n\n"
+                text += f"📅 За сегодня: {lucky_stats['games_today']} игр, {lucky_stats['wins_today']} побед\n"
         else:
-            text += "🎯 Игр еще не было\n\n"
+            text += "🎯 Игр еще не было\n"
+        text += "\n"
+        
+        if recent_topups:
+            text += "💰 Последние 5 пополнений:\n"
+            for topup in recent_topups:
+                username = topup['username'] or 'N/A'
+                date_str = format_datetime(topup['created_at'], user.language)
+                text += f"• @{username}: {topup['amount']:.0f}₽ ({date_str})\n"
+            text += "\n"
+        
+        if recent_lucky_games:
+            text += "🎰 Последние 5 игр в удачу:\n"
+            for game in recent_lucky_games:
+                username = game['username'] or 'N/A'
+                result = "🏆" if game['is_winner'] else "❌"
+                reward = f" +{game['reward_amount']:.0f}₽" if game['is_winner'] else ""
+                date_str = format_datetime(game['played_at'], user.language)
+                text += f"• {result} @{username}: #{game['chosen_number']}{reward} ({date_str})\n"
+            text += "\n"
+        
+        recent_ref_earnings = await get_recent_referral_earnings(db)
+        if recent_ref_earnings:
+            text += "🎁 Последние 5 реферальных выплат:\n"
+            for earning in recent_ref_earnings:
+                referrer_name = earning['referrer_name'] or 'N/A'
+                earning_type = "🎁" if earning['earning_type'] == 'first_reward' else "💵"
+                date_str = format_datetime(earning['created_at'], user.language)
+                text += f"• {earning_type} @{referrer_name}: {earning['amount']:.0f}₽ ({date_str})\n"
+            text += "\n"
         
         if api:
             try:
@@ -120,6 +148,7 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🎰 Детали игры в удачу", callback_data="lucky_game_admin_details")],
+            [InlineKeyboardButton(text="👥 Реферальная статистика", callback_data="referral_statistics")],
             [InlineKeyboardButton(text="🖥 Подробная системная статистика", callback_data="admin_system")],
             [InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_stats")],
             [InlineKeyboardButton(text="🔙 " + t('back', user.language), callback_data="admin_panel")]
@@ -133,6 +162,147 @@ async def admin_stats_callback(callback: CallbackQuery, user: User, db: Database
             t('error_occurred', user.language),
             reply_markup=back_keyboard("admin_panel", user.language)
         )
+
+async def get_referral_stats(db: Database) -> Dict[str, Any]:
+    try:
+        async with db.session_factory() as session:
+            from sqlalchemy import select, func, and_
+            from database import ReferralProgram, ReferralEarning
+            
+            total_paid = await session.execute(
+                select(func.sum(ReferralEarning.amount))
+            )
+            total_paid = total_paid.scalar() or 0.0
+            
+            active_referrers = await session.execute(
+                select(func.count(func.distinct(ReferralEarning.referrer_id)))
+            )
+            active_referrers = active_referrers.scalar() or 0
+            
+            total_referrals = await session.execute(
+                select(func.count(ReferralProgram.id)).where(
+                    and_(
+                        ReferralProgram.referred_id < 900000000,
+                        ReferralProgram.referred_id > 0
+                    )
+                )
+            )
+            total_referrals = total_referrals.scalar() or 0
+            
+            return {
+                'total_paid': total_paid,
+                'active_referrers': active_referrers,
+                'total_referrals': total_referrals
+            }
+    except Exception as e:
+        logger.error(f"Error getting referral stats: {e}")
+        return {'total_paid': 0.0, 'active_referrers': 0, 'total_referrals': 0}
+
+async def get_recent_topups(db: Database) -> List[Dict[str, Any]]:
+    try:
+        async with db.session_factory() as session:
+            from sqlalchemy import select, desc
+            from database import Payment, User
+            
+            result = await session.execute(
+                select(
+                    Payment.amount,
+                    Payment.created_at,
+                    Payment.payment_type,
+                    User.username,
+                    User.first_name
+                ).select_from(
+                    Payment.__table__.join(User.__table__, Payment.user_id == User.telegram_id)
+                ).where(
+                    and_(
+                        Payment.status == 'completed',
+                        Payment.payment_type.in_(['topup', 'subscription', 'subscription_extend', 'promocode', 'admin_topup', 'stars'])
+                    )
+                ).order_by(desc(Payment.created_at)).limit(5)
+            )
+            
+            topups = []
+            for row in result.fetchall():
+                topups.append({
+                    'amount': row.amount,
+                    'created_at': row.created_at,
+                    'payment_type': row.payment_type,
+                    'username': row.username,
+                    'first_name': row.first_name
+                })
+            
+            return topups
+    except Exception as e:
+        logger.error(f"Error getting recent topups: {e}")
+        return []
+
+async def get_recent_lucky_games(db: Database) -> List[Dict[str, Any]]:
+    try:
+        async with db.session_factory() as session:
+            from sqlalchemy import select, desc
+            from database import LuckyGame, User
+            
+            result = await session.execute(
+                select(
+                    LuckyGame.chosen_number,
+                    LuckyGame.is_winner,
+                    LuckyGame.reward_amount,
+                    LuckyGame.played_at,
+                    User.username,
+                    User.first_name
+                ).select_from(
+                    LuckyGame.__table__.join(User.__table__, LuckyGame.user_id == User.telegram_id)
+                ).order_by(desc(LuckyGame.played_at)).limit(5)
+            )
+            
+            games = []
+            for row in result.fetchall():
+                games.append({
+                    'chosen_number': row.chosen_number,
+                    'is_winner': row.is_winner,
+                    'reward_amount': row.reward_amount,
+                    'played_at': row.played_at,
+                    'username': row.username,
+                    'first_name': row.first_name
+                })
+            
+            return games
+    except Exception as e:
+        logger.error(f"Error getting recent lucky games: {e}")
+        return []
+
+async def get_recent_referral_earnings(db: Database) -> List[Dict[str, Any]]:
+    try:
+        async with db.session_factory() as session:
+            from sqlalchemy import select, desc
+            from database import ReferralEarning, User
+            
+            result = await session.execute(
+                select(
+                    ReferralEarning.amount,
+                    ReferralEarning.earning_type,
+                    ReferralEarning.created_at,
+                    User.username,
+                    User.first_name
+                ).select_from(
+                    ReferralEarning.__table__.join(User.__table__, ReferralEarning.referrer_id == User.telegram_id)
+                ).order_by(desc(ReferralEarning.created_at)).limit(5)
+            )
+            
+            earnings = []
+            for row in result.fetchall():
+                earnings.append({
+                    'amount': row.amount,
+                    'earning_type': row.earning_type,
+                    'created_at': row.created_at,
+                    'referrer_name': row.username,
+                    'referrer_first_name': row.first_name
+                })
+            
+            return earnings
+    except Exception as e:
+        logger.error(f"Error getting recent referral earnings: {e}")
+        return []
 
 @admin_router.callback_query(F.data == "admin_subscriptions")
 async def admin_subscriptions_callback(callback: CallbackQuery, user: User, **kwargs):
