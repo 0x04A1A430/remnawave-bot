@@ -2027,27 +2027,27 @@ async def topup_tribute_callback(callback: CallbackQuery, **kwargs):
     user = kwargs.get('user')
     config = kwargs.get('config')
     
-    if not user:
-        await callback.answer("❌ Ошибка пользователя")
-        return
-    
-    if not config or not config.TRIBUTE_ENABLED:
-        await callback.answer("❌ Tribute платежи недоступны")
+    if not user or not config or not config.TRIBUTE_ENABLED:
+        await callback.answer("⚠️ Tribute платежи недоступны")
         return
     
     text = (
         "💳 **Пополнение через Tribute**\n\n"
         "🔹 **Доступные способы оплаты:**\n"
         "• 💳 Банковские карты (Visa, MasterCard, МИР)\n"
-        "💰 **Выберите сумму пополнения:**"
+        "💰 **Введите любую сумму от 100 до 15000 рублей**\n\n"
+        "⏱️ После оплаты средства поступят на баланс автоматически в течение 1 минуты"
+        "🚨 НЕ ОТПРАВЛЯТЬ ПЛАТЕЖ АНОНИМНО!"
+        "Иначе дс не поступят на ваш счет!"
     )
     
-    await callback.message.edit_text(
-        text,
-        reply_markup=tribute_amounts_keyboard(user.language),
-        parse_mode="Markdown"
-    )
-
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 Открыть Tribute", url=config.TRIBUTE_DONATE_LINK)],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="topup_balance")]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+    
 @router.callback_query(F.data.startswith("tribute_amount_"))
 async def tribute_amount_callback(callback: CallbackQuery, **kwargs):
     user = kwargs.get('user')
