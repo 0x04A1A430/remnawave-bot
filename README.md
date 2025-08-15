@@ -316,7 +316,6 @@ docker compose up -d
 
 ## 💡 Полезные команды
 
-```bash
 # Быстрый перезапуск
 docker compose restart bot
 
