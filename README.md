@@ -598,6 +598,8 @@ emergency-fix:
 
 *Автор не является профессиональным разработчиком, но прикладывает все усилия для создания удобного бота для ваших сервисов* 💪
 
+*The English Readme is currently being written, with revisions for various payment systems and languages. If you have the opportunity, please help me with local optimization and translations. This would greatly help me in writing an open source project that is accessible to different markets/countries.*
+
 [🔝 Вернуться наверх](#-remnawave-bedolaga-bot)
 
 </div>
