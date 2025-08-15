@@ -233,6 +233,7 @@ TRANSLATIONS = {
         'payment_history': 'Payment history',
         'topup_card': 'Card payment',
         'topup_support': 'Through support',
+        'your_subscriptions': 'Your Subscriptions',
         'back': 'Back',
         'no_subscriptions': '❌ You have no active subscriptions',
         'subscription_info': '📋 Subscription: {name}\n💰 Price: ${price:.2f}\n⏱ Duration: {days} days\n📊 Traffic: {traffic}\n\n{description}',
