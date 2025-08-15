@@ -13,7 +13,7 @@ def language_keyboard() -> InlineKeyboardMarkup:
     ])
     return keyboard
 
-def main_menu_keyboard(lang: str = 'ru', is_admin: bool = False, show_trial: bool = False, show_lucky_game: bool = True) -> InlineKeyboardMarkup:
+def main_menu_keyboard(lang: str = 'ru', is_admin: bool = False, show_trial: bool = False, show_lucky_game: bool = False) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(text="💰 " + t('balance', lang), callback_data="balance"),
