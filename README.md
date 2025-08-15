@@ -588,9 +588,18 @@ emergency-fix:
 
 <div align="center">
 
-### 🌟 Понравился проект? Поставьте звезду!
+## ⭐ История проекта
+
+<div align="center">
+
+![Stars](https://img.shields.io/github/stars/Fr1ngg/remnawave-bedolaga-telegram-bot?style=for-the-badge&logo=github&color=yellow)
+![Forks](https://img.shields.io/github/forks/Fr1ngg/remnawave-bedolaga-telegram-bot?style=for-the-badge&logo=github&color=blue)
+![Issues](https://img.shields.io/github/issues/Fr1ngg/remnawave-bedolaga-telegram-bot?style=for-the-badge&logo=github&color=red)
+![Last Commit](https://img.shields.io/github/last-commit/Fr1ngg/remnawave-bedolaga-telegram-bot?style=for-the-badge&logo=github)
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Fr1ngg/remnawave-bedolaga-telegram-bot&type=Date)](https://star-history.com/#Fr1ngg/remnawave-bedolaga-telegram-bot&Date)
+
+</div>
 
 ---
 
