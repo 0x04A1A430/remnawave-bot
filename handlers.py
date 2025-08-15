@@ -25,9 +25,7 @@ from referral_utils import (
 )
 from lucky_game import lucky_game_router, LuckyGameStates
 
-class PaymentSystem(Enum):
-    STARS = 1
-    TRIBUTE = 2
+logger = logging.getLogger(__name__)
 
 class BotStates(StatesGroup):
     waiting_language = State()
@@ -429,16 +427,9 @@ async def topup_balance_callback(callback: CallbackQuery, **kwargs):
     if not user:
         await callback.answer("❌ Ошибка пользователя")
         return
-
+    
     stars_enabled = config and config.STARS_ENABLED and config.STARS_RATES
     tribute_enabled = config and config.TRIBUTE_ENABLED
-    enabled_payment_types = list[PaymentSystem]()
-
-    if stars_enabled:
-        enabled_payment_types.append(PaymentSystem.STARS)
-
-    if tribute_enabled:
-        enabled_payment_types.append(PaymentSystem.TRIBUTE)
     
     text = "💰 Выберите способ пополнения баланса:"
     
@@ -449,7 +440,7 @@ async def topup_balance_callback(callback: CallbackQuery, **kwargs):
     
     await callback.message.edit_text(
         text,
-        reply_markup=topup_keyboard(user.language, enabled_payment_types),
+        reply_markup=topup_keyboard(user.language, tribute_enabled),
         parse_mode='Markdown'
     )
 
