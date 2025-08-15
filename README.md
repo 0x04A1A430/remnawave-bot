@@ -448,7 +448,7 @@ docker compose exec postgres pg_dump -U remnawave_user remnawave_bot > backup.sq
 
 3.3 Рестартим Бота, рестратим Caddy/Nginx   
 
-4) Указываем ссылку на наш хук в настройках Tribute: https://test.example.com/tribute-webhook
+4) Указываем ссылку на наш хук в настройках Tribute: https://test.example.com/tribute-webhook, создаем API ключ вписываем в .env бота
 
 5) Делаем тест - если успешно, значит все настроили правильно. Не успешный тест - проверяй доступность хука, где-то ты что-то не так настроил
    
