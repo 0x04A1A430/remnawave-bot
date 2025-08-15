@@ -53,7 +53,7 @@ def balance_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     ])
     return keyboard
 
-def topup_keyboard(lang: str, tribute_enabled: bool = False) -> InlineKeyboardMarkup:
+def topup_keyboard(lang: str, tribute_enabled: bool = False, stars_enabled: bool = False) -> InlineKeyboardMarkup:
     keyboard = []
     
     if tribute_enabled:
@@ -64,11 +64,15 @@ def topup_keyboard(lang: str, tribute_enabled: bool = False) -> InlineKeyboardMa
             )
         ])
     
+    if stars_enabled:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="⭐ Telegram Stars" if lang == 'ru' else "⭐ Telegram Stars",
+                callback_data="topup_stars"
+            )
+        ])
+    
     keyboard.extend([
-        [InlineKeyboardButton(
-            text="⭐ Telegram Stars" if lang == 'ru' else "⭐ Telegram Stars",
-            callback_data="topup_stars"
-        )],
         [InlineKeyboardButton(
             text="💬 Связаться с поддержкой" if lang == 'ru' else "💬 Contact Support",
             callback_data="topup_support"
@@ -80,6 +84,7 @@ def topup_keyboard(lang: str, tribute_enabled: bool = False) -> InlineKeyboardMa
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
 
 def subscriptions_keyboard(subscriptions: List[dict], lang: str = 'ru') -> InlineKeyboardMarkup:
     buttons = []
