@@ -298,57 +298,51 @@ class RemnaWaveAPI:
     async def get_subscription_info(self, short_uuid: str) -> Optional[Dict]:
         try:
             logger.info(f"Getting subscription info for short_uuid: {short_uuid}")
-        
-            endpoint = f'/api/sub/{short_uuid}'
-            logger.debug(f"Using endpoint: {endpoint}")
-        
-            result = await self._make_request('GET', endpoint)
-        
-            if result:
-                logger.debug(f"Got result from {endpoint}: {result}")
             
-                subscription_data = None
-                
-                if 'response' in result:
-                    subscription_data = result['response']
-                elif 'data' in result:
-                    subscription_data = result['data']
-                elif 'subscription' in result:
-                    subscription_data = result['subscription']
-                else:
-                    subscription_data = result
+            endpoints_to_try = [
+                f'/api/subscriptions/{short_uuid}',
+                f'/api/sub/{short_uuid}',
+                f'/api/subscription/{short_uuid}'
+            ]
             
-                if subscription_data:
-                    subscription_url = (
-                        subscription_data.get('subscriptionUrl') or
-                        subscription_data.get('url') or
-                        subscription_data.get('link') or
-                        subscription_data.get('subscription_url')
-                    )
+            for endpoint in endpoints_to_try:
+                logger.debug(f"Trying endpoint: {endpoint}")
+                result = await self._make_request('GET', endpoint)
                 
-                    if subscription_url:
-                        logger.info(f"Successfully got subscription URL from API: {subscription_url}")
-                        return subscription_data
+                if result:
+                    logger.info(f"Successfully got subscription info from {endpoint}")
+                    
+                    subscription_data = None
+                    
+                    if 'response' in result:
+                        subscription_data = result['response']
+                    elif 'data' in result:
+                        subscription_data = result['data']
+                    elif 'subscription' in result:
+                        subscription_data = result['subscription']
                     else:
-                        logger.warning(f"Got subscription data but no URL found in response: {list(subscription_data.keys()) if isinstance(subscription_data, dict) else type(subscription_data)}")
-                else:
-                    logger.warning(f"No subscription data in response")
-            else:
-                logger.warning(f"No result from {endpoint}")
-        
-            logger.error(f"Could not get subscription URL from API for {short_uuid}")
+                        subscription_data = result
+                    
+                    if subscription_data and (
+                        'subscriptionUrl' in subscription_data or 
+                        'url' in subscription_data or 
+                        'link' in subscription_data
+                    ):
+                        return subscription_data
+            
+            logger.warning(f"Could not get subscription info for {short_uuid} from any endpoint")
             return None
-        
+            
         except Exception as e:
             logger.error(f"Error getting subscription info for {short_uuid}: {e}")
             return None
 
-    async def get_subscription_url(self, short_uuid: str) -> Optional[str]:
+    async def get_subscription_url(self, short_uuid: str) -> str:
         try:
             logger.info(f"Getting subscription URL for short_uuid: {short_uuid}")
-        
+            
             subscription_info = await self.get_subscription_info(short_uuid)
-        
+            
             if subscription_info:
                 subscription_url = (
                     subscription_info.get('subscriptionUrl') or
@@ -356,17 +350,29 @@ class RemnaWaveAPI:
                     subscription_info.get('link') or
                     subscription_info.get('subscription_url')
                 )
-            
+                
                 if subscription_url:
-                    logger.info(f"Successfully got subscription URL: {subscription_url}")
+                    logger.info(f"Got subscription URL from API: {subscription_url}")
                     return subscription_url
-        
-            logger.error(f"Could not get subscription URL from API for {short_uuid}")
-            return None
             
+            user_data = await self.get_user_by_short_uuid(short_uuid)
+            if user_data and 'subscriptionUrl' in user_data:
+                logger.info(f"Got subscription URL from user data: {user_data['subscriptionUrl']}")
+                return user_data['subscriptionUrl']
+            
+            if self.subscription_base_url:
+                fallback_url = f"{self.subscription_base_url.rstrip('/')}/sub/{short_uuid}"
+                logger.warning(f"Using fallback URL: {fallback_url}")
+                return fallback_url
+            else:
+                fallback_url = f"{self.base_url.rstrip('/')}/sub/{short_uuid}"
+                logger.warning(f"Using base_url fallback: {fallback_url}")
+                return fallback_url
+                
         except Exception as e:
             logger.error(f"Failed to get subscription URL for {short_uuid}: {e}")
-            return None
+            fallback_url = f"{self.base_url.rstrip('/')}/sub/{short_uuid}"
+            return fallback_url
 
     async def get_user_by_short_uuid(self, short_uuid: str) -> Optional[Dict]:
         logger.debug(f"Getting user by short UUID: {short_uuid}")
