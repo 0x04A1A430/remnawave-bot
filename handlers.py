@@ -691,7 +691,7 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
     api = kwargs.get('api')
     
     if not user:
-        await callback.answer("❌ Ошибка пользователя")
+        await callback.answer("⛔ Ошибка пользователя")
         return
     
     try:
@@ -699,17 +699,17 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
         subscription = await db.get_subscription_by_id(sub_id)
         
         if not subscription:
-            await callback.answer("❌ Подписка не найдена")
+            await callback.answer("⛔ Подписка не найдена")
             return
         
         if user.balance < subscription.price:
-            await callback.answer(t('insufficient_balance', user.language))
+            await callback.answer("⛔ Недостаточно средств")
             return
         
         if not api:
             logger.error("API not available in kwargs")
             await callback.message.edit_text(
-                "❌ Временная ошибка сервиса. Попробуйте позже.",
+                "⛔ Временная ошибка сервиса. Попробуйте позже.",
                 reply_markup=main_menu_keyboard(user.language, user.is_admin)
             )
             return
@@ -720,6 +720,7 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
         password = generate_password()
         
         logger.info(f"Creating new RemnaWave user for subscription {subscription.name}")
+        logger.info(f"User details: username={username}, telegram_id={user.telegram_id}")
         
         remna_user = await api.create_user(
             username=username,
@@ -730,53 +731,60 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
             activeInternalSquads=[subscription.squad_uuid]
         )
 
-        if remna_user:
-            if 'data' in remna_user and 'uuid' in remna_user['data']:
-                user_uuid = remna_user['data']['uuid']
-                short_uuid = remna_user['data'].get('shortUuid')
-            elif 'response' in remna_user and 'uuid' in remna_user['response']:
-                user_uuid = remna_user['response']['uuid']
-                short_uuid = remna_user['response'].get('shortUuid')
-            else:
-                logger.error(f"Invalid API response structure: {remna_user}")
-                await callback.message.edit_text(
-                    "❌ Ошибка создания подписки. Средства не списаны.",
-                    reply_markup=main_menu_keyboard(user.language, user.is_admin)
-                )
-                return
-
-            if user_uuid:
-                if not short_uuid:
-                    try:
-                        user_details = await api.get_user_by_uuid(user_uuid)
-                        if user_details and 'shortUuid' in user_details:
-                            short_uuid = user_details['shortUuid']
-                    except Exception as e:
-                        logger.error(f"Failed to get shortUuid: {e}")
-                
-                if not short_uuid:
-                    logger.error(f"Failed to get shortUuid for new user")
-                    await callback.message.edit_text(
-                        "❌ Ошибка получения данных подписки. Средства не списаны.",
-                        reply_markup=main_menu_keyboard(user.language, user.is_admin)
-                    )
-                    return
-                    
-                logger.info(f"Created new user with UUID: {user_uuid}, shortUuid: {short_uuid}")
-            else:
-                logger.error("Failed to create user in RemnaWave")
-                await callback.message.edit_text(
-                    "❌ Ошибка создания подписки. Средства не списаны.",
-                    reply_markup=main_menu_keyboard(user.language, user.is_admin)
-                )
-                return
-        else:
-            logger.error("Failed to create user in RemnaWave API")
+        if not remna_user:
+            logger.error("Failed to create user in RemnaWave API - no response")
             await callback.message.edit_text(
-                "❌ Ошибка создания подписки. Средства не списаны.",
+                "⛔ Ошибка создания подписки. Средства не списаны.",
                 reply_markup=main_menu_keyboard(user.language, user.is_admin)
             )
             return
+
+        logger.info(f"RemnaWave API response: {remna_user}")
+
+        user_uuid = None
+        short_uuid = None
+        
+        if 'data' in remna_user and remna_user['data']:
+            user_uuid = remna_user['data'].get('uuid')
+            short_uuid = remna_user['data'].get('shortUuid')
+        elif 'response' in remna_user and remna_user['response']:
+            user_uuid = remna_user['response'].get('uuid')
+            short_uuid = remna_user['response'].get('shortUuid')
+        else:
+            logger.error(f"Invalid API response structure: {remna_user}")
+            await callback.message.edit_text(
+                "⛔ Ошибка создания подписки. Средства не списаны.",
+                reply_markup=main_menu_keyboard(user.language, user.is_admin)
+            )
+            return
+
+        if not user_uuid:
+            logger.error("Failed to get user UUID from RemnaWave response")
+            await callback.message.edit_text(
+                "⛔ Ошибка получения данных подписки. Средства не списаны.",
+                reply_markup=main_menu_keyboard(user.language, user.is_admin)
+            )
+            return
+
+        if not short_uuid:
+            logger.warning("shortUuid not in response, trying to get it separately")
+            try:
+                user_details = await api.get_user_by_uuid(user_uuid)
+                if user_details and 'shortUuid' in user_details:
+                    short_uuid = user_details['shortUuid']
+                    logger.info(f"Got shortUuid from separate request: {short_uuid}")
+            except Exception as e:
+                logger.error(f"Failed to get shortUuid separately: {e}")
+        
+        if not short_uuid:
+            logger.error(f"Failed to get shortUuid for new user")
+            await callback.message.edit_text(
+                "⛔ Ошибка получения данных подписки. Средства не списаны.",
+                reply_markup=main_menu_keyboard(user.language, user.is_admin)
+            )
+            return
+                
+        logger.info(f"Successfully created user: UUID={user_uuid}, shortUuid={short_uuid}")
 
         user.balance -= subscription.price
         await db.update_user(user)
@@ -802,23 +810,28 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
             status='completed'
         )
         
-        
         success_text = f"✅ Подписка успешно создана!\n\n"
         success_text += f"📋 Подписка: {subscription.name}\n"
         success_text += f"⏰ Действует до: {format_date(expires_at, user.language)}\n"
         success_text += f"💰 Стоимость: {subscription.price} руб.\n"
         success_text += f"💳 Остаток: {user.balance} руб.\n\n"
         
+        subscription_url = None
         try:
             subscription_url = await api.get_subscription_url(short_uuid)
             if subscription_url:
-                success_text += f"🔗 <a href='{subscription_url}'>Нажмите для подключения</a>\n\n"
-                success_text += "📱 Скопируйте ссылку и импортируйте конфигурацию в ваше VPN приложение"
+                logger.info(f"Got subscription URL from API: {subscription_url}")
             else:
-                success_text += "⚠️ Ссылка для подключения будет доступна в разделе 'Мои подписки'"
+                logger.error(f"API returned None for subscription URL")
         except Exception as e:
-            logger.warning(f"Could not get subscription URL: {e}")
-            success_text += "⚠️ Ссылка для подключения будет доступна в разделе 'Мои подписки'"
+            logger.error(f"Error getting subscription URL from API: {e}")
+        
+        if subscription_url:
+            success_text += f"🔗 <a href='{subscription_url}'>Нажмите для подключения</a>\n\n"
+            success_text += "📱 Скопируйте ссылку и импортируйте конфигурацию в ваше VPN приложение"
+        else:
+            success_text += "⚠️ Не удалось получить ссылку подключения из панели.\n"
+            success_text += "Обратитесь в поддержку или попробуйте позже в разделе 'Мои подписки'."
         
         await callback.message.edit_text(
             success_text,
@@ -832,7 +845,7 @@ async def confirm_purchase(callback: CallbackQuery, db: Database, **kwargs):
     except Exception as e:
         logger.error(f"Error purchasing subscription: {e}", exc_info=True)
         await callback.message.edit_text(
-            "❌ Произошла ошибка при создании подписки. Если средства были списаны, обратитесь в поддержку.",
+            "⛔ Произошла ошибка при создании подписки. Если средства были списаны, обратитесь в поддержку.",
             reply_markup=main_menu_keyboard(user.language, user.is_admin)
         )
 
@@ -885,10 +898,10 @@ async def my_subscriptions_callback(callback: CallbackQuery, db: Database, **kwa
                     if subscription_url:
                         text += f"   🔗 <a href='{subscription_url}'>Подключить</a>\n"
                     else:
-                        text += f"   🔗 URL недоступен\n"
+                        text += f"   ⚠️ URL недоступен (ошибка API)\n"
                 except Exception as e:
                     logger.warning(f"Could not get subscription URL for {user_sub.short_uuid}: {e}")
-                    text += f"   🔗 URL недоступен\n"
+                    text += f"   ⚠️ URL недоступен (ошибка API)\n"
             
             text += "\n"
         
@@ -981,8 +994,11 @@ async def view_subscription_detail(callback: CallbackQuery, db: Database, **kwar
                 subscription_url = await api.get_subscription_url(user_sub.short_uuid)
                 if subscription_url:
                     text += f"\n\n🔗 <a href='{subscription_url}'>Ссылка для подключения</a>"
+                else:
+                    text += f"\n\n⚠️ Ссылка для подключения недоступна (ошибка API панели)"
             except Exception as e:
                 logger.warning(f"Could not get subscription URL: {e}")
+                text += f"\n\n⚠️ Ссылка для подключения недоступна (ошибка API панели)"
         
         if is_imported and 0 <= days_until_expiry <= 3:
             text += f"\n\n📅 Истекает через {days_until_expiry} дн.\n"
@@ -1123,53 +1139,15 @@ async def confirm_extend_subscription_callback(callback: CallbackQuery, db: Data
         
         if api and user_sub.short_uuid:
             try:
-                logger.info(f"Updating RemnaWave subscription for shortUuid: {user_sub.short_uuid}")
-                
-                remna_user_details = await api.get_user_by_short_uuid(user_sub.short_uuid)
-                if remna_user_details:
-                    user_uuid = remna_user_details.get('uuid')
-                    if user_uuid:
-                        expiry_str = new_expiry.isoformat() + 'Z'
-                        
-                        update_data = {
-                            'enable': True,
-                            'expireAt': expiry_str
-                        }
-                        
-                        logger.info(f"Updating user {user_uuid} with new expiry: {expiry_str}")
-                        
-                        result = await api.update_user(user_uuid, update_data)
-                        
-                        if not result:
-                            update_data['expiryTime'] = expiry_str
-                            result = await api.update_user(user_uuid, update_data)
-                        
-                        if result:
-                            logger.info(f"Successfully updated RemnaWave user expiry")
-                    
-                            try:
-                                traffic_reset = await api.reset_user_traffic(user_uuid)
-                                if traffic_reset:
-                                    logger.info(f"Successfully reset traffic for user {user_uuid}")
-                                else:
-                                    logger.warning(f"Failed to reset traffic for user {user_uuid}")
-                            except Exception as traffic_error:
-                                logger.error(f"Error resetting traffic for user {user_uuid}: {traffic_error}")
-                            
-                        else:
-                            logger.warning(f"Failed to update user in RemnaWave")
-                            
-                            if hasattr(api, 'update_user_expiry'):
-                                result = await api.update_user_expiry(user_sub.short_uuid, expiry_str)
-                                if result:
-                                    logger.info(f"Successfully updated expiry using update_user_expiry method")
-                    else:
-                        logger.warning(f"Could not get user UUID from RemnaWave response")
+                subscription_url = await api.get_subscription_url(user_sub.short_uuid)
+                if subscription_url:
+                    success_text += f"\n\n🔗 <a href='{subscription_url}'>Обновленная ссылка для подключения</a>"
+                    success_text += f"\n📱 Можете использовать прежнюю конфигурацию или обновить по ссылке"
                 else:
-                    logger.warning(f"Could not find user in RemnaWave with shortUuid: {user_sub.short_uuid}")
-                    
+                    success_text += f"\n\n⚠️ Не удалось получить обновленную ссылку из панели"
             except Exception as e:
-                logger.error(f"Failed to update expiry in RemnaWave: {e}")
+                logger.warning(f"Could not get updated subscription URL: {e}")
+                success_text += f"\n\n⚠️ Не удалось получить обновленную ссылку из панели"
         
         user_sub.expires_at = new_expiry
         user_sub.is_active = True
@@ -1247,13 +1225,21 @@ async def get_connection_callback(callback: CallbackQuery, db: Database, **kwarg
         if api:
             try:
                 connection_url = await api.get_subscription_url(user_sub.short_uuid)
-                logger.info(f"Got subscription URL from API: {connection_url}")
+                if connection_url:
+                    logger.info(f"Got subscription URL from API: {connection_url}")
+                else:
+                    logger.error(f"API returned None for subscription URL")
             except Exception as e:
                 logger.error(f"Failed to get URL from API: {e}")
-        
+
         if not connection_url:
             await callback.message.edit_text(
-                "❌ Не удалось получить ссылку для подключения\n\nПопробуйте позже или обратитесь в поддержку",
+                "⛔ Не удалось получить ссылку для подключения из панели\n\n"
+                "Возможные причины:\n"
+                "• Подписка еще не активирована в системе\n"
+                "• Временная проблема с API панели\n"
+                "• Подписка была удалена\n\n"
+                "Попробуйте позже или обратитесь в поддержку",
                 reply_markup=back_keyboard("my_subscriptions", user.language)
             )
             return
