@@ -62,7 +62,7 @@ class RemnaWaveAPI:
                             logger.error(f"Failed to decode JSON from {url}: {e}")
                             logger.debug(f"Raw response: {response_text[:500]}")
                             return None
-                    return {'success': True}  # Для статуса 204 (No Content)
+                    return {'success': True} 
                 elif response.status == 404:
                     logger.warning(f"API 404 for {endpoint}")
                     return None
@@ -77,9 +77,6 @@ class RemnaWaveAPI:
             return None
 
     async def delete_user(self, uuid: str) -> Optional[Dict]:
-        """
-        Удаляет пользователя по полному UUID
-        """
         try:
             logger.info(f"Deleting user with UUID: {uuid}")
             result = await self._make_request('DELETE', f'/api/users/{uuid}')
@@ -96,13 +93,9 @@ class RemnaWaveAPI:
             return None
 
     async def delete_user_by_short_uuid(self, short_uuid: str) -> Optional[Dict]:
-        """
-        Удаляет пользователя по short_uuid (сначала получает полный UUID, затем удаляет)
-        """
         try:
             logger.info(f"Deleting user by short UUID: {short_uuid}")
             
-            # Сначала получаем полную информацию о пользователе
             user_data = await self.get_user_by_short_uuid(short_uuid)
             
             if not user_data:
@@ -114,7 +107,6 @@ class RemnaWaveAPI:
                 logger.error(f"Could not get full UUID for short_uuid {short_uuid}")
                 return None
             
-            # Удаляем пользователя по полному UUID
             result = await self.delete_user(full_uuid)
             
             if result:
@@ -134,9 +126,6 @@ class RemnaWaveAPI:
             return None
 
     async def bulk_delete_users_by_short_uuids(self, short_uuids: List[str]) -> Dict[str, Any]:
-        """
-        Массовое удаление пользователей по списку short_uuid
-        """
         try:
             logger.info(f"Bulk deleting {len(short_uuids)} users by short UUIDs")
             
@@ -165,7 +154,6 @@ class RemnaWaveAPI:
                         results['errors'].append(f"Failed to delete {short_uuid}")
                         logger.warning(f"Failed to delete user {short_uuid}")
                     
-                    # Небольшая пауза между запросами, чтобы не перегружать API
                     await asyncio.sleep(0.1)
                     
                 except Exception as e:
@@ -237,7 +225,7 @@ class RemnaWaveAPI:
                 if isinstance(response_data, dict):
                     user_data = response_data
                 elif isinstance(response_data, list) and response_data:
-                    user_data = response_data[0]  # Берем первого пользователя
+                    user_data = response_data[0]
             elif 'data' in result:
                 data = result['data']
                 if isinstance(data, dict):
