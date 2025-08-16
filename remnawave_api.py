@@ -300,9 +300,7 @@ class RemnaWaveAPI:
             logger.info(f"Getting subscription info for short_uuid: {short_uuid}")
             
             endpoints_to_try = [
-                f'/api/subscriptions/{short_uuid}',
-                f'/api/sub/{short_uuid}',
-                f'/api/subscription/{short_uuid}'
+                f'/api/sub/{short_uuid}'
             ]
             
             for endpoint in endpoints_to_try:
