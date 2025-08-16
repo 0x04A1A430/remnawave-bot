@@ -20,8 +20,8 @@ class RemnaWaveAPI:
                 'Authorization': f'Bearer {self.token}',
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'X-Forwarded-Proto': 'https',  
-                'X-Forwarded-For': '127.0.0.1' 
+                'X-Forwarded-Proto': 'https',  # ← ДОБАВЬ ЭТО
+                'X-Forwarded-For': '127.0.0.1'  # ← И ЭТО
             }
             timeout = aiohttp.ClientTimeout(total=30)
             self.session = aiohttp.ClientSession(
@@ -62,7 +62,7 @@ class RemnaWaveAPI:
                             logger.error(f"Failed to decode JSON from {url}: {e}")
                             logger.debug(f"Raw response: {response_text[:500]}")
                             return None
-                    return {'success': True} 
+                    return {'success': True}  # Для статуса 204 (No Content)
                 elif response.status == 404:
                     logger.warning(f"API 404 for {endpoint}")
                     return None
@@ -77,6 +77,9 @@ class RemnaWaveAPI:
             return None
 
     async def delete_user(self, uuid: str) -> Optional[Dict]:
+        """
+        Удаляет пользователя по полному UUID
+        """
         try:
             logger.info(f"Deleting user with UUID: {uuid}")
             result = await self._make_request('DELETE', f'/api/users/{uuid}')
@@ -93,9 +96,13 @@ class RemnaWaveAPI:
             return None
 
     async def delete_user_by_short_uuid(self, short_uuid: str) -> Optional[Dict]:
+        """
+        Удаляет пользователя по short_uuid (сначала получает полный UUID, затем удаляет)
+        """
         try:
             logger.info(f"Deleting user by short UUID: {short_uuid}")
             
+            # Сначала получаем полную информацию о пользователе
             user_data = await self.get_user_by_short_uuid(short_uuid)
             
             if not user_data:
@@ -107,6 +114,7 @@ class RemnaWaveAPI:
                 logger.error(f"Could not get full UUID for short_uuid {short_uuid}")
                 return None
             
+            # Удаляем пользователя по полному UUID
             result = await self.delete_user(full_uuid)
             
             if result:
@@ -126,6 +134,9 @@ class RemnaWaveAPI:
             return None
 
     async def bulk_delete_users_by_short_uuids(self, short_uuids: List[str]) -> Dict[str, Any]:
+        """
+        Массовое удаление пользователей по списку short_uuid
+        """
         try:
             logger.info(f"Bulk deleting {len(short_uuids)} users by short UUIDs")
             
@@ -154,6 +165,7 @@ class RemnaWaveAPI:
                         results['errors'].append(f"Failed to delete {short_uuid}")
                         logger.warning(f"Failed to delete user {short_uuid}")
                     
+                    # Небольшая пауза между запросами, чтобы не перегружать API
                     await asyncio.sleep(0.1)
                     
                 except Exception as e:
@@ -225,7 +237,7 @@ class RemnaWaveAPI:
                 if isinstance(response_data, dict):
                     user_data = response_data
                 elif isinstance(response_data, list) and response_data:
-                    user_data = response_data[0]
+                    user_data = response_data[0]  # Берем первого пользователя
             elif 'data' in result:
                 data = result['data']
                 if isinstance(data, dict):
@@ -286,49 +298,57 @@ class RemnaWaveAPI:
     async def get_subscription_info(self, short_uuid: str) -> Optional[Dict]:
         try:
             logger.info(f"Getting subscription info for short_uuid: {short_uuid}")
+        
+            endpoint = f'/api/sub/{short_uuid}'
+            logger.debug(f"Using endpoint: {endpoint}")
+        
+            result = await self._make_request('GET', endpoint)
+        
+            if result:
+                logger.debug(f"Got result from {endpoint}: {result}")
             
-            endpoints_to_try = [
-                f'/api/sub/{short_uuid}'
-            ]
-            
-            for endpoint in endpoints_to_try:
-                logger.debug(f"Trying endpoint: {endpoint}")
-                result = await self._make_request('GET', endpoint)
+                subscription_data = None
                 
-                if result:
-                    logger.info(f"Successfully got subscription info from {endpoint}")
-                    
-                    subscription_data = None
-                    
-                    if 'response' in result:
-                        subscription_data = result['response']
-                    elif 'data' in result:
-                        subscription_data = result['data']
-                    elif 'subscription' in result:
-                        subscription_data = result['subscription']
-                    else:
-                        subscription_data = result
-                    
-                    if subscription_data and (
-                        'subscriptionUrl' in subscription_data or 
-                        'url' in subscription_data or 
-                        'link' in subscription_data
-                    ):
+                if 'response' in result:
+                    subscription_data = result['response']
+                elif 'data' in result:
+                    subscription_data = result['data']
+                elif 'subscription' in result:
+                    subscription_data = result['subscription']
+                else:
+                    subscription_data = result
+            
+                if subscription_data:
+                    subscription_url = (
+                        subscription_data.get('subscriptionUrl') or
+                        subscription_data.get('url') or
+                        subscription_data.get('link') or
+                        subscription_data.get('subscription_url')
+                    )
+                
+                    if subscription_url:
+                        logger.info(f"Successfully got subscription URL from API: {subscription_url}")
                         return subscription_data
-            
-            logger.warning(f"Could not get subscription info for {short_uuid} from any endpoint")
+                    else:
+                        logger.warning(f"Got subscription data but no URL found in response: {list(subscription_data.keys()) if isinstance(subscription_data, dict) else type(subscription_data)}")
+                else:
+                    logger.warning(f"No subscription data in response")
+            else:
+                logger.warning(f"No result from {endpoint}")
+        
+            logger.error(f"Could not get subscription URL from API for {short_uuid}")
             return None
-            
+        
         except Exception as e:
             logger.error(f"Error getting subscription info for {short_uuid}: {e}")
             return None
 
-    async def get_subscription_url(self, short_uuid: str) -> str:
+    async def get_subscription_url(self, short_uuid: str) -> Optional[str]:
         try:
             logger.info(f"Getting subscription URL for short_uuid: {short_uuid}")
-            
+        
             subscription_info = await self.get_subscription_info(short_uuid)
-            
+        
             if subscription_info:
                 subscription_url = (
                     subscription_info.get('subscriptionUrl') or
@@ -336,29 +356,17 @@ class RemnaWaveAPI:
                     subscription_info.get('link') or
                     subscription_info.get('subscription_url')
                 )
-                
+            
                 if subscription_url:
-                    logger.info(f"Got subscription URL from API: {subscription_url}")
+                    logger.info(f"Successfully got subscription URL: {subscription_url}")
                     return subscription_url
+        
+            logger.error(f"Could not get subscription URL from API for {short_uuid}")
+            return None
             
-            user_data = await self.get_user_by_short_uuid(short_uuid)
-            if user_data and 'subscriptionUrl' in user_data:
-                logger.info(f"Got subscription URL from user data: {user_data['subscriptionUrl']}")
-                return user_data['subscriptionUrl']
-            
-            if self.subscription_base_url:
-                fallback_url = f"{self.subscription_base_url.rstrip('/')}/sub/{short_uuid}"
-                logger.warning(f"Using fallback URL: {fallback_url}")
-                return fallback_url
-            else:
-                fallback_url = f"{self.base_url.rstrip('/')}/sub/{short_uuid}"
-                logger.warning(f"Using base_url fallback: {fallback_url}")
-                return fallback_url
-                
         except Exception as e:
             logger.error(f"Failed to get subscription URL for {short_uuid}: {e}")
-            fallback_url = f"{self.base_url.rstrip('/')}/sub/{short_uuid}"
-            return fallback_url
+            return None
 
     async def get_user_by_short_uuid(self, short_uuid: str) -> Optional[Dict]:
         logger.debug(f"Getting user by short UUID: {short_uuid}")
