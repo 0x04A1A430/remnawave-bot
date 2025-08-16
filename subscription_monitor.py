@@ -87,27 +87,33 @@ class SubscriptionMonitorService:
         
     async def _monitor_loop(self):
         logger.info("🔥 Starting monitor loop")
-        
+    
         logger.info("⏰ Initial check in 10 seconds...")
         await asyncio.sleep(10)
-        
+    
         while self.is_running:
             try:
                 logger.info("🔍 Running periodic subscription check...")
+            
+                trial_warnings = await self._check_trial_warnings()
+                
                 warnings_sent = await self._check_expiring_subscriptions()
-                
+            
                 trial_notifications = await self._check_expired_trial_subscriptions()
-                
-                if warnings_sent > 0 or trial_notifications > 0:
-                    logger.info(f"✅ Monitor check completed: {warnings_sent} warnings sent, {trial_notifications} trial notifications sent")
+            
+                total_notifications = trial_warnings + warnings_sent + trial_notifications
+            
+                if total_notifications > 0:
+                    logger.info(f"✅ Monitor check completed: {trial_warnings} trial warnings, "
+                              f"{warnings_sent} expiry warnings, {trial_notifications} trial notifications")
                 else:
-                    logger.info("✅ Monitor check completed: no warnings needed")
-                
+                    logger.info("✅ Monitor check completed: no notifications needed")
+            
                 self.last_check_time = datetime.now()
-                
+            
                 logger.debug(f"😴 Sleeping for {self.config.MONITOR_CHECK_INTERVAL} seconds...")
                 await asyncio.sleep(self.config.MONITOR_CHECK_INTERVAL)
-                
+            
             except asyncio.CancelledError:
                 logger.info("Monitor loop cancelled")
                 break
@@ -913,6 +919,124 @@ class SubscriptionMonitorService:
                 'daily_task': 'running' if daily_running else 'stopped'
             }
         }
+
+    async def _check_trial_warnings(self) -> int:
+        try:
+            if not getattr(self.config, 'TRIAL_WARNING_ENABLED', True):
+                return 0
+            
+            logger.info("⚠️ Checking for trials that will expire soon...")
+        
+            warnings_sent = 0
+            now_utc = datetime.utcnow()
+        
+            hours_before = getattr(self.config, 'TRIAL_WARNING_HOURS_BEFORE', 2)
+            hours_window = getattr(self.config, 'TRIAL_WARNING_HOURS_WINDOW', 6)
+        
+            logger.info(f"🔧 Trial warning settings: hours_before={hours_before}, hours_window={hours_window}")
+        
+            all_users = await self.db.get_all_users()
+        
+            for user in all_users:
+                try:
+                    user_subs = await self.db.get_user_subscriptions(user.telegram_id)
+                
+                    for user_sub in user_subs:
+                        try:
+                            subscription = await self.db.get_subscription_by_id(user_sub.subscription_id)
+                            if not subscription or not subscription.is_trial:
+                                continue
+                        
+                            if not user_sub.is_active:
+                                continue
+                        
+                            expires_at_utc = user_sub.expires_at
+                            if expires_at_utc.tzinfo is None:
+                                expires_at_utc = expires_at_utc.replace(tzinfo=None)
+                            else:
+                                expires_at_utc = expires_at_utc.astimezone(timezone.utc).replace(tzinfo=None)
+                            
+                            time_diff = expires_at_utc - now_utc
+                            hours_until_expiry = time_diff.total_seconds() / 3600
+                        
+                            logger.debug(f"🔍 Trial warning check for '{subscription.name}' (user {user.telegram_id}):")
+                            logger.debug(f"    Expires at: {expires_at_utc}")
+                            logger.debug(f"    Current time: {now_utc}")
+                            logger.debug(f"    Hours until expiry: {hours_until_expiry:.2f}")
+                            logger.debug(f"    Should warn: {hours_before - hours_window/2 <= hours_until_expiry <= hours_before + hours_window/2}")
+                        
+                            warning_start = hours_before - hours_window / 2
+                            warning_end = hours_before + hours_window / 2
+                        
+                            if warning_start <= hours_until_expiry <= warning_end:
+                                logger.info(f"⚠️ Sending trial warning to user {user.telegram_id}: "
+                                          f"trial '{subscription.name}' expires in {hours_until_expiry:.1f} hours")
+                            
+                                try:
+                                    await self._send_trial_warning(user, subscription, hours_until_expiry)
+                                    warnings_sent += 1
+                                    logger.info(f"✅ Trial warning sent to user {user.telegram_id}")
+                                    
+                                except Exception as notification_error:
+                                    logger.error(f"❌ Failed to send trial warning: {notification_error}")
+                    
+                        except Exception as sub_error:
+                            logger.error(f"❌ Error checking trial warning for subscription {user_sub.id}: {sub_error}")
+            
+                except Exception as user_error:
+                    logger.error(f"❌ Error checking trial warnings for user {user.telegram_id}: {user_error}")
+        
+            if warnings_sent > 0:
+                logger.info(f"⚠️ Trial warnings completed: {warnings_sent} warnings sent")
+        
+            return warnings_sent
+    
+        except Exception as e:
+            logger.error(f"❌ Critical error in trial warnings: {e}", exc_info=True)
+            return 0
+
+    async def _send_trial_warning(self, user, subscription, hours_left: float):
+        try:
+            if not self.bot:
+                logger.error("❌ Bot instance is None, cannot send trial warning")
+                return
+    
+            from translations import t
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        
+            hours_int = int(hours_left)
+            if hours_int <= 1:
+                time_text = "менее часа"
+            elif hours_int == 1:
+                time_text = "около часа"
+            else:
+                time_text = f"около {hours_int} часов"
+        
+            message = (
+                f"⚠️ **Ваша триальная подписка скоро истечет!**\n\n"
+                f"📋 Подписка: **{subscription.name}**\n"
+                f"⏰ Осталось: **{time_text}**\n\n"
+                f"🛒 Приобретите полную подписку, чтобы продолжить пользоваться VPN без перерывов!"
+            )
+    
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text="🛒 Купить подписку", 
+                    callback_data="buy_subscription"
+                )],
+                [InlineKeyboardButton(
+                    text="📋 Мои подписки", 
+                    callback_data="my_subscriptions"
+                )]
+            ])
+    
+            await self.bot.send_message(user.telegram_id, message, reply_markup=keyboard, parse_mode='Markdown')
+    
+            logger.info(f"✅ Trial warning sent to user {user.telegram_id} for subscription '{subscription.name}' ({hours_left:.1f} hours left)")
+    
+        except Exception as e:
+            logger.error(f"❌ Error sending trial warning to user {user.telegram_id}: {e}", exc_info=True)
+            raise
 
 async def create_subscription_monitor(bot, db: Database, config, api: RemnaWaveAPI = None) -> SubscriptionMonitorService:
     logger.info("🏭 Creating subscription monitor service...")
