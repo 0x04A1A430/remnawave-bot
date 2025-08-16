@@ -1146,6 +1146,18 @@ async def confirm_extend_subscription_callback(callback: CallbackQuery, db: Data
                         
                         if result:
                             logger.info(f"Successfully updated RemnaWave user expiry")
+                    
+                            try:
+                                traffic_reset = await api.reset_user_traffic(user_uuid)
+                                if traffic_reset:
+                                    logger.info(f"Successfully reset traffic for user {user_uuid}")
+                                else:
+                                    logger.warning(f"Failed to reset traffic for user {user_uuid}")
+                            except Exception as traffic_error:
+                                logger.error(f"Error resetting traffic for user {user_uuid}: {traffic_error}")
+                            
+                        else:
+                            logger.warning(f"Failed to update user in RemnaWave")
                         else:
                             logger.warning(f"Failed to update user in RemnaWave")
                             
