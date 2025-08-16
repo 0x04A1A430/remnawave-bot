@@ -1158,6 +1158,18 @@ async def confirm_extend_subscription_callback(callback: CallbackQuery, db: Data
                     
                         else:
                             logger.warning(f"Failed to update user in RemnaWave")
+                            
+                            if hasattr(api, 'update_user_expiry'):
+                                result = await api.update_user_expiry(user_sub.short_uuid, expiry_str)
+                                if result:
+                                    logger.info(f"Successfully updated expiry using update_user_expiry method")
+                    else:
+                        logger.warning(f"Could not get user UUID from RemnaWave response")
+                else:
+                    logger.warning(f"Could not find user in RemnaWave with shortUuid: {user_sub.short_uuid}")
+                    
+            except Exception as e:
+                logger.error(f"Failed to update expiry in RemnaWave: {e}")
         
         user_sub.expires_at = new_expiry
         user_sub.is_active = True
