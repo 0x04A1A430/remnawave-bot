@@ -219,27 +219,44 @@ class SubscriptionMonitorService:
             if not self.bot:
                 logger.error("❌ Bot instance is None, cannot send trial notification")
                 return
-            
+        
             from translations import t
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        
+            try:
+                available_subscriptions = await self.db.get_all_subscriptions(exclude_trial=True, exclude_imported=True)
+                min_price = None
             
+                if available_subscriptions:
+                    active_subs = [sub for sub in available_subscriptions if sub.is_active and sub.price > 0]
+                    if active_subs:
+                        min_price = min(sub.price for sub in active_subs)
+            except Exception as e:
+                logger.error(f"Error getting subscription prices: {e}")
+                min_price = None
+        
             message = t('trial_subscription_expired', user.language, name=subscription.name)
-            
+        
+            if min_price:
+                buy_button_text = f"🛒 Купить от {min_price:.0f}₽"
+            else:
+                buy_button_text = "🛒 Купить подписку"
+        
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
-                    text=t('buy_subscription_btn', user.language), 
+                    text=buy_button_text, 
                     callback_data="buy_subscription"
                 )],
                 [InlineKeyboardButton(
-                    text=t('my_subscriptions_btn', user.language), 
+                    text="📋 Мои подписки", 
                     callback_data="my_subscriptions"
                 )]
             ])
-            
-            await self.bot.send_message(user.telegram_id, message, reply_markup=keyboard)
-            
-            logger.info(f"✅ Trial expiry notification sent to user {user.telegram_id} for subscription '{subscription.name}'")
         
+            await self.bot.send_message(user.telegram_id, message, reply_markup=keyboard)
+        
+            logger.info(f"✅ Trial expiry notification sent to user {user.telegram_id} for subscription '{subscription.name}'")
+    
         except Exception as e:
             logger.error(f"❌ Error sending trial expiry notification to user {user.telegram_id}: {e}", exc_info=True)
             raise
@@ -1000,10 +1017,22 @@ class SubscriptionMonitorService:
             if not self.bot:
                 logger.error("❌ Bot instance is None, cannot send trial warning")
                 return
-    
+
             from translations import t
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
+    
+            try:
+                available_subscriptions = await self.db.get_all_subscriptions(exclude_trial=True, exclude_imported=True)
+                min_price = None
+            
+                if available_subscriptions:
+                    active_subs = [sub for sub in available_subscriptions if sub.is_active and sub.price > 0]
+                    if active_subs:
+                        min_price = min(sub.price for sub in active_subs)
+            except Exception as e:
+                logger.error(f"Error getting subscription prices: {e}")
+                min_price = None
+    
             hours_int = int(hours_left)
             if hours_int <= 1:
                 time_text = "менее часа"
@@ -1011,17 +1040,22 @@ class SubscriptionMonitorService:
                 time_text = "около часа"
             else:
                 time_text = f"около {hours_int} часов"
-        
+    
             message = (
                 f"⚠️ **Ваша триальная подписка скоро истечет!**\n\n"
                 f"📋 Подписка: **{subscription.name}**\n"
                 f"⏰ Осталось: **{time_text}**\n\n"
                 f"🛒 Приобретите полную подписку, чтобы продолжить пользоваться VPN без перерывов!"
             )
-    
+
+            if min_price:
+                buy_button_text = f"🛒 Купить от {min_price:.0f}₽"
+            else:
+                buy_button_text = "🛒 Купить подписку"
+
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
-                    text="🛒 Купить подписку", 
+                    text=buy_button_text, 
                     callback_data="buy_subscription"
                 )],
                 [InlineKeyboardButton(
@@ -1029,11 +1063,11 @@ class SubscriptionMonitorService:
                     callback_data="my_subscriptions"
                 )]
             ])
-    
+
             await self.bot.send_message(user.telegram_id, message, reply_markup=keyboard, parse_mode='Markdown')
-    
+
             logger.info(f"✅ Trial warning sent to user {user.telegram_id} for subscription '{subscription.name}' ({hours_left:.1f} hours left)")
-    
+
         except Exception as e:
             logger.error(f"❌ Error sending trial warning to user {user.telegram_id}: {e}", exc_info=True)
             raise
