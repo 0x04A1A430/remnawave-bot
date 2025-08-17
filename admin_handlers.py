@@ -811,37 +811,7 @@ async def list_users_callback(callback: CallbackQuery, user: User, db: Database,
     if not await check_admin_access(callback, user):
         return
     
-    try:
-        users = await db.get_all_users()
-        
-        if not users:
-            await callback.message.edit_text(
-                "❌ Пользователи не найдены",
-                reply_markup=back_keyboard("admin_users", user.language)
-            )
-            return
-        
-        text = t('user_list', user.language) + "\n\n"
-        
-        for u in users[:20]:
-            username = u.username or "N/A"
-            text += t('user_item', user.language,
-                id=u.telegram_id,
-                username=username,
-                balance=u.balance
-            ) + "\n"
-        
-        if len(users) > 20:
-            text += f"\n... и еще {len(users) - 20} пользователей"
-        
-        await callback.message.edit_text(
-            text,
-            reply_markup=back_keyboard("admin_users", user.language)
-        )
-        
-    except Exception as e:
-        logger.error(f"Error listing users: {e}")
-        await callback.answer(t('error_occurred', user.language))
+    await show_users_page(callback, user, db, page=0)
 
 @admin_router.callback_query(F.data == "admin_balance")
 async def admin_balance_callback(callback: CallbackQuery, user: User, **kwargs):
@@ -3852,16 +3822,162 @@ def create_users_pagination_keyboard(current_page: int, total_pages: int, langua
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 @admin_router.callback_query(F.data.startswith("users_page_"))
-async def users_page_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, state: FSMContext = None, **kwargs):
+async def users_page_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
     if not await check_admin_access(callback, user):
         return
     
     try:
         page = int(callback.data.split("_")[-1])
-        await show_system_users_list_paginated(callback, user, api, state, page)
+        await show_users_page(callback, user, db, page=page)
+    except (ValueError, IndexError) as e:
+        logger.error(f"Error parsing page number: {e}")
+        await callback.answer("❌ Ошибка навигации")
+
+async def show_users_page(callback: CallbackQuery, user: User, db: Database, page: int = 0):
+    try:
+        page_size = 8 
+        offset = page * page_size
+        
+        users, total_count = await db.get_users_paginated(offset=offset, limit=page_size)
+        
+        if not users and page == 0:
+            await callback.message.edit_text(
+                "❌ **Пользователи не найдены**",
+                reply_markup=back_keyboard("admin_users", user.language),
+                parse_mode='Markdown'
+            )
+            return
+        
+        if not users and page > 0:
+            # Если страница пуста, переходим на предыдущую
+            await show_users_page(callback, user, db, page - 1)
+            return
+        
+        total_pages = (total_count + page_size - 1) // page_size
+        current_time = datetime.now().strftime("%H:%M:%S")
+        
+        text = f"👥 **Управление пользователями**\n"
+        text += f"📊 Всего: **{total_count}** | Страница: **{page + 1}/{total_pages}**\n\n"
+        
+        for i, u in enumerate(users, 1):
+            status_emoji, status_text = format_user_status(u)
+            
+            display_name = truncate_text(u.first_name, 15)
+            username_display = f"@{u.username}" if u.username else "без @"
+            username_display = truncate_text(username_display, 18)
+            
+            text += f"**{offset + i}.** {status_emoji} **{display_name}**\n"
+            text += f"   └ {username_display} • ID: `{u.telegram_id}`\n"
+            
+            if u.is_admin:
+                text += f"   └ Статус: **{status_text}**\n\n"
+            else:
+                text += f"   └ Баланс: **{u.balance:.0f}₽**\n\n"
+        
+        text += f"🕐 _Обновлено: {current_time}_"
+        
+        keyboard = create_users_management_keyboard(
+            users, page, total_pages, offset, user.language
+        )
+        
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=keyboard,
+                parse_mode='Markdown'
+            )
+        except Exception as edit_error:
+            if "message is not modified" in str(edit_error).lower():
+                await callback.answer("✅ Список актуален", show_alert=False)
+            else:
+                logger.error(f"Error editing users message: {edit_error}")
+                await callback.answer("❌ Ошибка обновления", show_alert=True)
+        
     except Exception as e:
-        logger.error(f"Error in pagination: {e}")
-        await callback.answer("❌ Ошибка навигации", show_alert=True)
+        logger.error(f"Error showing users page: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка загрузки списка пользователей",
+            reply_markup=back_keyboard("admin_users", user.language)
+        )
+
+def create_users_management_keyboard(users: List[User], page: int, total_pages: int, 
+                                   offset: int, language: str = 'ru') -> InlineKeyboardMarkup:
+    buttons = []
+    
+    for i, u in enumerate(users):
+        user_index = offset + i + 1
+        display_name = u.first_name[:8] if u.first_name else f"ID{u.telegram_id}"
+        if len(display_name) > 8:
+            display_name = display_name[:8]
+        
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"👤 {user_index}. {display_name}",
+                callback_data=f"user_detail_{u.telegram_id}"
+            )
+        ])
+        
+        action_buttons = [
+            InlineKeyboardButton(text="💰", callback_data=f"user_balance_{u.telegram_id}"),
+            InlineKeyboardButton(text="📋", callback_data=f"user_subs_{u.telegram_id}"),
+            InlineKeyboardButton(text="✉️", callback_data=f"user_message_{u.telegram_id}"),
+        ]
+        
+        if not u.is_admin:
+            action_buttons.append(
+                InlineKeyboardButton(text="🔧", callback_data=f"user_manage_{u.telegram_id}")
+            )
+        
+        buttons.append(action_buttons)
+    
+    if users:
+        buttons.append([
+            InlineKeyboardButton(text="━━━━━━━━━━━━━━━━━━━━", callback_data="noop")
+        ])
+    
+    if total_pages > 1:
+        nav_buttons = []
+        
+        if page > 0:
+            nav_buttons.append(
+                InlineKeyboardButton(text="⏪", callback_data="users_page_0")
+            )
+        
+        if page > 0:
+            nav_buttons.append(
+                InlineKeyboardButton(text="◀️", callback_data=f"users_page_{page - 1}")
+            )
+        
+        nav_buttons.append(
+            InlineKeyboardButton(text=f"📄 {page + 1}/{total_pages}", callback_data="noop")
+        )
+        
+        if page < total_pages - 1:
+            nav_buttons.append(
+                InlineKeyboardButton(text="▶️", callback_data=f"users_page_{page + 1}")
+            )
+        
+        if page < total_pages - 1:
+            nav_buttons.append(
+                InlineKeyboardButton(text="⏩", callback_data=f"users_page_{total_pages - 1}")
+            )
+        
+        buttons.append(nav_buttons)
+    
+    buttons.extend([
+        [
+            InlineKeyboardButton(text="🔍 Поиск", callback_data="search_user"),
+            InlineKeyboardButton(text="📊 Статистика", callback_data="users_stats"),
+            InlineKeyboardButton(text="🔄 Обновить", callback_data=f"users_page_{page}")
+        ],
+        [
+            InlineKeyboardButton(text="📋 Все подписки", callback_data="admin_user_subscriptions_all"),
+            InlineKeyboardButton(text="💰 Управление балансом", callback_data="admin_balance")
+        ],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_users")]
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 @admin_router.callback_query(F.data.startswith("refresh_system_users_"))
 async def refresh_system_users_callback(callback: CallbackQuery, user: User, api: RemnaWaveAPI = None, **kwargs):
@@ -3980,168 +4096,389 @@ async def users_statistics_callback(callback: CallbackQuery, user: User, api: Re
             reply_markup=system_users_keyboard(user.language)
         )
 
-@admin_router.callback_query(F.data == "search_user_uuid")
+@admin_router.callback_query(F.data == "search_user")
 async def search_user_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
     if not await check_admin_access(callback, user):
         return
     
     await callback.message.edit_text(
-        "🔍 Поиск пользователя\n\n"
-        "Вы можете искать по:\n"
-        "• UUID (полный)\n"
-        "• Short UUID\n"
-        "• Telegram ID\n"
-        "• Username\n"
-        "• Email\n\n"
-        "📝 Введите любой идентификатор:",
-        reply_markup=cancel_keyboard(user.language)
+        "🔍 **Поиск пользователей**\n\n"
+        "Введите для поиска:\n"
+        "• Имя пользователя\n"
+        "• Username (без @)\n"
+        "• Telegram ID\n\n"
+        "📝 Напишите запрос:",
+        reply_markup=cancel_keyboard(user.language),
+        parse_mode='Markdown'
     )
-    await state.set_state(BotStates.admin_search_user_any)
+    await state.set_state(BotStates.admin_search_user)
 
-@admin_router.message(StateFilter(BotStates.admin_search_user_any))
-async def handle_search_user_any(message: Message, state: FSMContext, user: User, api: RemnaWaveAPI = None, db: Database = None, **kwargs):
-    search_input = message.text.strip()
+@admin_router.message(StateFilter(BotStates.admin_search_user))
+async def handle_user_search(message: Message, state: FSMContext, user: User, db: Database, **kwargs):
+    search_query = message.text.strip()
     
-    if not api:
-        await message.answer(
-            "❌ API недоступен",
-            reply_markup=system_users_keyboard(user.language)
-        )
-        await state.clear()
+    if len(search_query) < 2:
+        await message.answer("❌ Запрос должен содержать минимум 2 символа")
         return
     
     try:
-        search_msg = await message.answer("🔍 Поиск пользователя...")
-        user_data = None
-        search_method = None
+        users, total_count = await db.get_users_paginated(
+            offset=0, limit=10, search_query=search_query
+        )
         
-        if validate_squad_uuid(search_input):
-            user_data = await api.get_user_by_uuid(search_input)
-            search_method = "UUID"
-        
-        if not user_data:
-            try:
-                telegram_id = int(search_input)
-                user_data = await api.get_user_by_telegram_id(telegram_id)
-                search_method = "Telegram ID"
-            except ValueError:
-                pass
-        
-        if not user_data:
-            user_data = await api.get_user_by_short_uuid(search_input)
-            search_method = "Short UUID"
-        
-        if not user_data:
-            user_data = await api.get_user_by_username(search_input)
-            search_method = "Username"
-        
-        if not user_data and '@' in search_input:
-            user_data = await api.get_user_by_email(search_input)
-            search_method = "Email"
-        
-        if not user_data:
-            await search_msg.edit_text(
-                f"❌ Пользователь не найден\n\n"
-                f"Искомое значение: `{search_input}`\n\n"
-                f"Проверены методы поиска:\n"
-                f"• UUID\n"
-                f"• Short UUID\n"
-                f"• Telegram ID\n"
-                f"• Username\n"
-                f"• Email\n\n"
-                f"Проверьте правильность ввода и попробуйте снова",
-                reply_markup=system_users_keyboard(user.language),
+        if not users:
+            await message.answer(
+                f"❌ По запросу **'{search_query}'** пользователи не найдены",
+                reply_markup=admin_menu_keyboard(user.language),
                 parse_mode='Markdown'
             )
             await state.clear()
             return
         
-        local_user = None
-        if user_data.get('telegramId') and db:
-            local_user = await db.get_user_by_telegram_id(user_data['telegramId'])
+        text = f"🔍 **Результаты поиска: '{search_query}'**\n"
+        text += f"📊 Найдено: **{total_count}** пользователей\n\n"
         
-        text = f"👤 Информация о пользователе\n"
-        text += f"🔍 Найден по: {search_method}\n\n"
-        
-        text += f"📛 Username: `{user_data.get('username', 'N/A')}`\n"
-        text += f"🆔 UUID: `{user_data.get('uuid', 'N/A')}`\n"
-        text += f"🔗 Short UUID: `{user_data.get('shortUuid', 'N/A')}`\n"
-        
-        if user_data.get('telegramId'):
-            text += f"📱 Telegram ID: `{user_data.get('telegramId')}`\n"
-            if local_user:
-                text += f"💰 Баланс в боте: {local_user.balance} руб.\n"
-        
-        if user_data.get('email'):
-            text += f"📧 Email: {user_data.get('email')}\n"
-        
-        status = user_data.get('status', 'UNKNOWN')
-        status_emoji = "✅" if status == 'ACTIVE' else "❌"
-        text += f"\n🔘 Статус: {status_emoji} {status}\n"
-        
-        if user_data.get('expireAt'):
-            expire_date = user_data['expireAt']
-            text += f"⏰ Истекает: {expire_date[:10]}\n"
+        for i, u in enumerate(users, 1):
+            status_emoji, status_text = format_user_status(u)
+            display_name = truncate_text(u.first_name, 20)
+            username_display = f"@{u.username}" if u.username else "без @"
             
-            try:
-                expire_dt = datetime.fromisoformat(expire_date.replace('Z', '+00:00'))
-                days_left = (expire_dt - datetime.now()).days
-                if days_left > 0:
-                    text += f"📅 Осталось дней: {days_left}\n"
-                else:
-                    text += f"❌ Подписка истекла\n"
-            except:
-                pass
+            text += f"**{i}.** {status_emoji} **{display_name}**\n"
+            text += f"   └ {username_display} • ID: `{u.telegram_id}`\n"
+            
+            if u.is_admin:
+                text += f"   └ Статус: **{status_text}**\n\n"
+            else:
+                text += f"   └ Баланс: **{u.balance:.0f}₽**\n\n"
         
-        traffic_limit = user_data.get('trafficLimitBytes', 0)
-        used_traffic = user_data.get('usedTrafficBytes', 0)
+        if total_count > 10:
+            text += f"_... и еще {total_count - 10} пользователей_\n\n"
         
-        if traffic_limit > 0:
-            text += f"\n📊 Лимит трафика: {format_bytes(traffic_limit)}\n"
-            text += f"📈 Использовано: {format_bytes(used_traffic)}\n"
-            usage_percent = (used_traffic / traffic_limit) * 100
-            text += f"📉 Использовано: {usage_percent:.1f}%\n"
-        else:
-            text += f"\n📊 Лимит трафика: Безлимитный\n"
-            text += f"📈 Использовано: {format_bytes(used_traffic)}\n"
+        text += "💡 Нажмите на номер пользователя для подробной информации"
         
-        keyboard = create_user_management_keyboard(user_data.get('uuid'), user_data.get('status'), user.language)
+        keyboard = create_search_results_keyboard(users, user.language)
         
-        await search_msg.edit_text(text, reply_markup=keyboard)
+        await message.answer(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
         
     except Exception as e:
-        logger.error(f"Error searching user: {e}")
+        logger.error(f"Error searching users: {e}")
+        await message.answer(
+            "❌ Ошибка при поиске пользователей",
+            reply_markup=admin_menu_keyboard(user.language)
+        )
+    
+    await state.clear()
 
-def create_user_management_keyboard(user_uuid: str, status: str, language: str = 'ru') -> InlineKeyboardMarkup:
+def create_search_results_keyboard(users: List[User], language: str = 'ru') -> InlineKeyboardMarkup:
     buttons = []
     
-    if status == 'ACTIVE':
+    for i, u in enumerate(users, 1):
+        display_name = truncate_text(u.first_name, 15)
+        status_emoji, _ = format_user_status(u)
+        
         buttons.append([
-            InlineKeyboardButton(text="❌ Отключить", callback_data=f"disable_user_{user_uuid}"),
-            InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data=f"reset_user_traffic_{user_uuid}")
-        ])
-    else:
-        buttons.append([
-            InlineKeyboardButton(text="✅ Включить", callback_data=f"enable_user_{user_uuid}"),
-            InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data=f"reset_user_traffic_{user_uuid}")
+            InlineKeyboardButton(
+                text=f"{status_emoji} {i}. {display_name}",
+                callback_data=f"user_detail_{u.telegram_id}"
+            )
         ])
     
-    buttons.append([
-        InlineKeyboardButton(text="📅 Изменить срок", callback_data=f"edit_user_expiry_{user_uuid}"),
-        InlineKeyboardButton(text="📊 Изменить трафик", callback_data=f"edit_user_traffic_{user_uuid}")
-    ])
-    
-    buttons.append([
-        InlineKeyboardButton(text="📈 Статистика", callback_data=f"user_usage_stats_{user_uuid}"),
-        InlineKeyboardButton(text="🔄 Обновить", callback_data=f"refresh_user_{user_uuid}")
-    ])
-    
-    buttons.append([
-        InlineKeyboardButton(text="🔍 Новый поиск", callback_data="search_user_uuid"),
-        InlineKeyboardButton(text="🔙 Назад", callback_data="system_users")
+    buttons.extend([
+        [InlineKeyboardButton(text="🔍 Новый поиск", callback_data="search_user")],
+        [InlineKeyboardButton(text="📋 Все пользователи", callback_data="list_users")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_users")]
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+@admin_router.callback_query(F.data == "users_stats")
+async def users_stats_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        # Получаем расширенную статистику
+        stats = await get_extended_user_stats(db)
+        
+        text = f"📊 **Статистика пользователей**\n\n"
+        
+        text += f"**Общие показатели:**\n"
+        text += f"• Всего пользователей: **{stats['total_users']}**\n"
+        text += f"• Администраторов: **{stats['admin_count']}**\n"
+        text += f"• Обычных пользователей: **{stats['regular_count']}**\n\n"
+        
+        text += f"**По балансу:**\n"
+        text += f"• С нулевым балансом: **{stats['zero_balance']}**\n"
+        text += f"• С балансом 1-100₽: **{stats['low_balance']}**\n"
+        text += f"• С балансом 101-1000₽: **{stats['medium_balance']}**\n"
+        text += f"• С балансом >1000₽: **{stats['high_balance']}**\n\n"
+        
+        text += f"**Активность:**\n"
+        text += f"• Использовали триал: **{stats['trial_used']}**\n"
+        text += f"• С активными подписками: **{stats['active_subscriptions']}**\n"
+        text += f"• Общий баланс всех: **{stats['total_balance']:.2f}₽**\n\n"
+        
+        text += f"**Регистрации:**\n"
+        text += f"• За сегодня: **{stats['registered_today']}**\n"
+        text += f"• За неделю: **{stats['registered_week']}**\n"
+        text += f"• За месяц: **{stats['registered_month']}**\n\n"
+        
+        text += f"🕐 _Обновлено: {datetime.now().strftime('%H:%M:%S')}_"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Обновить", callback_data="users_stats")],
+            [InlineKeyboardButton(text="📋 Список пользователей", callback_data="list_users")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_users")]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting user stats: {e}")
+        await callback.answer("❌ Ошибка получения статистики", show_alert=True)
+
+async def get_extended_user_stats(db: Database) -> dict:
+    async with db.session_factory() as session:
+        try:
+            from sqlalchemy import select, func, and_
+            from datetime import datetime, timedelta
+            
+            total_users = await session.execute(select(func.count(User.id)))
+            total_users = total_users.scalar() or 0
+            
+            admin_count = await session.execute(
+                select(func.count(User.id)).where(User.is_admin == True)
+            )
+            admin_count = admin_count.scalar() or 0
+            
+            zero_balance = await session.execute(
+                select(func.count(User.id)).where(User.balance == 0)
+            )
+            zero_balance = zero_balance.scalar() or 0
+            
+            low_balance = await session.execute(
+                select(func.count(User.id)).where(
+                    and_(User.balance > 0, User.balance <= 100)
+                )
+            )
+            low_balance = low_balance.scalar() or 0
+            
+            medium_balance = await session.execute(
+                select(func.count(User.id)).where(
+                    and_(User.balance > 100, User.balance <= 1000)
+                )
+            )
+            medium_balance = medium_balance.scalar() or 0
+            
+            high_balance = await session.execute(
+                select(func.count(User.id)).where(User.balance > 1000)
+            )
+            high_balance = high_balance.scalar() or 0
+            
+            total_balance = await session.execute(select(func.sum(User.balance)))
+            total_balance = total_balance.scalar() or 0.0
+            
+            trial_used = await session.execute(
+                select(func.count(User.id)).where(User.is_trial_used == True)
+            )
+            trial_used = trial_used.scalar() or 0
+            
+            active_subs = await session.execute(
+                select(func.count(func.distinct(UserSubscription.user_id)))
+                .where(
+                    and_(
+                        UserSubscription.is_active == True,
+                        UserSubscription.expires_at > datetime.utcnow()
+                    )
+                )
+            )
+            active_subs = active_subs.scalar() or 0
+            
+            today = datetime.now().date()
+            week_ago = today - timedelta(days=7)
+            month_ago = today - timedelta(days=30)
+            
+            registered_today = await session.execute(
+                select(func.count(User.id)).where(
+                    func.date(User.created_at) == today
+                )
+            )
+            registered_today = registered_today.scalar() or 0
+            
+            registered_week = await session.execute(
+                select(func.count(User.id)).where(
+                    User.created_at >= week_ago
+                )
+            )
+            registered_week = registered_week.scalar() or 0
+            
+            registered_month = await session.execute(
+                select(func.count(User.id)).where(
+                    User.created_at >= month_ago
+                )
+            )
+            registered_month = registered_month.scalar() or 0
+            
+            return {
+                'total_users': total_users,
+                'admin_count': admin_count,
+                'regular_count': total_users - admin_count,
+                'zero_balance': zero_balance,
+                'low_balance': low_balance,
+                'medium_balance': medium_balance,
+                'high_balance': high_balance,
+                'total_balance': total_balance,
+                'trial_used': trial_used,
+                'active_subscriptions': active_subs,
+                'registered_today': registered_today,
+                'registered_week': registered_week,
+                'registered_month': registered_month
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting extended user stats: {e}")
+            return {
+                'total_users': 0, 'admin_count': 0, 'regular_count': 0,
+                'zero_balance': 0, 'low_balance': 0, 'medium_balance': 0, 'high_balance': 0,
+                'total_balance': 0.0, 'trial_used': 0, 'active_subscriptions': 0,
+                'registered_today': 0, 'registered_week': 0, 'registered_month': 0
+            }
+
+@admin_router.callback_query(F.data.startswith("user_balance_"))
+async def user_balance_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        user_id = int(callback.data.split("_")[2])
+        target_user = await db.get_user_by_telegram_id(user_id)
+        
+        if not target_user:
+            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            return
+        
+        payments = await db.get_user_payments(user_id)
+        recent_payments = payments[:5] if payments else []
+        
+        text = f"💰 **Управление балансом пользователя**\n\n"
+        text += f"👤 **{target_user.first_name or 'Без имени'}**\n"
+        text += f"@{target_user.username or 'без username'} • ID: `{target_user.telegram_id}`\n\n"
+        
+        text += f"💳 **Текущий баланс: {target_user.balance:.2f}₽**\n\n"
+        
+        if recent_payments:
+            text += f"📊 **Последние операции:**\n"
+            for payment in recent_payments:
+                status_emoji = "✅" if payment.status == 'completed' else "⏳" if payment.status == 'pending' else "❌"
+                date_str = format_datetime(payment.created_at, user.language)
+                amount_str = f"+{payment.amount}" if payment.amount > 0 else str(payment.amount)
+                text += f"{status_emoji} {amount_str}₽ • {date_str}\n"
+            text += "\n"
+        else:
+            text += f"📊 История платежей пуста\n\n"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="💸 Добавить баланс", callback_data=f"admin_add_balance_to_{user_id}"),
+                InlineKeyboardButton(text="💳 Списать баланс", callback_data=f"admin_subtract_balance_{user_id}")
+            ],
+            [
+                InlineKeyboardButton(text="📊 Вся история", callback_data=f"user_payments_{user_id}"),
+                InlineKeyboardButton(text="🔄 Обновить", callback_data=f"user_balance_{user_id}")
+            ],
+            [InlineKeyboardButton(text="🔙 К пользователю", callback_data=f"user_detail_{user_id}")]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing user balance: {e}")
+        await callback.answer("❌ Ошибка загрузки баланса", show_alert=True)
+
+@admin_router.callback_query(F.data.startswith("user_subs_"))
+async def user_subs_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        user_id = int(callback.data.split("_")[2])
+        target_user = await db.get_user_by_telegram_id(user_id)
+        
+        if not target_user:
+            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            return
+        
+        # Получаем подписки пользователя
+        user_subs = await db.get_user_subscriptions(user_id)
+        
+        text = f"📋 **Подписки пользователя**\n\n"
+        text += f"👤 **{target_user.first_name or 'Без имени'}**\n"
+        text += f"@{target_user.username or 'без username'} • ID: `{target_user.telegram_id}`\n\n"
+        
+        if user_subs:
+            active_count = 0
+            expired_count = 0
+            current_time = datetime.utcnow()
+            
+            text += f"📊 **Всего подписок: {len(user_subs)}**\n\n"
+            
+            for i, sub in enumerate(user_subs, 1):
+                # Получаем информацию о тарифе
+                subscription = await db.get_subscription_by_id(sub.subscription_id)
+                sub_name = subscription.name if subscription else "Неизвестный тариф"
+                
+                # Определяем статус
+                if sub.is_active and sub.expires_at > current_time:
+                    status_emoji = "🟢"
+                    status_text = "Активна"
+                    active_count += 1
+                    days_left = (sub.expires_at - current_time).days
+                    status_text += f" ({days_left}д)"
+                else:
+                    status_emoji = "🔴" 
+                    status_text = "Истекла"
+                    expired_count += 1
+                
+                text += f"**{i}.** {status_emoji} **{sub_name}**\n"
+                text += f"   └ {status_text}\n"
+                text += f"   └ До: {format_datetime(sub.expires_at, user.language)}\n\n"
+            
+            text += f"📈 Активных: **{active_count}** • Истекших: **{expired_count}**\n"
+        else:
+            text += f"❌ У пользователя нет подписок\n"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🛒 Создать подписку", callback_data=f"admin_create_user_sub_{user_id}"),
+                InlineKeyboardButton(text="📋 Все подписки", callback_data="admin_user_subscriptions_all")
+            ],
+            [
+                InlineKeyboardButton(text="🔄 Обновить", callback_data=f"user_subs_{user_id}"),
+                InlineKeyboardButton(text="🔙 К пользователю", callback_data=f"user_detail_{user_id}")
+            ]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing user subscriptions: {e}")
+        await callback.answer("❌ Ошибка загрузки подписок", show_alert=True)
 
 @admin_router.callback_query(F.data.startswith("edit_user_expiry_"))
 async def edit_user_expiry_callback(callback: CallbackQuery, user: User, state: FSMContext, **kwargs):
@@ -7861,6 +8198,77 @@ async def autopay_subscriptions_list_callback(callback: CallbackQuery, user: Use
             reply_markup=back_keyboard("admin_autopay", user.language)
         )
 
+@admin_router.callback_query(F.data.startswith("user_detail_"))
+async def user_detail_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        user_id = int(callback.data.split("_")[2])
+        target_user = await db.get_user_by_telegram_id(user_id)
+        
+        if not target_user:
+            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            return
+        
+        user_subs = await db.get_user_subscriptions(user_id)
+        user_payments = await db.get_user_payments(user_id)
+        
+        active_subs = [s for s in user_subs if s.is_active and s.expires_at > datetime.utcnow()]
+        total_spent = sum(p.amount for p in user_payments if p.status == 'completed')
+        
+        text = f"👤 **Детальная информация о пользователе**\n\n"
+        text += f"**Основная информация:**\n"
+        text += f"• Имя: {target_user.first_name or 'Не указано'}\n"
+        text += f"• Username: @{target_user.username or 'отсутствует'}\n"
+        text += f"• ID: `{target_user.telegram_id}`\n"
+        text += f"• Статус: {'👑 Администратор' if target_user.is_admin else '👤 Пользователь'}\n"
+        text += f"• Язык: {target_user.language.upper() if target_user.language else 'RU'}\n\n"
+        
+        text += f"**Финансы:**\n"
+        text += f"• Текущий баланс: **{target_user.balance:.2f}₽**\n"
+        text += f"• Всего потрачено: **{total_spent:.2f}₽**\n"
+        text += f"• Количество платежей: {len(user_payments)}\n\n"
+        
+        text += f"**Подписки:**\n"
+        text += f"• Всего подписок: {len(user_subs)}\n"
+        text += f"• Активных: {len(active_subs)}\n"
+        text += f"• Использовал триал: {'✅' if target_user.is_trial_used else '❌'}\n\n"
+        
+        text += f"**Даты:**\n"
+        text += f"• Регистрация: {format_datetime(target_user.created_at, user.language)}\n"
+        
+        keyboard = create_user_detail_keyboard(user_id, user.language)
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error showing user detail: {e}")
+        await callback.answer("❌ Ошибка загрузки данных пользователя", show_alert=True)
+
+def create_user_detail_keyboard(user_id: int, language: str = 'ru') -> InlineKeyboardMarkup:
+    buttons = [
+        [
+            InlineKeyboardButton(text="💰 Управление балансом", callback_data=f"user_balance_{user_id}"),
+            InlineKeyboardButton(text="📋 Подписки", callback_data=f"user_subs_{user_id}")
+        ],
+        [
+            InlineKeyboardButton(text="💳 История платежей", callback_data=f"user_payments_{user_id}"),
+            InlineKeyboardButton(text="✉️ Отправить сообщение", callback_data=f"user_message_{user_id}")
+        ],
+        [
+            InlineKeyboardButton(text="🔧 Управление", callback_data=f"user_manage_{user_id}"),
+            InlineKeyboardButton(text="🔄 Обновить", callback_data=f"user_detail_{user_id}")
+        ],
+        [InlineKeyboardButton(text="🔙 К списку пользователей", callback_data="list_users")]
+    ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
 @admin_router.callback_query(F.data.startswith("autopay_user_detail_"))
 async def autopay_user_detail_callback(callback: CallbackQuery, user: User, **kwargs):
     if not await check_admin_access(callback, user):
@@ -7979,6 +8387,174 @@ async def admin_user_subscriptions_filters_callback(callback: CallbackQuery, use
     except Exception as e:
         logger.error(f"Error showing subscriptions filters: {e}")
         await callback.answer("❌ Ошибка загрузки фильтров", show_alert=True)
+
+@admin_router.callback_query(F.data.startswith("quick_add_balance_"))
+async def quick_add_balance_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    """Быстрое добавление баланса пользователю"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        parts = callback.data.split("_")
+        user_id = int(parts[3])
+        amount = float(parts[4])
+        
+        target_user = await db.get_user_by_telegram_id(user_id)
+        if not target_user:
+            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            return
+        
+        # Добавляем баланс
+        success = await db.add_balance(user_id, amount)
+        
+        if success:
+            # Создаем запись о платеже
+            await db.create_payment(
+                user_id=user_id,
+                amount=amount,
+                payment_type='admin_topup',
+                description=f'Быстрое пополнение администратором (ID: {user.telegram_id})',
+                status='completed'
+            )
+            
+            # Обрабатываем реферальные вознаграждения
+            bot = kwargs.get('bot')
+            if bot:
+                try:
+                    from referral_system import process_referral_rewards
+                    await process_referral_rewards(
+                        user_id, amount, None, db, bot, payment_type='admin_topup'
+                    )
+                except ImportError:
+                    pass
+            
+            await callback.answer(f"✅ Добавлено {amount}₽ пользователю", show_alert=True)
+            
+            # Уведомляем пользователя
+            if bot:
+                try:
+                    await bot.send_message(
+                        user_id,
+                        f"💰 Ваш баланс пополнен на {amount}₽ администратором"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to notify user {user_id}: {e}")
+            
+            log_user_action(user.telegram_id, "quick_balance_add", f"User: {user_id}, Amount: {amount}")
+            
+            # Обновляем отображение баланса
+            await user_balance_callback(callback, user, db, **kwargs)
+        else:
+            await callback.answer("❌ Ошибка добавления баланса", show_alert=True)
+            
+    except Exception as e:
+        logger.error(f"Error in quick add balance: {e}")
+        await callback.answer("❌ Ошибка операции", show_alert=True)
+
+@admin_router.callback_query(F.data.startswith("user_detailed_stats_"))
+async def user_detailed_stats_callback(callback: CallbackQuery, user: User, db: Database, **kwargs):
+    """Детальная статистика пользователя"""
+    if not await check_admin_access(callback, user):
+        return
+    
+    try:
+        user_id = int(callback.data.split("_")[3])
+        target_user = await db.get_user_by_telegram_id(user_id)
+        
+        if not target_user:
+            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            return
+        
+        # Собираем подробную статистику
+        user_subs = await db.get_user_subscriptions(user_id)
+        user_payments = await db.get_user_payments(user_id)
+        
+        # Анализируем подписки
+        current_time = datetime.utcnow()
+        active_subs = [s for s in user_subs if s.is_active and s.expires_at > current_time]
+        expired_subs = [s for s in user_subs if not s.is_active or s.expires_at <= current_time]
+        
+        # Анализируем платежи
+        completed_payments = [p for p in user_payments if p.status == 'completed']
+        pending_payments = [p for p in user_payments if p.status == 'pending']
+        
+        total_spent = sum(p.amount for p in completed_payments)
+        avg_payment = total_spent / len(completed_payments) if completed_payments else 0
+        
+        # Анализируем активность по месяцам
+        from collections import defaultdict
+        monthly_spending = defaultdict(float)
+        for payment in completed_payments:
+            month_key = payment.created_at.strftime("%Y-%m")
+            monthly_spending[month_key] += payment.amount
+        
+        text = f"📊 **Детальная статистика пользователя**\n\n"
+        text += f"👤 **{target_user.first_name or 'Без имени'}**\n"
+        text += f"@{target_user.username or 'без username'} • ID: `{target_user.telegram_id}`\n\n"
+        
+        text += f"💰 **Финансовая активность:**\n"
+        text += f"• Текущий баланс: **{target_user.balance:.2f}₽**\n"
+        text += f"• Всего потрачено: **{total_spent:.2f}₽**\n"
+        text += f"• Средний платеж: **{avg_payment:.2f}₽**\n"
+        text += f"• Завершенных платежей: **{len(completed_payments)}**\n"
+        text += f"• Ожидающих платежей: **{len(pending_payments)}**\n\n"
+        
+        text += f"📋 **Статистика подписок:**\n"
+        text += f"• Всего подписок: **{len(user_subs)}**\n"
+        text += f"• Активных: **{len(active_subs)}**\n"
+        text += f"• Истекших: **{len(expired_subs)}**\n"
+        text += f"• Использовал триал: **{'✅' if target_user.is_trial_used else '❌'}**\n\n"
+        
+        if monthly_spending:
+            text += f"📈 **Активность по месяцам (последние 3):**\n"
+            sorted_months = sorted(monthly_spending.items(), reverse=True)[:3]
+            for month, amount in sorted_months:
+                text += f"• {month}: **{amount:.2f}₽**\n"
+            text += "\n"
+        
+        text += f"📅 **Временные метки:**\n"
+        text += f"• Регистрация: {format_datetime(target_user.created_at, user.language)}\n"
+        
+        if user_payments:
+            last_payment = max(user_payments, key=lambda p: p.created_at)
+            text += f"• Последний платеж: {format_datetime(last_payment.created_at, user.language)}\n"
+        
+        if active_subs:
+            nearest_expiry = min(active_subs, key=lambda s: s.expires_at)
+            text += f"• Ближайшее истечение: {format_datetime(nearest_expiry.expires_at, user.language)}\n"
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="💳 История платежей", callback_data=f"user_payments_{user_id}"),
+                InlineKeyboardButton(text="📋 Все подписки", callback_data=f"user_subs_{user_id}")
+            ],
+            [
+                InlineKeyboardButton(text="📊 Экспорт данных", callback_data=f"export_user_data_{user_id}"),
+                InlineKeyboardButton(text="🔄 Обновить", callback_data=f"user_detailed_stats_{user_id}")
+            ],
+            [InlineKeyboardButton(text="🔙 К управлению", callback_data=f"user_manage_{user_id}")]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting detailed user stats: {e}")
+        await callback.answer("❌ Ошибка загрузки статистики", show_alert=True)
+
+# Вспомогательная функция для логирования действий администратора
+def log_user_action(admin_id: int, action: str, details: str = ""):
+    """Логирует действия администратора для аудита"""
+    try:
+        import logging
+        audit_logger = logging.getLogger('admin_audit')
+        audit_logger.info(f"Admin {admin_id} performed {action}: {details}")
+    except Exception as e:
+        logger.warning(f"Failed to log admin action: {e}")
+
 
 @admin_router.callback_query(F.data.startswith("filter_subs_"))
 async def filter_subscriptions_callback(callback: CallbackQuery, user: User, **kwargs):
