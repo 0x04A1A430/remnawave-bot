@@ -28,45 +28,83 @@ from lucky_game import lucky_game_router, LuckyGameStates
 logger = logging.getLogger(__name__)
 
 class BotStates(StatesGroup):
-    waiting_language = State()
-    waiting_amount = State()
-    waiting_promocode = State()
-    waiting_topup_amount = State()
+    # Пользовательские состояния
+    setting_language = State()
+    entering_promocode = State()
+    custom_topup_amount = State()
+    
+    # Админские состояния - подписки
     admin_create_sub_name = State()
-    admin_create_sub_desc = State()
+    admin_create_sub_desc = State()  
     admin_create_sub_price = State()
     admin_create_sub_days = State()
     admin_create_sub_traffic = State()
     admin_create_sub_squad = State()
-    admin_create_sub_squad_select = State()
     admin_edit_sub_value = State()
+    
+    # Админские состояния - пользователи
+    admin_search_user = State()
+    admin_search_user_any = State()
     admin_add_balance_user = State()
     admin_add_balance_amount = State()
-    admin_payment_history_page = State()
-    admin_create_promo_code = State()
-    admin_create_promo_discount = State()
-    admin_create_promo_limit = State()
-    admin_edit_promo_value = State()
-    admin_create_promo_expiry = State()
     admin_send_message_user = State()
     admin_send_message_text = State()
     admin_broadcast_text = State()
-    admin_search_user_uuid = State()
-    admin_search_user_any = State()
+    admin_bulk_message_text = State()
+    admin_bulk_balance_amount = State()
+    admin_user_balance_operation = State()
     admin_edit_user_expiry = State()
     admin_edit_user_traffic = State()
     admin_test_monitor_user = State()
-    admin_sync_single_user = State()
-    admin_debug_user_structure = State()
-    admin_rename_plans_confirm = State()
-    waiting_number_choice = State()
+    
+    # Админские состояния - промокоды
+    admin_create_promo_code = State()
+    admin_create_promo_discount = State()
+    admin_create_promo_limit = State()
+    admin_create_promo_expiry = State()
+    admin_edit_promo_value = State()
+    
+    # Админские состояния - платежи и баланс
+    admin_payment_history_page = State()
+    
+    # Админские состояния - правила сервиса
     waiting_rule_title = State()
     waiting_rule_content = State()
     waiting_rule_order = State()
     waiting_rule_edit_title = State()
     waiting_rule_edit_content = State()
     waiting_rule_edit_order = State()
-    waiting_tribute_amount = State()
+    
+    # Админские состояния - автопродления
+    admin_autopay_settings = State()
+    
+    # Админские состояния - реферальная система
+    admin_referral_settings = State()
+    
+    # Состояния для улучшенного управления пользователями
+    admin_user_search_advanced = State()
+    admin_user_bulk_operation = State()
+    admin_user_export_settings = State()
+    admin_user_message_template = State()
+    admin_user_balance_bulk = State()
+    
+    # Состояния для работы с подписками пользователей
+    admin_create_user_subscription = State()
+    admin_extend_user_subscription = State()
+    admin_modify_user_subscription = State()
+    
+    # Состояния для аналитики
+    admin_analytics_period = State()
+    admin_export_format = State()
+    
+    # Состояния для мониторинга
+    admin_monitor_settings = State()
+    admin_monitor_test = State()
+    
+    # Состояния для системных операций
+    admin_system_maintenance = State()
+    admin_backup_settings = State()
+    admin_sync_settings = State()
 
 
 router = Router()
