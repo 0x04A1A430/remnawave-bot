@@ -82,6 +82,7 @@ class BotStates(StatesGroup):
     admin_referral_settings = State()
     
     # Состояния для улучшенного управления пользователями
+    waiting_amount = State()
     admin_user_search_advanced = State()
     admin_user_bulk_operation = State()
     admin_user_export_settings = State()
