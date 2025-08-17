@@ -2582,38 +2582,3 @@ class Database:
         except Exception as e:
             logger.error(f"Error getting lucky game top players: {e}")
             return []
-
-        async def get_users_paginated(self, offset: int = 0, limit: int = 10, 
-                                    search_query: str = None) -> tuple[List[User], int]:
-            async with self.session_factory() as session:
-                try:
-                    from sqlalchemy import select, desc, func, or_
-            
-                    base_query = select(User)
-                    count_query = select(func.count(User.id))
-            
-                    if search_query:
-                        search_filter = or_(
-                            User.first_name.ilike(f'%{search_query}%'),
-                            User.username.ilike(f'%{search_query}%'),
-                            User.telegram_id == int(search_query) if search_query.isdigit() else False
-                        )
-                        base_query = base_query.where(search_filter)
-                        count_query = count_query.where(search_filter)
-            
-                    count_result = await session.execute(count_query)
-                    total_count = count_result.scalar() or 0
-            
-                    result = await session.execute(
-                        base_query
-                        .order_by(desc(User.created_at))
-                        .offset(offset)
-                        .limit(limit)
-                    )
-                    users = list(result.scalars().all())
-            
-                    return users, total_count
-            
-                except Exception as e:
-                    logger.error(f"Error getting paginated users: {e}")
-                    return [], 0
