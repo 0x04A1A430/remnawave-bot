@@ -28,38 +28,10 @@ from lucky_game import lucky_game_router, LuckyGameStates
 logger = logging.getLogger(__name__)
 
 class BotStates(StatesGroup):
-    # ========== БАЗОВЫЕ ПОЛЬЗОВАТЕЛЬСКИЕ СОСТОЯНИЯ ==========
     waiting_language = State()
     waiting_amount = State()
     waiting_promocode = State()
     waiting_topup_amount = State()
-    waiting_tribute_amount = State()
-    waiting_number_choice = State()
-    
-    # Дополнительные пользовательские состояния
-    entering_promocode = State()
-    custom_topup_amount = State()
-    selecting_subscription = State()
-    confirming_purchase = State()
-    confirming_trial = State()
-    setting_autopay = State()
-    
-    # Состояния для поддержки
-    support_message = State()
-    feedback_message = State()
-    
-    # Состояния для игр
-    lucky_game_choosing = State()
-    lucky_game_result = State()
-    
-    # Состояния для реферальной системы
-    entering_referral_code = State()
-    
-    # Состояния для звездных платежей (Telegram Stars)
-    stars_payment_amount = State()
-    stars_payment_confirmation = State()
-    
-    # ========== АДМИНСКИЕ СОСТОЯНИЯ - ПОДПИСКИ ==========
     admin_create_sub_name = State()
     admin_create_sub_desc = State()
     admin_create_sub_price = State()
@@ -68,18 +40,14 @@ class BotStates(StatesGroup):
     admin_create_sub_squad = State()
     admin_create_sub_squad_select = State()
     admin_edit_sub_value = State()
-    admin_rename_plans_confirm = State()
-    
-    # Дополнительные состояния для подписок
-    admin_create_sub_confirmation = State()
-    admin_edit_sub_selection = State()
-    admin_bulk_sub_operation = State()
-    admin_import_subscription = State()
-    admin_sync_subscription = State()
-    
-    # ========== АДМИНСКИЕ СОСТОЯНИЯ - ПОЛЬЗОВАТЕЛИ ==========
     admin_add_balance_user = State()
     admin_add_balance_amount = State()
+    admin_payment_history_page = State()
+    admin_create_promo_code = State()
+    admin_create_promo_discount = State()
+    admin_create_promo_limit = State()
+    admin_edit_promo_value = State()
+    admin_create_promo_expiry = State()
     admin_send_message_user = State()
     admin_send_message_text = State()
     admin_broadcast_text = State()
@@ -90,157 +58,15 @@ class BotStates(StatesGroup):
     admin_test_monitor_user = State()
     admin_sync_single_user = State()
     admin_debug_user_structure = State()
-    
-    # Новые состояния для улучшенного управления пользователями
-    admin_search_user = State()
-    admin_user_detail_view = State()
-    admin_user_balance_operation = State()
-    admin_user_subscription_management = State()
-    admin_bulk_user_operation = State()
-    admin_user_export_settings = State()
-    admin_user_message_template = State()
-    admin_user_advanced_search = State()
-    admin_user_filter_settings = State()
-    admin_quick_balance_add = State()
-    admin_user_statistics_period = State()
-    admin_user_activity_analysis = State()
-    
-    # ========== АДМИНСКИЕ СОСТОЯНИЯ - ПЛАТЕЖИ ==========
-    admin_payment_history_page = State()
-    admin_payment_filter = State()
-    admin_payment_search = State()
-    admin_payment_export = State()
-    admin_payment_analytics = State()
-    
-    # ========== АДМИНСКИЕ СОСТОЯНИЯ - ПРОМОКОДЫ ==========
-    admin_create_promo_code = State()
-    admin_create_promo_discount = State()
-    admin_create_promo_limit = State()
-    admin_create_promo_expiry = State()
-    admin_edit_promo_value = State()
-    
-    # Дополнительные состояния для промокодов
-    admin_promo_bulk_create = State()
-    admin_promo_export = State()
-    admin_promo_analytics = State()
-    admin_promo_usage_analysis = State()
-    
-    # ========== АДМИНСКИЕ СОСТОЯНИЯ - ПРАВИЛА СЕРВИСА ==========
+    admin_rename_plans_confirm = State()
+    waiting_number_choice = State()
     waiting_rule_title = State()
     waiting_rule_content = State()
     waiting_rule_order = State()
     waiting_rule_edit_title = State()
     waiting_rule_edit_content = State()
     waiting_rule_edit_order = State()
-    
-    # Дополнительные состояния для правил
-    admin_rule_bulk_edit = State()
-    admin_rule_import = State()
-    admin_rule_export = State()
-    
-    # ========== АДМИНСКИЕ СОСТОЯНИЯ - АВТОПРОДЛЕНИЯ ==========
-    admin_autopay_settings = State()
-    admin_autopay_user_management = State()
-    admin_autopay_bulk_enable = State()
-    admin_autopay_bulk_disable = State()
-    admin_autopay_analytics = State()
-    admin_autopay_notification_settings = State()
-    
-    # ========== АДМИНСКИЕ СОСТОЯНИЯ - РЕФЕРАЛЬНАЯ СИСТЕМА ==========
-    admin_referral_settings = State()
-    admin_referral_rewards_config = State()
-    admin_referral_analytics = State()
-    admin_referral_payout = State()
-    admin_referral_user_management = State()
-    
-    # ========== АДМИНСКИЕ СОСТОЯНИЯ - МОНИТОРИНГ ==========
-    admin_monitor_settings = State()
-    admin_monitor_test = State()
-    admin_monitor_config = State()
-    admin_monitor_alerts = State()
-    admin_monitor_reports = State()
-    
-    # ========== АДМИНСКИЕ СОСТОЯНИЯ - СИСТЕМА ==========
-    admin_system_maintenance = State()
-    admin_backup_settings = State()
-    admin_sync_settings = State()
-    admin_debug_mode = State()
-    admin_api_testing = State()
-    admin_database_operations = State()
-    admin_export_all_data = State()
-    admin_import_data = State()
-    
-    # ========== АДМИНСКИЕ СОСТОЯНИЯ - АНАЛИТИКА ==========
-    admin_analytics_period = State()
-    admin_analytics_export = State()
-    admin_analytics_custom_report = State()
-    admin_analytics_dashboard_config = State()
-    admin_financial_analytics = State()
-    admin_user_behavior_analytics = State()
-    
-    # ========== АДМИНСКИЕ СОСТОЯНИЯ - УВЕДОМЛЕНИЯ ==========
-    admin_notification_template = State()
-    admin_notification_schedule = State()
-    admin_notification_target_users = State()
-    admin_notification_test = State()
-    
-    # ========== АДМИНСКИЕ СОСТОЯНИЯ - БЕЗОПАСНОСТЬ ==========
-    admin_security_audit = State()
-    admin_access_control = State()
-    admin_activity_log_review = State()
-    admin_suspicious_activity = State()
-    
-    # ========== ДОПОЛНИТЕЛЬНЫЕ СПЕЦИАЛЬНЫЕ СОСТОЯНИЯ ==========
-    # Состояния для импорта/экспорта
-    data_import_format = State()
-    data_import_validation = State()
-    data_export_format = State()
-    data_export_period = State()
-    
-    # Состояния для массовых операций
-    bulk_operation_confirmation = State()
-    bulk_operation_progress = State()
-    bulk_operation_review = State()
-    
-    # Состояния для настроек
-    settings_language = State()
-    settings_notifications = State()
-    settings_privacy = State()
-    settings_backup = State()
-    
-    # Состояния для отладки
-    debug_mode_selection = State()
-    debug_test_input = State()
-    debug_log_review = State()
-    
-    # Состояния для интеграций
-    integration_setup = State()
-    integration_testing = State()
-    integration_config = State()
-    
-    # Состояния для кастомных операций
-    custom_operation_input = State()
-    custom_script_execution = State()
-    custom_query_execution = State()
-    
-    # ========== СОСТОЯНИЯ ДЛЯ WORKFLOW ==========
-    workflow_step_1 = State()
-    workflow_step_2 = State()
-    workflow_step_3 = State()
-    workflow_confirmation = State()
-    workflow_completion = State()
-    
-    # ========== ВРЕМЕННЫЕ СОСТОЯНИЯ ==========
-    temp_data_storage = State()
-    temp_file_upload = State()
-    temp_image_processing = State()
-    temp_calculation = State()
-    
-    # ========== СОСТОЯНИЯ ДЛЯ ТЕСТИРОВАНИЯ ==========
-    test_mode_active = State()
-    test_scenario_selection = State()
-    test_data_input = State()
-    test_result_review = State()
+    waiting_tribute_amount = State()
 
 
 router = Router()
