@@ -452,8 +452,23 @@ services:
     networks:
       - bot_network
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - bot_network
+
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
   bot_network:
