@@ -280,7 +280,7 @@ bedolaga_bot/
 | `DEFAULT_LANGUAGE` | Язык по умолчанию (Англа нет, но все для его реализации есть) | `ru` |
 | `AVAILABLE_LANGUAGES` | Доступные языки | `ru,en` |
 | `LOG_LEVEL` | Уровень логирования | `INFO` |
-| `LOG_FILE` | Файл логов | `logs/bot.log` |
+| `LOG_FILE` | Файл логов | `/tmp/bot.log` |
 | `DEBUG` | Режим отладки | `false` |
 </details>
 <details>
