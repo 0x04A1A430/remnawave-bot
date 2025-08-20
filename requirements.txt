@@ -1,0 +1,21 @@
+# Основные зависимости
+aiogram==3.4.1
+aiohttp==3.9.1
+asyncpg==0.29.0
+SQLAlchemy==2.0.25
+alembic==1.13.1
+aiosqlite==0.19.0
+
+# Дополнительные зависимости
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+redis==5.0.1
+
+# Логирование и мониторинг
+structlog==23.2.0
+
+# Утилиты
+python-dateutil==2.8.2
+pytz==2023.4
+cryptography>=41.0.0
