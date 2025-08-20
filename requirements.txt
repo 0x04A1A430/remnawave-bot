@@ -1,38 +1,21 @@
-# Telegram Bot Framework
-aiogram>=3.4.0
+# Основные зависимости
+aiogram==3.4.1
+aiohttp==3.9.1
+asyncpg==0.29.0
+SQLAlchemy==2.0.25
+alembic==1.13.1
+aiosqlite==0.19.0
 
-# Database
-SQLAlchemy>=2.0.0
-alembic>=1.12.0
+# Дополнительные зависимости
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+redis==5.0.1
 
-# PostgreSQL driver
-asyncpg>=0.28.0
-psycopg2-binary>=2.9.0
+# Логирование и мониторинг
+structlog==23.2.0
 
-# SQLite driver (fallback)
-aiosqlite>=0.19.0
-
-# HTTP Client
-aiohttp>=3.8.0
-aiofiles>=23.0.0
-
-# Redis (optional)
-redis>=4.5.0
-aioredis>=2.0.0
-
-# Utilities
-python-dotenv>=1.0.0
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-
-# Logging and monitoring
-structlog>=23.0.0
-
-# Date and time
-python-dateutil>=2.8.0
-
-# Cryptography
-cryptography>=42.0.0
-
-# JSON handling
-orjson>=3.9.0
+# Утилиты
+python-dateutil==2.8.2
+pytz==2023.4
+cryptography>=41.0.0
