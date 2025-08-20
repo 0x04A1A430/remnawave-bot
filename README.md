@@ -392,6 +392,7 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://remnawave_user:secure_password_123@postgres:5432/remnawave_bot
+      REDIS_URL: redis://redis:6379/0
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
