@@ -354,7 +354,7 @@ class RussianTexts(Texts):
     ADMIN_MONITORING = "🔍 Мониторинг"
     ADMIN_REFERRALS = "🤝 Рефералы"
     ADMIN_RULES = "📋 Правила"
-    ADMIN_REMNAWAVE = "🖥️ RemnaWave"
+    ADMIN_REMNAWAVE = "🖥️ Remnawave"
     ADMIN_STATISTICS = "📊 Статистика"
     
     ACCESS_DENIED = "❌ Доступ запрещен"
