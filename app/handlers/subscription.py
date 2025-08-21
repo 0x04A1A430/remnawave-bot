@@ -1,9 +1,12 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from aiogram import Dispatcher, types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
+import json
+import os
+from typing import Dict, List, Any
 
 from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
 from app.states import SubscriptionStates
@@ -28,7 +31,9 @@ from app.keyboards.inline import (
     get_autopay_days_keyboard, get_back_keyboard,
     get_extend_subscription_keyboard, get_add_traffic_keyboard,
     get_add_devices_keyboard, get_reset_traffic_confirm_keyboard,
-    get_manage_countries_keyboard
+    get_manage_countries_keyboard,
+    get_device_selection_keyboard, get_connection_guide_keyboard,
+    get_app_selection_keyboard, get_specific_app_keyboard
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
@@ -271,11 +276,23 @@ async def activate_trial(
             trial_success_text = f"{texts.TRIAL_ACTIVATED}\n\n"
             trial_success_text += f"🔗 <b>Ваша ссылка для подключения:</b>\n"
             trial_success_text += f"<code>{subscription.subscription_url}</code>\n\n"
-            trial_success_text += f"📱 Скопируйте эту ссылку и добавьте её в ваш VPN-клиент"
-            
+            trial_success_text += f"📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве"
+    
+            connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
+                ],
+                [
+                    InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")
+                ],
+                [
+                    InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")
+                ]
+            ])
+    
             await callback.message.edit_text(
                 trial_success_text,
-                reply_markup=get_back_keyboard(db_user.language),
+                reply_markup=connect_keyboard,
                 parse_mode="HTML"
             )
         else:
@@ -1257,11 +1274,23 @@ async def confirm_purchase(
             success_text = f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
             success_text += f"🔗 <b>Ваша ссылка для подключения:</b>\n"
             success_text += f"<code>{subscription.subscription_url}</code>\n\n"
-            success_text += f"📱 Скопируйте эту ссылку и добавьте её в ваш VPN-клиент"
-            
+            success_text += f"📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве"
+    
+            connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
+                ],
+                [
+                    InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")
+                ],
+                [
+                    InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")
+                ]
+            ])
+    
             await callback.message.edit_text(
                 success_text,
-                reply_markup=get_back_keyboard(db_user.language),
+                reply_markup=connect_keyboard,
                 parse_mode="HTML"
             )
         else:
@@ -1800,6 +1829,242 @@ async def confirm_reset_devices(
     
     await callback.answer()
 
+async def handle_connect_subscription(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Показать меню выбора устройства для подключения"""
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    
+    if not subscription or not subscription.subscription_url:
+        await callback.answer("❌ У вас нет активной подписки или ссылка еще генерируется", show_alert=True)
+        return
+    
+    device_text = f"""
+📱 <b>Подключить подписку</b>
+
+🔗 <b>Ссылка подписки:</b>
+<code>{subscription.subscription_url}</code>
+
+💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:
+"""
+    
+    await callback.message.edit_text(
+        device_text,
+        reply_markup=get_device_selection_keyboard(db_user.language),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+async def handle_device_guide(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    device_type = callback.data.split('_')[2] 
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    
+    if not subscription or not subscription.subscription_url:
+        await callback.answer("❌ Ссылка подписки недоступна", show_alert=True)
+        return
+    
+    apps = get_apps_for_device(device_type, db_user.language)
+    
+    if not apps:
+        await callback.answer("❌ Приложения для этого устройства не найдены", show_alert=True)
+        return
+    
+    featured_app = next((app for app in apps if app.get('isFeatured', False)), apps[0])
+    
+    guide_text = f"""
+📱 <b>Настройка для {get_device_name(device_type, db_user.language)}</b>
+
+🔗 <b>Ссылка подписки:</b>
+<code>{subscription.subscription_url}</code>
+
+📋 <b>Рекомендуемое приложение:</b> {featured_app['name']}
+
+<b>Шаг 1 - Установка:</b>
+{featured_app['installationStep']['description'][db_user.language]}
+
+<b>Шаг 2 - Добавление подписки:</b>
+{featured_app['addSubscriptionStep']['description'][db_user.language]}
+
+<b>Шаг 3 - Подключение:</b>
+{featured_app['connectAndUseStep']['description'][db_user.language]}
+
+💡 <b>Как подключить:</b>
+1. Установите приложение по ссылке выше
+2. Скопируйте ссылку подписки (нажмите на неё)
+3. Откройте приложение и вставьте ссылку
+4. Подключитесь к серверу
+"""
+    
+    await callback.message.edit_text(
+        guide_text,
+        reply_markup=get_connection_guide_keyboard(
+            subscription.subscription_url,
+            featured_app,
+            db_user.language
+        ),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+async def handle_app_selection(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    device_type = callback.data.split('_')[2] 
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    
+    apps = get_apps_for_device(device_type, db_user.language)
+    
+    if not apps:
+        await callback.answer("❌ Приложения для этого устройства не найдены", show_alert=True)
+        return
+    
+    app_text = f"""
+📱 <b>Приложения для {get_device_name(device_type, db_user.language)}</b>
+
+Выберите приложение для подключения:
+"""
+    
+    await callback.message.edit_text(
+        app_text,
+        reply_markup=get_app_selection_keyboard(device_type, apps, db_user.language),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+async def handle_specific_app_guide(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    _, device_type, app_id = callback.data.split('_') 
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    
+    apps = get_apps_for_device(device_type, db_user.language)
+    app = next((a for a in apps if a['id'] == app_id), None)
+    
+    if not app:
+        await callback.answer("❌ Приложение не найдено", show_alert=True)
+        return
+    
+    guide_text = f"""
+📱 <b>{app['name']} - {get_device_name(device_type, db_user.language)}</b>
+
+🔗 <b>Ссылка подписки:</b>
+<code>{subscription.subscription_url}</code>
+
+<b>Шаг 1 - Установка:</b>
+{app['installationStep']['description'][db_user.language]}
+
+<b>Шаг 2 - Добавление подписки:</b>
+{app['addSubscriptionStep']['description'][db_user.language]}
+
+<b>Шаг 3 - Подключение:</b>
+{app['connectAndUseStep']['description'][db_user.language]}
+"""
+    
+    if 'additionalAfterAddSubscriptionStep' in app:
+        additional = app['additionalAfterAddSubscriptionStep']
+        guide_text += f"""
+
+<b>{additional['title'][db_user.language]}:</b>
+{additional['description'][db_user.language]}
+"""
+    
+    await callback.message.edit_text(
+        guide_text,
+        reply_markup=get_specific_app_keyboard(
+            subscription.subscription_url,
+            app,
+            device_type,
+            db_user.language
+        ),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+async def handle_open_subscription_link(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    subscription = db_user.subscription
+    
+    if not subscription or not subscription.subscription_url:
+        await callback.answer("❌ Ссылка подписки недоступна", show_alert=True)
+        return
+    
+    await callback.answer(url=subscription.subscription_url)
+
+
+def load_app_config() -> Dict[str, Any]:
+    try:
+        from app.config import settings
+        config_path = settings.get_app_config_path()
+        
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Ошибка загрузки конфига приложений: {e}")
+        return {}
+
+
+def get_apps_for_device(device_type: str, language: str = "ru") -> List[Dict[str, Any]]:
+    config = load_app_config()
+    
+    device_mapping = {
+        'ios': 'ios',
+        'android': 'android', 
+        'windows': 'pc',
+        'mac': 'pc',
+        'tv': 'tv'
+    }
+    
+    config_key = device_mapping.get(device_type, device_type)
+    return config.get(config_key, [])
+
+
+def get_device_name(device_type: str, language: str = "ru") -> str:
+    if language == "en":
+        names = {
+            'ios': 'iPhone/iPad',
+            'android': 'Android',
+            'windows': 'Windows',
+            'mac': 'macOS',
+            'tv': 'Android TV'
+        }
+    else:
+        names = {
+            'ios': 'iPhone/iPad',
+            'android': 'Android',
+            'windows': 'Windows',
+            'mac': 'macOS',
+            'tv': 'Android TV'
+        }
+    
+    return names.get(device_type, device_type)
+
+
+def create_deep_link(app: Dict[str, Any], subscription_url: str) -> str:
+    from app.config import settings
+    
+    return subscription_url
+
 
 def get_reset_devices_confirm_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
@@ -1976,4 +2241,29 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         apply_countries_changes,
         F.data == "countries_apply"
+    )
+
+    dp.callback_query.register(
+        handle_connect_subscription,
+        F.data == "subscription_connect"
+    )
+    
+    dp.callback_query.register(
+        handle_device_guide,
+        F.data.startswith("device_guide_")
+    )
+    
+    dp.callback_query.register(
+        handle_app_selection,
+        F.data.startswith("app_list_")
+    )
+    
+    dp.callback_query.register(
+        handle_specific_app_guide,
+        F.data.startswith("app_")
+    )
+    
+    dp.callback_query.register(
+        handle_open_subscription_link,
+        F.data == "open_subscription_link"
     )
