@@ -744,3 +744,31 @@ def get_specific_app_keyboard(
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) -> InlineKeyboardMarkup:
+    from app.localization.texts import get_texts
+    texts = get_texts(language)
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=f"📅 30 дней - {texts.format_price(prices[30])}", 
+                callback_data="extend_period_30"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"📅 90 дней - {texts.format_price(prices[90])}", 
+                callback_data="extend_period_90"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"📅 180 дней - {texts.format_price(prices[180])}", 
+                callback_data="extend_period_180"
+            )
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+        ]
+    ])
