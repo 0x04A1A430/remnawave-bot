@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 import json
 import os
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 
 from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
 from app.states import SubscriptionStates
@@ -34,7 +34,7 @@ from app.keyboards.inline import (
     get_manage_countries_keyboard,
     get_device_selection_keyboard, get_connection_guide_keyboard,
     get_app_selection_keyboard, get_specific_app_keyboard,
-    get_subscription_settings_keyboard
+    get_subscription_settings_keyboard, get_extend_subscription_keyboard_with_prices
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
@@ -150,67 +150,37 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
         if subscription.is_trial:
             return 0
         
-        from app.database.crud.transaction import get_user_transactions
-        from app.database.models import TransactionType
+        from app.config import TRAFFIC_PRICES, PERIOD_PRICES, settings
+        from app.services.subscription_service import SubscriptionService
         
-        transactions = await get_user_transactions(db, subscription.user_id, limit=100)
+        subscription_service = SubscriptionService()
         
-        logger.info(f"🔍 Всего транзакций у пользователя {subscription.user_id}: {len(transactions)}")
+        try:
+            servers_cost, _ = await subscription_service.get_countries_price_by_uuids(
+                subscription.connected_squads, db
+            )
+        except AttributeError:
+            logger.warning("Используем fallback для расчета стоимости серверов")
+            servers_cost, _ = await get_countries_price_by_uuids_fallback(
+                subscription.connected_squads, db
+            )
         
-        total_subscription_cost = 0
-        base_subscription_cost = 0
-        additions_cost = 0
+        traffic_cost = TRAFFIC_PRICES.get(subscription.traffic_limit_gb, 0)
         
-        for transaction in transactions:
-            if transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value:
-                description = transaction.description.lower()
-                amount = transaction.amount_kopeks
-                
-                logger.info(f"📝 Транзакция: {amount/100}₽ - '{transaction.description}'")
-                
-                if 'сброс' in description:
-                    logger.info(f"   ⏭️ Пропускаем сброс")
-                    continue
-                    
-                
-                is_base_subscription = (
-                    ('подписка' in description and 'дней' in description) or
-                    ('покупка' in description and 'подписка' in description) or
-                    ('subscription' in description and 'days' in description)
-                )
-                
-                if is_base_subscription:
-                    base_subscription_cost += amount
-                    logger.info(f"   💎 Основная подписка: +{amount/100}₽")
-                    continue
-                
-                is_addition = any(keyword in description for keyword in [
-                    'добавление', 'добавить', 'продление', 'продлить'
-                ])
-                
-                if is_addition:
-                    additions_cost += amount
-                    logger.info(f"   🔧 Дополнение: +{amount/100}₽")
-                    continue
-                
-                if amount >= 50000:
-                    base_subscription_cost += amount
-                    logger.info(f"   💰 Крупная транзакция подписки: +{amount/100}₽")
-                    continue
-                
-                logger.info(f"   ❓ Неопознанная транзакция, пропускаем")
+        devices_cost = max(0, subscription.device_limit - 1) * settings.PRICE_PER_DEVICE
         
-        total_subscription_cost = base_subscription_cost + additions_cost
+        base_cost = min(PERIOD_PRICES.values()) if PERIOD_PRICES else 0
         
-        if total_subscription_cost > 0:
-            logger.info(f"💰 Итого стоимость подписки:")
-            logger.info(f"   📦 Базовая подписка: {base_subscription_cost/100}₽")
-            logger.info(f"   🔧 Дополнения: {additions_cost/100}₽")
-            logger.info(f"   💎 ОБЩАЯ СТОИМОСТЬ: {total_subscription_cost/100}₽")
-            return total_subscription_cost
-        else:
-            logger.warning(f"⚠️ Стоимость подписки не найдена для пользователя {subscription.user_id}")
-            return 0
+        total_cost = base_cost + servers_cost + traffic_cost + devices_cost
+        
+        logger.info(f"📊 Расчет стоимости подписки {subscription.id} (по текущим ценам):")
+        logger.info(f"   📦 Базовая стоимость: {base_cost/100}₽")
+        logger.info(f"   🌍 Серверы ({len(subscription.connected_squads)}) по текущим ценам: {servers_cost/100}₽")
+        logger.info(f"   📊 Трафик ({subscription.traffic_limit_gb} ГБ): {traffic_cost/100}₽")
+        logger.info(f"   📱 Устройства ({subscription.device_limit}): {devices_cost/100}₽")
+        logger.info(f"   💎 ОБЩАЯ СТОИМОСТЬ: {total_cost/100}₽")
+        
+        return total_cost
         
     except Exception as e:
         logger.error(f"❌ Ошибка расчета стоимости подписки: {e}")
@@ -391,6 +361,36 @@ async def handle_add_countries(
     
     await callback.answer()
 
+async def get_countries_price_by_uuids_fallback(country_uuids: List[str], db: AsyncSession) -> Tuple[int, List[int]]:
+    try:
+        from app.database.crud.server_squad import get_server_squad_by_uuid
+        
+        total_price = 0
+        prices_list = []
+        
+        for country_uuid in country_uuids:
+            try:
+                server = await get_server_squad_by_uuid(db, country_uuid)
+                if server and server.is_available and not server.is_full:
+                    price = server.price_kopeks
+                    total_price += price
+                    prices_list.append(price)
+                else:
+                    default_price = 1000
+                    total_price += default_price
+                    prices_list.append(default_price)
+            except Exception:
+                default_price = 1000
+                total_price += default_price
+                prices_list.append(default_price)
+        
+        return total_price, prices_list
+        
+    except Exception as e:
+        logger.error(f"Ошибка fallback функции: {e}")
+        default_prices = [1000] * len(country_uuids)
+        return sum(default_prices), default_prices
+
 async def handle_manage_country(
     callback: types.CallbackQuery,
     db_user: User,
@@ -447,13 +447,14 @@ async def apply_countries_changes(
     logger.info(f"🔍 Применение изменений стран")
     
     data = await state.get_data()
-    new_countries = data.get('countries', [])
-    
+    texts = get_texts(db_user.language)
     subscription = db_user.subscription
-    old_countries = subscription.connected_squads
     
-    added = [c for c in new_countries if c not in old_countries]
-    removed = [c for c in old_countries if c not in new_countries]
+    selected_countries = data.get('countries', [])
+    current_countries = subscription.connected_squads
+    
+    added = [c for c in selected_countries if c not in current_countries]
+    removed = [c for c in current_countries if c not in selected_countries]
     
     if not added and not removed:
         await callback.answer("⚠️ Изменения не обнаружены", show_alert=True)
@@ -466,14 +467,16 @@ async def apply_countries_changes(
     added_names = []
     removed_names = []
     
+    added_server_prices = []
+    added_server_ids = []
+    
     for country in countries:
         if country['uuid'] in added:
             cost += country['price_kopeks']
             added_names.append(country['name'])
+            added_server_prices.append(country['price_kopeks'])
         if country['uuid'] in removed:
             removed_names.append(country['name'])
-    
-    texts = get_texts(db_user.language)
     
     if cost > 0 and db_user.balance_kopeks < cost:
         await callback.answer(
@@ -483,7 +486,7 @@ async def apply_countries_changes(
         return
     
     try:
-        if cost > 0:
+        if added and cost > 0:
             success = await subtract_user_balance(
                 db, db_user, cost, 
                 f"Добавление стран: {', '.join(added_names)}"
@@ -500,7 +503,19 @@ async def apply_countries_changes(
                 description=f"Добавление стран к подписке: {', '.join(added_names)}"
             )
         
-        subscription.connected_squads = new_countries
+        if added:
+            from app.database.crud.server_squad import get_server_ids_by_uuids, add_user_to_servers
+            from app.database.crud.subscription import add_subscription_servers
+            
+            added_server_ids = await get_server_ids_by_uuids(db, added)
+            
+            if added_server_ids:
+                await add_subscription_servers(db, subscription, added_server_ids, added_server_prices)
+                await add_user_to_servers(db, added_server_ids)
+                
+                logger.info(f"📊 Добавлены серверы с ценами: {list(zip(added_server_ids, added_server_prices))}")
+        
+        subscription.connected_squads = selected_countries
         subscription.updated_at = datetime.utcnow()
         await db.commit()
         
@@ -534,7 +549,7 @@ async def apply_countries_changes(
             success_text += "\n".join(f"• {name}" for name in removed_names)
             success_text += "\nℹ️ Повторное подключение будет платным\n"
         
-        success_text += f"\n🌍 <b>Активных стран:</b> {len(new_countries)}"
+        success_text += f"\n🌍 <b>Активных стран:</b> {len(selected_countries)}"
         
         await callback.message.edit_text(
             success_text,
@@ -626,11 +641,27 @@ async def handle_extend_subscription(
         await callback.answer("❌ Продление доступно за 3 дня до окончания подписки", show_alert=True)
         return
     
+    subscription_service = SubscriptionService()
+    
+    renewal_prices = {}
+    for days in [30, 90, 180]:
+        price = await subscription_service.calculate_renewal_price(subscription, days, db)
+        renewal_prices[days] = price
+    
     await callback.message.edit_text(
         f"⏰ <b>Продление подписки</b>\n\n"
-        f"Осталось дней: {subscription.days_left}\n"
-        f"Выберите период продления:",
-        reply_markup=get_extend_subscription_keyboard(db_user.language)
+        f"Осталось дней: {subscription.days_left}\n\n"
+        f"<b>Ваша текущая конфигурация:</b>\n"
+        f"🌍 Серверов: {len(subscription.connected_squads)}\n"
+        f"📊 Трафик: {texts.format_traffic(subscription.traffic_limit_gb)}\n"
+        f"📱 Устройств: {subscription.device_limit}\n\n"
+        f"<b>Выберите период продления:</b>\n"
+        f"📅 30 дней - {texts.format_price(renewal_prices[30])}\n"
+        f"📅 90 дней - {texts.format_price(renewal_prices[90])}\n"
+        f"📅 180 дней - {texts.format_price(renewal_prices[180])}\n\n"
+        f"💡 <i>Цена включает все ваши текущие серверы и настройки</i>",
+        reply_markup=get_extend_subscription_keyboard_with_prices(db_user.language, renewal_prices),
+        parse_mode="HTML"
     )
     
     await callback.answer()
@@ -832,7 +863,8 @@ async def confirm_extend_subscription(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
-    price = PERIOD_PRICES[days]
+    subscription_service = SubscriptionService()
+    price = await subscription_service.calculate_renewal_price(subscription, days, db)
     
     if db_user.balance_kopeks < price:
         await callback.answer("❌ Недостаточно средств на балансе", show_alert=True)
@@ -877,11 +909,12 @@ async def confirm_extend_subscription(
         await callback.message.edit_text(
             f"✅ Подписка успешно продлена!\n\n"
             f"⏰ Добавлено: {days} дней\n"
-            f"Действует до: {subscription.end_date.strftime('%d.%m.%Y %H:%M')}",
+            f"Действует до: {subscription.end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"💰 Списано: {texts.format_price(price)}",
             reply_markup=get_back_keyboard(db_user.language)
         )
         
-        logger.info(f"✅ Пользователь {db_user.telegram_id} продлил подписку на {days} дней")
+        logger.info(f"✅ Пользователь {db_user.telegram_id} продлил подписку на {days} дней за {price/100}₽")
         
     except Exception as e:
         logger.error(f"Ошибка продления подписки: {e}")
@@ -891,6 +924,34 @@ async def confirm_extend_subscription(
         )
     
     await callback.answer()
+
+
+def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=f"📅 30 дней - {texts.format_price(prices[30])}", 
+                callback_data="extend_period_30"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"📅 90 дней - {texts.format_price(prices[90])}", 
+                callback_data="extend_period_90"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"📅 180 дней - {texts.format_price(prices[180])}", 
+                callback_data="extend_period_180"
+            )
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+        ]
+    ])
 
 
 async def confirm_reset_traffic(
@@ -1012,7 +1073,8 @@ async def select_traffic(
 async def select_country(
     callback: types.CallbackQuery,
     state: FSMContext,
-    db_user: User
+    db_user: User,
+    db: AsyncSession
 ):
     
     country_uuid = callback.data.split('_')[1]
@@ -1028,10 +1090,12 @@ async def select_country(
     
     base_price = PERIOD_PRICES[data['period_days']] + TRAFFIC_PRICES[data['traffic_gb']]
     
-    countries_price = 0
-    for country in countries:
-        if country['uuid'] in selected_countries:
-            countries_price += country['price_kopeks']
+    try:
+        subscription_service = SubscriptionService()
+        countries_price, _ = await subscription_service.get_countries_price_by_uuids(selected_countries, db)
+    except AttributeError:
+        logger.warning("Используем fallback функцию для расчета цен стран")
+        countries_price, _ = await get_countries_price_by_uuids_fallback(selected_countries, db)
     
     data['countries'] = selected_countries
     data['total_price'] = base_price + countries_price
@@ -1108,7 +1172,8 @@ async def select_devices(
 async def devices_continue(
     callback: types.CallbackQuery,
     state: FSMContext,
-    db_user: User
+    db_user: User,
+    db: AsyncSession
 ):
     
     if not callback.data == "devices_continue":
@@ -1119,17 +1184,32 @@ async def devices_continue(
     texts = get_texts(db_user.language)
     
     countries = await _get_available_countries()
-    selected_countries_names = [
-        c['name'] for c in countries 
-        if c['uuid'] in data['countries']
-    ]
+    selected_countries_names = []
+    
+    try:
+        subscription_service = SubscriptionService()
+        countries_price, _ = await subscription_service.get_countries_price_by_uuids(data['countries'], db)
+    except AttributeError:
+        logger.warning("Используем fallback функцию для расчета цен стран")
+        countries_price, _ = await get_countries_price_by_uuids_fallback(data['countries'], db)
+    
+    for country in countries:
+        if country['uuid'] in data['countries']:
+            selected_countries_names.append(country['name'])
+    
+    base_price = PERIOD_PRICES[data['period_days']] + TRAFFIC_PRICES[data['traffic_gb']]
+    devices_price = (data['devices'] - 1) * settings.PRICE_PER_DEVICE
+    total_price = base_price + countries_price + devices_price
+    
+    data['total_price'] = total_price
+    await state.set_data(data)
     
     summary_text = texts.SUBSCRIPTION_SUMMARY.format(
         period=data['period_days'],
         traffic=texts.format_traffic(data['traffic_gb']),
         countries=", ".join(selected_countries_names),
         devices=data['devices'],
-        total_price=texts.format_price(data['total_price'])
+        total_price=texts.format_price(total_price)
     )
     
     await callback.message.edit_text(
@@ -1155,9 +1235,11 @@ async def confirm_purchase(
     base_price = PERIOD_PRICES[data['period_days']] + TRAFFIC_PRICES[data['traffic_gb']]
     
     countries_price = 0
+    server_prices = []
     for country in countries:
         if country['uuid'] in data['countries']:
             countries_price += country['price_kopeks']
+            server_prices.append(country['price_kopeks'])
     
     devices_price = (data['devices'] - 1) * settings.PRICE_PER_DEVICE
     final_price = base_price + countries_price + devices_price
@@ -1225,20 +1307,10 @@ async def confirm_purchase(
         server_ids = await get_server_ids_by_uuids(db, data['countries'])
         
         if server_ids:
-            countries = await _get_available_countries()
-            server_prices = []
-            for country_uuid in data['countries']:
-                for country in countries:
-                    if country['uuid'] == country_uuid:
-                        server_prices.append(country['price_kopeks'])
-                        break
-                else:
-                    server_prices.append(0)
-            
             await add_subscription_servers(db, subscription, server_ids, server_prices)
-            
             await add_user_to_servers(db, server_ids)
             
+            logger.info(f"📊 Сохранены цены серверов: {server_prices}")
             logger.info(f"📊 Обновлены счетчики пользователей для серверов: {server_ids}")
         
         await db.refresh(db_user)
