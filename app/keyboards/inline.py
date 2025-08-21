@@ -106,44 +106,53 @@ def get_subscription_keyboard(
                 InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
             ])
         
+        if not is_trial and subscription and subscription.days_left <= 3:
+            keyboard.append([
+                InlineKeyboardButton(text="⏰ Продлить", callback_data="subscription_extend")
+            ])
+        
+        if not is_trial:
+            keyboard.append([
+                InlineKeyboardButton(text="💳 Автоплатеж", callback_data="subscription_autopay")
+            ])
+        
         if is_trial:
             keyboard.append([
                 InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data="subscription_upgrade")
             ])
         else:
-            row1 = []
-            row2 = []
-            row3 = []
-            row4 = [] 
-            
-            row1.append(InlineKeyboardButton(text="🌐 Добавить страны", callback_data="subscription_add_countries"))
-            
-            if subscription and subscription.traffic_limit_gb > 0:
-                row1.append(InlineKeyboardButton(text="📈 Добавить трафик", callback_data="subscription_add_traffic"))
-            
-            row2.append(InlineKeyboardButton(text="📱 Добавить устройства", callback_data="subscription_add_devices"))
-            
-            if subscription and subscription.days_left <= 3:
-                row2.append(InlineKeyboardButton(text="⏰ Продлить", callback_data="subscription_extend"))
-            
-            row3.append(InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data="subscription_reset_traffic"))
-            
-            row3.append(InlineKeyboardButton(text="💳 Автоплатеж", callback_data="subscription_autopay"))
-            
-            row4.append(InlineKeyboardButton(text="🔄 Сбросить устройства", callback_data="subscription_reset_devices"))
-            
-            if row1:
-                keyboard.append(row1)
-            if row2:
-                keyboard.append(row2)
-            if row3:
-                keyboard.append(row3)
-            if row4:
-                keyboard.append(row4)
+            keyboard.append([
+                InlineKeyboardButton(text="⚙️ Настройки подписки", callback_data="subscription_settings")
+            ])
     
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
     ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_subscription_settings_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    keyboard = [
+        [
+            InlineKeyboardButton(text="🌍 Добавить страны", callback_data="subscription_add_countries")
+        ],
+        [
+            InlineKeyboardButton(text="📈 Добавить трафик", callback_data="subscription_add_traffic")
+        ],
+        [
+            InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data="subscription_reset_traffic")
+        ],
+        [
+            InlineKeyboardButton(text="📱 Добавить устройства", callback_data="subscription_add_devices")
+        ],
+        [
+            InlineKeyboardButton(text="🔄 Сбросить устройства", callback_data="subscription_reset_devices")
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+        ]
+    ]
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
