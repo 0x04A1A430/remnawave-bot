@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     WEBHOOK_URL: Optional[str] = None
     WEBHOOK_PATH: str = "/webhook"
     
+    APP_CONFIG_PATH: str = "app-config.json"
+    ENABLE_DEEP_LINKS: bool = True
+    APP_CONFIG_CACHE_TTL: int = 3600  # 1 час
+    
     @field_validator('LOG_FILE', mode='before')
     @classmethod
     def ensure_log_dir(cls, v):
@@ -141,6 +145,19 @@ class Settings(BaseSettings):
     
     def is_notifications_enabled(self) -> bool:
         return self.ENABLE_NOTIFICATIONS
+    
+    def get_app_config_path(self) -> str:
+        if os.path.isabs(self.APP_CONFIG_PATH):
+            return self.APP_CONFIG_PATH
+        
+        project_root = Path(__file__).parent.parent
+        return str(project_root / self.APP_CONFIG_PATH)
+    
+    def is_deep_links_enabled(self) -> bool:
+        return self.ENABLE_DEEP_LINKS
+    
+    def get_app_config_cache_ttl(self) -> int:
+        return self.APP_CONFIG_CACHE_TTL
     
     model_config = {
         "env_file": ".env",
