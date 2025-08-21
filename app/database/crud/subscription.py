@@ -444,6 +444,72 @@ async def get_subscription_servers(
     
     return servers_info
 
+async def remove_subscription_servers(
+    db: AsyncSession,
+    subscription_id: int,
+    server_squad_ids: List[int]
+) -> bool:
+    try:
+        from app.database.models import SubscriptionServer
+        from sqlalchemy import delete
+        
+        await db.execute(
+            delete(SubscriptionServer)
+            .where(
+                SubscriptionServer.subscription_id == subscription_id,
+                SubscriptionServer.server_squad_id.in_(server_squad_ids)
+            )
+        )
+        
+        await db.commit()
+        logger.info(f"🗑️ Удалены серверы {server_squad_ids} из подписки {subscription_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка удаления серверов из подписки: {e}")
+        await db.rollback()
+        return False
+
+
+async def get_subscription_renewal_cost(
+    db: AsyncSession,
+    subscription_id: int,
+    period_days: int
+) -> int:
+    try:
+        from app.config import PERIOD_PRICES, TRAFFIC_PRICES, settings
+        
+        base_price = PERIOD_PRICES.get(period_days, 0)
+        
+        servers_info = await get_subscription_servers(db, subscription_id)
+        servers_cost = sum(server_info['paid_price_kopeks'] for server_info in servers_info)
+        
+        subscription = await db.get(Subscription, subscription_id)
+        if not subscription:
+            return base_price
+        
+        traffic_cost = 0
+        if subscription.traffic_limit_gb > 0:
+            traffic_cost = TRAFFIC_PRICES.get(subscription.traffic_limit_gb, 0)
+        
+        devices_cost = max(0, subscription.device_limit - 1) * settings.PRICE_PER_DEVICE
+        
+        total_cost = base_price + servers_cost + traffic_cost + devices_cost
+        
+        logger.info(f"💰 Расчет продления подписки {subscription_id} на {period_days} дней:")
+        logger.info(f"   📅 Период: {base_price/100}₽")
+        logger.info(f"   🌍 Серверы: {servers_cost/100}₽")
+        logger.info(f"   📊 Трафик: {traffic_cost/100}₽")
+        logger.info(f"   📱 Устройства: {devices_cost/100}₽")
+        logger.info(f"   💎 ИТОГО: {total_cost/100}₽")
+        
+        return total_cost
+        
+    except Exception as e:
+        logger.error(f"Ошибка расчета стоимости продления: {e}")
+        from app.config import PERIOD_PRICES
+        return PERIOD_PRICES.get(period_days, 0)
+
 async def create_subscription(
     db: AsyncSession,
     user_id: int,
