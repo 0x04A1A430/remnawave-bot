@@ -609,7 +609,7 @@ def get_device_selection_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📺 Android TV", callback_data="device_guide_tv")
         ],
         [
-            InlineKeyboardButton(text="🔗 Открыть ссылку подписки", callback_data="open_subscription_link")
+            InlineKeyboardButton(text="📋 Показать ссылку подписки", callback_data="open_subscription_link")
         ],
         [
             InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
@@ -622,6 +622,8 @@ def get_connection_guide_keyboard(
     app: dict, 
     language: str = "ru"
 ) -> InlineKeyboardMarkup:
+    from app.handlers.subscription import create_deep_link
+    
     keyboard = []
     
     if 'installationStep' in app and 'buttons' in app['installationStep']:
@@ -691,6 +693,8 @@ def get_specific_app_keyboard(
     device_type: str,
     language: str = "ru"
 ) -> InlineKeyboardMarkup:
+    from app.handlers.subscription import create_deep_link
+    
     keyboard = []
     
     if 'installationStep' in app and 'buttons' in app['installationStep']:
