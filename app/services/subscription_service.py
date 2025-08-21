@@ -200,34 +200,113 @@ class SubscriptionService:
         devices: int,
         db: AsyncSession 
     ) -> Tuple[int, List[int]]:
-    
+
         from app.config import PERIOD_PRICES, TRAFFIC_PRICES
         from app.database.crud.server_squad import get_server_squad_by_id
-    
+
         base_price = PERIOD_PRICES.get(period_days, 0)
         traffic_price = TRAFFIC_PRICES.get(traffic_gb, 0)
-    
+
         server_prices = []
         total_servers_price = 0
-    
+
         for server_id in server_squad_ids:
             server = await get_server_squad_by_id(db, server_id)
             if server and server.is_available and not server.is_full:
                 server_prices.append(server.price_kopeks)
                 total_servers_price += server.price_kopeks
+                logger.debug(f"🏷️ Сервер {server.display_name}: {server.price_kopeks/100}₽")
             else:
                 server_prices.append(0)
-    
+                logger.warning(f"⚠️ Сервер ID {server_id} недоступен")
+
         devices_price = max(0, devices - 1) * settings.PRICE_PER_DEVICE
         
         total_price = base_price + traffic_price + total_servers_price + devices_price
+        
+        logger.info(f"💰 Расчет стоимости новой подписки:")
+        logger.info(f"   📅 Период {period_days} дней: {base_price/100}₽")
+        logger.info(f"   📊 Трафик {traffic_gb} ГБ: {traffic_price/100}₽")
+        logger.info(f"   🌍 Серверы ({len(server_squad_ids)}): {total_servers_price/100}₽")
+        logger.info(f"   📱 Устройства ({devices}): {devices_price/100}₽")
+        logger.info(f"   💎 ИТОГО: {total_price/100}₽")
+        
         return total_price, server_prices
     
-    async def _get_countries_price(self, country_uuids: List[str]) -> int:
-        # TODO: Реализовать получение цен из базы данных сквадов
-        # Пока возвращаем базовую логику
-        price_per_country = 1000 
-        return len(country_uuids) * price_per_country
+    async def calculate_renewal_price(
+        self,
+        subscription: Subscription,
+        period_days: int,
+        db: AsyncSession
+    ) -> int:
+        try:
+            from app.config import PERIOD_PRICES, TRAFFIC_PRICES
+            
+            base_price = PERIOD_PRICES.get(period_days, 0)
+            
+            servers_price, _ = await self.get_countries_price_by_uuids(
+                subscription.connected_squads, db
+            )
+            
+            devices_price = max(0, subscription.device_limit - 1) * settings.PRICE_PER_DEVICE
+            
+            traffic_price = TRAFFIC_PRICES.get(subscription.traffic_limit_gb, 0)
+            
+            total_price = base_price + servers_price + devices_price + traffic_price
+            
+            logger.info(f"💰 Расчет стоимости продления для подписки {subscription.id} (по текущим ценам):")
+            logger.info(f"   📅 Период {period_days} дней: {base_price/100}₽")
+            logger.info(f"   🌍 Серверы ({len(subscription.connected_squads)}) по текущим ценам: {servers_price/100}₽")
+            logger.info(f"   📱 Устройства ({subscription.device_limit}): {devices_price/100}₽")
+            logger.info(f"   📊 Трафик ({subscription.traffic_limit_gb} ГБ): {traffic_price/100}₽")
+            logger.info(f"   💎 ИТОГО: {total_price/100}₽")
+            
+            return total_price
+            
+        except Exception as e:
+            logger.error(f"Ошибка расчета стоимости продления: {e}")
+            from app.config import PERIOD_PRICES
+            return PERIOD_PRICES.get(period_days, 0)
+    
+    async def get_countries_price_by_uuids(
+        self, 
+        country_uuids: List[str], 
+        db: AsyncSession
+    ) -> Tuple[int, List[int]]:
+        try:
+            from app.database.crud.server_squad import get_server_squad_by_uuid
+            
+            total_price = 0
+            prices_list = []
+            
+            for country_uuid in country_uuids:
+                server = await get_server_squad_by_uuid(db, country_uuid)
+                if server and server.is_available and not server.is_full:
+                    price = server.price_kopeks
+                    total_price += price
+                    prices_list.append(price)
+                    logger.debug(f"🏷️ Страна {server.display_name}: {price/100}₽")
+                else:
+                    default_price = 1000  
+                    total_price += default_price
+                    prices_list.append(default_price)
+                    logger.warning(f"⚠️ Сервер {country_uuid} недоступен, используем базовую цену: {default_price/100}₽")
+            
+            logger.info(f"💰 Общая стоимость стран: {total_price/100}₽")
+            return total_price, prices_list
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения цен стран: {e}")
+            default_prices = [1000] * len(country_uuids)
+            return sum(default_prices), default_prices
+    
+    async def _get_countries_price(self, country_uuids: List[str], db: AsyncSession) -> int:
+        try:
+            total_price, _ = await self.get_countries_price_by_uuids(country_uuids, db)
+            return total_price
+        except Exception as e:
+            logger.error(f"Ошибка получения цен стран: {e}")
+            return len(country_uuids) * 1000
     
     def _gb_to_bytes(self, gb: int) -> int:
         if gb == 0: 
