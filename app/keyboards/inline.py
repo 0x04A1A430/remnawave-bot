@@ -101,6 +101,11 @@ def get_subscription_keyboard(
     keyboard = []
     
     if has_subscription:
+        if subscription and subscription.subscription_url:
+            keyboard.append([
+                InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
+            ])
+        
         if is_trial:
             keyboard.append([
                 InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data="subscription_upgrade")
@@ -111,7 +116,7 @@ def get_subscription_keyboard(
             row3 = []
             row4 = [] 
             
-            row1.append(InlineKeyboardButton(text="🌍 Добавить страны", callback_data="subscription_add_countries"))
+            row1.append(InlineKeyboardButton(text="🌐 Добавить страны", callback_data="subscription_add_countries"))
             
             if subscription and subscription.traffic_limit_gb > 0:
                 row1.append(InlineKeyboardButton(text="📈 Добавить трафик", callback_data="subscription_add_traffic"))
@@ -189,7 +194,7 @@ def get_traffic_packages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         (50, texts.TRAFFIC_50GB),
         (100, texts.TRAFFIC_100GB),
         (250, texts.TRAFFIC_250GB),
-        (0, texts.TRAFFIC_UNLIMITED)  # 0 = безлимит
+        (0, texts.TRAFFIC_UNLIMITED) 
     ]
     
     for gb, text in packages:
@@ -294,7 +299,6 @@ def get_balance_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         InlineKeyboardButton(text=texts.BALANCE_SUPPORT_REQUEST, callback_data="balance_support")
     ])
     
-    # Назад
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
     ])
@@ -534,7 +538,6 @@ def get_manage_countries_keyboard(
     current_subscription_countries: List[str],
     language: str = "ru"
 ) -> InlineKeyboardMarkup:
-    """Клавиатура для управления странами подписки БЕЗ состояний FSM"""
     texts = get_texts(language)
     keyboard = []
     
@@ -592,3 +595,139 @@ def get_manage_countries_keyboard(
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+def get_device_selection_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📱 iOS (iPhone/iPad)", callback_data="device_guide_ios"),
+            InlineKeyboardButton(text="🤖 Android", callback_data="device_guide_android")
+        ],
+        [
+            InlineKeyboardButton(text="💻 Windows", callback_data="device_guide_windows"),
+            InlineKeyboardButton(text="🍎 macOS", callback_data="device_guide_mac")
+        ],
+        [
+            InlineKeyboardButton(text="📺 Android TV", callback_data="device_guide_tv")
+        ],
+        [
+            InlineKeyboardButton(text="🔗 Открыть ссылку подписки", callback_data="open_subscription_link")
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+        ]
+    ])
+
+
+def get_connection_guide_keyboard(
+    subscription_url: str, 
+    app: dict, 
+    language: str = "ru"
+) -> InlineKeyboardMarkup:
+    keyboard = []
+    
+    if 'installationStep' in app and 'buttons' in app['installationStep']:
+        app_buttons = []
+        for button in app['installationStep']['buttons']:
+            button_text = button['buttonText'].get(language, button['buttonText']['en'])
+            app_buttons.append(
+                InlineKeyboardButton(text=f"📥 {button_text}", url=button['buttonLink'])
+            )
+            if len(app_buttons) == 2:
+                keyboard.append(app_buttons)
+                app_buttons = []
+        
+        if app_buttons:
+            keyboard.append(app_buttons)
+    
+    keyboard.append([
+        InlineKeyboardButton(text="📋 Скопировать ссылку подписки", url=subscription_url)
+    ])
+    
+    keyboard.extend([
+        [
+            InlineKeyboardButton(text="📱 Выбрать другое устройство", callback_data="subscription_connect")
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ К подписке", callback_data="menu_subscription")
+        ]
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_app_selection_keyboard(
+    device_type: str, 
+    apps: list, 
+    language: str = "ru"
+) -> InlineKeyboardMarkup:
+    keyboard = []
+    
+    for app in apps:
+        app_name = app['name']
+        if app.get('isFeatured', False):
+            app_name = f"⭐ {app_name}"
+        
+        keyboard.append([
+            InlineKeyboardButton(
+                text=app_name, 
+                callback_data=f"app_{device_type}_{app['id']}"
+            )
+        ])
+    
+    keyboard.extend([
+        [
+            InlineKeyboardButton(text="📱 Выбрать другое устройство", callback_data="subscription_connect")
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ К подписке", callback_data="menu_subscription")
+        ]
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_specific_app_keyboard(
+    subscription_url: str,
+    app: dict,
+    device_type: str,
+    language: str = "ru"
+) -> InlineKeyboardMarkup:
+    keyboard = []
+    
+    if 'installationStep' in app and 'buttons' in app['installationStep']:
+        app_buttons = []
+        for button in app['installationStep']['buttons']:
+            button_text = button['buttonText'].get(language, button['buttonText']['en'])
+            app_buttons.append(
+                InlineKeyboardButton(text=f"📥 {button_text}", url=button['buttonLink'])
+            )
+            if len(app_buttons) == 2:
+                keyboard.append(app_buttons)
+                app_buttons = []
+        
+        if app_buttons:
+            keyboard.append(app_buttons)
+    
+    keyboard.append([
+        InlineKeyboardButton(text="📋 Скопировать ссылку подписки", url=subscription_url)
+    ])
+    
+    if 'additionalAfterAddSubscriptionStep' in app and 'buttons' in app['additionalAfterAddSubscriptionStep']:
+        for button in app['additionalAfterAddSubscriptionStep']['buttons']:
+            button_text = button['buttonText'].get(language, button['buttonText']['en'])
+            keyboard.append([
+                InlineKeyboardButton(text=button_text, url=button['buttonLink'])
+            ])
+    
+    keyboard.extend([
+        [
+            InlineKeyboardButton(text="📋 Другие приложения", callback_data=f"app_list_{device_type}")
+        ],
+        [
+            InlineKeyboardButton(text="📱 Выбрать другое устройство", callback_data="subscription_connect")
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ К подписке", callback_data="menu_subscription")
+        ]
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
