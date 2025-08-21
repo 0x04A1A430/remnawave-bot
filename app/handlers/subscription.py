@@ -1834,7 +1834,6 @@ async def handle_connect_subscription(
     db_user: User,
     db: AsyncSession
 ):
-    """Показать меню выбора устройства для подключения"""
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
@@ -2009,7 +2008,33 @@ async def handle_open_subscription_link(
         await callback.answer("❌ Ссылка подписки недоступна", show_alert=True)
         return
     
-    await callback.answer(url=subscription.subscription_url)
+    link_text = f"""
+🔗 <b>Ссылка подписки:</b>
+
+<code>{subscription.subscription_url}</code>
+
+📱 <b>Как использовать:</b>
+1. Нажмите на ссылку выше чтобы её скопировать
+2. Откройте ваше VPN приложение
+3. Найдите функцию "Добавить подписку" или "Import"
+4. Вставьте скопированную ссылку
+
+💡 Если ссылка не скопировалась, выделите её вручную и скопируйте.
+"""
+    
+    await callback.message.edit_text(
+        link_text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+            ]
+        ]),
+        parse_mode="HTML"
+    )
+    await callback.answer()
 
 
 def load_app_config() -> Dict[str, Any]:
