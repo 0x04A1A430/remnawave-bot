@@ -1324,18 +1324,218 @@ async def show_sync_options(
 
 Выберите тип синхронизации:
 
-- <b>Синхронизировать всех</b> - полная синхронизация всех пользователей
-- <b>Только новых</b> - создание пользователей из панели, которых нет в боте
-- <b>Обновить данные</b> - обновление информации о трафике и подписках
+🔄 <b>Синхронизировать всех</b>
+• Полная синхронизация всех пользователей
+• Создание новых пользователей из панели
+• Обновление данных существующих
+• Удаление неактуальных подписок
+• ⏱️ Время выполнения: 2-5 минут
 
-⚠️ Процесс может занять несколько минут
+🆕 <b>Только новых</b>
+• Создание пользователей из панели, которых нет в боте
+• Быстрое добавление при массовой регистрации
+• ⏱️ Время выполнения: 30 секунд - 2 минуты
+
+📈 <b>Обновить данные</b>
+• Обновление информации о трафике и подписках
+• Синхронизация статуса и лимитов
+• Обновление подключенных сквадов
+• ⏱️ Время выполнения: 1-3 минуты
+
+⚠️ <b>Важно:</b>
+• Во время синхронизации не выполняйте другие операции
+• При полной синхронизации подписки пользователей, отсутствующих в панели, будут деактивированы
+• Рекомендуется делать полную синхронизацию ежедневно
 """
+   
+   keyboard = [
+       [types.InlineKeyboardButton(text="🔄 Синхронизировать всех", callback_data="sync_all_users")],
+       [types.InlineKeyboardButton(text="🆕 Только новых", callback_data="sync_new_users")],
+       [types.InlineKeyboardButton(text="📈 Обновить данные", callback_data="sync_update_data")],
+       [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_remnawave")]
+   ]
    
    await callback.message.edit_text(
        text,
-       reply_markup=get_sync_options_keyboard(db_user.language)
+       reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
    )
    await callback.answer()
+
+@admin_required
+@error_handler
+async def show_sync_recommendations(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    
+    await callback.message.edit_text(
+        "🔍 Анализируем состояние синхронизации...",
+        reply_markup=None
+    )
+    
+    remnawave_service = RemnaWaveService()
+    recommendations = await remnawave_service.get_sync_recommendations(db)
+    
+    priority_emoji = {
+        "low": "🟢",
+        "medium": "🟡", 
+        "high": "🔴"
+    }
+    
+    text = f"""
+💡 <b>Рекомендации по синхронизации</b>
+
+{priority_emoji.get(recommendations['priority'], '🟢')} <b>Приоритет:</b> {recommendations['priority'].upper()}
+⏱️ <b>Время выполнения:</b> {recommendations['estimated_time']}
+
+<b>Рекомендуемое действие:</b>
+"""
+    
+    if recommendations['sync_type'] == 'all':
+        text += "🔄 Полная синхронизация"
+    elif recommendations['sync_type'] == 'update_only':
+        text += "📈 Обновление данных"
+    elif recommendations['sync_type'] == 'new_only':
+        text += "🆕 Синхронизация новых"
+    else:
+        text += "✅ Синхронизация не требуется"
+    
+    text += "\n\n<b>Причины:</b>\n"
+    for reason in recommendations['reasons']:
+        text += f"• {reason}\n"
+    
+    keyboard = []
+    
+    if recommendations['should_sync'] and recommendations['sync_type'] != 'none':
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=f"✅ Выполнить рекомендацию", 
+                callback_data=f"sync_{recommendations['sync_type']}_users" if recommendations['sync_type'] != 'update_only' else "sync_update_data"
+            )
+        ])
+    
+    keyboard.extend([
+        [types.InlineKeyboardButton(text="🔄 Другие опции", callback_data="admin_rw_sync")],
+        [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_remnawave")]
+    ])
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+@admin_required
+@error_handler
+async def validate_subscriptions(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    
+    await callback.message.edit_text(
+        "🔍 Выполняется валидация подписок...\n\nПроверяем данные, может занять несколько минут.",
+        reply_markup=None
+    )
+    
+    remnawave_service = RemnaWaveService()
+    stats = await remnawave_service.validate_and_fix_subscriptions(db)
+    
+    # Формируем отчет
+    if stats['errors'] == 0:
+        status_emoji = "✅"
+        status_text = "успешно завершена"
+    else:
+        status_emoji = "⚠️"
+        status_text = "завершена с ошибками"
+    
+    text = f"""
+{status_emoji} <b>Валидация {status_text}</b>
+
+📊 <b>Результаты:</b>
+• 🔍 Проверено подписок: {stats['checked']}
+• 🔧 Исправлено подписок: {stats['fixed']}
+• ⚠️ Найдено проблем: {stats['issues_found']}
+• ❌ Ошибок: {stats['errors']}
+"""
+    
+    if stats['fixed'] > 0:
+        text += "\n✅ <b>Исправленные проблемы:</b>\n"
+        text += "• Статусы просроченных подписок\n"
+        text += "• Отсутствующие данные RemnaWave\n" 
+        text += "• Некорректные лимиты трафика\n"
+        text += "• Настройки устройств\n"
+    
+    if stats['errors'] > 0:
+        text += f"\n⚠️ Обнаружены ошибки при обработке.\nПроверьте логи для подробной информации."
+    
+    keyboard = [
+        [types.InlineKeyboardButton(text="🔄 Повторить валидацию", callback_data="sync_validate")],
+        [types.InlineKeyboardButton(text="🔄 Полная синхронизация", callback_data="sync_all_users")],
+        [types.InlineKeyboardButton(text="⬅️ К синхронизации", callback_data="admin_rw_sync")]
+    ]
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+@admin_required
+@error_handler
+async def cleanup_subscriptions(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    
+    await callback.message.edit_text(
+        "🧹 Выполняется очистка неактуальных подписок...\n\nУдаляем подписки пользователей, отсутствующих в панели.",
+        reply_markup=None
+    )
+    
+    remnawave_service = RemnaWaveService()
+    stats = await remnawave_service.cleanup_orphaned_subscriptions(db)
+    
+    # Формируем отчет
+    if stats['errors'] == 0:
+        status_emoji = "✅"
+        status_text = "успешно завершена"
+    else:
+        status_emoji = "⚠️"
+        status_text = "завершена с ошибками"
+    
+    text = f"""
+{status_emoji} <b>Очистка {status_text}</b>
+
+📊 <b>Результаты:</b>
+• 🔍 Проверено подписок: {stats['checked']}
+• 🗑️ Деактивировано: {stats['deactivated']}
+• ❌ Ошибок: {stats['errors']}
+"""
+    
+    if stats['deactivated'] > 0:
+        text += f"\n🗑️ <b>Деактивированные подписки:</b>\n"
+        text += f"Отключены подписки пользователей, которые\n"
+        text += f"отсутствуют в панели RemnaWave.\n"
+    else:
+        text += f"\n✅ Все подписки актуальны!\nНеактуальных подписок не найдено."
+    
+    if stats['errors'] > 0:
+        text += f"\n⚠️ Обнаружены ошибки при обработке.\nПроверьте логи для подробной информации."
+    
+    keyboard = [
+        [types.InlineKeyboardButton(text="🔄 Повторить очистку", callback_data="sync_cleanup")],
+        [types.InlineKeyboardButton(text="🔍 Валидация", callback_data="sync_validate")],
+        [types.InlineKeyboardButton(text="⬅️ К синхронизации", callback_data="admin_rw_sync")]
+    ]
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
 
 
 @admin_required
@@ -1347,37 +1547,124 @@ async def sync_users(
 ):
    sync_type = callback.data.split('_')[-2] + "_" + callback.data.split('_')[-1]
    
+   progress_text = "🔄 Выполняется синхронизация...\n\n"
+   
+   if sync_type == "all_users":
+       progress_text += "📋 Тип: Полная синхронизация\n"
+       progress_text += "• Создание новых пользователей\n"
+       progress_text += "• Обновление существующих\n"
+       progress_text += "• Удаление неактуальных подписок\n"
+   elif sync_type == "new_users":
+       progress_text += "📋 Тип: Только новые пользователи\n"
+       progress_text += "• Создание пользователей из панели\n"
+   elif sync_type == "update_data":
+       progress_text += "📋 Тип: Обновление данных\n"
+       progress_text += "• Обновление информации о трафике\n"
+       progress_text += "• Синхронизация подписок\n"
+   
+   progress_text += "\n⏳ Пожалуйста, подождите..."
+   
    await callback.message.edit_text(
-       "🔄 Выполняется синхронизация...\n\nПожалуйста, подождите.",
+       progress_text,
        reply_markup=None
    )
    
    remnawave_service = RemnaWaveService()
    
-   if sync_type in ["all_users", "new_users", "update_data"]:
-       sync_map = {
-           "all_users": "all",
-           "new_users": "new_only", 
-           "update_data": "update_only"
-       }
-       stats = await remnawave_service.sync_users_from_panel(db, sync_map[sync_type])
+   sync_map = {
+       "all_users": "all",
+       "new_users": "new_only", 
+       "update_data": "update_only"
+   }
+   
+   stats = await remnawave_service.sync_users_from_panel(db, sync_map.get(sync_type, "all"))
+   
+   total_operations = stats['created'] + stats['updated'] + stats.get('deleted', 0)
+   success_operations = stats['created'] + stats['updated'] + stats.get('deleted', 0)
+   
+   if stats['errors'] == 0:
+       status_emoji = "✅"
+       status_text = "успешно завершена"
+   elif stats['errors'] < total_operations:
+       status_emoji = "⚠️"
+       status_text = "завершена с предупреждениями"
    else:
-       stats = {"created": 0, "updated": 0, "errors": 0}
+       status_emoji = "❌"
+       status_text = "завершена с ошибками"
    
    text = f"""
-✅ <b>Синхронизация завершена</b>
+{status_emoji} <b>Синхронизация {status_text}</b>
 
 📊 <b>Результат:</b>
-- Создано: {stats['created']}
-- Обновлено: {stats['updated']}
-- Ошибок: {stats['errors']}
 """
+   
+   if sync_type == "all_users":
+       text += f"• 🆕 Создано: {stats['created']}\n"
+       text += f"• 🔄 Обновлено: {stats['updated']}\n"
+       if 'deleted' in stats:
+           text += f"• 🗑️ Удалено: {stats['deleted']}\n"
+       text += f"• ❌ Ошибок: {stats['errors']}\n"
+   elif sync_type == "new_users":
+       text += f"• 🆕 Создано: {stats['created']}\n"
+       text += f"• ❌ Ошибок: {stats['errors']}\n"
+       if stats['created'] == 0 and stats['errors'] == 0:
+           text += "\n💡 Новых пользователей не найдено"
+   elif sync_type == "update_data":
+       text += f"• 🔄 Обновлено: {stats['updated']}\n"
+       text += f"• ❌ Ошибок: {stats['errors']}\n"
+       if stats['updated'] == 0 and stats['errors'] == 0:
+           text += "\n💡 Все данные актуальны"
+   
+   if stats['errors'] > 0:
+       text += f"\n⚠️ <b>Внимание:</b>\n"
+       text += f"Некоторые операции завершились с ошибками.\n"
+       text += f"Проверьте логи для получения подробной информации."
+   
+   if sync_type == "all_users" and 'deleted' in stats and stats['deleted'] > 0:
+       text += f"\n🗑️ <b>Удаленные подписки:</b>\n"
+       text += f"Деактивированы подписки пользователей,\n"
+       text += f"которые отсутствуют в панели RemnaWave."
+   
+   text += f"\n\n💡 <b>Рекомендации:</b>\n"
+   if sync_type == "all_users":
+       text += "• Полная синхронизация выполнена\n"
+       text += "• Рекомендуется запускать раз в день\n"
+   elif sync_type == "new_users":
+       text += "• Синхронизация новых пользователей\n"
+       text += "• Используйте при массовом добавлении\n"
+   elif sync_type == "update_data":
+       text += "• Обновление данных о трафике\n"
+       text += "• Запускайте для актуализации статистики\n"
+   
+   keyboard = []
+   
+   if stats['errors'] > 0:
+       keyboard.append([
+           types.InlineKeyboardButton(
+               text="🔄 Повторить синхронизацию", 
+               callback_data=callback.data
+           )
+       ])
+   
+   if sync_type != "all_users":
+       keyboard.append([
+           types.InlineKeyboardButton(
+               text="🔄 Полная синхронизация", 
+               callback_data="sync_all_users"
+           )
+       ])
+   
+   keyboard.extend([
+       [
+           types.InlineKeyboardButton(text="📊 Статистика системы", callback_data="admin_rw_system"),
+           types.InlineKeyboardButton(text="🌐 Ноды", callback_data="admin_rw_nodes")
+       ],
+       [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_remnawave")]
+   ])
    
    await callback.message.edit_text(
        text,
-       reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-           [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_remnawave")]
-       ])
+       reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
    )
    await callback.answer()
 
@@ -1435,6 +1722,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(restart_all_nodes, F.data == "admin_restart_all_nodes")
     dp.callback_query.register(show_sync_options, F.data == "admin_rw_sync")
     dp.callback_query.register(sync_users, F.data.startswith("sync_"))
+    dp.callback_query.register(show_sync_recommendations, F.data == "sync_recommendations")
+    dp.callback_query.register(validate_subscriptions, F.data == "sync_validate") 
+    dp.callback_query.register(cleanup_subscriptions, F.data == "sync_cleanup")
     dp.callback_query.register(show_squads_management, F.data == "admin_rw_squads")
     
     dp.callback_query.register(show_squad_details, F.data.startswith("admin_squad_manage_"))
