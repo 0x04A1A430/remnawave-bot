@@ -136,7 +136,7 @@ bedolaga_bot/
 │   │   ├── referral_service.py         # Рефералы                        
 │   │   ├── monitoring_service.py       # Мониторинг     
 │   │   ├── tribute_service.py               
-│   │   └── remnawave_service.py       # Интеграция с RemnaWave       
+│   │   └── remnawave_service.py       # Интеграция с Remnawave       
 │   │
 │   ├── utils/                 # Утилиты
 │   │   ├── __init__.py                                          
