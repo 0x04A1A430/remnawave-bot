@@ -339,18 +339,52 @@ def get_broadcast_history_keyboard(page: int, total_pages: int, language: str = 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_sync_options_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
+    keyboard = [
+        [InlineKeyboardButton(text="🔄 Полная синхронизация", callback_data="sync_all_users")],
+        [InlineKeyboardButton(text="🆕 Только новые", callback_data="sync_new_users")],
+        [InlineKeyboardButton(text="📈 Обновить данные", callback_data="sync_update_data")],
         [
-            InlineKeyboardButton(text="🔄 Синхронизировать всех", callback_data="sync_all_users"),
-            InlineKeyboardButton(text="➕ Только новых", callback_data="sync_new_users")
+            InlineKeyboardButton(text="🔍 Валидация", callback_data="sync_validate"),
+            InlineKeyboardButton(text="🧹 Очистка", callback_data="sync_cleanup")
         ],
+        [InlineKeyboardButton(text="💡 Рекомендации", callback_data="sync_recommendations")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_remnawave")]
+    ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_sync_confirmation_keyboard(sync_type: str, language: str = "ru") -> InlineKeyboardMarkup:
+    keyboard = [
+        [InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"confirm_{sync_type}")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_rw_sync")]
+    ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_sync_result_keyboard(sync_type: str, has_errors: bool = False, language: str = "ru") -> InlineKeyboardMarkup:
+    keyboard = []
+    
+    if has_errors:
+        keyboard.append([
+            InlineKeyboardButton(text="🔄 Повторить", callback_data=f"sync_{sync_type}")
+        ])
+    
+    if sync_type != "all_users":
+        keyboard.append([
+            InlineKeyboardButton(text="🔄 Полная синхронизация", callback_data="sync_all_users")
+        ])
+    
+    keyboard.extend([
         [
-            InlineKeyboardButton(text="📊 Обновить данные", callback_data="sync_update_data")
+            InlineKeyboardButton(text="📊 Статистика", callback_data="admin_rw_system"),
+            InlineKeyboardButton(text="🔍 Валидация", callback_data="sync_validate")
         ],
-        [
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_remnawave")
-        ]
+        [InlineKeyboardButton(text="⬅️ К синхронизации", callback_data="admin_rw_sync")],
+        [InlineKeyboardButton(text="🏠 В главное меню", callback_data="admin_remnawave")]
     ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
 
 
 def get_period_selection_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
