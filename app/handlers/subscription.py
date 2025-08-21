@@ -33,7 +33,8 @@ from app.keyboards.inline import (
     get_add_devices_keyboard, get_reset_traffic_confirm_keyboard,
     get_manage_countries_keyboard,
     get_device_selection_keyboard, get_connection_guide_keyboard,
-    get_app_selection_keyboard, get_specific_app_keyboard
+    get_app_selection_keyboard, get_specific_app_keyboard,
+    get_subscription_settings_keyboard
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
@@ -1311,6 +1312,38 @@ async def confirm_purchase(
     await state.clear()
     await callback.answer()
 
+async def handle_subscription_settings(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    
+    if not subscription or subscription.is_trial:
+        await callback.answer("⚠️ Настройки доступны только для платных подписок", show_alert=True)
+        return
+    
+    devices_used = await get_current_devices_count(db_user)
+    
+    settings_text = f"""
+⚙️ <b>Настройки подписки</b>
+
+📊 <b>Текущие параметры:</b>
+🌍 Стран: {len(subscription.connected_squads)}
+📈 Трафик: {texts.format_traffic(subscription.traffic_used_gb)} / {texts.format_traffic(subscription.traffic_limit_gb)}
+📱 Устройства: {devices_used} / {subscription.device_limit}
+
+Выберите что хотите изменить:
+"""
+    
+    await callback.message.edit_text(
+        settings_text,
+        reply_markup=get_subscription_settings_keyboard(db_user.language),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
 
 async def handle_autopay_menu(
     callback: types.CallbackQuery,
@@ -2291,4 +2324,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_open_subscription_link,
         F.data == "open_subscription_link"
+    )
+
+    dp.callback_query.register(
+        handle_subscription_settings,
+        F.data == "subscription_settings"
     )
