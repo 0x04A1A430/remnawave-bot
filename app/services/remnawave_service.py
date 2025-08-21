@@ -391,17 +391,34 @@ class RemnaWaveService:
             return False
     
     async def sync_users_from_panel(self, db: AsyncSession, sync_type: str = "all") -> Dict[str, int]:
+        """
+        Синхронизация пользователей из панели RemnaWave в бота
+        
+        sync_type:
+        - "all": полная синхронизация (создание + обновление + удаление)
+        - "new_only": только создание новых пользователей
+        - "update_only": только обновление существующих
+        """
         try:
-            stats = {"created": 0, "updated": 0, "errors": 0}
+            stats = {"created": 0, "updated": 0, "errors": 0, "deleted": 0}
         
             logger.info(f"🔄 Начинаем синхронизацию типа: {sync_type}")
         
             async with self.api as api:
+                # Получаем всех пользователей из панели
                 panel_users_data = await api._make_request('GET', '/api/users')
                 panel_users = panel_users_data['response']['users']
             
                 logger.info(f"👥 Найдено пользователей в панели: {len(panel_users)}")
-            
+                
+                # Получаем всех пользователей из бота для сравнения
+                bot_users = await get_users_list(db, offset=0, limit=10000)
+                bot_users_by_telegram_id = {user.telegram_id: user for user in bot_users}
+                
+                # Множество telegram_id из панели для проверки удаленных
+                panel_telegram_ids = set()
+                
+                # Обрабатываем каждого пользователя из панели
                 for i, panel_user in enumerate(panel_users):
                     try:
                         telegram_id = panel_user.get('telegramId')
@@ -409,13 +426,16 @@ class RemnaWaveService:
                             logger.debug(f"➡️ Пропускаем пользователя без telegram_id")
                             continue
                         
+                        panel_telegram_ids.add(telegram_id)
+                        
                         logger.info(f"🔄 Обрабатываем пользователя {i+1}/{len(panel_users)}: {telegram_id}")
                     
-                        db_user = await get_user_by_telegram_id(db, telegram_id)
+                        db_user = bot_users_by_telegram_id.get(telegram_id)
                     
                         if not db_user:
+                            # Пользователя нет в боте - создаем
                             if sync_type in ["new_only", "all"]:
-                                logger.info(f"📝 Создание пользователя для telegram_id {telegram_id}")
+                                logger.info(f"🆕 Создание пользователя для telegram_id {telegram_id}")
                                 
                                 from app.database.crud.user import create_user
                             
@@ -435,6 +455,7 @@ class RemnaWaveService:
                                 logger.info(f"✅ Создан пользователь {telegram_id} с подпиской")
                             
                         else:
+                            # Пользователь есть в боте - обновляем
                             if sync_type in ["update_only", "all"]:
                                 logger.debug(f"🔄 Обновление пользователя {telegram_id}")
                             
@@ -450,13 +471,33 @@ class RemnaWaveService:
                         logger.error(f"❌ Ошибка обработки пользователя {telegram_id}: {user_error}")
                         stats["errors"] += 1
                         continue
+                
+                # Удаляем подписки пользователей, которых нет в панели
+                if sync_type == "all":
+                    logger.info("🗑️ Удаляем подписки пользователей, отсутствующих в панели...")
+                    
+                    for telegram_id, db_user in bot_users_by_telegram_id.items():
+                        if telegram_id not in panel_telegram_ids and db_user.subscription:
+                            try:
+                                logger.info(f"🗑️ Удаляем подписку пользователя {telegram_id} (нет в панели)")
+                                
+                                # Деактивируем подписку
+                                from app.database.crud.subscription import deactivate_subscription
+                                await deactivate_subscription(db, db_user.subscription)
+                                
+                                stats["deleted"] += 1
+                                logger.info(f"✅ Деактивирована подписка пользователя {telegram_id}")
+                                
+                            except Exception as delete_error:
+                                logger.error(f"❌ Ошибка удаления подписки {telegram_id}: {delete_error}")
+                                stats["errors"] += 1
         
-            logger.info(f"🎯 Синхронизация завершена: создано {stats['created']}, обновлено {stats['updated']}, ошибок {stats['errors']}")
+            logger.info(f"🎯 Синхронизация завершена: создано {stats['created']}, обновлено {stats['updated']}, удалено {stats['deleted']}, ошибок {stats['errors']}")
             return stats
         
         except Exception as e:
             logger.error(f"❌ Критическая ошибка синхронизации пользователей: {e}")
-            return {"created": 0, "updated": 0, "errors": 1}
+            return {"created": 0, "updated": 0, "errors": 1, "deleted": 0}
 
     async def _create_subscription_from_panel_data(self, db: AsyncSession, user, panel_user):
         try:
@@ -549,6 +590,7 @@ class RemnaWaveService:
     async def _update_subscription_from_panel_data(self, db: AsyncSession, user, panel_user):
         try:
             from app.database.crud.subscription import get_subscription_by_user_id
+            from app.database.models import SubscriptionStatus
             from datetime import datetime, timedelta
         
             subscription = await get_subscription_by_user_id(db, user.id)
@@ -557,18 +599,72 @@ class RemnaWaveService:
                 await self._create_subscription_from_panel_data(db, user, panel_user)
                 return
         
+            # Обновляем статус подписки
+            panel_status = panel_user.get('status', 'ACTIVE')
+            expire_at_str = panel_user.get('expireAt', '')
+            
+            try:
+                if expire_at_str:
+                    if expire_at_str.endswith('Z'):
+                        expire_at_str = expire_at_str[:-1] + '+00:00'
+                    expire_at = datetime.fromisoformat(expire_at_str)
+                    if expire_at.tzinfo is not None:
+                        expire_at = expire_at.replace(tzinfo=None)
+                    
+                    # Обновляем дату окончания если она отличается
+                    if abs((subscription.end_date - expire_at).total_seconds()) > 60:  # больше минуты разницы
+                        subscription.end_date = expire_at
+                        logger.debug(f"Обновлена дата окончания подписки до {expire_at}")
+            except Exception as date_error:
+                logger.warning(f"⚠️ Ошибка парсинга даты при обновлении {expire_at_str}: {date_error}")
+            
+            # Обновляем статус
+            current_time = datetime.utcnow()
+            if panel_status == 'ACTIVE' and subscription.end_date > current_time:
+                new_status = SubscriptionStatus.ACTIVE.value
+            elif subscription.end_date <= current_time:
+                new_status = SubscriptionStatus.EXPIRED.value
+            elif panel_status == 'DISABLED':
+                new_status = SubscriptionStatus.DISABLED.value
+            else:
+                new_status = subscription.status  # Оставляем текущий статус
+            
+            if subscription.status != new_status:
+                subscription.status = new_status
+                logger.debug(f"Обновлен статус подписки: {new_status}")
+        
+            # Обновляем использованный трафик
             used_traffic_bytes = panel_user.get('usedTrafficBytes', 0)
             traffic_used_gb = used_traffic_bytes / (1024**3)
         
             if abs(subscription.traffic_used_gb - traffic_used_gb) > 0.01:
                 subscription.traffic_used_gb = traffic_used_gb
+                logger.debug(f"Обновлен использованный трафик: {traffic_used_gb} GB")
+            
+            # Обновляем лимит трафика
+            traffic_limit_bytes = panel_user.get('trafficLimitBytes', 0)
+            traffic_limit_gb = traffic_limit_bytes // (1024**3) if traffic_limit_bytes > 0 else 0
+            
+            if subscription.traffic_limit_gb != traffic_limit_gb:
+                subscription.traffic_limit_gb = traffic_limit_gb
+                logger.debug(f"Обновлен лимит трафика: {traffic_limit_gb} GB")
+            
+            # Обновляем лимит устройств
+            device_limit = panel_user.get('hwidDeviceLimit', 1) or 1
+            if subscription.device_limit != device_limit:
+                subscription.device_limit = device_limit
+                logger.debug(f"Обновлен лимит устройств: {device_limit}")
         
+            # Обновляем RemnaWave UUID если отсутствует
             if not subscription.remnawave_short_uuid:
                 subscription.remnawave_short_uuid = panel_user.get('shortUuid')
         
-            if not subscription.subscription_url:
-                subscription.subscription_url = panel_user.get('subscriptionUrl', '')
+            # Обновляем URL подписки если отсутствует или изменился
+            panel_url = panel_user.get('subscriptionUrl', '')
+            if not subscription.subscription_url or subscription.subscription_url != panel_url:
+                subscription.subscription_url = panel_url
         
+            # Обновляем подключенные сквады
             active_squads = panel_user.get('activeInternalSquads', [])
             squad_uuids = []
             if isinstance(active_squads, list):
@@ -578,14 +674,20 @@ class RemnaWaveService:
                     elif isinstance(squad, str):
                         squad_uuids.append(squad)
         
-            if squad_uuids != subscription.connected_squads:
+            # Сравниваем сквады - обновляем только если есть изменения
+            current_squads = set(subscription.connected_squads or [])
+            new_squads = set(squad_uuids)
+            
+            if current_squads != new_squads:
                 subscription.connected_squads = squad_uuids
+                logger.debug(f"Обновлены подключенные сквады: {squad_uuids}")
         
             await db.commit()
             logger.debug(f"✅ Обновлена подписка для пользователя {user.telegram_id}")
         
         except Exception as e:
             logger.error(f"❌ Ошибка обновления подписки для пользователя {user.telegram_id}: {e}")
+            await db.rollback()
     
     async def sync_users_to_panel(self, db: AsyncSession) -> Dict[str, int]:
         try:
@@ -866,3 +968,265 @@ class RemnaWaveService:
         except Exception as e:
             logger.error(f"Ошибка валидации данных пользователя: {e}")
             return False
+
+    async def cleanup_orphaned_subscriptions(self, db: AsyncSession) -> Dict[str, int]:
+        try:
+            stats = {"deactivated": 0, "errors": 0, "checked": 0}
+        
+            logger.info("🧹 Начинаем очистку неактуальных подписок...")
+        
+            async with self.api as api:
+                panel_users_data = await api._make_request('GET', '/api/users')
+                panel_users = panel_users_data['response']['users']
+        
+            panel_telegram_ids = set()
+            for panel_user in panel_users:
+                telegram_id = panel_user.get('telegramId')
+                if telegram_id:
+                    panel_telegram_ids.add(telegram_id)
+        
+            logger.info(f"📊 Найдено {len(panel_telegram_ids)} пользователей в панели")
+        
+            from app.database.crud.subscription import get_all_subscriptions
+            from app.database.models import SubscriptionStatus
+        
+            page = 1
+            limit = 100
+        
+            while True:
+                subscriptions, total_count = await get_all_subscriptions(db, page, limit)
+                
+                if not subscriptions:
+                    break
+            
+                for subscription in subscriptions:
+                    try:
+                        stats["checked"] += 1
+                        user = subscription.user
+                    
+                        if subscription.status == SubscriptionStatus.DISABLED.value:
+                            continue
+                    
+                        if user.telegram_id not in panel_telegram_ids:
+                            logger.info(f"🗑️ Деактивируем подписку пользователя {user.telegram_id} (отсутствует в панели)")
+                        
+                            from app.database.crud.subscription import deactivate_subscription
+                            await deactivate_subscription(db, subscription)
+                        
+                            stats["deactivated"] += 1
+                        
+                    except Exception as sub_error:
+                        logger.error(f"❌ Ошибка обработки подписки {subscription.id}: {sub_error}")
+                        stats["errors"] += 1
+            
+                page += 1
+                if len(subscriptions) < limit:
+                    break
+        
+            logger.info(f"🧹 Очистка завершена: проверено {stats['checked']}, деактивировано {stats['deactivated']}, ошибок {stats['errors']}")
+            return stats
+        
+        except Exception as e:
+            logger.error(f"❌ Критическая ошибка очистки подписок: {e}")
+            return {"deactivated": 0, "errors": 1, "checked": 0}
+
+
+    async def sync_subscription_statuses(self, db: AsyncSession) -> Dict[str, int]:
+        try:
+            stats = {"updated": 0, "errors": 0, "checked": 0}
+        
+            logger.info("🔄 Начинаем синхронизацию статусов подписок...")
+        
+            async with self.api as api:
+                panel_users_data = await api._make_request('GET', '/api/users')
+                panel_users = panel_users_data['response']['users']
+        
+            panel_users_dict = {}
+            for panel_user in panel_users:
+                telegram_id = panel_user.get('telegramId')
+                if telegram_id:
+                    panel_users_dict[telegram_id] = panel_user
+        
+            logger.info(f"📊 Найдено {len(panel_users_dict)} пользователей в панели для синхронизации")
+        
+            from app.database.crud.subscription import get_all_subscriptions
+            from app.database.models import SubscriptionStatus
+            from datetime import datetime
+        
+            page = 1
+            limit = 100
+        
+            while True:
+                subscriptions, total_count = await get_all_subscriptions(db, page, limit)
+            
+                if not subscriptions:
+                    break
+            
+                for subscription in subscriptions:
+                    try:
+                        stats["checked"] += 1
+                        user = subscription.user
+                    
+                        panel_user = panel_users_dict.get(user.telegram_id)
+                    
+                        if panel_user:
+                            await self._update_subscription_from_panel_data(db, user, panel_user)
+                            stats["updated"] += 1
+                        else:
+                            if subscription.status != SubscriptionStatus.DISABLED.value:
+                                logger.info(f"🗑️ Деактивируем подписку пользователя {user.telegram_id} (нет в панели)")
+                            
+                                from app.database.crud.subscription import deactivate_subscription
+                                await deactivate_subscription(db, subscription)
+                                stats["updated"] += 1
+                        
+                    except Exception as sub_error:
+                        logger.error(f"❌ Ошибка синхронизации подписки {subscription.id}: {sub_error}")
+                        stats["errors"] += 1
+            
+                page += 1
+                if len(subscriptions) < limit:
+                    break
+        
+            logger.info(f"🔄 Синхронизация статусов завершена: проверено {stats['checked']}, обновлено {stats['updated']}, ошибок {stats['errors']}")
+            return stats
+        
+        except Exception as e:
+            logger.error(f"❌ Критическая ошибка синхронизации статусов: {e}")
+            return {"updated": 0, "errors": 1, "checked": 0}
+
+
+    async def validate_and_fix_subscriptions(self, db: AsyncSession) -> Dict[str, int]:
+        try:
+            stats = {"fixed": 0, "errors": 0, "checked": 0, "issues_found": 0}
+        
+            logger.info("🔍 Начинаем валидацию подписок...")
+            
+            from app.database.crud.subscription import get_all_subscriptions
+            from app.database.models import SubscriptionStatus
+            from datetime import datetime
+        
+            page = 1
+            limit = 100
+        
+            while True:
+                subscriptions, total_count = await get_all_subscriptions(db, page, limit)
+            
+                if not subscriptions:
+                    break
+            
+                for subscription in subscriptions:
+                    try:
+                        stats["checked"] += 1
+                        user = subscription.user
+                        issues_fixed = 0
+                    
+                        current_time = datetime.utcnow()
+                        if subscription.end_date <= current_time and subscription.status == SubscriptionStatus.ACTIVE.value:
+                            logger.info(f"🔧 Исправляем статус просроченной подписки {user.telegram_id}")
+                            subscription.status = SubscriptionStatus.EXPIRED.value
+                            issues_fixed += 1
+                
+                        if not subscription.remnawave_short_uuid and user.remnawave_uuid:
+                            try:
+                                async with self.api as api:
+                                    rw_user = await api.get_user_by_uuid(user.remnawave_uuid)
+                                    if rw_user:
+                                        subscription.remnawave_short_uuid = rw_user.short_uuid
+                                        subscription.subscription_url = rw_user.subscription_url
+                                        logger.info(f"🔧 Восстановлены данные RemnaWave для {user.telegram_id}")
+                                        issues_fixed += 1
+                            except Exception as rw_error:
+                                logger.warning(f"⚠️ Не удалось получить данные RemnaWave для {user.telegram_id}: {rw_error}")
+                    
+                        if subscription.traffic_limit_gb < 0:
+                            subscription.traffic_limit_gb = 0
+                            logger.info(f"🔧 Исправлен некорректный лимит трафика для {user.telegram_id}")
+                            issues_fixed += 1
+                    
+                        if subscription.traffic_used_gb < 0:
+                            subscription.traffic_used_gb = 0.0
+                            logger.info(f"🔧 Исправлено некорректное использование трафика для {user.telegram_id}")
+                            issues_fixed += 1
+                    
+                        if subscription.device_limit <= 0:
+                            subscription.device_limit = 1
+                            logger.info(f"🔧 Исправлен лимит устройств для {user.telegram_id}")
+                            issues_fixed += 1
+                    
+                        if subscription.connected_squads is None:
+                            subscription.connected_squads = []
+                            logger.info(f"🔧 Инициализирован список сквадов для {user.telegram_id}")
+                            issues_fixed += 1
+                    
+                        if issues_fixed > 0:
+                            stats["issues_found"] += issues_fixed
+                            stats["fixed"] += 1
+                            await db.commit()
+                        
+                    except Exception as sub_error:
+                        logger.error(f"❌ Ошибка валидации подписки {subscription.id}: {sub_error}")
+                        stats["errors"] += 1
+                        await db.rollback()
+            
+                page += 1
+                if len(subscriptions) < limit:
+                    break
+        
+            logger.info(f"🔍 Валидация завершена: проверено {stats['checked']}, исправлено подписок {stats['fixed']}, найдено проблем {stats['issues_found']}, ошибок {stats['errors']}")
+            return stats
+        
+        except Exception as e:
+            logger.error(f"❌ Критическая ошибка валидации: {e}")
+            return {"fixed": 0, "errors": 1, "checked": 0, "issues_found": 0}
+
+
+    async def get_sync_recommendations(self, db: AsyncSession) -> Dict[str, Any]:
+        try:
+            recommendations = {
+                "should_sync": False,
+                "sync_type": "none",
+                "reasons": [],
+                "priority": "low",
+                "estimated_time": "1-2 минуты"
+            }
+        
+            from app.database.crud.user import get_users_list
+            bot_users = await get_users_list(db, offset=0, limit=10000)
+        
+            users_without_uuid = sum(1 for user in bot_users if not user.remnawave_uuid and user.subscription)
+        
+            from app.database.crud.subscription import get_expired_subscriptions
+            expired_subscriptions = await get_expired_subscriptions(db)
+            active_expired = sum(1 for sub in expired_subscriptions if sub.status == "active")
+        
+            if users_without_uuid > 10:
+                recommendations["should_sync"] = True
+                recommendations["sync_type"] = "all"
+                recommendations["priority"] = "high"
+                recommendations["reasons"].append(f"Найдено {users_without_uuid} пользователей без связи с RemnaWave")
+                recommendations["estimated_time"] = "3-5 минут"
+        
+            if active_expired > 5:
+                recommendations["should_sync"] = True
+                if recommendations["sync_type"] == "none":
+                    recommendations["sync_type"] = "update_only"
+                recommendations["priority"] = "medium" if recommendations["priority"] == "low" else recommendations["priority"]
+                recommendations["reasons"].append(f"Найдено {active_expired} активных подписок с истекшим сроком")
+        
+            if not recommendations["should_sync"]:
+                recommendations["sync_type"] = "update_only"
+                recommendations["reasons"].append("Рекомендуется регулярная синхронизация данных")
+                recommendations["estimated_time"] = "1-2 минуты"
+        
+            return recommendations
+        
+        except Exception as e:
+            logger.error(f"❌ Ошибка получения рекомендаций: {e}")
+            return {
+                "should_sync": True,
+                "sync_type": "all",
+                "reasons": ["Ошибка анализа - рекомендуется полная синхронизация"],
+                "priority": "medium",
+                "estimated_time": "3-5 минут"
+            }
