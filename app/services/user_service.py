@@ -157,6 +157,10 @@ class UserService:
             if not user:
                 return False
             
+            if user.subscription:
+                from app.database.crud.subscription import deactivate_subscription
+                await deactivate_subscription(db, user.subscription)
+            
             await update_user(db, user, status=UserStatus.BLOCKED.value)
             
             logger.info(f"Админ {admin_id} заблокировал пользователя {user_id}: {reason}")
@@ -179,6 +183,18 @@ class UserService:
             
             await update_user(db, user, status=UserStatus.ACTIVE.value)
             
+            if user.subscription:
+                from datetime import datetime
+                from app.database.models import SubscriptionStatus
+                
+                if user.subscription.end_date > datetime.utcnow():
+                    user.subscription.status = SubscriptionStatus.ACTIVE.value
+                    await db.commit()
+                    await db.refresh(user.subscription)
+                    logger.info(f"🔄 Подписка пользователя {user_id} восстановлена")
+                else:
+                    logger.info(f"⏰ Подписка пользователя {user_id} истекла, восстановление невозможно")
+            
             logger.info(f"Админ {admin_id} разблокировал пользователя {user_id}")
             return True
             
@@ -196,6 +212,10 @@ class UserService:
             user = await get_user_by_id(db, user_id)
             if not user:
                 return False
+            
+            if user.subscription:
+                from app.database.crud.subscription import deactivate_subscription
+                await deactivate_subscription(db, user.subscription)
             
             success = await delete_user(db, user)
             
