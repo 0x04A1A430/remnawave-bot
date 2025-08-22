@@ -176,7 +176,7 @@ async def start_tribute_payment(
     try:
         from app.services.tribute_service import TributeService
         
-        tribute_service = TributeService()
+        tribute_service = TributeService(callback.bot)
         payment_url = await tribute_service.create_payment_link(
             user_id=db_user.telegram_id,
             amount_kopeks=0,
