@@ -9,6 +9,7 @@ from app.states import RegistrationStates
 from app.database.crud.user import (
     get_user_by_telegram_id, create_user, get_user_by_referral_code
 )
+from app.database.models import UserStatus
 from app.keyboards.inline import (
     get_rules_keyboard, get_main_menu_keyboard
 )
@@ -19,7 +20,7 @@ from app.utils.user_utils import generate_unique_referral_code
 logger = logging.getLogger(__name__)
 
 
-async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession):
+async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession, db_user=None):
     logger.info(f"🚀 START: Обработка /start от {message.from_user.id}")
     
     referral_code = None
@@ -31,10 +32,10 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession)
     if referral_code:
         await state.set_data({'referral_code': referral_code})
     
-    user = await get_user_by_telegram_id(db, message.from_user.id)
+    user = db_user if db_user else await get_user_by_telegram_id(db, message.from_user.id)
     
-    if user:
-        logger.info(f"✅ Пользователь найден: {user.telegram_id}")
+    if user and user.status != UserStatus.DELETED.value:
+        logger.info(f"✅ Активный пользователь найден: {user.telegram_id}")
         texts = get_texts(user.language)
         
         if referral_code and not user.referred_by_id:
@@ -60,26 +61,82 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession)
                 subscription_is_active=subscription_is_active
             )
         )
+        await state.clear()
+        return
+    
+    if user and user.status == UserStatus.DELETED.value:
+        logger.info(f"🔄 Удаленный пользователь {user.telegram_id} начинает повторную регистрацию")
+        
+        try:
+            from app.services.user_service import UserService
+            from app.database.models import (
+                Subscription, Transaction, PromoCodeUse, 
+                ReferralEarning, SubscriptionServer
+            )
+            from sqlalchemy import delete
+            
+            if user.subscription:
+                await db.execute(
+                    delete(SubscriptionServer).where(
+                        SubscriptionServer.subscription_id == user.subscription.id
+                    )
+                )
+                logger.info(f"🗑️ Удалены записи SubscriptionServer")
+            
+            if user.subscription:
+                await db.delete(user.subscription)
+                logger.info(f"🗑️ Удалена подписка пользователя")
+            
+            await db.execute(
+                delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id)
+            )
+            
+            await db.execute(
+                delete(ReferralEarning).where(ReferralEarning.user_id == user.id)
+            )
+            await db.execute(
+                delete(ReferralEarning).where(ReferralEarning.referral_id == user.id)
+            )
+            
+            await db.execute(
+                delete(Transaction).where(Transaction.user_id == user.id)
+            )
+            
+            user.status = UserStatus.ACTIVE.value
+            user.balance_kopeks = 0
+            user.remnawave_uuid = None
+            user.has_had_paid_subscription = False
+            user.referred_by_id = None
+            from app.utils.user_utils import generate_unique_referral_code
+            user.referral_code = await generate_unique_referral_code(db, user.telegram_id)
+            
+            await db.commit()
+            
+            logger.info(f"✅ Пользователь {user.telegram_id} подготовлен к восстановлению")
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка подготовки к восстановлению: {e}")
+            await db.rollback()
     else:
         logger.info(f"🆕 Новый пользователь, начинаем регистрацию")
-        
-        language = 'ru'
-        texts = get_texts(language)
-        
-        data = await state.get_data() or {}
-        data['language'] = language
-        await state.set_data(data)
-        logger.info(f"💾 Установлен русский язык по умолчанию")
-        
-        await message.answer(
-            texts.RULES_TEXT,
-            reply_markup=get_rules_keyboard(language)
-        )
-        logger.info(f"📋 Правила отправлены")
-        
-        await state.set_state(RegistrationStates.waiting_for_rules_accept)
-        current_state = await state.get_state()
-        logger.info(f"📊 Установлено состояние: {current_state}")
+    
+    language = 'ru'
+    texts = get_texts(language)
+    
+    data = await state.get_data() or {}
+    data['language'] = language
+    await state.set_data(data)
+    logger.info(f"💾 Установлен русский язык по умолчанию")
+    
+    await message.answer(
+        texts.RULES_TEXT,
+        reply_markup=get_rules_keyboard(language)
+    )
+    logger.info(f"📋 Правила отправлены")
+    
+    await state.set_state(RegistrationStates.waiting_for_rules_accept)
+    current_state = await state.get_state()
+    logger.info(f"📊 Установлено состояние: {current_state}")
 
 
 async def process_rules_accept(
@@ -125,7 +182,7 @@ async def process_rules_accept(
                 if referrer:
                     data['referrer_id'] = referrer.id
                     await state.set_data(data)
-                    logger.info(f"✅ Референс найден: {referrer.id}")
+                    logger.info(f"✅ Реферер найден: {referrer.id}")
                 
                 await complete_registration_from_callback(callback, state, db)
             else:
@@ -237,8 +294,9 @@ async def complete_registration_from_callback(
     logger.info(f"🏁 COMPLETE: Завершение регистрации для пользователя {callback.from_user.id}")
     
     existing_user = await get_user_by_telegram_id(db, callback.from_user.id)
-    if existing_user:
-        logger.warning(f"⚠️ Пользователь {callback.from_user.id} уже существует! Показываем главное меню.")
+    
+    if existing_user and existing_user.status == UserStatus.ACTIVE.value:
+        logger.warning(f"⚠️ Пользователь {callback.from_user.id} уже активен! Показываем главное меню.")
         texts = get_texts(existing_user.language)
         
         has_active_subscription = existing_user.subscription is not None
@@ -282,18 +340,43 @@ async def complete_registration_from_callback(
         if referrer:
             referrer_id = referrer.id
     
-    referral_code = await generate_unique_referral_code(db, callback.from_user.id)
-    
-    user = await create_user(
-        db=db,
-        telegram_id=callback.from_user.id,
-        username=callback.from_user.username,
-        first_name=callback.from_user.first_name,
-        last_name=callback.from_user.last_name,
-        language=language,
-        referred_by_id=referrer_id,
-        referral_code=referral_code 
-    )
+    if existing_user and existing_user.status == UserStatus.DELETED.value:
+        logger.info(f"🔄 Восстанавливаем удаленного пользователя {callback.from_user.id}")
+        
+        existing_user.username = callback.from_user.username
+        existing_user.first_name = callback.from_user.first_name
+        existing_user.last_name = callback.from_user.last_name
+        existing_user.language = language
+        existing_user.referred_by_id = referrer_id
+        existing_user.status = UserStatus.ACTIVE.value
+        existing_user.balance_kopeks = 0
+        existing_user.has_had_paid_subscription = False
+        
+        from datetime import datetime
+        existing_user.updated_at = datetime.utcnow()
+        existing_user.last_activity = datetime.utcnow()
+        
+        await db.commit()
+        await db.refresh(existing_user)
+        
+        user = existing_user
+        logger.info(f"✅ Пользователь {callback.from_user.id} восстановлен")
+        
+    else:
+        logger.info(f"🆕 Создаем нового пользователя {callback.from_user.id}")
+        
+        referral_code = await generate_unique_referral_code(db, callback.from_user.id)
+        
+        user = await create_user(
+            db=db,
+            telegram_id=callback.from_user.id,
+            username=callback.from_user.username,
+            first_name=callback.from_user.first_name,
+            last_name=callback.from_user.last_name,
+            language=language,
+            referred_by_id=referrer_id,
+            referral_code=referral_code 
+        )
     
     if referrer_id:
         try:
@@ -355,7 +438,7 @@ async def complete_registration_from_callback(
             except Exception as final_error:
                 logger.error(f"❌ Критическая ошибка при отправке простого сообщения: {final_error}")
     
-    logger.info(f"✅ Зарегистрирован новый пользователь: {user_telegram_id}")
+    logger.info(f"✅ Регистрация завершена для пользователя: {user_telegram_id}")
 
 
 async def complete_registration(
@@ -365,6 +448,8 @@ async def complete_registration(
 ):
     
     logger.info(f"🏁 COMPLETE: Завершение регистрации для пользователя {message.from_user.id}")
+    
+    existing_user = await get_user_by_telegram_id(db, message.from_user.id)
     
     data = await state.get_data()
     language = data.get('language', 'ru')
@@ -376,18 +461,43 @@ async def complete_registration(
         if referrer:
             referrer_id = referrer.id
     
-    referral_code = await generate_unique_referral_code(db, message.from_user.id)
-    
-    user = await create_user(
-        db=db,
-        telegram_id=message.from_user.id,
-        username=message.from_user.username,
-        first_name=message.from_user.first_name,
-        last_name=message.from_user.last_name,
-        language=language,
-        referred_by_id=referrer_id,
-        referral_code=referral_code
-    )
+    if existing_user and existing_user.status == UserStatus.DELETED.value:
+        logger.info(f"🔄 Восстанавливаем удаленного пользователя {message.from_user.id}")
+        
+        existing_user.username = message.from_user.username
+        existing_user.first_name = message.from_user.first_name
+        existing_user.last_name = message.from_user.last_name
+        existing_user.language = language
+        existing_user.referred_by_id = referrer_id
+        existing_user.status = UserStatus.ACTIVE.value
+        existing_user.balance_kopeks = 0
+        existing_user.has_had_paid_subscription = False
+        
+        from datetime import datetime
+        existing_user.updated_at = datetime.utcnow()
+        existing_user.last_activity = datetime.utcnow()
+        
+        await db.commit()
+        await db.refresh(existing_user)
+        
+        user = existing_user
+        logger.info(f"✅ Пользователь {message.from_user.id} восстановлен")
+        
+    else:
+        logger.info(f"🆕 Создаем нового пользователя {message.from_user.id}")
+        
+        referral_code = await generate_unique_referral_code(db, message.from_user.id)
+        
+        user = await create_user(
+            db=db,
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+            last_name=message.from_user.last_name,
+            language=language,
+            referred_by_id=referrer_id,
+            referral_code=referral_code
+        )
     
     if referrer_id:
         try:
@@ -449,7 +559,7 @@ async def complete_registration(
             except:
                 pass
     
-    logger.info(f"✅ Зарегистрирован новый пользователь: {user_telegram_id}")
+    logger.info(f"✅ Регистрация завершена для пользователя: {user_telegram_id}")
 
 
 def _get_subscription_status(user, texts):
