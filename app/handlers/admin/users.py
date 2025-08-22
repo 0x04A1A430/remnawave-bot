@@ -274,7 +274,7 @@ async def show_user_subscription(
         text += f"<b>Окончание:</b> {format_datetime(subscription.end_date)}\n"
         text += f"<b>Трафик:</b> {subscription.traffic_used_gb:.1f}/{subscription.traffic_limit_gb} ГБ\n"
         text += f"<b>Устройства:</b> {subscription.device_limit}\n"
-        text += f"<b>Подключенных устройств:</b> {len(subscription.connected_devices) if subscription.connected_devices else 0}\n"
+        text += f"<b>Подключенных устройств:</b> {subscription.device_limit}\n"
         
         if subscription.is_active:
             days_left = (subscription.end_date - datetime.utcnow()).days
@@ -521,7 +521,14 @@ async def show_user_management(
     user = profile["user"]
     subscription = profile["subscription"]
     
-    status_text = "✅ Активен" if user.status == UserStatus.ACTIVE.value else "❌ Заблокирован"
+    if user.status == UserStatus.ACTIVE.value:
+        status_text = "✅ Активен"
+    elif user.status == UserStatus.BLOCKED.value:
+        status_text = "🚫 Заблокирован"
+    elif user.status == UserStatus.DELETED.value:
+        status_text = "🗑️ Удален"
+    else:
+        status_text = "❓ Неизвестно"
     
     text = f"""
 👤 <b>Управление пользователем</b>
@@ -558,7 +565,7 @@ async def show_user_management(
     
     await callback.message.edit_text(
         text,
-        reply_markup=get_user_management_keyboard(user.id, db_user.language)
+        reply_markup=get_user_management_keyboard(user.id, user.status, db_user.language)
     )
     await callback.answer()
 
@@ -746,6 +753,112 @@ async def show_inactive_users(
     )
     await callback.answer()
 
+@admin_required
+@error_handler
+async def confirm_user_unblock(
+    callback: types.CallbackQuery,
+    db_user: User
+):
+    
+    user_id = int(callback.data.split('_')[-1])
+    
+    await callback.message.edit_text(
+        "✅ <b>Разблокировка пользователя</b>\n\n"
+        "Вы уверены, что хотите разблокировать этого пользователя?\n"
+        "Пользователь снова получит доступ к боту.",
+        reply_markup=get_confirmation_keyboard(
+            f"admin_user_unblock_confirm_{user_id}",
+            f"admin_user_manage_{user_id}",
+            db_user.language
+        )
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def unblock_user(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    
+    user_id = int(callback.data.split('_')[-1])
+    
+    user_service = UserService()
+    success = await user_service.unblock_user(db, user_id, db_user.id)
+    
+    if success:
+        await callback.message.edit_text(
+            "✅ Пользователь разблокирован",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="👤 К пользователю", callback_data=f"admin_user_manage_{user_id}")]
+            ])
+        )
+    else:
+        await callback.message.edit_text(
+            "❌ Ошибка разблокировки пользователя",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="👤 К пользователю", callback_data=f"admin_user_manage_{user_id}")]
+            ])
+        )
+    
+    await callback.answer()
+
+@admin_required
+@error_handler
+async def show_user_statistics(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    
+    user_id = int(callback.data.split('_')[-1])
+    
+    user_service = UserService()
+    profile = await user_service.get_user_profile(db, user_id)
+    
+    if not profile:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+    
+    user = profile["user"]
+    subscription = profile["subscription"]
+    
+    text = f"📊 <b>Статистика пользователя</b>\n\n"
+    text += f"👤 {user.full_name} (ID: <code>{user.telegram_id}</code>)\n\n"
+    
+    text += f"<b>Основная информация:</b>\n"
+    text += f"• Дней с регистрации: {profile['registration_days']}\n"
+    text += f"• Баланс: {settings.format_price(user.balance_kopeks)}\n"
+    text += f"• Транзакций: {profile['transactions_count']}\n"
+    text += f"• Язык: {user.language}\n\n"
+    
+    text += f"<b>Подписка:</b>\n"
+    if subscription:
+        sub_status = "✅ Активна" if subscription.is_active else "❌ Неактивна"
+        sub_type = " (триал)" if subscription.is_trial else " (платная)"
+        text += f"• Статус: {sub_status}{sub_type}\n"
+        text += f"• Трафик: {subscription.traffic_used_gb:.1f}/{subscription.traffic_limit_gb} ГБ\n"
+        text += f"• Устройства: {subscription.device_limit}\n"
+        text += f"• Стран: {len(subscription.connected_squads)}\n"
+    else:
+        text += f"• Отсутствует\n"
+    
+    text += f"\n<b>Реферальная программа:</b>\n"
+    if user.referred_by_id:
+        text += f"• Пришел по рефералке\n"
+    else:
+        text += f"• Прямая регистрация\n"
+    text += f"• Реферальный код: <code>{user.referral_code}</code>\n"
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="⬅️ К пользователю", callback_data=f"admin_user_manage_{user_id}")]
+        ])
+    )
+    await callback.answer()
 
 @admin_required
 @error_handler
@@ -787,22 +900,47 @@ def register_handlers(dp: Dispatcher):
     
     dp.callback_query.register(
         show_user_subscription,
-        F.data.startswith("admin_user_sub_")
+        F.data.startswith("admin_user_subscription_")
     )
-    
+
     dp.callback_query.register(
         show_user_transactions,
-        F.data.startswith("admin_user_trans_")
+        F.data.startswith("admin_user_transactions_")
     )
-    
+
     dp.callback_query.register(
-        confirm_user_delete,
-        F.data.startswith("admin_user_delete_")
+        show_user_statistics,
+        F.data.startswith("admin_user_statistics_")
     )
-    
+
+    dp.callback_query.register(
+        block_user,
+        F.data.startswith("admin_user_block_confirm_")
+    )
+
     dp.callback_query.register(
         delete_user_account,
         F.data.startswith("admin_user_delete_confirm_")
+    )
+
+    dp.callback_query.register(
+        confirm_user_block,
+        F.data.startswith("admin_user_block_")
+    )
+
+    dp.callback_query.register(
+        unblock_user,
+        F.data.startswith("admin_user_unblock_confirm_")
+    )
+
+    dp.callback_query.register(
+        confirm_user_unblock,
+        F.data.startswith("admin_user_unblock_") & ~F.data.contains("confirm")
+    )
+
+    dp.callback_query.register(
+        confirm_user_delete,
+        F.data.startswith("admin_user_delete_")
     )
     
     dp.callback_query.register(
@@ -835,15 +973,6 @@ def register_handlers(dp: Dispatcher):
         AdminStates.editing_user_balance
     )
     
-    dp.callback_query.register(
-        confirm_user_block,
-        F.data.startswith("admin_user_block_")
-    )
-    
-    dp.callback_query.register(
-        block_user,
-        F.data.startswith("admin_user_block_confirm_")
-    )
     
     dp.callback_query.register(
         show_inactive_users,
