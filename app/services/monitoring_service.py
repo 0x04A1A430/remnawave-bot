@@ -32,7 +32,7 @@ class MonitoringService:
         self.subscription_service = SubscriptionService()
         self.payment_service = PaymentService()
         self.bot = bot
-        self._notified_users: Set[str] = set()  # Защита от дублирования уведомлений
+        self._notified_users: Set[str] = set() 
     
     async def start_monitoring(self):
         if self.is_running:
@@ -60,12 +60,11 @@ class MonitoringService:
             try:
                 await self._check_expired_subscriptions(db)
                 await self._check_expiring_subscriptions(db)
-                await self._check_trial_expiring_soon(db)  # Новый метод!
+                await self._check_trial_expiring_soon(db)  
                 await self._process_autopayments(db)
                 await self._cleanup_inactive_users(db)
                 await self._sync_with_remnawave(db)
                 
-                # Очищаем кеш уведомлений каждые 24 часа
                 current_hour = datetime.utcnow().hour
                 if current_hour == 0:
                     self._notified_users.clear()
@@ -88,7 +87,6 @@ class MonitoringService:
                 break 
     
     async def _check_expired_subscriptions(self, db: AsyncSession):
-        """Проверка истекших подписок"""
         try:
             expired_subscriptions = await get_expired_subscriptions(db)
             
@@ -99,7 +97,6 @@ class MonitoringService:
                 if user and user.remnawave_uuid:
                     await self.subscription_service.disable_remnawave_user(user.remnawave_uuid)
                 
-                # Отправляем уведомление об истечении
                 if user and self.bot:
                     await self._send_subscription_expired_notification(user)
                 
@@ -116,12 +113,10 @@ class MonitoringService:
             logger.error(f"Ошибка проверки истекших подписок: {e}")
     
     async def _check_expiring_subscriptions(self, db: AsyncSession):
-        """Проверка подписок, истекающих через 2-3 дня (только платные)"""
         try:
             warning_days = settings.get_autopay_warning_days()
             
             for days in warning_days:
-                # Получаем только платные подписки
                 expiring_subscriptions = await self._get_expiring_paid_subscriptions(db, days)
                 
                 for subscription in expiring_subscriptions:
@@ -131,7 +126,7 @@ class MonitoringService:
                     
                     notification_key = f"expiring_{user.telegram_id}_{days}d"
                     if notification_key in self._notified_users:
-                        continue  # Уже уведомляли сегодня
+                        continue 
                     
                     if self.bot:
                         await self._send_subscription_expiring_notification(user, subscription, days)
@@ -150,9 +145,7 @@ class MonitoringService:
             logger.error(f"Ошибка проверки истекающих подписок: {e}")
     
     async def _check_trial_expiring_soon(self, db: AsyncSession):
-        """Проверка тестовых подписок, истекающих через 2 часа"""
         try:
-            # Получаем тестовые подписки, истекающие через 2 часа
             threshold_time = datetime.utcnow() + timedelta(hours=2)
             
             result = await db.execute(
@@ -176,7 +169,7 @@ class MonitoringService:
                 
                 notification_key = f"trial_2h_{user.telegram_id}"
                 if notification_key in self._notified_users:
-                    continue  # Уже уведомляли
+                    continue  
                 
                 if self.bot:
                     await self._send_trial_ending_notification(user, subscription)
@@ -195,7 +188,6 @@ class MonitoringService:
             logger.error(f"Ошибка проверки истекающих тестовых подписок: {e}")
     
     async def _get_expiring_paid_subscriptions(self, db: AsyncSession, days_before: int) -> List[Subscription]:
-        """Получение платных подписок, истекающих через указанное количество дней"""
         threshold_date = datetime.utcnow() + timedelta(days=days_before)
         
         result = await db.execute(
@@ -204,7 +196,7 @@ class MonitoringService:
             .where(
                 and_(
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
-                    Subscription.is_trial == False,  # Только платные
+                    Subscription.is_trial == False, 
                     Subscription.end_date <= threshold_date,
                     Subscription.end_date > datetime.utcnow()
                 )
@@ -213,9 +205,7 @@ class MonitoringService:
         return result.scalars().all()
     
     async def _process_autopayments(self, db: AsyncSession):
-        """Обработка автоплатежей"""
         try:
-            # Исправленный запрос с использованием индивидуальных настроек
             current_time = datetime.utcnow()
             
             result = await db.execute(
@@ -225,13 +215,12 @@ class MonitoringService:
                     and_(
                         Subscription.status == SubscriptionStatus.ACTIVE.value,
                         Subscription.autopay_enabled == True,
-                        Subscription.is_trial == False  # Автооплата только для платных
+                        Subscription.is_trial == False 
                     )
                 )
             )
             all_autopay_subscriptions = result.scalars().all()
             
-            # Фильтруем по времени с учетом индивидуальных настроек
             autopay_subscriptions = []
             for sub in all_autopay_subscriptions:
                 days_before_expiry = (sub.end_date - current_time).days
@@ -248,24 +237,20 @@ class MonitoringService:
                 
                 renewal_cost = settings.PRICE_30_DAYS
                 
-                # Проверяем, не списывали ли уже сегодня
                 autopay_key = f"autopay_{user.telegram_id}_{subscription.id}"
                 if autopay_key in self._notified_users:
                     continue
                 
                 if user.balance_kopeks >= renewal_cost:
-                    # Списываем средства
                     success = await subtract_user_balance(
                         db, user, renewal_cost,
                         "Автопродление подписки"
                     )
                     
                     if success:
-                        # Продлеваем подписку
                         await extend_subscription(db, subscription, 30)
                         await self.subscription_service.update_remnawave_user(db, subscription)
                         
-                        # Уведомляем об успешном автоплатеже
                         if self.bot:
                             await self._send_autopay_success_notification(user, renewal_cost, 30)
                         
@@ -279,7 +264,6 @@ class MonitoringService:
                         logger.warning(f"💳 Ошибка списания средств для автопродления пользователя {user.telegram_id}")
                 else:
                     failed_count += 1
-                    # Уведомляем о недостатке средств
                     if self.bot:
                         await self._send_autopay_failed_notification(user, user.balance_kopeks, renewal_cost)
                     logger.warning(f"💳 Недостаточно средств для автопродления у пользователя {user.telegram_id}")
@@ -294,54 +278,98 @@ class MonitoringService:
         except Exception as e:
             logger.error(f"Ошибка обработки автоплатежей: {e}")
     
-    # Методы отправки уведомлений
     async def _send_subscription_expired_notification(self, user: User):
-        """Уведомление об истечении подписки"""
         try:
-            texts = get_texts(user.language)
-            message = texts.SUBSCRIPTION_EXPIRED
-            await self.bot.send_message(user.telegram_id, message, parse_mode="HTML")
+            message = """
+    ❌ <b>Подписка истекла</b>
+
+    Ваша подписка истекла. Для восстановления доступа продлите подписку.
+
+    🔧 Доступ к серверам заблокирован до продления.
+    """
+            
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="💎 Купить подписку", callback_data="menu_buy")],
+                [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="balance_topup")]
+            ])
+            
+            await self.bot.send_message(
+                user.telegram_id, 
+                message, 
+                parse_mode="HTML",
+                reply_markup=keyboard
+            )
+            
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об истечении подписки пользователю {user.telegram_id}: {e}")
     
     async def _send_subscription_expiring_notification(self, user: User, subscription: Subscription, days: int):
-        """Уведомление об истечении подписки через N дней"""
         try:
             texts = get_texts(user.language)
-            message = texts.SUBSCRIPTION_EXPIRING.format(days=days)
-            await self.bot.send_message(user.telegram_id, message, parse_mode="HTML")
+            
+            if subscription.autopay_enabled:
+                autopay_status = "✅ Включен - подписка продлится автоматически"
+                action_text = f"💰 Убедитесь, что на балансе достаточно средств: {texts.format_price(user.balance_kopeks)}"
+            else:
+                autopay_status = "❌ Отключен - не забудьте продлить вручную!"
+                action_text = "💡 Включите автоплатеж или продлите подписку вручную"
+            
+            message = f"""
+    ⚠️ <b>Подписка истекает через {days} дней!</b>
+
+    Ваша платная подписка истекает {subscription.end_date.strftime("%d.%m.%Y %H:%M")}.
+
+    💳 <b>Автоплатеж:</b> {autopay_status}
+
+    {action_text}
+    """
+            
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⏰ Продлить подписку", callback_data="subscription_extend")],
+                [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="balance_topup")],
+                [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")]
+            ])
+            
+            await self.bot.send_message(
+                user.telegram_id, 
+                message, 
+                parse_mode="HTML",
+                reply_markup=keyboard
+            )
+            
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об истечении подписки пользователю {user.telegram_id}: {e}")
     
     async def _send_trial_ending_notification(self, user: User, subscription: Subscription):
-        """Уведомление об окончании тестовой подписки через 2 часа"""
         try:
             texts = get_texts(user.language)
             
-            # Создаем специальное сообщение для тестовой подписки
             message = f"""
-🎁 <b>Тестовая подписка скоро закончится!</b>
+    🎁 <b>Тестовая подписка скоро закончится!</b>
 
-Ваша тестовая подписка истекает через 2 часа.
+    Ваша тестовая подписка истекает через 2 часа.
 
-💎 <b>Не хотите остаться без VPN?</b>
-Переходите на полную подписку со скидкой!
+    💎 <b>Не хотите остаться без VPN?</b>
+    Переходите на полную подписку со скидкой!
 
-🔥 <b>Специальное предложение:</b>
-• 30 дней всего за {settings.format_price(settings.PRICE_30_DAYS)}
-• Безлимитный трафик
-• Все серверы доступны
-• Поддержка до 3 устройств
+    🔥 <b>Специальное предложение:</b>
+    • 30 дней всего за {settings.format_price(settings.PRICE_30_DAYS)}
+    • Безлимитный трафик
+    • Все серверы доступны
+    • Поддержка до 3 устройств
 
-⚡️ Успейте оформить до окончания тестового периода!
-"""
+    ⚡️ Успейте оформить до окончания тестового периода!
+    """
             
-            # Добавляем inline клавиатуру с кнопкой покупки
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
             
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💎 Купить подписку", callback_data="buy_subscription")],
-                [InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="balance_top_up")]
+                [InlineKeyboardButton(text="💎 Купить подписку", callback_data="menu_buy")],
+                [InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="balance_topup")]
             ])
             
             await self.bot.send_message(
@@ -355,7 +383,6 @@ class MonitoringService:
             logger.error(f"Ошибка отправки уведомления об окончании тестовой подписки пользователю {user.telegram_id}: {e}")
     
     async def _send_autopay_success_notification(self, user: User, amount: int, days: int):
-        """Уведомление об успешном автоплатеже"""
         try:
             texts = get_texts(user.language)
             message = texts.AUTOPAY_SUCCESS.format(
@@ -367,7 +394,6 @@ class MonitoringService:
             logger.error(f"Ошибка отправки уведомления об автоплатеже пользователю {user.telegram_id}: {e}")
     
     async def _send_autopay_failed_notification(self, user: User, balance: int, required: int):
-        """Уведомление о неудачном автоплатеже"""
         try:
             texts = get_texts(user.language)
             message = texts.AUTOPAY_FAILED.format(
@@ -375,11 +401,11 @@ class MonitoringService:
                 required=settings.format_price(required)
             )
             
-            # Добавляем кнопку пополнения баланса
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
             
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="balance_top_up")]
+                [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="balance_topup")],
+                [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")]
             ])
             
             await self.bot.send_message(
@@ -392,7 +418,6 @@ class MonitoringService:
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о неудачном автоплатеже пользователю {user.telegram_id}: {e}")
     
-    # Остальные методы остаются без изменений...
     async def _cleanup_inactive_users(self, db: AsyncSession):
         try:
             now = datetime.utcnow()
@@ -523,7 +548,6 @@ class MonitoringService:
     
     async def force_check_subscriptions(self, db: AsyncSession) -> Dict[str, int]:
         try:
-            # Проверяем истекшие
             expired_subscriptions = await get_expired_subscriptions(db)
             expired_count = 0
             
