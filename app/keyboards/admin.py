@@ -172,24 +172,38 @@ def get_admin_statistics_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     ])
 
 
-def get_user_management_keyboard(user_id: int, language: str = "ru") -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
+def get_user_management_keyboard(user_id: int, user_status: str, language: str = "ru") -> InlineKeyboardMarkup:
+    keyboard = [
         [
             InlineKeyboardButton(text="💰 Баланс", callback_data=f"admin_user_balance_{user_id}"),
-            InlineKeyboardButton(text="📱 Подписка", callback_data=f"admin_user_sub_{user_id}")
+            InlineKeyboardButton(text="📱 Подписка", callback_data=f"admin_user_subscription_{user_id}")
         ],
         [
-            InlineKeyboardButton(text="📊 Статистика", callback_data=f"admin_user_stats_{user_id}"),
-            InlineKeyboardButton(text="📋 Транзакции", callback_data=f"admin_user_trans_{user_id}")
-        ],
-        [
+            InlineKeyboardButton(text="📊 Статистика", callback_data=f"admin_user_statistics_{user_id}"),
+            InlineKeyboardButton(text="📋 Транзакции", callback_data=f"admin_user_transactions_{user_id}")
+        ]
+    ]
+    
+    if user_status == "active":
+        keyboard.append([
             InlineKeyboardButton(text="🚫 Заблокировать", callback_data=f"admin_user_block_{user_id}"),
             InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"admin_user_delete_{user_id}")
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_users_list")
-        ]
+        ])
+    elif user_status == "blocked":
+        keyboard.append([
+            InlineKeyboardButton(text="✅ Разблокировать", callback_data=f"admin_user_unblock_{user_id}"),
+            InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"admin_user_delete_{user_id}")
+        ])
+    elif user_status == "deleted":
+        keyboard.append([
+            InlineKeyboardButton(text="❌ Пользователь удален", callback_data="noop")
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_users_list")
     ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_confirmation_keyboard(
@@ -293,8 +307,8 @@ def get_custom_criteria_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="⚡ Активные сегодня", callback_data="criteria_active_today")
         ],
         [
-            InlineKeyboardButton(text="💤 Неактивные 7+ дней", callback_data="criteria_inactive_week"),
-            InlineKeyboardButton(text="💤 Неактивные 30+ дней", callback_data="criteria_inactive_month")
+            InlineKeyboardButton(text="👤 Неактивные 7+ дней", callback_data="criteria_inactive_week"),
+            InlineKeyboardButton(text="👤 Неактивные 30+ дней", callback_data="criteria_inactive_month")
         ],
         [
             InlineKeyboardButton(text="🤝 Через рефералов", callback_data="criteria_referrals"),
