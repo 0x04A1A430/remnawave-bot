@@ -292,45 +292,95 @@ def get_subscription_confirm_keyboard(language: str = "ru") -> InlineKeyboardMar
 
 def get_balance_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    keyboard = []
     
-    keyboard.append([
-        InlineKeyboardButton(text=texts.BALANCE_HISTORY, callback_data="balance_history"),
-        InlineKeyboardButton(text=texts.BALANCE_TOP_UP, callback_data="balance_topup")
-    ])
-    
-    if settings.TRIBUTE_ENABLED:
-        keyboard.append([
-            InlineKeyboardButton(text="💳 Быстрое пополнение", callback_data="tribute_quick_pay")
-        ])
-    
-    keyboard.append([
-        InlineKeyboardButton(text=texts.BALANCE_SUPPORT_REQUEST, callback_data="balance_support")
-    ])
-    
-    keyboard.append([
-        InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
-    ])
+    keyboard = [
+        [
+            InlineKeyboardButton(text=texts.BALANCE_HISTORY, callback_data="balance_history"),
+            InlineKeyboardButton(text=texts.BALANCE_TOP_UP, callback_data="balance_topup")
+        ],
+        [
+            InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
+        ]
+    ]
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_payment_methods_keyboard(amount_kopeks: int, language: str = "ru") -> InlineKeyboardMarkup:
+    """Клавиатура выбора способа оплаты"""
     texts = get_texts(language)
     keyboard = []
     
     if settings.TELEGRAM_STARS_ENABLED:
         keyboard.append([
-            InlineKeyboardButton(text=texts.TOP_UP_STARS, callback_data=f"pay_stars_{amount_kopeks}")
+            InlineKeyboardButton(
+                text="⭐ Telegram Stars", 
+                callback_data="topup_stars"
+            )
         ])
     
+    if settings.TRIBUTE_ENABLED:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="💳 Банковская карта", 
+                callback_data="topup_tribute"
+            )
+        ])
     
     keyboard.append([
-        InlineKeyboardButton(text=texts.BACK, callback_data="menu_balance") 
+        InlineKeyboardButton(
+            text="🛠️ Через поддержку", 
+            callback_data="topup_support"
+        )
+    ])
+    
+    keyboard.append([
+        InlineKeyboardButton(text=texts.BACK, callback_data="menu_balance")
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+def get_autopay_notification_keyboard(subscription_id: int, language: str = "ru") -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="💳 Пополнить баланс", 
+                callback_data="balance_topup"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📱 Моя подписка", 
+                callback_data="menu_subscription"
+            )
+        ]
+    ])
+
+def get_subscription_expiring_keyboard(subscription_id: int, language: str = "ru") -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="⏰ Продлить подписку", 
+                callback_data="subscription_extend"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="💳 Пополнить баланс", 
+                callback_data="balance_topup"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📱 Моя подписка", 
+                callback_data="menu_subscription"
+            )
+        ]
+    ])
 
 def get_referral_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
