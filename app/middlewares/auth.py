@@ -56,7 +56,7 @@ class AuthMiddleware(BaseMiddleware):
                     )
                     
                     if is_registration_process:
-                        logger.info(f"🔓 Пропускаем пользователя {user.id} в процессе регистрации")
+                        logger.info(f"📝 Пропускаем пользователя {user.id} в процессе регистрации")
                         data['db'] = db
                         data['db_user'] = None
                         data['is_admin'] = False
@@ -64,11 +64,11 @@ class AuthMiddleware(BaseMiddleware):
                     else:
                         if isinstance(event, Message):
                             await event.answer(
-                                "◀️ Для начала работы необходимо выполнить команду /start"
+                                "▶️ Для начала работы необходимо выполнить команду /start"
                             )
                         elif isinstance(event, CallbackQuery):
                             await event.answer(
-                                "◀️ Необходимо начать с команды /start",
+                                "▶️ Необходимо начать с команды /start",
                                 show_alert=True
                             )
                         logger.info(f"🚫 Заблокирован незарегистрированный пользователь {user.id}")
@@ -85,12 +85,44 @@ class AuthMiddleware(BaseMiddleware):
                         return
                     
                     if db_user.status == UserStatus.DELETED.value:
-                        if isinstance(event, Message):
-                            await event.answer("❌ Ваш аккаунт был удален администратором.")
-                        elif isinstance(event, CallbackQuery):
-                            await event.answer("❌ Ваш аккаунт был удален администратором.", show_alert=True)
-                        logger.info(f"❌ Удаленный пользователь {user.id} попытался использовать бота")
-                        return
+                        state: FSMContext = data.get('state')
+                        current_state = None
+                        
+                        if state:
+                            current_state = await state.get_state()
+                        
+                        registration_states = [
+                            RegistrationStates.waiting_for_rules_accept,
+                            RegistrationStates.waiting_for_referral_code
+                        ]
+                        
+                        is_start_or_registration = (
+                            (isinstance(event, Message) and event.text and event.text.startswith('/start'))
+                            or (isinstance(event, CallbackQuery) and current_state and 
+                                any(str(state) in str(current_state) for state in registration_states))
+                            or (isinstance(event, CallbackQuery) and event.data and 
+                                (event.data in ['rules_accept', 'rules_decline', 'referral_skip']))
+                        )
+                        
+                        if is_start_or_registration:
+                            logger.info(f"🔄 Удаленный пользователь {user.id} начинает повторную регистрацию")
+                            data['db'] = db
+                            data['db_user'] = None 
+                            data['is_admin'] = False
+                            return await handler(event, data)
+                        else:
+                            if isinstance(event, Message):
+                                await event.answer(
+                                    "❌ Ваш аккаунт был удален.\n"
+                                    "🔄 Для повторной регистрации выполните команду /start"
+                                )
+                            elif isinstance(event, CallbackQuery):
+                                await event.answer(
+                                    "❌ Ваш аккаунт был удален. Для повторной регистрации выполните /start",
+                                    show_alert=True
+                                )
+                            logger.info(f"❌ Удаленный пользователь {user.id} попытался использовать бота без /start")
+                            return
                     
                     from datetime import datetime
                     db_user.last_activity = datetime.utcnow()
