@@ -108,15 +108,25 @@ async def handle_back_to_menu(
 
 def _get_subscription_status(user: User, texts) -> str:
     if not user.subscription:
-        return texts.SUBSCRIPTION_NONE
+        return "❌ Отсутствует"
     
     if user.subscription.is_trial:
-        return f"{texts.SUBSCRIPTION_TRIAL} (до {user.subscription.end_date.strftime('%d.%m.%Y')})"
+        days_left = user.subscription.days_left
+        if days_left > 1:
+            return f"🎁 Тестовая подписка\n📅 до {user.subscription.end_date.strftime('%d.%m.%Y')} ({days_left} дн.)"
+        else:
+            return f"🎁 Тестовая подписка\n⚠️ истекает сегодня!"
+    
     elif user.subscription.is_active:
         days_left = user.subscription.days_left
-        return f"{texts.SUBSCRIPTION_ACTIVE} ({days_left} дн.)"
+        if days_left > 7:
+            return f"✅ Активна\n📅 до {user.subscription.end_date.strftime('%d.%m.%Y')} ({days_left} дн.)"
+        elif days_left > 0:
+            return f"✅ Активна\n⚠️ истекает через {days_left} дн."
+        else:
+            return f"✅ Активна\n⚠️ истекает сегодня!"
     else:
-        return texts.SUBSCRIPTION_EXPIRED
+        return f"⏰ Истекла\n📅 {user.subscription.end_date.strftime('%d.%m.%Y')}"
 
 
 def register_handlers(dp: Dispatcher):
