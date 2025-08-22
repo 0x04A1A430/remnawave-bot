@@ -1174,7 +1174,7 @@ docker stats --no-stream
 <th>🥇 Место</th>
 <th>👤 Спонсор</th>
 <th>💰 Сумма</th>
-<th>💬 За что</th>
+<th>💬 От себя благодарю</th>
 </tr>
 <tr>
 <td>🥇</td>
