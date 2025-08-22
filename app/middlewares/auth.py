@@ -74,14 +74,32 @@ class AuthMiddleware(BaseMiddleware):
                         logger.info(f"🚫 Заблокирован незарегистрированный пользователь {user.id}")
                         return
                 else:
+                    from app.database.models import UserStatus
+                    
+                    if db_user.status == UserStatus.BLOCKED.value:
+                        if isinstance(event, Message):
+                            await event.answer("🚫 Ваш аккаунт заблокирован администратором.")
+                        elif isinstance(event, CallbackQuery):
+                            await event.answer("🚫 Ваш аккаунт заблокирован администратором.", show_alert=True)
+                        logger.info(f"🚫 Заблокированный пользователь {user.id} попытался использовать бота")
+                        return
+                    
+                    if db_user.status == UserStatus.DELETED.value:
+                        if isinstance(event, Message):
+                            await event.answer("❌ Ваш аккаунт был удален администратором.")
+                        elif isinstance(event, CallbackQuery):
+                            await event.answer("❌ Ваш аккаунт был удален администратором.", show_alert=True)
+                        logger.info(f"❌ Удаленный пользователь {user.id} попытался использовать бота")
+                        return
+                    
                     from datetime import datetime
                     db_user.last_activity = datetime.utcnow()
                     await db.commit()
-                
+
                 data['db'] = db
                 data['db_user'] = db_user
                 data['is_admin'] = settings.is_admin(user.id)
-                
+
                 return await handler(event, data)
                 
             except Exception as e:
