@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete
 
 from app.database.crud.user import (
     get_user_by_id, get_user_by_telegram_id, get_users_list,
@@ -10,7 +11,10 @@ from app.database.crud.user import (
 )
 from app.database.crud.transaction import get_user_transactions_count
 from app.database.crud.subscription import get_subscription_by_user_id
-from app.database.models import User, UserStatus
+from app.database.models import (
+    User, UserStatus, Subscription, Transaction, PromoCodeUse, 
+    ReferralEarning, SubscriptionServer
+)
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -211,21 +215,100 @@ class UserService:
         try:
             user = await get_user_by_id(db, user_id)
             if not user:
+                logger.warning(f"Пользователь {user_id} не найден для удаления")
                 return False
             
+            logger.info(f"🗑️ Начинаем полное удаление пользователя {user_id} (Telegram ID: {user.telegram_id})")
+            
+            if user.remnawave_uuid:
+                try:
+                    from app.services.subscription_service import SubscriptionService
+                    subscription_service = SubscriptionService()
+                    await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+                    logger.info(f"✅ RemnaWave пользователь {user.remnawave_uuid} деактивирован")
+                except Exception as e:
+                    logger.error(f"❌ Ошибка деактивации RemnaWave пользователя: {e}")
+            
             if user.subscription:
-                from app.database.crud.subscription import deactivate_subscription
-                await deactivate_subscription(db, user.subscription)
+                try:
+                    await db.execute(
+                        delete(SubscriptionServer).where(
+                            SubscriptionServer.subscription_id == user.subscription.id
+                        )
+                    )
+                    logger.info(f"🗑️ Удалены записи SubscriptionServer для подписки {user.subscription.id}")
+                except Exception as e:
+                    logger.error(f"❌ Ошибка удаления SubscriptionServer: {e}")
             
-            success = await delete_user(db, user)
+            if user.subscription:
+                try:
+                    await db.delete(user.subscription)
+                    logger.info(f"🗑️ Удалена подписка пользователя {user_id}")
+                except Exception as e:
+                    logger.error(f"❌ Ошибка удаления подписки: {e}")
             
-            if success:
-                logger.info(f"Админ {admin_id} удалил пользователя {user_id}")
+            try:
+                await db.execute(
+                    delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id)
+                )
+                logger.info(f"🗑️ Удалены использования промокодов пользователя {user_id}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления использований промокодов: {e}")
             
-            return success
+            try:
+                await db.execute(
+                    delete(ReferralEarning).where(ReferralEarning.user_id == user.id)
+                )
+                logger.info(f"🗑️ Удалены реферальные доходы пользователя {user_id}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления реферальных доходов: {e}")
+            
+            try:
+                await db.execute(
+                    delete(ReferralEarning).where(ReferralEarning.referral_id == user.id)
+                )
+                logger.info(f"🗑️ Удалены реферальные записи о пользователе {user_id}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления реферальных записей: {e}")
+            
+            try:
+                from sqlalchemy import update
+                await db.execute(
+                    update(User)
+                    .where(User.referred_by_id == user.id)
+                    .values(referred_by_id=None)
+                )
+                logger.info(f"🗑️ Очищены реферальные ссылки у рефералов пользователя {user_id}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка очистки реферальных ссылок: {e}")
+            
+            try:
+                await db.execute(
+                    delete(Transaction).where(Transaction.user_id == user.id)
+                )
+                logger.info(f"🗑️ Удалены транзакции пользователя {user_id}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления транзакций: {e}")
+            
+            try:
+                user.status = UserStatus.DELETED.value
+                user.balance_kopeks = 0
+                user.remnawave_uuid = None
+                user.updated_at = datetime.utcnow()
+                
+                await db.commit()
+                logger.info(f"✅ Пользователь {user_id} помечен как удаленный и обнулен")
+            except Exception as e:
+                logger.error(f"❌ Ошибка обновления статуса пользователя: {e}")
+                await db.rollback()
+                return False
+            
+            logger.info(f"✅ Пользователь {user_id} (Telegram ID: {user.telegram_id}) полностью удален админом {admin_id}")
+            return True
             
         except Exception as e:
-            logger.error(f"Ошибка удаления пользователя: {e}")
+            logger.error(f"❌ Критическая ошибка удаления пользователя {user_id}: {e}")
+            await db.rollback()
             return False
     
     async def get_user_statistics(self, db: AsyncSession) -> Dict[str, Any]:
@@ -257,7 +340,7 @@ class UserService:
             deleted_count = 0
             
             for user in inactive_users:
-                success = await delete_user(db, user)
+                success = await self.delete_user_account(db, user.id, 0) 
                 if success:
                     deleted_count += 1
             
@@ -301,7 +384,7 @@ class UserService:
                 "subscription_active": subscription.is_active if subscription else False,
                 "subscription_trial": subscription.is_trial if subscription else False,
                 "transactions_count": transactions_count,
-                "referrer_id": user.referrer_id,
+                "referrer_id": user.referred_by_id,
                 "referral_code": user.referral_code
             }
             
