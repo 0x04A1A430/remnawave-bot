@@ -106,11 +106,11 @@ class RussianTexts(Texts):
     REFERRAL_CODE_INVALID = "❌ Неверный реферальный код"
     REFERRAL_CODE_SKIP = "⏭️ Пропустить"
     
-    MAIN_MENU = """
-👤 <b>{user_name}</b>
-
+    MAIN_MENU = """👤 <b>{user_name}</b>
+━━━━━━━━━━━━━━━━━━━━━
 💰 <b>Баланс:</b> {balance}
 📱 <b>Подписка:</b> {subscription_status}
+━━━━━━━━━━━━━━━━━━━━━
 
 Выберите действие:
 """
