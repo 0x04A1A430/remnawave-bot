@@ -1,7 +1,9 @@
 import asyncio
 import json
+import ssl
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union, Any
+from urllib.parse import urlparse
 import aiohttp
 import logging
 from dataclasses import dataclass
@@ -85,13 +87,65 @@ class RemnaWaveAPI:
         self.api_key = api_key
         self.session: Optional[aiohttp.ClientSession] = None
         
+    def _detect_connection_type(self) -> str:
+        parsed = urlparse(self.base_url)
+        
+        local_hosts = [
+            'localhost', '127.0.0.1', 'remnawave', 
+            'remnawave-backend', 'app', 'api'
+        ]
+        
+        if parsed.hostname in local_hosts:
+            return "local"
+            
+        if parsed.hostname:
+            if (parsed.hostname.startswith('192.168.') or 
+                parsed.hostname.startswith('10.') or 
+                parsed.hostname.startswith('172.') or
+                parsed.hostname.endswith('.local')):
+                return "local"
+        
+        return "external"
+        
     async def __aenter__(self):
+        conn_type = self._detect_connection_type()
+        
+        logger.info(f"🔗 Подключение к RemnaWave: {self.base_url} (тип: {conn_type})")
+            
+        headers = {
+            'Authorization': f'Bearer {self.api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        connector_kwargs = {}
+        
+        if conn_type == "local":
+            logger.debug("🏠 Использую локальные заголовки proxy")
+            headers.update({
+                'X-Forwarded-For': '127.0.0.1',
+                'X-Forwarded-Proto': 'https',
+                'X-Forwarded-Host': 'localhost',
+                'X-Real-IP': '127.0.0.1',
+                'Host': 'localhost'
+            })
+            
+            if self.base_url.startswith('https://'):
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+                connector_kwargs['ssl'] = ssl_context
+                logger.debug("🔓 SSL проверка отключена для локального HTTPS")
+                
+        elif conn_type == "external":
+            logger.debug("🌐 Использую внешнее подключение с полной SSL проверкой")
+            pass
+            
+        connector = aiohttp.TCPConnector(**connector_kwargs)
+        
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=30),
-            headers={
-                'Authorization': f'Bearer {self.api_key}',
-                'Content-Type': 'application/json'
-            }
+            headers=headers,
+            connector=connector
         )
         return self
         
@@ -375,6 +429,56 @@ class RemnaWaveAPI:
         return response['response']
     
     
+    async def get_user_devices(self, user_uuid: str) -> Dict[str, Any]:
+        try:
+            response = await self._make_request('GET', f'/api/hwid/devices/{user_uuid}')
+            return response['response']
+        except RemnaWaveAPIError as e:
+            if e.status_code == 404:
+                return {'total': 0, 'devices': []}
+            raise
+
+    async def reset_user_devices(self, user_uuid: str) -> bool:
+        try:
+            devices_info = await self.get_user_devices(user_uuid)
+            devices = devices_info.get('devices', [])
+            
+            if not devices:
+                return True
+            
+            failed_count = 0
+            for device in devices:
+                device_hwid = device.get('hwid')
+                if device_hwid:
+                    try:
+                        delete_data = {
+                            "userUuid": user_uuid,
+                            "hwid": device_hwid
+                        }
+                        await self._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
+                    except Exception as device_error:
+                        logger.error(f"Ошибка удаления устройства {device_hwid}: {device_error}")
+                        failed_count += 1
+            
+            return failed_count < len(devices) / 2
+            
+        except Exception as e:
+            logger.error(f"Ошибка при сбросе устройств: {e}")
+            return False
+
+    async def remove_device(self, user_uuid: str, device_hwid: str) -> bool:
+        try:
+            delete_data = {
+                "userUuid": user_uuid,
+                "hwid": device_hwid
+            }
+            await self._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка удаления устройства {device_hwid}: {e}")
+            return False
+    
+    
     def _parse_user(self, user_data: Dict) -> RemnaWaveUser:
         return RemnaWaveUser(
             uuid=user_data['uuid'],
@@ -422,7 +526,6 @@ class RemnaWaveAPI:
         )
 
 
-
 def format_bytes(bytes_value: int) -> str:
     if bytes_value == 0:
         return "0 B"
@@ -466,56 +569,4 @@ async def test_api_connection(api: RemnaWaveAPI) -> bool:
         return True
     except Exception as e:
         logger.error(f"API connection test failed: {e}")
-        return False
-
-async def get_user_devices(self, user_uuid: str) -> Dict[str, Any]:
-    try:
-        response = await self._make_request('GET', f'/api/hwid/devices/{user_uuid}')
-        return response['response']
-    except RemnaWaveAPIError as e:
-        if e.status_code == 404:
-            return {'total': 0, 'devices': []}
-        raise
-
-
-async def reset_user_devices(self, user_uuid: str) -> bool:
-    try:
-        devices_info = await self.get_user_devices(user_uuid)
-        devices = devices_info.get('devices', [])
-        
-        if not devices:
-            return True
-        
-        failed_count = 0
-        for device in devices:
-            device_hwid = device.get('hwid')
-            if device_hwid:
-                try:
-                    delete_data = {
-                        "userUuid": user_uuid,
-                        "hwid": device_hwid
-                    }
-                    await self._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
-                except Exception as device_error:
-                    logger.error(f"Ошибка удаления устройства {device_hwid}: {device_error}")
-                    failed_count += 1
-        
-        return failed_count < len(devices) / 2
-        
-    except Exception as e:
-        logger.error(f"Ошибка при сбросе устройств: {e}")
-        return False
-
-
-
-async def remove_device(self, user_uuid: str, device_hwid: str) -> bool:
-    try:
-        delete_data = {
-            "userUuid": user_uuid,
-            "hwid": device_hwid
-        }
-        await self._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
-        return True
-    except Exception as e:
-        logger.error(f"Ошибка удаления устройства {device_hwid}: {e}")
         return False
