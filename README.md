@@ -681,26 +681,6 @@ docker stats bedolaga_bot bedolaga_postgres bedolaga_redis
 
 ---
 
-## 💎 Продвинутые возможности
-
-### 🎯 **Автоматизация бизнеса**
-
-```python
-# 🔄 Автопродление подписок
-if user.balance >= subscription.price and subscription.auto_renewal:
-    await renew_subscription(subscription)
-    await notify_user("💸 Подписка автоматически продлена!")
-
-# ⏰ Уведомления об истечении
-if subscription.expires_in_hours <= 24:
-    await send_expiry_warning(user)
-
-# 💰 Реферальные бонусы
-if referral_purchase:
-    bonus = purchase_amount * REFERRAL_COMMISSION_PERCENT / 100
-    await add_bonus_to_referrer(referrer, bonus)
-```
-
 ### 🔄 **Синхронизация с Remnawave**
 
 - **👥 Импорт существующих пользователей** 
