@@ -161,6 +161,15 @@ class UserService:
             if not user:
                 return False
             
+            if user.remnawave_uuid:
+                try:
+                    from app.services.subscription_service import SubscriptionService
+                    subscription_service = SubscriptionService()
+                    await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+                    logger.info(f"✅ RemnaWave пользователь {user.remnawave_uuid} деактивирован при блокировке")
+                except Exception as e:
+                    logger.error(f"❌ Ошибка деактивации RemnaWave пользователя при блокировке: {e}")
+            
             if user.subscription:
                 from app.database.crud.subscription import deactivate_subscription
                 await deactivate_subscription(db, user.subscription)
@@ -196,6 +205,15 @@ class UserService:
                     await db.commit()
                     await db.refresh(user.subscription)
                     logger.info(f"🔄 Подписка пользователя {user_id} восстановлена")
+                    
+                    if user.remnawave_uuid:
+                        try:
+                            from app.services.subscription_service import SubscriptionService
+                            subscription_service = SubscriptionService()
+                            await subscription_service.update_remnawave_user(db, user.subscription)
+                            logger.info(f"✅ RemnaWave пользователь {user.remnawave_uuid} восстановлен при разблокировке")
+                        except Exception as e:
+                            logger.error(f"❌ Ошибка восстановления RemnaWave пользователя при разблокировке: {e}")
                 else:
                     logger.info(f"⏰ Подписка пользователя {user_id} истекла, восстановление невозможно")
             
