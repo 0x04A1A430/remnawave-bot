@@ -1131,8 +1131,8 @@ docker stats --no-stream
 ### 📞 **Контакты**
 
 - **💬 Telegram:** [@fringg](https://t.me/fringg) - вопросы по разработке (только по делу!)
+- **💬 Telegram Group:** [Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi) - Для общения, вопросов, предложений, багов
 - **🐛 Issues:** [GitHub Issues](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/issues) - баги и предложения
-- **💭 Discussions:** [Обсуждения](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/discussions) - общие вопросы
 
 ### 📚 **Полезные ресурсы**
 
