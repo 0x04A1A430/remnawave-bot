@@ -1946,20 +1946,83 @@ async def handle_connect_subscription(
         await callback.answer("❌ У вас нет активной подписки или ссылка еще генерируется", show_alert=True)
         return
     
-    device_text = f"""
+    connect_mode = settings.CONNECT_BUTTON_MODE
+    
+    if connect_mode == "miniapp_subscription":
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔗 Открыть подписку", 
+                    web_app=types.WebAppInfo(url=subscription.subscription_url)
+                )
+            ],
+            [
+                InlineKeyboardButton(text="📋 Показать ссылку", callback_data="open_subscription_link")
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+            ]
+        ])
+        
+        await callback.message.edit_text(
+            f"""
+🔗 <b>Подключить подписку</b>
+
+📱 Нажмите кнопку ниже, чтобы открыть подписку в мини-приложении Telegram:
+            """,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        
+    elif connect_mode == "miniapp_custom":
+        if not settings.MINIAPP_CUSTOM_URL:
+            await callback.answer("❌ Кастомная ссылка для мини-приложения не настроена", show_alert=True)
+            return
+            
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🚀 Открыть приложение", 
+                    web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL)
+                )
+            ],
+            [
+                InlineKeyboardButton(text="📋 Показать ссылку подписки", callback_data="open_subscription_link")
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+            ]
+        ])
+        
+        await callback.message.edit_text(
+            f"""
+🚀 <b>Подключить подписку</b>
+
+📱 Нажмите кнопку ниже, чтобы открыть приложение:
+
+📋 <b>Ссылка подписки:</b>
+<code>{subscription.subscription_url}</code>
+            """,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        
+    else:
+        device_text = f"""
 📱 <b>Подключить подписку</b>
 
 🔗 <b>Ссылка подписки:</b>
 <code>{subscription.subscription_url}</code>
 
 💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:
-"""
+        """
+        
+        await callback.message.edit_text(
+            device_text,
+            reply_markup=get_device_selection_keyboard(db_user.language),
+            parse_mode="HTML"
+        )
     
-    await callback.message.edit_text(
-        device_text,
-        reply_markup=get_device_selection_keyboard(db_user.language),
-        parse_mode="HTML"
-    )
     await callback.answer()
 
 
