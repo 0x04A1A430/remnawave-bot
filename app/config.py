@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     
     PRICE_PER_DEVICE: int = 5000
     
+    TRAFFIC_SELECTION_MODE: str = "selectable"
+    FIXED_TRAFFIC_LIMIT_GB: int = 100 
+    
     REFERRAL_REGISTRATION_REWARD: int = 5000
     REFERRED_USER_REWARD: int = 2500
     REFERRAL_COMMISSION_PERCENT: int = 10
@@ -85,7 +88,7 @@ class Settings(BaseSettings):
     
     APP_CONFIG_PATH: str = "app-config.json"
     ENABLE_DEEP_LINKS: bool = True
-    APP_CONFIG_CACHE_TTL: int = 3600  # 1 час
+    APP_CONFIG_CACHE_TTL: int = 3600 
     
     @field_validator('LOG_FILE', mode='before')
     @classmethod
@@ -161,6 +164,15 @@ class Settings(BaseSettings):
     
     def get_app_config_cache_ttl(self) -> int:
         return self.APP_CONFIG_CACHE_TTL
+    
+    def is_traffic_selectable(self) -> bool:
+        return self.TRAFFIC_SELECTION_MODE.lower() == "selectable"
+    
+    def is_traffic_fixed(self) -> bool:
+        return self.TRAFFIC_SELECTION_MODE.lower() == "fixed"
+    
+    def get_fixed_traffic_limit(self) -> int:
+        return self.FIXED_TRAFFIC_LIMIT_GB
     
     model_config = {
         "env_file": ".env",
