@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     TRIBUTE_DONATE_LINK: Optional[str] = None
     TRIBUTE_WEBHOOK_PATH: str = "/tribute-webhook"
     TRIBUTE_WEBHOOK_PORT: int = 8081
+
+    CONNECT_BUTTON_MODE: str = "guide" 
+    MINIAPP_CUSTOM_URL: str = "" 
     
     DEFAULT_LANGUAGE: str = "ru"
     AVAILABLE_LANGUAGES: str = "ru,en"
