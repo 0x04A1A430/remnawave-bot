@@ -86,32 +86,59 @@ class PromoCodeService:
             effects.append(f"💰 Баланс пополнен на {balance_bonus_rubles}₽")
         
         if promocode.subscription_days > 0:
-            from app.database.crud.subscription import create_paid_subscription
+            from app.config import settings
             
             subscription = await get_subscription_by_user_id(db, user.id)
             
             if subscription:
                 await extend_subscription(db, subscription, promocode.subscription_days)
+                
+                await self.subscription_service.update_remnawave_user(db, subscription)
+                
                 effects.append(f"⏰ Подписка продлена на {promocode.subscription_days} дней")
+                logger.info(f"✅ Подписка пользователя {user.telegram_id} продлена на {promocode.subscription_days} дней в RemnaWave с текущими сквадами")
+                
             else:
-                await create_paid_subscription(
+                from app.database.crud.subscription import create_paid_subscription
+                
+                trial_squads = []
+                if hasattr(settings, 'TRIAL_SQUAD_UUID') and settings.TRIAL_SQUAD_UUID:
+                    trial_squads = [settings.TRIAL_SQUAD_UUID]
+                
+                new_subscription = await create_paid_subscription(
                     db=db,
                     user_id=user.id,
                     duration_days=promocode.subscription_days,
-                    traffic_limit_gb=0,
+                    traffic_limit_gb=0, 
                     device_limit=1,
-                    connected_squads=[]
+                    connected_squads=trial_squads 
                 )
+                
+                await self.subscription_service.create_remnawave_user(db, new_subscription)
+                
                 effects.append(f"🎉 Получена подписка на {promocode.subscription_days} дней")
+                logger.info(f"✅ Создана новая подписка для пользователя {user.telegram_id} на {promocode.subscription_days} дней с триал сквадом {trial_squads}")
         
         if promocode.type == PromoCodeType.TRIAL_SUBSCRIPTION.value:
             from app.database.crud.subscription import create_trial_subscription
+            from app.config import settings
             
             subscription = await get_subscription_by_user_id(db, user.id)
-            if not subscription and not user.has_had_paid_subscription:
-                await create_trial_subscription(db, user.id)
-                effects.append("🎁 Активирована тестовая подписка")
+            
+            if not subscription:
+                trial_days = promocode.subscription_days if promocode.subscription_days > 0 else settings.TRIAL_DURATION_DAYS
+                
+                trial_subscription = await create_trial_subscription(
+                    db, 
+                    user.id, 
+                    duration_days=trial_days 
+                )
+                
+                await self.subscription_service.create_remnawave_user(db, trial_subscription)
+                
+                effects.append(f"🎁 Активирована тестовая подписка на {trial_days} дней")
+                logger.info(f"✅ Создана триал подписка для пользователя {user.telegram_id} на {trial_days} дней")
             else:
-                effects.append("ℹ️ Тестовая подписка уже недоступна")
+                effects.append("ℹ️ У вас уже есть активная подписка")
         
         return "\n".join(effects) if effects else "✅ Промокод активирован"
