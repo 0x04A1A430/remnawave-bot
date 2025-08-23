@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     
     PRICE_PER_DEVICE: int = 5000
     
-    TRAFFIC_SELECTION_MODE: str = "selectable"
+    TRAFFIC_SELECTION_MODE: str = "selectable" 
     FIXED_TRAFFIC_LIMIT_GB: int = 100 
     
     REFERRAL_REGISTRATION_REWARD: int = 5000
@@ -73,8 +73,8 @@ class Settings(BaseSettings):
     TRIBUTE_WEBHOOK_PATH: str = "/tribute-webhook"
     TRIBUTE_WEBHOOK_PORT: int = 8081
 
-    CONNECT_BUTTON_MODE: str = "guide" 
-    MINIAPP_CUSTOM_URL: str = "" 
+    CONNECT_BUTTON_MODE: str = "guide"
+    MINIAPP_CUSTOM_URL: str = ""
     
     DEFAULT_LANGUAGE: str = "ru"
     AVAILABLE_LANGUAGES: str = "ru,en"
