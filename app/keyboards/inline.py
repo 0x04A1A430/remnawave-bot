@@ -107,9 +107,9 @@ def get_subscription_keyboard(
             connect_mode = settings.CONNECT_BUTTON_MODE
             
             if connect_mode == "miniapp_subscription":
-                button_text = "🚀 Подключить подписку"
+                button_text = "🚀 Открыть в мини-приложении"
             elif connect_mode == "miniapp_custom":
-                button_text = "🚀 Подключить подписку"
+                button_text = "🚀 Открыть приложение"
             else:
                 button_text = "🔗 Подключиться"
                 
@@ -143,27 +143,32 @@ def get_subscription_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_subscription_settings_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    from app.config import settings
+    
     texts = get_texts(language)
     keyboard = [
         [
             InlineKeyboardButton(text="🌍 Добавить страны", callback_data="subscription_add_countries")
         ],
         [
-            InlineKeyboardButton(text="📈 Добавить трафик", callback_data="subscription_add_traffic")
-        ],
-        [
-            InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data="subscription_reset_traffic")
-        ],
-        [
             InlineKeyboardButton(text="📱 Добавить устройства", callback_data="subscription_add_devices")
         ],
         [
             InlineKeyboardButton(text="🔄 Сбросить устройства", callback_data="subscription_reset_devices")
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
         ]
     ]
+    
+    if settings.is_traffic_selectable():
+        keyboard.insert(1, [
+            InlineKeyboardButton(text="📈 Добавить трафик", callback_data="subscription_add_traffic")
+        ])
+        keyboard.insert(2, [
+            InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data="subscription_reset_traffic")
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+    ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -204,6 +209,11 @@ def get_subscription_period_keyboard(language: str = "ru") -> InlineKeyboardMark
 
 
 def get_traffic_packages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    from app.config import settings
+    
+    if settings.is_traffic_fixed():
+        return get_back_keyboard(language)
+    
     texts = get_texts(language)
     keyboard = []
     
@@ -318,7 +328,6 @@ def get_balance_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
 
 
 def get_payment_methods_keyboard(amount_kopeks: int, language: str = "ru") -> InlineKeyboardMarkup:
-    """Клавиатура выбора способа оплаты"""
     texts = get_texts(language)
     keyboard = []
     
@@ -540,6 +549,11 @@ def get_extend_subscription_keyboard(language: str = "ru") -> InlineKeyboardMark
 
 
 def get_add_traffic_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    from app.config import settings
+    
+    if settings.is_traffic_fixed():
+        return get_back_keyboard(language)
+    
     texts = get_texts(language)
     keyboard = []
     
@@ -589,6 +603,11 @@ def get_add_devices_keyboard(current_devices: int, language: str = "ru") -> Inli
 
 
 def get_reset_traffic_confirm_keyboard(price_kopeks: int, language: str = "ru") -> InlineKeyboardMarkup:
+    from app.config import settings
+    
+    if settings.is_traffic_fixed():
+        return get_back_keyboard(language)
+    
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -598,7 +617,7 @@ def get_reset_traffic_confirm_keyboard(price_kopeks: int, language: str = "ru") 
             )
         ],
         [
-            InlineKeyboardButton(text="❌ Отмена", callback_data="menu_subscription")
+            InlineKeyboardButton(text="⌛ Отмена", callback_data="menu_subscription")
         ]
     ])
 
