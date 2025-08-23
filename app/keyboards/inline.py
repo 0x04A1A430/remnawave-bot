@@ -97,13 +97,24 @@ def get_subscription_keyboard(
     is_trial: bool = False,
     subscription=None
 ) -> InlineKeyboardMarkup:
+    from app.config import settings 
+    
     texts = get_texts(language)
     keyboard = []
     
     if has_subscription:
         if subscription and subscription.subscription_url:
+            connect_mode = settings.CONNECT_BUTTON_MODE
+            
+            if connect_mode == "miniapp_subscription":
+                button_text = "🚀 Подключить подписку"
+            elif connect_mode == "miniapp_custom":
+                button_text = "🚀 Подключить подписку"
+            else:
+                button_text = "🔗 Подключиться"
+                
             keyboard.append([
-                InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
+                InlineKeyboardButton(text=button_text, callback_data="subscription_connect")
             ])
         
         if not is_trial and subscription and subscription.days_left <= 3:
@@ -655,25 +666,32 @@ def get_manage_countries_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_device_selection_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
+    from app.config import settings
+    
+    keyboard = [
         [
             InlineKeyboardButton(text="📱 iOS (iPhone/iPad)", callback_data="device_guide_ios"),
             InlineKeyboardButton(text="🤖 Android", callback_data="device_guide_android")
         ],
         [
             InlineKeyboardButton(text="💻 Windows", callback_data="device_guide_windows"),
-            InlineKeyboardButton(text="🍎 macOS", callback_data="device_guide_mac")
+            InlineKeyboardButton(text="🎯 macOS", callback_data="device_guide_mac")
         ],
         [
             InlineKeyboardButton(text="📺 Android TV", callback_data="device_guide_tv")
-        ],
-        [
-            InlineKeyboardButton(text="📋 Показать ссылку подписки", callback_data="open_subscription_link")
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
         ]
+    ]
+    
+    if settings.CONNECT_BUTTON_MODE == "guide":
+        keyboard.append([
+            InlineKeyboardButton(text="📋 Показать ссылку подписки", callback_data="open_subscription_link")
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
     ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_connection_guide_keyboard(
