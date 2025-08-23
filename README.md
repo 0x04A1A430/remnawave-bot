@@ -121,6 +121,14 @@ TRIBUTE_WEBHOOK_PATH=/tribute-webhook
 TRIBUTE_WEBHOOK_PORT=8081
 TRIBUTE_WEBHOOK_SECRET=your_webhook_secret
 
+# 🚀 Режим работы кнопки "Подключиться"
+# guide - открывает гайд подключения (режим 1)
+# miniapp_subscription - открывает ссылку подписки в мини-приложении (режим 2)
+# miniapp_custom - открывает заданную ссылку в мини-приложении (режим 3)
+CONNECT_BUTTON_MODE=miniapp_subscription
+# URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
+# MINIAPP_CUSTOM_URL=
+
 # 🎁 Триал настройки
 TRIAL_ENABLED=true
 TRIAL_DURATION_DAYS=3
