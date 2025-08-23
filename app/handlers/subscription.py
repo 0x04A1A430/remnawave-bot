@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 import json
 import os
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 
 from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
 from app.states import SubscriptionStates
@@ -67,49 +67,7 @@ async def show_subscription_info(
     
     await db.refresh(subscription)
     
-    devices_used = await get_current_devices_count(db_user)
-    
-    countries_info = await _get_countries_info(subscription.connected_squads)
-    countries_text = ", ".join([c['name'] for c in countries_info]) if countries_info else "Нет"
-    
-    subscription_url = getattr(subscription, 'subscription_url', None) or "Генерируется..."
-    
-    if subscription.is_trial:
-        status_text = "🎁 Тестовая"
-        type_text = "Триал"
-    else:
-        if subscription.is_active:
-            status_text = "✅ Оплачена"
-        else:
-            status_text = "❌ Истекла"
-        type_text = "Платная подписка"
-    
-    if subscription.traffic_limit_gb == 0:
-        traffic_text = "∞ (безлимит)"
-    else:
-        traffic_text = texts.format_traffic(subscription.traffic_limit_gb)
-    
-    subscription_cost = await get_subscription_cost(subscription, db)
-    
-    info_text = texts.SUBSCRIPTION_INFO.format(
-        status=status_text,
-        type=type_text,
-        end_date=subscription.end_date.strftime("%d.%m.%Y %H:%M"),
-        days_left=max(0, subscription.days_left),
-        traffic_used=texts.format_traffic(subscription.traffic_used_gb),
-        traffic_limit=traffic_text,
-        countries_count=len(subscription.connected_squads),
-        devices_used=devices_used,
-        devices_limit=subscription.device_limit,
-        autopay_status="✅ Включен" if subscription.autopay_enabled else "❌ Выключен"
-    )
-    
-    if subscription_cost > 0:
-        info_text += f"\n💰 <b>Стоимость подписки:</b> {texts.format_price(subscription_cost)}"
-    
-    if subscription_url and subscription_url != "Генерируется...":
-        info_text += f"\n\n🔗 <b>Ссылка для подключения:</b>\n<code>{subscription_url}</code>"
-        info_text += f"\n\n📱 Скопируйте ссылку и добавьте в ваше VPN приложение"
+    info_text = await get_subscription_info_text(subscription, texts, db_user, db)
     
     await callback.message.edit_text(
         info_text,
@@ -289,7 +247,6 @@ async def start_subscription_purchase(
     state: FSMContext,
     db_user: User
 ):
-    
     texts = get_texts(db_user.language)
     
     await callback.message.edit_text(
@@ -297,14 +254,19 @@ async def start_subscription_purchase(
         reply_markup=get_subscription_period_keyboard(db_user.language)
     )
     
-    await state.set_data({
+    initial_data = {
         'period_days': None,
-        'traffic_gb': None,
         'countries': [],
         'devices': 1,
         'total_price': 0
-    })
+    }
     
+    if settings.is_traffic_fixed():
+        initial_data['traffic_gb'] = settings.get_fixed_traffic_limit()
+    else:
+        initial_data['traffic_gb'] = None
+    
+    await state.set_data(initial_data)
     await state.set_state(SubscriptionStates.selecting_period)
     await callback.answer()
 
@@ -575,16 +537,21 @@ async def handle_add_traffic(
     db_user: User,
     db: AsyncSession
 ):
+    from app.config import settings
+    
+    if settings.is_traffic_fixed():
+        await callback.answer("⚠️ В текущем режиме трафик фиксированный и не может быть изменен", show_alert=True)
+        return
     
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
     if not subscription or subscription.is_trial:
-        await callback.answer("❌ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer("⌛ Эта функция доступна только для платных подписок", show_alert=True)
         return
     
     if subscription.traffic_limit_gb == 0:
-        await callback.answer("❌ У вас уже безлимитный трафик", show_alert=True)
+        await callback.answer("⌛ У вас уже безлимитный трафик", show_alert=True)
         return
     
     current_traffic = subscription.traffic_limit_gb
@@ -672,22 +639,27 @@ async def handle_reset_traffic(
     db_user: User,
     db: AsyncSession
 ):
+    from app.config import settings
+    
+    if settings.is_traffic_fixed():
+        await callback.answer("⚠️ В текущем режиме трафик фиксированный и не может быть сброшен", show_alert=True)
+        return
     
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
     if not subscription or subscription.is_trial:
-        await callback.answer("❌ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer("⌛ Эта функция доступна только для платных подписок", show_alert=True)
         return
     
     if subscription.traffic_limit_gb == 0:
-        await callback.answer("❌ У вас безлимитный трафик", show_alert=True)
+        await callback.answer("⌛ У вас безлимитный трафик", show_alert=True)
         return
     
     reset_price = PERIOD_PRICES[30]
     
     if db_user.balance_kopeks < reset_price:
-        await callback.answer("❌ Недостаточно средств на балансе", show_alert=True)
+        await callback.answer("⌛ Недостаточно средств на балансе", show_alert=True)
         return
     
     await callback.message.edit_text(
@@ -708,6 +680,11 @@ async def confirm_add_traffic(
     db_user: User,
     db: AsyncSession
 ):
+    from app.config import settings
+    
+    if settings.is_traffic_fixed():
+        await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
+        return
     
     traffic_gb = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
@@ -716,7 +693,7 @@ async def confirm_add_traffic(
     price = TRAFFIC_PRICES[traffic_gb]
     
     if db_user.balance_kopeks < price:
-        await callback.answer("❌ Недостаточно средств на балансе", show_alert=True)
+        await callback.answer("⌛ Недостаточно средств на балансе", show_alert=True)
         return
     
     try:
@@ -726,7 +703,7 @@ async def confirm_add_traffic(
         )
         
         if not success:
-            await callback.answer("❌ Ошибка списания средств", show_alert=True)
+            await callback.answer("⌛ Ошибка списания средств", show_alert=True)
             return
         
         if traffic_gb == 0: 
@@ -959,6 +936,11 @@ async def confirm_reset_traffic(
     db_user: User,
     db: AsyncSession
 ):
+    from app.config import settings
+    
+    if settings.is_traffic_fixed():
+        await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
+        return
     
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
@@ -966,7 +948,7 @@ async def confirm_reset_traffic(
     reset_price = PERIOD_PRICES[30] 
     
     if db_user.balance_kopeks < reset_price:
-        await callback.answer("❌ Недостаточно средств на балансе", show_alert=True)
+        await callback.answer("⌛ Недостаточно средств на балансе", show_alert=True)
         return
     
     try:
@@ -976,7 +958,7 @@ async def confirm_reset_traffic(
         )
         
         if not success:
-            await callback.answer("❌ Ошибка списания средств", show_alert=True)
+            await callback.answer("⌛ Ошибка списания средств", show_alert=True)
             return
         
         subscription.traffic_used_gb = 0.0
@@ -1027,23 +1009,102 @@ async def select_period(
     state: FSMContext,
     db_user: User
 ):
-    
     period_days = int(callback.data.split('_')[1])
     texts = get_texts(db_user.language)
     
     data = await state.get_data()
     data['period_days'] = period_days
     data['total_price'] = PERIOD_PRICES[period_days]
+    
+    if settings.is_traffic_fixed():
+        fixed_traffic_price = TRAFFIC_PRICES.get(settings.get_fixed_traffic_limit(), 0)
+        data['total_price'] += fixed_traffic_price
+    
     await state.set_data(data)
     
-    await callback.message.edit_text(
-        texts.SELECT_TRAFFIC,
-        reply_markup=get_traffic_packages_keyboard(db_user.language)
-    )
+    if settings.is_traffic_selectable():
+        await callback.message.edit_text(
+            texts.SELECT_TRAFFIC,
+            reply_markup=get_traffic_packages_keyboard(db_user.language)
+        )
+        await state.set_state(SubscriptionStates.selecting_traffic)
+    else:
+        countries = await _get_available_countries()
+        await callback.message.edit_text(
+            texts.SELECT_COUNTRIES,
+            reply_markup=get_countries_keyboard(countries, [], db_user.language)
+        )
+        await state.set_state(SubscriptionStates.selecting_countries)
     
-    await state.set_state(SubscriptionStates.selecting_traffic)
     await callback.answer()
 
+async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSession):
+    
+    devices_used = await get_current_devices_count(db_user)
+    countries_info = await _get_countries_info(subscription.connected_squads)
+    countries_text = ", ".join([c['name'] for c in countries_info]) if countries_info else "Нет"
+    
+    subscription_url = getattr(subscription, 'subscription_url', None) or "Генерируется..."
+    
+    if subscription.is_trial:
+        status_text = "🎁 Тестовая"
+        type_text = "Триал"
+    else:
+        if subscription.is_active:
+            status_text = "✅ Оплачена"
+        else:
+            status_text = "⌛ Истекла"
+        type_text = "Платная подписка"
+    
+    if subscription.traffic_limit_gb == 0:
+        if settings.is_traffic_fixed():
+            traffic_text = "∞ Безлимитный"
+        else:
+            traffic_text = "∞ Безлимитный"
+    else:
+        if settings.is_traffic_fixed():
+            traffic_text = f"{subscription.traffic_limit_gb} ГБ"
+        else:
+            traffic_text = f"{subscription.traffic_limit_gb} ГБ"
+    
+    subscription_cost = await get_subscription_cost(subscription, db)
+    
+    info_text = texts.SUBSCRIPTION_INFO.format(
+        status=status_text,
+        type=type_text,
+        end_date=subscription.end_date.strftime("%d.%m.%Y %H:%M"),
+        days_left=max(0, subscription.days_left),
+        traffic_used=texts.format_traffic(subscription.traffic_used_gb),
+        traffic_limit=traffic_text,
+        countries_count=len(subscription.connected_squads),
+        devices_used=devices_used,
+        devices_limit=subscription.device_limit,
+        autopay_status="✅ Включен" if subscription.autopay_enabled else "⌛ Выключен"
+    )
+    
+    if subscription_cost > 0:
+        info_text += f"\n💰 <b>Стоимость подписки:</b> {texts.format_price(subscription_cost)}"
+    
+    if subscription_url and subscription_url != "Генерируется...":
+        info_text += f"\n\n🔗 <b>Ссылка для подключения:</b>\n<code>{subscription_url}</code>"
+        info_text += f"\n\n📱 Скопируйте ссылку и добавьте в ваше VPN приложение"
+    
+    return info_text
+
+def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None) -> str:
+    if is_fixed_mode is None:
+        is_fixed_mode = settings.is_traffic_fixed()
+    
+    if traffic_gb == 0:
+        if is_fixed_mode:
+            return "Безлимитный"
+        else:
+            return "Безлимитный"
+    else:
+        if is_fixed_mode:
+            return f"{traffic_gb} ГБ"
+        else:
+            return f"{traffic_gb} ГБ"
 
 async def select_traffic(
     callback: types.CallbackQuery,
@@ -1168,16 +1229,14 @@ async def select_devices(
     )
     await callback.answer()
 
-
 async def devices_continue(
     callback: types.CallbackQuery,
     state: FSMContext,
     db_user: User,
     db: AsyncSession
 ):
-    
     if not callback.data == "devices_continue":
-        await callback.answer("❌ Некорректный запрос", show_alert=True)
+        await callback.answer("⌛ Некорректный запрос", show_alert=True)
         return
     
     data = await state.get_data()
@@ -1197,24 +1256,47 @@ async def devices_continue(
         if country['uuid'] in data['countries']:
             selected_countries_names.append(country['name'])
     
-    base_price = PERIOD_PRICES[data['period_days']] + TRAFFIC_PRICES[data['traffic_gb']]
+    base_price = PERIOD_PRICES[data['period_days']]
+    
+    if settings.is_traffic_fixed():
+        traffic_price = TRAFFIC_PRICES.get(data['traffic_gb'], 0)
+    else:
+        traffic_price = TRAFFIC_PRICES.get(data['traffic_gb'], 0)
+    
     devices_price = (data['devices'] - 1) * settings.PRICE_PER_DEVICE
-    total_price = base_price + countries_price + devices_price
+    total_price = base_price + traffic_price + countries_price + devices_price
     
     data['total_price'] = total_price
     await state.set_data(data)
     
-    summary_text = texts.SUBSCRIPTION_SUMMARY.format(
-        period=data['period_days'],
-        traffic=texts.format_traffic(data['traffic_gb']),
-        countries=", ".join(selected_countries_names),
-        devices=data['devices'],
-        total_price=texts.format_price(total_price)
-    )
+    if settings.is_traffic_fixed():
+        if data['traffic_gb'] == 0:
+            traffic_display = "Безлимитный"
+        else:
+            traffic_display = f"{data['traffic_gb']} ГБ"
+    else:
+        if data['traffic_gb'] == 0:
+            traffic_display = "Безлимитный"
+        else:
+            traffic_display = f"{data['traffic_gb']} ГБ"
+    
+    summary_text = f"""
+📋 <b>Сводка заказа</b>
+
+📅 <b>Период:</b> {data['period_days']} дней
+📊 <b>Трафик:</b> {traffic_display}
+🌍 <b>Страны:</b> {", ".join(selected_countries_names)}
+📱 <b>Устройства:</b> {data['devices']}
+
+💰 <b>Общая стоимость:</b> {texts.format_price(total_price)}
+
+Подтверждаете покупку?
+"""
     
     await callback.message.edit_text(
         summary_text,
-        reply_markup=get_subscription_confirm_keyboard(db_user.language)
+        reply_markup=get_subscription_confirm_keyboard(db_user.language),
+        parse_mode="HTML"
     )
     
     await state.set_state(SubscriptionStates.confirming_purchase)
@@ -1232,7 +1314,7 @@ async def confirm_purchase(
     
     countries = await _get_available_countries()
     
-    base_price = PERIOD_PRICES[data['period_days']] + TRAFFIC_PRICES[data['traffic_gb']]
+    base_price = PERIOD_PRICES[data['period_days']]
     
     countries_price = 0
     server_prices = []
@@ -1242,7 +1324,15 @@ async def confirm_purchase(
             server_prices.append(country['price_kopeks'])
     
     devices_price = (data['devices'] - 1) * settings.PRICE_PER_DEVICE
-    final_price = base_price + countries_price + devices_price
+    
+    if settings.is_traffic_fixed():
+        traffic_price = TRAFFIC_PRICES.get(settings.get_fixed_traffic_limit(), 0)
+        final_traffic_gb = settings.get_fixed_traffic_limit()
+    else:
+        traffic_price = TRAFFIC_PRICES.get(data['traffic_gb'], 0)
+        final_traffic_gb = data['traffic_gb']
+    
+    final_price = base_price + traffic_price + countries_price + devices_price
     
     if db_user.balance_kopeks < final_price:
         await callback.message.edit_text(
@@ -1274,7 +1364,7 @@ async def confirm_purchase(
             existing_subscription.is_trial = False
             existing_subscription.status = SubscriptionStatus.ACTIVE.value
             
-            existing_subscription.traffic_limit_gb = data['traffic_gb']
+            existing_subscription.traffic_limit_gb = final_traffic_gb
             existing_subscription.device_limit = data['devices']
             existing_subscription.connected_squads = data['countries']
             
@@ -1289,13 +1379,13 @@ async def confirm_purchase(
             
         else:
             logger.info(f"🆕 Создаем новую платную подписку для пользователя {db_user.telegram_id}")
-            subscription = await create_paid_subscription(
+            subscription = await create_paid_subscription_with_traffic_mode(
                 db=db,
                 user_id=db_user.id,
                 duration_days=data['period_days'],
-                traffic_limit_gb=data['traffic_gb'],
                 device_limit=data['devices'],
-                connected_squads=data['countries']
+                connected_squads=data['countries'],
+                traffic_gb=final_traffic_gb
             )
         
         from app.utils.user_utils import mark_user_as_had_paid_subscription
@@ -1383,6 +1473,39 @@ async def confirm_purchase(
     
     await state.clear()
     await callback.answer()
+
+async def create_paid_subscription_with_traffic_mode(
+    db: AsyncSession,
+    user_id: int,
+    duration_days: int,
+    device_limit: int,
+    connected_squads: List[str],
+    traffic_gb: Optional[int] = None 
+):
+    from app.config import settings
+    from app.database.crud.subscription import create_paid_subscription
+    
+    if traffic_gb is None:
+        if settings.is_traffic_fixed():
+            traffic_limit_gb = settings.get_fixed_traffic_limit()
+        else:
+            traffic_limit_gb = 0 
+    else:
+        traffic_limit_gb = traffic_gb
+    
+    subscription = await create_paid_subscription(
+        db=db,
+        user_id=user_id,
+        duration_days=duration_days,
+        traffic_limit_gb=traffic_limit_gb,
+        device_limit=device_limit,
+        connected_squads=connected_squads
+    )
+    
+    logger.info(f"📋 Создана подписка с трафиком: {traffic_limit_gb} ГБ (режим: {settings.TRAFFIC_SELECTION_MODE})")
+    
+    return subscription
+
 
 async def handle_subscription_settings(
     callback: types.CallbackQuery,
@@ -1495,7 +1618,6 @@ async def handle_subscription_config_back(
     db_user: User,
     db: AsyncSession
 ):
-    
     current_state = await state.get_state()
     texts = get_texts(db_user.language)
     
@@ -1507,11 +1629,18 @@ async def handle_subscription_config_back(
         await state.set_state(SubscriptionStates.selecting_period)
         
     elif current_state == SubscriptionStates.selecting_countries.state:
-        await callback.message.edit_text(
-            texts.SELECT_TRAFFIC,
-            reply_markup=get_traffic_packages_keyboard(db_user.language)
-        )
-        await state.set_state(SubscriptionStates.selecting_traffic)
+        if settings.is_traffic_selectable():
+            await callback.message.edit_text(
+                texts.SELECT_TRAFFIC,
+                reply_markup=get_traffic_packages_keyboard(db_user.language)
+            )
+            await state.set_state(SubscriptionStates.selecting_traffic)
+        else:
+            await callback.message.edit_text(
+                texts.BUY_SUBSCRIPTION_START,
+                reply_markup=get_subscription_period_keyboard(db_user.language)
+            )
+            await state.set_state(SubscriptionStates.selecting_period)
         
     elif current_state == SubscriptionStates.selecting_devices.state:
         countries = await _get_available_countries()
