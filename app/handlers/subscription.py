@@ -113,35 +113,33 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
         
         subscription_service = SubscriptionService()
         
+        base_cost = PERIOD_PRICES.get(30, 0)
+        
         try:
             servers_cost, _ = await subscription_service.get_countries_price_by_uuids(
                 subscription.connected_squads, db
             )
         except AttributeError:
-            logger.warning("Используем fallback для расчета стоимости серверов")
             servers_cost, _ = await get_countries_price_by_uuids_fallback(
                 subscription.connected_squads, db
             )
         
         traffic_cost = TRAFFIC_PRICES.get(subscription.traffic_limit_gb, 0)
-        
         devices_cost = max(0, subscription.device_limit - 1) * settings.PRICE_PER_DEVICE
-        
-        base_cost = min(PERIOD_PRICES.values()) if PERIOD_PRICES else 0
         
         total_cost = base_cost + servers_cost + traffic_cost + devices_cost
         
-        logger.info(f"📊 Расчет стоимости подписки {subscription.id} (по текущим ценам):")
-        logger.info(f"   📦 Базовая стоимость: {base_cost/100}₽")
-        logger.info(f"   🌍 Серверы ({len(subscription.connected_squads)}) по текущим ценам: {servers_cost/100}₽")
-        logger.info(f"   📊 Трафик ({subscription.traffic_limit_gb} ГБ): {traffic_cost/100}₽")
-        logger.info(f"   📱 Устройства ({subscription.device_limit}): {devices_cost/100}₽")
-        logger.info(f"   💎 ОБЩАЯ СТОИМОСТЬ: {total_cost/100}₽")
+        logger.info(f"📊 Месячная стоимость конфигурации подписки {subscription.id}:")
+        logger.info(f"   📅 Базовый тариф (30 дней): {base_cost/100}₽")
+        logger.info(f"   🌍 Серверы: {servers_cost/100}₽")
+        logger.info(f"   📊 Трафик: {traffic_cost/100}₽")
+        logger.info(f"   📱 Устройства: {devices_cost/100}₽")
+        logger.info(f"   💎 ИТОГО: {total_cost/100}₽")
         
         return total_cost
         
     except Exception as e:
-        logger.error(f"❌ Ошибка расчета стоимости подписки: {e}")
+        logger.error(f"⚠ Ошибка расчета стоимости подписки: {e}")
         return 0
 
 
