@@ -1407,9 +1407,16 @@ async def confirm_purchase(
         
         subscription_service = SubscriptionService()
         
-        if existing_subscription and existing_subscription.is_trial == False: 
+        if db_user.remnawave_uuid:
+            logger.info(f"📝 Обновляем существующего RemnaWave пользователя {db_user.remnawave_uuid}")
             remnawave_user = await subscription_service.update_remnawave_user(db, subscription)
         else:
+            logger.info(f"🆕 Создаем нового RemnaWave пользователя для {db_user.telegram_id}")
+            remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
+            
+        if not remnawave_user:
+            logger.error(f"❌ Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}")
+            logger.info(f"🔄 Fallback: принудительное создание нового RemnaWave пользователя")
             remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
         
         await create_transaction(
