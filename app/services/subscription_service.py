@@ -34,10 +34,23 @@ class SubscriptionService:
                 logger.error(f"Пользователь {subscription.user_id} не найден")
                 return None
             
+            validation_success = await self.validate_and_clean_subscription(db, subscription, user)
+            if not validation_success:
+                logger.error(f"Ошибка валидации подписки для пользователя {user.telegram_id}")
+                return None
+            
             async with self.api as api:
                 existing_users = await api.get_user_by_telegram_id(user.telegram_id)
                 if existing_users:
+                    logger.info(f"🔄 Найден существующий пользователь в панели для {user.telegram_id}")
                     remnawave_user = existing_users[0]
+                    
+                    try:
+                        await api.reset_user_devices(remnawave_user.uuid)
+                        logger.info(f"🔧 Сброшены HWID устройства для пользователя {user.telegram_id}")
+                    except Exception as hwid_error:
+                        logger.warning(f"⚠️ Не удалось сбросить HWID: {hwid_error}")
+                    
                     updated_user = await api.update_user(
                         uuid=remnawave_user.uuid,
                         status=UserStatus.ACTIVE,
@@ -47,7 +60,9 @@ class SubscriptionService:
                         hwid_device_limit=subscription.device_limit,
                         active_internal_squads=subscription.connected_squads
                     )
+                    
                 else:
+                    logger.info(f"🆕 Создаем нового пользователя в панели для {user.telegram_id}")
                     username = f"user_{user.telegram_id}"
                     updated_user = await api.create_user(
                         username=username,
@@ -67,7 +82,7 @@ class SubscriptionService:
                 
                 await db.commit()
                 
-                logger.info(f"✅ Создан RemnaWave пользователь для подписки {subscription.id}")
+                logger.info(f"✅ Создан/обновлен RemnaWave пользователь для подписки {subscription.id}")
                 logger.info(f"🔗 Ссылка на подписку: {updated_user.subscription_url}")
                 logger.info(f"📊 Стратегия сброса трафика: MONTH") 
                 return updated_user
@@ -267,6 +282,54 @@ class SubscriptionService:
             logger.error(f"Ошибка расчета стоимости продления: {e}")
             from app.config import PERIOD_PRICES
             return PERIOD_PRICES.get(period_days, 0)
+
+    async def validate_and_clean_subscription(
+        self,
+        db: AsyncSession,
+        subscription: Subscription,
+        user: User
+    ) -> bool:
+        try:
+            needs_cleanup = False
+            
+            if user.remnawave_uuid:
+                try:
+                    async with self.api as api:
+                        remnawave_user = await api.get_user_by_uuid(user.remnawave_uuid)
+                        
+                        if not remnawave_user:
+                            logger.warning(f"⚠️ Пользователь {user.telegram_id} имеет UUID {user.remnawave_uuid}, но не найден в панели")
+                            needs_cleanup = True
+                        else:
+                            if remnawave_user.telegram_id != user.telegram_id:
+                                logger.warning(f"⚠️ Несоответствие telegram_id для пользователя {user.telegram_id}")
+                                needs_cleanup = True
+                except Exception as api_error:
+                    logger.error(f"❌ Ошибка проверки пользователя в панели: {api_error}")
+                    needs_cleanup = True
+            
+            if subscription.remnawave_short_uuid and not user.remnawave_uuid:
+                logger.warning(f"⚠️ У подписки есть short_uuid, но у пользователя нет remnawave_uuid")
+                needs_cleanup = True
+                
+            if needs_cleanup:
+                logger.info(f"🧹 Очищаем мусорные данные подписки для пользователя {user.telegram_id}")
+                
+                subscription.remnawave_short_uuid = None
+                subscription.subscription_url = ""
+                subscription.connected_squads = []
+                
+                user.remnawave_uuid = None
+                
+                await db.commit()
+                logger.info(f"✅ Мусорные данные очищены для пользователя {user.telegram_id}")
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка валидации подписки для пользователя {user.telegram_id}: {e}")
+            await db.rollback()
+            return False
     
     async def get_countries_price_by_uuids(
         self, 
