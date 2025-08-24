@@ -862,6 +862,606 @@ async def show_user_statistics(
 
 @admin_required
 @error_handler
+async def extend_user_subscription(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    await state.update_data(extending_user_id=user_id)
+    
+    await callback.message.edit_text(
+        "⏰ <b>Продление подписки</b>\n\n"
+        "Введите количество дней для продления:\n"
+        "• Например: 30, 7, 90\n"
+        "• Максимум: 365 дней\n\n"
+        "Или нажмите /cancel для отмены",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [
+                types.InlineKeyboardButton(text="7 дней", callback_data=f"admin_sub_extend_days_{user_id}_7"),
+                types.InlineKeyboardButton(text="30 дней", callback_data=f"admin_sub_extend_days_{user_id}_30")
+            ],
+            [
+                types.InlineKeyboardButton(text="90 дней", callback_data=f"admin_sub_extend_days_{user_id}_90"),
+                types.InlineKeyboardButton(text="180 дней", callback_data=f"admin_sub_extend_days_{user_id}_180")
+            ],
+            [
+                types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_user_subscription_{user_id}")
+            ]
+        ])
+    )
+    
+    await state.set_state(AdminStates.extending_subscription)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_subscription_extension_days(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    parts = callback.data.split('_')
+    user_id = int(parts[-2])
+    days = int(parts[-1])
+    
+    success = await _extend_subscription_by_days(db, user_id, days, db_user.id)
+    
+    if success:
+        await callback.message.edit_text(
+            f"✅ Подписка пользователя продлена на {days} дней",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    else:
+        await callback.message.edit_text(
+            "❌ Ошибка продления подписки",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_subscription_extension_text(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession
+):
+    data = await state.get_data()
+    user_id = data.get("extending_user_id")
+    
+    if not user_id:
+        await message.answer("❌ Ошибка: пользователь не найден")
+        await state.clear()
+        return
+    
+    try:
+        days = int(message.text.strip())
+        
+        if days <= 0 or days > 365:
+            await message.answer("❌ Количество дней должно быть от 1 до 365")
+            return
+        
+        success = await _extend_subscription_by_days(db, user_id, days, db_user.id)
+        
+        if success:
+            await message.answer(
+                f"✅ Подписка пользователя продлена на {days} дней",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+                ])
+            )
+        else:
+            await message.answer("❌ Ошибка продления подписки")
+        
+    except ValueError:
+        await message.answer("❌ Введите корректное число дней")
+        return
+    
+    await state.clear()
+
+
+@admin_required
+@error_handler
+async def add_subscription_traffic(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    await state.update_data(traffic_user_id=user_id)
+    
+    await callback.message.edit_text(
+        "📊 <b>Добавление трафика</b>\n\n"
+        "Введите количество ГБ для добавления:\n"
+        "• Например: 50, 100, 500\n"
+        "• Максимум: 10000 ГБ\n\n"
+        "Или нажмите /cancel для отмены",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [
+                types.InlineKeyboardButton(text="50 ГБ", callback_data=f"admin_sub_traffic_add_{user_id}_50"),
+                types.InlineKeyboardButton(text="100 ГБ", callback_data=f"admin_sub_traffic_add_{user_id}_100")
+            ],
+            [
+                types.InlineKeyboardButton(text="500 ГБ", callback_data=f"admin_sub_traffic_add_{user_id}_500"),
+                types.InlineKeyboardButton(text="1000 ГБ", callback_data=f"admin_sub_traffic_add_{user_id}_1000")
+            ],
+            [
+                types.InlineKeyboardButton(text="♾️ Безлимит", callback_data=f"admin_sub_traffic_add_{user_id}_0"),
+            ],
+            [
+                types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_user_subscription_{user_id}")
+            ]
+        ])
+    )
+    
+    await state.set_state(AdminStates.adding_traffic)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_traffic_addition_button(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    parts = callback.data.split('_')
+    user_id = int(parts[-2])
+    gb = int(parts[-1])
+    
+    success = await _add_subscription_traffic(db, user_id, gb, db_user.id)
+    
+    if success:
+        traffic_text = "♾️ безлимитный" if gb == 0 else f"{gb} ГБ"
+        await callback.message.edit_text(
+            f"✅ К подписке пользователя добавлен трафик: {traffic_text}",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    else:
+        await callback.message.edit_text(
+            "❌ Ошибка добавления трафика",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_traffic_addition_text(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession
+):
+    data = await state.get_data()
+    user_id = data.get("traffic_user_id")
+    
+    if not user_id:
+        await message.answer("❌ Ошибка: пользователь не найден")
+        await state.clear()
+        return
+    
+    try:
+        gb = int(message.text.strip())
+        
+        if gb < 0 or gb > 10000:
+            await message.answer("❌ Количество ГБ должно быть от 0 до 10000 (0 = безлимит)")
+            return
+        
+        success = await _add_subscription_traffic(db, user_id, gb, db_user.id)
+        
+        if success:
+            traffic_text = "♾️ безлимитный" if gb == 0 else f"{gb} ГБ"
+            await message.answer(
+                f"✅ К подписке пользователя добавлен трафик: {traffic_text}",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+                ])
+            )
+        else:
+            await message.answer("❌ Ошибка добавления трафика")
+        
+    except ValueError:
+        await message.answer("❌ Введите корректное число ГБ")
+        return
+    
+    await state.clear()
+
+
+@admin_required
+@error_handler
+async def deactivate_user_subscription(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    await callback.message.edit_text(
+        "🚫 <b>Деактивация подписки</b>\n\n"
+        "Вы уверены, что хотите деактивировать подписку этого пользователя?\n"
+        "Пользователь потеряет доступ к сервису.",
+        reply_markup=get_confirmation_keyboard(
+            f"admin_sub_deactivate_confirm_{user_id}",
+            f"admin_user_subscription_{user_id}",
+            db_user.language
+        )
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def confirm_subscription_deactivation(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    success = await _deactivate_user_subscription(db, user_id, db_user.id)
+    
+    if success:
+        await callback.message.edit_text(
+            "✅ Подписка пользователя деактивирована",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    else:
+        await callback.message.edit_text(
+            "❌ Ошибка деактивации подписки",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def activate_user_subscription(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    success = await _activate_user_subscription(db, user_id, db_user.id)
+    
+    if success:
+        await callback.message.edit_text(
+            "✅ Подписка пользователя активирована",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    else:
+        await callback.message.edit_text(
+            "❌ Ошибка активации подписки",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def grant_trial_subscription(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    success = await _grant_trial_subscription(db, user_id, db_user.id)
+    
+    if success:
+        await callback.message.edit_text(
+            "✅ Пользователю выдан триальный период",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    else:
+        await callback.message.edit_text(
+            "❌ Ошибка выдачи триального периода",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def grant_paid_subscription(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    await state.update_data(granting_user_id=user_id)
+    
+    await callback.message.edit_text(
+        "💎 <b>Выдача подписки</b>\n\n"
+        "Введите количество дней подписки:\n"
+        "• Например: 30, 90, 180, 365\n"
+        "• Максимум: 730 дней\n\n"
+        "Или нажмите /cancel для отмены",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [
+                types.InlineKeyboardButton(text="30 дней", callback_data=f"admin_sub_grant_days_{user_id}_30"),
+                types.InlineKeyboardButton(text="90 дней", callback_data=f"admin_sub_grant_days_{user_id}_90")
+            ],
+            [
+                types.InlineKeyboardButton(text="180 дней", callback_data=f"admin_sub_grant_days_{user_id}_180"),
+                types.InlineKeyboardButton(text="365 дней", callback_data=f"admin_sub_grant_days_{user_id}_365")
+            ],
+            [
+                types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_user_subscription_{user_id}")
+            ]
+        ])
+    )
+    
+    await state.set_state(AdminStates.granting_subscription)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_subscription_grant_days(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    parts = callback.data.split('_')
+    user_id = int(parts[-2])
+    days = int(parts[-1])
+    
+    success = await _grant_paid_subscription(db, user_id, days, db_user.id)
+    
+    if success:
+        await callback.message.edit_text(
+            f"✅ Пользователю выдана подписка на {days} дней",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    else:
+        await callback.message.edit_text(
+            "❌ Ошибка выдачи подписки",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_subscription_grant_text(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession
+):
+    data = await state.get_data()
+    user_id = data.get("granting_user_id")
+    
+    if not user_id:
+        await message.answer("❌ Ошибка: пользователь не найден")
+        await state.clear()
+        return
+    
+    try:
+        days = int(message.text.strip())
+        
+        if days <= 0 or days > 730:
+            await message.answer("❌ Количество дней должно быть от 1 до 730")
+            return
+        
+        success = await _grant_paid_subscription(db, user_id, days, db_user.id)
+        
+        if success:
+            await message.answer(
+                f"✅ Пользователю выдана подписка на {days} дней",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+                ])
+            )
+        else:
+            await message.answer("❌ Ошибка выдачи подписки")
+        
+    except ValueError:
+        await message.answer("❌ Введите корректное число дней")
+        return
+    
+    await state.clear()
+
+
+async def _extend_subscription_by_days(db: AsyncSession, user_id: int, days: int, admin_id: int) -> bool:
+    try:
+        from app.database.crud.subscription import get_subscription_by_user_id, extend_subscription
+        from app.services.subscription_service import SubscriptionService
+        
+        subscription = await get_subscription_by_user_id(db, user_id)
+        if not subscription:
+            logger.error(f"Подписка не найдена для пользователя {user_id}")
+            return False
+        
+        await extend_subscription(db, subscription, days)
+        
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+        
+        logger.info(f"Админ {admin_id} продлил подписку пользователя {user_id} на {days} дней")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка продления подписки: {e}")
+        return False
+
+
+async def _add_subscription_traffic(db: AsyncSession, user_id: int, gb: int, admin_id: int) -> bool:
+    try:
+        from app.database.crud.subscription import get_subscription_by_user_id, add_subscription_traffic
+        from app.services.subscription_service import SubscriptionService
+        
+        subscription = await get_subscription_by_user_id(db, user_id)
+        if not subscription:
+            logger.error(f"Подписка не найдена для пользователя {user_id}")
+            return False
+        
+        if gb == 0:  
+            subscription.traffic_limit_gb = 0
+            await db.commit()
+        else:
+            await add_subscription_traffic(db, subscription, gb)
+        
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+        
+        traffic_text = "безлимитный" if gb == 0 else f"{gb} ГБ"
+        logger.info(f"Админ {admin_id} добавил трафик {traffic_text} пользователю {user_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка добавления трафика: {e}")
+        return False
+
+
+async def _deactivate_user_subscription(db: AsyncSession, user_id: int, admin_id: int) -> bool:
+    try:
+        from app.database.crud.subscription import get_subscription_by_user_id, deactivate_subscription
+        from app.services.subscription_service import SubscriptionService
+        
+        subscription = await get_subscription_by_user_id(db, user_id)
+        if not subscription:
+            logger.error(f"Подписка не найдена для пользователя {user_id}")
+            return False
+        
+        await deactivate_subscription(db, subscription)
+        
+        user = await get_user_by_id(db, user_id)
+        if user and user.remnawave_uuid:
+            subscription_service = SubscriptionService()
+            await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+        
+        logger.info(f"Админ {admin_id} деактивировал подписку пользователя {user_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка деактивации подписки: {e}")
+        return False
+
+
+async def _activate_user_subscription(db: AsyncSession, user_id: int, admin_id: int) -> bool:
+    try:
+        from app.database.crud.subscription import get_subscription_by_user_id
+        from app.services.subscription_service import SubscriptionService
+        from app.database.models import SubscriptionStatus
+        from datetime import datetime
+        
+        subscription = await get_subscription_by_user_id(db, user_id)
+        if not subscription:
+            logger.error(f"Подписка не найдена для пользователя {user_id}")
+            return False
+        
+        subscription.status = SubscriptionStatus.ACTIVE.value
+        if subscription.end_date <= datetime.utcnow():
+            subscription.end_date = datetime.utcnow() + timedelta(days=1)
+        
+        await db.commit()
+        await db.refresh(subscription)
+        
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+        
+        logger.info(f"Админ {admin_id} активировал подписку пользователя {user_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка активации подписки: {e}")
+        return False
+
+
+async def _grant_trial_subscription(db: AsyncSession, user_id: int, admin_id: int) -> bool:
+    try:
+        from app.database.crud.subscription import get_subscription_by_user_id, create_trial_subscription
+        from app.services.subscription_service import SubscriptionService
+        
+        existing_subscription = await get_subscription_by_user_id(db, user_id)
+        if existing_subscription:
+            logger.error(f"У пользователя {user_id} уже есть подписка")
+            return False
+        
+        subscription = await create_trial_subscription(db, user_id)
+        
+        subscription_service = SubscriptionService()
+        await subscription_service.create_remnawave_user(db, subscription)
+        
+        logger.info(f"Админ {admin_id} выдал триальную подписку пользователю {user_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка выдачи триальной подписки: {e}")
+        return False
+
+
+async def _grant_paid_subscription(db: AsyncSession, user_id: int, days: int, admin_id: int) -> bool:
+    try:
+        from app.database.crud.subscription import get_subscription_by_user_id, create_paid_subscription
+        from app.services.subscription_service import SubscriptionService
+        from app.config import settings
+        
+        existing_subscription = await get_subscription_by_user_id(db, user_id)
+        if existing_subscription:
+            logger.error(f"У пользователя {user_id} уже есть подписка")
+            return False
+        
+        subscription = await create_paid_subscription(
+            db=db,
+            user_id=user_id,
+            duration_days=days,
+            traffic_limit_gb=settings.DEFAULT_TRAFFIC_LIMIT_GB,
+            device_limit=settings.DEFAULT_DEVICE_LIMIT,
+            connected_squads=[settings.TRIAL_SQUAD_UUID] if settings.TRIAL_SQUAD_UUID else []
+        )
+        
+        subscription_service = SubscriptionService()
+        await subscription_service.create_remnawave_user(db, subscription)
+        
+        logger.info(f"Админ {admin_id} выдал платную подписку на {days} дней пользователю {user_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка выдачи платной подписки: {e}")
+        return False
+
+@admin_required
+@error_handler
 async def cleanup_inactive_users(
     callback: types.CallbackQuery,
     db_user: User,
@@ -925,7 +1525,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(
         confirm_user_block,
-        F.data.startswith("admin_user_block_")
+        F.data.startswith("admin_user_block_") & ~F.data.contains("confirm")
     )
 
     dp.callback_query.register(
@@ -940,7 +1540,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(
         confirm_user_delete,
-        F.data.startswith("admin_user_delete_")
+        F.data.startswith("admin_user_delete_") & ~F.data.contains("confirm")
     )
     
     dp.callback_query.register(
@@ -973,7 +1573,6 @@ def register_handlers(dp: Dispatcher):
         AdminStates.editing_user_balance
     )
     
-    
     dp.callback_query.register(
         show_inactive_users,
         F.data == "admin_users_inactive"
@@ -982,4 +1581,70 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         cleanup_inactive_users,
         F.data == "admin_cleanup_inactive"
+    )
+
+    
+    dp.callback_query.register(
+        extend_user_subscription,
+        F.data.startswith("admin_sub_extend_") & ~F.data.contains("days") & ~F.data.contains("confirm")
+    )
+    
+    dp.callback_query.register(
+        process_subscription_extension_days,
+        F.data.startswith("admin_sub_extend_days_")
+    )
+    
+    dp.message.register(
+        process_subscription_extension_text,
+        AdminStates.extending_subscription
+    )
+    
+    dp.callback_query.register(
+        add_subscription_traffic,
+        F.data.startswith("admin_sub_traffic_") & ~F.data.contains("add")
+    )
+    
+    dp.callback_query.register(
+        process_traffic_addition_button,
+        F.data.startswith("admin_sub_traffic_add_")
+    )
+    
+    dp.message.register(
+        process_traffic_addition_text,
+        AdminStates.adding_traffic
+    )
+    
+    dp.callback_query.register(
+        deactivate_user_subscription,
+        F.data.startswith("admin_sub_deactivate_") & ~F.data.contains("confirm")
+    )
+    
+    dp.callback_query.register(
+        confirm_subscription_deactivation,
+        F.data.startswith("admin_sub_deactivate_confirm_")
+    )
+    
+    dp.callback_query.register(
+        activate_user_subscription,
+        F.data.startswith("admin_sub_activate_")
+    )
+    
+    dp.callback_query.register(
+        grant_trial_subscription,
+        F.data.startswith("admin_sub_grant_trial_")
+    )
+    
+    dp.callback_query.register(
+        grant_paid_subscription,
+        F.data.startswith("admin_sub_grant_") & ~F.data.contains("trial") & ~F.data.contains("days")
+    )
+    
+    dp.callback_query.register(
+        process_subscription_grant_days,
+        F.data.startswith("admin_sub_grant_days_")
+    )
+    
+    dp.message.register(
+        process_subscription_grant_text,
+        AdminStates.granting_subscription
     )
