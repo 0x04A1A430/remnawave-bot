@@ -391,34 +391,22 @@ class RemnaWaveService:
             return False
     
     async def sync_users_from_panel(self, db: AsyncSession, sync_type: str = "all") -> Dict[str, int]:
-        """
-        Синхронизация пользователей из панели RemnaWave в бота
-        
-        sync_type:
-        - "all": полная синхронизация (создание + обновление + удаление)
-        - "new_only": только создание новых пользователей
-        - "update_only": только обновление существующих
-        """
         try:
             stats = {"created": 0, "updated": 0, "errors": 0, "deleted": 0}
         
             logger.info(f"🔄 Начинаем синхронизацию типа: {sync_type}")
         
             async with self.api as api:
-                # Получаем всех пользователей из панели
                 panel_users_data = await api._make_request('GET', '/api/users')
                 panel_users = panel_users_data['response']['users']
             
                 logger.info(f"👥 Найдено пользователей в панели: {len(panel_users)}")
                 
-                # Получаем всех пользователей из бота для сравнения
                 bot_users = await get_users_list(db, offset=0, limit=10000)
                 bot_users_by_telegram_id = {user.telegram_id: user for user in bot_users}
                 
-                # Множество telegram_id из панели для проверки удаленных
                 panel_telegram_ids = set()
                 
-                # Обрабатываем каждого пользователя из панели
                 for i, panel_user in enumerate(panel_users):
                     try:
                         telegram_id = panel_user.get('telegramId')
@@ -433,7 +421,6 @@ class RemnaWaveService:
                         db_user = bot_users_by_telegram_id.get(telegram_id)
                     
                         if not db_user:
-                            # Пользователя нет в боте - создаем
                             if sync_type in ["new_only", "all"]:
                                 logger.info(f"🆕 Создание пользователя для telegram_id {telegram_id}")
                                 
@@ -455,7 +442,6 @@ class RemnaWaveService:
                                 logger.info(f"✅ Создан пользователь {telegram_id} с подпиской")
                             
                         else:
-                            # Пользователь есть в боте - обновляем
                             if sync_type in ["update_only", "all"]:
                                 logger.debug(f"🔄 Обновление пользователя {telegram_id}")
                             
@@ -472,25 +458,64 @@ class RemnaWaveService:
                         stats["errors"] += 1
                         continue
                 
-                # Удаляем подписки пользователей, которых нет в панели
                 if sync_type == "all":
-                    logger.info("🗑️ Удаляем подписки пользователей, отсутствующих в панели...")
+                    logger.info("🗑️ Полная очистка подписок пользователей, отсутствующих в панели...")
                     
                     for telegram_id, db_user in bot_users_by_telegram_id.items():
                         if telegram_id not in panel_telegram_ids and db_user.subscription:
                             try:
-                                logger.info(f"🗑️ Удаляем подписку пользователя {telegram_id} (нет в панели)")
+                                logger.info(f"🗑️ Полная очистка данных подписки пользователя {telegram_id} (нет в панели)")
                                 
-                                # Деактивируем подписку
-                                from app.database.crud.subscription import deactivate_subscription
-                                await deactivate_subscription(db, db_user.subscription)
+                                subscription = db_user.subscription
+                                
+                                if db_user.remnawave_uuid:
+                                    try:
+                                        devices_reset = await api.reset_user_devices(db_user.remnawave_uuid)
+                                        if devices_reset:
+                                            logger.info(f"🔧 Сброшены HWID устройства для пользователя {telegram_id}")
+                                        else:
+                                            logger.warning(f"⚠️ Не удалось сбросить HWID устройства для пользователя {telegram_id}")
+                                    except Exception as hwid_error:
+                                        logger.error(f"❌ Ошибка сброса HWID устройств для {telegram_id}: {hwid_error}")
+                                
+                                from app.database.models import SubscriptionStatus
+                                from datetime import datetime
+                                
+                                subscription.status = SubscriptionStatus.DISABLED.value
+                                subscription.is_trial = True 
+                                subscription.end_date = datetime.utcnow()
+                                subscription.traffic_limit_gb = 0
+                                subscription.traffic_used_gb = 0.0
+                                subscription.device_limit = 1
+                                subscription.connected_squads = []
+                                subscription.autopay_enabled = False
+                                subscription.autopay_days_before = 3
+                                
+                                subscription.remnawave_short_uuid = None
+                                subscription.subscription_url = ""
+                                
+                                db_user.remnawave_uuid = None
+                                
+                                try:
+                                    from app.database.crud.subscription import get_subscription_server_ids, remove_subscription_servers
+                                    
+                                    server_ids = await get_subscription_server_ids(db, subscription.id)
+                                    if server_ids:
+                                        await remove_subscription_servers(db, subscription.id, server_ids)
+                                        logger.info(f"🗑️ Удалены серверы подписки ({len(server_ids)}): {server_ids}")
+                                except Exception as servers_error:
+                                    logger.warning(f"⚠️ Не удалось удалить серверы подписки: {servers_error}")
+                                
+                                
+                                await db.commit()
                                 
                                 stats["deleted"] += 1
-                                logger.info(f"✅ Деактивирована подписка пользователя {telegram_id}")
+                                logger.info(f"✅ ПОЛНОСТЬЮ очищены ВСЕ данные подписки пользователя {telegram_id}")
                                 
                             except Exception as delete_error:
-                                logger.error(f"❌ Ошибка удаления подписки {telegram_id}: {delete_error}")
+                                logger.error(f"❌ Ошибка полной очистки данных подписки {telegram_id}: {delete_error}")
                                 stats["errors"] += 1
+                                await db.rollback()
         
             logger.info(f"🎯 Синхронизация завершена: создано {stats['created']}, обновлено {stats['updated']}, удалено {stats['deleted']}, ошибок {stats['errors']}")
             return stats
@@ -599,7 +624,6 @@ class RemnaWaveService:
                 await self._create_subscription_from_panel_data(db, user, panel_user)
                 return
         
-            # Обновляем статус подписки
             panel_status = panel_user.get('status', 'ACTIVE')
             expire_at_str = panel_user.get('expireAt', '')
             
@@ -611,14 +635,12 @@ class RemnaWaveService:
                     if expire_at.tzinfo is not None:
                         expire_at = expire_at.replace(tzinfo=None)
                     
-                    # Обновляем дату окончания если она отличается
-                    if abs((subscription.end_date - expire_at).total_seconds()) > 60:  # больше минуты разницы
+                    if abs((subscription.end_date - expire_at).total_seconds()) > 60: 
                         subscription.end_date = expire_at
                         logger.debug(f"Обновлена дата окончания подписки до {expire_at}")
             except Exception as date_error:
                 logger.warning(f"⚠️ Ошибка парсинга даты при обновлении {expire_at_str}: {date_error}")
             
-            # Обновляем статус
             current_time = datetime.utcnow()
             if panel_status == 'ACTIVE' and subscription.end_date > current_time:
                 new_status = SubscriptionStatus.ACTIVE.value
@@ -627,13 +649,12 @@ class RemnaWaveService:
             elif panel_status == 'DISABLED':
                 new_status = SubscriptionStatus.DISABLED.value
             else:
-                new_status = subscription.status  # Оставляем текущий статус
+                new_status = subscription.status 
             
             if subscription.status != new_status:
                 subscription.status = new_status
                 logger.debug(f"Обновлен статус подписки: {new_status}")
         
-            # Обновляем использованный трафик
             used_traffic_bytes = panel_user.get('usedTrafficBytes', 0)
             traffic_used_gb = used_traffic_bytes / (1024**3)
         
@@ -641,7 +662,6 @@ class RemnaWaveService:
                 subscription.traffic_used_gb = traffic_used_gb
                 logger.debug(f"Обновлен использованный трафик: {traffic_used_gb} GB")
             
-            # Обновляем лимит трафика
             traffic_limit_bytes = panel_user.get('trafficLimitBytes', 0)
             traffic_limit_gb = traffic_limit_bytes // (1024**3) if traffic_limit_bytes > 0 else 0
             
@@ -649,22 +669,18 @@ class RemnaWaveService:
                 subscription.traffic_limit_gb = traffic_limit_gb
                 logger.debug(f"Обновлен лимит трафика: {traffic_limit_gb} GB")
             
-            # Обновляем лимит устройств
             device_limit = panel_user.get('hwidDeviceLimit', 1) or 1
             if subscription.device_limit != device_limit:
                 subscription.device_limit = device_limit
                 logger.debug(f"Обновлен лимит устройств: {device_limit}")
         
-            # Обновляем RemnaWave UUID если отсутствует
             if not subscription.remnawave_short_uuid:
                 subscription.remnawave_short_uuid = panel_user.get('shortUuid')
         
-            # Обновляем URL подписки если отсутствует или изменился
             panel_url = panel_user.get('subscriptionUrl', '')
             if not subscription.subscription_url or subscription.subscription_url != panel_url:
                 subscription.subscription_url = panel_url
         
-            # Обновляем подключенные сквады
             active_squads = panel_user.get('activeInternalSquads', [])
             squad_uuids = []
             if isinstance(active_squads, list):
@@ -674,7 +690,6 @@ class RemnaWaveService:
                     elif isinstance(squad, str):
                         squad_uuids.append(squad)
         
-            # Сравниваем сквады - обновляем только если есть изменения
             current_squads = set(subscription.connected_squads or [])
             new_squads = set(squad_uuids)
             
@@ -729,7 +744,6 @@ class RemnaWaveService:
                                 active_internal_squads=subscription.connected_squads
                             )
                             
-                            # Обновляем UUID в нашей базе
                             await update_user(db, user, remnawave_uuid=new_user.uuid)
                             subscription.remnawave_short_uuid = new_user.short_uuid
                             await db.commit()
