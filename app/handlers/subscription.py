@@ -1081,7 +1081,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
     )
     
     if subscription_cost > 0:
-        info_text += f"\n💰 <b>Стоимость подписки:</b> {texts.format_price(subscription_cost)}"
+        info_text += f"\n💰 <b>Стоимость подписки в месяц:</b> {texts.format_price(subscription_cost)}"
     
     if subscription_url and subscription_url != "Генерируется...":
         info_text += f"\n\n🔗 <b>Ссылка для подключения:</b>\n<code>{subscription_url}</code>"
