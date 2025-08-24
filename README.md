@@ -1,4 +1,4 @@
-# 🚀 Remnawave Bedolaga Bot 2.0.0
+# 🚀 Remnawave Bedolaga Bot
 
 <div align="center">
 
