@@ -20,7 +20,12 @@ async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Optiona
         .options(selectinload(Subscription.user))
         .where(Subscription.user_id == user_id)
     )
-    return result.scalar_one_or_none()
+    subscription = result.scalar_one_or_none()
+    
+    if subscription:
+        subscription = await check_and_update_subscription_status(db, subscription)
+    
+    return subscription
 
 
 async def create_trial_subscription(
@@ -509,6 +514,41 @@ async def get_subscription_renewal_cost(
         logger.error(f"Ошибка расчета стоимости продления: {e}")
         from app.config import PERIOD_PRICES
         return PERIOD_PRICES.get(period_days, 0)
+
+async def expire_subscription(
+    db: AsyncSession,
+    subscription: Subscription
+) -> Subscription:
+    
+    subscription.status = SubscriptionStatus.EXPIRED.value
+    subscription.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(subscription)
+    
+    logger.info(f"⏰ Подписка пользователя {subscription.user_id} помечена как истёкшая")
+    return subscription
+
+
+async def check_and_update_subscription_status(
+    db: AsyncSession,
+    subscription: Subscription
+) -> Subscription:
+    
+    current_time = datetime.utcnow()
+    
+    if (subscription.status == SubscriptionStatus.ACTIVE.value and 
+        subscription.end_date <= current_time):
+        
+        subscription.status = SubscriptionStatus.EXPIRED.value
+        subscription.updated_at = current_time
+        
+        await db.commit()
+        await db.refresh(subscription)
+        
+        logger.info(f"⏰ Статус подписки пользователя {subscription.user_id} изменен на 'expired'")
+    
+    return subscription
 
 async def create_subscription(
     db: AsyncSession,
