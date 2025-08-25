@@ -150,33 +150,36 @@ async def add_user_balance(
 
 
 async def subtract_user_balance(
-    db: AsyncSession,
-    user: User,
-    amount_kopeks: int,
-    description: str = "Списание с баланса"
+    db: AsyncSession, 
+    user: User, 
+    amount_kopeks: int, 
+    description: str
 ) -> bool:
+    logger.error(f"💸 ОТЛАДКА subtract_user_balance:")
+    logger.error(f"   👤 User ID: {user.id} (TG: {user.telegram_id})")
+    logger.error(f"   💰 Баланс до списания: {user.balance_kopeks} копеек")
+    logger.error(f"   💸 Сумма к списанию: {amount_kopeks} копеек")
+    logger.error(f"   📝 Описание: {description}")
     
-    if not user.subtract_balance(amount_kopeks):
+    if user.balance_kopeks < amount_kopeks:
+        logger.error(f"   ❌ НЕДОСТАТОЧНО СРЕДСТВ!")
         return False
     
-    user.updated_at = datetime.utcnow()
-    
-    from app.database.crud.transaction import create_transaction
-    from app.database.models import TransactionType
-    
-    await create_transaction(
-        db=db,
-        user_id=user.id,
-        type=TransactionType.WITHDRAWAL,
-        amount_kopeks=amount_kopeks,
-        description=description
-    )
-    
-    await db.commit()
-    await db.refresh(user)
-    
-    logger.info(f"💸 Списан баланс пользователя {user.telegram_id}: -{amount_kopeks/100}₽")
-    return True
+    try:
+        old_balance = user.balance_kopeks
+        user.balance_kopeks -= amount_kopeks
+        user.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        await db.refresh(user)
+        
+        logger.error(f"   ✅ Средства списаны: {old_balance} → {user.balance_kopeks}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"   ❌ ОШИБКА СПИСАНИЯ: {e}")
+        await db.rollback()
+        return False
 
 
 async def get_users_list(
