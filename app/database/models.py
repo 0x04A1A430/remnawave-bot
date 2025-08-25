@@ -31,7 +31,7 @@ class TransactionType(Enum):
     DEPOSIT = "deposit"  
     WITHDRAWAL = "withdrawal"  
     SUBSCRIPTION_PAYMENT = "subscription_payment"  
-    REFUND = "refund"  # Возврат
+    REFUND = "refund" 
     REFERRAL_REWARD = "referral_reward"  
 
 
@@ -133,21 +133,113 @@ class Subscription(Base):
     
     @property
     def is_active(self) -> bool:
+        """Проверяет, действительно ли подписка активна (и по статусу, и по времени)"""
+        current_time = datetime.utcnow()
         return (
             self.status == SubscriptionStatus.ACTIVE.value and 
-            self.end_date > datetime.utcnow()
+            self.end_date > current_time
         )
     
     @property
     def is_expired(self) -> bool:
+        """Проверяет, истёк ли срок подписки"""
         return self.end_date <= datetime.utcnow()
-    
+
+    @property
+    def should_be_expired(self) -> bool:
+        """Проверяет, должна ли подписка быть помечена как истёкшая"""
+        current_time = datetime.utcnow()
+        return (
+            self.status == SubscriptionStatus.ACTIVE.value and 
+            self.end_date <= current_time
+        )
+
+    @property
+    def actual_status(self) -> str:
+        current_time = datetime.utcnow()
+        
+        if self.status == SubscriptionStatus.EXPIRED.value:
+            return "expired"
+        
+        if self.status == SubscriptionStatus.DISABLED.value:
+            return "disabled"
+        
+        if self.status == SubscriptionStatus.ACTIVE.value:
+            if self.end_date <= current_time:
+                return "expired"
+            else:
+                return "active"
+        
+        if self.status == SubscriptionStatus.TRIAL.value:
+            if self.end_date <= current_time:
+                return "expired"
+            else:
+                return "trial"
+        
+        return self.status
+
+    @property
+    def status_display(self) -> str:
+        actual_status = self.actual_status
+        current_time = datetime.utcnow()
+        
+        if actual_status == "expired":
+            return "🔴 Истекла"
+        elif actual_status == "active":
+            if self.is_trial:
+                return "🎯 Тестовая"
+            else:
+                return "🟢 Активна"
+        elif actual_status == "disabled":
+            return "⚫ Отключена"
+        elif actual_status == "trial":
+            return "🎯 Тестовая"
+        
+        return "❓ Неизвестно"
+
+    @property
+    def status_emoji(self) -> str:
+        actual_status = self.actual_status
+        
+        if actual_status == "expired":
+            return "🔴"
+        elif actual_status == "active":
+            if self.is_trial:
+                return "🎁"
+            else:
+                return "💎"
+        elif actual_status == "disabled":
+            return "⚫"
+        elif actual_status == "trial":
+            return "🎁"
+        
+        return "❓"
+
     @property
     def days_left(self) -> int:
-        if self.is_expired:
+        current_time = datetime.utcnow()
+        if self.end_date <= current_time:
             return 0
-        delta = self.end_date - datetime.utcnow()
-        return delta.days
+        delta = self.end_date - current_time
+        return max(0, delta.days)
+
+    @property
+    def time_left_display(self) -> str:
+        current_time = datetime.utcnow()
+        if self.end_date <= current_time:
+            return "истёк"
+        
+        delta = self.end_date - current_time
+        days = delta.days
+        hours = delta.seconds // 3600
+        minutes = (delta.seconds % 3600) // 60
+        
+        if days > 0:
+            return f"{days} дн."
+        elif hours > 0:
+            return f"{hours} ч."
+        else:
+            return f"{minutes} мин."
     
     @property
     def traffic_used_percent(self) -> float:
