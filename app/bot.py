@@ -8,6 +8,7 @@ from app.config import settings
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.logging import LoggingMiddleware
 from app.middlewares.throttling import ThrottlingMiddleware
+from app.middlewares.subscription_checker import SubscriptionStatusMiddleware
 from app.utils.cache import cache 
 
 from app.handlers import (
@@ -66,6 +67,9 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.callback_query.middleware(AuthMiddleware())
     dp.message.middleware(ThrottlingMiddleware())
     dp.callback_query.middleware(ThrottlingMiddleware())
+    dp.message.middleware(SubscriptionStatusMiddleware())
+    dp.callback_query.middleware(SubscriptionStatusMiddleware())
+    
 
     start.register_handlers(dp)
     menu.register_handlers(dp)
