@@ -22,6 +22,10 @@ from app.services.subscription_service import SubscriptionService
 from app.services.payment_service import PaymentService
 from app.localization.texts import get_texts
 
+from app.external.remnawave_api import (
+    RemnaWaveUser, UserStatus, TrafficLimitStrategy, RemnaWaveAPIError
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -91,7 +95,8 @@ class MonitoringService:
             expired_subscriptions = await get_expired_subscriptions(db)
             
             for subscription in expired_subscriptions:
-                await deactivate_subscription(db, subscription)
+                from app.database.crud.subscription import expire_subscription
+                await expire_subscription(db, subscription)
                 
                 user = await get_user_by_id(db, subscription.user_id)
                 if user and user.remnawave_uuid:
@@ -100,17 +105,65 @@ class MonitoringService:
                 if user and self.bot:
                     await self._send_subscription_expired_notification(user)
                 
-                logger.info(f"🔴 Подписка пользователя {subscription.user_id} истекла и деактивирована")
+                logger.info(f"🔴 Подписка пользователя {subscription.user_id} истекла и статус изменен на 'expired'")
             
             if expired_subscriptions:
                 await self._log_monitoring_event(
                     db, "expired_subscriptions_processed",
-                    f"Обработано {len(expired_subscriptions)} истекших подписок",
+                    f"Обработано {len(expired_subscriptions)} истёкших подписок",
                     {"count": len(expired_subscriptions)}
                 )
                 
         except Exception as e:
-            logger.error(f"Ошибка проверки истекших подписок: {e}")
+            logger.error(f"Ошибка проверки истёкших подписок: {e}")
+
+    async def update_remnawave_user(
+        self,
+        db: AsyncSession,
+        subscription: Subscription
+    ) -> Optional[RemnaWaveUser]:
+        
+        try:
+            user = await get_user_by_id(db, subscription.user_id)
+            if not user or not user.remnawave_uuid:
+                logger.error(f"RemnaWave UUID не найден для пользователя {subscription.user_id}")
+                return None
+            
+            current_time = datetime.utcnow()
+            is_active = (subscription.status == SubscriptionStatus.ACTIVE.value and 
+                        subscription.end_date > current_time)
+            
+            if (subscription.status == SubscriptionStatus.ACTIVE.value and 
+                subscription.end_date <= current_time):
+                subscription.status = SubscriptionStatus.EXPIRED.value
+                await db.commit()
+                is_active = False
+                logger.info(f"📝 Статус подписки {subscription.id} обновлен на 'expired'")
+            
+            async with self.api as api:
+                updated_user = await api.update_user(
+                    uuid=user.remnawave_uuid,
+                    status=UserStatus.ACTIVE if is_active else UserStatus.EXPIRED,
+                    expire_at=subscription.end_date,
+                    traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
+                    traffic_limit_strategy=TrafficLimitStrategy.MONTH, 
+                    hwid_device_limit=subscription.device_limit,
+                    active_internal_squads=subscription.connected_squads
+                )
+                
+                subscription.subscription_url = updated_user.subscription_url
+                await db.commit()
+                
+                status_text = "активным" if is_active else "истёкшим"
+                logger.info(f"✅ Обновлен RemnaWave пользователь {user.remnawave_uuid} со статусом {status_text}")
+                return updated_user
+                
+        except RemnaWaveAPIError as e:
+            logger.error(f"Ошибка обновления RemnaWave пользователя: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Ошибка обновления RemnaWave пользователя: {e}")
+            return None
     
     async def _check_expiring_subscriptions(self, db: AsyncSession):
         try:
