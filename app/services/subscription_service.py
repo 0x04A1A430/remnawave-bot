@@ -4,7 +4,7 @@ from typing import Optional, List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import Subscription, User
+from app.database.models import Subscription, User, SubscriptionStatus
 from app.external.remnawave_api import (
     RemnaWaveAPI, RemnaWaveUser, UserStatus, 
     TrafficLimitStrategy, RemnaWaveAPIError
@@ -113,12 +113,11 @@ class SubscriptionService:
             if (subscription.status == SubscriptionStatus.ACTIVE.value and 
                 subscription.end_date <= current_time):
                 
-                from app.database.models import SubscriptionStatus
                 subscription.status = SubscriptionStatus.EXPIRED.value
                 subscription.updated_at = current_time
                 await db.commit()
                 is_actually_active = False
-                logger.info(f"📝 Статус подписки {subscription.id} автоматически изменен на 'expired'")
+                logger.info(f"🔔 Статус подписки {subscription.id} автоматически изменен на 'expired'")
             
             async with self.api as api:
                 updated_user = await api.update_user(
