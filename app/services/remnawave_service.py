@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, List, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete
 
 from app.config import settings
 from app.external.remnawave_api import (
@@ -9,7 +10,10 @@ from app.external.remnawave_api import (
 )
 from app.database.crud.user import get_users_list, get_user_by_telegram_id, update_user
 from app.database.crud.subscription import get_subscription_by_user_id, update_subscription_usage
-from app.database.models import User
+from app.database.models import (
+    User, SubscriptionServer, Transaction, ReferralEarning, 
+    PromoCodeUse, SubscriptionStatus
+)
 
 logger = logging.getLogger(__name__)
 
@@ -459,12 +463,12 @@ class RemnaWaveService:
                         continue
                 
                 if sync_type == "all":
-                    logger.info("🗑️ Полная очистка подписок пользователей, отсутствующих в панели...")
+                    logger.info("🗑️ ПОЛНАЯ очистка подписок пользователей, отсутствующих в панели...")
                     
                     for telegram_id, db_user in bot_users_by_telegram_id.items():
                         if telegram_id not in panel_telegram_ids and db_user.subscription:
                             try:
-                                logger.info(f"🗑️ Полная очистка данных подписки пользователя {telegram_id} (нет в панели)")
+                                logger.info(f"🗑️ ПОЛНАЯ очистка данных подписки пользователя {telegram_id} (нет в панели)")
                                 
                                 subscription = db_user.subscription
                                 
@@ -478,6 +482,66 @@ class RemnaWaveService:
                                     except Exception as hwid_error:
                                         logger.error(f"❌ Ошибка сброса HWID устройств для {telegram_id}: {hwid_error}")
                                 
+                                try:
+                                    from app.database.crud.subscription import get_subscription_server_ids, remove_subscription_servers
+                                    from sqlalchemy import delete
+                                    from app.database.models import SubscriptionServer
+                                    
+                                    await db.execute(
+                                        delete(SubscriptionServer).where(
+                                            SubscriptionServer.subscription_id == subscription.id
+                                        )
+                                    )
+                                    logger.info(f"🗑️ УДАЛЕНЫ ВСЕ записи SubscriptionServer для подписки {subscription.id}")
+                                    
+                                except Exception as servers_error:
+                                    logger.warning(f"⚠️ Не удалось удалить серверы подписки: {servers_error}")
+                                
+                                try:
+                                    from sqlalchemy import delete
+                                    from app.database.models import Transaction
+                                    
+                                    await db.execute(
+                                        delete(Transaction).where(Transaction.user_id == db_user.id)
+                                    )
+                                    logger.info(f"🗑️ УДАЛЕНЫ ВСЕ транзакции пользователя {telegram_id}")
+                                    
+                                except Exception as transactions_error:
+                                    logger.warning(f"⚠️ Не удалось удалить транзакции: {transactions_error}")
+                                
+                                try:
+                                    from sqlalchemy import delete
+                                    from app.database.models import ReferralEarning
+                                    
+                                    await db.execute(
+                                        delete(ReferralEarning).where(ReferralEarning.user_id == db_user.id)
+                                    )
+                                    await db.execute(
+                                        delete(ReferralEarning).where(ReferralEarning.referral_id == db_user.id)
+                                    )
+                                    logger.info(f"🗑️ УДАЛЕНЫ ВСЕ реферальные доходы пользователя {telegram_id}")
+                                    
+                                except Exception as referral_error:
+                                    logger.warning(f"⚠️ Не удалось удалить реферальные доходы: {referral_error}")
+                                
+                                try:
+                                    from sqlalchemy import delete
+                                    from app.database.models import PromoCodeUse
+                                    
+                                    await db.execute(
+                                        delete(PromoCodeUse).where(PromoCodeUse.user_id == db_user.id)
+                                    )
+                                    logger.info(f"🗑️ УДАЛЕНЫ ВСЕ использования промокодов пользователя {telegram_id}")
+                                    
+                                except Exception as promo_error:
+                                    logger.warning(f"⚠️ Не удалось удалить использования промокодов: {promo_error}")
+                                
+                                try:
+                                    db_user.balance_kopeks = 0
+                                    logger.info(f"💰 Сброшен баланс пользователя {telegram_id}")
+                                except Exception as balance_error:
+                                    logger.warning(f"⚠️ Не удалось сбросить баланс: {balance_error}")
+                                
                                 from app.database.models import SubscriptionStatus
                                 from datetime import datetime
                                 
@@ -490,22 +554,12 @@ class RemnaWaveService:
                                 subscription.connected_squads = []
                                 subscription.autopay_enabled = False
                                 subscription.autopay_days_before = 3
-                                
                                 subscription.remnawave_short_uuid = None
                                 subscription.subscription_url = ""
                                 
                                 db_user.remnawave_uuid = None
-                                
-                                try:
-                                    from app.database.crud.subscription import get_subscription_server_ids, remove_subscription_servers
-                                    
-                                    server_ids = await get_subscription_server_ids(db, subscription.id)
-                                    if server_ids:
-                                        await remove_subscription_servers(db, subscription.id, server_ids)
-                                        logger.info(f"🗑️ Удалены серверы подписки ({len(server_ids)}): {server_ids}")
-                                except Exception as servers_error:
-                                    logger.warning(f"⚠️ Не удалось удалить серверы подписки: {servers_error}")
-                                
+                                db_user.has_had_paid_subscription = False 
+                                db_user.used_promocodes = 0 
                                 
                                 await db.commit()
                                 
@@ -523,6 +577,8 @@ class RemnaWaveService:
         except Exception as e:
             logger.error(f"❌ Критическая ошибка синхронизации пользователей: {e}")
             return {"created": 0, "updated": 0, "errors": 1, "deleted": 0}
+
+
 
     async def _create_subscription_from_panel_data(self, db: AsyncSession, user, panel_user):
         try:
@@ -983,11 +1039,101 @@ class RemnaWaveService:
             logger.error(f"Ошибка валидации данных пользователя: {e}")
             return False
 
+    async def force_cleanup_user_data(self, db: AsyncSession, user: User) -> bool:
+        try:
+            logger.info(f"🗑️ ПРИНУДИТЕЛЬНАЯ полная очистка данных пользователя {user.telegram_id}")
+            
+            if user.remnawave_uuid:
+                try:
+                    async with self.api as api:
+                        devices_reset = await api.reset_user_devices(user.remnawave_uuid)
+                        if devices_reset:
+                            logger.info(f"🔧 Сброшены HWID устройства для {user.telegram_id}")
+                except Exception as hwid_error:
+                    logger.warning(f"⚠️ Ошибка сброса HWID устройств: {hwid_error}")
+            
+            try:
+                from sqlalchemy import delete
+                from app.database.models import (
+                    SubscriptionServer, Transaction, ReferralEarning, 
+                    PromoCodeUse, SubscriptionStatus
+                )
+                
+                if user.subscription:
+                    await db.execute(
+                        delete(SubscriptionServer).where(
+                            SubscriptionServer.subscription_id == user.subscription.id
+                        )
+                    )
+                    logger.info(f"🗑️ Удалены серверы подписки для {user.telegram_id}")
+                
+                await db.execute(
+                    delete(Transaction).where(Transaction.user_id == user.id)
+                )
+                logger.info(f"🗑️ Удалены транзакции для {user.telegram_id}")
+                
+                await db.execute(
+                    delete(ReferralEarning).where(ReferralEarning.user_id == user.id)
+                )
+                await db.execute(
+                    delete(ReferralEarning).where(ReferralEarning.referral_id == user.id)
+                )
+                logger.info(f"🗑️ Удалены реферальные доходы для {user.telegram_id}")
+                
+                await db.execute(
+                    delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id)
+                )
+                logger.info(f"🗑️ Удалены использования промокодов для {user.telegram_id}")
+                
+            except Exception as records_error:
+                logger.error(f"❌ Ошибка удаления связанных записей: {records_error}")
+            
+            try:
+                from datetime import datetime
+                
+                user.balance_kopeks = 0
+                user.remnawave_uuid = None
+                user.has_had_paid_subscription = False
+                user.used_promocodes = 0
+                user.updated_at = datetime.utcnow()
+                
+                if user.subscription:
+                    user.subscription.status = SubscriptionStatus.DISABLED.value
+                    user.subscription.is_trial = True
+                    user.subscription.end_date = datetime.utcnow()
+                    user.subscription.traffic_limit_gb = 0
+                    user.subscription.traffic_used_gb = 0.0
+                    user.subscription.device_limit = 1
+                    user.subscription.connected_squads = []
+                    user.subscription.autopay_enabled = False
+                    user.subscription.autopay_days_before = 3
+                    user.subscription.remnawave_short_uuid = None
+                    user.subscription.subscription_url = ""
+                    user.subscription.updated_at = datetime.utcnow()
+                
+                await db.commit()
+                
+                logger.info(f"✅ ПРИНУДИТЕЛЬНО очищены ВСЕ данные пользователя {user.telegram_id}")
+                return True
+                
+            except Exception as cleanup_error:
+                logger.error(f"❌ Ошибка финальной очистки пользователя: {cleanup_error}")
+                await db.rollback()
+                return False
+        
+        except Exception as e:
+            logger.error(f"❌ Критическая ошибка принудительной очистки пользователя {user.telegram_id}: {e}")
+            await db.rollback()
+            return False
+
     async def cleanup_orphaned_subscriptions(self, db: AsyncSession) -> Dict[str, int]:
+        """
+        Усиленная версия очистки с полным удалением данных
+        """
         try:
             stats = {"deactivated": 0, "errors": 0, "checked": 0}
         
-            logger.info("🧹 Начинаем очистку неактуальных подписок...")
+            logger.info("🧹 Начинаем усиленную очистку неактуальных подписок...")
         
             async with self.api as api:
                 panel_users_data = await api._make_request('GET', '/api/users')
@@ -1022,12 +1168,14 @@ class RemnaWaveService:
                             continue
                     
                         if user.telegram_id not in panel_telegram_ids:
-                            logger.info(f"🗑️ Деактивируем подписку пользователя {user.telegram_id} (отсутствует в панели)")
-                        
-                            from app.database.crud.subscription import deactivate_subscription
-                            await deactivate_subscription(db, subscription)
-                        
-                            stats["deactivated"] += 1
+                            logger.info(f"🗑️ ПОЛНАЯ деактивация подписки пользователя {user.telegram_id} (отсутствует в панели)")
+                            
+                            cleanup_success = await self.force_cleanup_user_data(db, user)
+                            
+                            if cleanup_success:
+                                stats["deactivated"] += 1
+                            else:
+                                stats["errors"] += 1
                         
                     except Exception as sub_error:
                         logger.error(f"❌ Ошибка обработки подписки {subscription.id}: {sub_error}")
@@ -1037,11 +1185,11 @@ class RemnaWaveService:
                 if len(subscriptions) < limit:
                     break
         
-            logger.info(f"🧹 Очистка завершена: проверено {stats['checked']}, деактивировано {stats['deactivated']}, ошибок {stats['errors']}")
+            logger.info(f"🧹 Усиленная очистка завершена: проверено {stats['checked']}, деактивировано {stats['deactivated']}, ошибок {stats['errors']}")
             return stats
         
         except Exception as e:
-            logger.error(f"❌ Критическая ошибка очистки подписок: {e}")
+            logger.error(f"❌ Критическая ошибка усиленной очистки подписок: {e}")
             return {"deactivated": 0, "errors": 1, "checked": 0}
 
 
