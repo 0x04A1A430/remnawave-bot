@@ -1315,11 +1315,11 @@ async def restart_all_nodes(
 @admin_required
 @error_handler
 async def show_sync_options(
-   callback: types.CallbackQuery,
-   db_user: User,
-   db: AsyncSession
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
 ):
-   text = """
+    text = """
 🔄 <b>Синхронизация с RemnaWave</b>
 
 Выберите тип синхронизации:
@@ -1342,24 +1342,41 @@ async def show_sync_options(
 • Обновление подключенных сквадов
 • ⏱️ Время выполнения: 1-3 минуты
 
+🔍 <b>Валидация подписок</b>
+• Проверка и исправление проблем в данных
+• Восстановление отсутствующих полей
+• Исправление некорректных статусов
+
+🧹 <b>Мягкая очистка</b>  
+• Деактивация подписок отсутствующих в панели
+• Сохранение транзакций и истории
+
+🗑️ <b>ПРИНУДИТЕЛЬНАЯ ОЧИСТКА</b>
+• ⚠️ ОПАСНО: Полное удаление данных пользователей
+• Удаление транзакций, балансов, рефералов  
+• Только при серьезных проблемах синхронизации
+
 ⚠️ <b>Важно:</b>
 • Во время синхронизации не выполняйте другие операции
 • При полной синхронизации подписки пользователей, отсутствующих в панели, будут деактивированы
 • Рекомендуется делать полную синхронизацию ежедневно
 """
-   
-   keyboard = [
-       [types.InlineKeyboardButton(text="🔄 Синхронизировать всех", callback_data="sync_all_users")],
-       [types.InlineKeyboardButton(text="🆕 Только новых", callback_data="sync_new_users")],
-       [types.InlineKeyboardButton(text="📈 Обновить данные", callback_data="sync_update_data")],
-       [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_remnawave")]
-   ]
-   
-   await callback.message.edit_text(
-       text,
-       reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
-   )
-   await callback.answer()
+    
+    keyboard = [
+        [types.InlineKeyboardButton(text="🔄 Синхронизировать всех", callback_data="sync_all_users")],
+        [types.InlineKeyboardButton(text="🆕 Только новых", callback_data="sync_new_users")],
+        [types.InlineKeyboardButton(text="📈 Обновить данные", callback_data="sync_update_data")],
+        [types.InlineKeyboardButton(text="🔍 Валидация подписок", callback_data="sync_validate")],
+        [types.InlineKeyboardButton(text="🧹 Мягкая очистка", callback_data="sync_cleanup")],
+        [types.InlineKeyboardButton(text="🗑️ ПРИНУДИТЕЛЬНАЯ ОЧИСТКА", callback_data="confirm_force_cleanup")],
+        [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_remnawave")]
+    ]
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
 
 @admin_required
 @error_handler
@@ -1442,7 +1459,6 @@ async def validate_subscriptions(
     remnawave_service = RemnaWaveService()
     stats = await remnawave_service.validate_and_fix_subscriptions(db)
     
-    # Формируем отчет
     if stats['errors'] == 0:
         status_emoji = "✅"
         status_text = "успешно завершена"
@@ -1498,7 +1514,6 @@ async def cleanup_subscriptions(
     remnawave_service = RemnaWaveService()
     stats = await remnawave_service.cleanup_orphaned_subscriptions(db)
     
-    # Формируем отчет
     if stats['errors'] == 0:
         status_emoji = "✅"
         status_text = "успешно завершена"
@@ -1529,6 +1544,114 @@ async def cleanup_subscriptions(
         [types.InlineKeyboardButton(text="🔄 Повторить очистку", callback_data="sync_cleanup")],
         [types.InlineKeyboardButton(text="🔍 Валидация", callback_data="sync_validate")],
         [types.InlineKeyboardButton(text="⬅️ К синхронизации", callback_data="admin_rw_sync")]
+    ]
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+@admin_required
+@error_handler
+async def force_cleanup_all_orphaned_users(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    
+    await callback.message.edit_text(
+        "🗑️ Выполняется принудительная очистка всех пользователей, отсутствующих в панели...\n\n"
+        "⚠️ ВНИМАНИЕ: Это полностью удалит ВСЕ данные пользователей!\n"
+        "📊 Включая: транзакции, реферальные доходы, промокоды, серверы, балансы\n\n"
+        "⏳ Пожалуйста, подождите...",
+        reply_markup=None
+    )
+    
+    remnawave_service = RemnaWaveService()
+    stats = await remnawave_service.cleanup_orphaned_subscriptions(db)
+    
+    if stats['errors'] == 0:
+        status_emoji = "✅"
+        status_text = "успешно завершена"
+    else:
+        status_emoji = "⚠️"
+        status_text = "завершена с ошибками"
+    
+    text = f"""
+{status_emoji} <b>Принудительная очистка {status_text}</b>
+
+📊 <b>Результаты:</b>
+• 🔍 Проверено подписок: {stats['checked']}
+• 🗑️ Полностью очищено: {stats['deactivated']}
+• ❌ Ошибок: {stats['errors']}
+"""
+    
+    if stats['deactivated'] > 0:
+        text += f"""
+
+🗑️ <b>Полностью очищенные данные:</b>
+• Подписки сброшены к начальному состоянию
+• Удалены ВСЕ транзакции пользователей
+• Удалены ВСЕ реферальные доходы  
+• Удалены использования промокодов
+• Сброшены балансы к нулю
+• Удалены подключенные серверы
+• Сброшены HWID устройства в RemnaWave
+• Очищены RemnaWave UUID
+"""
+    else:
+        text += f"\n✅ Неактуальных подписок не найдено!\nВсе пользователи синхронизированы с панелью."
+    
+    if stats['errors'] > 0:
+        text += f"\n⚠️ Обнаружены ошибки при обработке.\nПроверьте логи для подробной информации."
+    
+    keyboard = [
+        [types.InlineKeyboardButton(text="🔄 Повторить очистку", callback_data="force_cleanup_orphaned")],
+        [types.InlineKeyboardButton(text="🔄 Полная синхронизация", callback_data="sync_all_users")],
+        [types.InlineKeyboardButton(text="⬅️ К синхронизации", callback_data="admin_rw_sync")]
+    ]
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def confirm_force_cleanup(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    
+    text = """
+⚠️ <b>ВНИМАНИЕ! ОПАСНАЯ ОПЕРАЦИЯ!</b>
+
+🗑️ <b>Принудительная очистка полностью удалит:</b>
+• ВСЕ транзакции пользователей отсутствующих в панели
+• ВСЕ реферальные доходы и связи
+• ВСЕ использования промокодов
+• ВСЕ подключенные серверы подписок
+• ВСЕ балансы (сброс к нулю)
+• ВСЕ HWID устройства в RemnaWave
+• ВСЕ RemnaWave UUID и ссылки
+
+⚡ <b>Это действие НЕОБРАТИМО!</b>
+
+Используйте только если:
+• Обычная синхронизация не помогает
+• Нужно полностью очистить "мусорные" данные
+• После массового удаления пользователей из панели
+
+❓ <b>Вы действительно хотите продолжить?</b>
+"""
+    
+    keyboard = [
+        [types.InlineKeyboardButton(text="🗑️ ДА, ОЧИСТИТЬ ВСЕ", callback_data="force_cleanup_orphaned")],
+        [types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin_rw_sync")]
     ]
     
     await callback.message.edit_text(
@@ -1725,6 +1848,8 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_sync_recommendations, F.data == "sync_recommendations")
     dp.callback_query.register(validate_subscriptions, F.data == "sync_validate") 
     dp.callback_query.register(cleanup_subscriptions, F.data == "sync_cleanup")
+    dp.callback_query.register(confirm_force_cleanup, F.data == "confirm_force_cleanup")
+    dp.callback_query.register(force_cleanup_all_orphaned_users, F.data == "force_cleanup_orphaned")
     dp.callback_query.register(show_squads_management, F.data == "admin_rw_squads")
     
     dp.callback_query.register(show_squad_details, F.data.startswith("admin_squad_manage_"))
