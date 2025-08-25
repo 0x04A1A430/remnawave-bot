@@ -62,15 +62,88 @@ async def show_subscription_info(
         await callback.answer()
         return
     
+    from app.database.crud.subscription import check_and_update_subscription_status
+    subscription = await check_and_update_subscription_status(db, subscription)
+    
     subscription_service = SubscriptionService()
     await subscription_service.sync_subscription_usage(db, subscription)
     
     await db.refresh(subscription)
     
-    info_text = await get_subscription_info_text(subscription, texts, db_user, db)
+    current_time = datetime.utcnow()
+    
+    if subscription.status == "expired" or subscription.end_date <= current_time:
+        actual_status = "expired"
+        status_display = "Истекла"
+        status_emoji = "🔴"
+    elif subscription.status == "active" and subscription.end_date > current_time:
+        if subscription.is_trial:
+            actual_status = "trial_active"
+            status_display = "Тестовая"
+            status_emoji = "🎁"
+        else:
+            actual_status = "paid_active"
+            status_display = "Активна"
+            status_emoji = "💎"
+    else:
+        actual_status = "unknown"
+        status_display = "Неизвестно"
+        status_emoji = "❓"
+    
+    if subscription.end_date <= current_time:
+        days_left = 0
+        time_left_text = "истёк"
+        warning_text = "" 
+    else:
+        delta = subscription.end_date - current_time
+        days_left = delta.days
+        hours_left = delta.seconds // 3600
+        
+        if days_left > 1:
+            time_left_text = f"{days_left} дн."
+            warning_text = ""
+        elif days_left == 1:
+            time_left_text = f"{days_left} дн."
+            warning_text = "\n⚠️ истекает завтра!"
+        elif hours_left > 0:
+            time_left_text = f"{hours_left} ч."
+            warning_text = "\n⚠️ истекает сегодня!"
+        else:
+            minutes_left = (delta.seconds % 3600) // 60
+            time_left_text = f"{minutes_left} мин."
+            warning_text = "\n🔴 истекает через несколько минут!"
+    
+    subscription_type = "Триал" if subscription.is_trial else "Платная"
+    
+    if subscription.traffic_limit_gb == 0:
+        traffic_used_display = f"∞ (безлимит) / {subscription.traffic_used_gb:.1f} ГБ"
+    else:
+        traffic_used_display = f"{subscription.traffic_used_gb:.1f} / {subscription.traffic_limit_gb} ГБ"
+    
+    devices_used = await get_current_devices_count(db_user)
+    
+
+    message = f"""👤 {db_user.full_name}
+━━━━━━━━━━━━━━━━━
+💰 Баланс: {settings.format_price(db_user.balance_kopeks)}
+📱 Подписка: {status_emoji} {status_display}{warning_text}
+━━━━━━━━━━━━━━━━━
+
+📱 Информация о подписке
+🎭 Тип: {subscription_type}
+📅 Действует до: {subscription.end_date.strftime("%d.%m.%Y %H:%M")}
+⏰ Осталось: {time_left_text}
+📈 Трафик: {traffic_used_display}
+🌍 Серверы: {len(subscription.connected_squads)} стран
+📱 Устройства: {devices_used} / {subscription.device_limit}"""
+    
+    if hasattr(subscription, 'subscription_url') and subscription.subscription_url:
+        if actual_status in ['trial_active', 'paid_active']:
+            message += f"\n\n🔗 <b>Ссылка для подключения:</b>\n<code>{subscription.subscription_url}</code>"
+            message += f"\n\n📱 Скопируйте ссылку и добавьте в ваше VPN приложение"
     
     await callback.message.edit_text(
-        info_text,
+        message,
         reply_markup=get_subscription_keyboard(
             db_user.language,
             has_subscription=True,
