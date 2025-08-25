@@ -106,10 +106,24 @@ class SubscriptionService:
                 logger.error(f"RemnaWave UUID не найден для пользователя {subscription.user_id}")
                 return None
             
+            current_time = datetime.utcnow()
+            is_actually_active = (subscription.status == SubscriptionStatus.ACTIVE.value and 
+                                 subscription.end_date > current_time)
+            
+            if (subscription.status == SubscriptionStatus.ACTIVE.value and 
+                subscription.end_date <= current_time):
+                
+                from app.database.models import SubscriptionStatus
+                subscription.status = SubscriptionStatus.EXPIRED.value
+                subscription.updated_at = current_time
+                await db.commit()
+                is_actually_active = False
+                logger.info(f"📝 Статус подписки {subscription.id} автоматически изменен на 'expired'")
+            
             async with self.api as api:
                 updated_user = await api.update_user(
                     uuid=user.remnawave_uuid,
-                    status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
+                    status=UserStatus.ACTIVE if is_actually_active else UserStatus.EXPIRED,
                     expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=TrafficLimitStrategy.MONTH, 
@@ -120,12 +134,13 @@ class SubscriptionService:
                 subscription.subscription_url = updated_user.subscription_url
                 await db.commit()
                 
-                logger.info(f"✅ Обновлен RemnaWave пользователь {user.remnawave_uuid}")
+                status_text = "активным" if is_actually_active else "истёкшим"
+                logger.info(f"✅ Обновлен RemnaWave пользователь {user.remnawave_uuid} со статусом {status_text}")
                 logger.info(f"📊 Стратегия сброса трафика: MONTH") 
                 return updated_user
                 
         except RemnaWaveAPIError as e:
-            logger.error(f"Ошибка обновления RemnaWave пользователя: {e}")
+            logger.error(f"Ошибка RemnaWave API: {e}")
             return None
         except Exception as e:
             logger.error(f"Ошибка обновления RemnaWave пользователя: {e}")
