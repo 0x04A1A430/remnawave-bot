@@ -133,7 +133,6 @@ class Subscription(Base):
     
     @property
     def is_active(self) -> bool:
-        """Проверяет, действительно ли подписка активна (и по статусу, и по времени)"""
         current_time = datetime.utcnow()
         return (
             self.status == SubscriptionStatus.ACTIVE.value and 
@@ -147,7 +146,6 @@ class Subscription(Base):
 
     @property
     def should_be_expired(self) -> bool:
-        """Проверяет, должна ли подписка быть помечена как истёкшая"""
         current_time = datetime.utcnow()
         return (
             self.status == SubscriptionStatus.ACTIVE.value and 
