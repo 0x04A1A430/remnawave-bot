@@ -241,7 +241,8 @@ class MonitoringService:
             logger.error(f"Ошибка проверки истекающих тестовых подписок: {e}")
     
     async def _get_expiring_paid_subscriptions(self, db: AsyncSession, days_before: int) -> List[Subscription]:
-        threshold_date = datetime.utcnow() + timedelta(days=days_before)
+        current_time = datetime.utcnow()
+        threshold_date = current_time + timedelta(days=days_before)
         
         result = await db.execute(
             select(Subscription)
@@ -250,12 +251,20 @@ class MonitoringService:
                 and_(
                     Subscription.status == SubscriptionStatus.ACTIVE.value,
                     Subscription.is_trial == False, 
-                    Subscription.end_date <= threshold_date,
-                    Subscription.end_date > datetime.utcnow()
+                    Subscription.end_date > current_time,
+                    Subscription.end_date <= threshold_date
                 )
             )
         )
-        return result.scalars().all()
+        
+        logger.info(f"🔍 Поиск платных подписок, истекающих в ближайшие {days_before} дней")
+        logger.info(f"📅 Текущее время: {current_time}")
+        logger.info(f"📅 Пороговая дата: {threshold_date}")
+        
+        subscriptions = result.scalars().all()
+        logger.info(f"📊 Найдено {len(subscriptions)} платных подписок для уведомлений")
+        
+        return subscriptions
     
     async def _process_autopayments(self, db: AsyncSession):
         try:
