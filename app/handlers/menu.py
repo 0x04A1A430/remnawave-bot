@@ -2,6 +2,7 @@ import logging
 from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timedelta 
 
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id, update_user
@@ -108,25 +109,33 @@ async def handle_back_to_menu(
 
 def _get_subscription_status(user: User, texts) -> str:
     if not user.subscription:
-        return "❌ Отсутствует"
+        return "⌐ Отсутствует"
     
-    if user.subscription.is_trial:
-        days_left = user.subscription.days_left
+    subscription = user.subscription
+    current_time = datetime.utcnow()
+    
+    if subscription.end_date <= current_time:
+        return f"🔴 Истекла\n📅 {subscription.end_date.strftime('%d.%m.%Y')}"
+    
+    days_left = (subscription.end_date - current_time).days
+    
+    if subscription.is_trial:
         if days_left > 1:
-            return f"🎁 Тестовая подписка\n📅 до {user.subscription.end_date.strftime('%d.%m.%Y')} ({days_left} дн.)"
+            return f"🎁 Тестовая подписка\n📅 до {subscription.end_date.strftime('%d.%m.%Y')} ({days_left} дн.)"
+        elif days_left == 1:
+            return f"🎁 Тестовая подписка\n⚠️ истекает завтра!"
         else:
             return f"🎁 Тестовая подписка\n⚠️ истекает сегодня!"
     
-    elif user.subscription.is_active:
-        days_left = user.subscription.days_left
+    else: 
         if days_left > 7:
-            return f"✅ Активна\n📅 до {user.subscription.end_date.strftime('%d.%m.%Y')} ({days_left} дн.)"
-        elif days_left > 0:
-            return f"✅ Активна\n⚠️ истекает через {days_left} дн."
+            return f"💎 Активна\n📅 до {subscription.end_date.strftime('%d.%m.%Y')} ({days_left} дн.)"
+        elif days_left > 1:
+            return f"💎 Активна\n⚠️ истекает через {days_left} дн."
+        elif days_left == 1:
+            return f"💎 Активна\n⚠️ истекает завтра!"
         else:
-            return f"✅ Активна\n⚠️ истекает сегодня!"
-    else:
-        return f"⏰ Истекла\n📅 {user.subscription.end_date.strftime('%d.%m.%Y')}"
+            return f"💎 Активна\n⚠️ истекает сегодня!"
 
 
 def register_handlers(dp: Dispatcher):
