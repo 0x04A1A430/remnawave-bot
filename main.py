@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import os
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent))
@@ -10,6 +11,7 @@ from app.config import settings
 from app.database.database import init_db
 from app.services.monitoring_service import monitoring_service
 from app.external.webhook_server import WebhookServer
+from app.database.universal_migration import run_universal_migration
 
 
 async def main():
@@ -23,7 +25,7 @@ async def main():
     )
     
     logger = logging.getLogger(__name__)
-    logger.info("🚀 Запуск VPN бота...")
+    logger.info("🚀 Запуск Bedolaga Remnawave Bot...")
     
     webhook_server = None
     
@@ -31,12 +33,29 @@ async def main():
         logger.info("📊 Инициализация базы данных...")
         await init_db()
         
+        skip_migration = os.getenv('SKIP_MIGRATION', 'false').lower() == 'true'
+        
+        if not skip_migration:
+            logger.info("🔧 Выполняем проверку и миграцию базы данных...")
+            try:
+                migration_success = await run_universal_migration()
+                
+                if migration_success:
+                    logger.info("✅ Миграция базы данных завершена успешно")
+                else:
+                    logger.warning("⚠️ Миграция завершилась с предупреждениями, но продолжаем запуск")
+                    
+            except Exception as migration_error:
+                logger.error(f"❌ Ошибка выполнения миграции: {migration_error}")
+                logger.warning("⚠️ Продолжаем запуск без миграции")
+        else:
+            logger.info("ℹ️ Миграция пропущена (SKIP_MIGRATION=true)")
+        
         logger.info("🤖 Настройка бота...")
         bot, dp = await setup_bot()
         
         monitoring_service.bot = bot
         
-        # Инициализируем webhook сервер если Tribute включен
         if settings.TRIBUTE_ENABLED:
             logger.info("🌐 Запуск webhook сервера для Tribute...")
             webhook_server = WebhookServer(bot)
