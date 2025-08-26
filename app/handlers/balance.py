@@ -55,15 +55,46 @@ async def show_balance_history(
     
     offset = (page - 1) * TRANSACTIONS_PER_PAGE
     
-    transactions = await get_user_transactions(
+    raw_transactions = await get_user_transactions(
         db, db_user.id, 
-        limit=TRANSACTIONS_PER_PAGE,
+        limit=TRANSACTIONS_PER_PAGE * 3, 
         offset=offset
     )
     
-    total_count = await get_user_transactions_count(db, db_user.id)
+    seen_transactions = set()
+    unique_transactions = []
     
-    if not transactions:
+    for transaction in raw_transactions:
+        rounded_time = transaction.created_at.replace(second=0, microsecond=0)
+        transaction_key = (
+            transaction.amount_kopeks,
+            transaction.description,
+            rounded_time
+        )
+        
+        if transaction_key not in seen_transactions:
+            seen_transactions.add(transaction_key)
+            unique_transactions.append(transaction)
+            
+            if len(unique_transactions) >= TRANSACTIONS_PER_PAGE:
+                break
+    
+    all_transactions = await get_user_transactions(db, db_user.id, limit=1000)
+    seen_all = set()
+    total_unique = 0
+    
+    for transaction in all_transactions:
+        rounded_time = transaction.created_at.replace(second=0, microsecond=0)
+        transaction_key = (
+            transaction.amount_kopeks,
+            transaction.description,
+            rounded_time
+        )
+        if transaction_key not in seen_all:
+            seen_all.add(transaction_key)
+            total_unique += 1
+    
+    if not unique_transactions:
         await callback.message.edit_text(
             "📊 История операций пуста",
             reply_markup=get_back_keyboard(db_user.language)
@@ -73,7 +104,7 @@ async def show_balance_history(
     
     text = "📊 <b>История операций</b>\n\n"
     
-    for transaction in transactions:
+    for transaction in unique_transactions:
         emoji = "💰" if transaction.type == TransactionType.DEPOSIT.value else "💸"
         amount_text = f"+{texts.format_price(transaction.amount_kopeks)}" if transaction.type == TransactionType.DEPOSIT.value else f"-{texts.format_price(transaction.amount_kopeks)}"
         
@@ -82,7 +113,7 @@ async def show_balance_history(
         text += f"📅 {transaction.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
     
     keyboard = []
-    total_pages = (total_count + TRANSACTIONS_PER_PAGE - 1) // TRANSACTIONS_PER_PAGE
+    total_pages = (total_unique + TRANSACTIONS_PER_PAGE - 1) // TRANSACTIONS_PER_PAGE
     
     if total_pages > 1:
         pagination_row = get_pagination_keyboard(
