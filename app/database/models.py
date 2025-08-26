@@ -104,7 +104,7 @@ class Subscription(Base):
     __tablename__ = "subscriptions"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
     
     status = Column(String(20), default=SubscriptionStatus.TRIAL.value)
     is_trial = Column(Boolean, default=True)

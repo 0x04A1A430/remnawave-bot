@@ -906,19 +906,30 @@ async def confirm_extend_subscription(
     db_user: User,
     db: AsyncSession
 ):
-    
     days = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
+    if not subscription:
+        await callback.answer("❌ У вас нет активной подписки", show_alert=True)
+        return
+    
     subscription_service = SubscriptionService()
-    price = await subscription_service.calculate_renewal_price(subscription, days, db)
+    
+    try:
+        price = await subscription_service.calculate_renewal_price(subscription, days, db)
+    except Exception as e:
+        logger.error(f"❌ ОШИБКА РАСЧЕТА ЦЕНЫ: {e}")
+        await callback.answer("❌ Ошибка расчета стоимости", show_alert=True)
+        return
     
     if db_user.balance_kopeks < price:
         await callback.answer("❌ Недостаточно средств на балансе", show_alert=True)
         return
     
     try:
+        logger.info(f"🔄 Начинаем продление подписки {subscription.id} на {days} дней за {price/100}₽")
+        
         success = await subtract_user_balance(
             db, db_user, price,
             f"Продление подписки на {days} дней"
@@ -928,18 +939,40 @@ async def confirm_extend_subscription(
             await callback.answer("❌ Ошибка списания средств", show_alert=True)
             return
         
-        await extend_subscription(db, subscription, days)
+        current_time = datetime.utcnow()
         
-        subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
+        if subscription.end_date > current_time:
+            subscription.end_date = subscription.end_date + timedelta(days=days)
+        else:
+            subscription.end_date = current_time + timedelta(days=days)
         
-        await create_transaction(
-            db=db,
-            user_id=db_user.id,
-            type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=price,
-            description=f"Продление подписки на {days} дней"
-        )
+        subscription.status = SubscriptionStatus.ACTIVE.value
+        subscription.updated_at = current_time
+        
+        await db.commit()
+        await db.refresh(subscription)
+        await db.refresh(db_user)
+        
+        try:
+            remnawave_result = await subscription_service.update_remnawave_user(db, subscription)
+            if remnawave_result:
+                logger.info(f"✅ RemnaWave обновлен успешно")
+            else:
+                logger.error(f"❌ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE")
+        except Exception as e:
+            logger.error(f"❌ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE: {e}")
+        
+        try:
+            transaction = await create_transaction(
+                db=db,
+                user_id=db_user.id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                amount_kopeks=price,
+                description=f"Продление подписки на {days} дней"
+            )
+            logger.info(f"✅ Транзакция создана: ID {transaction.id}")
+        except Exception as e:
+            logger.error(f"❌ ОШИБКА СОЗДАНИЯ ТРАНЗАКЦИИ: {e}")
         
         try:
             await process_referral_purchase(
@@ -948,11 +981,9 @@ async def confirm_extend_subscription(
                 purchase_amount_kopeks=price,
                 transaction_id=None
             )
+            logger.info(f"✅ Рефералы обработаны")
         except Exception as e:
-            logger.error(f"Ошибка обработки реферальной покупки: {e}")
-        
-        await db.refresh(db_user)
-        await db.refresh(subscription)
+            logger.error(f"❌ ОШИБКА ОБРАБОТКИ РЕФЕРАЛОВ: {e}")
         
         await callback.message.edit_text(
             f"✅ Подписка успешно продлена!\n\n"
@@ -965,9 +996,12 @@ async def confirm_extend_subscription(
         logger.info(f"✅ Пользователь {db_user.telegram_id} продлил подписку на {days} дней за {price/100}₽")
         
     except Exception as e:
-        logger.error(f"Ошибка продления подписки: {e}")
+        logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ: {e}")
+        import traceback
+        logger.error(f"TRACEBACK: {traceback.format_exc()}")
+        
         await callback.message.edit_text(
-            texts.ERROR,
+            "❌ Произошла ошибка при продлении подписки. Обратитесь в поддержку.",
             reply_markup=get_back_keyboard(db_user.language)
         )
     
@@ -1429,27 +1463,29 @@ async def confirm_purchase(
         
         existing_subscription = db_user.subscription
         
-        if existing_subscription and existing_subscription.is_trial:
-            logger.info(f"🔄 Обновляем триальную подписку пользователя {db_user.telegram_id}")
+        if existing_subscription:
+            logger.info(f"🔄 Обновляем существующую подписку пользователя {db_user.telegram_id}")
             
             existing_subscription.is_trial = False
             existing_subscription.status = SubscriptionStatus.ACTIVE.value
-            
             existing_subscription.traffic_limit_gb = final_traffic_gb
             existing_subscription.device_limit = data['devices']
             existing_subscription.connected_squads = data['countries']
             
-            existing_subscription.extend_subscription(data['period_days'])
+            existing_subscription.start_date = datetime.utcnow()
+            existing_subscription.end_date = datetime.utcnow() + timedelta(days=data['period_days'])
             existing_subscription.updated_at = datetime.utcnow()
+            
+            existing_subscription.traffic_used_gb = 0.0
             
             await db.commit()
             await db.refresh(existing_subscription)
             subscription = existing_subscription
             
-            logger.info(f"✅ Триальная подписка обновлена до платной. Новая дата окончания: {subscription.end_date}")
+            logger.info(f"✅ Подписка обновлена. Новая дата окончания: {subscription.end_date}")
             
         else:
-            logger.info(f"🆕 Создаем новую платную подписку для пользователя {db_user.telegram_id}")
+            logger.info(f"🆕 Создаем новую подписку для пользователя {db_user.telegram_id}")
             subscription = await create_paid_subscription_with_traffic_mode(
                 db=db,
                 user_id=db_user.id,
@@ -1479,7 +1515,7 @@ async def confirm_purchase(
         subscription_service = SubscriptionService()
         
         if db_user.remnawave_uuid:
-            logger.info(f"📝 Обновляем существующего RemnaWave пользователя {db_user.remnawave_uuid}")
+            logger.info(f"🔄 Обновляем существующего RemnaWave пользователя {db_user.remnawave_uuid}")
             remnawave_user = await subscription_service.update_remnawave_user(db, subscription)
         else:
             logger.info(f"🆕 Создаем нового RemnaWave пользователя для {db_user.telegram_id}")

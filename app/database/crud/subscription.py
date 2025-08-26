@@ -19,6 +19,8 @@ async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Optiona
         select(Subscription)
         .options(selectinload(Subscription.user))
         .where(Subscription.user_id == user_id)
+        .order_by(Subscription.created_at.desc())
+        .limit(1) 
     )
     subscription = result.scalar_one_or_none()
     
@@ -98,17 +100,30 @@ async def extend_subscription(
     subscription: Subscription,
     days: int
 ) -> Subscription:
+    current_time = datetime.utcnow()
     
-    subscription.extend_subscription(days)
+    logger.info(f"🔄 Продление подписки {subscription.id} на {days} дней")
+    logger.info(f"📊 Текущие параметры: статус={subscription.status}, окончание={subscription.end_date}")
+    
+    if subscription.end_date > current_time:
+        subscription.end_date = subscription.end_date + timedelta(days=days)
+        logger.info(f"📅 Подписка активна, добавляем {days} дней к текущей дате окончания")
+    else:
+        subscription.end_date = current_time + timedelta(days=days)
+        logger.info(f"📅 Подписка истекла, устанавливаем новую дату окончания")
     
     if subscription.status == SubscriptionStatus.EXPIRED.value:
         subscription.status = SubscriptionStatus.ACTIVE.value
+        logger.info(f"🔄 Статус изменён с EXPIRED на ACTIVE")
     
-    subscription.updated_at = datetime.utcnow()
+    subscription.updated_at = current_time
+    
     await db.commit()
     await db.refresh(subscription)
     
-    logger.info(f"⏰ Подписка пользователя {subscription.user_id} продлена на {days} дней")
+    logger.info(f"✅ Подписка продлена до: {subscription.end_date}")
+    logger.info(f"📊 Новые параметры: статус={subscription.status}, окончание={subscription.end_date}")
+    
     return subscription
 
 
