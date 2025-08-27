@@ -33,7 +33,7 @@ class RemnaWaveUser:
     username: str
     status: UserStatus
     used_traffic_bytes: int
-    lifetime_used_traffic_bytes: int
+    lifetime_used_traffic_bytes: int  # Новое поле
     traffic_limit_bytes: int
     traffic_limit_strategy: TrafficLimitStrategy
     expire_at: datetime
@@ -46,6 +46,16 @@ class RemnaWaveUser:
     active_internal_squads: List[Dict[str, str]]
     created_at: datetime
     updated_at: datetime
+    sub_last_user_agent: Optional[str] = None
+    sub_last_opened_at: Optional[datetime] = None
+    online_at: Optional[datetime] = None
+    sub_revoked_at: Optional[datetime] = None
+    last_traffic_reset_at: Optional[datetime] = None
+    trojan_password: Optional[str] = None
+    vless_uuid: Optional[str] = None
+    ss_password: Optional[str] = None
+    first_connected_at: Optional[datetime] = None
+    last_triggered_threshold: int = 0
 
 
 @dataclass
@@ -498,8 +508,23 @@ class RemnaWaveAPI:
             subscription_url=user_data['subscriptionUrl'],
             active_internal_squads=user_data['activeInternalSquads'],
             created_at=datetime.fromisoformat(user_data['createdAt'].replace('Z', '+00:00')),
-            updated_at=datetime.fromisoformat(user_data['updatedAt'].replace('Z', '+00:00'))
+            updated_at=datetime.fromisoformat(user_data['updatedAt'].replace('Z', '+00:00')),
+            sub_last_user_agent=user_data.get('subLastUserAgent'),
+            sub_last_opened_at=self._parse_optional_datetime(user_data.get('subLastOpenedAt')),
+            online_at=self._parse_optional_datetime(user_data.get('onlineAt')),
+            sub_revoked_at=self._parse_optional_datetime(user_data.get('subRevokedAt')),
+            last_traffic_reset_at=self._parse_optional_datetime(user_data.get('lastTrafficResetAt')),
+            trojan_password=user_data.get('trojanPassword'),
+            vless_uuid=user_data.get('vlessUuid'),
+            ss_password=user_data.get('ssPassword'),
+            first_connected_at=self._parse_optional_datetime(user_data.get('firstConnectedAt')),
+            last_triggered_threshold=user_data.get('lastTriggeredThreshold', 0)
         )
+
+    def _parse_optional_datetime(self, date_str: Optional[str]) -> Optional[datetime]:
+        if date_str:
+            return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        return None
     
     def _parse_internal_squad(self, squad_data: Dict) -> RemnaWaveInternalSquad:
         return RemnaWaveInternalSquad(
