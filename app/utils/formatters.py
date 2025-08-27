@@ -67,6 +67,17 @@ def format_time_ago(dt: Union[datetime, str]) -> str:
     else:
         return "только что"
 
+def format_days_declension(days: int, language: str = "ru") -> str:
+    if language != "ru":
+        return f"{days} day{'s' if days != 1 else ''}"
+    
+    if days % 10 == 1 and days % 100 != 11:
+        return f"{days} день"
+    elif days % 10 in [2, 3, 4] and days % 100 not in [12, 13, 14]:
+        return f"{days} дня"
+    else:
+        return f"{days} дней"
+
 
 def format_duration(seconds: int) -> str:
     if seconds < 60:
