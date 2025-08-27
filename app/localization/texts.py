@@ -283,7 +283,7 @@ class RussianTexts(Texts):
 """
 
     SUBSCRIPTION_EXPIRING_PAID = """
-⚠️ <b>Подписка истекает через {days} дней!</b>
+⚠️ <b>Подписка истекает через {days_text}!</b>
 
 Ваша платная подписка истекает {end_date}.
 
