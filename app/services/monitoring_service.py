@@ -369,7 +369,10 @@ class MonitoringService:
     
     async def _send_subscription_expiring_notification(self, user: User, subscription: Subscription, days: int):
         try:
+            from app.utils.formatters import format_days_declension
+            
             texts = get_texts(user.language)
+            days_text = format_days_declension(days, user.language)
             
             if subscription.autopay_enabled:
                 autopay_status = "✅ Включен - подписка продлится автоматически"
@@ -379,7 +382,7 @@ class MonitoringService:
                 action_text = "💡 Включите автоплатеж или продлите подписку вручную"
             
             message = f"""
-    ⚠️ <b>Подписка истекает через {days} дней!</b>
+    ⚠️ <b>Подписка истекает через {days_text}!</b>
 
     Ваша платная подписка истекает {subscription.end_date.strftime("%d.%m.%Y %H:%M")}.
 
