@@ -58,6 +58,94 @@ async def check_unique_constraint_exists():
         logger.error(f"Ошибка проверки ограничения уникальности: {e}")
         return False
 
+async def check_column_exists(table_name: str, column_name: str) -> bool:
+    """Проверяет, существует ли колонка в таблице"""
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            
+            if db_type == 'sqlite':
+                result = await conn.execute(text(f"PRAGMA table_info({table_name})"))
+                columns = result.fetchall()
+                return any(col[1] == column_name for col in columns)
+                
+            elif db_type == 'postgresql':
+                result = await conn.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = :table_name 
+                    AND column_name = :column_name
+                """), {"table_name": table_name, "column_name": column_name})
+                return result.fetchone() is not None
+                
+            elif db_type == 'mysql':
+                result = await conn.execute(text("""
+                    SELECT COLUMN_NAME 
+                    FROM information_schema.COLUMNS 
+                    WHERE TABLE_NAME = :table_name 
+                    AND COLUMN_NAME = :column_name
+                """), {"table_name": table_name, "column_name": column_name})
+                return result.fetchone() is not None
+                
+            return False
+            
+    except Exception as e:
+        logger.error(f"Ошибка проверки существования колонки {column_name}: {e}")
+        return False
+
+async def add_remnawave_v2_columns():
+    """Добавляет колонки для поддержки RemnaWave API v2.1.5"""
+    
+    columns_to_add = {
+        'lifetime_used_traffic_bytes': 'BIGINT DEFAULT 0',
+        'last_remnawave_sync': 'TIMESTAMP NULL',
+        'trojan_password': 'VARCHAR(255) NULL',
+        'vless_uuid': 'VARCHAR(255) NULL',
+        'ss_password': 'VARCHAR(255) NULL'
+    }
+    
+    logger.info("=== ПРОВЕРКА КОЛОНОК REMNAWAVE V2.1.5 ===")
+    
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            columns_added = 0
+            
+            for column_name, column_def in columns_to_add.items():
+                exists = await check_column_exists('users', column_name)
+                
+                if not exists:
+                    logger.info(f"Добавление колонки {column_name} в таблицу users")
+                    
+                    if db_type == 'sqlite':
+                        if column_def.startswith('BIGINT'):
+                            column_def = column_def.replace('BIGINT', 'INTEGER')
+                        column_def = column_def.replace('TIMESTAMP', 'DATETIME')
+                    elif db_type == 'mysql':
+                        column_def = column_def.replace('TIMESTAMP', 'DATETIME')
+                    
+                    try:
+                        await conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_def}"))
+                        columns_added += 1
+                        logger.info(f"Колонка {column_name} успешно добавлена")
+                    except Exception as e:
+                        logger.error(f"Ошибка добавления колонки {column_name}: {e}")
+                        continue
+                        
+                else:
+                    logger.debug(f"Колонка {column_name} уже существует")
+            
+            if columns_added > 0:
+                logger.info(f"Добавлено {columns_added} новых колонок для RemnaWave v2.1.5")
+            else:
+                logger.info("Все колонки RemnaWave v2.1.5 уже существуют")
+                
+            return columns_added
+            
+    except Exception as e:
+        logger.error(f"Ошибка при добавлении колонок RemnaWave v2.1.5: {e}")
+        return 0
+
 async def fix_subscription_duplicates_universal():
     """Универсальная функция очистки дубликатов для разных типов БД"""
     
@@ -146,6 +234,8 @@ async def run_universal_migration():
     try:
         db_type = await get_database_type()
         logger.info(f"Тип базы данных: {db_type}")
+        
+        await add_remnawave_v2_columns()
         
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))
