@@ -55,31 +55,27 @@ class User(Base):
     username = Column(String(255), nullable=True)
     first_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
-    
     status = Column(String(20), default=UserStatus.ACTIVE.value)
     language = Column(String(5), default="ru")
-    
     balance_kopeks = Column(Integer, default=0)
-    
     used_promocodes = Column(Integer, default=0) 
-
     has_had_paid_subscription = Column(Boolean, default=False, nullable=False)
-    
     referred_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     referral_code = Column(String(20), unique=True, nullable=True)
-    
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     last_activity = Column(DateTime, default=func.now())
-    
     remnawave_uuid = Column(String(255), nullable=True, unique=True)
-
     broadcasts = relationship("BroadcastHistory", back_populates="admin")
-    
     referrals = relationship("User", backref="referrer", remote_side=[id], foreign_keys="User.referred_by_id")
     subscription = relationship("Subscription", back_populates="user", uselist=False)
     transactions = relationship("Transaction", back_populates="user")
     referral_earnings = relationship("ReferralEarning", foreign_keys="ReferralEarning.user_id", back_populates="user")
+    lifetime_used_traffic_bytes = Column(BigInteger, default=0)
+    last_remnawave_sync = Column(DateTime, nullable=True)
+    trojan_password = Column(String(255), nullable=True)
+    vless_uuid = Column(String(255), nullable=True)
+    ss_password = Column(String(255), nullable=True)
     
     @property
     def balance_rubles(self) -> float:
