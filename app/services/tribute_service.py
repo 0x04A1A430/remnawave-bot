@@ -48,7 +48,6 @@ class TributeService:
             if not payment_url:
                 return None
             
-            
             return payment_url
             
         except Exception as e:
@@ -122,8 +121,7 @@ class TributeService:
                     is_completed=True
                 )
                 
-                user.balance_kopeks += amount_kopeks
-                await session.commit()
+                await add_user_balance(session, user.id, amount_kopeks)
                 
                 await self._send_success_notification(user_id, amount_kopeks)
                 
@@ -177,8 +175,7 @@ class TributeService:
                 
                 user = await get_user_by_telegram_id(session, user_id)
                 if user and user.balance_kopeks >= amount_kopeks:
-                    user.balance_kopeks -= amount_kopeks
-                    await session.commit()
+                    await add_user_balance(session, user.id, -amount_kopeks)
                 
                 await self._send_refund_notification(user_id, amount_kopeks)
                 
