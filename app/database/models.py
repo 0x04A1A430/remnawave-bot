@@ -44,7 +44,56 @@ class PromoCodeType(Enum):
 class PaymentMethod(Enum):
     TELEGRAM_STARS = "telegram_stars"
     TRIBUTE = "tribute"
+    YOOKASSA = "yookassa" 
     MANUAL = "manual"  
+
+class YooKassaPayment(Base):
+    __tablename__ = "yookassa_payments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    yookassa_payment_id = Column(String(255), unique=True, nullable=False, index=True)
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(3), default="RUB", nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String(50), nullable=False)  
+    is_paid = Column(Boolean, default=False)
+    is_captured = Column(Boolean, default=False)
+    confirmation_url = Column(Text, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    payment_method_type = Column(String(50), nullable=True) 
+    refundable = Column(Boolean, default=False)
+    test_mode = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    yookassa_created_at = Column(DateTime, nullable=True) 
+    captured_at = Column(DateTime, nullable=True) 
+    user = relationship("User", backref="yookassa_payments")
+    transaction = relationship("Transaction", backref="yookassa_payment")
+    
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+    
+    @property
+    def is_pending(self) -> bool:
+        return self.status == "pending"
+    
+    @property
+    def is_succeeded(self) -> bool:
+        return self.status == "succeeded" and self.is_paid
+    
+    @property
+    def is_failed(self) -> bool:
+        return self.status in ["canceled", "failed"]
+    
+    @property
+    def can_be_captured(self) -> bool:
+        return self.status == "waiting_for_capture"
+    
+    def __repr__(self):
+        return f"<YooKassaPayment(id={self.id}, yookassa_id={self.yookassa_payment_id}, amount={self.amount_rubles}₽, status={self.status})>"
 
 
 class User(Base):

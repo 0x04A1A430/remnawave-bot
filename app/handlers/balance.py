@@ -157,7 +157,7 @@ async def show_payment_methods(
 Выберите удобный для вас способ оплаты:
 
 ⭐ <b>Telegram Stars</b> - быстро и удобно
-💎 <b>Банковская карта</b> - через Tribute
+💳 <b>Банковская карта</b> - через YooKassa/Tribute
 🛠️ <b>Через поддержку</b> - другие способы
 
 Выберите способ пополнения:
@@ -190,6 +190,30 @@ async def start_stars_payment(
     
     await state.set_state(BalanceStates.waiting_for_amount)
     await state.update_data(payment_method="stars")
+    await callback.answer()
+
+
+@error_handler
+async def start_yookassa_payment(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext
+):
+    texts = get_texts(db_user.language)
+    
+    if not settings.is_yookassa_enabled():
+        await callback.answer("❌ Оплата картой через YooKassa временно недоступна", show_alert=True)
+        return
+    
+    await callback.message.edit_text(
+        "💳 <b>Оплата банковской картой</b>\n\n"
+        "Введите сумму для пополнения от 100 до 50,000 рублей:",
+        reply_markup=get_back_keyboard(db_user.language),
+        parse_mode="HTML"
+    )
+    
+    await state.set_state(BalanceStates.waiting_for_amount)
+    await state.update_data(payment_method="yookassa")
     await callback.answer()
 
 
@@ -309,6 +333,10 @@ async def process_topup_amount(
         
         if payment_method == "stars":
             await process_stars_payment_amount(message, db_user, amount_kopeks, state)
+        elif payment_method == "yookassa":
+            from app.database.database import get_db
+            async with get_db() as db:
+                await process_yookassa_payment_amount(message, db_user, db, amount_kopeks, state)
         else:
             await message.answer("❌ Неизвестный способ оплаты")
         
@@ -360,6 +388,139 @@ async def process_stars_payment_amount(
         await message.answer("❌ Ошибка создания платежа")
 
 
+@error_handler
+async def process_yookassa_payment_amount(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    amount_kopeks: int,
+    state: FSMContext
+):
+    texts = get_texts(db_user.language)
+    
+    if not settings.is_yookassa_enabled():
+        await message.answer("❌ Оплата через YooKassa временно недоступна")
+        return
+    
+    if amount_kopeks < 10000:
+        await message.answer("❌ Минимальная сумма для оплаты картой: 100 ₽")
+        return
+    
+    try:
+        payment_service = PaymentService(message.bot)
+        
+        payment_result = await payment_service.create_yookassa_payment(
+            db=db,
+            user_id=db_user.id,
+            amount_kopeks=amount_kopeks,
+            description=f"Пополнение баланса VPN на {settings.format_price(amount_kopeks)}",
+            receipt_email=None,
+            receipt_phone=None,
+            metadata={
+                "user_telegram_id": str(db_user.telegram_id),
+                "user_username": db_user.username or "",
+                "purpose": "balance_topup"
+            }
+        )
+        
+        if not payment_result:
+            await message.answer("❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.")
+            await state.clear()
+            return
+        
+        confirmation_url = payment_result.get("confirmation_url")
+        if not confirmation_url:
+            await message.answer("❌ Ошибка получения ссылки для оплаты. Обратитесь в поддержку.")
+            await state.clear()
+            return
+        
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="💳 Оплатить картой", url=confirmation_url)],
+            [types.InlineKeyboardButton(text="📊 Проверить статус", callback_data=f"check_yookassa_{payment_result['local_payment_id']}")],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")]
+        ])
+        
+        await message.answer(
+            f"💳 <b>Оплата банковской картой</b>\n\n"
+            f"💰 Сумма: {settings.format_price(amount_kopeks)}\n"
+            f"🆔 ID платежа: {payment_result['yookassa_payment_id'][:8]}...\n\n"
+            f"📱 <b>Инструкция:</b>\n"
+            f"1. Нажмите кнопку 'Оплатить картой'\n"
+            f"2. Введите данные вашей карты\n"
+            f"3. Подтвердите платеж\n"
+            f"4. Деньги поступят на баланс автоматически\n\n"
+            f"🔒 Оплата происходит через защищенную систему YooKassa\n"
+            f"✅ Принимаем карты: Visa, MasterCard, МИР\n\n"
+            f"❓ Если возникнут проблемы, обратитесь в {settings.SUPPORT_USERNAME}",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        
+        await state.clear()
+        
+        logger.info(f"Создан платеж YooKassa для пользователя {db_user.telegram_id}: "
+                   f"{amount_kopeks/100}₽, ID: {payment_result['yookassa_payment_id']}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка создания YooKassa платежа: {e}")
+        await message.answer("❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.")
+        await state.clear()
+
+
+@error_handler
+async def check_yookassa_payment_status(
+    callback: types.CallbackQuery,
+    db: AsyncSession
+):
+    try:
+        local_payment_id = int(callback.data.split('_')[-1])
+        
+        from app.database.crud.yookassa import get_yookassa_payment_by_local_id
+        payment = await get_yookassa_payment_by_local_id(db, local_payment_id)
+        
+        if not payment:
+            await callback.answer("❌ Платеж не найден", show_alert=True)
+            return
+        
+        status_emoji = {
+            "pending": "⏳",
+            "waiting_for_capture": "⌛",
+            "succeeded": "✅",
+            "canceled": "❌",
+            "failed": "❌"
+        }
+        
+        status_text = {
+            "pending": "Ожидает оплаты",
+            "waiting_for_capture": "Ожидает подтверждения",
+            "succeeded": "Оплачен",
+            "canceled": "Отменен",
+            "failed": "Ошибка"
+        }
+        
+        emoji = status_emoji.get(payment.status, "❓")
+        status = status_text.get(payment.status, "Неизвестно")
+        
+        message_text = (f"💳 <b>Статус платежа</b>\n\n"
+                       f"🆔 ID: {payment.yookassa_payment_id[:8]}...\n"
+                       f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n"
+                       f"📊 Статус: {emoji} {status}\n"
+                       f"📅 Создан: {payment.created_at.strftime('%d.%m.%Y %H:%M')}\n")
+        
+        if payment.is_succeeded:
+            message_text += "\n✅ Платеж успешно завершен!\nСредства зачислены на баланс."
+        elif payment.is_pending:
+            message_text += "\n⏳ Платеж ожидает оплаты. Нажмите кнопку 'Оплатить' выше."
+        elif payment.is_failed:
+            message_text += f"\n❌ Платеж не прошел. Обратитесь в {settings.SUPPORT_USERNAME}"
+        
+        await callback.answer(message_text, show_alert=True)
+        
+    except Exception as e:
+        logger.error(f"Ошибка проверки статуса платежа: {e}")
+        await callback.answer("❌ Ошибка проверки статуса", show_alert=True)
+
+
 def register_handlers(dp: Dispatcher):
     
     dp.callback_query.register(
@@ -388,6 +549,11 @@ def register_handlers(dp: Dispatcher):
     )
     
     dp.callback_query.register(
+        start_yookassa_payment,
+        F.data == "topup_yookassa"
+    )
+    
+    dp.callback_query.register(
         start_tribute_payment,
         F.data == "topup_tribute"
     )
@@ -395,6 +561,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         request_support_topup,
         F.data == "topup_support"
+    )
+    
+    dp.callback_query.register(
+        check_yookassa_payment_status,
+        F.data.startswith("check_yookassa_")
     )
     
     dp.message.register(

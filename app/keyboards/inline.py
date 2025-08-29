@@ -339,10 +339,18 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = "ru") -> In
             )
         ])
     
+    if settings.is_yookassa_enabled():
+        keyboard.append([
+            InlineKeyboardButton(
+                text="💳 Банковская карта (YooKassa)", 
+                callback_data="topup_yookassa"
+            )
+        ])
+    
     if settings.TRIBUTE_ENABLED:
         keyboard.append([
             InlineKeyboardButton(
-                text="💳 Банковская карта", 
+                text="💎 Банковская карта (Tribute)", 
                 callback_data="topup_tribute"
             )
         ])
@@ -359,6 +367,34 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = "ru") -> In
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_yookassa_payment_keyboard(
+    payment_id: str, 
+    amount_kopeks: int, 
+    confirmation_url: str,
+    language: str = "ru"
+) -> InlineKeyboardMarkup:
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="💳 Оплатить",
+                url=confirmation_url
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📊 Проверить статус",
+                callback_data=f"check_yookassa_status_{payment_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="💰 Мой баланс",
+                callback_data="menu_balance"
+            )
+        ]
+    ])
 
 def get_autopay_notification_keyboard(subscription_id: int, language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
