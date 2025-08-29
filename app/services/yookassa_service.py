@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class YooKassaService:
-    """Сервис для работы с YooKassa API"""
     
     def __init__(self,
                  shop_id: Optional[str] = None,
@@ -21,7 +20,6 @@ class YooKassaService:
                  configured_return_url: Optional[str] = None,
                  bot_username_for_default_return: Optional[str] = None):
 
-        # Используем значения из settings, если не переданы параметры
         shop_id = shop_id or getattr(settings, 'YOOKASSA_SHOP_ID', None)
         secret_key = secret_key or getattr(settings, 'YOOKASSA_SECRET_KEY', None)
         configured_return_url = configured_return_url or getattr(settings, 'YOOKASSA_RETURN_URL', None)
@@ -42,7 +40,6 @@ class YooKassaService:
                               exc_info=True)
                 self.configured = False
 
-        # Настройка return_url
         if configured_return_url:
             self.return_url = configured_return_url
         elif bot_username_for_default_return:
@@ -71,7 +68,6 @@ class YooKassaService:
             logger.error("YooKassa не сконфигурирован. Невозможно создать платеж.")
             return None
 
-        # Подготовка контактов для чека
         customer_contact_for_receipt = {}
         if receipt_email:
             customer_contact_for_receipt["email"] = receipt_email
@@ -101,7 +97,6 @@ class YooKassaService:
             builder.set_description(description)
             builder.set_metadata(metadata)
 
-            # Настройка чека
             receipt_items_list: List[Dict[str, Any]] = [{
                 "description": description[:128],
                 "quantity": "1.00",
@@ -156,7 +151,6 @@ class YooKassaService:
 
     async def get_payment_info(
             self, payment_id_in_yookassa: str) -> Optional[Dict[str, Any]]:
-        """Получает информацию о платеже из YooKassa"""
         
         if not self.configured:
             logger.error("YooKassa не сконфигурирован. Невозможно получить информацию о платеже.")
