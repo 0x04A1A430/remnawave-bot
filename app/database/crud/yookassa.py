@@ -24,7 +24,6 @@ async def create_yookassa_payment(
     yookassa_created_at: Optional[datetime] = None,
     test_mode: bool = False
 ) -> YooKassaPayment:
-    """Создает новый платеж YooKassa в БД"""
     
     payment = YooKassaPayment(
         user_id=user_id,
@@ -52,7 +51,6 @@ async def get_yookassa_payment_by_id(
     db: AsyncSession,
     yookassa_payment_id: str
 ) -> Optional[YooKassaPayment]:
-    """Получает платеж YooKassa по ID из YooKassa"""
     
     result = await db.execute(
         select(YooKassaPayment)
@@ -66,7 +64,6 @@ async def get_yookassa_payment_by_local_id(
     db: AsyncSession,
     local_id: int
 ) -> Optional[YooKassaPayment]:
-    """Получает платеж YooKassa по локальному ID"""
     
     result = await db.execute(
         select(YooKassaPayment)
@@ -85,7 +82,6 @@ async def update_yookassa_payment_status(
     captured_at: Optional[datetime] = None,
     payment_method_type: Optional[str] = None
 ) -> Optional[YooKassaPayment]:
-    """Обновляет статус платежа YooKassa"""
     
     update_data = {
         "status": status,
@@ -107,7 +103,6 @@ async def update_yookassa_payment_status(
     )
     await db.commit()
     
-    # Получаем обновленный объект
     result = await db.execute(
         select(YooKassaPayment)
         .options(selectinload(YooKassaPayment.user))
@@ -126,7 +121,6 @@ async def link_yookassa_payment_to_transaction(
     yookassa_payment_id: str,
     transaction_id: int
 ) -> Optional[YooKassaPayment]:
-    """Связывает платеж YooKassa с локальной транзакцией"""
     
     await db.execute(
         update(YooKassaPayment)
@@ -154,7 +148,6 @@ async def get_user_yookassa_payments(
     limit: int = 50,
     offset: int = 0
 ) -> List[YooKassaPayment]:
-    """Получает список платежей YooKassa пользователя"""
     
     result = await db.execute(
         select(YooKassaPayment)
@@ -172,7 +165,6 @@ async def get_pending_yookassa_payments(
     user_id: Optional[int] = None,
     limit: int = 100
 ) -> List[YooKassaPayment]:
-    """Получает список неоплаченных платежей YooKassa"""
     
     query = select(YooKassaPayment).options(selectinload(YooKassaPayment.user))
     
@@ -192,7 +184,6 @@ async def get_succeeded_yookassa_payments_without_transaction(
     db: AsyncSession,
     limit: int = 50
 ) -> List[YooKassaPayment]:
-    """Получает успешные платежи YooKassa без привязанной транзакции"""
     
     result = await db.execute(
         select(YooKassaPayment)
@@ -214,7 +205,6 @@ async def delete_yookassa_payment(
     db: AsyncSession,
     yookassa_payment_id: str
 ) -> bool:
-    """Удаляет платеж YooKassa (для тестирования)"""
     
     result = await db.execute(
         select(YooKassaPayment)
@@ -235,7 +225,6 @@ async def get_yookassa_payments_stats(
     db: AsyncSession,
     user_id: Optional[int] = None
 ) -> dict:
-    """Получает статистику по платежам YooKassa"""
     
     from sqlalchemy import func, case
     
