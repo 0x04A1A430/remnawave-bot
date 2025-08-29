@@ -58,52 +58,26 @@ class TributeService:
             return False
     
     async def process_webhook(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Обрабатывает webhook от Tribute"""
         
         try:
-            if payload.get("test_event"):
-                logger.info("Получено тестовое событие Tribute")
-                return {
-                    "event_type": "test",
-                    "payment_id": "test_event",
-                    "user_id": 0,
-                    "amount_kopeks": 0,
-                    "status": "test",
-                    "external_id": "test"
-                }
-            
-            payment_id = None
-            status = None
-            amount_kopeks = 0 
-            amount_rubles = 0
-            telegram_user_id = None
             
             payment_id = payload.get("id") or payload.get("payment_id")
             status = payload.get("status")
-            amount_rubles = payload.get("amount", 0)
+            amount_kopeks = payload.get("amount", 0) 
             telegram_user_id = payload.get("telegram_user_id") or payload.get("user_id")
-            
-            if amount_rubles:
-                amount_kopeks = int(amount_rubles * 100)
             
             if not payment_id and "payload" in payload:
                 data = payload["payload"]
                 payment_id = data.get("id") or data.get("payment_id")
                 status = data.get("status")
-                amount_rubles = data.get("amount", 0)
-                amount_kopeks = data.get("amount_kopeks", int(amount_rubles * 100))
+                amount_kopeks = data.get("amount", 0) 
                 telegram_user_id = data.get("telegram_user_id") or data.get("user_id")
             
             if not payment_id and "name" in payload:
                 event_name = payload.get("name")
                 data = payload.get("payload", {})
-                payment_id = str(data.get("donation_request_id", ""))
-                
-                amount_kopeks = data.get("amount_kopeks", 0)
-                if not amount_kopeks:
-                    amount_rubles = data.get("amount", 0)
-                    amount_kopeks = int(amount_rubles * 100)
-                    
+                payment_id = str(data.get("donation_request_id")) 
+                amount_kopeks = data.get("amount", 0) 
                 telegram_user_id = data.get("telegram_user_id")
                 
                 if event_name == "new_donation":
@@ -125,7 +99,7 @@ class TributeService:
                 "user_id": int(telegram_user_id),
                 "amount_kopeks": amount_kopeks,
                 "status": status or "paid",
-                "external_id": f"donation_{payment_id}" if payment_id else f"tribute_{telegram_user_id}"
+                "external_id": f"donation_{payment_id}"
             }
             
         except Exception as e:
