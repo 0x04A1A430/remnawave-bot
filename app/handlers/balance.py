@@ -320,11 +320,11 @@ async def process_topup_amount(
         amount_rubles = float(message.text.replace(',', '.'))
         
         if amount_rubles < 1:
-            await message.answer("❌ Минимальная сумма пополнения: 1 ₽")
+            await message.answer("Минимальная сумма пополнения: 1 ₽")
             return
         
         if amount_rubles > 50000:
-            await message.answer("❌ Максимальная сумма пополнения: 50,000 ₽")
+            await message.answer("Максимальная сумма пополнения: 50,000 ₽")
             return
         
         amount_kopeks = int(amount_rubles * 100)
@@ -334,18 +334,17 @@ async def process_topup_amount(
         if payment_method == "stars":
             await process_stars_payment_amount(message, db_user, amount_kopeks, state)
         elif payment_method == "yookassa":
-            from app.database.database import get_db
-            async with get_db() as db:
+            from app.database.database import async_session_maker
+            async with async_session_maker() as db:
                 await process_yookassa_payment_amount(message, db_user, db, amount_kopeks, state)
         else:
-            await message.answer("❌ Неизвестный способ оплаты")
+            await message.answer("Неизвестный способ оплаты")
         
     except ValueError:
         await message.answer(
             texts.INVALID_AMOUNT,
             reply_markup=get_back_keyboard(db_user.language)
         )
-
 
 @error_handler
 async def process_stars_payment_amount(
