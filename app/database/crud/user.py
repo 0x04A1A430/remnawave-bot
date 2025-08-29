@@ -123,31 +123,37 @@ async def update_user(
 
 async def add_user_balance(
     db: AsyncSession,
-    user: User,
-    amount_kopeks: int,
-    description: str = "Пополнение баланса"
-) -> User:
-    
-    user.add_balance(amount_kopeks)
-    user.updated_at = datetime.utcnow()
-    
-    from app.database.crud.transaction import create_transaction
-    from app.database.models import TransactionType
-    
-    await create_transaction(
-        db=db,
-        user_id=user.id,
-        type=TransactionType.DEPOSIT,
-        amount_kopeks=amount_kopeks,
-        description=description
-    )
-    
-    await db.commit()
-    await db.refresh(user)
-    
-    logger.info(f"💰 Пополнен баланс пользователя {user.telegram_id}: +{amount_kopeks/100}₽")
-    return user
-
+    user_id: int,
+    amount_kopeks: int
+) -> bool:
+    """
+    Простое добавление средств к балансу пользователя.
+    НЕ создает транзакцию - это должно делаться отдельно!
+    """
+    try:
+        result = await db.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            logger.error(f"Пользователь с ID {user_id} не найден")
+            return False
+        
+        old_balance = user.balance_kopeks
+        user.balance_kopeks += amount_kopeks
+        user.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        await db.refresh(user)
+        
+        logger.info(f"💰 Баланс пользователя {user.telegram_id} изменен: {old_balance} → {user.balance_kopeks} (изменение: {amount_kopeks})")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка изменения баланса пользователя {user_id}: {e}")
+        await db.rollback()
+        return False
 
 async def subtract_user_balance(
     db: AsyncSession, 
