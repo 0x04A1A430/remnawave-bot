@@ -90,33 +90,44 @@ class TributeService:
         return {"status": "ok", "event": event_type}
     
     async def _handle_successful_payment(self, payment_data: Dict[str, Any]):
+        """Обработка успешного платежа - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
         
         try:
             user_id = payment_data["user_id"]
             amount_kopeks = payment_data["amount_kopeks"]
             payment_id = payment_data["payment_id"]
             
+            logger.info(f"🔄 Обрабатываем успешный Tribute платеж: user_id={user_id}, amount={amount_kopeks}, payment_id={payment_id}")
+            
             async for session in get_db():
+                external_id = f"donation_{payment_id}"
+                
                 existing_transaction = await get_transaction_by_external_id(
-                    session, f"donation_{payment_id}", PaymentMethod.TRIBUTE
+                    session, external_id, PaymentMethod.TRIBUTE
                 )
                 
                 if existing_transaction:
                     if existing_transaction.is_completed:
-                        logger.warning(f"Транзакция с donation_request_id {payment_id} уже обработана")
+                        logger.warning(f"❌ Транзакция с donation_request_id {payment_id} уже обработана и завершена")
                         return
                     else:
-                        logger.info(f"Завершаем незавершенную транзакцию {payment_id}")
+                        logger.info(f"⚠️ Найдена незавершенная транзакция {existing_transaction.id}, завершаем...")
                         await complete_transaction(session, existing_transaction)
-                        await add_user_balance(session, existing_transaction.user_id, amount_kopeks)
-                        await self._send_success_notification(user_id, amount_kopeks)
-                        logger.info(f"Успешно завершен Tribute платеж: {amount_kopeks/100}₽ для пользователя {user_id}")
+                        
+                        user = await get_user_by_telegram_id(session, user_id)
+                        if user:
+                            user.balance_kopeks += amount_kopeks
+                            await session.commit()
+                            await self._send_success_notification(user_id, amount_kopeks)
+                            logger.info(f"✅ Завершена незавершенная транзакция для пользователя {user_id}")
                         return
                 
                 user = await get_user_by_telegram_id(session, user_id)
                 if not user:
-                    logger.error(f"Пользователь {user_id} не найден")
+                    logger.error(f"❌ Пользователь {user_id} не найден")
                     return
+                
+                logger.info(f"👤 Найден пользователь {user.telegram_id}, текущий баланс: {user.balance_kopeks} коп")
                 
                 transaction = await create_transaction(
                     db=session,
@@ -125,21 +136,28 @@ class TributeService:
                     amount_kopeks=amount_kopeks,
                     description=f"Пополнение через Tribute: {amount_kopeks/100}₽",
                     payment_method=PaymentMethod.TRIBUTE,
-                    external_id=f"donation_{payment_id}",
+                    external_id=external_id,
                     is_completed=True
                 )
                 
-                await add_user_balance(session, user.id, amount_kopeks)
+                old_balance = user.balance_kopeks
+                user.balance_kopeks += amount_kopeks
+                user.updated_at = datetime.utcnow()
+                
+                await session.commit()
+                
+                logger.info(f"💰 Баланс пользователя {user_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
                 
                 await self._send_success_notification(user_id, amount_kopeks)
                 
-                logger.info(f"Успешно обработан Tribute платеж: {amount_kopeks/100}₽ для пользователя {user_id}")
+                logger.info(f"✅ Успешно обработан Tribute платеж: {amount_kopeks/100}₽ для пользователя {user_id}")
                 break
                 
         except Exception as e:
-            logger.error(f"Ошибка обработки успешного Tribute платежа: {e}")
+            logger.error(f"❌ Ошибка обработки успешного Tribute платежа: {e}", exc_info=True)
     
     async def _handle_failed_payment(self, payment_data: Dict[str, Any]):
+        """Обработка неудачного платежа"""
         
         try:
             user_id = payment_data["user_id"]
@@ -147,7 +165,7 @@ class TributeService:
             
             async for session in get_db():
                 transaction = await get_transaction_by_external_id(
-                    session, payment_id, PaymentMethod.TRIBUTE
+                    session, f"donation_{payment_id}", PaymentMethod.TRIBUTE
                 )
                 
                 if transaction:
@@ -163,6 +181,7 @@ class TributeService:
             logger.error(f"Ошибка обработки неудачного Tribute платежа: {e}")
     
     async def _handle_refund(self, refund_data: Dict[str, Any]):
+        """Обработка возврата"""
         
         try:
             user_id = refund_data["user_id"]
@@ -183,7 +202,8 @@ class TributeService:
                 
                 user = await get_user_by_telegram_id(session, user_id)
                 if user and user.balance_kopeks >= amount_kopeks:
-                    await add_user_balance(session, user.id, -amount_kopeks)
+                    user.balance_kopeks -= amount_kopeks
+                    await session.commit()
                 
                 await self._send_refund_notification(user_id, amount_kopeks)
                 
@@ -194,6 +214,7 @@ class TributeService:
             logger.error(f"Ошибка обработки возврата Tribute: {e}")
     
     async def _send_success_notification(self, user_id: int, amount_kopeks: int):
+        """Отправка уведомления об успешном платеже"""
         
         try:
             amount_rubles = amount_kopeks / 100
@@ -222,6 +243,7 @@ class TributeService:
             logger.error(f"Ошибка отправки уведомления об успешном платеже: {e}")
     
     async def _send_failure_notification(self, user_id: int):
+        """Отправка уведомления о неудачном платеже"""
         
         try:
             text = (
@@ -250,6 +272,7 @@ class TributeService:
             logger.error(f"Ошибка отправки уведомления о неудачном платеже: {e}")
     
     async def _send_refund_notification(self, user_id: int, amount_kopeks: int):
+        """Отправка уведомления о возврате"""
         
         try:
             amount_rubles = amount_kopeks / 100
