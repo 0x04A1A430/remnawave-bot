@@ -102,8 +102,16 @@ class TributeService:
                 )
                 
                 if existing_transaction:
-                    logger.warning(f"Транзакция с donation_request_id {payment_id} уже существует")
-                    return
+                    if existing_transaction.is_completed:
+                        logger.warning(f"Транзакция с donation_request_id {payment_id} уже обработана")
+                        return
+                    else:
+                        logger.info(f"Завершаем незавершенную транзакцию {payment_id}")
+                        await complete_transaction(session, existing_transaction)
+                        await add_user_balance(session, existing_transaction.user_id, amount_kopeks)
+                        await self._send_success_notification(user_id, amount_kopeks)
+                        logger.info(f"Успешно завершен Tribute платеж: {amount_kopeks/100}₽ для пользователя {user_id}")
+                        return
                 
                 user = await get_user_by_telegram_id(session, user_id)
                 if not user:
