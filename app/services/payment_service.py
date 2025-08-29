@@ -93,11 +93,13 @@ class PaymentService:
             yookassa_created_at = None
             if yookassa_response.get("created_at"):
                 try:
-                    yookassa_created_at = datetime.fromisoformat(
+                    dt_with_tz = datetime.fromisoformat(
                         yookassa_response["created_at"].replace('Z', '+00:00')
                     )
-                except:
-                    pass
+                    yookassa_created_at = dt_with_tz.replace(tzinfo=None)
+                except Exception as e:
+                    logger.warning(f"Не удалось парсить created_at: {e}")
+                    yookassa_created_at = None
             
             local_payment = await create_yookassa_payment(
                 db=db,
@@ -110,7 +112,7 @@ class PaymentService:
                 confirmation_url=yookassa_response.get("confirmation_url"),
                 metadata_json=payment_metadata,
                 payment_method_type=None, 
-                yookassa_created_at=yookassa_created_at,
+                yookassa_created_at=yookassa_created_at, 
                 test_mode=yookassa_response.get("test_mode", False)
             )
             
@@ -156,7 +158,7 @@ class PaymentService:
             
             captured_at = None
             if status == "succeeded":
-                captured_at = datetime.utcnow()
+                captured_at = datetime.utcnow() 
             
             updated_payment = await update_yookassa_payment_status(
                 db, 
@@ -193,7 +195,7 @@ class PaymentService:
                             updated_payment.user.telegram_id,
                             f"✅ <b>Пополнение успешно!</b>\n\n"
                             f"💰 Сумма: {settings.format_price(updated_payment.amount_kopeks)}\n"
-                            f"� Способ: Банковская карта\n"
+                            f"🏦 Способ: Банковская карта\n"
                             f"🆔 Транзакция: {yookassa_payment_id[:8]}...\n\n"
                             f"Баланс пополнен автоматически!",
                             parse_mode="HTML"
