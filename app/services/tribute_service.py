@@ -102,13 +102,29 @@ class TributeService:
             async for session in get_db():
                 external_id = f"donation_{payment_id}"
                 
+                logger.info(f"🔍 Ищем существующую транзакцию с external_id: '{external_id}', payment_method: TRIBUTE")
+                
                 existing_transaction = await get_transaction_by_external_id(
                     session, external_id, PaymentMethod.TRIBUTE
                 )
                 
                 if existing_transaction:
+                    logger.info(f"🔍 Найдена существующая транзакция:")
+                    logger.info(f"   ID: {existing_transaction.id}")
+                    logger.info(f"   External ID: '{existing_transaction.external_id}'")
+                    logger.info(f"   Payment Method: {existing_transaction.payment_method}")
+                    logger.info(f"   Is Completed: {existing_transaction.is_completed}")
+                    logger.info(f"   Amount: {existing_transaction.amount_kopeks} коп")
+                    logger.info(f"   Created: {existing_transaction.created_at}")
+                    
                     if existing_transaction.is_completed:
                         logger.warning(f"❌ Транзакция с donation_request_id {payment_id} уже обработана и завершена")
+                        
+                        user = await get_user_by_telegram_id(session, user_id)
+                        if user:
+                            logger.info(f"💰 Текущий баланс пользователя {user_id}: {user.balance_kopeks} коп")
+                        else:
+                            logger.error(f"❌ Пользователь {user_id} не найден при проверке баланса")
                         return
                     else:
                         logger.info(f"⚠️ Найдена незавершенная транзакция {existing_transaction.id}, завершаем...")
@@ -116,11 +132,15 @@ class TributeService:
                         
                         user = await get_user_by_telegram_id(session, user_id)
                         if user:
+                            old_balance = user.balance_kopeks
                             user.balance_kopeks += amount_kopeks
                             await session.commit()
+                            logger.info(f"💰 Баланс обновлен при завершении транзакции: {old_balance} -> {user.balance_kopeks} коп")
                             await self._send_success_notification(user_id, amount_kopeks)
                             logger.info(f"✅ Завершена незавершенная транзакция для пользователя {user_id}")
                         return
+                else:
+                    logger.info(f"✅ Транзакция с external_id '{external_id}' не найдена, создаем новую")
                 
                 user = await get_user_by_telegram_id(session, user_id)
                 if not user:
@@ -136,7 +156,7 @@ class TributeService:
                     amount_kopeks=amount_kopeks,
                     description=f"Пополнение через Tribute: {amount_kopeks/100}₽",
                     payment_method=PaymentMethod.TRIBUTE,
-                    external_id=external_id,
+                    external_id=external_id, 
                     is_completed=True
                 )
                 
@@ -299,6 +319,54 @@ class TributeService:
             
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о возврате: {e}")
+    
+    async def force_process_payment(
+        self, 
+        payment_id: str, 
+        user_id: int, 
+        amount_kopeks: int,
+        description: str = "Принудительная обработка Tribute платежа"
+    ) -> bool:
+        """Принудительная обработка платежа (для отладки)"""
+        
+        try:
+            logger.info(f"🔧 ПРИНУДИТЕЛЬНАЯ ОБРАБОТКА: payment_id={payment_id}, user_id={user_id}, amount={amount_kopeks}")
+            
+            async for session in get_db():
+                user = await get_user_by_telegram_id(session, user_id)
+                if not user:
+                    logger.error(f"❌ Пользователь {user_id} не найден")
+                    return False
+                
+                external_id = f"force_donation_{payment_id}_{int(datetime.utcnow().timestamp())}"
+                
+                transaction = await create_transaction(
+                    db=session,
+                    user_id=user.id,
+                    type=TransactionType.DEPOSIT,
+                    amount_kopeks=amount_kopeks,
+                    description=description,
+                    payment_method=PaymentMethod.TRIBUTE,
+                    external_id=external_id,
+                    is_completed=True
+                )
+                
+                old_balance = user.balance_kopeks
+                user.balance_kopeks += amount_kopeks
+                user.updated_at = datetime.utcnow()
+                
+                await session.commit()
+                
+                logger.info(f"💰 ПРИНУДИТЕЛЬНО обновлен баланс: {old_balance} -> {user.balance_kopeks} коп")
+                
+                await self._send_success_notification(user_id, amount_kopeks)
+                
+                logger.info(f"✅ Принудительно обработан платеж {payment_id}")
+                return True
+                
+        except Exception as e:
+            logger.error(f"❌ Ошибка принудительной обработки: {e}", exc_info=True)
+            return False
     
     async def get_payment_status(self, payment_id: str) -> Optional[Dict[str, Any]]:
         return await self.tribute_api.get_payment_status(payment_id)
