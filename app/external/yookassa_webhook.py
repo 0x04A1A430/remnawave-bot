@@ -91,7 +91,6 @@ def create_yookassa_webhook_app(payment_service: PaymentService) -> web.Applicat
     
     app = web.Application()
     
-    # Middleware для логирования
     async def logging_middleware(request, handler):
         start_time = request.loop.time()
         
