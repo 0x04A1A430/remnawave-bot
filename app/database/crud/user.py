@@ -155,6 +155,45 @@ async def add_user_balance(
         await db.rollback()
         return False
 
+async def add_user_balance_by_id(
+    db: AsyncSession,
+    user_id: int,
+    amount_kopeks: int,
+    description: str = "Пополнение баланса"
+) -> bool:
+    
+    try:
+        user = await get_user_by_telegram_id(db, user_id)
+        if not user:
+            logger.error(f"❌ Пользователь с telegram_id {user_id} не найден")
+            return False
+        
+        old_balance = user.balance_kopeks
+        user.balance_kopeks += amount_kopeks
+        user.updated_at = datetime.utcnow()
+        
+        from app.database.crud.transaction import create_transaction
+        from app.database.models import TransactionType
+        
+        await create_transaction(
+            db=db,
+            user_id=user.id, 
+            type=TransactionType.DEPOSIT,
+            amount_kopeks=amount_kopeks,
+            description=description
+        )
+        
+        await db.commit()
+        await db.refresh(user)
+        
+        logger.info(f"💰 Пополнен баланс пользователя {user_id}: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка пополнения баланса пользователя {user_id}: {e}")
+        await db.rollback()
+        return False
+
 async def subtract_user_balance(
     db: AsyncSession, 
     user: User, 
