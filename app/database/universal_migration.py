@@ -6,60 +6,41 @@ from app.database.database import engine
 logger = logging.getLogger(__name__)
 
 async def get_database_type():
-    """Определяет тип базы данных"""
     return engine.dialect.name
 
-async def check_unique_constraint_exists():
-    """Проверяет, существует ли ограничение уникальности на user_id"""
+async def check_table_exists(table_name: str) -> bool:
     try:
         async with engine.begin() as conn:
             db_type = await get_database_type()
             
             if db_type == 'sqlite':
-                result = await conn.execute(text("PRAGMA table_info(subscriptions)"))
-                columns = result.fetchall()
-                
-                check_result = await conn.execute(text("""
-                    SELECT user_id, COUNT(*) as count 
-                    FROM subscriptions 
-                    GROUP BY user_id 
-                    HAVING COUNT(*) > 1
-                    LIMIT 1
+                result = await conn.execute(text(f"""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name='{table_name}'
                 """))
-                
-                duplicates = check_result.fetchall()
-                return len(duplicates) == 0 
+                return result.fetchone() is not None
                 
             elif db_type == 'postgresql':
                 result = await conn.execute(text("""
-                    SELECT constraint_name 
-                    FROM information_schema.table_constraints 
-                    WHERE table_name = 'subscriptions' 
-                    AND constraint_type = 'UNIQUE'
-                    AND constraint_name LIKE '%user_id%'
-                """))
-                constraints = result.fetchall()
-                return len(constraints) > 0
+                    SELECT table_name FROM information_schema.tables 
+                    WHERE table_schema = 'public' AND table_name = :table_name
+                """), {"table_name": table_name})
+                return result.fetchone() is not None
                 
             elif db_type == 'mysql':
                 result = await conn.execute(text("""
-                    SELECT CONSTRAINT_NAME 
-                    FROM information_schema.TABLE_CONSTRAINTS 
-                    WHERE TABLE_NAME = 'subscriptions' 
-                    AND CONSTRAINT_TYPE = 'UNIQUE'
-                    AND CONSTRAINT_NAME LIKE '%user_id%'
-                """))
-                constraints = result.fetchall()
-                return len(constraints) > 0
+                    SELECT table_name FROM information_schema.tables 
+                    WHERE table_schema = DATABASE() AND table_name = :table_name
+                """), {"table_name": table_name})
+                return result.fetchone() is not None
                 
             return False
             
     except Exception as e:
-        logger.error(f"Ошибка проверки ограничения уникальности: {e}")
+        logger.error(f"Ошибка проверки существования таблицы {table_name}: {e}")
         return False
 
 async def check_column_exists(table_name: str, column_name: str) -> bool:
-    """Проверяет, существует ли колонка в таблице"""
     try:
         async with engine.begin() as conn:
             db_type = await get_database_type()
@@ -93,8 +74,122 @@ async def check_column_exists(table_name: str, column_name: str) -> bool:
         logger.error(f"Ошибка проверки существования колонки {column_name}: {e}")
         return False
 
+async def create_yookassa_payments_table():
+    
+    table_exists = await check_table_exists('yookassa_payments')
+    if table_exists:
+        logger.info("Таблица yookassa_payments уже существует")
+        return True
+    
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE yookassa_payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    yookassa_payment_id VARCHAR(255) UNIQUE NOT NULL,
+                    amount_kopeks INTEGER NOT NULL,
+                    currency VARCHAR(3) DEFAULT 'RUB' NOT NULL,
+                    description TEXT NULL,
+                    status VARCHAR(50) NOT NULL,
+                    is_paid BOOLEAN DEFAULT 0,
+                    is_captured BOOLEAN DEFAULT 0,
+                    confirmation_url TEXT NULL,
+                    metadata_json TEXT NULL,
+                    transaction_id INTEGER NULL,
+                    payment_method_type VARCHAR(50) NULL,
+                    refundable BOOLEAN DEFAULT 0,
+                    test_mode BOOLEAN DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    yookassa_created_at DATETIME NULL,
+                    captured_at DATETIME NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+                
+                CREATE INDEX idx_yookassa_payments_user_id ON yookassa_payments(user_id);
+                CREATE INDEX idx_yookassa_payments_yookassa_id ON yookassa_payments(yookassa_payment_id);
+                CREATE INDEX idx_yookassa_payments_status ON yookassa_payments(status);
+                """
+                
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE yookassa_payments (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    yookassa_payment_id VARCHAR(255) UNIQUE NOT NULL,
+                    amount_kopeks INTEGER NOT NULL,
+                    currency VARCHAR(3) DEFAULT 'RUB' NOT NULL,
+                    description TEXT NULL,
+                    status VARCHAR(50) NOT NULL,
+                    is_paid BOOLEAN DEFAULT FALSE,
+                    is_captured BOOLEAN DEFAULT FALSE,
+                    confirmation_url TEXT NULL,
+                    metadata_json JSONB NULL,
+                    transaction_id INTEGER NULL,
+                    payment_method_type VARCHAR(50) NULL,
+                    refundable BOOLEAN DEFAULT FALSE,
+                    test_mode BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    yookassa_created_at TIMESTAMP NULL,
+                    captured_at TIMESTAMP NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+                
+                CREATE INDEX idx_yookassa_payments_user_id ON yookassa_payments(user_id);
+                CREATE INDEX idx_yookassa_payments_yookassa_id ON yookassa_payments(yookassa_payment_id);
+                CREATE INDEX idx_yookassa_payments_status ON yookassa_payments(status);
+                """
+                
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE yookassa_payments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    yookassa_payment_id VARCHAR(255) UNIQUE NOT NULL,
+                    amount_kopeks INT NOT NULL,
+                    currency VARCHAR(3) DEFAULT 'RUB' NOT NULL,
+                    description TEXT NULL,
+                    status VARCHAR(50) NOT NULL,
+                    is_paid BOOLEAN DEFAULT FALSE,
+                    is_captured BOOLEAN DEFAULT FALSE,
+                    confirmation_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    transaction_id INT NULL,
+                    payment_method_type VARCHAR(50) NULL,
+                    refundable BOOLEAN DEFAULT FALSE,
+                    test_mode BOOLEAN DEFAULT FALSE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    yookassa_created_at DATETIME NULL,
+                    captured_at DATETIME NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+                
+                CREATE INDEX idx_yookassa_payments_user_id ON yookassa_payments(user_id);
+                CREATE INDEX idx_yookassa_payments_yookassa_id ON yookassa_payments(yookassa_payment_id);
+                CREATE INDEX idx_yookassa_payments_status ON yookassa_payments(status);
+                """
+            else:
+                logger.error(f"Неподдерживаемый тип БД для создания таблицы: {db_type}")
+                return False
+            
+            await conn.execute(text(create_sql))
+            logger.info("Таблица yookassa_payments успешно создана")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы yookassa_payments: {e}")
+        return False
+
 async def add_remnawave_v2_columns():
-    """Добавляет колонки для поддержки RemnaWave API v2.1.5"""
     
     columns_to_add = {
         'lifetime_used_traffic_bytes': 'BIGINT DEFAULT 0',
@@ -147,7 +242,6 @@ async def add_remnawave_v2_columns():
         return 0
 
 async def fix_subscription_duplicates_universal():
-    """Универсальная функция очистки дубликатов для разных типов БД"""
     
     async with engine.begin() as conn:
         db_type = await get_database_type()
@@ -227,15 +321,21 @@ async def fix_subscription_duplicates_universal():
             raise
 
 async def run_universal_migration():
-    """Запускает универсальную миграцию"""
     
-    logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ПОДПИСОК ===")
+    logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
     try:
         db_type = await get_database_type()
         logger.info(f"Тип базы данных: {db_type}")
         
         await add_remnawave_v2_columns()
+        
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ YOOKASSA ===")
+        yookassa_created = await create_yookassa_payments_table()
+        if yookassa_created:
+            logger.info("✅ Таблица YooKassa payments готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей YooKassa payments")
         
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))

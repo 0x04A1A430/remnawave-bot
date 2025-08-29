@@ -73,6 +73,19 @@ class Settings(BaseSettings):
     TRIBUTE_WEBHOOK_PATH: str = "/tribute-webhook"
     TRIBUTE_WEBHOOK_PORT: int = 8081
 
+    # === НОВЫЕ НАСТРОЙКИ YOOKASSA ===
+    YOOKASSA_ENABLED: bool = False
+    YOOKASSA_SHOP_ID: Optional[str] = None
+    YOOKASSA_SECRET_KEY: Optional[str] = None
+    YOOKASSA_RETURN_URL: Optional[str] = None
+    YOOKASSA_DEFAULT_RECEIPT_EMAIL: Optional[str] = None
+    YOOKASSA_VAT_CODE: int = 1  # 1 - НДС не облагается
+    YOOKASSA_PAYMENT_MODE: str = "full_payment"  # полная оплата
+    YOOKASSA_PAYMENT_SUBJECT: str = "service"  # услуга
+    YOOKASSA_WEBHOOK_PATH: str = "/yookassa-webhook"
+    YOOKASSA_WEBHOOK_PORT: int = 8082
+    YOOKASSA_WEBHOOK_SECRET: Optional[str] = None
+
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
     
@@ -173,6 +186,19 @@ class Settings(BaseSettings):
     
     def get_fixed_traffic_limit(self) -> int:
         return self.FIXED_TRAFFIC_LIMIT_GB
+    
+    # === НОВЫЕ МЕТОДЫ ДЛЯ YOOKASSA ===
+    def is_yookassa_enabled(self) -> bool:
+        return (self.YOOKASSA_ENABLED and 
+                self.YOOKASSA_SHOP_ID is not None and 
+                self.YOOKASSA_SECRET_KEY is not None)
+    
+    def get_yookassa_return_url(self) -> str:
+        if self.YOOKASSA_RETURN_URL:
+            return self.YOOKASSA_RETURN_URL
+        elif self.WEBHOOK_URL:
+            return f"{self.WEBHOOK_URL}/payment-success"
+        return "https://t.me/"
     
     model_config = {
         "env_file": ".env",
