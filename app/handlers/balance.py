@@ -334,8 +334,8 @@ async def process_topup_amount(
         if payment_method == "stars":
             await process_stars_payment_amount(message, db_user, amount_kopeks, state)
         elif payment_method == "yookassa":
-            from app.database.database import async_session_maker
-            async with async_session_maker() as db:
+            from app.database.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
                 await process_yookassa_payment_amount(message, db_user, db, amount_kopeks, state)
         else:
             await message.answer("Неизвестный способ оплаты")
