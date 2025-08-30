@@ -123,9 +123,10 @@ async def update_user(
 
 async def add_user_balance(
     db: AsyncSession,
-    user_id: int,
-    amount_kopeks: int
-) -> bool:
+    user: User,
+    amount_kopeks: int,
+    description: str
+) -> User:
     """
     Простое добавление средств к балансу пользователя.
     НЕ создает транзакцию - это должно делаться отдельно!
