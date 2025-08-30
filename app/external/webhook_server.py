@@ -1,4 +1,5 @@
 import logging
+import json
 from typing import Optional
 
 from aiohttp import web
@@ -17,7 +18,7 @@ class WebhookServer:
         self.app = None
         self.runner = None
         self.site = None
-        self.tribute_service = TributeService()
+        self.tribute_service = TributeService(bot)
     
     async def create_app(self) -> web.Application:
         
@@ -93,6 +94,7 @@ class WebhookServer:
             logger.error(f"Ошибка остановки Tribute webhook сервера: {e}")
     
     async def _options_handler(self, request: web.Request) -> web.Response:
+        """Обработчик OPTIONS запросов для CORS"""
         return web.Response(
             status=200,
             headers={
@@ -120,8 +122,28 @@ class WebhookServer:
             payload = raw_body.decode('utf-8')
             logger.info(f"📄 Payload: {payload}")
             
+            try:
+                webhook_data = json.loads(payload)
+                logger.info(f"📊 Распарсенные данные: {webhook_data}")
+            except json.JSONDecodeError as e:
+                logger.error(f"❌ Ошибка парсинга JSON: {e}")
+                return web.json_response(
+                    {"status": "error", "reason": "invalid_json"},
+                    status=400
+                )
+            
             signature = request.headers.get('X-Tribute-Signature')
             logger.info(f"🔐 Signature: {signature}")
+            
+            if signature and settings.TRIBUTE_WEBHOOK_SECRET:
+                from app.external.tribute import TributeService as TributeAPI
+                tribute_api = TributeAPI()
+                if not tribute_api.verify_webhook_signature(payload, signature):
+                    logger.error("❌ Неверная подпись Tribute webhook")
+                    return web.json_response(
+                        {"status": "error", "reason": "invalid_signature"},
+                        status=401
+                    )
             
             result = await self.tribute_service.process_webhook(payload, signature)
             
