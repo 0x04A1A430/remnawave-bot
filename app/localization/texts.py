@@ -526,3 +526,20 @@ def clear_rules_cache():
     global _cached_rules
     _cached_rules.clear()
     print("✅ Кеш правил очищен")
+
+def get_text(key: str, language: str = "ru") -> str:
+    texts = get_texts(language)
+    
+    text_mapping = {
+        "payment_success_tribute": getattr(texts, "PAYMENT_SUCCESS_TRIBUTE", 
+            "✅ Пополнение через Tribute выполнено! Сумма: {amount} ₽, ID: {payment_id}"),
+        "payment_success_yookassa": getattr(texts, "PAYMENT_SUCCESS_YOOKASSA", 
+            "✅ Пополнение через YooKassa выполнено! Сумма: {amount} ₽, ID: {payment_id}"),
+        "welcome": texts.WELCOME,
+        "back": texts.BACK,
+        "cancel": texts.CANCEL,
+        "confirm": texts.CONFIRM,
+        "continue": texts.CONTINUE,
+    }
+    
+    return text_mapping.get(key, f"Текст для ключа '{key}' не найден")
