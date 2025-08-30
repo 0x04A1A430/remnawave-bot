@@ -24,26 +24,6 @@ class WebhookServer:
         
         self.app = web.Application()
         
-        async def logging_middleware(request, handler):
-            start_time = request.loop.time()
-            
-            try:
-                response = await handler(request)
-                process_time = request.loop.time() - start_time
-                
-                logger.info(f"Tribute webhook {request.method} {request.path_qs} "
-                           f"-> {response.status} ({process_time:.3f}s)")
-                
-                return response
-            
-            except Exception as e:
-                process_time = request.loop.time() - start_time
-                logger.error(f"Tribute webhook {request.method} {request.path_qs} "
-                            f"-> ERROR ({process_time:.3f}s): {e}")
-                raise
-        
-        self.app.middlewares.append(logging_middleware)
-        
         self.app.router.add_post(settings.TRIBUTE_WEBHOOK_PATH, self._tribute_webhook_handler)
         self.app.router.add_get('/health', self._health_check)
         
@@ -94,7 +74,6 @@ class WebhookServer:
             logger.error(f"Ошибка остановки Tribute webhook сервера: {e}")
     
     async def _options_handler(self, request: web.Request) -> web.Response:
-        """Обработчик OPTIONS запросов для CORS"""
         return web.Response(
             status=200,
             headers={
