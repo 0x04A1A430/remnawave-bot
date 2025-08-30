@@ -1,3 +1,4 @@
+
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -26,8 +27,9 @@ RUN useradd --create-home --shell /bin/bash app
 RUN chown -R app:app /app
 USER app
 
-# Expose port (if needed for webhooks)
-EXPOSE 8000
+# Expose webhook ports для платежных систем
+EXPOSE 8081
+EXPOSE 8082
 
 # Run the application
 CMD ["python", "main.py"]
