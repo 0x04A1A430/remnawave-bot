@@ -141,14 +141,14 @@ class PaymentService:
     ) -> bool:
         
         try:
-            logger.info(f"Обработка Tribute платежа: user_id={user_id}, amount={amount_kopeks} коп., payment_id={payment_id}")
+            logger.info(f"Обработка Tribute платежа: telegram_id={user_id}, amount={amount_kopeks} коп., payment_id={payment_id}")
             
             from app.database.crud.user import UserCRUD
             user_crud = UserCRUD()
             
-            user = await user_crud.get_user(db, user_id)
+            user = await user_crud.get_user_by_telegram_id(db, user_id)
             if not user:
-                logger.error(f"Пользователь {user_id} не найден для обработки Tribute платежа")
+                logger.error(f"Пользователь с telegram_id {user_id} не найден для обработки Tribute платежа")
                 return False
             
             from app.database.crud.transaction import TransactionCRUD
@@ -163,9 +163,9 @@ class PaymentService:
                 return True
             
             transaction_data = {
-                "user_id": user_id,
+                "user_id": user.id, 
                 "amount_kopeks": amount_kopeks,
-                "transaction_type": "top_up",
+                "transaction_type": "deposit", 
                 "status": "completed",
                 "external_id": f"tribute_{payment_id}",
                 "payment_system": "tribute",
@@ -178,10 +178,10 @@ class PaymentService:
                 logger.error(f"Не удалось создать транзакцию для Tribute платежа {payment_id}")
                 return False
             
-            success = await user_crud.add_balance(db, user_id, amount_kopeks)
+            success = await user_crud.add_balance(db, user.id, amount_kopeks)
             
             if not success:
-                logger.error(f"Не удалось пополнить баланс пользователя {user_id}")
+                logger.error(f"Не удалось пополнить баланс пользователя {user.id}")
                 await transaction_crud.update_transaction_status(db, transaction.id, "failed")
                 return False
             
@@ -195,12 +195,12 @@ class PaymentService:
                 )
                 
                 if hasattr(self, 'bot') and self.bot:
-                    await self.bot.send_message(user_id, message)
+                    await self.bot.send_message(user.telegram_id, message)
                 
             except Exception as e:
-                logger.warning(f"Не удалось отправить уведомление о платеже пользователю {user_id}: {e}")
+                logger.warning(f"Не удалось отправить уведомление о платеже пользователю {user.telegram_id}: {e}")
             
-            logger.info(f"✅ Успешно обработан Tribute платеж {payment_id} для пользователя {user_id}")
+            logger.info(f"✅ Успешно обработан Tribute платеж {payment_id} для пользователя {user.telegram_id}")
             return True
             
         except Exception as e:
