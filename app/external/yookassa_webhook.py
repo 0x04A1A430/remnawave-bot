@@ -43,17 +43,19 @@ class YooKassaWebhookHandler:
             
             logger.info(f"📄 Body: {body}")
             
-            if hasattr(settings, 'YOOKASSA_WEBHOOK_SECRET') and settings.YOOKASSA_WEBHOOK_SECRET:
-                signature = request.headers.get('X-YooKassa-Signature')
+            if settings.YOOKASSA_WEBHOOK_SECRET:
+                signature = request.headers.get('Signature') or request.headers.get('X-YooKassa-Signature')
                 if not signature:
-                    logger.warning("⚠️ Webhook без подписи")
-                    return web.Response(status=400, text="Missing signature")
-                
-                if not YooKassaWebhookHandler.verify_webhook_signature(body, signature, settings.YOOKASSA_WEBHOOK_SECRET):
-                    logger.error("❌ Неверная подпись webhook")
-                    return web.Response(status=400, text="Invalid signature")
+                    logger.warning("⚠️ Webhook без подписи, но секрет настроен")
                 else:
-                    logger.info("✅ Подпись webhook проверена успешно")
+                    logger.info(f"🔐 Получена подпись: {signature}")
+                    if not YooKassaWebhookHandler.verify_webhook_signature(body, signature, settings.YOOKASSA_WEBHOOK_SECRET):
+                        logger.error("❌ Неверная подпись webhook")
+                        return web.Response(status=400, text="Invalid signature")
+                    else:
+                        logger.info("✅ Подпись webhook проверена успешно")
+            else:
+                logger.info("ℹ️ Проверка подписи отключена (YOOKASSA_WEBHOOK_SECRET не настроен)")
             
             try:
                 webhook_data = json.loads(body)
@@ -92,7 +94,7 @@ class YooKassaWebhookHandler:
         webhook_path = settings.YOOKASSA_WEBHOOK_PATH
         app.router.add_post(webhook_path, self.handle_webhook)
         app.router.add_get(webhook_path, self._get_handler) 
-        app.router.add_options(webhook_path, self._options_handler)  
+        app.router.add_options(webhook_path, self._options_handler) 
         
         logger.info(f"✅ Настроен YooKassa webhook на пути: POST {webhook_path}")
     
