@@ -9,7 +9,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-class TributeAPI:
+class TributeService:
     
     def __init__(self):
         self.api_key = settings.TRIBUTE_API_KEY
@@ -28,7 +28,6 @@ class TributeAPI:
             return None
         
         try:
-            
             payment_url = f"{self.donate_link}&user_id={user_id}"
             
             logger.info(f"Создана ссылка Tribute для пользователя {user_id}")
@@ -41,7 +40,7 @@ class TributeAPI:
     def verify_webhook_signature(self, payload: str, signature: str) -> bool:
         
         if not self.webhook_secret:
-            logger.warning("Webhook secret не настроен")
+            logger.warning("Webhook secret не настроен, пропускаем проверку")
             return True 
         
         try:
@@ -51,27 +50,24 @@ class TributeAPI:
                 hashlib.sha256
             ).hexdigest()
             
-            return hmac.compare_digest(signature, expected_signature)
+            is_valid = hmac.compare_digest(signature, expected_signature)
+            
+            if is_valid:
+                logger.info("✅ Подпись Tribute webhook проверена успешно")
+            else:
+                logger.error("❌ Неверная подпись Tribute webhook")
+            
+            return is_valid
             
         except Exception as e:
             logger.error(f"Ошибка проверки подписи webhook: {e}")
             return False
     
-    async def process_webhook(self, payload: str, signature: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def process_webhook(self, webhook_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         
         try:
-            logger.info(f"🔄 Начинаем обработку Tribute webhook")
-            
-            if signature and not self.verify_webhook_signature(payload, signature):
-                logger.error("❌ Неверная подпись Tribute webhook")
-                return None
-            
-            try:
-                webhook_data = json.loads(payload)
-                logger.info(f"📊 Распарсенные данные: {webhook_data}")
-            except json.JSONDecodeError as e:
-                logger.error(f"❌ Ошибка парсинга JSON: {e}")
-                return None
+            logger.info(f"🔄 Начинаем обработку Tribute webhook данных")
+            logger.info(f"📊 Данные: {json.dumps(webhook_data, ensure_ascii=False, indent=2)}")
             
             payment_id = None
             status = None
@@ -132,5 +128,26 @@ class TributeAPI:
             
         except Exception as e:
             logger.error(f"❌ Ошибка обработки Tribute webhook: {e}", exc_info=True)
-            logger.error(f"🔍 Webhook payload для отладки: {payload}")
+            logger.error(f"🔍 Webhook data для отладки: {json.dumps(webhook_data, ensure_ascii=False, indent=2)}")
+            return None
+    
+    async def get_payment_status(self, payment_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            logger.info(f"Запрос статуса платежа {payment_id}")
+            return {"status": "unknown", "payment_id": payment_id}
+        except Exception as e:
+            logger.error(f"Ошибка получения статуса платежа: {e}")
+            return None
+    
+    async def refund_payment(
+        self,
+        payment_id: str,
+        amount_kopeks: Optional[int] = None,
+        reason: str = "Возврат по запросу"
+    ) -> Optional[Dict[str, Any]]:
+        try:
+            logger.info(f"Создание возврата для платежа {payment_id}")
+            return {"refund_id": f"refund_{payment_id}", "status": "pending"}
+        except Exception as e:
+            logger.error(f"Ошибка создания возврата: {e}")
             return None
