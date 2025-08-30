@@ -25,7 +25,8 @@ def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=texts.ADMIN_REMNAWAVE, callback_data="admin_remnawave")
         ],
         [
-            InlineKeyboardButton(text=texts.ADMIN_STATISTICS, callback_data="admin_statistics")
+            InlineKeyboardButton(text=texts.ADMIN_STATISTICS, callback_data="admin_statistics"),
+            InlineKeyboardButton(text="🔧 Техработы", callback_data="maintenance_panel")
         ],
         [
             InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
@@ -573,5 +574,28 @@ def get_admin_pagination_keyboard(
     keyboard.append([
         InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)
     ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_maintenance_keyboard(language: str = "ru", is_active: bool = False, monitoring_active: bool = False) -> InlineKeyboardMarkup:
+    """Клавиатура для управления техработами"""
+    
+    if language == "en":
+        toggle_text = "🔴 Disable maintenance" if is_active else "🔧 Enable maintenance"
+        monitoring_text = "⏹️ Stop monitoring" if monitoring_active else "🔄 Start monitoring"
+        check_api_text = "🔍 Check API"
+        back_text = "⬅️ Back to admin"
+    else:
+        toggle_text = "🔴 Выключить техработы" if is_active else "🔧 Включить техработы"
+        monitoring_text = "⏹️ Остановить мониторинг" if monitoring_active else "🔄 Запустить мониторинг"
+        check_api_text = "🔍 Проверить API"
+        back_text = "⬅️ Назад в админку"
+    
+    keyboard = [
+        [InlineKeyboardButton(text=toggle_text, callback_data="maintenance_toggle")],
+        [InlineKeyboardButton(text=monitoring_text, callback_data="maintenance_monitoring")],
+        [InlineKeyboardButton(text=check_api_text, callback_data="maintenance_check_api")],
+        [InlineKeyboardButton(text=back_text, callback_data="admin_panel")]
+    ]
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
