@@ -12,7 +12,9 @@ from app.config import settings
 from app.database.database import init_db
 from app.services.monitoring_service import monitoring_service
 from app.services.maintenance_service import maintenance_service
+from app.services.payment_service import PaymentService
 from app.external.webhook_server import WebhookServer
+from app.external.yookassa_webhook import start_yookassa_webhook_server
 from app.database.universal_migration import run_universal_migration
 
 
@@ -44,6 +46,7 @@ async def main():
     signal.signal(signal.SIGTERM, killer.exit_gracefully)
     
     webhook_server = None
+    yookassa_server_task = None
     monitoring_task = None
     maintenance_task = None
     polling_task = None
@@ -75,12 +78,22 @@ async def main():
         
         monitoring_service.bot = bot
         
+        payment_service = PaymentService()
+        
         if settings.TRIBUTE_ENABLED:
-            logger.info("🌐 Запуск webhook сервера для Tribute...")
+            logger.info("🌐 Запуск Tribute webhook сервера...")
             webhook_server = WebhookServer(bot)
             await webhook_server.start()
         else:
             logger.info("ℹ️ Tribute отключен, webhook сервер не запускается")
+        
+        if settings.is_yookassa_enabled():
+            logger.info("💳 Запуск YooKassa webhook сервера...")
+            yookassa_server_task = asyncio.create_task(
+                start_yookassa_webhook_server(payment_service)
+            )
+        else:
+            logger.info("ℹ️ YooKassa отключена, webhook сервер не запускается")
         
         logger.info("🔍 Запуск службы мониторинга...")
         monitoring_task = asyncio.create_task(monitoring_service.start_monitoring())
@@ -91,9 +104,26 @@ async def main():
         logger.info("🔄 Запуск polling...")
         polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=True))
         
+        logger.info("=" * 50)
+        logger.info("🎯 Активные webhook endpoints:")
+        if settings.TRIBUTE_ENABLED:
+            logger.info(f"   Tribute: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.TRIBUTE_WEBHOOK_PATH}")
+        if settings.is_yookassa_enabled():
+            logger.info(f"   YooKassa: {settings.WEBHOOK_URL}:{settings.YOOKASSA_WEBHOOK_PORT}{settings.YOOKASSA_WEBHOOK_PATH}")
+        logger.info("=" * 50)
+        
         try:
             while not killer.exit:
                 await asyncio.sleep(1)
+                
+                if yookassa_server_task and yookassa_server_task.done():
+                    exception = yookassa_server_task.exception()
+                    if exception:
+                        logger.error(f"YooKassa webhook сервер завершился с ошибкой: {exception}")
+                        logger.info("🔄 Перезапуск YooKassa webhook сервера...")
+                        yookassa_server_task = asyncio.create_task(
+                            start_yookassa_webhook_server(payment_service)
+                        )
                 
                 if monitoring_task.done():
                     exception = monitoring_task.exception()
@@ -123,6 +153,14 @@ async def main():
     finally:
         logger.info("🛑 Начинается корректное завершение работы...")
         
+        if yookassa_server_task and not yookassa_server_task.done():
+            logger.info("⏹️ Остановка YooKassa webhook сервера...")
+            yookassa_server_task.cancel()
+            try:
+                await yookassa_server_task
+            except asyncio.CancelledError:
+                pass
+        
         if monitoring_task and not monitoring_task.done():
             logger.info("⏹️ Остановка службы мониторинга...")
             monitoring_service.stop_monitoring()
@@ -150,7 +188,7 @@ async def main():
                 pass
         
         if webhook_server:
-            logger.info("⏹️ Остановка webhook сервера...")
+            logger.info("⏹️ Остановка Tribute webhook сервера...")
             await webhook_server.stop()
         
         if 'bot' in locals():
