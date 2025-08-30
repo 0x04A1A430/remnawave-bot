@@ -89,50 +89,92 @@ docker compose logs -f bot
 <summary>🔧 Полная конфигурация .env</summary>
 
 ```env
-# 🏷️ Основные настройки
-NODE_ENV=production
-DEBUG=false
-LOG_LEVEL=INFO
+# TELEGRAM BOT CONFIGURATION
+BOT_TOKEN=
+ADMIN_IDS=
+SUPPORT_USERNAME=
 
-# 🗄️ База данных
-POSTGRES_DB=bedolaga_bot
-POSTGRES_USER=bedolaga_user
-POSTGRES_PASSWORD=secure_password_123
-POSTGRES_PORT=5432
-DATABASE_URL=postgresql+asyncpg://bedolaga_user:secure_password_123@postgres:5432/bedolaga_bot
+# DATABASE CONFIGURATION
+DATABASE_URL=sqlite+aiosqlite:///./bot.db
+REDIS_URL=redis://localhost:6379/0
 
-# ⚡ Redis кеш
-REDIS_PASSWORD=redis_password_123
-REDIS_PORT=6379
-REDIS_URL=redis://:redis_password_123@redis:6379/0
+# REMNAWAVE API CONFIGURATION
+REMNAWAVE_API_URL=
+REMNAWAVE_API_KEY=
 
-# 🤖 Telegram Bot
-BOT_TOKEN=your_bot_token_here
-ADMIN_IDS=123456789,987654321
-SUPPORT_USERNAME=@your_support
+# === NEW: Traffic Selection Mode Settings ===
+# Режим выбора трафика:
+# "selectable" - пользователи выбирают пакеты трафика (по умолчанию)
+# "fixed" - фиксированный лимит трафика для всех подписок, доступно 5/10/25/50/100/250/0 (0 безлимит) гб 
+TRAFFIC_SELECTION_MODE=selectable
 
-# 🔗 Remnawave API
-REMNAWAVE_API_URL=https://your-panel.com
-REMNAWAVE_API_KEY=your_jwt_token_here
+# Фиксированный лимит трафика в ГБ (используется только в режиме "fixed")
+# 0 = безлимит
+# для "fixed" обязательно должы быть проставлены цены на пакеты 5/10/25/50/100/250/0 можно постать 0 руб - будет беслпатно
+FIXED_TRAFFIC_LIMIT_GB=0
 
-# 🌐 Webhook настройки
-WEBHOOK_DOMAIN=your-domain.com
-WEBHOOK_PORT=8081
-WEBHOOK_URL=https://your-domain.com
-WEBHOOK_PATH=/webhook
+# TRIAL SUBSCRIPTION SETTINGS
+TRIAL_DURATION_DAYS=3
+TRIAL_TRAFFIC_LIMIT_GB=10
+TRIAL_DEVICE_LIMIT=2
+TRIAL_SQUAD_UUID=
+DEFAULT_TRAFFIC_RESET_STRATEGY=MONTH
 
-# ⭐ Telegram Stars
+# SUBSCRIPTION PRICING (в копейках для точности)
+BASE_SUBSCRIPTION_PRICE=50000
+
+PRICE_14_DAYS=5000
+PRICE_30_DAYS=9900  
+PRICE_60_DAYS=18900
+PRICE_90_DAYS=26900
+PRICE_180_DAYS=49900
+PRICE_360_DAYS=89900
+
+PRICE_TRAFFIC_5GB=2000
+PRICE_TRAFFIC_10GB=4000
+PRICE_TRAFFIC_25GB=6000
+PRICE_TRAFFIC_50GB=10000
+PRICE_TRAFFIC_100GB=15000
+PRICE_TRAFFIC_250GB=20000
+PRICE_TRAFFIC_UNLIMITED=25000
+
+PRICE_PER_DEVICE=5000
+
+# REFERRAL SYSTEM SETTINGS
+REFERRAL_REGISTRATION_REWARD=5000
+REFERRED_USER_REWARD=10000
+REFERRAL_COMMISSION_PERCENT=25
+
+# Режим работы кнопки "Подключиться"
+# guide - открывает гайд подключения (режим 1)
+# miniapp_subscription - открывает ссылку подписки в мини-приложении (режим 2)
+# miniapp_custom - открывает заданную ссылку в мини-приложении (режим 3)
+CONNECT_BUTTON_MODE=miniapp_subscription
+# URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
+# MINIAPP_CUSTOM_URL=
+
+# AUTO-PAYMENT SETTINGS
+AUTOPAY_WARNING_DAYS=3,1
+
+# MONITORING SETTINGS
+MONITORING_INTERVAL=60
+INACTIVE_USER_DELETE_MONTHS=3
+
+TRIAL_WARNING_HOURS=2
+ENABLE_NOTIFICATIONS=true
+NOTIFICATION_RETRY_ATTEMPTS=3
+MONITORING_LOGS_RETENTION_DAYS=30
+
+# PAYMENT SYSTEMS
 TELEGRAM_STARS_ENABLED=true
-
-# 💳 Tribute платежи
-TRIBUTE_ENABLED=true
-TRIBUTE_API_KEY=your_tribute_api_key
+TRIBUTE_ENABLED=false
+TRIBUTE_API_KEY=
+TRIBUTE_WEBHOOK_SECRET=your_webhook_secret
 TRIBUTE_DONATE_LINK=https://t.me/tribute/app?startapp=XXXX
 TRIBUTE_WEBHOOK_PATH=/tribute-webhook
 TRIBUTE_WEBHOOK_PORT=8081
-TRIBUTE_WEBHOOK_SECRET=your_webhook_secret
 
-# 💳 YOOKASSA 
+# === НОВЫЕ НАСТРОЙКИ YOOKASSA ===
 # Включение/выключение YooKassa
 YOOKASSA_ENABLED=false
 
@@ -187,65 +229,23 @@ YOOKASSA_WEBHOOK_PATH=/yookassa-webhook
 YOOKASSA_WEBHOOK_PORT=8082
 YOOKASSA_WEBHOOK_SECRET=ваш_секретный_ключ_для_webhook
 
-# 🚀 Режим работы кнопки "Подключиться"
-# guide - открывает гайд подключения c настройками и парамтерами из app-config.json (режим 1)
-# miniapp_subscription - открывает ссылку подписки в мини-приложении (режим 2)
-# miniapp_custom - открывает заданную ссылку в мини-приложении (режим 3)
-CONNECT_BUTTON_MODE=miniapp_subscription
-# URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
-# MINIAPP_CUSTOM_URL=
+WEBHOOK_URL=https://example.com
+WEBHOOK_PATH=/webhook
 
-# 🎛️ === NEW: Traffic Selection Mode Settings ===
-# Режим выбора трафика:
-# "selectable" - пользователи выбирают пакеты трафика (по умолчанию)
-# "fixed" - фиксированный лимит трафика для всех подписок(БЕЗ ШАГА ВЫБОРА ПАКЕТА ТРАФИКА ВО ВРЕМЯ ОФОРМЛЕНИЯ ПОДПИСКИ), доступно 5/10/25/50/100/250/0 (0 безлимит) гб 
-# Фиксированный лимит трафика в ГБ (используется только в режиме "fixed")
-# 0 = безлимит
-# для "fixed" обязательно должы быть проставлены цены на пакеты 5/10/25/50/100/250/0 можно постать 0 руб - будет беслпатно
-TRAFFIC_SELECTION_MODE=selectable
-FIXED_TRAFFIC_LIMIT_GB=0
+# LOCALIZATION
+DEFAULT_LANGUAGE=ru
+AVAILABLE_LANGUAGES=ru
 
-# 🎁 Триал настройки
-TRIAL_ENABLED=true
-TRIAL_DURATION_DAYS=3
-TRIAL_TRAFFIC_LIMIT_GB=10
-TRIAL_DEVICE_LIMIT=2
-TRIAL_SQUAD_UUID=your_trial_squad_uuid
+# LOGGING
+LOG_LEVEL=INFO
+LOG_FILE=/tmp/bot.log
 
-# 💰 Ценообразование (в копейках)
-BASE_SUBSCRIPTION_PRICE=50000
-PRICE_14_DAYS=5000
-PRICE_30_DAYS=9900
-PRICE_60_DAYS=18900
-PRICE_90_DAYS=26900
-PRICE_180_DAYS=49900
-PRICE_360_DAYS=89900
+# DEVELOPMENT
+DEBUG=false
 
-PRICE_TRAFFIC_5GB=2000
-PRICE_TRAFFIC_10GB=4000
-PRICE_TRAFFIC_25GB=6000
-PRICE_TRAFFIC_50GB=10000
-PRICE_TRAFFIC_100GB=15000
-PRICE_TRAFFIC_250GB=20000
-PRICE_TRAFFIC_UNLIMITED=25000
-
-PRICE_PER_DEVICE=5000
-
-# 🤝 Реферальная система
-REFERRAL_REGISTRATION_REWARD=5000
-REFERRED_USER_REWARD=2500
-REFERRAL_COMMISSION_PERCENT=10
-
-# 🔍 Мониторинг
-MONITORING_INTERVAL=60
-ENABLE_NOTIFICATIONS=true
-AUTOPAY_WARNING_DAYS=3,1
-MONITORING_LOGS_RETENTION_DAYS=30
-INACTIVE_USER_DELETE_MONTHS=3
-
-# 📊 Опционально для мониторинга
-GRAFANA_USER=admin
-GRAFANA_PASSWORD=admin123
+MAINTENANCE_CHECK_INTERVAL=30
+MAINTENANCE_AUTO_ENABLE=true
+MAINTENANCE_MESSAGE="Ведутся технические работы"
 ```
 
 </details>
