@@ -35,12 +35,14 @@ class MaintenanceService:
         return self._status
     
     def is_maintenance_active(self) -> bool:
+        """Проверяет, активен ли режим техработ"""
         return self._status.is_active
     
     def get_maintenance_message(self) -> str:
+        """Получает сообщение о техработах"""
         if self._status.auto_enabled:
             return f"""
-🔧 Технические работы!
+🔧 Технические работы
 
 Сервис временно недоступен из-за проблем с подключением к серверам.
 
@@ -65,6 +67,10 @@ class MaintenanceService:
             await self._save_status_to_cache()
             
             logger.warning(f"🔧 Режим техработ ВКЛЮЧЕН. Причина: {self._status.reason}")
+            
+            if auto:
+                await self._notify_admins_maintenance_enabled(reason)
+            
             return True
             
         except Exception as e:
@@ -77,6 +83,8 @@ class MaintenanceService:
                 logger.info("Режим техработ уже выключен")
                 return True
             
+            was_auto_enabled = self._status.auto_enabled
+            
             self._status.is_active = False
             self._status.enabled_at = None
             self._status.reason = None
@@ -86,6 +94,10 @@ class MaintenanceService:
             await self._save_status_to_cache()
             
             logger.info("✅ Режим техработ ВЫКЛЮЧЕН")
+            
+            if was_auto_enabled:
+                await self._notify_admins_maintenance_disabled()
+            
             return True
             
         except Exception as e:
@@ -93,6 +105,7 @@ class MaintenanceService:
             return False
     
     async def start_monitoring(self) -> bool:
+        """Запускает мониторинг API RemnaWave"""
         try:
             if self._check_task and not self._check_task.done():
                 logger.warning("Мониторинг уже запущен")
@@ -181,9 +194,10 @@ class MaintenanceService:
                 break
             except Exception as e:
                 logger.error(f"Ошибка в цикле мониторинга: {e}")
-                await asyncio.sleep(30) 
+                await asyncio.sleep(30)  
     
     async def _save_status_to_cache(self):
+        """Сохраняет состояние в кеше"""
         try:
             status_data = {
                 "is_active": self._status.is_active,
