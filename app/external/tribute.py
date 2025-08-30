@@ -57,25 +57,42 @@ class TributeService:
             logger.error(f"Ошибка проверки подписи webhook: {e}")
             return False
     
-    async def process_webhook(self, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def process_webhook(self, payload: str, signature: Optional[str] = None) -> Optional[Dict[str, Any]]:
         
         try:
+            logger.info(f"🔄 Начинаем обработку Tribute webhook")
             
-            payment_id = payload.get("id") or payload.get("payment_id")
-            status = payload.get("status")
-            amount_kopeks = payload.get("amount", 0) 
-            telegram_user_id = payload.get("telegram_user_id") or payload.get("user_id")
+            if signature and not self.verify_webhook_signature(payload, signature):
+                logger.error("❌ Неверная подпись Tribute webhook")
+                return None
             
-            if not payment_id and "payload" in payload:
-                data = payload["payload"]
+            try:
+                webhook_data = json.loads(payload)
+                logger.info(f"📊 Распарсенные данные: {webhook_data}")
+            except json.JSONDecodeError as e:
+                logger.error(f"❌ Ошибка парсинга JSON: {e}")
+                return None
+            
+            payment_id = None
+            status = None
+            amount_kopeks = 0
+            telegram_user_id = None
+            
+            payment_id = webhook_data.get("id") or webhook_data.get("payment_id")
+            status = webhook_data.get("status")
+            amount_kopeks = webhook_data.get("amount", 0) 
+            telegram_user_id = webhook_data.get("telegram_user_id") or webhook_data.get("user_id")
+            
+            if not payment_id and "payload" in webhook_data:
+                data = webhook_data["payload"]
                 payment_id = data.get("id") or data.get("payment_id")
                 status = data.get("status")
                 amount_kopeks = data.get("amount", 0) 
                 telegram_user_id = data.get("telegram_user_id") or data.get("user_id")
             
-            if not payment_id and "name" in payload:
-                event_name = payload.get("name")
-                data = payload.get("payload", {})
+            if not payment_id and "name" in webhook_data:
+                event_name = webhook_data.get("name")
+                data = webhook_data.get("payload", {})
                 payment_id = str(data.get("donation_request_id")) 
                 amount_kopeks = data.get("amount", 0) 
                 telegram_user_id = data.get("telegram_user_id")
@@ -87,22 +104,33 @@ class TributeService:
                 else:
                     status = "unknown"
             
-            logger.info(f"Обработка Tribute webhook: payment_id={payment_id}, status={status}, amount_kopeks={amount_kopeks}, user_id={telegram_user_id}")
+            logger.info(f"📝 Извлеченные данные: payment_id={payment_id}, status={status}, amount_kopeks={amount_kopeks}, user_id={telegram_user_id}")
             
             if not telegram_user_id:
-                logger.error("Не найден telegram_user_id в webhook данных")
+                logger.error("❌ Не найден telegram_user_id в webhook данных")
+                logger.error(f"🔍 Полные данные для отладки: {json.dumps(webhook_data, ensure_ascii=False, indent=2)}")
                 return None
             
-            return {
+            try:
+                telegram_user_id = int(telegram_user_id)
+            except (ValueError, TypeError):
+                logger.error(f"❌ Некорректный telegram_user_id: {telegram_user_id}")
+                return None
+            
+            result = {
                 "event_type": "payment",
                 "payment_id": payment_id or f"tribute_{telegram_user_id}_{amount_kopeks}",
-                "user_id": int(telegram_user_id),
-                "amount_kopeks": amount_kopeks,
+                "user_id": telegram_user_id,
+                "amount_kopeks": int(amount_kopeks) if amount_kopeks else 0,
                 "status": status or "paid",
-                "external_id": f"donation_{payment_id}"
+                "external_id": f"donation_{payment_id or 'unknown'}",
+                "payment_system": "tribute"
             }
             
+            logger.info(f"✅ Tribute webhook обработан успешно: {result}")
+            return result
+            
         except Exception as e:
-            logger.error(f"Ошибка обработки Tribute webhook: {e}")
-            logger.error(f"Webhook payload: {json.dumps(payload, ensure_ascii=False)}")
+            logger.error(f"❌ Ошибка обработки Tribute webhook: {e}", exc_info=True)
+            logger.error(f"🔍 Webhook payload для отладки: {payload}")
             return None
