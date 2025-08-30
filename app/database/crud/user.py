@@ -154,27 +154,27 @@ async def add_user_balance(
         await db.rollback()
         return False
 
-async def add_user_balance_by_id(
+sync def add_user_balance_by_id(
     db: AsyncSession,
-    telegram_id: int, 
+    user_id: int, 
     amount_kopeks: int,
     description: str = "Пополнение баланса"
 ) -> bool:
+    """Пополнить баланс пользователя по ID"""
     try:
-        user = await get_user_by_telegram_id(db, telegram_id)
+        user = await get_user_by_id(db, user_id)
+        
         if not user:
-            logger.error(f"Пользователь с telegram_id {telegram_id} не найден")
+            user = await get_user_by_telegram_id(db, user_id)
+        
+        if not user:
+            logger.error(f"Пользователь с ID {user_id} не найден")
             return False
         
         return await add_user_balance(db, user, amount_kopeks, description)
         
     except Exception as e:
-        logger.error(f"Ошибка пополнения баланса пользователя {telegram_id}: {e}")
-        return False
-        
-    except Exception as e:
-        logger.error(f"❌ Ошибка пополнения баланса пользователя {user_id}: {e}")
-        await db.rollback()
+        logger.error(f"Ошибка пополнения баланса пользователя {user_id}: {e}")
         return False
 
 async def subtract_user_balance(
@@ -356,3 +356,14 @@ async def get_users_statistics(db: AsyncSession) -> dict:
         "new_week": new_week,
         "new_month": new_month
     }
+
+class UserCRUD:
+    
+    async def get_user(self, db: AsyncSession, user_id: int) -> Optional[User]:
+        return await get_user_by_id(db, user_id)
+    
+    async def get_user_by_telegram_id(self, db: AsyncSession, telegram_id: int) -> Optional[User]:
+        return await get_user_by_telegram_id(db, telegram_id)
+    
+    async def add_balance(self, db: AsyncSession, user_id: int, amount_kopeks: int) -> bool:
+        return await add_user_balance_by_id(db, user_id, amount_kopeks)
