@@ -276,3 +276,83 @@ async def get_revenue_by_period(
     )
     
     return [{"date": row.date, "amount_kopeks": row.amount} for row in result]
+
+async def find_tribute_transactions_by_payment_id(
+    db: AsyncSession, 
+    payment_id: str, 
+    user_telegram_id: Optional[int] = None
+) -> List[Transaction]:
+    """Найти все Tribute транзакции по payment_id"""
+    
+    query = select(Transaction).options(selectinload(Transaction.user))
+    
+    conditions = [
+        Transaction.external_id == f"donation_{payment_id}",
+        Transaction.external_id == payment_id,
+        Transaction.external_id.like(f"%{payment_id}%")
+    ]
+    
+    query = query.where(
+        and_(
+            Transaction.payment_method == PaymentMethod.TRIBUTE.value,
+            or_(*conditions)
+        )
+    )
+    
+    if user_telegram_id:
+        from app.database.models import User
+        query = query.join(User).where(User.telegram_id == user_telegram_id)
+    
+    result = await db.execute(query.order_by(Transaction.created_at.desc()))
+    return result.scalars().all()
+
+
+async def check_tribute_payment_duplicate(
+    db: AsyncSession,
+    payment_id: str,
+    amount_kopeks: int,
+    user_telegram_id: int
+) -> Optional[Transaction]:
+    
+    transactions = await find_tribute_transactions_by_payment_id(
+        db, payment_id, user_telegram_id
+    )
+    
+    for transaction in transactions:
+        if (transaction.amount_kopeks == amount_kopeks and 
+            transaction.is_completed and
+            transaction.user.telegram_id == user_telegram_id):
+            return transaction
+    
+    return None
+
+
+async def create_unique_tribute_transaction(
+    db: AsyncSession,
+    user_id: int,
+    payment_id: str,
+    amount_kopeks: int,
+    description: str
+) -> Transaction:
+    """Создать уникальную Tribute транзакцию с защитой от дубликатов"""
+    
+    external_id = f"donation_{payment_id}"
+    
+    existing = await get_transaction_by_external_id(db, external_id, PaymentMethod.TRIBUTE)
+    
+    if existing:
+        timestamp = int(datetime.utcnow().timestamp())
+        external_id = f"donation_{payment_id}_{amount_kopeks}_{timestamp}"
+        
+        logger.info(f"Создан уникальный external_id для избежания дубликатов: {external_id}")
+    
+    return await create_transaction(
+        db=db,
+        user_id=user_id,
+        type=TransactionType.DEPOSIT,
+        amount_kopeks=amount_kopeks,
+        description=description,
+        payment_method=PaymentMethod.TRIBUTE,
+        external_id=external_id,
+        is_completed=True
+    )
