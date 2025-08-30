@@ -125,7 +125,7 @@ async def add_user_balance(
     db: AsyncSession,
     user: User,
     amount_kopeks: int,
-    description: str = "Пополнение баланса"
+    description: str
 ) -> User:
     try:
         result = await db.execute(
