@@ -500,7 +500,7 @@ async def check_yookassa_payment_status(
         emoji = status_emoji.get(payment.status, "❓")
         status = status_text.get(payment.status, "Неизвестно")
         
-        message_text = (f"💳 Статус платежа\n\n"
+        message_text = (f"💳 <b>Статус платежа</b>\n\n"
                        f"🆔 ID: {payment.yookassa_payment_id[:8]}...\n"
                        f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n"
                        f"📊 Статус: {emoji} {status}\n"

@@ -35,14 +35,12 @@ class MaintenanceService:
         return self._status
     
     def is_maintenance_active(self) -> bool:
-        """Проверяет, активен ли режим техработ"""
         return self._status.is_active
     
     def get_maintenance_message(self) -> str:
-        """Получает сообщение о техработах"""
         if self._status.auto_enabled:
             return f"""
-🔧 Технические работы
+🔧 Технические работы!
 
 Сервис временно недоступен из-за проблем с подключением к серверам.
 
@@ -67,10 +65,6 @@ class MaintenanceService:
             await self._save_status_to_cache()
             
             logger.warning(f"🔧 Режим техработ ВКЛЮЧЕН. Причина: {self._status.reason}")
-            
-            if auto:
-                await self._notify_admins_maintenance_enabled(reason)
-            
             return True
             
         except Exception as e:
@@ -83,8 +77,6 @@ class MaintenanceService:
                 logger.info("Режим техработ уже выключен")
                 return True
             
-            was_auto_enabled = self._status.auto_enabled
-            
             self._status.is_active = False
             self._status.enabled_at = None
             self._status.reason = None
@@ -94,10 +86,6 @@ class MaintenanceService:
             await self._save_status_to_cache()
             
             logger.info("✅ Режим техработ ВЫКЛЮЧЕН")
-            
-            if was_auto_enabled:
-                await self._notify_admins_maintenance_disabled()
-            
             return True
             
         except Exception as e:
@@ -105,7 +93,6 @@ class MaintenanceService:
             return False
     
     async def start_monitoring(self) -> bool:
-        """Запускает мониторинг API RemnaWave"""
         try:
             if self._check_task and not self._check_task.done():
                 logger.warning("Мониторинг уже запущен")
@@ -194,10 +181,9 @@ class MaintenanceService:
                 break
             except Exception as e:
                 logger.error(f"Ошибка в цикле мониторинга: {e}")
-                await asyncio.sleep(30)  
+                await asyncio.sleep(30) 
     
     async def _save_status_to_cache(self):
-        """Сохраняет состояние в кеше"""
         try:
             status_data = {
                 "is_active": self._status.is_active,
@@ -278,84 +264,5 @@ class MaintenanceService:
                 "consecutive_failures": self._status.consecutive_failures
             }
 
-    def set_bot(self, bot):
-        self._bot = bot
-    
-    async def _notify_admins_maintenance_enabled(self, reason: Optional[str] = None):
-        if not hasattr(self, '_bot') or not self._bot:
-            return
-        
-        try:
-            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-            
-            admin_ids = settings.get_admin_ids()
-            if not admin_ids:
-                return
-            
-            enabled_time = self._status.enabled_at.strftime("%d.%m.%Y %H:%M:%S") if self._status.enabled_at else "неизвестно"
-            
-            message = f"""
-    🔧 <b>Режим техработ автоматически ВКЛЮЧЕН</b>
-    
-    ⏰ <b>Время:</b> {enabled_time}
-    📝 <b>Причина:</b> {reason or 'Недоступность API'}
-    🔄 <b>Неудачных проверок:</b> {self._status.consecutive_failures}
-    
-    ℹ️ Обычные пользователи заблокированы до восстановления API.
-    ⚙️ Админы имеют полный доступ к боту.
-    
-    🔍 Для управления используйте админ-панель → Техработы
-    """
-            
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔧 Панель техработ", callback_data="maintenance_panel")]
-            ])
-            
-            for admin_id in admin_ids:
-                try:
-                    await self._bot.send_message(
-                        admin_id, 
-                        message,
-                        parse_mode="HTML",
-                        reply_markup=keyboard
-                    )
-                except Exception as e:
-                    logger.error(f"Ошибка отправки уведомления админу {admin_id}: {e}")
-                    
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомлений админам о включении техработ: {e}")
-    
-    async def _notify_admins_maintenance_disabled(self):
-        if not hasattr(self, '_bot') or not self._bot:
-            return
-        
-        try:
-            admin_ids = settings.get_admin_ids()
-            if not admin_ids:
-                return
-            
-            disabled_time = datetime.utcnow().strftime("%d.%m.%Y %H:%M:%S")
-            
-            message = f"""
-    ✅ <b>Режим техработ автоматически ОТКЛЮЧЕН</b>
-    
-    ⏰ <b>Время:</b> {disabled_time}
-    🔄 <b>API восстановлено:</b> Подключение к Remnawave работает
-    
-    ℹ️ Пользователи снова могут использовать бота.
-    """
-            
-            for admin_id in admin_ids:
-                try:
-                    await self._bot.send_message(
-                        admin_id, 
-                        message,
-                        parse_mode="HTML"
-                    )
-                except Exception as e:
-                    logger.error(f"Ошибка отправки уведомления админу {admin_id}: {e}")
-                    
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомлений админам о выключении техработ: {e}")
 
 maintenance_service = MaintenanceService()

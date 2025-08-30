@@ -51,13 +51,17 @@ async def get_transaction_by_id(db: AsyncSession, transaction_id: int) -> Option
 
 async def get_transaction_by_external_id(
     db: AsyncSession, 
-    external_id: str
+    external_id: str, 
+    payment_method: PaymentMethod
 ) -> Optional[Transaction]:
-    """Получить транзакцию по external_id"""
     result = await db.execute(
         select(Transaction)
-        .options(selectinload(Transaction.user))
-        .where(Transaction.external_id == external_id)
+        .where(
+            and_(
+                Transaction.external_id == external_id,
+                Transaction.payment_method == payment_method.value
+            )
+        )
     )
     return result.scalar_one_or_none()
 
@@ -273,17 +277,16 @@ async def get_revenue_by_period(
     
     return [{"date": row.date, "amount_kopeks": row.amount} for row in result]
 
-
 async def find_tribute_transactions_by_payment_id(
     db: AsyncSession, 
     payment_id: str, 
     user_telegram_id: Optional[int] = None
 ) -> List[Transaction]:
+    """Найти все Tribute транзакции по payment_id"""
     
     query = select(Transaction).options(selectinload(Transaction.user))
     
     conditions = [
-        Transaction.external_id == f"tribute_{payment_id}",
         Transaction.external_id == f"donation_{payment_id}",
         Transaction.external_id == payment_id,
         Transaction.external_id.like(f"%{payment_id}%")
@@ -331,14 +334,15 @@ async def create_unique_tribute_transaction(
     amount_kopeks: int,
     description: str
 ) -> Transaction:
+    """Создать уникальную Tribute транзакцию с защитой от дубликатов"""
     
-    external_id = f"tribute_{payment_id}"
+    external_id = f"donation_{payment_id}"
     
-    existing = await get_transaction_by_external_id(db, external_id)
+    existing = await get_transaction_by_external_id(db, external_id, PaymentMethod.TRIBUTE)
     
     if existing:
         timestamp = int(datetime.utcnow().timestamp())
-        external_id = f"tribute_{payment_id}_{amount_kopeks}_{timestamp}"
+        external_id = f"donation_{payment_id}_{amount_kopeks}_{timestamp}"
         
         logger.info(f"Создан уникальный external_id для избежания дубликатов: {external_id}")
     
@@ -352,70 +356,3 @@ async def create_unique_tribute_transaction(
         external_id=external_id,
         is_completed=True
     )
-
-
-class TransactionCRUD:
-    
-    async def create_transaction(
-        self, 
-        db: AsyncSession, 
-        transaction_data: dict
-    ) -> Optional[Transaction]:
-        try:
-            transaction = Transaction(
-                user_id=transaction_data['user_id'],
-                type=transaction_data['transaction_type'],
-                amount_kopeks=transaction_data['amount_kopeks'],
-                description=transaction_data['description'],
-                external_id=transaction_data.get('external_id'),
-                payment_method=transaction_data.get('payment_system'),
-                is_completed=transaction_data.get('status') == 'completed'
-            )
-            
-            db.add(transaction)
-            await db.commit()
-            await db.refresh(transaction)
-            
-            logger.info(f"Создана транзакция: {transaction.id} на {transaction.amount_kopeks} коп.")
-            return transaction
-            
-        except Exception as e:
-            logger.error(f"Ошибка создания транзакции: {e}")
-            await db.rollback()
-            return None
-    
-    async def get_transaction_by_external_id(
-        self, 
-        db: AsyncSession, 
-        external_id: str
-    ) -> Optional[Transaction]:
-        return await get_transaction_by_external_id(db, external_id)
-    
-    async def update_transaction_status(
-        self, 
-        db: AsyncSession, 
-        transaction_id: int, 
-        status: str
-    ) -> bool:
-        try:
-            result = await db.execute(
-                select(Transaction).where(Transaction.id == transaction_id)
-            )
-            transaction = result.scalar_one_or_none()
-            
-            if not transaction:
-                logger.error(f"Транзакция {transaction_id} не найдена")
-                return False
-            
-            transaction.is_completed = (status == 'completed')
-            if transaction.is_completed:
-                transaction.completed_at = datetime.utcnow()
-            
-            await db.commit()
-            logger.info(f"Статус транзакции {transaction_id} обновлен на {status}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка обновления статуса транзакции: {e}")
-            await db.rollback()
-            return False

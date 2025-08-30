@@ -306,109 +306,43 @@ class SubscriptionService:
         try:
             needs_cleanup = False
             
-            if not isinstance(subscription.connected_squads, list):
-                logger.warning(f"Исправляем connected_squads для пользователя {user.telegram_id}")
-                subscription.connected_squads = []
-                needs_cleanup = True
-                
-            if subscription.connected_squads:
-                unique_squads = list(set([squad for squad in subscription.connected_squads if squad and isinstance(squad, str)]))
-                if len(unique_squads) != len(subscription.connected_squads):
-                    logger.info(f"Очищены дубликаты в connected_squads для пользователя {user.telegram_id}")
-                    subscription.connected_squads = unique_squads
-                    needs_cleanup = True
-            
-            if subscription.traffic_limit_gb < 0:
-                logger.warning(f"Отрицательный traffic_limit_gb исправлен на 0 для пользователя {user.telegram_id}")
-                subscription.traffic_limit_gb = 0
-                needs_cleanup = True
-                
-            if subscription.traffic_used_gb < 0:
-                logger.warning(f"Отрицательный traffic_used_gb исправлен на 0 для пользователя {user.telegram_id}")
-                subscription.traffic_used_gb = 0.0
-                needs_cleanup = True
-                
-            if subscription.device_limit < 1:
-                logger.warning(f"device_limit < 1 исправлен на 1 для пользователя {user.telegram_id}")
-                subscription.device_limit = 1
-                needs_cleanup = True
-            elif subscription.device_limit > 10:  
-                logger.warning(f"device_limit > 10 исправлен на 10 для пользователя {user.telegram_id}")
-                subscription.device_limit = 10
-                needs_cleanup = True
-            
-            from datetime import datetime
-            current_time = datetime.utcnow()
-            
-            if subscription.start_date > current_time + timedelta(days=1):  
-                logger.warning(f"Некорректная start_date исправлена для пользователя {user.telegram_id}")
-                subscription.start_date = current_time
-                needs_cleanup = True
-                
-            if subscription.end_date < subscription.start_date:
-                logger.warning(f"end_date раньше start_date исправлено для пользователя {user.telegram_id}")
-                subscription.end_date = subscription.start_date + timedelta(days=1)
-                needs_cleanup = True
-            
             if user.remnawave_uuid:
                 try:
                     async with self.api as api:
                         remnawave_user = await api.get_user_by_uuid(user.remnawave_uuid)
                         
                         if not remnawave_user:
-                            logger.warning(f"Пользователь {user.telegram_id} имеет UUID {user.remnawave_uuid}, но не найден в панели")
+                            logger.warning(f"⚠️ Пользователь {user.telegram_id} имеет UUID {user.remnawave_uuid}, но не найден в панели")
                             needs_cleanup = True
                         else:
                             if remnawave_user.telegram_id != user.telegram_id:
-                                logger.warning(f"Несоответствие telegram_id для пользователя {user.telegram_id}")
+                                logger.warning(f"⚠️ Несоответствие telegram_id для пользователя {user.telegram_id}")
                                 needs_cleanup = True
-                            
-                            if remnawave_user.subscription_url and not subscription.subscription_url:
-                                subscription.subscription_url = remnawave_user.subscription_url
-                                logger.info(f"Восстановлена subscription_url из панели для пользователя {user.telegram_id}")
-                                needs_cleanup = True
-                                
                 except Exception as api_error:
-                    logger.error(f"Ошибка проверки пользователя в панели: {api_error}")
+                    logger.error(f"❌ Ошибка проверки пользователя в панели: {api_error}")
                     needs_cleanup = True
             
             if subscription.remnawave_short_uuid and not user.remnawave_uuid:
-                logger.warning(f"У подписки есть short_uuid, но у пользователя нет remnawave_uuid")
+                logger.warning(f"⚠️ У подписки есть short_uuid, но у пользователя нет remnawave_uuid")
                 needs_cleanup = True
-            
-            if subscription.subscription_url:
-                if not subscription.subscription_url.startswith(('http://', 'https://')):
-                    logger.warning(f"Некорректный subscription_url для пользователя {user.telegram_id}")
-                    subscription.subscription_url = ""
-                    needs_cleanup = True
-            
-            if needs_cleanup and (
-                not user.remnawave_uuid or 
-                subscription.remnawave_short_uuid and not user.remnawave_uuid
-            ):
-                logger.info(f"Очищаем критические мусорные данные подписки для пользователя {user.telegram_id}")
+                
+            if needs_cleanup:
+                logger.info(f"🧹 Очищаем мусорные данные подписки для пользователя {user.telegram_id}")
                 
                 subscription.remnawave_short_uuid = None
                 subscription.subscription_url = ""
-                
+                subscription.connected_squads = []
                 
                 user.remnawave_uuid = None
                 
-            if needs_cleanup:
-                subscription.updated_at = current_time
                 await db.commit()
-                logger.info(f"Исправления применены для пользователя {user.telegram_id}")
+                logger.info(f"✅ Мусорные данные очищены для пользователя {user.telegram_id}")
                 
             return True
             
         except Exception as e:
-            logger.error(f"Ошибка валидации подписки для пользователя {user.telegram_id}: {e}")
-            import traceback
-            logger.error(f"Полный traceback: {traceback.format_exc()}")
-            try:
-                await db.rollback()
-            except:
-                pass
+            logger.error(f"❌ Ошибка валидации подписки для пользователя {user.telegram_id}: {e}")
+            await db.rollback()
             return False
     
     async def get_countries_price_by_uuids(
