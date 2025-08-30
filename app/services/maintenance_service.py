@@ -278,5 +278,85 @@ class MaintenanceService:
                 "consecutive_failures": self._status.consecutive_failures
             }
 
+    def set_bot(self, bot):
+        self._bot = bot
+    
+    async def _notify_admins_maintenance_enabled(self, reason: Optional[str] = None):
+        if not hasattr(self, '_bot') or not self._bot:
+            return
+        
+        try:
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            
+            admin_ids = settings.get_admin_ids()
+            if not admin_ids:
+                return
+            
+            enabled_time = self._status.enabled_at.strftime("%d.%m.%Y %H:%M:%S") if self._status.enabled_at else "неизвестно"
+            
+            message = f"""
+    🔧 Режим техработ автоматически ВКЛЮЧЕН
+    
+    ⏰ Время: {enabled_time}
+    📝 Причина: {reason or 'Недоступность API'}
+    🔄 Неудачных проверок: {self._status.consecutive_failures}
+    
+    ℹ️ Обычные пользователи заблокированы до восстановления API.
+    ⚙️ Админы имеют полный доступ к боту.
+    
+    🔍 Для управления используйте админ-панель → Техработы
+    """
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔧 Панель техработ", callback_data="maintenance_panel")]
+            ])
+            
+            for admin_id in admin_ids:
+                try:
+                    await self._bot.send_message(
+                        admin_id, 
+                        message,
+                        parse_mode="HTML",
+                        reply_markup=keyboard
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка отправки уведомления админу {admin_id}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомлений админам о включении техработ: {e}")
+    
+    async def _notify_admins_maintenance_disabled(self):
+        if not hasattr(self, '_bot') or not self._bot:
+            return
+        
+        try:
+            admin_ids = settings.get_admin_ids()
+            if not admin_ids:
+                return
+            
+            disabled_time = datetime.utcnow().strftime("%d.%m.%Y %H:%M:%S")
+            
+            message = f"""
+    ✅ Режим техработ автоматически ОТКЛЮЧЕН
+    
+    ⏰ Время: {disabled_time}
+    🔄 API восстановлено:</b> Подключение к RemnaWave работает
+    
+    ℹ️ Пользователи снова могут использовать бота.
+    """
+            
+            for admin_id in admin_ids:
+                try:
+                    await self._bot.send_message(
+                        admin_id, 
+                        message,
+                        parse_mode="HTML"
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка отправки уведомления админу {admin_id}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомлений админам о выключении техработ: {e}")
 
+was_auto_enabled = self._status.auto_enabled
 maintenance_service = MaintenanceService()
