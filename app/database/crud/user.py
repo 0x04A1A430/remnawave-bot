@@ -124,6 +124,7 @@ async def update_user(
 async def add_user_balance(
     db: AsyncSession,
     user: User,
+    user_id: int,
     amount_kopeks: int,
     description: str = "Пополнение баланса"
 ) -> User:
