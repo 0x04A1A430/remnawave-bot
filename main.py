@@ -75,7 +75,7 @@ async def main():
         bot, dp = await setup_bot()
         
         logger.info("💳 Инициализация сервиса платежей...")
-        payment_service = PaymentService()
+        payment_service = PaymentService(bot)
         
         monitoring_service.bot = bot
         maintenance_service.set_bot(bot) 
