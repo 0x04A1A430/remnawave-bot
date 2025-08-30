@@ -5,7 +5,7 @@ from aiohttp import web
 from aiogram import Bot
 
 from app.config import settings
-from app.services.tribute_service import TributeService
+from app.external.tribute import TributeService
 from app.services.payment_service import PaymentService
 from app.external.yookassa_webhook import YooKassaWebhookHandler
 
