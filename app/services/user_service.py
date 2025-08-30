@@ -122,31 +122,31 @@ class UserService:
             }
     
     async def update_user_balance(
-    self,
-    db: AsyncSession,
-    user_id: int,
-    amount_kopeks: int,
-    description: str,
-    admin_id: int
-) -> bool:
-    try:
-        user = await get_user_by_id(db, user_id)
-        if not user:
+        self,
+        db: AsyncSession,
+        user_id: int,
+        amount_kopeks: int,
+        description: str,
+        admin_id: int
+    ) -> bool:
+        try:
+            user = await get_user_by_id(db, user_id)
+            if not user:
+                return False
+            
+            if amount_kopeks > 0:
+                await add_user_balance(db, user, amount_kopeks, description)
+                logger.info(f"Админ {admin_id} пополнил баланс пользователя {user_id} на {amount_kopeks/100}₽")
+                return True
+            else:
+                success = await subtract_user_balance(db, user, abs(amount_kopeks), description)
+                if success:
+                    logger.info(f"Админ {admin_id} списал с баланса пользователя {user_id} {abs(amount_kopeks)/100}₽")
+                return success
+            
+        except Exception as e:
+            logger.error(f"Ошибка изменения баланса пользователя: {e}")
             return False
-        
-        if amount_kopeks > 0:
-            await add_user_balance(db, user, amount_kopeks, description)
-            logger.info(f"Админ {admin_id} пополнил баланс пользователя {user_id} на {amount_kopeks/100}₽")
-            return True
-        else:
-            success = await subtract_user_balance(db, user, abs(amount_kopeks), description)
-            if success:
-                logger.info(f"Админ {admin_id} списал с баланса пользователя {user_id} {abs(amount_kopeks)/100}₽")
-            return success
-        
-    except Exception as e:
-        logger.error(f"Ошибка изменения баланса пользователя: {e}")
-        return False
     
     async def block_user(
         self,
