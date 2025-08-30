@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import json
 import hashlib
@@ -90,7 +91,7 @@ class YooKassaWebhookHandler:
         
         webhook_path = settings.YOOKASSA_WEBHOOK_PATH
         app.router.add_post(webhook_path, self.handle_webhook)
-        app.router.add_options(webhook_path, self._options_handler) 
+        app.router.add_options(webhook_path, self._options_handler)  
         
         logger.info(f"✅ Настроен YooKassa webhook на пути: POST {webhook_path}")
     
