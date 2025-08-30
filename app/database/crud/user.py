@@ -154,7 +154,7 @@ async def add_user_balance(
         await db.rollback()
         return False
 
-sync def add_user_balance_by_id(
+async def add_user_balance_by_id(
     db: AsyncSession,
     user_id: int, 
     amount_kopeks: int,
