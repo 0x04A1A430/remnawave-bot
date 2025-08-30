@@ -131,6 +131,81 @@ class PaymentService:
         except Exception as e:
             logger.error(f"Ошибка создания платежа YooKassa: {e}")
             return None
+
+    async def process_tribute_payment(
+        self, 
+        db: AsyncSession, 
+        user_id: int, 
+        amount_kopeks: int, 
+        payment_id: str
+    ) -> bool:
+        
+        try:
+            logger.info(f"Обработка Tribute платежа: user_id={user_id}, amount={amount_kopeks} коп., payment_id={payment_id}")
+            
+            from app.database.crud.user import UserCRUD
+            user_crud = UserCRUD()
+            
+            user = await user_crud.get_user(db, user_id)
+            if not user:
+                logger.error(f"Пользователь {user_id} не найден для обработки Tribute платежа")
+                return False
+            
+            from app.database.crud.transaction import TransactionCRUD
+            transaction_crud = TransactionCRUD()
+            
+            existing_transaction = await transaction_crud.get_transaction_by_external_id(
+                db, f"tribute_{payment_id}"
+            )
+            
+            if existing_transaction:
+                logger.info(f"Платеж {payment_id} уже был обработан ранее")
+                return True
+            
+            transaction_data = {
+                "user_id": user_id,
+                "amount_kopeks": amount_kopeks,
+                "transaction_type": "top_up",
+                "status": "completed",
+                "external_id": f"tribute_{payment_id}",
+                "payment_system": "tribute",
+                "description": f"Пополнение через Tribute: {payment_id}"
+            }
+            
+            transaction = await transaction_crud.create_transaction(db, transaction_data)
+            
+            if not transaction:
+                logger.error(f"Не удалось создать транзакцию для Tribute платежа {payment_id}")
+                return False
+            
+            success = await user_crud.add_balance(db, user_id, amount_kopeks)
+            
+            if not success:
+                logger.error(f"Не удалось пополнить баланс пользователя {user_id}")
+                await transaction_crud.update_transaction_status(db, transaction.id, "failed")
+                return False
+            
+            try:
+                from app.localization.texts import get_text
+                
+                amount_rubles = amount_kopeks / 100
+                message = get_text("payment_success_tribute").format(
+                    amount=f"{amount_rubles:.2f}",
+                    payment_id=payment_id
+                )
+                
+                if hasattr(self, 'bot') and self.bot:
+                    await self.bot.send_message(user_id, message)
+                
+            except Exception as e:
+                logger.warning(f"Не удалось отправить уведомление о платеже пользователю {user_id}: {e}")
+            
+            logger.info(f"✅ Успешно обработан Tribute платеж {payment_id} для пользователя {user_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка обработки Tribute платежа {payment_id}: {e}", exc_info=True)
+            return False
     
     async def process_yookassa_webhook(self, db: AsyncSession, webhook_data: dict) -> bool:
         try:
