@@ -117,8 +117,8 @@ class TributeService:
                     logger.info(f"   Amount: {existing_transaction.amount_kopeks} коп")
                     logger.info(f"   Created: {existing_transaction.created_at}")
                     
-                    if existing_transaction.is_completed:
-                        logger.warning(f"❌ Транзакция с donation_request_id {payment_id} уже обработана и завершена")
+                    if existing_transaction.is_completed and existing_transaction.amount_kopeks == amount_kopeks:
+                        logger.warning(f"❌ Транзакция с donation_request_id {payment_id} и суммой {amount_kopeks} коп уже обработана")
                         
                         user = await get_user_by_telegram_id(session, user_id)
                         if user:
@@ -126,6 +126,14 @@ class TributeService:
                         else:
                             logger.error(f"❌ Пользователь {user_id} не найден при проверке баланса")
                         return
+                    elif existing_transaction.is_completed and existing_transaction.amount_kopeks != amount_kopeks:
+                        logger.warning(f"⚠️ Найден платеж с тем же ID {payment_id}, но другой суммой:")
+                        logger.warning(f"   Существующий: {existing_transaction.amount_kopeks} коп")
+                        logger.warning(f"   Новый: {amount_kopeks} коп")
+                        logger.warning(f"   Обрабатываем как новый платеж...")
+                        
+                        external_id = f"donation_{payment_id}_{amount_kopeks}_{int(datetime.utcnow().timestamp())}"
+                        logger.info(f"🔧 Создан уникальный external_id: {external_id}")
                     else:
                         logger.info(f"⚠️ Найдена незавершенная транзакция {existing_transaction.id}, завершаем...")
                         await complete_transaction(session, existing_transaction)
@@ -154,7 +162,7 @@ class TributeService:
                     user_id=user.id, 
                     type=TransactionType.DEPOSIT,
                     amount_kopeks=amount_kopeks,
-                    description=f"Пополнение через Tribute: {amount_kopeks/100}₽",
+                    description=f"Пополнение через Tribute: {amount_kopeks/100}₽ (ID: {payment_id})",
                     payment_method=PaymentMethod.TRIBUTE,
                     external_id=external_id, 
                     is_completed=True
