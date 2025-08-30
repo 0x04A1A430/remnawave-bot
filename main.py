@@ -17,7 +17,6 @@ from app.database.universal_migration import run_universal_migration
 
 
 class GracefulExit:
-    """Класс для корректного завершения работы бота"""
     
     def __init__(self):
         self.exit = False
@@ -40,7 +39,6 @@ async def main():
     logger = logging.getLogger(__name__)
     logger.info("🚀 Запуск Bedolaga Remnawave Bot...")
     
-    # Настройка обработчика сигналов
     killer = GracefulExit()
     signal.signal(signal.SIGINT, killer.exit_gracefully)
     signal.signal(signal.SIGTERM, killer.exit_gracefully)
@@ -75,7 +73,6 @@ async def main():
         logger.info("🤖 Настройка бота...")
         bot, dp = await setup_bot()
         
-        # Устанавливаем ссылку на бота в сервисы
         monitoring_service.bot = bot
         
         if settings.TRIBUTE_ENABLED:
@@ -94,12 +91,10 @@ async def main():
         logger.info("🔄 Запуск polling...")
         polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=True))
         
-        # Ожидание сигнала завершения или исключения
         try:
             while not killer.exit:
                 await asyncio.sleep(1)
                 
-                # Проверяем, не завершились ли задачи с ошибкой
                 if monitoring_task.done():
                     exception = monitoring_task.exception()
                     if exception:
@@ -128,7 +123,6 @@ async def main():
     finally:
         logger.info("🛑 Начинается корректное завершение работы...")
         
-        # Останавливаем службы
         if monitoring_task and not monitoring_task.done():
             logger.info("⏹️ Остановка службы мониторинга...")
             monitoring_service.stop_monitoring()
@@ -159,7 +153,6 @@ async def main():
             logger.info("⏹️ Остановка webhook сервера...")
             await webhook_server.stop()
         
-        # Закрываем сессию бота
         if 'bot' in locals():
             try:
                 await bot.session.close()
