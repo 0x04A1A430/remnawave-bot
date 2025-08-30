@@ -12,7 +12,6 @@ from app.config import settings
 from app.database.database import init_db
 from app.services.monitoring_service import monitoring_service
 from app.services.maintenance_service import maintenance_service
-from app.services.payment_service import PaymentService
 from app.external.webhook_server import WebhookServer
 from app.database.universal_migration import run_universal_migration
 
@@ -74,26 +73,14 @@ async def main():
         logger.info("🤖 Настройка бота...")
         bot, dp = await setup_bot()
         
-        logger.info("💳 Инициализация сервиса платежей...")
-        payment_service = PaymentService(bot)
-        
         monitoring_service.bot = bot
-        maintenance_service.set_bot(bot) 
         
-        webhook_servers_enabled = settings.TRIBUTE_ENABLED or settings.is_yookassa_enabled()
-        
-        if webhook_servers_enabled:
-            logger.info("🌐 Запуск webhook серверов...")
-            webhook_server = WebhookServer(bot, payment_service)
-            
+        if settings.TRIBUTE_ENABLED:
+            logger.info("🌐 Запуск webhook сервера для Tribute...")
+            webhook_server = WebhookServer(bot)
             await webhook_server.start()
-            
-            if settings.TRIBUTE_ENABLED:
-                logger.info(f"✅ Tribute webhook: http://0.0.0.0:{settings.TRIBUTE_WEBHOOK_PORT}{settings.TRIBUTE_WEBHOOK_PATH}")
-            if settings.is_yookassa_enabled():
-                logger.info(f"✅ YooKassa webhook: http://0.0.0.0:{settings.YOOKASSA_WEBHOOK_PORT}{settings.YOOKASSA_WEBHOOK_PATH}")
         else:
-            logger.info("ℹ️ Все платежные провайдеры отключены, webhook серверы не запускаются")
+            logger.info("ℹ️ Tribute отключен, webhook сервер не запускается")
         
         logger.info("🔍 Запуск службы мониторинга...")
         monitoring_task = asyncio.create_task(monitoring_service.start_monitoring())
@@ -103,8 +90,6 @@ async def main():
         
         logger.info("🔄 Запуск polling...")
         polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=True))
-        
-        logger.info("✅ Все сервисы запущены! Бот готов к работе.")
         
         try:
             while not killer.exit:
@@ -165,7 +150,7 @@ async def main():
                 pass
         
         if webhook_server:
-            logger.info("⏹️ Остановка webhook серверов...")
+            logger.info("⏹️ Остановка webhook сервера...")
             await webhook_server.stop()
         
         if 'bot' in locals():
