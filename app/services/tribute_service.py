@@ -90,82 +90,43 @@ class TributeService:
         return {"status": "ok", "event": event_type}
     
     async def _handle_successful_payment(self, payment_data: Dict[str, Any]):
-        """Обработка успешного платежа - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+        """Обработка успешного платежа - ПОЛНОСТЬЮ ПЕРЕРАБОТАННАЯ ВЕРСИЯ"""
         
         try:
             user_id = payment_data["user_id"]
             amount_kopeks = payment_data["amount_kopeks"]
             payment_id = payment_data["payment_id"]
             
-            logger.info(f"🔄 Обрабатываем успешный Tribute платеж: user_id={user_id}, amount={amount_kopeks}, payment_id={payment_id}")
+            logger.info(f"Обрабатываем успешный Tribute платеж: user_id={user_id}, amount={amount_kopeks}, payment_id={payment_id}")
             
             async for session in get_db():
-                external_id = f"donation_{payment_id}"
+                from app.database.crud.transaction import check_tribute_payment_duplicate, create_unique_tribute_transaction
                 
-                logger.info(f"🔍 Ищем существующую транзакцию с external_id: '{external_id}', payment_method: TRIBUTE")
-                
-                existing_transaction = await get_transaction_by_external_id(
-                    session, external_id, PaymentMethod.TRIBUTE
+                duplicate_transaction = await check_tribute_payment_duplicate(
+                    session, payment_id, amount_kopeks, user_id
                 )
                 
-                if existing_transaction:
-                    logger.info(f"🔍 Найдена существующая транзакция:")
-                    logger.info(f"   ID: {existing_transaction.id}")
-                    logger.info(f"   External ID: '{existing_transaction.external_id}'")
-                    logger.info(f"   Payment Method: {existing_transaction.payment_method}")
-                    logger.info(f"   Is Completed: {existing_transaction.is_completed}")
-                    logger.info(f"   Amount: {existing_transaction.amount_kopeks} коп")
-                    logger.info(f"   Created: {existing_transaction.created_at}")
-                    
-                    if existing_transaction.is_completed and existing_transaction.amount_kopeks == amount_kopeks:
-                        logger.warning(f"❌ Транзакция с donation_request_id {payment_id} и суммой {amount_kopeks} коп уже обработана")
-                        
-                        user = await get_user_by_telegram_id(session, user_id)
-                        if user:
-                            logger.info(f"💰 Текущий баланс пользователя {user_id}: {user.balance_kopeks} коп")
-                        else:
-                            logger.error(f"❌ Пользователь {user_id} не найден при проверке баланса")
-                        return
-                    elif existing_transaction.is_completed and existing_transaction.amount_kopeks != amount_kopeks:
-                        logger.warning(f"⚠️ Найден платеж с тем же ID {payment_id}, но другой суммой:")
-                        logger.warning(f"   Существующий: {existing_transaction.amount_kopeks} коп")
-                        logger.warning(f"   Новый: {amount_kopeks} коп")
-                        logger.warning(f"   Обрабатываем как новый платеж...")
-                        
-                        external_id = f"donation_{payment_id}_{amount_kopeks}_{int(datetime.utcnow().timestamp())}"
-                        logger.info(f"🔧 Создан уникальный external_id: {external_id}")
-                    else:
-                        logger.info(f"⚠️ Найдена незавершенная транзакция {existing_transaction.id}, завершаем...")
-                        await complete_transaction(session, existing_transaction)
-                        
-                        user = await get_user_by_telegram_id(session, user_id)
-                        if user:
-                            old_balance = user.balance_kopeks
-                            user.balance_kopeks += amount_kopeks
-                            await session.commit()
-                            logger.info(f"💰 Баланс обновлен при завершении транзакции: {old_balance} -> {user.balance_kopeks} коп")
-                            await self._send_success_notification(user_id, amount_kopeks)
-                            logger.info(f"✅ Завершена незавершенная транзакция для пользователя {user_id}")
-                        return
-                else:
-                    logger.info(f"✅ Транзакция с external_id '{external_id}' не найдена, создаем новую")
+                if duplicate_transaction:
+                    logger.warning(f"Найден дубликат платежа:")
+                    logger.warning(f"   Transaction ID: {duplicate_transaction.id}")
+                    logger.warning(f"   Amount: {duplicate_transaction.amount_kopeks} коп")
+                    logger.warning(f"   Created: {duplicate_transaction.created_at}")
+                    logger.warning(f"Платеж игнорирован")
+                    return
                 
                 user = await get_user_by_telegram_id(session, user_id)
                 if not user:
-                    logger.error(f"❌ Пользователь {user_id} не найден")
+                    logger.error(f"Пользователь {user_id} не найден")
                     return
                 
-                logger.info(f"👤 Найден пользователь {user.telegram_id}, текущий баланс: {user.balance_kopeks} коп")
+                logger.info(f"Найден пользователь {user.telegram_id}, текущий баланс: {user.balance_kopeks} коп")
                 
-                transaction = await create_transaction(
+                transaction = await create_unique_tribute_transaction(
                     db=session,
-                    user_id=user.id, 
-                    type=TransactionType.DEPOSIT,
+                    user_id=user.id,
+                    payment_id=payment_id,
                     amount_kopeks=amount_kopeks,
-                    description=f"Пополнение через Tribute: {amount_kopeks/100}₽ (ID: {payment_id})",
-                    payment_method=PaymentMethod.TRIBUTE,
-                    external_id=external_id, 
-                    is_completed=True
+                    description=f"Пополнение через Tribute: {amount_kopeks/100}₽ (ID: {payment_id})"
                 )
                 
                 old_balance = user.balance_kopeks
@@ -174,15 +135,15 @@ class TributeService:
                 
                 await session.commit()
                 
-                logger.info(f"💰 Баланс пользователя {user_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
+                logger.info(f"Баланс пользователя {user_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
                 
                 await self._send_success_notification(user_id, amount_kopeks)
                 
-                logger.info(f"✅ Успешно обработан Tribute платеж: {amount_kopeks/100}₽ для пользователя {user_id}")
+                logger.info(f"Успешно обработан Tribute платеж: {amount_kopeks/100}₽ для пользователя {user_id}")
                 break
                 
         except Exception as e:
-            logger.error(f"❌ Ошибка обработки успешного Tribute платежа: {e}", exc_info=True)
+            logger.error(f"Ошибка обработки успешного Tribute платежа: {e}", exc_info=True)
     
     async def _handle_failed_payment(self, payment_data: Dict[str, Any]):
         """Обработка неудачного платежа"""
