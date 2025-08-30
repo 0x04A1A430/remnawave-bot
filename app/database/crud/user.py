@@ -125,12 +125,8 @@ async def add_user_balance(
     db: AsyncSession,
     user: User,
     amount_kopeks: int,
-    description: str
+    description: str = "Пополнение баланса"
 ) -> User:
-    """
-    Простое добавление средств к балансу пользователя.
-    НЕ создает транзакцию - это должно делаться отдельно!
-    """
     try:
         result = await db.execute(
             select(User).where(User.id == user_id)
