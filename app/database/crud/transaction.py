@@ -53,6 +53,7 @@ async def get_transaction_by_external_id(
     db: AsyncSession, 
     external_id: str
 ) -> Optional[Transaction]:
+    """Получить транзакцию по external_id"""
     result = await db.execute(
         select(Transaction)
         .options(selectinload(Transaction.user))
@@ -272,16 +273,17 @@ async def get_revenue_by_period(
     
     return [{"date": row.date, "amount_kopeks": row.amount} for row in result]
 
+
 async def find_tribute_transactions_by_payment_id(
     db: AsyncSession, 
     payment_id: str, 
     user_telegram_id: Optional[int] = None
 ) -> List[Transaction]:
-    """Найти все Tribute транзакции по payment_id"""
     
     query = select(Transaction).options(selectinload(Transaction.user))
     
     conditions = [
+        Transaction.external_id == f"tribute_{payment_id}",
         Transaction.external_id == f"donation_{payment_id}",
         Transaction.external_id == payment_id,
         Transaction.external_id.like(f"%{payment_id}%")
@@ -329,15 +331,14 @@ async def create_unique_tribute_transaction(
     amount_kopeks: int,
     description: str
 ) -> Transaction:
-    """Создать уникальную Tribute транзакцию с защитой от дубликатов"""
     
-    external_id = f"donation_{payment_id}"
+    external_id = f"tribute_{payment_id}"
     
-    existing = await get_transaction_by_external_id(db, external_id, PaymentMethod.TRIBUTE)
+    existing = await get_transaction_by_external_id(db, external_id)
     
     if existing:
         timestamp = int(datetime.utcnow().timestamp())
-        external_id = f"donation_{payment_id}_{amount_kopeks}_{timestamp}"
+        external_id = f"tribute_{payment_id}_{amount_kopeks}_{timestamp}"
         
         logger.info(f"Создан уникальный external_id для избежания дубликатов: {external_id}")
     
@@ -351,6 +352,7 @@ async def create_unique_tribute_transaction(
         external_id=external_id,
         is_completed=True
     )
+
 
 class TransactionCRUD:
     
