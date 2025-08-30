@@ -135,7 +135,7 @@ class UserService:
                 return False
             
             if amount_kopeks > 0:
-                await add_user_balance(db, user, amount_kopeks, description=description)
+                await add_user_balance(db, user, amount_kopeks, description)
                 logger.info(f"Админ {admin_id} пополнил баланс пользователя {user_id} на {amount_kopeks/100}₽")
                 return True
             else:
