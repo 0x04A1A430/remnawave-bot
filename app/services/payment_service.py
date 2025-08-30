@@ -11,7 +11,7 @@ from app.config import settings
 from app.services.yookassa_service import YooKassaService
 from app.database.crud.yookassa import create_yookassa_payment, link_yookassa_payment_to_transaction
 from app.database.crud.transaction import create_transaction
-from app.database.crud.user import add_user_balance
+from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.models import TransactionType, PaymentMethod
 
 logger = logging.getLogger(__name__)
@@ -186,22 +186,27 @@ class PaymentService:
                     db, yookassa_payment_id, transaction.id
                 )
                 
-                from app.database.crud.user import add_user_balance
-                await add_user_balance(db, updated_payment.user_id, updated_payment.amount_kopeks)
-                
-                if self.bot:
-                    try:
-                        await self.bot.send_message(
-                            updated_payment.user.telegram_id,
-                            f"✅ <b>Пополнение успешно!</b>\n\n"
-                            f"💰 Сумма: {settings.format_price(updated_payment.amount_kopeks)}\n"
-                            f"🏦 Способ: Банковская карта\n"
-                            f"🆔 Транзакция: {yookassa_payment_id[:8]}...\n\n"
-                            f"Баланс пополнен автоматически!",
-                            parse_mode="HTML"
-                        )
-                    except Exception as e:
-                        logger.error(f"Ошибка отправки уведомления о пополнении: {e}")
+                user = await get_user_by_id(db, updated_payment.user_id)
+                if user:
+                    await add_user_balance(db, user, updated_payment.amount_kopeks, f"Пополнение YooKassa: {updated_payment.amount_kopeks/100:.2f}₽")
+                    
+                    if self.bot:
+                        try:
+                            await self.bot.send_message(
+                                user.telegram_id,
+                                f"✅ <b>Пополнение успешно!</b>\n\n"
+                                f"💰 Сумма: {settings.format_price(updated_payment.amount_kopeks)}\n"
+                                f"🏦 Способ: Банковская карта\n"
+                                f"🆔 Транзакция: {yookassa_payment_id[:8]}...\n\n"
+                                f"Баланс пополнен автоматически!",
+                                parse_mode="HTML"
+                            )
+                            logger.info(f"✅ Отправлено уведомление пользователю {user.telegram_id} о пополнении на {updated_payment.amount_kopeks/100:.2f}₽")
+                        except Exception as e:
+                            logger.error(f"Ошибка отправки уведомления о пополнении: {e}")
+                else:
+                    logger.error(f"Пользователь с ID {updated_payment.user_id} не найден при пополнении баланса")
+                    return False
             
             return True
             
@@ -233,15 +238,17 @@ class PaymentService:
                 transaction_id=transaction.id
             )
             
-            await add_user_balance(db, payment.user_id, payment.amount_kopeks)
+            user = await get_user_by_id(db, payment.user_id)
+            if user:
+                await add_user_balance(db, user, payment.amount_kopeks, f"Пополнение YooKassa: {payment.amount_kopeks/100:.2f}₽")
             
             logger.info(f"Успешно обработан платеж YooKassa {payment.yookassa_payment_id}: "
                        f"пользователь {payment.user_id} получил {payment.amount_kopeks/100}₽")
             
-            if self.bot:
+            if self.bot and user:
                 try:
                     await self._send_payment_success_notification(
-                        payment.user.telegram_id, 
+                        user.telegram_id, 
                         payment.amount_kopeks
                     )
                 except Exception as e:
