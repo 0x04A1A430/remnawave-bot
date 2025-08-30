@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     
     MONITORING_INTERVAL: int = 60
     INACTIVE_USER_DELETE_MONTHS: int = 3
+
+    MAINTENANCE_MODE: bool = False
+    MAINTENANCE_CHECK_INTERVAL: int = 30 
+    MAINTENANCE_AUTO_ENABLE: bool = True 
+    MAINTENANCE_MESSAGE: str = "🔧 Ведутся технические работы. Сервис временно недоступен. Попробуйте позже."
     
     TELEGRAM_STARS_ENABLED: bool = True
     
@@ -199,6 +204,18 @@ class Settings(BaseSettings):
         elif self.WEBHOOK_URL:
             return f"{self.WEBHOOK_URL}/payment-success"
         return "https://t.me/"
+
+    def is_maintenance_mode(self) -> bool:
+        return self.MAINTENANCE_MODE
+    
+    def get_maintenance_message(self) -> str:
+        return self.MAINTENANCE_MESSAGE
+    
+    def get_maintenance_check_interval(self) -> int:
+        return self.MAINTENANCE_CHECK_INTERVAL
+    
+    def is_maintenance_auto_enable(self) -> bool:
+        return self.MAINTENANCE_AUTO_ENABLE
     
     model_config = {
         "env_file": ".env",
