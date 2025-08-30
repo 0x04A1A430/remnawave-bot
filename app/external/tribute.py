@@ -63,11 +63,20 @@ class TributeService:
             logger.error(f"Ошибка проверки подписи webhook: {e}")
             return False
     
-    async def process_webhook(self, webhook_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def process_webhook(self, payload_or_data) -> Optional[Dict[str, Any]]:
         
         try:
-            logger.info(f"🔄 Начинаем обработку Tribute webhook данных")
-            logger.info(f"📊 Данные: {json.dumps(webhook_data, ensure_ascii=False, indent=2)}")
+            logger.info(f"🔄 Начинаем обработку Tribute webhook")
+            
+            if isinstance(payload_or_data, str):
+                try:
+                    webhook_data = json.loads(payload_or_data)
+                    logger.info(f"📊 Распарсенные данные: {webhook_data}")
+                except json.JSONDecodeError as e:
+                    logger.error(f"❌ Ошибка парсинга JSON: {e}")
+                    return None
+            else:
+                webhook_data = payload_or_data
             
             payment_id = None
             status = None
