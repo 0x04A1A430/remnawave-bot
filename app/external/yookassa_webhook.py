@@ -43,19 +43,12 @@ class YooKassaWebhookHandler:
             
             logger.info(f"📄 Body: {body}")
             
-            if settings.YOOKASSA_WEBHOOK_SECRET:
-                signature = request.headers.get('Signature') or request.headers.get('X-YooKassa-Signature')
-                if not signature:
-                    logger.warning("⚠️ Webhook без подписи, но секрет настроен")
-                else:
-                    logger.info(f"🔐 Получена подпись: {signature}")
-                    if not YooKassaWebhookHandler.verify_webhook_signature(body, signature, settings.YOOKASSA_WEBHOOK_SECRET):
-                        logger.error("❌ Неверная подпись webhook")
-                        return web.Response(status=400, text="Invalid signature")
-                    else:
-                        logger.info("✅ Подпись webhook проверена успешно")
+            signature = request.headers.get('Signature') or request.headers.get('X-YooKassa-Signature')
+            if signature:
+                logger.info(f"🔐 Получена подпись: {signature}")
+                logger.warning("⚠️ Проверка подписи YooKassa временно отключена")
             else:
-                logger.info("ℹ️ Проверка подписи отключена (YOOKASSA_WEBHOOK_SECRET не настроен)")
+                logger.info("ℹ️ Подпись не найдена")
             
             try:
                 webhook_data = json.loads(body)
@@ -94,12 +87,11 @@ class YooKassaWebhookHandler:
         webhook_path = settings.YOOKASSA_WEBHOOK_PATH
         app.router.add_post(webhook_path, self.handle_webhook)
         app.router.add_get(webhook_path, self._get_handler) 
-        app.router.add_options(webhook_path, self._options_handler) 
+        app.router.add_options(webhook_path, self._options_handler)
         
         logger.info(f"✅ Настроен YooKassa webhook на пути: POST {webhook_path}")
     
     async def _get_handler(self, request: web.Request) -> web.Response:
-        """Обработчик GET запросов для тестирования"""
         return web.json_response({
             "status": "ok",
             "message": "YooKassa webhook endpoint is working",
@@ -109,7 +101,6 @@ class YooKassaWebhookHandler:
         })
     
     async def _options_handler(self, request: web.Request) -> web.Response:
-        """Обработчик OPTIONS запросов для CORS"""
         return web.Response(
             status=200,
             headers={
