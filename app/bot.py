@@ -9,8 +9,8 @@ from app.middlewares.auth import AuthMiddleware
 from app.middlewares.logging import LoggingMiddleware
 from app.middlewares.throttling import ThrottlingMiddleware
 from app.middlewares.subscription_checker import SubscriptionStatusMiddleware
-from app.middlewares.maintenance import MaintenanceMiddleware  # Новый middleware
-from app.services.maintenance_service import maintenance_service  # Новый сервис
+from app.middlewares.maintenance import MaintenanceMiddleware  
+from app.services.maintenance_service import maintenance_service
 from app.utils.cache import cache 
 
 from app.handlers import (
@@ -63,25 +63,16 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         storage = MemoryStorage()
     
     dp = Dispatcher(storage=storage)
-    
-    # Порядок middleware важен!
     dp.message.middleware(LoggingMiddleware())
     dp.callback_query.middleware(LoggingMiddleware())
-    
-    # AuthMiddleware должен быть раньше MaintenanceMiddleware
     dp.message.middleware(AuthMiddleware())
     dp.callback_query.middleware(AuthMiddleware())
-    
-    # MaintenanceMiddleware проверяет режим техработ после авторизации
     dp.message.middleware(MaintenanceMiddleware())
     dp.callback_query.middleware(MaintenanceMiddleware())
-    
     dp.message.middleware(ThrottlingMiddleware())
     dp.callback_query.middleware(ThrottlingMiddleware())
     dp.message.middleware(SubscriptionStatusMiddleware())
     dp.callback_query.middleware(SubscriptionStatusMiddleware())
-    
-    # Регистрация обработчиков
     start.register_handlers(dp)
     menu.register_handlers(dp)
     subscription.register_handlers(dp)
@@ -89,8 +80,6 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     promocode.register_handlers(dp)
     referral.register_handlers(dp)
     support.register_handlers(dp)
-    
-    # Админские обработчики
     admin_main.register_handlers(dp)
     admin_users.register_handlers(dp)
     admin_subscriptions.register_handlers(dp)
@@ -102,11 +91,10 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_rules.register_handlers(dp)
     admin_remnawave.register_handlers(dp)
     admin_statistics.register_handlers(dp)
-    admin_maintenance.register_handlers(dp)  # Новые обработчики техработ
+    admin_maintenance.register_handlers(dp)
 
     common.register_handlers(dp)
     
-    # Запуск мониторинга техработ
     try:
         await maintenance_service.start_monitoring()
         logger.info("Мониторинг техработ запущен")
