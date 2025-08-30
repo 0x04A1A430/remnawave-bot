@@ -74,6 +74,7 @@ async def main():
         bot, dp = await setup_bot()
         
         monitoring_service.bot = bot
+        maintenance_service.set_bot(bot) 
         
         if settings.TRIBUTE_ENABLED:
             logger.info("🌐 Запуск webhook сервера для Tribute...")
