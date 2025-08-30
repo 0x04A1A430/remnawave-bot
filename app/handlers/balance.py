@@ -500,14 +500,14 @@ async def check_yookassa_payment_status(
         emoji = status_emoji.get(payment.status, "❓")
         status = status_text.get(payment.status, "Неизвестно")
         
-        message_text = (f"💳 <b>Статус платежа</b>\n\n"
+        message_text = (f"💳 Статус платежа:\n\n"
                        f"🆔 ID: {payment.yookassa_payment_id[:8]}...\n"
                        f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n"
                        f"📊 Статус: {emoji} {status}\n"
                        f"📅 Создан: {payment.created_at.strftime('%d.%m.%Y %H:%M')}\n")
         
         if payment.is_succeeded:
-            message_text += "\n✅ Платеж успешно завершен!\nСредства зачислены на баланс."
+            message_text += "\n✅ Платеж успешно завершен!\n\nСредства зачислены на баланс."
         elif payment.is_pending:
             message_text += "\n⏳ Платеж ожидает оплаты. Нажмите кнопку 'Оплатить' выше."
         elif payment.is_failed:
