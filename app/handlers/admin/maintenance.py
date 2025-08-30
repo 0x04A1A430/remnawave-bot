@@ -26,12 +26,10 @@ async def show_maintenance_panel(
     db: AsyncSession,
     state: FSMContext
 ):
-    """Показывает панель управления техработами"""
     texts = get_texts(db_user.language)
     
     status_info = maintenance_service.get_status_info()
     
-    # Формируем информацию о статусе
     status_emoji = "🔧" if status_info["is_active"] else "✅"
     status_text = "Включен" if status_info["is_active"] else "Выключен"
     
@@ -41,7 +39,6 @@ async def show_maintenance_panel(
     monitoring_emoji = "🔄" if status_info["monitoring_active"] else "⏹️"
     monitoring_text = "Запущен" if status_info["monitoring_active"] else "Остановлен"
     
-    # Информация о включении
     enabled_info = ""
     if status_info["is_active"] and status_info["enabled_at"]:
         enabled_time = status_info["enabled_at"].strftime("%d.%m.%Y %H:%M:%S")
@@ -49,13 +46,11 @@ async def show_maintenance_panel(
         if status_info["reason"]:
             enabled_info += f"\n📝 <b>Причина:</b> {status_info['reason']}"
     
-    # Информация о последней проверке
     last_check_info = ""
     if status_info["last_check"]:
         last_check_time = status_info["last_check"].strftime("%H:%M:%S")
         last_check_info = f"\n🕐 <b>Последняя проверка:</b> {last_check_time}"
     
-    # Информация о неудачных попытках
     failures_info = ""
     if status_info["consecutive_failures"] > 0:
         failures_info = f"\n⚠️ <b>Неудачных проверок подряд:</b> {status_info['consecutive_failures']}"
@@ -90,18 +85,15 @@ async def toggle_maintenance_mode(
     db: AsyncSession,
     state: FSMContext
 ):
-    """Переключает режим техработ"""
     is_active = maintenance_service.is_maintenance_active()
     
     if is_active:
-        # Выключаем техработы
         success = await maintenance_service.disable_maintenance()
         if success:
             await callback.answer("Режим техработ выключен", show_alert=True)
         else:
             await callback.answer("Ошибка выключения режима техработ", show_alert=True)
     else:
-        # Включаем техработы - спрашиваем причину
         await state.set_state(MaintenanceStates.waiting_for_reason)
         await callback.message.edit_text(
             "🔧 <b>Включение режима техработ</b>\n\nВведите причину включения техработ или отправьте /skip для пропуска:",
@@ -121,7 +113,6 @@ async def process_maintenance_reason(
     db: AsyncSession,
     state: FSMContext
 ):
-    """Обрабатывает ввод причины техработ"""
     current_state = await state.get_state()
     
     if current_state != MaintenanceStates.waiting_for_reason:
@@ -129,7 +120,7 @@ async def process_maintenance_reason(
     
     reason = None
     if message.text and message.text != "/skip":
-        reason = message.text[:200]  # Ограничиваем длину
+        reason = message.text[:200] 
     
     success = await maintenance_service.enable_maintenance(reason=reason, auto=False)
     
@@ -143,7 +134,6 @@ async def process_maintenance_reason(
     await message.answer(response_text)
     await state.clear()
     
-    # Показываем обновленную панель
     status_info = maintenance_service.get_status_info()
     await message.answer(
         "Вернуться к панели управления техработами:",
@@ -160,7 +150,6 @@ async def toggle_monitoring(
     db_user: User,
     db: AsyncSession
 ):
-    """Переключает мониторинг API"""
     status_info = maintenance_service.get_status_info()
     
     if status_info["monitoring_active"]:
@@ -172,7 +161,6 @@ async def toggle_monitoring(
     
     await callback.answer(message, show_alert=True)
     
-    # Обновляем панель
     await show_maintenance_panel(callback, db_user, db, None)
 
 
@@ -183,7 +171,6 @@ async def force_api_check(
     db_user: User, 
     db: AsyncSession
 ):
-    """Принудительная проверка API"""
     await callback.answer("Проверка API...", show_alert=False)
     
     check_result = await maintenance_service.force_api_check()
@@ -196,7 +183,6 @@ async def force_api_check(
     
     await callback.message.answer(message)
     
-    # Обновляем панель
     await show_maintenance_panel(callback, db_user, db, None)
 
 
@@ -207,7 +193,6 @@ async def back_to_admin_panel(
     db_user: User,
     db: AsyncSession
 ):
-    """Возвращение в главную админку"""
     texts = get_texts(db_user.language)
     
     await callback.message.edit_text(
@@ -218,39 +203,32 @@ async def back_to_admin_panel(
 
 
 def register_handlers(dp: Dispatcher):
-    """Регистрирует обработчики техработ"""
     
-    # Панель управления техработами
     dp.callback_query.register(
         show_maintenance_panel,
         F.data == "maintenance_panel"
     )
     
-    # Переключение режима техработ
     dp.callback_query.register(
         toggle_maintenance_mode,
         F.data == "maintenance_toggle"
     )
     
-    # Переключение мониторинга
     dp.callback_query.register(
         toggle_monitoring,
         F.data == "maintenance_monitoring"
     )
     
-    # Принудительная проверка API
     dp.callback_query.register(
         force_api_check,
         F.data == "maintenance_check_api"
     )
     
-    # Возврат в админку
     dp.callback_query.register(
         back_to_admin_panel,
         F.data == "admin_panel"
     )
     
-    # Обработка ввода причины техработ
     dp.message.register(
         process_maintenance_reason,
         MaintenanceStates.waiting_for_reason
