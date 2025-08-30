@@ -28,10 +28,30 @@ class WebhookServer:
         self.yookassa_runner = None
         self.yookassa_site = None
     
+    def _create_logging_middleware(self):
+        @web.middleware
+        async def logging_middleware(request, handler):
+            start_time = request.loop.time()
+            
+            try:
+                response = await handler(request)
+                process_time = request.loop.time() - start_time
+                
+                logger.info(f"{request.method} {request.path_qs} -> {response.status} ({process_time:.3f}s)")
+                
+                return response
+            
+            except Exception as e:
+                process_time = request.loop.time() - start_time
+                logger.error(f"{request.method} {request.path_qs} -> ERROR ({process_time:.3f}s): {e}")
+                raise
+        
+        return logging_middleware
+    
     async def create_tribute_app(self) -> web.Application:
         self.tribute_app = web.Application()
         
-        self.tribute_app.middlewares.append(self._logging_middleware)
+        self.tribute_app.middlewares.append(self._create_logging_middleware())
         
         self.tribute_app.router.add_post(settings.TRIBUTE_WEBHOOK_PATH, self._tribute_webhook_handler)
         self.tribute_app.router.add_get('/health', self._tribute_health_check)
@@ -45,7 +65,7 @@ class WebhookServer:
     async def create_yookassa_app(self) -> web.Application:
         self.yookassa_app = web.Application()
         
-        self.yookassa_app.middlewares.append(self._logging_middleware)
+        self.yookassa_app.middlewares.append(self._create_logging_middleware())
         
         self.yookassa_app.router.add_post(settings.YOOKASSA_WEBHOOK_PATH, self.yookassa_handler.handle_webhook)
         self.yookassa_app.router.add_get('/health', self._yookassa_health_check)
@@ -225,19 +245,3 @@ class WebhookServer:
             "yookassa_enabled": settings.is_yookassa_enabled(),
             "port": settings.YOOKASSA_WEBHOOK_PORT
         })
-    
-    async def _logging_middleware(self, request: web.Request, handler):
-        start_time = request.loop.time()
-        
-        try:
-            response = await handler(request)
-            process_time = request.loop.time() - start_time
-            
-            logger.info(f"{request.method} {request.path_qs} -> {response.status} ({process_time:.3f}s)")
-            
-            return response
-        
-        except Exception as e:
-            process_time = request.loop.time() - start_time
-            logger.error(f"{request.method} {request.path_qs} -> ERROR ({process_time:.3f}s): {e}")
-            raise
