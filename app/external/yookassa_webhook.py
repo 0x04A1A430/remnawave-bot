@@ -91,11 +91,23 @@ class YooKassaWebhookHandler:
         
         webhook_path = settings.YOOKASSA_WEBHOOK_PATH
         app.router.add_post(webhook_path, self.handle_webhook)
+        app.router.add_get(webhook_path, self._get_handler) 
         app.router.add_options(webhook_path, self._options_handler)  
         
         logger.info(f"✅ Настроен YooKassa webhook на пути: POST {webhook_path}")
     
+    async def _get_handler(self, request: web.Request) -> web.Response:
+        """Обработчик GET запросов для тестирования"""
+        return web.json_response({
+            "status": "ok",
+            "message": "YooKassa webhook endpoint is working",
+            "method": "GET",
+            "path": request.path,
+            "note": "Use POST method for actual webhooks"
+        })
+    
     async def _options_handler(self, request: web.Request) -> web.Response:
+        """Обработчик OPTIONS запросов для CORS"""
         return web.Response(
             status=200,
             headers={
@@ -109,26 +121,6 @@ class YooKassaWebhookHandler:
 def create_yookassa_webhook_app(payment_service: PaymentService) -> web.Application:
     
     app = web.Application()
-    
-    async def logging_middleware(request, handler):
-        start_time = request.loop.time()
-        
-        try:
-            response = await handler(request)
-            process_time = request.loop.time() - start_time
-            
-            logger.info(f"YooKassa webhook {request.method} {request.path_qs} "
-                       f"-> {response.status} ({process_time:.3f}s)")
-            
-            return response
-        
-        except Exception as e:
-            process_time = request.loop.time() - start_time
-            logger.error(f"YooKassa webhook {request.method} {request.path_qs} "
-                        f"-> ERROR ({process_time:.3f}s): {e}")
-            raise
-    
-    app.middlewares.append(logging_middleware)
     
     webhook_handler = YooKassaWebhookHandler(payment_service)
     webhook_handler.setup_routes(app)
