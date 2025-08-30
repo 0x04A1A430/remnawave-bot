@@ -9,7 +9,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-class TributeService:
+class TributeAPI:
     
     def __init__(self):
         self.api_key = settings.TRIBUTE_API_KEY
