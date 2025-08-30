@@ -23,26 +23,21 @@ class MaintenanceStatus:
 
 
 class MaintenanceService:
-    """
-    Сервис для управления режимом технических работ
-    """
     
     def __init__(self):
         self._status = MaintenanceStatus(is_active=False)
         self._check_task: Optional[asyncio.Task] = None
         self._is_checking = False
-        self._max_consecutive_failures = 3  # После 3 неудачных проверок включаем техработы
+        self._max_consecutive_failures = 3 
         
     @property
     def status(self) -> MaintenanceStatus:
         return self._status
     
     def is_maintenance_active(self) -> bool:
-        """Проверяет, активен ли режим техработ"""
         return self._status.is_active
     
     def get_maintenance_message(self) -> str:
-        """Получает сообщение о техработах"""
         if self._status.auto_enabled:
             return f"""
 🔧 <b>Технические работы</b>
@@ -57,7 +52,6 @@ class MaintenanceService:
             return settings.get_maintenance_message()
     
     async def enable_maintenance(self, reason: Optional[str] = None, auto: bool = False) -> bool:
-        """Включает режим техработ"""
         try:
             if self._status.is_active:
                 logger.warning("Режим техработ уже включен")
@@ -68,7 +62,6 @@ class MaintenanceService:
             self._status.reason = reason or ("Автоматическое включение" if auto else "Включено администратором")
             self._status.auto_enabled = auto
             
-            # Сохраняем состояние в кеше
             await self._save_status_to_cache()
             
             logger.warning(f"🔧 Режим техработ ВКЛЮЧЕН. Причина: {self._status.reason}")
@@ -79,7 +72,6 @@ class MaintenanceService:
             return False
     
     async def disable_maintenance(self) -> bool:
-        """Выключает режим техработ"""
         try:
             if not self._status.is_active:
                 logger.info("Режим техработ уже выключен")
@@ -91,7 +83,6 @@ class MaintenanceService:
             self._status.auto_enabled = False
             self._status.consecutive_failures = 0
             
-            # Сохраняем состояние в кеше
             await self._save_status_to_cache()
             
             logger.info("✅ Режим техработ ВЫКЛЮЧЕН")
@@ -102,13 +93,11 @@ class MaintenanceService:
             return False
     
     async def start_monitoring(self) -> bool:
-        """Запускает мониторинг API RemnaWave"""
         try:
             if self._check_task and not self._check_task.done():
                 logger.warning("Мониторинг уже запущен")
                 return True
             
-            # Загружаем состояние из кеша
             await self._load_status_from_cache()
             
             self._check_task = asyncio.create_task(self._monitoring_loop())
@@ -120,7 +109,6 @@ class MaintenanceService:
             return False
     
     async def stop_monitoring(self) -> bool:
-        """Останавливает мониторинг API"""
         try:
             if self._check_task and not self._check_task.done():
                 self._check_task.cancel()
@@ -137,7 +125,6 @@ class MaintenanceService:
             return False
     
     async def check_api_status(self) -> bool:
-        """Проверяет доступность API RemnaWave"""
         try:
             if self._is_checking:
                 return self._status.api_status
@@ -148,14 +135,12 @@ class MaintenanceService:
             api = RemnaWaveAPI(settings.REMNAWAVE_API_URL, settings.REMNAWAVE_API_KEY)
             
             async with api:
-                # Проверяем подключение к API
                 is_connected = await test_api_connection(api)
                 
                 if is_connected:
                     self._status.api_status = True
                     self._status.consecutive_failures = 0
                     
-                    # Если техработы были включены автоматически и API восстановился
                     if self._status.is_active and self._status.auto_enabled:
                         await self.disable_maintenance()
                         logger.info("✅ API восстановился, режим техработ автоматически отключен")
@@ -165,7 +150,6 @@ class MaintenanceService:
                     self._status.api_status = False
                     self._status.consecutive_failures += 1
                     
-                    # Включаем техработы автоматически при множественных сбоях
                     if (self._status.consecutive_failures >= self._max_consecutive_failures and
                         not self._status.is_active and
                         settings.is_maintenance_auto_enable()):
@@ -187,7 +171,6 @@ class MaintenanceService:
             await self._save_status_to_cache()
     
     async def _monitoring_loop(self):
-        """Основной цикл мониторинга"""
         while True:
             try:
                 await self.check_api_status()
@@ -198,10 +181,9 @@ class MaintenanceService:
                 break
             except Exception as e:
                 logger.error(f"Ошибка в цикле мониторинга: {e}")
-                await asyncio.sleep(30)  # Ждем полминуты при ошибке
+                await asyncio.sleep(30) 
     
     async def _save_status_to_cache(self):
-        """Сохраняет состояние в кеше"""
         try:
             status_data = {
                 "is_active": self._status.is_active,
@@ -218,7 +200,6 @@ class MaintenanceService:
             logger.error(f"Ошибка сохранения состояния в кеш: {e}")
     
     async def _load_status_from_cache(self):
-        """Загружает состояние из кеша"""
         try:
             status_data = await cache.get("maintenance_status")
             if not status_data:
@@ -241,7 +222,6 @@ class MaintenanceService:
             logger.error(f"Ошибка загрузки состояния из кеша: {e}")
     
     def get_status_info(self) -> Dict[str, Any]:
-        """Возвращает информацию о статусе техработ для админки"""
         return {
             "is_active": self._status.is_active,
             "enabled_at": self._status.enabled_at,
@@ -256,7 +236,6 @@ class MaintenanceService:
         }
     
     async def force_api_check(self) -> Dict[str, Any]:
-        """Принудительная проверка API для админки"""
         start_time = datetime.utcnow()
         
         try:
@@ -286,5 +265,4 @@ class MaintenanceService:
             }
 
 
-# Глобальный экземпляр сервиса
 maintenance_service = MaintenanceService()
