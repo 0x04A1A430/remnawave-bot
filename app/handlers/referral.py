@@ -85,13 +85,7 @@ async def create_invite_message(
         [
             types.InlineKeyboardButton(
                 text="📤 Поделиться",
-                switch_inline_query=invite_text
-            )
-        ],
-        [
-            types.InlineKeyboardButton(
-                text="📋 Скопировать ссылку",
-                callback_data="copy_referral_link"
+                switch_inline_query=invite_text 
             )
         ],
         [
@@ -104,26 +98,12 @@ async def create_invite_message(
     
     await callback.message.edit_text(
         f"📝 <b>Приглашение создано!</b>\n\n"
-        f"Используйте кнопку ниже для отправки приглашения или скопируйте текст:\n\n"
+        f"Нажмите кнопку «📤 Поделиться» чтобы отправить приглашение в любой чат, или скопируйте текст ниже:\n\n"
         f"<code>{invite_text}</code>",
         reply_markup=keyboard,
         parse_mode="HTML"
     )
     await callback.answer()
-
-
-async def copy_referral_link(
-    callback: types.CallbackQuery,
-    db_user: User
-):
-    
-    bot_username = (await callback.bot.get_me()).username
-    referral_link = f"https://t.me/{bot_username}?start={db_user.referral_code}"
-    
-    await callback.answer(
-        f"Ссылка скопирована: {referral_link}",
-        show_alert=True
-    )
 
 
 def register_handlers(dp: Dispatcher):
@@ -136,9 +116,4 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         create_invite_message,
         F.data == "referral_create_invite"
-    )
-    
-    dp.callback_query.register(
-        copy_referral_link,
-        F.data == "copy_referral_link"
     )
