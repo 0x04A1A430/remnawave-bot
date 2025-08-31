@@ -45,7 +45,8 @@ async def show_messages_menu(
     
     await callback.message.edit_text(
         text,
-        reply_markup=get_admin_messages_keyboard(db_user.language)
+        reply_markup=get_admin_messages_keyboard(db_user.language),
+        parse_mode="HTML"  
     )
     await callback.answer()
 
@@ -60,7 +61,8 @@ async def show_broadcast_targets(
     await callback.message.edit_text(
         "🎯 <b>Выбор целевой аудитории</b>\n\n"
         "Выберите категорию пользователей для рассылки:",
-        reply_markup=get_broadcast_target_keyboard(db_user.language)
+        reply_markup=get_broadcast_target_keyboard(db_user.language),
+        parse_mode="HTML" 
     )
     await callback.answer()
 
@@ -118,7 +120,8 @@ async def show_messages_history(
     
     await callback.message.edit_text(
         text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML"  
     )
     await callback.answer()
 
@@ -135,7 +138,7 @@ async def show_custom_broadcast(
     stats = await get_users_statistics(db)
     
     text = f"""
-🔍 <b>Рассылка по критериям</b>
+📝 <b>Рассылка по критериям</b>
 
 📊 <b>Доступные фильтры:</b>
 
@@ -158,7 +161,8 @@ async def show_custom_broadcast(
     
     await callback.message.edit_text(
         text,
-        reply_markup=get_custom_criteria_keyboard(db_user.language)
+        reply_markup=get_custom_criteria_keyboard(db_user.language),
+        parse_mode="HTML" 
     )
     await callback.answer()
 
@@ -196,7 +200,8 @@ async def select_custom_criteria(
         f"<i>Поддерживается HTML разметка</i>",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")]
-        ])
+        ]),
+        parse_mode="HTML" 
     )
     
     await state.set_state(AdminStates.waiting_for_broadcast_message)
@@ -233,7 +238,8 @@ async def select_broadcast_target(
         f"<i>Поддерживается HTML разметка</i>",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")]
-        ])
+        ]),
+        parse_mode="HTML" 
     )
     
     await state.set_state(AdminStates.waiting_for_broadcast_message)
@@ -284,7 +290,8 @@ async def process_broadcast_message(
     
     await message.answer(
         preview_text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML"  
     )
     await state.set_state(AdminStates.confirming_broadcast)
 
@@ -304,7 +311,8 @@ async def confirm_broadcast(
     await callback.message.edit_text(
         "📨 Начинаю рассылку...\n\n"
         "⏳ Это может занять несколько минут.",
-        reply_markup=None
+        reply_markup=None,
+        parse_mode="HTML" 
     )
     
     if target.startswith('custom_'):
@@ -367,7 +375,8 @@ async def confirm_broadcast(
         result_text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="📨 К рассылкам", callback_data="admin_messages")]
-        ])
+        ]),
+        parse_mode="HTML" 
     )
     
     await state.clear()
