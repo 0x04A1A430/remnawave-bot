@@ -63,6 +63,7 @@
 # 1. Скачай репозиторий
 git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot.git
 cd remnawave-bedolaga-telegram-bot
+или собери docker-compose.yml
 
 # 2. Настрой конфиг
 cp .env.example .env
