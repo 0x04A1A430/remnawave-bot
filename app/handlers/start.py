@@ -92,6 +92,37 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     
     if user and user.status != UserStatus.DELETED.value:
         logger.info(f"✅ Активный пользователь найден: {user.telegram_id}")
+        
+        profile_updated = False
+        
+        if user.username != message.from_user.username:
+            old_username = user.username
+            user.username = message.from_user.username
+            logger.info(f"📝 Username обновлен: '{old_username}' → '{user.username}'")
+            profile_updated = True
+        
+        if user.first_name != message.from_user.first_name:
+            old_first_name = user.first_name
+            user.first_name = message.from_user.first_name
+            logger.info(f"📝 Имя обновлено: '{old_first_name}' → '{user.first_name}'")
+            profile_updated = True
+        
+        if user.last_name != message.from_user.last_name:
+            old_last_name = user.last_name
+            user.last_name = message.from_user.last_name
+            logger.info(f"📝 Фамилия обновлена: '{old_last_name}' → '{user.last_name}'")
+            profile_updated = True
+        
+        user.last_activity = datetime.utcnow()
+        
+        if profile_updated:
+            user.updated_at = datetime.utcnow()
+            await db.commit()
+            await db.refresh(user)
+            logger.info(f"💾 Профиль пользователя {user.telegram_id} обновлен")
+        else:
+            await db.commit()
+        
         texts = get_texts(user.language)
         
         if referral_code and not user.referred_by_id:
@@ -163,6 +194,13 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             user.remnawave_uuid = None
             user.has_had_paid_subscription = False
             user.referred_by_id = None
+            
+            user.username = message.from_user.username
+            user.first_name = message.from_user.first_name
+            user.last_name = message.from_user.last_name
+            user.updated_at = datetime.utcnow()
+            user.last_activity = datetime.utcnow()
+            
             from app.utils.user_utils import generate_unique_referral_code
             user.referral_code = await generate_unique_referral_code(db, user.telegram_id)
             
