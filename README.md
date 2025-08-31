@@ -208,8 +208,6 @@ WEBHOOK_DOMAIN=your-domain.com
 ### 📄 docker-compose.yml
 
 ```yaml
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
