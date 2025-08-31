@@ -875,29 +875,31 @@ def get_specific_app_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) -> InlineKeyboardMarkup:
-    from app.localization.texts import get_texts
     texts = get_texts(language)
+    keyboard = []
     
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=f"📅 30 дней - {texts.format_price(prices[30])}", 
-                callback_data="extend_period_30"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"📅 90 дней - {texts.format_price(prices[90])}", 
-                callback_data="extend_period_90"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"📅 180 дней - {texts.format_price(prices[180])}", 
-                callback_data="extend_period_180"
-            )
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
-        ]
+    available_periods = settings.get_available_renewal_periods()
+    
+    period_display = {
+        14: "14 дней",
+        30: "30 дней", 
+        60: "60 дней",
+        90: "90 дней",
+        180: "180 дней",
+        360: "360 дней"
+    }
+    
+    for days in available_periods:
+        if days in prices and days in period_display:
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"📅 {period_display[days]} - {texts.format_price(prices[days])}", 
+                    callback_data=f"extend_period_{days}"
+                )
+            ])
+    
+    keyboard.append([
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
     ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
