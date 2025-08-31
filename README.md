@@ -90,41 +90,40 @@ docker compose logs -f bot
 <summary> 🔧 ВСЕ ПАРАМЕТРЫ .env</summary>
 
 ```env
-# ===== ОБЯЗАТЕЛЬНЫЕ НАСТРОЙКИ =====
+# ===============================================
+# 🤖 REMNAWAVE BEDOLAGA BOT CONFIGURATION
+# ===============================================
 
-# Токен вашего бота (получить у @BotFather)
+# ===== TELEGRAM BOT =====
 BOT_TOKEN=
-
-# Ваш Telegram ID (узнать у @userinfobot)
 ADMIN_IDS=
+SUPPORT_USERNAME=@support
 
-# URL панели Remnawave (например: https://your-panel.com)
+# ===== DATABASE =====
+# Для Docker используйте PostgreSQL:
+DATABASE_URL=postgresql+asyncpg://remnawave_user:secure_password_123@postgres:5432/remnawave_bot
+# Для локального запуска без Docker используйте SQLite: sqlite+aiosqlite:///./bot.db 
+# DATABASE_URL=postgresql+asyncpg://remnawave_user:secure_password_123@postgres:5432/remnawave_bot
+
+REDIS_URL=redis://redis:6379/0
+
+# Пароли для Docker (PostgreSQL/Redis)
+POSTGRES_DB=remnawave_bot
+POSTGRES_USER=remnawave_user
+POSTGRES_PASSWORD=secure_password_123
+
+# ===== REMNAWAVE API =====
 REMNAWAVE_API_URL=
-
-# API ключ из панели Remnawave
 REMNAWAVE_API_KEY=
 
-# Пароль для базы данных (придумайте сложный)
-POSTGRES_PASSWORD=
-
-# ===== ПЛАТЕЖНЫЕ СИСТЕМЫ =====
-
-# Telegram Stars (работает автоматически)
-TELEGRAM_STARS_ENABLED=true
-
-# Tribute (https://tribute.app)
-TRIBUTE_ENABLED=false
-TRIBUTE_API_KEY=
-TRIBUTE_DONATE_LINK=
-TRIBUTE_WEBHOOK_SECRET=your_webhook_secret
-TRIBUTE_WEBHOOK_PORT=8081
-
-# YooKassa (https://yookassa.ru)
-YOOKASSA_ENABLED=false
-YOOKASSA_SHOP_ID=
-YOOKASSA_SECRET_KEY=
-YOOKASSA_DEFAULT_RECEIPT_EMAIL=receipts@yourdomain.com
-YOOKASSA_WEBHOOK_PORT=8082
+# ===== ТРИАЛ ПОДПИСКА =====
+TRIAL_DURATION_DAYS=3
+TRIAL_TRAFFIC_LIMIT_GB=10
+TRIAL_DEVICE_LIMIT=1
+TRIAL_SQUAD_UUID=
+DEFAULT_TRAFFIC_RESET_STRATEGY=MONTH
+DEFAULT_TRAFFIC_LIMIT_GB=100
+DEFAULT_DEVICE_LIMIT=1
 
 # ===== НАСТРОЙКИ ТРАФИКА =====
 # Режим выбора трафика:
@@ -134,69 +133,154 @@ TRAFFIC_SELECTION_MODE=selectable
 
 # Фиксированный лимит трафика в ГБ (используется только в режиме "fixed")
 # 0 = безлимит
-FIXED_TRAFFIC_LIMIT_GB=0
+FIXED_TRAFFIC_LIMIT_GB=100
+
+# ===== ПЕРИОДЫ ПОДПИСКИ =====
+# Доступные периоды подписки (через запятую)
+# Возможные значения: 14,30,60,90,180,360
+AVAILABLE_SUBSCRIPTION_PERIODS=30,90,180
+AVAILABLE_RENEWAL_PERIODS=30,90,180
 
 # ===== ЦЕНЫ (в копейках) =====
-PRICE_14_DAYS=5000
-PRICE_30_DAYS=9900  
-PRICE_60_DAYS=18900
-PRICE_90_DAYS=26900
-PRICE_180_DAYS=49900
-PRICE_360_DAYS=89900
+BASE_SUBSCRIPTION_PRICE=0
 
-PRICE_TRAFFIC_5GB=2000
-PRICE_TRAFFIC_10GB=4000
-PRICE_TRAFFIC_25GB=6000
-PRICE_TRAFFIC_50GB=10000
-PRICE_TRAFFIC_100GB=15000
-PRICE_TRAFFIC_250GB=20000
-PRICE_TRAFFIC_UNLIMITED=25000
+# Цены за периоды
+PRICE_14_DAYS=7000
+PRICE_30_DAYS=9900
+PRICE_60_DAYS=25900
+PRICE_90_DAYS=36900
+PRICE_180_DAYS=69900
+PRICE_360_DAYS=109900
 
+# Цены за трафик
+PRICE_TRAFFIC_5GB=1000
+PRICE_TRAFFIC_10GB=2000
+PRICE_TRAFFIC_25GB=3000
+PRICE_TRAFFIC_50GB=4000
+PRICE_TRAFFIC_100GB=6000
+PRICE_TRAFFIC_250GB=10000
+PRICE_TRAFFIC_UNLIMITED=15000
+
+# Цена за дополнительное устройство
 PRICE_PER_DEVICE=5000
 
-# ===== ТРИАЛ ПОДПИСКА =====
-TRIAL_DURATION_DAYS=3
-TRIAL_TRAFFIC_LIMIT_GB=10
-TRIAL_DEVICE_LIMIT=2
-TRIAL_SQUAD_UUID=
-
 # ===== РЕФЕРАЛЬНАЯ СИСТЕМА =====
-REFERRAL_REGISTRATION_REWARD=5000
+REFERRAL_REGISTRATION_REWARD=10000
 REFERRED_USER_REWARD=10000
 REFERRAL_COMMISSION_PERCENT=25
 
-# ===== ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ =====
-# Доступные периоды подписки (через запятую)
-AVAILABLE_SUBSCRIPTION_PERIODS=14,30,60,90,180,360
-AVAILABLE_RENEWAL_PERIODS=30,90,180
+# ===== АВТОПРОДЛЕНИЕ =====
+AUTOPAY_WARNING_DAYS=3,1
+DEFAULT_AUTOPAY_DAYS_BEFORE=3
+MIN_BALANCE_FOR_AUTOPAY_KOPEKS=10000
+
+# ===== ПЛАТЕЖНЫЕ СИСТЕМЫ =====
+
+# Telegram Stars (работает автоматически)
+TELEGRAM_STARS_ENABLED=true
+
+# Tribute (https://tribute.app)
+TRIBUTE_ENABLED=false
+TRIBUTE_API_KEY=
+TRIBUTE_WEBHOOK_SECRET=your_webhook_secret
+TRIBUTE_DONATE_LINK=
+TRIBUTE_WEBHOOK_PATH=/tribute-webhook
+TRIBUTE_WEBHOOK_PORT=8081
+
+# YooKassa (https://yookassa.ru)
+YOOKASSA_ENABLED=false
+YOOKASSA_SHOP_ID=
+YOOKASSA_SECRET_KEY=
+YOOKASSA_RETURN_URL=
+YOOKASSA_DEFAULT_RECEIPT_EMAIL=receipts@yourdomain.com
+
+# Настройки чеков для налоговой
+YOOKASSA_VAT_CODE=1
+# Коды НДС:
+# 1 - НДС не облагается
+# 2 - НДС 0%
+# 3 - НДС 10%
+# 4 - НДС 20%
+# 5 - НДС 10/110
+# 6 - НДС 20/120
+
+YOOKASSA_PAYMENT_MODE=full_payment
+# Способы расчета:
+# full_payment - полная оплата
+# partial_payment - частичная оплата
+# advance - аванс
+# full_prepayment - полная предоплата
+# partial_prepayment - частичная предоплата
+# credit - передача в кредит
+# credit_payment - оплата кредита
+
+YOOKASSA_PAYMENT_SUBJECT=service
+# Предметы расчета:
+# commodity - товар
+# excise - подакцизный товар
+# job - работа
+# service - услуга
+# gambling_bet - ставка в азартной игре
+# gambling_prize - выигрыш в азартной игре
+# lottery - лотерейный билет
+# lottery_prize - выигрыш в лотерее
+# intellectual_activity - результат интеллектуальной деятельности
+# payment - платеж
+# agent_commission - агентское вознаграждение
+# composite - составной предмет расчета
+# another - другое
+
+# Webhook настройки
+YOOKASSA_WEBHOOK_PATH=/yookassa-webhook
+YOOKASSA_WEBHOOK_PORT=8082
+YOOKASSA_WEBHOOK_SECRET=your_webhook_secret
+
+# ===== ИНТЕРФЕЙС И UX =====
 
 # Режим работы кнопки "Подключиться"
 # guide - открывает гайд подключения (режим 1)
 # miniapp_subscription - открывает ссылку подписки в мини-приложении (режим 2)
 # miniapp_custom - открывает заданную ссылку в мини-приложении (режим 3)
-CONNECT_BUTTON_MODE=miniapp_subscription
+CONNECT_BUTTON_MODE=guide
 
-# Автопродление - за сколько дней предупреждать
-AUTOPAY_WARNING_DAYS=3,1
+# URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
+MINIAPP_CUSTOM_URL=
 
-# Мониторинг
+# ===== МОНИТОРИНГ И УВЕДОМЛЕНИЯ =====
 MONITORING_INTERVAL=60
+INACTIVE_USER_DELETE_MONTHS=3
+
+# Уведомления
 TRIAL_WARNING_HOURS=2
 ENABLE_NOTIFICATIONS=true
+NOTIFICATION_RETRY_ATTEMPTS=3
+MONITORING_LOGS_RETENTION_DAYS=30
+NOTIFICATION_CACHE_HOURS=24
 
-# База данных
-POSTGRES_DB=remnawave_bot
-POSTGRES_USER=remnawave_user
+# ===== РЕЖИМ ТЕХНИЧЕСКИХ РАБОТ =====
+MAINTENANCE_MODE=false
+MAINTENANCE_CHECK_INTERVAL=30
+MAINTENANCE_AUTO_ENABLE=true
+MAINTENANCE_MESSAGE=Ведутся технические работы. Сервис временно недоступен. Попробуйте позже.
 
-# Логи
+# ===== ЛОКАЛИЗАЦИЯ =====
+DEFAULT_LANGUAGE=ru
+AVAILABLE_LANGUAGES=ru,en
+
+# ===== ЛОГИРОВАНИЕ =====
 LOG_LEVEL=INFO
+LOG_FILE=logs/bot.log
+
+# ===== РАЗРАБОТКА =====
 DEBUG=false
+WEBHOOK_URL=
+WEBHOOK_PATH=/webhook
 
-# Поддержка
-SUPPORT_USERNAME=
-
-# Домен для webhook'ов (только если используете Tribute/YooKassa)
-WEBHOOK_DOMAIN=your-domain.com
+# ===== ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ =====
+# Конфигурация приложений для гайда подключения
+APP_CONFIG_PATH=app-config.json
+ENABLE_DEEP_LINKS=true
+APP_CONFIG_CACHE_TTL=3600
 ```
 
 </details>
