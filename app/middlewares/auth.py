@@ -42,20 +42,30 @@ class AuthMiddleware(BaseMiddleware):
                     if state:
                         current_state = await state.get_state()
                     
+                    logger.info(f"🔍 DEBUG AUTH: user_id={user.id}, current_state={current_state}, event_type={type(event).__name__}")
+                    if isinstance(event, Message):
+                        logger.info(f"🔍 DEBUG AUTH: message_text='{event.text}'")
+                    
                     registration_states = [
                         RegistrationStates.waiting_for_rules_accept,
                         RegistrationStates.waiting_for_referral_code
                     ]
                     
+                    is_start_command = isinstance(event, Message) and event.text and event.text.startswith('/start')
+                    is_registration_callback = isinstance(event, CallbackQuery) and event.data and event.data in ['rules_accept', 'rules_decline', 'referral_skip']
+                    is_waiting_rules = current_state == RegistrationStates.waiting_for_rules_accept.state
+                    is_waiting_referral = current_state == RegistrationStates.waiting_for_referral_code.state
+                    is_message_in_referral_state = isinstance(event, Message) and is_waiting_referral
+                    
                     is_registration_process = (
-                        (isinstance(event, Message) and event.text and event.text.startswith('/start'))
-                        or (isinstance(event, CallbackQuery) and current_state and 
-                            any(str(state) in str(current_state) for state in registration_states))
-                        or (isinstance(event, CallbackQuery) and event.data and 
-                            (event.data in ['rules_accept', 'rules_decline', 'referral_skip']))
-                        or (isinstance(event, Message) and current_state and 
-                            str(RegistrationStates.waiting_for_referral_code) in str(current_state))
+                        is_start_command 
+                        or is_registration_callback
+                        or is_waiting_rules 
+                        or is_message_in_referral_state
                     )
+                    
+                    logger.info(f"🔍 DEBUG AUTH: is_start={is_start_command}, is_callback={is_registration_callback}, is_waiting_rules={is_waiting_rules}, is_waiting_referral={is_waiting_referral}, is_msg_in_ref={is_message_in_referral_state}")
+                    logger.info(f"🔍 DEBUG AUTH: final_result={is_registration_process}")
                     
                     if is_registration_process:
                         logger.info(f"📝 Пропускаем пользователя {user.id} в процессе регистрации")
@@ -93,20 +103,23 @@ class AuthMiddleware(BaseMiddleware):
                         if state:
                             current_state = await state.get_state()
                         
-                        registration_states = [
-                            RegistrationStates.waiting_for_rules_accept,
-                            RegistrationStates.waiting_for_referral_code
-                        ]
+                        logger.info(f"🔍 DEBUG AUTH DELETED: user_id={user.id}, current_state={current_state}, event_type={type(event).__name__}")
+                        
+                        is_start_command = isinstance(event, Message) and event.text and event.text.startswith('/start')
+                        is_registration_callback = isinstance(event, CallbackQuery) and event.data and event.data in ['rules_accept', 'rules_decline', 'referral_skip']
+                        is_waiting_rules = current_state == RegistrationStates.waiting_for_rules_accept.state
+                        is_waiting_referral = current_state == RegistrationStates.waiting_for_referral_code.state
+                        is_message_in_referral_state = isinstance(event, Message) and is_waiting_referral
                         
                         is_start_or_registration = (
-                            (isinstance(event, Message) and event.text and event.text.startswith('/start'))
-                            or (isinstance(event, CallbackQuery) and current_state and 
-                                any(str(state) in str(current_state) for state in registration_states))
-                            or (isinstance(event, CallbackQuery) and event.data and 
-                                (event.data in ['rules_accept', 'rules_decline', 'referral_skip']))
-                            or (isinstance(event, Message) and current_state and 
-                                str(RegistrationStates.waiting_for_referral_code) in str(current_state))
+                            is_start_command 
+                            or is_registration_callback
+                            or is_waiting_rules 
+                            or is_message_in_referral_state
                         )
+                        
+                        logger.info(f"🔍 DEBUG AUTH DELETED: is_start={is_start_command}, is_callback={is_registration_callback}, is_waiting_rules={is_waiting_rules}, is_waiting_referral={is_waiting_referral}, is_msg_in_ref={is_message_in_referral_state}")
+                        logger.info(f"🔍 DEBUG AUTH DELETED: final_result={is_start_or_registration}")
                         
                         if is_start_or_registration:
                             logger.info(f"🔄 Удаленный пользователь {user.id} начинает повторную регистрацию")
