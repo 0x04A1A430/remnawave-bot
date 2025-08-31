@@ -188,9 +188,6 @@ async def show_promocode_management(
     )
     await callback.answer()
 
-
-# Замените эти функции в вашем файле
-
 @admin_required
 @error_handler
 async def show_promocode_edit_menu(
@@ -198,10 +195,9 @@ async def show_promocode_edit_menu(
     db_user: User,
     db: AsyncSession
 ):
-    callback_parts = callback.data.split('_')
-    if len(callback_parts) >= 3:
-        promo_id = int(callback_parts[2]) 
-    else:
+    try:
+        promo_id = int(callback.data.split('_')[-1])
+    except (ValueError, IndexError):
         await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
         return
     
@@ -283,10 +279,9 @@ async def start_edit_promocode_date(
     db_user: User,
     state: FSMContext
 ):
-    callback_parts = callback.data.split('_')
-    if len(callback_parts) >= 4:
-        promo_id = int(callback_parts[3]) 
-    else:
+    try:
+        promo_id = int(callback.data.split('_')[-1])
+    except (ValueError, IndexError):
         await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
         return
     
@@ -323,10 +318,9 @@ async def start_edit_promocode_amount(
     db_user: User,
     state: FSMContext
 ):
-    callback_parts = callback.data.split('_')
-    if len(callback_parts) >= 4:
-        promo_id = int(callback_parts[3]) 
-    else:
+    try:
+        promo_id = int(callback.data.split('_')[-1])
+    except (ValueError, IndexError):
         await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
         return
     
@@ -359,10 +353,10 @@ async def start_edit_promocode_days(
     db_user: User,
     state: FSMContext
 ):
-    callback_parts = callback.data.split('_')
-    if len(callback_parts) >= 4:
-        promo_id = int(callback_parts[3])
-    else:
+    # ИСПРАВЛЕНИЕ: берем последний элемент как ID
+    try:
+        promo_id = int(callback.data.split('_')[-1])
+    except (ValueError, IndexError):
         await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
         return
     
@@ -396,10 +390,9 @@ async def start_edit_promocode_uses(
     db_user: User,
     state: FSMContext
 ):
-    callback_parts = callback.data.split('_')
-    if len(callback_parts) >= 4:
-        promo_id = int(callback_parts[3]) 
-    else:
+    try:
+        promo_id = int(callback.data.split('_')[-1])
+    except (ValueError, IndexError):
         await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
         return
     
@@ -851,10 +844,9 @@ async def confirm_delete_promocode(
     db_user: User,
     db: AsyncSession
 ):
-    callback_parts = callback.data.split('_')
-    if len(callback_parts) >= 3:
-        promo_id = int(callback_parts[2]) 
-    else:
+    try:
+        promo_id = int(callback.data.split('_')[-1])
+    except (ValueError, IndexError):
         await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
         return
     
@@ -893,7 +885,6 @@ ID: {promo_id}
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer()
 
-
 @admin_required
 @error_handler
 async def delete_promocode_confirmed(
@@ -901,7 +892,11 @@ async def delete_promocode_confirmed(
     db_user: User,
     db: AsyncSession
 ):
-    promo_id = int(callback.data.split('_')[-1])
+    try:
+        promo_id = int(callback.data.split('_')[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
+        return
     
     promo = await db.get(PromoCode, promo_id)
     if not promo:
