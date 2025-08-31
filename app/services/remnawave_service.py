@@ -228,7 +228,6 @@ class RemnaWaveService:
                     'GBPS': 1024 ** 3
                 }
             
-                import re
                 match = re.match(r'([0-9.,]+)([A-Z]+)', bandwidth_str)
                 if match:
                     value_str = match.group(1).replace(',', '.') 
