@@ -74,14 +74,20 @@ async def create_invite_message(
     bot_username = (await callback.bot.get_me()).username
     referral_link = f"https://t.me/{bot_username}?start={db_user.referral_code}"
     
-    invite_text = f"🎉 Присоединяйся к VPN сервису!\n\n"
+    invite_text = f"?start={db_user.referral_code}\n\n"
+    invite_text += f"🎉 Присоединяйся к VPN сервису!\n\n"
     invite_text += f"💎 При регистрации по моей ссылке ты получишь {texts.format_price(settings.REFERRED_USER_REWARD)} на баланс!\n\n"
     invite_text += f"🚀 Быстрое подключение\n"
     invite_text += f"🌍 Серверы по всему миру\n"
-    invite_text += f"🔒 Надежная защита\n\n"
-    invite_text += f"👇 Переходи по ссылке:\n{referral_link}"
+    invite_text += f"🔒 Надежная защита"
     
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [
+            types.InlineKeyboardButton(
+                text="📤 Поделиться",
+                switch_inline_query=invite_text
+            )
+        ],
         [
             types.InlineKeyboardButton(
                 text=texts.BACK,
@@ -91,13 +97,9 @@ async def create_invite_message(
     ])
     
     await callback.message.edit_text(
-        f"📝 <b>Приглашение готово!</b>\n\n"
-        f"Скопируйте текст ниже и отправьте его друзьям:\n\n"
-        f"<code>{invite_text}</code>\n\n"
-        f"💡 <b>Как отправить:</b>\n"
-        f"• Выделите и скопируйте текст выше\n"
-        f"• Вставьте в любой чат с другом\n" 
-        f"• Отправьте сообщение",
+        f"📝 <b>Приглашение создано!</b>\n\n"
+        f"Нажмите кнопку «📤 Поделиться» для отправки:\n\n"
+        f"<code>{invite_text}</code>",
         reply_markup=keyboard,
         parse_mode="HTML"
     )
