@@ -355,6 +355,10 @@ async def complete_registration_from_callback(
         logger.warning(f"⚠️ Пользователь {callback.from_user.id} уже активен! Показываем главное меню.")
         texts = get_texts(existing_user.language)
         
+        data = await state.get_data()
+        if data.get('referral_code') and not existing_user.referred_by_id:
+            await callback.message.answer("ℹ️ Вы уже зарегистрированы в системе. Реферальная ссылка не может быть применена.")
+        
         has_active_subscription = existing_user.subscription is not None
         subscription_is_active = False
         
@@ -418,7 +422,7 @@ async def complete_registration_from_callback(
         user = existing_user
         logger.info(f"✅ Пользователь {callback.from_user.id} восстановлен")
         
-    else:
+    elif not existing_user:
         logger.info(f"🆕 Создаем нового пользователя {callback.from_user.id}")
         
         referral_code = await generate_unique_referral_code(db, callback.from_user.id)
@@ -433,6 +437,20 @@ async def complete_registration_from_callback(
             referred_by_id=referrer_id,
             referral_code=referral_code 
         )
+    else:
+        logger.info(f"🔄 Обновляем существующего пользователя {callback.from_user.id}")
+        existing_user.status = UserStatus.ACTIVE.value
+        existing_user.language = language
+        if referrer_id and not existing_user.referred_by_id:
+            existing_user.referred_by_id = referrer_id
+        
+        from datetime import datetime
+        existing_user.updated_at = datetime.utcnow()
+        existing_user.last_activity = datetime.utcnow()
+        
+        await db.commit()
+        await db.refresh(existing_user)
+        user = existing_user
     
     if referrer_id:
         try:
@@ -507,6 +525,42 @@ async def complete_registration(
     
     existing_user = await get_user_by_telegram_id(db, message.from_user.id)
     
+    if existing_user and existing_user.status == UserStatus.ACTIVE.value:
+        logger.warning(f"⚠️ Пользователь {message.from_user.id} уже активен! Показываем главное меню.")
+        texts = get_texts(existing_user.language)
+        
+        data = await state.get_data()
+        if data.get('referral_code') and not existing_user.referred_by_id:
+            await message.answer("ℹ️ Вы уже зарегистрированы в системе. Реферальная ссылка не может быть применена.")
+        
+        has_active_subscription = existing_user.subscription is not None
+        subscription_is_active = False
+        
+        if existing_user.subscription:
+            subscription_is_active = existing_user.subscription.is_active
+        
+        try:
+            await message.answer(
+                texts.MAIN_MENU.format(
+                    user_name=existing_user.full_name,
+                    balance=texts.format_price(existing_user.balance_kopeks),
+                    subscription_status=_get_subscription_status(existing_user, texts)
+                ),
+                reply_markup=get_main_menu_keyboard(
+                    language=existing_user.language,
+                    is_admin=settings.is_admin(existing_user.telegram_id),
+                    has_had_paid_subscription=existing_user.has_had_paid_subscription,
+                    has_active_subscription=has_active_subscription,
+                    subscription_is_active=subscription_is_active
+                )
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при показе главного меню существующему пользователю: {e}")
+            await message.answer(f"Добро пожаловать, {existing_user.full_name}!")
+        
+        await state.clear()
+        return
+    
     data = await state.get_data()
     language = data.get('language', 'ru')
     texts = get_texts(language)
@@ -539,7 +593,7 @@ async def complete_registration(
         user = existing_user
         logger.info(f"✅ Пользователь {message.from_user.id} восстановлен")
         
-    else:
+    elif not existing_user:
         logger.info(f"🆕 Создаем нового пользователя {message.from_user.id}")
         
         referral_code = await generate_unique_referral_code(db, message.from_user.id)
@@ -554,6 +608,20 @@ async def complete_registration(
             referred_by_id=referrer_id,
             referral_code=referral_code
         )
+    else:
+        logger.info(f"🔄 Обновляем существующего пользователя {message.from_user.id}")
+        existing_user.status = UserStatus.ACTIVE.value
+        existing_user.language = language
+        if referrer_id and not existing_user.referred_by_id:
+            existing_user.referred_by_id = referrer_id
+        
+        from datetime import datetime
+        existing_user.updated_at = datetime.utcnow()
+        existing_user.last_activity = datetime.utcnow()
+        
+        await db.commit()
+        await db.refresh(existing_user)
+        user = existing_user
     
     if referrer_id:
         try:
