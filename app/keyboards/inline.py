@@ -187,19 +187,25 @@ def get_subscription_period_keyboard(language: str = "ru") -> InlineKeyboardMark
     texts = get_texts(language)
     keyboard = []
     
-    periods = [
-        (14, texts.PERIOD_14_DAYS),
-        (30, texts.PERIOD_30_DAYS),
-        (60, texts.PERIOD_60_DAYS),
-        (90, texts.PERIOD_90_DAYS),
-        (180, texts.PERIOD_180_DAYS),
-        (360, texts.PERIOD_360_DAYS)
-    ]
+    available_periods = settings.get_available_subscription_periods()
     
-    for days, text in periods:
-        keyboard.append([
-            InlineKeyboardButton(text=text, callback_data=f"period_{days}")
-        ])
+    period_texts = {
+        14: texts.PERIOD_14_DAYS,
+        30: texts.PERIOD_30_DAYS,
+        60: texts.PERIOD_60_DAYS,
+        90: texts.PERIOD_90_DAYS,
+        180: texts.PERIOD_180_DAYS,
+        360: texts.PERIOD_360_DAYS
+    }
+    
+    for days in available_periods:
+        if days in period_texts:
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=period_texts[days], 
+                    callback_data=f"period_{days}"
+                )
+            ])
     
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
