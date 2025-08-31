@@ -227,12 +227,19 @@ async def get_promocode_statistics(db: AsyncSession, promocode_id: int) -> dict:
     today_uses = today_uses_result.scalar()
     
     recent_uses_result = await db.execute(
-        select(PromoCodeUse)
+        select(PromoCodeUse, User)
+        .join(User, PromoCodeUse.user_id == User.id)
         .where(PromoCodeUse.promocode_id == promocode_id)
         .order_by(PromoCodeUse.used_at.desc())
         .limit(10)
     )
-    recent_uses = recent_uses_result.scalars().all()
+    recent_uses_data = recent_uses_result.all()
+    
+    recent_uses = []
+    for use, user in recent_uses_data:
+        use.user_username = user.username
+        use.user_full_name = user.full_name
+        recent_uses.append(use)
     
     return {
         "total_uses": total_uses,
