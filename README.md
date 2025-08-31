@@ -329,7 +329,7 @@ services:
       retries: 3
 
   bot:
-    build: .
+    image: fr1ngg/remnawave-bedolaga-telegram-bot:latest
     container_name: remnawave_bot
     restart: unless-stopped
     depends_on:
