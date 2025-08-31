@@ -766,3 +766,31 @@ async def process_promocode_code(
         await state.set_state(AdminStates.setting_promocode_value)
     elif promo_type == "trial":
         await message
+
+
+def register_handlers(dp: Dispatcher):
+    dp.callback_query.register(show_promocodes_menu, F.data == "admin_promocodes")
+    dp.callback_query.register(show_promocodes_list, F.data == "admin_promo_list")
+    dp.callback_query.register(start_promocode_creation, F.data == "admin_promo_create")
+    dp.callback_query.register(select_promocode_type, F.data.startswith("promo_type_"))
+    
+    dp.callback_query.register(show_promocode_management, F.data.startswith("promo_manage_"))
+    dp.callback_query.register(toggle_promocode_status, F.data.startswith("promo_toggle_"))
+    dp.callback_query.register(confirm_delete_promocode, F.data.startswith("promo_delete_"))
+    dp.callback_query.register(delete_promocode_confirmed, F.data.startswith("promo_delete_confirm_"))
+    dp.callback_query.register(show_promocode_stats, F.data.startswith("promo_stats_"))
+    
+    dp.callback_query.register(show_promocode_edit_menu, F.data.startswith("promo_edit_"))
+    dp.callback_query.register(start_edit_promocode_date, F.data.startswith("promo_edit_date_"))
+    dp.callback_query.register(start_edit_promocode_amount, F.data.startswith("promo_edit_amount_"))
+    dp.callback_query.register(start_edit_promocode_days, F.data.startswith("promo_edit_days_"))
+    dp.callback_query.register(start_edit_promocode_uses, F.data.startswith("promo_edit_uses_"))
+    
+    dp.message.register(process_promocode_code, AdminStates.creating_promocode)
+    dp.message.register(process_promocode_value, AdminStates.setting_promocode_value)
+    dp.message.register(process_promocode_uses, AdminStates.setting_promocode_uses)
+    dp.message.register(process_promocode_expiry, AdminStates.setting_promocode_expiry)
+    
+    dp.message.register(process_promocode_edit_value, AdminStates.setting_promocode_value)
+    dp.message.register(process_promocode_edit_uses, AdminStates.setting_promocode_uses)
+    dp.message.register(process_promocode_edit_expiry, AdminStates.setting_promocode_expiry)
