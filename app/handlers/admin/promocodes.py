@@ -940,11 +940,20 @@ async def show_promocode_stats(
 📅 <b>Последние использования:</b>
 """
     
-    for use in stats['recent_uses'][:5]:
-        use_date = format_datetime(use.used_at)
-        text += f"- {use_date} (ID: {use.user_id})\n"
-    
-    if not stats['recent_uses']:
+    if stats['recent_uses']:
+        for use in stats['recent_uses'][:5]:
+            use_date = format_datetime(use.used_at)
+            
+            user = await db.get(User, use.user_id)
+            if user:
+                if user.username:
+                    user_info = f"@{user.username}"
+                else:
+                    user_info = f"{user.full_name}"
+                text += f"- {use_date} | {user_info} (ID: {use.user_id})\n"
+            else:
+                text += f"- {use_date} | Пользователь удален (ID: {use.user_id})\n"
+    else:
         text += "- Пока не было использований\n"
     
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
