@@ -25,6 +25,36 @@ class RemnaWaveService:
             base_url=settings.REMNAWAVE_API_URL,
             api_key=settings.REMNAWAVE_API_KEY
         )
+
+    def _parse_remnawave_date(self, date_str: str) -> datetime:
+        if not date_str:
+            return datetime.utcnow() + timedelta(days=30)
+        
+        try:
+            from datetime import datetime, timedelta
+            import re
+            
+            cleaned_date = date_str.strip()
+            
+            if cleaned_date.endswith('Z'):
+                cleaned_date = cleaned_date[:-1] + '+00:00'
+            
+            if '+00:00+00:00' in cleaned_date:
+                cleaned_date = cleaned_date.replace('+00:00+00:00', '+00:00')
+            
+            cleaned_date = re.sub(r'(\+\d{2}:\d{2})\+\d{2}:\d{2}$', r'\1', cleaned_date)
+            
+            parsed_date = datetime.fromisoformat(cleaned_date)
+            
+            if parsed_date.tzinfo is not None:
+                parsed_date = parsed_date.replace(tzinfo=None)
+            
+            logger.debug(f"Успешно распарсена дата: {date_str} -> {parsed_date}")
+            return parsed_date
+            
+        except Exception as e:
+            logger.warning(f"⚠️ Не удалось распарсить дату '{date_str}': {e}. Используем дефолтную дату.")
+            return datetime.utcnow() + timedelta(days=30)
     
     async def get_system_statistics(self) -> Dict[str, Any]:
             try:
@@ -575,26 +605,9 @@ class RemnaWaveService:
             from app.database.crud.subscription import create_subscription
             from app.database.models import SubscriptionStatus
             from datetime import datetime, timedelta
-            import pytz
         
             expire_at_str = panel_user.get('expireAt', '')
-            try:
-                if expire_at_str:
-                    if expire_at_str.endswith('Z'):
-                        expire_at_str = expire_at_str[:-1] + '+00:00'
-                    elif '+00:00+00:00' in expire_at_str:
-                        expire_at_str = expire_at_str.replace('+00:00+00:00', '+00:00')
-                    
-                    expire_at = datetime.fromisoformat(expire_at_str)
-                
-                    if expire_at.tzinfo is not None:
-                        expire_at = expire_at.replace(tzinfo=None)
-                    
-                else:
-                    expire_at = datetime.utcnow() + timedelta(days=30)
-            except Exception as date_error:
-                logger.warning(f"⚠️ Ошибка парсинга даты {expire_at_str}: {date_error}")
-                expire_at = datetime.utcnow() + timedelta(days=30)
+            expire_at = self._parse_remnawave_date(expire_at_str)
         
             panel_status = panel_user.get('status', 'ACTIVE')
             current_time = datetime.utcnow()
@@ -642,6 +655,7 @@ class RemnaWaveService:
             try:
                 from app.database.crud.subscription import create_subscription
                 from app.database.models import SubscriptionStatus
+                from datetime import datetime, timedelta
             
                 basic_subscription = await create_subscription(
                     db=db,
@@ -675,22 +689,12 @@ class RemnaWaveService:
             panel_status = panel_user.get('status', 'ACTIVE')
             expire_at_str = panel_user.get('expireAt', '')
             
-            try:
-                if expire_at_str:
-                    if expire_at_str.endswith('Z'):
-                        expire_at_str = expire_at_str[:-1] + '+00:00'
-                    elif '+00:00+00:00' in expire_at_str:
-                        expire_at_str = expire_at_str.replace('+00:00+00:00', '+00:00')
-                    
-                    expire_at = datetime.fromisoformat(expire_at_str)
-                    if expire_at.tzinfo is not None:
-                        expire_at = expire_at.replace(tzinfo=None)
-                    
-                    if abs((subscription.end_date - expire_at).total_seconds()) > 60: 
-                        subscription.end_date = expire_at
-                        logger.debug(f"Обновлена дата окончания подписки до {expire_at}")
-            except Exception as date_error:
-                logger.warning(f"⚠️ Ошибка парсинга даты при обновлении {expire_at_str}: {date_error}")
+            if expire_at_str:
+                expire_at = self._parse_remnawave_date(expire_at_str)
+                
+                if abs((subscription.end_date - expire_at).total_seconds()) > 60: 
+                    subscription.end_date = expire_at
+                    logger.debug(f"Обновлена дата окончания подписки до {expire_at}")
             
             current_time = datetime.utcnow()
             if panel_status == 'ACTIVE' and subscription.end_date > current_time:
