@@ -1,2 +1,30 @@
-/screens
-/assets
+# Игнорируем все файлы и папки по умолчанию
+*
+
+# Исключения: разрешаем только нужные файлы
+!.env.example
+!Dockerfile
+!app-config.json
+!main.py
+!requirements.txt
+
+# Разрешаем папку app/ и все её содержимое рекурсивно
+!app/
+!app/**
+
+# Дополнительно разрешаем README и лицензию (опционально)
+!README.md
+!LICENSE
+
+# Разрешаем .gitignore чтобы он попал в репозиторий
+!.gitignore
+
+# Внутри разрешенных папок игнорируем служебные файлы
+app/__pycache__/
+app/**/__pycache__/
+app/**/*.pyc
+app/**/*.pyo
+app/**/*.pyd
+*.pyc
+*.pyo
+*.pyd
