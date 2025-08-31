@@ -77,6 +77,7 @@ async def show_promocodes_list(
         return
     
     text = f"🎫 <b>Список промокодов</b> (стр. {page}/{total_pages})\n\n"
+    keyboard = []
     
     for promo in promocodes:
         status_emoji = "✅" if promo.is_active else "❌"
@@ -93,9 +94,14 @@ async def show_promocodes_list(
         if promo.valid_until:
             text += f"⏰ До: {format_datetime(promo.valid_until)}\n"
         
-        text += f"🔧 Управление: /promo_{promo.id}\n\n"
-    
-    keyboard = []
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=f"🎫 {promo.code}", 
+                callback_data=f"promo_manage_{promo.id}"
+            )
+        ])
+        
+        text += "\n" 
     
     if total_pages > 1:
         pagination_row = get_admin_pagination_keyboard(
