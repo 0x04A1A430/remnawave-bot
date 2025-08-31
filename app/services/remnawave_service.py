@@ -2,6 +2,8 @@ import logging
 from typing import Dict, List, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete
+from datetime import datetime, timedelta
+import re
 
 from app.config import settings
 from app.external.remnawave_api import (
@@ -31,8 +33,6 @@ class RemnaWaveService:
             return datetime.utcnow() + timedelta(days=30)
         
         try:
-            from datetime import datetime, timedelta
-            import re
             
             cleaned_date = date_str.strip()
             
@@ -88,7 +88,6 @@ class RemnaWaveService:
                         logger.error(f"Ошибка получения статистики нод: {e}")
                         nodes_stats = {}
                 
-                    from datetime import datetime
                 
                     total_download = sum(node.get('downloadBytes', 0) for node in realtime_usage)
                     total_upload = sum(node.get('uploadBytes', 0) for node in realtime_usage)
