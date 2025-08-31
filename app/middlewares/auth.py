@@ -125,7 +125,6 @@ class AuthMiddleware(BaseMiddleware):
                             logger.info(f"❌ Удаленный пользователь {user.id} попытался использовать бота без /start")
                             return
                     
-                    from datetime import datetime
                     
                     profile_updated = False
                     
