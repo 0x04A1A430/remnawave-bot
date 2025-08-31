@@ -189,6 +189,8 @@ async def show_promocode_management(
     await callback.answer()
 
 
+# Замените эти функции в вашем файле
+
 @admin_required
 @error_handler
 async def show_promocode_edit_menu(
@@ -196,7 +198,12 @@ async def show_promocode_edit_menu(
     db_user: User,
     db: AsyncSession
 ):
-    promo_id = int(callback.data.split('_')[-1])
+    callback_parts = callback.data.split('_')
+    if len(callback_parts) >= 3:
+        promo_id = int(callback_parts[2]) 
+    else:
+        await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
+        return
     
     promo = await db.get(PromoCode, promo_id)
     if not promo:
@@ -206,8 +213,22 @@ async def show_promocode_edit_menu(
     text = f"""
 ✏️ <b>Редактирование промокода</b> <code>{promo.code}</code>
 
-Выберите параметр для изменения:
+💰 <b>Текущие параметры:</b>
 """
+    
+    if promo.type == PromoCodeType.BALANCE.value:
+        text += f"• Бонус: {settings.format_price(promo.balance_bonus_kopeks)}\n"
+    elif promo.type in [PromoCodeType.SUBSCRIPTION_DAYS.value, PromoCodeType.TRIAL_SUBSCRIPTION.value]:
+        text += f"• Дней: {promo.subscription_days}\n"
+    
+    text += f"• Использований: {promo.current_uses}/{promo.max_uses}\n"
+    
+    if promo.valid_until:
+        text += f"• До: {format_datetime(promo.valid_until)}\n"
+    else:
+        text += f"• Срок: бессрочно\n"
+    
+    text += f"\nВыберите параметр для изменения:"
     
     keyboard = [
         [
@@ -262,14 +283,19 @@ async def start_edit_promocode_date(
     db_user: User,
     state: FSMContext
 ):
-    promo_id = int(callback.data.split('_')[-1])
+    callback_parts = callback.data.split('_')
+    if len(callback_parts) >= 4:
+        promo_id = int(callback_parts[3]) 
+    else:
+        await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
+        return
     
     await state.update_data(
         editing_promo_id=promo_id,
         edit_action="date"
     )
     
-    text = """
+    text = f"""
 📅 <b>Изменение даты окончания промокода</b>
 
 Введите количество дней до окончания (от текущего момента):
@@ -277,6 +303,8 @@ async def start_edit_promocode_date(
 • Введите положительное число для установки срока
 
 <i>Например: 30 (промокод будет действовать 30 дней)</i>
+
+ID промокода: {promo_id}
 """
     
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
@@ -295,18 +323,25 @@ async def start_edit_promocode_amount(
     db_user: User,
     state: FSMContext
 ):
-    promo_id = int(callback.data.split('_')[-1])
+    callback_parts = callback.data.split('_')
+    if len(callback_parts) >= 4:
+        promo_id = int(callback_parts[3]) 
+    else:
+        await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
+        return
     
     await state.update_data(
         editing_promo_id=promo_id,
         edit_action="amount"
     )
     
-    text = """
+    text = f"""
 💰 <b>Изменение суммы бонуса промокода</b>
 
 Введите новую сумму в рублях:
 <i>Например: 500</i>
+
+ID промокода: {promo_id}
 """
     
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
@@ -317,7 +352,6 @@ async def start_edit_promocode_amount(
     await state.set_state(AdminStates.setting_promocode_value)
     await callback.answer()
 
-
 @admin_required
 @error_handler
 async def start_edit_promocode_days(
@@ -325,18 +359,25 @@ async def start_edit_promocode_days(
     db_user: User,
     state: FSMContext
 ):
-    promo_id = int(callback.data.split('_')[-1])
+    callback_parts = callback.data.split('_')
+    if len(callback_parts) >= 4:
+        promo_id = int(callback_parts[3])
+    else:
+        await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
+        return
     
     await state.update_data(
         editing_promo_id=promo_id,
         edit_action="days"
     )
     
-    text = """
+    text = f"""
 📅 <b>Изменение количества дней подписки</b>
 
 Введите новое количество дней:
 <i>Например: 30</i>
+
+ID промокода: {promo_id}
 """
     
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
@@ -355,14 +396,19 @@ async def start_edit_promocode_uses(
     db_user: User,
     state: FSMContext
 ):
-    promo_id = int(callback.data.split('_')[-1])
+    callback_parts = callback.data.split('_')
+    if len(callback_parts) >= 4:
+        promo_id = int(callback_parts[3]) 
+    else:
+        await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
+        return
     
     await state.update_data(
         editing_promo_id=promo_id,
         edit_action="uses"
     )
     
-    text = """
+    text = f"""
 📊 <b>Изменение максимального количества использований</b>
 
 Введите новое количество использований:
@@ -370,6 +416,8 @@ async def start_edit_promocode_uses(
 • Введите положительное число для ограничения
 
 <i>Например: 100</i>
+
+ID промокода: {promo_id}
 """
     
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
@@ -803,7 +851,12 @@ async def confirm_delete_promocode(
     db_user: User,
     db: AsyncSession
 ):
-    promo_id = int(callback.data.split('_')[-1])
+    callback_parts = callback.data.split('_')
+    if len(callback_parts) >= 3:
+        promo_id = int(callback_parts[2]) 
+    else:
+        await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
+        return
     
     promo = await db.get(PromoCode, promo_id)
     if not promo:
@@ -815,7 +868,13 @@ async def confirm_delete_promocode(
 
 Вы действительно хотите удалить промокод <code>{promo.code}</code>?
 
-<b>Внимание:</b> Это действие нельзя отменить!
+📊 <b>Информация о промокоде:</b>
+• Использований: {promo.current_uses}/{promo.max_uses}
+• Статус: {'Активен' if promo.is_active else 'Неактивен'}
+
+<b>⚠️ Внимание:</b> Это действие нельзя отменить!
+
+ID: {promo_id}
 """
     
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
