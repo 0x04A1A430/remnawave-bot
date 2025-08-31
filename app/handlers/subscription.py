@@ -667,36 +667,57 @@ async def handle_extend_subscription(
     db_user: User,
     db: AsyncSession
 ):
-    
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
     if not subscription or subscription.is_trial:
-        await callback.answer("❌ Продление доступно только для платных подписок", show_alert=True)
+        await callback.answer("⌛ Продление доступно только для платных подписок", show_alert=True)
         return
     
     if subscription.days_left > 3:
-        await callback.answer("❌ Продление доступно за 3 дня до окончания подписки", show_alert=True)
+        await callback.answer("⌛ Продление доступно за 3 дня до окончания подписки", show_alert=True)
         return
     
     subscription_service = SubscriptionService()
     
+    available_periods = settings.get_available_renewal_periods()
     renewal_prices = {}
-    for days in [30, 90, 180]:
-        price = await subscription_service.calculate_renewal_price(subscription, days, db)
-        renewal_prices[days] = price
+    
+    for days in available_periods:
+        try:
+            price = await subscription_service.calculate_renewal_price(subscription, days, db)
+            renewal_prices[days] = price
+        except Exception as e:
+            logger.error(f"Ошибка расчета цены для периода {days}: {e}")
+            continue
+    
+    if not renewal_prices:
+        await callback.answer("⌛ Нет доступных периодов для продления", show_alert=True)
+        return
+    
+    prices_text = ""
+    period_display = {
+        14: "14 дней",
+        30: "30 дней", 
+        60: "60 дней",
+        90: "90 дней",
+        180: "180 дней",
+        360: "360 дней"
+    }
+    
+    for days in available_periods:
+        if days in renewal_prices and days in period_display:
+            prices_text += f"📅 {period_display[days]} - {texts.format_price(renewal_prices[days])}\n"
     
     await callback.message.edit_text(
-        f"⏰ <b>Продление подписки</b>\n\n"
+        f"⏰ Продление подписки\n\n"
         f"Осталось дней: {subscription.days_left}\n\n"
         f"<b>Ваша текущая конфигурация:</b>\n"
         f"🌍 Серверов: {len(subscription.connected_squads)}\n"
         f"📊 Трафик: {texts.format_traffic(subscription.traffic_limit_gb)}\n"
         f"📱 Устройств: {subscription.device_limit}\n\n"
         f"<b>Выберите период продления:</b>\n"
-        f"📅 30 дней - {texts.format_price(renewal_prices[30])}\n"
-        f"📅 90 дней - {texts.format_price(renewal_prices[90])}\n"
-        f"📅 180 дней - {texts.format_price(renewal_prices[180])}\n\n"
+        f"{prices_text.rstrip()}\n\n"
         f"💡 <i>Цена включает все ваши текущие серверы и настройки</i>",
         reply_markup=get_extend_subscription_keyboard_with_prices(db_user.language, renewal_prices),
         parse_mode="HTML"
