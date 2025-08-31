@@ -968,19 +968,21 @@ def register_handlers(dp: Dispatcher):
     
     dp.callback_query.register(show_promocode_management, F.data.startswith("promo_manage_"))
     dp.callback_query.register(toggle_promocode_status, F.data.startswith("promo_toggle_"))
-    dp.callback_query.register(confirm_delete_promocode, F.data.startswith("promo_delete_") & ~F.data.contains("confirm"))
-    dp.callback_query.register(delete_promocode_confirmed, F.data.startswith("promo_delete_confirm_"))
     dp.callback_query.register(show_promocode_stats, F.data.startswith("promo_stats_"))
-    
-    dp.callback_query.register(
-        show_promocode_edit_menu, 
-        F.data.regexp(r"^promo_edit_\d+$") 
-    )
     
     dp.callback_query.register(start_edit_promocode_date, F.data.startswith("promo_edit_date_"))
     dp.callback_query.register(start_edit_promocode_amount, F.data.startswith("promo_edit_amount_"))
     dp.callback_query.register(start_edit_promocode_days, F.data.startswith("promo_edit_days_"))
     dp.callback_query.register(start_edit_promocode_uses, F.data.startswith("promo_edit_uses_"))
+    
+    dp.callback_query.register(
+        show_promocode_edit_menu, 
+        F.data.regexp(r"^promo_edit_\d+$")
+    )
+    
+    dp.callback_query.register(delete_promocode_confirmed, F.data.startswith("promo_delete_confirm_"))
+    dp.callback_query.register(confirm_delete_promocode, F.data.startswith("promo_delete_"))
+    
     dp.message.register(process_promocode_code, AdminStates.creating_promocode)
     dp.message.register(process_promocode_value, AdminStates.setting_promocode_value)
     dp.message.register(process_promocode_uses, AdminStates.setting_promocode_uses)
