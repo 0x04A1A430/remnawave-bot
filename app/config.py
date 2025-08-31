@@ -33,7 +33,9 @@ class Settings(BaseSettings):
     NOTIFICATION_CACHE_HOURS: int = 24  
     
     BASE_SUBSCRIPTION_PRICE: int = 50000
-    
+
+    AVAILABLE_SUBSCRIPTION_PERIODS: str = "14,30,60,90,180,360"
+    AVAILABLE_RENEWAL_PERIODS: str = "30,90,180"
     PRICE_14_DAYS: int = 50000
     PRICE_30_DAYS: int = 99000
     PRICE_60_DAYS: int = 189000
@@ -216,6 +218,44 @@ class Settings(BaseSettings):
     
     def is_maintenance_auto_enable(self) -> bool:
         return self.MAINTENANCE_AUTO_ENABLE
+
+    def get_available_subscription_periods(self) -> List[int]:
+        try:
+            periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
+            if not periods_str.strip():
+                return [30, 90, 180] 
+            
+            periods = []
+            for period_str in periods_str.split(','):
+                period_str = period_str.strip()
+                if period_str:
+                    period = int(period_str)
+                    if period in PERIOD_PRICES:
+                        periods.append(period)
+            
+            return periods if periods else [30, 90, 180]
+            
+        except (ValueError, AttributeError):
+            return [30, 90, 180]
+    
+    def get_available_renewal_periods(self) -> List[int]:
+        try:
+            periods_str = self.AVAILABLE_RENEWAL_PERIODS
+            if not periods_str.strip():
+                return [30, 90, 180] 
+            
+            periods = []
+            for period_str in periods_str.split(','):
+                period_str = period_str.strip()
+                if period_str:
+                    period = int(period_str)
+                    if period in PERIOD_PRICES:
+                        periods.append(period)
+            
+            return periods if periods else [30, 90, 180]
+            
+        except (ValueError, AttributeError):
+            return [30, 90, 180]
     
     model_config = {
         "env_file": ".env",
