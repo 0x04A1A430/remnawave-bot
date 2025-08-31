@@ -582,7 +582,9 @@ class RemnaWaveService:
                 if expire_at_str:
                     if expire_at_str.endswith('Z'):
                         expire_at_str = expire_at_str[:-1] + '+00:00'
-                
+                    elif '+00:00+00:00' in expire_at_str:
+                        expire_at_str = expire_at_str.replace('+00:00+00:00', '+00:00')
+                    
                     expire_at = datetime.fromisoformat(expire_at_str)
                 
                     if expire_at.tzinfo is not None:
@@ -677,6 +679,9 @@ class RemnaWaveService:
                 if expire_at_str:
                     if expire_at_str.endswith('Z'):
                         expire_at_str = expire_at_str[:-1] + '+00:00'
+                    elif '+00:00+00:00' in expire_at_str:
+                        expire_at_str = expire_at_str.replace('+00:00+00:00', '+00:00')
+                    
                     expire_at = datetime.fromisoformat(expire_at_str)
                     if expire_at.tzinfo is not None:
                         expire_at = expire_at.replace(tzinfo=None)
