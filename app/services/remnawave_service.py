@@ -397,188 +397,178 @@ class RemnaWaveService:
     async def sync_users_from_panel(self, db: AsyncSession, sync_type: str = "all") -> Dict[str, int]:
         try:
             stats = {"created": 0, "updated": 0, "errors": 0, "deleted": 0}
-        
-            logger.info(f"🔄 Начинаем синхронизацию типа: {sync_type}")
-        
-            async with self.api as api:
-                panel_users_data = await api._make_request('GET', '/api/users')
-                panel_users = panel_users_data['response']['users']
             
-                logger.info(f"👥 Найдено пользователей в панели: {len(panel_users)}")
+            logger.info(f"🔄 Начинаем синхронизацию типа: {sync_type}")
+            
+            async with self.api as api:
+                panel_users = []
+                start = 0
+                size = 100 
                 
-                bot_users = await get_users_list(db, offset=0, limit=10000)
-                bot_users_by_telegram_id = {user.telegram_id: user for user in bot_users}
-                
-                panel_telegram_ids = set()
-                
-                for i, panel_user in enumerate(panel_users):
-                    try:
-                        telegram_id = panel_user.get('telegramId')
-                        if not telegram_id:
-                            logger.debug(f"➡️ Пропускаем пользователя без telegram_id")
-                            continue
-                        
-                        panel_telegram_ids.add(telegram_id)
-                        
-                        logger.info(f"🔄 Обрабатываем пользователя {i+1}/{len(panel_users)}: {telegram_id}")
+                while True:
+                    logger.info(f"📥 Загружаем пользователей: start={start}, size={size}")
                     
-                        db_user = bot_users_by_telegram_id.get(telegram_id)
+                    response = await api.get_all_users(start=start, size=size)
+                    users_batch = response['users']
+                    total_users = response['total']
                     
-                        if not db_user:
-                            if sync_type in ["new_only", "all"]:
-                                logger.info(f"🆕 Создание пользователя для telegram_id {telegram_id}")
-                                
-                                from app.database.crud.user import create_user
+                    logger.info(f"📊 Получено {len(users_batch)} пользователей из {total_users}")
+                    
+                    for user_obj in users_batch:
+                        user_dict = {
+                            'uuid': user_obj.uuid,
+                            'shortUuid': user_obj.short_uuid,
+                            'username': user_obj.username,
+                            'status': user_obj.status.value,
+                            'telegramId': user_obj.telegram_id,
+                            'expireAt': user_obj.expire_at.isoformat() + 'Z',
+                            'trafficLimitBytes': user_obj.traffic_limit_bytes,
+                            'usedTrafficBytes': user_obj.used_traffic_bytes,
+                            'hwidDeviceLimit': user_obj.hwid_device_limit,
+                            'subscriptionUrl': user_obj.subscription_url,
+                            'activeInternalSquads': user_obj.active_internal_squads
+                        }
+                        panel_users.append(user_dict)
+                    
+                    if len(users_batch) < size:
+                        break
+                        
+                    start += size
+                    
+                    if start > total_users:
+                        break
+                
+                logger.info(f"✅ Всего загружено пользователей из панели: {len(panel_users)}")
+            
+            bot_users = await get_users_list(db, offset=0, limit=10000)
+            bot_users_by_telegram_id = {user.telegram_id: user for user in bot_users}
+            
+            logger.info(f"📊 Пользователей в боте: {len(bot_users)}")
+            
+            panel_users_with_tg = [
+                user for user in panel_users 
+                if user.get('telegramId') is not None
+            ]
+            
+            logger.info(f"📊 Пользователей в панели с Telegram ID: {len(panel_users_with_tg)}")
+            
+            panel_telegram_ids = set()
+            
+            for i, panel_user in enumerate(panel_users_with_tg):
+                try:
+                    telegram_id = panel_user.get('telegramId')
+                    if not telegram_id:
+                        continue
+                    
+                    panel_telegram_ids.add(telegram_id)
+                    
+                    if (i + 1) % 10 == 0: 
+                        logger.info(f"🔄 Обрабатываем пользователя {i+1}/{len(panel_users_with_tg)}: {telegram_id}")
+                    
+                    db_user = bot_users_by_telegram_id.get(telegram_id)
+                    
+                    if not db_user:
+                        if sync_type in ["new_only", "all"]:
+                            logger.info(f"🆕 Создание пользователя для telegram_id {telegram_id}")
                             
-                                db_user = await create_user(
-                                    db=db,
-                                    telegram_id=telegram_id,
-                                    username=panel_user.get('username') or f"user_{telegram_id}",
-                                    first_name=f"Panel User {telegram_id}",
-                                    language="ru"
-                                )
+                            from app.database.crud.user import create_user
                             
+                            db_user = await create_user(
+                                db=db,
+                                telegram_id=telegram_id,
+                                username=panel_user.get('username') or f"user_{telegram_id}",
+                                first_name=f"Panel User {telegram_id}",
+                                language="ru"
+                            )
+                            
+                            await update_user(db, db_user, remnawave_uuid=panel_user.get('uuid'))
+                            
+                            await self._create_subscription_from_panel_data(db, db_user, panel_user)
+                            
+                            stats["created"] += 1
+                            logger.info(f"✅ Создан пользователь {telegram_id} с подпиской")
+                    
+                    else:
+                        if sync_type in ["update_only", "all"]:
+                            logger.debug(f"🔄 Обновление пользователя {telegram_id}")
+                            
+                            if not db_user.remnawave_uuid:
                                 await update_user(db, db_user, remnawave_uuid=panel_user.get('uuid'))
                             
-                                await self._create_subscription_from_panel_data(db, db_user, panel_user)
+                            await self._update_subscription_from_panel_data(db, db_user, panel_user)
                             
-                                stats["created"] += 1
-                                logger.info(f"✅ Создан пользователь {telegram_id} с подпиской")
+                            stats["updated"] += 1
+                            logger.debug(f"✅ Обновлён пользователь {telegram_id}")
                             
-                        else:
-                            if sync_type in ["update_only", "all"]:
-                                logger.debug(f"🔄 Обновление пользователя {telegram_id}")
-                            
-                                if not db_user.remnawave_uuid:
-                                    await update_user(db, db_user, remnawave_uuid=panel_user.get('uuid'))
-                            
-                                await self._update_subscription_from_panel_data(db, db_user, panel_user)
-                            
-                                stats["updated"] += 1
-                                logger.debug(f"✅ Обновлён пользователь {telegram_id}")
-                            
-                    except Exception as user_error:
-                        logger.error(f"❌ Ошибка обработки пользователя {telegram_id}: {user_error}")
-                        stats["errors"] += 1
-                        continue
+                except Exception as user_error:
+                    logger.error(f"❌ Ошибка обработки пользователя {telegram_id}: {user_error}")
+                    stats["errors"] += 1
+                    continue
+            
+            if sync_type == "all":
+                logger.info("🗑️ Деактивация подписок пользователей, отсутствующих в панели...")
                 
-                if sync_type == "all":
-                    logger.info("🗑️ ПОЛНАЯ очистка подписок пользователей, отсутствующих в панели...")
-                    
-                    for telegram_id, db_user in bot_users_by_telegram_id.items():
-                        if telegram_id not in panel_telegram_ids and db_user.subscription:
-                            try:
-                                logger.info(f"🗑️ ПОЛНАЯ очистка данных подписки пользователя {telegram_id} (нет в панели)")
-                                
-                                subscription = db_user.subscription
-                                
-                                if db_user.remnawave_uuid:
-                                    try:
+                for telegram_id, db_user in bot_users_by_telegram_id.items():
+                    if telegram_id not in panel_telegram_ids and db_user.subscription:
+                        try:
+                            logger.info(f"🗑️ Деактивация подписки пользователя {telegram_id} (нет в панели)")
+                            
+                            subscription = db_user.subscription
+                            
+                            if db_user.remnawave_uuid:
+                                try:
+                                    async with self.api as api:
                                         devices_reset = await api.reset_user_devices(db_user.remnawave_uuid)
                                         if devices_reset:
                                             logger.info(f"🔧 Сброшены HWID устройства для пользователя {telegram_id}")
-                                        else:
-                                            logger.warning(f"⚠️ Не удалось сбросить HWID устройства для пользователя {telegram_id}")
-                                    except Exception as hwid_error:
-                                        logger.error(f"❌ Ошибка сброса HWID устройств для {telegram_id}: {hwid_error}")
+                                except Exception as hwid_error:
+                                    logger.error(f"❌ Ошибка сброса HWID устройств для {telegram_id}: {hwid_error}")
+                            
+                            try:
+                                from sqlalchemy import delete
+                                from app.database.models import SubscriptionServer
                                 
-                                try:
-                                    from app.database.crud.subscription import get_subscription_server_ids, remove_subscription_servers
-                                    from sqlalchemy import delete
-                                    from app.database.models import SubscriptionServer
-                                    
-                                    await db.execute(
-                                        delete(SubscriptionServer).where(
-                                            SubscriptionServer.subscription_id == subscription.id
-                                        )
+                                await db.execute(
+                                    delete(SubscriptionServer).where(
+                                        SubscriptionServer.subscription_id == subscription.id
                                     )
-                                    logger.info(f"🗑️ УДАЛЕНЫ ВСЕ записи SubscriptionServer для подписки {subscription.id}")
-                                    
-                                except Exception as servers_error:
-                                    logger.warning(f"⚠️ Не удалось удалить серверы подписки: {servers_error}")
-                                
-                                try:
-                                    from sqlalchemy import delete
-                                    from app.database.models import Transaction
-                                    
-                                    await db.execute(
-                                        delete(Transaction).where(Transaction.user_id == db_user.id)
-                                    )
-                                    logger.info(f"🗑️ УДАЛЕНЫ ВСЕ транзакции пользователя {telegram_id}")
-                                    
-                                except Exception as transactions_error:
-                                    logger.warning(f"⚠️ Не удалось удалить транзакции: {transactions_error}")
-                                
-                                try:
-                                    from sqlalchemy import delete
-                                    from app.database.models import ReferralEarning
-                                    
-                                    await db.execute(
-                                        delete(ReferralEarning).where(ReferralEarning.user_id == db_user.id)
-                                    )
-                                    await db.execute(
-                                        delete(ReferralEarning).where(ReferralEarning.referral_id == db_user.id)
-                                    )
-                                    logger.info(f"🗑️ УДАЛЕНЫ ВСЕ реферальные доходы пользователя {telegram_id}")
-                                    
-                                except Exception as referral_error:
-                                    logger.warning(f"⚠️ Не удалось удалить реферальные доходы: {referral_error}")
-                                
-                                try:
-                                    from sqlalchemy import delete
-                                    from app.database.models import PromoCodeUse
-                                    
-                                    await db.execute(
-                                        delete(PromoCodeUse).where(PromoCodeUse.user_id == db_user.id)
-                                    )
-                                    logger.info(f"🗑️ УДАЛЕНЫ ВСЕ использования промокодов пользователя {telegram_id}")
-                                    
-                                except Exception as promo_error:
-                                    logger.warning(f"⚠️ Не удалось удалить использования промокодов: {promo_error}")
-                                
-                                try:
-                                    db_user.balance_kopeks = 0
-                                    logger.info(f"💰 Сброшен баланс пользователя {telegram_id}")
-                                except Exception as balance_error:
-                                    logger.warning(f"⚠️ Не удалось сбросить баланс: {balance_error}")
-                                
-                                from app.database.models import SubscriptionStatus
-                                from datetime import datetime
-                                
-                                subscription.status = SubscriptionStatus.DISABLED.value
-                                subscription.is_trial = True 
-                                subscription.end_date = datetime.utcnow()
-                                subscription.traffic_limit_gb = 0
-                                subscription.traffic_used_gb = 0.0
-                                subscription.device_limit = 1
-                                subscription.connected_squads = []
-                                subscription.autopay_enabled = False
-                                subscription.autopay_days_before = 3
-                                subscription.remnawave_short_uuid = None
-                                subscription.subscription_url = ""
-                                
-                                db_user.remnawave_uuid = None
-                                db_user.has_had_paid_subscription = False 
-                                db_user.used_promocodes = 0 
-                                
-                                await db.commit()
-                                
-                                stats["deleted"] += 1
-                                logger.info(f"✅ ПОЛНОСТЬЮ очищены ВСЕ данные подписки пользователя {telegram_id}")
-                                
-                            except Exception as delete_error:
-                                logger.error(f"❌ Ошибка полной очистки данных подписки {telegram_id}: {delete_error}")
-                                stats["errors"] += 1
-                                await db.rollback()
-        
-            logger.info(f"🎯 Синхронизация завершена: создано {stats['created']}, обновлено {stats['updated']}, удалено {stats['deleted']}, ошибок {stats['errors']}")
+                                )
+                                logger.info(f"🗑️ Удалены серверы подписки для {telegram_id}")
+                            except Exception as servers_error:
+                                logger.warning(f"⚠️ Не удалось удалить серверы подписки: {servers_error}")
+                            
+                            from app.database.models import SubscriptionStatus
+                            from datetime import datetime
+                            
+                            subscription.status = SubscriptionStatus.DISABLED.value
+                            subscription.is_trial = True 
+                            subscription.end_date = datetime.utcnow()
+                            subscription.traffic_limit_gb = 0
+                            subscription.traffic_used_gb = 0.0
+                            subscription.device_limit = 1
+                            subscription.connected_squads = []
+                            subscription.autopay_enabled = False
+                            subscription.remnawave_short_uuid = None
+                            subscription.subscription_url = ""
+                            
+                            db_user.remnawave_uuid = None
+                            
+                            await db.commit()
+                            
+                            stats["deleted"] += 1
+                            logger.info(f"✅ Деактивирована подписка пользователя {telegram_id} (сохранен баланс)")
+                            
+                        except Exception as delete_error:
+                            logger.error(f"❌ Ошибка деактивации подписки {telegram_id}: {delete_error}")
+                            stats["errors"] += 1
+                            await db.rollback()
+            
+            logger.info(f"🎯 Синхронизация завершена: создано {stats['created']}, обновлено {stats['updated']}, деактивировано {stats['deleted']}, ошибок {stats['errors']}")
             return stats
         
         except Exception as e:
             logger.error(f"❌ Критическая ошибка синхронизации пользователей: {e}")
             return {"created": 0, "updated": 0, "errors": 1, "deleted": 0}
-
-
 
     async def _create_subscription_from_panel_data(self, db: AsyncSession, user, panel_user):
         try:
