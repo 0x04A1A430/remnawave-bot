@@ -599,3 +599,11 @@ def get_maintenance_keyboard(language: str = "ru", is_active: bool = False, moni
     ]
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_sync_simplified_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    keyboard = [
+        [InlineKeyboardButton(text="🔄 Полная синхронизация", callback_data="sync_all_users")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_remnawave")]
+    ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
