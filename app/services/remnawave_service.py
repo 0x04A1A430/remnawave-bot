@@ -567,7 +567,6 @@ class RemnaWaveService:
                                 logger.warning(f"⚠️ Не удалось удалить серверы подписки: {servers_error}")
                             
                             from app.database.models import SubscriptionStatus
-                            from datetime import datetime
                             
                             subscription.status = SubscriptionStatus.DISABLED.value
                             subscription.is_trial = True 
@@ -603,7 +602,6 @@ class RemnaWaveService:
         try:
             from app.database.crud.subscription import create_subscription
             from app.database.models import SubscriptionStatus
-            from datetime import datetime, timedelta
         
             expire_at_str = panel_user.get('expireAt', '')
             expire_at = self._parse_remnawave_date(expire_at_str)
@@ -654,7 +652,6 @@ class RemnaWaveService:
             try:
                 from app.database.crud.subscription import create_subscription
                 from app.database.models import SubscriptionStatus
-                from datetime import datetime, timedelta
             
                 basic_subscription = await create_subscription(
                     db=db,
@@ -677,7 +674,6 @@ class RemnaWaveService:
         try:
             from app.database.crud.subscription import get_subscription_by_user_id
             from app.database.models import SubscriptionStatus
-            from datetime import datetime, timedelta
         
             subscription = await get_subscription_by_user_id(db, user.id)
             
@@ -999,7 +995,6 @@ class RemnaWaveService:
                     node_realtime = stats
                     break
             
-            from datetime import datetime, timedelta
             end_date = datetime.now()
             start_date = end_date - timedelta(days=7)
             
@@ -1087,7 +1082,6 @@ class RemnaWaveService:
                 logger.error(f"❌ Ошибка удаления связанных записей: {records_error}")
             
             try:
-                from datetime import datetime
                 
                 user.balance_kopeks = 0
                 user.remnawave_uuid = None
@@ -1211,7 +1205,6 @@ class RemnaWaveService:
         
             from app.database.crud.subscription import get_all_subscriptions
             from app.database.models import SubscriptionStatus
-            from datetime import datetime
         
             page = 1
             limit = 100
@@ -1264,7 +1257,6 @@ class RemnaWaveService:
             
             from app.database.crud.subscription import get_all_subscriptions
             from app.database.models import SubscriptionStatus
-            from datetime import datetime
         
             page = 1
             limit = 100
