@@ -44,6 +44,7 @@
 - 🎁 **Промо-система** - коды на деньги, дни подписки, триал-периоды
 - 3 режима показа ссылки подписки: 1) С гайдом по подключению прямо в боте(тянущий данные приложений и ссылок на скачку из app-config.json) 2) Обычное открытие ссылки подписки в миниапе 3) Интеграция сабпейджа maposia - кастомно прописать ссылку можно
 - Возможность переключаться между пакетной продажей трафика и фиксированной(Пропуская шаг выбора пакета трафика при оформлении/настройки подписки юзера)
+- Возможность задать доступные дни для покупки первой подписки и при продлении
 
 ### 💪 **Enterprise готовность**
 - 🏗️ **Современная архитектура** - AsyncIO, PostgreSQL, Redis
@@ -428,7 +429,6 @@ bedolaga_bot/
 ```
 project/
 ├── docker-compose.yml              # 🚀 Продакшн
-├── docker-compose.local.yml        # 🏠 Разработка
 ├── .env                           # ⚙️ Конфиг
 └── .env.example                   # 📝 Пример
 ```
@@ -439,66 +439,45 @@ project/
 <summary>📄 Показать полный docker-compose.yml</summary>
 
 ```yaml
-version: '3.8'
-
 services:
-  # 🗄️ PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: bedolaga_postgres
+    container_name: remnawave_bot_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-bedolaga_bot}
-      POSTGRES_USER: ${POSTGRES_USER:-bedolaga_user}
+      POSTGRES_DB: ${POSTGRES_DB:-remnawave_bot}
+      POSTGRES_USER: ${POSTGRES_USER:-remnawave_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_123}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d:ro
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     networks:
-      - bedolaga_network
+      - bot_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bedolaga_user} -d ${POSTGRES_DB:-bedolaga_bot}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-remnawave_user} -d ${POSTGRES_DB:-remnawave_bot}"]
+      interval: 30s
       timeout: 5s
       retries: 5
       start_period: 30s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
-  # ⚡ Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: bedolaga_redis
+    container_name: remnawave_bot_redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_123}
+    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
     networks:
-      - bedolaga_network
+      - bot_network
     healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:-redis_password_123}", "ping"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 10s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "5m"
-        max-file: "3"
 
-  # 🤖 Telegram Bot
   bot:
     image: fr1ngg/remnawave-bedolaga-telegram-bot:latest
-    container_name: bedolaga_bot
+    container_name: remnawave_bot
     restart: unless-stopped
     depends_on:
       postgres:
@@ -508,108 +487,35 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bedolaga_user}:${POSTGRES_PASSWORD:-secure_password_123}@postgres:5432/${POSTGRES_DB:-bedolaga_bot}
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_password_123}@redis:6379/0
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DEBUG: ${DEBUG:-false}
-      HEALTH_CHECK_ENABLED: "true"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-remnawave_user}:${POSTGRES_PASSWORD:-secure_password_123}@postgres:5432/${POSTGRES_DB:-remnawave_bot}
+      REDIS_URL: redis://redis:6379/0
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
-      - ./backups:/app/backups
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     ports:
-      - "${WEBHOOK_PORT:-8081}:8081"
+      - "${TRIBUTE_WEBHOOK_PORT:-8081}:8081"
+      - "${YOOKASSA_WEBHOOK_PORT:-8082}:8082"
     networks:
-      - bedolaga_network
+      - bot_network
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8081/health', timeout=5)"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "5"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.bedolaga-webhook.rule=Host(`${WEBHOOK_DOMAIN:-localhost}`) && PathPrefix(`/tribute-webhook`)"
-      - "traefik.http.services.bedolaga-webhook.loadbalancer.server.port=8081"
 
-  # 📊 Monitoring (опционально)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: bedolaga_prometheus
-    restart: unless-stopped
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
-    networks:
-      - bedolaga_network
-    profiles:
-      - monitoring
-
-  # 📈 Grafana (опционально)
-  grafana:
-    image: grafana/grafana:latest
-    container_name: bedolaga_grafana
-    restart: unless-stopped
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
-    ports:
-      - "3000:3000"
-    networks:
-      - bedolaga_network
-    profiles:
-      - monitoring
-
-# 📦 Volumes
 volumes:
   postgres_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./volumes/postgres
   redis_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./volumes/redis
-  prometheus_data:
-    driver: local
-  grafana_data:
-    driver: local
 
-# 🌐 Networks
 networks:
-  bedolaga_network:
+  bot_network:
     driver: bridge
     ipam:
-      driver: default
       config:
         - subnet: 172.20.0.0/16
-          gateway: 172.20.0.1
-    driver_opts:
-      com.docker.network.bridge.name: br-bedolaga
 ```
 
 </details>
@@ -620,8 +526,6 @@ networks:
 <summary>📄 Показать dev конфигурацию</summary>
 
 ```yaml
-version: '3.8'
-
 services:
   # 🗄️ PostgreSQL для разработки
   postgres-dev:
