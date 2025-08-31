@@ -5,7 +5,7 @@ from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import PromoCode, PromoCodeUse, PromoCodeType
+from app.database.models import PromoCode, PromoCodeUse, PromoCodeType, User
 
 logger = logging.getLogger(__name__)
 
