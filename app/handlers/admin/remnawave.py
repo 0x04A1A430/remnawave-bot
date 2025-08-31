@@ -1322,55 +1322,122 @@ async def show_sync_options(
     text = """
 🔄 <b>Синхронизация с RemnaWave</b>
 
-Выберите тип синхронизации:
-
-🔄 <b>Синхронизировать всех</b>
-• Полная синхронизация всех пользователей
-• Создание новых пользователей из панели
-• Обновление данных существующих
-• Удаление неактуальных подписок
+🔄 <b>Полная синхронизация выполняет:</b>
+• Создание новых пользователей из панели в боте
+• Обновление данных существующих пользователей  
+• Деактивация подписок пользователей, отсутствующих в панели
+• Сохранение балансов пользователей
 • ⏱️ Время выполнения: 2-5 минут
-
-🆕 <b>Только новых</b>
-• Создание пользователей из панели, которых нет в боте
-• Быстрое добавление при массовой регистрации
-• ⏱️ Время выполнения: 30 секунд - 2 минуты
-
-📈 <b>Обновить данные</b>
-• Обновление информации о трафике и подписках
-• Синхронизация статуса и лимитов
-• Обновление подключенных сквадов
-• ⏱️ Время выполнения: 1-3 минуты
-
-🔍 <b>Валидация подписок</b>
-• Проверка и исправление проблем в данных
-• Восстановление отсутствующих полей
-• Исправление некорректных статусов
-
-🧹 <b>Мягкая очистка</b>  
-• Деактивация подписок отсутствующих в панели
-• Сохранение транзакций и истории
-
-🗑️ <b>ПРИНУДИТЕЛЬНАЯ ОЧИСТКА</b>
-• ⚠️ ОПАСНО: Полное удаление данных пользователей
-• Удаление транзакций, балансов, рефералов  
-• Только при серьезных проблемах синхронизации
 
 ⚠️ <b>Важно:</b>
 • Во время синхронизации не выполняйте другие операции
 • При полной синхронизации подписки пользователей, отсутствующих в панели, будут деактивированы
 • Рекомендуется делать полную синхронизацию ежедневно
+• Баланс пользователей НЕ удаляется
 """
     
     keyboard = [
-        [types.InlineKeyboardButton(text="🔄 Синхронизировать всех", callback_data="sync_all_users")],
-        [types.InlineKeyboardButton(text="🆕 Только новых", callback_data="sync_new_users")],
-        [types.InlineKeyboardButton(text="📈 Обновить данные", callback_data="sync_update_data")],
-        [types.InlineKeyboardButton(text="🔍 Валидация подписок", callback_data="sync_validate")],
-        [types.InlineKeyboardButton(text="🧹 Мягкая очистка", callback_data="sync_cleanup")],
-        [types.InlineKeyboardButton(text="🗑️ ПРИНУДИТЕЛЬНАЯ ОЧИСТКА", callback_data="confirm_force_cleanup")],
+        [types.InlineKeyboardButton(text="🔄 Запустить полную синхронизацию", callback_data="sync_all_users")],
         [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_remnawave")]
     ]
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+@admin_required
+@error_handler
+async def sync_all_users(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Выполняет полную синхронизацию всех пользователей"""
+    
+    progress_text = """
+🔄 <b>Выполняется полная синхронизация...</b>
+
+📋 Этапы:
+• Загрузка ВСЕХ пользователей из панели RemnaWave
+• Создание новых пользователей в боте
+• Обновление существующих пользователей
+• Деактивация подписок отсутствующих пользователей
+• Сохранение балансов
+
+⏳ Пожалуйста, подождите...
+"""
+    
+    await callback.message.edit_text(progress_text, reply_markup=None)
+    
+    remnawave_service = RemnaWaveService()
+    stats = await remnawave_service.sync_users_from_panel(db, "all")
+    
+    total_operations = stats['created'] + stats['updated'] + stats.get('deleted', 0)
+    
+    if stats['errors'] == 0:
+        status_emoji = "✅"
+        status_text = "успешно завершена"
+    elif stats['errors'] < total_operations:
+        status_emoji = "⚠️"
+        status_text = "завершена с предупреждениями"
+    else:
+        status_emoji = "❌"
+        status_text = "завершена с ошибками"
+    
+    text = f"""
+{status_emoji} <b>Полная синхронизация {status_text}</b>
+
+📊 <b>Результат:</b>
+• 🆕 Создано: {stats['created']}
+• 🔄 Обновлено: {stats['updated']}  
+• 🗑️ Деактивировано: {stats.get('deleted', 0)}
+• ❌ Ошибок: {stats['errors']}
+"""
+    
+    if stats.get('deleted', 0) > 0:
+        text += f"""
+
+🗑️ <b>Деактивированные подписки:</b>
+Деактивированы подписки пользователей, которые
+отсутствуют в панели RemnaWave.
+💰 Балансы пользователей сохранены.
+"""
+    
+    if stats['errors'] > 0:
+        text += f"""
+
+⚠️ <b>Внимание:</b>
+Некоторые операции завершились с ошибками.
+Проверьте логи для получения подробной информации.
+"""
+    
+    text += f"""
+
+💡 <b>Рекомендации:</b>
+• Полная синхронизация выполнена
+• Рекомендуется запускать раз в день
+• Все пользователи из панели синхронизированы
+"""
+    
+    keyboard = []
+    
+    if stats['errors'] > 0:
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text="🔄 Повторить синхронизацию", 
+                callback_data="sync_all_users"
+            )
+        ])
+    
+    keyboard.extend([
+        [
+            types.InlineKeyboardButton(text="📊 Статистика системы", callback_data="admin_rw_system"),
+            types.InlineKeyboardButton(text="🌐 Ноды", callback_data="admin_rw_nodes")
+        ],
+        [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_remnawave")]
+    ])
     
     await callback.message.edit_text(
         text,
@@ -1844,39 +1911,22 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(manage_node, F.data.startswith("node_restart_"))
     dp.callback_query.register(restart_all_nodes, F.data == "admin_restart_all_nodes")
     dp.callback_query.register(show_sync_options, F.data == "admin_rw_sync")
-    dp.callback_query.register(sync_users, F.data.startswith("sync_"))
-    dp.callback_query.register(show_sync_recommendations, F.data == "sync_recommendations")
-    dp.callback_query.register(validate_subscriptions, F.data == "sync_validate") 
-    dp.callback_query.register(cleanup_subscriptions, F.data == "sync_cleanup")
-    dp.callback_query.register(confirm_force_cleanup, F.data == "confirm_force_cleanup")
-    dp.callback_query.register(force_cleanup_all_orphaned_users, F.data == "force_cleanup_orphaned")
+    dp.callback_query.register(sync_all_users, F.data == "sync_all_users")
     dp.callback_query.register(show_squads_management, F.data == "admin_rw_squads")
-    
     dp.callback_query.register(show_squad_details, F.data.startswith("admin_squad_manage_"))
-    
     dp.callback_query.register(manage_squad_action, F.data.startswith("squad_add_users_"))
     dp.callback_query.register(manage_squad_action, F.data.startswith("squad_remove_users_"))
     dp.callback_query.register(manage_squad_action, F.data.startswith("squad_delete_"))
-    
     dp.callback_query.register(show_squad_edit_menu, F.data.startswith("squad_edit_") & ~F.data.startswith("squad_edit_inbounds_"))
-    
     dp.callback_query.register(show_squad_inbounds_selection, F.data.startswith("squad_edit_inbounds_"))
     dp.callback_query.register(show_squad_rename_form, F.data.startswith("squad_rename_"))
-    
     dp.callback_query.register(cancel_squad_rename, F.data.startswith("cancel_rename_"))
-    
     dp.callback_query.register(toggle_squad_inbound, F.data.startswith("sqd_tgl_"))
     dp.callback_query.register(save_squad_inbounds, F.data.startswith("sqd_save_"))
-    
     dp.callback_query.register(show_squad_edit_menu_short, F.data.startswith("sqd_edit_"))
-    
-    
     dp.callback_query.register(start_squad_creation, F.data == "admin_squad_create")
-    
     dp.callback_query.register(cancel_squad_creation, F.data == "cancel_squad_create")
-    
     dp.callback_query.register(toggle_create_inbound, F.data.startswith("create_tgl_"))
-    
     dp.callback_query.register(finish_squad_creation, F.data == "create_squad_finish")
     
     dp.message.register(
