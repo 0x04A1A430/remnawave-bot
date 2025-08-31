@@ -187,8 +187,13 @@ async def update_promocode(
 
 
 async def delete_promocode(db: AsyncSession, promocode: PromoCode) -> bool:
-    
     try:
+        from sqlalchemy import delete as sql_delete
+        
+        await db.execute(
+            sql_delete(PromoCodeUse).where(PromoCodeUse.promocode_id == promocode.id)
+        )
+        
         await db.delete(promocode)
         await db.commit()
         
