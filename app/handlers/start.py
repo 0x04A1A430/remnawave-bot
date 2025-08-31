@@ -20,6 +20,62 @@ from app.utils.user_utils import generate_unique_referral_code
 logger = logging.getLogger(__name__)
 
 
+async def handle_potential_referral_code(
+    message: types.Message, 
+    state: FSMContext, 
+    db: AsyncSession
+):
+    current_state = await state.get_state()
+    logger.info(f"🔍 REFERRAL CHECK: Проверка сообщения '{message.text}' в состоянии {current_state}")
+    
+    if current_state not in [
+        RegistrationStates.waiting_for_rules_accept.state,
+        RegistrationStates.waiting_for_referral_code.state,
+        None 
+    ]:
+        return False
+    
+    user = await get_user_by_telegram_id(db, message.from_user.id)
+    if user and user.status == UserStatus.ACTIVE.value:
+        return False
+    
+    potential_code = message.text.strip()
+    if len(potential_code) < 4 or len(potential_code) > 20:
+        return False
+    
+    referrer = await get_user_by_referral_code(db, potential_code)
+    if not referrer:
+        await message.answer(
+            "❌ Неверный реферальный код.\n\n"
+            "💡 Если у вас есть реферальный код, убедитесь что он введен правильно.\n"
+            "⏭️ Для продолжения регистрации без реферального кода используйте команду /start"
+        )
+        return True 
+    
+    data = await state.get_data() or {}
+    data['referral_code'] = potential_code
+    data['referrer_id'] = referrer.id
+    await state.set_data(data)
+    
+    await message.answer("✅ Реферальный код принят!")
+    logger.info(f"✅ Реферальный код {potential_code} применен для пользователя {message.from_user.id}")
+    
+    if current_state != RegistrationStates.waiting_for_referral_code.state:
+        language = data.get('language', 'ru')
+        texts = get_texts(language)
+        
+        await message.answer(
+            texts.RULES_TEXT,
+            reply_markup=get_rules_keyboard(language)
+        )
+        await state.set_state(RegistrationStates.waiting_for_rules_accept)
+        logger.info("📋 Правила отправлены после ввода реферального кода")
+    else:
+        await complete_registration(message, state, db)
+    
+    return True 
+
+
 async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession, db_user=None):
     logger.info(f"🚀 START: Обработка /start от {message.from_user.id}")
     
@@ -613,5 +669,14 @@ def register_handlers(dp: Dispatcher):
         StateFilter(RegistrationStates.waiting_for_referral_code)
     )
     logger.info("✅ Зарегистрирован process_referral_code_input")
+    
+    dp.message.register(
+        handle_potential_referral_code,
+        StateFilter(
+            RegistrationStates.waiting_for_rules_accept,
+            RegistrationStates.waiting_for_referral_code
+        )
+    )
+    logger.info("✅ Зарегистрирован handle_potential_referral_code")
     
     logger.info("🔧 === КОНЕЦ регистрации обработчиков start.py ===")
