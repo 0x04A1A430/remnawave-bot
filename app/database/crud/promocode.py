@@ -239,6 +239,7 @@ async def get_promocode_statistics(db: AsyncSession, promocode_id: int) -> dict:
     for use, user in recent_uses_data:
         use.user_username = user.username
         use.user_full_name = user.full_name
+        use.user_telegram_id = user.telegram_id
         recent_uses.append(use)
     
     return {
@@ -246,3 +247,4 @@ async def get_promocode_statistics(db: AsyncSession, promocode_id: int) -> dict:
         "today_uses": today_uses,
         "recent_uses": recent_uses
     }
+
