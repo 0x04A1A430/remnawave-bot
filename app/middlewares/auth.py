@@ -53,6 +53,8 @@ class AuthMiddleware(BaseMiddleware):
                             any(str(state) in str(current_state) for state in registration_states))
                         or (isinstance(event, CallbackQuery) and event.data and 
                             (event.data in ['rules_accept', 'rules_decline', 'referral_skip']))
+                        or (isinstance(event, Message) and current_state and 
+                            str(RegistrationStates.waiting_for_referral_code) in str(current_state))
                     )
                     
                     if is_registration_process:
@@ -102,6 +104,8 @@ class AuthMiddleware(BaseMiddleware):
                                 any(str(state) in str(current_state) for state in registration_states))
                             or (isinstance(event, CallbackQuery) and event.data and 
                                 (event.data in ['rules_accept', 'rules_decline', 'referral_skip']))
+                            or (isinstance(event, Message) and current_state and 
+                                str(RegistrationStates.waiting_for_referral_code) in str(current_state))
                         )
                         
                         if is_start_or_registration:
