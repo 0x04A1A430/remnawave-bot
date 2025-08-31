@@ -78,7 +78,7 @@ async def main():
         
         monitoring_service.bot = bot
         
-        payment_service = PaymentService()
+        payment_service = PaymentService(bot)
         
         if settings.TRIBUTE_ENABLED:
             logger.info("🌐 Запуск Tribute webhook сервера...")
