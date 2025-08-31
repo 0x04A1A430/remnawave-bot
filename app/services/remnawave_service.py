@@ -636,6 +636,29 @@ class RemnaWaveService:
         
             subscription = await create_subscription(db, **subscription_data)
             logger.info(f"✅ Создана подписка для пользователя {user.telegram_id} до {expire_at}")
+    
+    except Exception as e:
+        logger.error(f"❌ Ошибка создания подписки для пользователя {user.telegram_id}: {e}")
+        try:
+            from app.database.crud.subscription import create_subscription
+            from app.database.models import SubscriptionStatus
+        
+            basic_subscription = await create_subscription(
+                db=db,
+                user_id=user.id,
+                status=SubscriptionStatus.ACTIVE.value,
+                is_trial=False,
+                end_date=datetime.utcnow() + timedelta(days=30),
+                traffic_limit_gb=0,
+                traffic_used_gb=0.0,
+                device_limit=1,
+                connected_squads=[],
+                remnawave_short_uuid=panel_user.get('shortUuid'),
+                subscription_url=panel_user.get('subscriptionUrl', '')
+            )
+            logger.info(f"✅ Создана базовая подписка для пользователя {user.telegram_id}")
+        except Exception as basic_error:
+            logger.error(f"❌ Ошибка создания базовой подписки: {basic_error}")
         
         except Exception as e:
             logger.error(f"❌ Ошибка создания подписки для пользователя {user.telegram_id}: {e}")
