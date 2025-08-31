@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.states import AdminStates
-from app.database.models import User, PromoCodeType, PromoCode
+from app.database.models import PromoCode, PromoCodeUse, PromoCodeType, User
 from app.keyboards.admin import (
     get_admin_promocodes_keyboard, get_promocode_type_keyboard,
     get_admin_pagination_keyboard, get_confirmation_keyboard
