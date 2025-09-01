@@ -142,27 +142,31 @@ def get_subscription_keyboard(
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_subscription_settings_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_subscription_settings_keyboard(language: str = "ru", show_countries_management: bool = True) -> InlineKeyboardMarkup:
     from app.config import settings
     
     texts = get_texts(language)
-    keyboard = [
-        [
+    keyboard = []
+    
+    if show_countries_management:
+        keyboard.append([
             InlineKeyboardButton(text="🌍 Добавить страны", callback_data="subscription_add_countries")
-        ],
+        ])
+    
+    keyboard.extend([
         [
             InlineKeyboardButton(text="📱 Добавить устройства", callback_data="subscription_add_devices")
         ],
         [
             InlineKeyboardButton(text="🔄 Сбросить устройства", callback_data="subscription_reset_devices")
         ]
-    ]
+    ])
     
     if settings.is_traffic_selectable():
-        keyboard.insert(1, [
+        keyboard.insert(-2, [
             InlineKeyboardButton(text="📈 Добавить трафик", callback_data="subscription_add_traffic")
         ])
-        keyboard.insert(2, [
+        keyboard.insert(-2, [
             InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data="subscription_reset_traffic")
         ])
     
