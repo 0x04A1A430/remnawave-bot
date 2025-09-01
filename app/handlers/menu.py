@@ -38,108 +38,17 @@ async def show_main_menu(
         subscription_status=_get_subscription_status(db_user, texts)
     )
     
-    keyboard = get_main_menu_keyboard(
-        language=db_user.language,
-        is_admin=settings.is_admin(db_user.telegram_id),
-        has_had_paid_subscription=db_user.has_had_paid_subscription,
-        has_active_subscription=has_active_subscription,
-        subscription_is_active=subscription_is_active  
-    )
-    
-    if settings.is_main_menu_photo_enabled():
-        photo = settings.get_main_menu_photo()
-        
-        if photo:
-            try:
-                await callback.message.edit_media(
-                    media=types.InputMediaPhoto(
-                        media=photo,
-                        caption=menu_text,
-                        parse_mode="HTML"
-                    ),
-                    reply_markup=keyboard
-                )
-            except Exception as e:
-                try:
-                    await callback.message.delete()
-                except:
-                    pass
-                
-                await callback.message.answer_photo(
-                    photo=photo,
-                    caption=menu_text,
-                    reply_markup=keyboard,
-                    parse_mode="HTML"
-                )
-        else:
-            await callback.message.edit_text(
-                menu_text,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
-    else:
-        await callback.message.edit_text(
-            menu_text,
-            reply_markup=keyboard,
-            parse_mode="HTML"
+    await callback.message.edit_text(
+        menu_text,
+        reply_markup=get_main_menu_keyboard(
+            language=db_user.language,
+            is_admin=settings.is_admin(db_user.telegram_id),
+            has_had_paid_subscription=db_user.has_had_paid_subscription,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active  
         )
-    
+    )
     await callback.answer()
-
-async def show_main_menu_message(
-    message: types.Message,
-    db_user: User,
-    db: AsyncSession
-):
-    
-    texts = get_texts(db_user.language)
-    
-    from datetime import datetime
-    db_user.last_activity = datetime.utcnow()
-    await db.commit()
-    
-    has_active_subscription = bool(db_user.subscription)
-    subscription_is_active = False
-    
-    if db_user.subscription:
-        subscription_is_active = db_user.subscription.is_active
-    
-    menu_text = texts.MAIN_MENU.format(
-        user_name=db_user.full_name,
-        balance=texts.format_price(db_user.balance_kopeks),
-        subscription_status=_get_subscription_status(db_user, texts)
-    )
-    
-    keyboard = get_main_menu_keyboard(
-        language=db_user.language,
-        is_admin=settings.is_admin(db_user.telegram_id),
-        has_had_paid_subscription=db_user.has_had_paid_subscription,
-        has_active_subscription=has_active_subscription,
-        subscription_is_active=subscription_is_active  
-    )
-    
-    if settings.is_main_menu_photo_enabled():
-        photo = settings.get_main_menu_photo()
-        
-        if photo:
-            await message.answer_photo(
-                photo=photo,
-                caption=menu_text,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
-        else:
-            await message.answer(
-                menu_text,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
-    else:
-        await message.answer(
-            menu_text,
-            reply_markup=keyboard,
-            parse_mode="HTML"
-        )
 
 async def mark_user_as_had_paid_subscription(
     db: AsyncSession,
