@@ -306,13 +306,13 @@ async def show_pricing_settings(
 """
     
     keyboard = [
-        [
-            types.InlineKeyboardButton(text="📅 Периоды", callback_data="admin_edit_period_prices"),
-            types.InlineKeyboardButton(text="📈 Трафик", callback_data="admin_edit_traffic_prices")
-        ],
-        [
-            types.InlineKeyboardButton(text="📱 Устройства", callback_data="admin_edit_device_price")
-        ],
+      #  [
+      #      types.InlineKeyboardButton(text="📅 Периоды", callback_data="admin_edit_period_prices"),
+      #      types.InlineKeyboardButton(text="📈 Трафик", callback_data="admin_edit_traffic_prices")
+      #  ],
+      #  [
+      #      types.InlineKeyboardButton(text="📱 Устройства", callback_data="admin_edit_device_price")
+      #  ],
         [
             types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_subscriptions")
         ]
