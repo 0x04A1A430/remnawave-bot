@@ -412,7 +412,7 @@ async def process_yookassa_payment_amount(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description=f"Пополнение баланса VPN на {settings.format_price(amount_kopeks)}",
+            description=settings.get_balance_payment_description(amount_kopeks),
             receipt_email=None,
             receipt_phone=None,
             metadata={
