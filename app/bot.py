@@ -52,6 +52,9 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     
+    maintenance_service.set_bot(bot)
+    logger.info("Бот установлен в maintenance_service")
+    
     try:
         redis_client = redis.from_url(settings.REDIS_URL)
         await redis_client.ping()
@@ -107,7 +110,6 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
 
 
 async def shutdown_bot():
-    """Корректное завершение работы бота"""
     try:
         await maintenance_service.stop_monitoring()
         logger.info("Мониторинг техработ остановлен")
