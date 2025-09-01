@@ -28,8 +28,15 @@ class MaintenanceService:
         self._status = MaintenanceStatus(is_active=False)
         self._check_task: Optional[asyncio.Task] = None
         self._is_checking = False
-        self._max_consecutive_failures = 3 
+        self._max_consecutive_failures = 3
+        self._bot = None 
+        self._last_notification_sent = None 
         
+    def set_bot(self, bot):
+        """Устанавливает ссылку на бота для отправки уведомлений"""
+        self._bot = bot
+        logger.info("Бот установлен для maintenance_service")
+    
     @property
     def status(self) -> MaintenanceStatus:
         return self._status
@@ -51,6 +58,51 @@ class MaintenanceService:
         else:
             return settings.get_maintenance_message()
     
+    async def _notify_admins(self, message: str, alert_type: str = "info"):
+        """Отправка уведомлений администраторам"""
+        if not self._bot:
+            logger.warning("Бот не установлен, уведомления не могут быть отправлены")
+            return
+        
+        cache_key = f"maintenance_notification_{alert_type}"
+        if await cache.get(cache_key):
+            return
+        
+        admin_ids = settings.get_admin_ids()
+        if not admin_ids:
+            logger.warning("Список администраторов пуст")
+            return
+        
+        emoji_map = {
+            "error": "🚨",
+            "warning": "⚠️", 
+            "success": "✅",
+            "info": "ℹ️"
+        }
+        emoji = emoji_map.get(alert_type, "ℹ️")
+        
+        formatted_message = f"{emoji} <b>Maintenance Service</b>\n\n{message}"
+        
+        success_count = 0
+        for admin_id in admin_ids:
+            try:
+                await self._bot.send_message(
+                    chat_id=admin_id,
+                    text=formatted_message,
+                    parse_mode="HTML"
+                )
+                success_count += 1
+                await asyncio.sleep(0.1) 
+                
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления админу {admin_id}: {e}")
+        
+        if success_count > 0:
+            logger.info(f"Уведомление отправлено {success_count} администраторам")
+            await cache.set(cache_key, True, expire=300)
+        else:
+            logger.error("Не удалось отправить уведомления ни одному администратору")
+    
     async def enable_maintenance(self, reason: Optional[str] = None, auto: bool = False) -> bool:
         try:
             if self._status.is_active:
@@ -63,6 +115,18 @@ class MaintenanceService:
             self._status.auto_enabled = auto
             
             await self._save_status_to_cache()
+            
+            notification_msg = f"""
+Режим технических работ ВКЛЮЧЕН
+
+📋 <b>Причина:</b> {self._status.reason}
+🤖 <b>Автоматически:</b> {'Да' if auto else 'Нет'}
+🕐 <b>Время:</b> {self._status.enabled_at.strftime('%d.%m.%Y %H:%M:%S')}
+
+Обычные пользователи временно не смогут использовать бота.
+"""
+            
+            await self._notify_admins(notification_msg, "warning" if auto else "info")
             
             logger.warning(f"🔧 Режим техработ ВКЛЮЧЕН. Причина: {self._status.reason}")
             return True
@@ -77,6 +141,11 @@ class MaintenanceService:
                 logger.info("Режим техработ уже выключен")
                 return True
             
+            was_auto = self._status.auto_enabled
+            duration = None
+            if self._status.enabled_at:
+                duration = datetime.utcnow() - self._status.enabled_at
+            
             self._status.is_active = False
             self._status.enabled_at = None
             self._status.reason = None
@@ -84,6 +153,27 @@ class MaintenanceService:
             self._status.consecutive_failures = 0
             
             await self._save_status_to_cache()
+            
+            duration_str = ""
+            if duration:
+                hours = int(duration.total_seconds() // 3600)
+                minutes = int((duration.total_seconds() % 3600) // 60)
+                if hours > 0:
+                    duration_str = f"\n⏱️ <b>Длительность:</b> {hours}ч {minutes}мин"
+                else:
+                    duration_str = f"\n⏱️ <b>Длительность:</b> {minutes}мин"
+            
+            notification_msg = f"""
+Режим технических работ ВЫКЛЮЧЕН
+
+🤖 <b>Автоматически:</b> {'Да' if was_auto else 'Нет'}
+🕐 <b>Время:</b> {datetime.utcnow().strftime('%d.%m.%Y %H:%M:%S')}
+{duration_str}
+
+Сервис снова доступен для пользователей.
+"""
+            
+            await self._notify_admins(notification_msg, "success")
             
             logger.info("✅ Режим техработ ВЫКЛЮЧЕН")
             return True
@@ -102,6 +192,17 @@ class MaintenanceService:
             
             self._check_task = asyncio.create_task(self._monitoring_loop())
             logger.info(f"🔄 Запущен мониторинг API RemnaWave (интервал: {settings.get_maintenance_check_interval()}с)")
+            
+            await self._notify_admins(f"""
+Мониторинг технических работ запущен
+
+🔄 <b>Интервал проверки:</b> {settings.get_maintenance_check_interval()} секунд
+🤖 <b>Автовключение:</b> {'Включено' if settings.is_maintenance_auto_enable() else 'Отключено'}
+🎯 <b>Порог ошибок:</b> {self._max_consecutive_failures}
+
+Система будет следить за доступностью API.
+""", "info")
+            
             return True
             
         except Exception as e:
@@ -117,7 +218,8 @@ class MaintenanceService:
                 except asyncio.CancelledError:
                     pass
             
-            logger.info("⏹️ Мониторинг API остановлен")
+            await self._notify_admins("Мониторинг технических работ остановлен", "info")
+            logger.info("ℹ️ Мониторинг API остановлен")
             return True
             
         except Exception as e:
@@ -138,6 +240,18 @@ class MaintenanceService:
                 is_connected = await test_api_connection(api)
                 
                 if is_connected:
+                    # API восстановилось
+                    if not self._status.api_status:
+                        await self._notify_admins(f"""
+API RemnaWave восстановлено!
+
+✅ <b>Статус:</b> Доступно
+🕐 <b>Время восстановления:</b> {self._status.last_check.strftime('%H:%M:%S')}
+🔄 <b>Неудачных попыток было:</b> {self._status.consecutive_failures}
+
+API снова отвечает на запросы.
+""", "success")
+                    
                     self._status.api_status = True
                     self._status.consecutive_failures = 0
                     
@@ -147,8 +261,20 @@ class MaintenanceService:
                     
                     return True
                 else:
+                    was_available = self._status.api_status
                     self._status.api_status = False
                     self._status.consecutive_failures += 1
+                    
+                    if was_available:
+                        await self._notify_admins(f"""
+API RemnaWave недоступно!
+
+❌ <b>Статус:</b> Недоступно
+🕐 <b>Время обнаружения:</b> {self._status.last_check.strftime('%H:%M:%S')}
+🔄 <b>Попытка:</b> {self._status.consecutive_failures}
+
+Началась серия неудачных проверок API.
+""", "error")
                     
                     if (self._status.consecutive_failures >= self._max_consecutive_failures and
                         not self._status.is_active and
@@ -163,6 +289,17 @@ class MaintenanceService:
                     
         except Exception as e:
             logger.error(f"Ошибка проверки API: {e}")
+            
+            if self._status.api_status:
+                await self._notify_admins(f"""
+Ошибка при проверке API RemnaWave
+
+❌ <b>Ошибка:</b> {str(e)}
+🕐 <b>Время:</b> {datetime.utcnow().strftime('%H:%M:%S')}
+
+Не удалось выполнить проверку доступности API.
+""", "error")
+            
             self._status.api_status = False
             self._status.consecutive_failures += 1
             return False
@@ -216,7 +353,7 @@ class MaintenanceService:
             if status_data.get("last_check"):
                 self._status.last_check = datetime.fromisoformat(status_data["last_check"])
             
-            logger.info(f"📥 Состояние техработ загружено из кеша: активен={self._status.is_active}")
+            logger.info(f"🔥 Состояние техработ загружено из кеша: активен={self._status.is_active}")
             
         except Exception as e:
             logger.error(f"Ошибка загрузки состояния из кеша: {e}")
@@ -232,7 +369,8 @@ class MaintenanceService:
             "consecutive_failures": self._status.consecutive_failures,
             "monitoring_active": self._check_task is not None and not self._check_task.done(),
             "auto_enable_configured": settings.is_maintenance_auto_enable(),
-            "check_interval": settings.get_maintenance_check_interval()
+            "check_interval": settings.get_maintenance_check_interval(),
+            "bot_connected": self._bot is not None
         }
     
     async def force_api_check(self) -> Dict[str, Any]:
