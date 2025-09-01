@@ -362,7 +362,6 @@ services:
     networks:
       - bot_network
     user: "1000:1000"
-    # Создание директорий при запуске
     command: >
       bash -c "
         mkdir -p /app/logs /app/data &&
