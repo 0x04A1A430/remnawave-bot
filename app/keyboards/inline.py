@@ -292,9 +292,11 @@ def get_devices_keyboard(current: int, language: str = "ru") -> InlineKeyboardMa
         price_text = f" (+{texts.format_price(price)})" if price > 0 else ""
         emoji = "✅" if devices == current else "⚪"
         
+        device_word = _get_device_declension(devices)
+        
         keyboard.append([
             InlineKeyboardButton(
-                text=f"{emoji} {devices} устройство{_get_device_suffix(devices)}{price_text}",
+                text=f"{emoji} {devices} {device_word}{price_text}",
                 callback_data=f"devices_{devices}"
             )
         ])
@@ -306,6 +308,13 @@ def get_devices_keyboard(current: int, language: str = "ru") -> InlineKeyboardMa
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+def _get_device_declension(count: int) -> str:
+    if count % 10 == 1 and count % 100 != 11:
+        return "устройство"
+    elif count % 10 in [2, 3, 4] and count % 100 not in [12, 13, 14]:
+        return "устройства"
+    else:
+        return "устройств"
 
 def get_subscription_confirm_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
@@ -500,16 +509,6 @@ def get_pagination_keyboard(
     
     return keyboard
 
-
-def _get_device_suffix(count: int) -> str:
-    if count == 1:
-        return ""
-    elif 2 <= count <= 4:
-        return "а"
-    else:
-        return ""
-
-
 def get_confirmation_keyboard(
     confirm_data: str,
     cancel_data: str = "cancel",
@@ -630,9 +629,11 @@ def get_add_devices_keyboard(current_devices: int, language: str = "ru") -> Inli
         price = add_count * settings.PRICE_PER_DEVICE
         total_devices = current_devices + add_count
         
+        add_device_word = _get_device_declension(add_count)
+        
         keyboard.append([
             InlineKeyboardButton(
-                text=f"📱 +{add_count} устройство{_get_device_suffix(add_count)} (итого: {total_devices}) - {settings.format_price(price)}",
+                text=f"📱 +{add_count} {add_device_word} (итого: {total_devices}) - {settings.format_price(price)}",
                 callback_data=f"add_devices_{add_count}"
             )
         ])
