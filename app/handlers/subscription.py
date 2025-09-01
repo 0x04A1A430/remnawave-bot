@@ -349,6 +349,9 @@ async def handle_add_countries(
     db: AsyncSession,
     state: FSMContext
 ):
+    if not await _should_show_countries_management():
+        await callback.answer("ℹ️ Управление серверами недоступно - доступен только один сервер", show_alert=True)
+        return
     
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
@@ -366,7 +369,7 @@ async def handle_add_countries(
             current_countries_names.append(country['name'])
     
     text = "🌍 <b>Управление странами подписки</b>\n\n"
-    text += f"📍 <b>Текущие страны ({len(current_countries)}):</b>\n"
+    text += f"📋 <b>Текущие страны ({len(current_countries)}):</b>\n"
     if current_countries_names:
         text += "\n".join(f"• {name}" for name in current_countries_names)
     else:
@@ -1155,12 +1158,24 @@ async def select_period(
         )
         await state.set_state(SubscriptionStates.selecting_traffic)
     else:
-        countries = await _get_available_countries()
-        await callback.message.edit_text(
-            texts.SELECT_COUNTRIES,
-            reply_markup=get_countries_keyboard(countries, [], db_user.language)
-        )
-        await state.set_state(SubscriptionStates.selecting_countries)
+        if await _should_show_countries_management():
+            countries = await _get_available_countries()
+            await callback.message.edit_text(
+                texts.SELECT_COUNTRIES,
+                reply_markup=get_countries_keyboard(countries, [], db_user.language)
+            )
+            await state.set_state(SubscriptionStates.selecting_countries)
+        else:
+            countries = await _get_available_countries()
+            available_countries = [c for c in countries if c.get('is_available', True)]
+            data['countries'] = [available_countries[0]['uuid']] if available_countries else []
+            await state.set_data(data)
+            
+            await callback.message.edit_text(
+                texts.SELECT_DEVICES,
+                reply_markup=get_devices_keyboard(1, db_user.language)
+            )
+            await state.set_state(SubscriptionStates.selecting_devices)
     
     await callback.answer()
 
@@ -1237,7 +1252,6 @@ async def select_traffic(
     state: FSMContext,
     db_user: User
 ):
-    
     traffic_gb = int(callback.data.split('_')[1])
     texts = get_texts(db_user.language)
     
@@ -1246,14 +1260,25 @@ async def select_traffic(
     data['total_price'] += TRAFFIC_PRICES[traffic_gb]
     await state.set_data(data)
     
-    countries = await _get_available_countries()
+    if await _should_show_countries_management():
+        countries = await _get_available_countries()
+        await callback.message.edit_text(
+            texts.SELECT_COUNTRIES,
+            reply_markup=get_countries_keyboard(countries, [], db_user.language)
+        )
+        await state.set_state(SubscriptionStates.selecting_countries)
+    else:
+        countries = await _get_available_countries()
+        available_countries = [c for c in countries if c.get('is_available', True)]
+        data['countries'] = [available_countries[0]['uuid']] if available_countries else []
+        await state.set_data(data)
+        
+        await callback.message.edit_text(
+            texts.SELECT_DEVICES,
+            reply_markup=get_devices_keyboard(1, db_user.language)
+        )
+        await state.set_state(SubscriptionStates.selecting_devices)
     
-    await callback.message.edit_text(
-        texts.SELECT_COUNTRIES,
-        reply_markup=get_countries_keyboard(countries, [], db_user.language)
-    )
-    
-    await state.set_state(SubscriptionStates.selecting_countries)
     await callback.answer()
 
 
@@ -1667,9 +1692,11 @@ async def handle_subscription_settings(
 Выберите что хотите изменить:
 """
     
+    show_countries = await _should_show_countries_management()
+    
     await callback.message.edit_text(
         settings_text,
-        reply_markup=get_subscription_settings_keyboard(db_user.language),
+        reply_markup=get_subscription_settings_keyboard(db_user.language, show_countries),
         parse_mode="HTML"
     )
     await callback.answer()
@@ -1988,6 +2015,15 @@ async def handle_add_country_to_subscription(
         logger.error(f"❌ Ошибка обновления клавиатуры: {e}")
     
     await callback.answer()
+
+async def _should_show_countries_management() -> bool:
+    try:
+        countries = await _get_available_countries()
+        available_countries = [c for c in countries if c.get('is_available', True)]
+        return len(available_countries) > 1
+    except Exception as e:
+        logger.error(f"Ошибка проверки доступных серверов: {e}")
+        return True
 
 
 async def confirm_add_countries_to_subscription(
