@@ -405,8 +405,7 @@ async def show_countries_management(
     
     keyboard = [
         [
-            types.InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_subs_countries"),
-            types.InlineKeyboardButton(text="⚙️ API настройки", callback_data="admin_rw_api")
+            types.InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_subs_countries")
         ],
         [
             types.InlineKeyboardButton(text="📊 Статистика нод", callback_data="admin_rw_nodes"),
