@@ -431,16 +431,16 @@ your-domain.com {
 
 ```bash
 # Быстрый старт
-docker compose up -d --build
+docker compose up -d
 
 # Статус сервисов
 docker compose ps
 
 # Логи
-docker compose logs -f bot
+docker compose logs
 
 # Перезапуск
-docker compose restart bot
+docker compose restart
 
 # Остановка
 docker compose down
