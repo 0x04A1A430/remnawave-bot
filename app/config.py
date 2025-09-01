@@ -93,6 +93,12 @@ class Settings(BaseSettings):
     YOOKASSA_WEBHOOK_PATH: str = "/yookassa-webhook"
     YOOKASSA_WEBHOOK_PORT: int = 8082
     YOOKASSA_WEBHOOK_SECRET: Optional[str] = None
+    PAYMENT_BALANCE_DESCRIPTION: str = "Пополнение баланса"
+    PAYMENT_SUBSCRIPTION_DESCRIPTION: str = "Оплата подписки"
+    PAYMENT_SERVICE_NAME: str = "Интернет-сервис"
+    PAYMENT_BALANCE_TEMPLATE: str = "{service_name} - {description}"
+    PAYMENT_SUBSCRIPTION_TEMPLATE: str = "{service_name} - {description}"
+
 
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
@@ -256,6 +262,24 @@ class Settings(BaseSettings):
             
         except (ValueError, AttributeError):
             return [30, 90, 180]
+
+    def get_balance_payment_description(self, amount_kopeks: int) -> str:
+        return self.PAYMENT_BALANCE_TEMPLATE.format(
+            service_name=self.PAYMENT_SERVICE_NAME,
+            description=f"{self.PAYMENT_BALANCE_DESCRIPTION} на {self.format_price(amount_kopeks)}"
+        )
+    
+    def get_subscription_payment_description(self, period_days: int, amount_kopeks: int) -> str:
+        return self.PAYMENT_SUBSCRIPTION_TEMPLATE.format(
+            service_name=self.PAYMENT_SERVICE_NAME,
+            description=f"{self.PAYMENT_SUBSCRIPTION_DESCRIPTION} на {period_days} дней"
+        )
+    
+    def get_custom_payment_description(self, description: str) -> str:
+        return self.PAYMENT_BALANCE_TEMPLATE.format(
+            service_name=self.PAYMENT_SERVICE_NAME,
+            description=description
+        )
     
     model_config = {
         "env_file": ".env",
