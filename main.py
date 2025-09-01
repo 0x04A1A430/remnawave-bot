@@ -77,6 +77,8 @@ async def main():
         bot, dp = await setup_bot()
         
         monitoring_service.bot = bot
+        maintenance_service.set_bot(bot) 
+        logger.info("🔗 Бот подключен к сервисам мониторинга и техработ")
         
         payment_service = PaymentService(bot)
         
@@ -95,11 +97,16 @@ async def main():
         else:
             logger.info("ℹ️ YooKassa отключена, webhook сервер не запускается")
         
-        logger.info("🔍 Запуск службы мониторинга...")
+        logger.info("📊 Запуск службы мониторинга...")
         monitoring_task = asyncio.create_task(monitoring_service.start_monitoring())
         
-        logger.info("🔧 Запуск службы техработ...")
-        maintenance_task = asyncio.create_task(maintenance_service.start_monitoring())
+        logger.info("🔧 Проверка службы техработ...")
+        if not maintenance_service._check_task or maintenance_service._check_task.done():
+            logger.info("🔧 Запуск службы техработ...")
+            maintenance_task = asyncio.create_task(maintenance_service.start_monitoring())
+        else:
+            logger.info("🔧 Служба техработ уже запущена")
+            maintenance_task = None
         
         logger.info("🔄 Запуск polling...")
         polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=True))
@@ -131,7 +138,7 @@ async def main():
                         logger.error(f"Служба мониторинга завершилась с ошибкой: {exception}")
                         monitoring_task = asyncio.create_task(monitoring_service.start_monitoring())
                         
-                if maintenance_task.done():
+                if maintenance_task and maintenance_task.done():
                     exception = maintenance_task.exception()
                     if exception:
                         logger.error(f"Служба техработ завершилась с ошибкой: {exception}")
@@ -154,7 +161,7 @@ async def main():
         logger.info("🛑 Начинается корректное завершение работы...")
         
         if yookassa_server_task and not yookassa_server_task.done():
-            logger.info("⏹️ Остановка YooKassa webhook сервера...")
+            logger.info("ℹ️ Остановка YooKassa webhook сервера...")
             yookassa_server_task.cancel()
             try:
                 await yookassa_server_task
@@ -162,7 +169,7 @@ async def main():
                 pass
         
         if monitoring_task and not monitoring_task.done():
-            logger.info("⏹️ Остановка службы мониторинга...")
+            logger.info("ℹ️ Остановка службы мониторинга...")
             monitoring_service.stop_monitoring()
             monitoring_task.cancel()
             try:
@@ -171,7 +178,7 @@ async def main():
                 pass
         
         if maintenance_task and not maintenance_task.done():
-            logger.info("⏹️ Остановка службы техработ...")
+            logger.info("ℹ️ Остановка службы техработ...")
             await maintenance_service.stop_monitoring()
             maintenance_task.cancel()
             try:
@@ -180,7 +187,7 @@ async def main():
                 pass
         
         if polling_task and not polling_task.done():
-            logger.info("⏹️ Остановка polling...")
+            logger.info("ℹ️ Остановка polling...")
             polling_task.cancel()
             try:
                 await polling_task
@@ -188,7 +195,7 @@ async def main():
                 pass
         
         if webhook_server:
-            logger.info("⏹️ Остановка Tribute webhook сервера...")
+            logger.info("ℹ️ Остановка Tribute webhook сервера...")
             await webhook_server.stop()
         
         if 'bot' in locals():
