@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     
     REMNAWAVE_API_URL: str
     REMNAWAVE_API_KEY: str
+
+    MAIN_MENU_PHOTO_ENABLED: bool = False
+    MAIN_MENU_PHOTO_URL: Optional[str] = None
+    MAIN_MENU_PHOTO_PATH: Optional[str] = None
     
     TRIAL_DURATION_DAYS: int = 3
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
@@ -256,6 +260,25 @@ class Settings(BaseSettings):
             
         except (ValueError, AttributeError):
             return [30, 90, 180]
+
+    def is_main_menu_photo_enabled(self) -> bool:
+        return self.MAIN_MENU_PHOTO_ENABLED and (
+            self.MAIN_MENU_PHOTO_URL is not None or 
+            self.MAIN_MENU_PHOTO_PATH is not None
+        )
+    
+    def get_main_menu_photo(self) -> Optional[Union[str, 'FSInputFile']]:
+        if not self.is_main_menu_photo_enabled():
+            return None
+            
+        if self.MAIN_MENU_PHOTO_URL:
+            return self.MAIN_MENU_PHOTO_URL
+            
+        if self.MAIN_MENU_PHOTO_PATH and os.path.exists(self.MAIN_MENU_PHOTO_PATH):
+            from aiogram.types import FSInputFile
+            return FSInputFile(self.MAIN_MENU_PHOTO_PATH)
+            
+        return None
     
     model_config = {
         "env_file": ".env",
