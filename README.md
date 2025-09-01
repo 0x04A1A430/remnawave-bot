@@ -71,10 +71,10 @@ nano .env  # Заполни токены и настройки
 mkdir -p logs data
 
 # 4. Запусти всё разом
-docker compose up -d --build
+docker compose up -d
 
 # 5. Проверь статус
-docker compose logs -f bot
+docker compose logs 
 ```
 
 ### ⚙️ ENV параметры
