@@ -1,4 +1,5 @@
 from typing import List, Optional
+from aiogram import types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
@@ -107,15 +108,34 @@ def get_subscription_keyboard(
             connect_mode = settings.CONNECT_BUTTON_MODE
             
             if connect_mode == "miniapp_subscription":
-                button_text = "🚀 Открыть в мини-приложении"
+                keyboard.append([
+                    InlineKeyboardButton(
+                        text="🚀 Открыть в мини-приложении",
+                        web_app=types.WebAppInfo(url=subscription.subscription_url)
+                    )
+                ])
+                keyboard.append([
+                    InlineKeyboardButton(text="📋 Показать ссылку", callback_data="open_subscription_link")
+                ])
             elif connect_mode == "miniapp_custom":
-                button_text = "🚀 Открыть приложение"
+                if settings.MINIAPP_CUSTOM_URL:
+                    keyboard.append([
+                        InlineKeyboardButton(
+                            text="🚀 Открыть приложение",
+                            web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL)
+                        )
+                    ])
+                    keyboard.append([
+                        InlineKeyboardButton(text="📋 Показать ссылку подписки", callback_data="open_subscription_link")
+                    ])
+                else:
+                    keyboard.append([
+                        InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
+                    ])
             else:
-                button_text = "🔗 Подключиться"
-                
-            keyboard.append([
-                InlineKeyboardButton(text=button_text, callback_data="subscription_connect")
-            ])
+                keyboard.append([
+                    InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
+                ])
         
         if not is_trial and subscription and subscription.days_left <= 3:
             keyboard.append([
