@@ -2249,125 +2249,27 @@ async def handle_connect_subscription(
     connect_mode = settings.CONNECT_BUTTON_MODE
     
     if connect_mode == "miniapp_subscription":
-        from app.database.crud.subscription import check_and_update_subscription_status
-        subscription = await check_and_update_subscription_status(db, subscription)
-        
-        subscription_service = SubscriptionService()
-        await subscription_service.sync_subscription_usage(db, subscription)
-        
-        await db.refresh(subscription)
-        
-        current_time = datetime.utcnow()
-        
-        if subscription.status == "expired" or subscription.end_date <= current_time:
-            actual_status = "expired"
-            status_display = "Истекла"
-            status_emoji = "🔴"
-        elif subscription.status == "active" and subscription.end_date > current_time:
-            if subscription.is_trial:
-                actual_status = "trial_active"
-                status_display = "Тестовая"
-                status_emoji = "🎁"
-            else:
-                actual_status = "paid_active"
-                status_display = "Активна"
-                status_emoji = "💎"
-        else:
-            actual_status = "unknown"
-            status_display = "Неизвестно"
-            status_emoji = "❓"
-        
-        if subscription.end_date <= current_time:
-            days_left = 0
-            time_left_text = "истёк"
-            warning_text = "" 
-        else:
-            delta = subscription.end_date - current_time
-            days_left = delta.days
-            hours_left = delta.seconds // 3600
-            
-            if days_left > 1:
-                time_left_text = f"{days_left} дн."
-                warning_text = ""
-            elif days_left == 1:
-                time_left_text = f"{days_left} дн."
-                warning_text = "\n⚠️ истекает завтра!"
-            elif hours_left > 0:
-                time_left_text = f"{hours_left} ч."
-                warning_text = "\n⚠️ истекает сегодня!"
-            else:
-                minutes_left = (delta.seconds % 3600) // 60
-                time_left_text = f"{minutes_left} мин."
-                warning_text = "\n🔴 истекает через несколько минут!"
-        
-        subscription_type = "Триал" if subscription.is_trial else "Платная"
-        
-        if subscription.traffic_limit_gb == 0:
-            traffic_used_display = f"∞ (безлимит) / {subscription.traffic_used_gb:.1f} ГБ"
-        else:
-            traffic_used_display = f"{subscription.traffic_used_gb:.1f} / {subscription.traffic_limit_gb} ГБ"
-        
-        devices_used = await get_current_devices_count(db_user)
-        
-        message = f"""👤 {db_user.full_name}
-━━━━━━━━━━━━━━━━━━
-💰 Баланс: {settings.format_price(db_user.balance_kopeks)}
-📱 Подписка: {status_emoji} {status_display}{warning_text}
-━━━━━━━━━━━━━━━━━━
-
-📱 Информация о подписке
-🎭 Тип: {subscription_type}
-📅 Действует до: {subscription.end_date.strftime("%d.%m.%Y %H:%M")}
-⏰ Осталось: {time_left_text}
-📈 Трафик: {traffic_used_display}
-🌍 Серверы: {len(subscription.connected_squads)} стран
-📱 Устройства: {devices_used} / {subscription.device_limit}"""
-        
-        if hasattr(subscription, 'subscription_url') and subscription.subscription_url:
-            message += f"\n\n🔗 <b>Ссылка для подключения:</b>\n<code>{subscription.subscription_url}</code>"
-            message += f"\n\n📱 Скопируйте ссылку и добавьте в ваше VPN приложение"
-        
-        keyboard_buttons = []
-        
-        keyboard_buttons.append([
-            InlineKeyboardButton(
-                text="🔗 Открыть подписку", 
-                web_app=types.WebAppInfo(url=subscription.subscription_url)
-            )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔗 Открыть подписку", 
+                    web_app=types.WebAppInfo(url=subscription.subscription_url)
+                )
+            ],
+            [
+                InlineKeyboardButton(text="📋 Показать ссылку", callback_data="open_subscription_link")
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+            ]
         ])
-        
-        if actual_status in ['trial_active', 'paid_active'] and not subscription.is_trial:
-            keyboard_buttons.extend([
-                [InlineKeyboardButton(text="⚙️ Управление подпиской", callback_data="subscription_settings")],
-                [
-                    InlineKeyboardButton(text="🌍 Страны", callback_data="subscription_add_countries"),
-                    InlineKeyboardButton(text="📊 Трафик", callback_data="subscription_add_traffic")
-                ],
-                [
-                    InlineKeyboardButton(text="📱 Устройства", callback_data="subscription_add_devices"),
-                    InlineKeyboardButton(text="🔄 Сброс устройств", callback_data="subscription_reset_devices")
-                ],
-                [InlineKeyboardButton(text="⏰ Продлить", callback_data="subscription_extend")],
-                [InlineKeyboardButton(text="💳 Автоплатеж", callback_data="subscription_autopay")]
-            ])
-        elif actual_status == 'trial_active':
-            keyboard_buttons.append([
-                InlineKeyboardButton(text="⬆️ Улучшить подписку", callback_data="subscription_upgrade")
-            ])
-        
-        if actual_status == 'expired':
-            keyboard_buttons.append([
-                InlineKeyboardButton(text="🛒 Купить подписку", callback_data="menu_buy")
-            ])
-        
-        keyboard_buttons.append([
-            InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")
-        ])
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         
         await callback.message.edit_text(
-            message,
+            f"""
+🔗 <b>Подключить подписку</b>
+
+📱 Нажмите кнопку ниже, чтобы открыть подписку в мини-приложении Telegram:
+            """,
             reply_markup=keyboard,
             parse_mode="HTML"
         )
@@ -2376,125 +2278,31 @@ async def handle_connect_subscription(
         if not settings.MINIAPP_CUSTOM_URL:
             await callback.answer("❌ Кастомная ссылка для мини-приложения не настроена", show_alert=True)
             return
-        
-        from app.database.crud.subscription import check_and_update_subscription_status
-        subscription = await check_and_update_subscription_status(db, subscription)
-        
-        subscription_service = SubscriptionService()
-        await subscription_service.sync_subscription_usage(db, subscription)
-        
-        await db.refresh(subscription)
-        
-        current_time = datetime.utcnow()
-        
-        if subscription.status == "expired" or subscription.end_date <= current_time:
-            actual_status = "expired"
-            status_display = "Истекла"
-            status_emoji = "🔴"
-        elif subscription.status == "active" and subscription.end_date > current_time:
-            if subscription.is_trial:
-                actual_status = "trial_active"
-                status_display = "Тестовая"
-                status_emoji = "🎁"
-            else:
-                actual_status = "paid_active"
-                status_display = "Активна"
-                status_emoji = "💎"
-        else:
-            actual_status = "unknown"
-            status_display = "Неизвестно"
-            status_emoji = "❓"
-        
-        if subscription.end_date <= current_time:
-            days_left = 0
-            time_left_text = "истёк"
-            warning_text = "" 
-        else:
-            delta = subscription.end_date - current_time
-            days_left = delta.days
-            hours_left = delta.seconds // 3600
             
-            if days_left > 1:
-                time_left_text = f"{days_left} дн."
-                warning_text = ""
-            elif days_left == 1:
-                time_left_text = f"{days_left} дн."
-                warning_text = "\n⚠️ истекает завтра!"
-            elif hours_left > 0:
-                time_left_text = f"{hours_left} ч."
-                warning_text = "\n⚠️ истекает сегодня!"
-            else:
-                minutes_left = (delta.seconds % 3600) // 60
-                time_left_text = f"{minutes_left} мин."
-                warning_text = "\n🔴 истекает через несколько минут!"
-        
-        subscription_type = "Триал" if subscription.is_trial else "Платная"
-        
-        if subscription.traffic_limit_gb == 0:
-            traffic_used_display = f"∞ (безлимит) / {subscription.traffic_used_gb:.1f} ГБ"
-        else:
-            traffic_used_display = f"{subscription.traffic_used_gb:.1f} / {subscription.traffic_limit_gb} ГБ"
-        
-        devices_used = await get_current_devices_count(db_user)
-        
-        message = f"""👤 {db_user.full_name}
-━━━━━━━━━━━━━━━━━━
-💰 Баланс: {settings.format_price(db_user.balance_kopeks)}
-📱 Подписка: {status_emoji} {status_display}{warning_text}
-━━━━━━━━━━━━━━━━━━
-
-📱 Информация о подписке
-🎭 Тип: {subscription_type}
-📅 Действует до: {subscription.end_date.strftime("%d.%m.%Y %H:%M")}
-⏰ Осталось: {time_left_text}
-📈 Трафик: {traffic_used_display}
-🌍 Серверы: {len(subscription.connected_squads)} стран
-📱 Устройства: {devices_used} / {subscription.device_limit}
-
-🔗 <b>Ссылка подписки:</b>
-<code>{subscription.subscription_url}</code>"""
-        
-        keyboard_buttons = []
-        
-        keyboard_buttons.append([
-            InlineKeyboardButton(
-                text="🚀 Открыть приложение", 
-                web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL)
-            )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🚀 Открыть приложение", 
+                    web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL)
+                )
+            ],
+            [
+                InlineKeyboardButton(text="📋 Показать ссылку подписки", callback_data="open_subscription_link")
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+            ]
         ])
-        
-        if actual_status in ['trial_active', 'paid_active'] and not subscription.is_trial:
-            keyboard_buttons.extend([
-                [InlineKeyboardButton(text="⚙️ Управление подпиской", callback_data="subscription_settings")],
-                [
-                    InlineKeyboardButton(text="🌍 Страны", callback_data="subscription_add_countries"),
-                    InlineKeyboardButton(text="📊 Трафик", callback_data="subscription_add_traffic")
-                ],
-                [
-                    InlineKeyboardButton(text="📱 Устройства", callback_data="subscription_add_devices"),
-                    InlineKeyboardButton(text="🔄 Сброс устройств", callback_data="subscription_reset_devices")
-                ],
-                [InlineKeyboardButton(text="⏰ Продлить", callback_data="subscription_extend")],
-                [InlineKeyboardButton(text="💳 Автоплатеж", callback_data="subscription_autopay")]
-            ])
-        elif actual_status == 'trial_active':
-            keyboard_buttons.append([
-                InlineKeyboardButton(text="⬆️ Улучшить подписку", callback_data="subscription_upgrade")
-            ])
-        
-        if actual_status == 'expired':
-            keyboard_buttons.append([
-                InlineKeyboardButton(text="🛒 Купить подписку", callback_data="menu_buy")
-            ])
-        
-        keyboard_buttons.append([
-            InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")
-        ])
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         
         await callback.message.edit_text(
-            message,
+            f"""
+🚀 <b>Подключить подписку</b>
+
+📱 Нажмите кнопку ниже, чтобы открыть приложение:
+
+📋 <b>Ссылка подписки:</b>
+<code>{subscription.subscription_url}</code>
+            """,
             reply_markup=keyboard,
             parse_mode="HTML"
         )
@@ -2516,7 +2324,6 @@ async def handle_connect_subscription(
         )
     
     await callback.answer()
-
 
 
 async def handle_device_guide(
