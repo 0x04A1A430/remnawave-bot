@@ -2243,7 +2243,7 @@ async def handle_connect_subscription(
     subscription = db_user.subscription
     
     if not subscription or not subscription.subscription_url:
-        await callback.answer("❌ У вас нет активной подписки или ссылка еще генерируется", show_alert=True)
+        await callback.answer("⚠ У вас нет активной подписки или ссылка еще генерируется", show_alert=True)
         return
     
     connect_mode = settings.CONNECT_BUTTON_MODE
@@ -2252,7 +2252,7 @@ async def handle_connect_subscription(
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🔗 Открыть подписку", 
+                    text="🔗 Открыть подписку в мини-приложении", 
                     web_app=types.WebAppInfo(url=subscription.subscription_url)
                 )
             ],
@@ -2266,9 +2266,9 @@ async def handle_connect_subscription(
         
         await callback.message.edit_text(
             f"""
-🔗 <b>Подключить подписку</b>
+📱 <b>Подключить подписку</b>
 
-📱 Нажмите кнопку ниже, чтобы открыть подписку в мини-приложении Telegram:
+🚀 Нажмите кнопку ниже, чтобы открыть подписку в мини-приложении Telegram:
             """,
             reply_markup=keyboard,
             parse_mode="HTML"
@@ -2276,7 +2276,7 @@ async def handle_connect_subscription(
         
     elif connect_mode == "miniapp_custom":
         if not settings.MINIAPP_CUSTOM_URL:
-            await callback.answer("❌ Кастомная ссылка для мини-приложения не настроена", show_alert=True)
+            await callback.answer("⚠ Кастомная ссылка для мини-приложения не настроена", show_alert=True)
             return
             
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
