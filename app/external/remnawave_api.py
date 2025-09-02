@@ -125,20 +125,25 @@ class RemnaWaveAPI:
             return True
             
         try:
-            auth_url = f"{self.base_url}/auth/login?{self.secret_key}={self.secret_key}"
+            if ':' in self.secret_key:
+                key_name, key_value = self.secret_key.split(':', 1)
+            else:
+                key_name = key_value = self.secret_key
+            
+            auth_url = f"{self.base_url}/auth/login?{key_name}={key_value}"
             
             logger.debug(f"🍪 Попытка аутентификации через куки: {auth_url}")
             
             async with self.session.get(auth_url, allow_redirects=False) as response:
                 cookies = self.session.cookie_jar.filter_cookies(self.base_url)
                 
-                if self.secret_key in [cookie.key for cookie in cookies.values()]:
+                if key_name in [cookie.key for cookie in cookies.values()]:
                     logger.info("✅ Куки успешно установлены")
                     self.authenticated = True
                     return True
                 else:
                     self.session.cookie_jar.update_cookies({
-                        self.secret_key: self.secret_key
+                        key_name: key_value
                     }, response_url=aiohttp.yarl.URL(self.base_url))
                     logger.info("✅ Куки установлены вручную")
                     self.authenticated = True
