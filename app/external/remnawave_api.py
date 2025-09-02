@@ -129,6 +129,8 @@ class RemnaWaveAPI:
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json',
             'Accept': 'application/json',
+            'User-Agent': 'RemnaWave-Bot/1.0',
+            'Connection': 'close', 
             'X-Forwarded-Proto': 'https',
             'X-Forwarded-For': '127.0.0.1',
             'X-Real-IP': '127.0.0.1'
@@ -144,7 +146,14 @@ class RemnaWaveAPI:
                 cookies = {self.secret_key: self.secret_key}
                 logger.debug(f"🍪 Используем куки: {self.secret_key}=***")
         
-        connector_kwargs = {}
+        connector_kwargs = {
+            'force_close': True,         
+            'enable_cleanup_closed': True, 
+            'limit': 10,
+            'limit_per_host': 2,
+            'ttl_dns_cache': 300,
+            'use_dns_cache': True
+        }
         
         if conn_type == "local":
             logger.debug("🏠 Использую локальные заголовки proxy")
@@ -167,7 +176,7 @@ class RemnaWaveAPI:
         connector = aiohttp.TCPConnector(**connector_kwargs)
         
         session_kwargs = {
-            'timeout': aiohttp.ClientTimeout(total=30),
+            'timeout': aiohttp.ClientTimeout(total=30, connect=10, sock_read=20),
             'headers': headers,
             'connector': connector
         }
@@ -176,7 +185,7 @@ class RemnaWaveAPI:
             session_kwargs['cookies'] = cookies
             
         self.session = aiohttp.ClientSession(**session_kwargs)
-        self.authenticated = True 
+        self.authenticated = True
                 
         return self
         
