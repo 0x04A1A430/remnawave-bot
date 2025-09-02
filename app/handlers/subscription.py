@@ -2257,9 +2257,6 @@ async def handle_connect_subscription(
                 )
             ],
             [
-                InlineKeyboardButton(text="📋 Показать ссылку", callback_data="open_subscription_link")
-            ],
-            [
                 InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
             ]
         ])
@@ -2287,9 +2284,6 @@ async def handle_connect_subscription(
                 )
             ],
             [
-                InlineKeyboardButton(text="📋 Показать ссылку подписки", callback_data="open_subscription_link")
-            ],
-            [
                 InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
             ]
         ])
@@ -2299,9 +2293,6 @@ async def handle_connect_subscription(
 🚀 <b>Подключить подписку</b>
 
 📱 Нажмите кнопку ниже, чтобы открыть приложение:
-
-📋 <b>Ссылка подписки:</b>
-<code>{subscription.subscription_url}</code>
             """,
             reply_markup=keyboard,
             parse_mode="HTML"
