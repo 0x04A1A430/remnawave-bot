@@ -8,6 +8,7 @@ import aiohttp
 import logging
 from dataclasses import dataclass
 from enum import Enum
+from urllib.parse import urlparse, urljoin
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ class RemnaWaveUser:
     username: str
     status: UserStatus
     used_traffic_bytes: int
-    lifetime_used_traffic_bytes: int  # Новое поле
+    lifetime_used_traffic_bytes: int 
     traffic_limit_bytes: int
     traffic_limit_strategy: TrafficLimitStrategy
     expire_at: datetime
@@ -83,11 +84,12 @@ class RemnaWaveNode:
 
 
 class RemnaWaveAPIError(Exception):
-    def __init__(self, message: str, status_code: int = None, response_data: dict = None):
-        self.message = message
-        self.status_code = status_code
-        self.response_data = response_data
-        super().__init__(self.message)
+    def __init__(self, base_url: str, api_key: str, secret_key: Optional[str] = None):
+        self.base_url = base_url.rstrip('/')
+        self.api_key = api_key
+        self.secret_key = secret_key 
+        self.session: Optional[aiohttp.ClientSession] = None
+        self.authenticated = False  
 
 
 class RemnaWaveAPI:
@@ -116,6 +118,35 @@ class RemnaWaveAPI:
                 return "local"
         
         return "external"
+
+    async def _authenticate_with_cookie(self) -> bool:
+        if not self.secret_key:
+            logger.debug("🍪 Секретный ключ не указан, пропускаем куки-аутентификацию")
+            return True
+            
+        try:
+            auth_url = f"{self.base_url}/auth/login?{self.secret_key}={self.secret_key}"
+            
+            logger.debug(f"🍪 Попытка аутентификации через куки: {auth_url}")
+            
+            async with self.session.get(auth_url, allow_redirects=False) as response:
+                cookies = self.session.cookie_jar.filter_cookies(self.base_url)
+                
+                if self.secret_key in [cookie.key for cookie in cookies.values()]:
+                    logger.info("✅ Куки успешно установлены")
+                    self.authenticated = True
+                    return True
+                else:
+                    self.session.cookie_jar.update_cookies({
+                        self.secret_key: self.secret_key
+                    }, response_url=aiohttp.yarl.URL(self.base_url))
+                    logger.info("✅ Куки установлены вручную")
+                    self.authenticated = True
+                    return True
+                    
+        except Exception as e:
+            logger.error(f"❌ Ошибка при установке куки: {e}")
+            return False
         
     async def __aenter__(self):
         conn_type = self._detect_connection_type()
@@ -157,6 +188,12 @@ class RemnaWaveAPI:
             headers=headers,
             connector=connector
         )
+        
+        if self.secret_key:
+            auth_success = await self._authenticate_with_cookie()
+            if not auth_success:
+                logger.warning("⚠️ Не удалось установить куки, продолжаем без них")
+                
         return self
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -186,6 +223,15 @@ class RemnaWaveAPI:
                 
             async with self.session.request(method, **kwargs) as response:
                 response_text = await response.text()
+                
+                if (response.status in [404, 403] and 
+                    self.secret_key and 
+                    not self.authenticated):
+                    logger.debug("🔄 Попытка переаутентификации...")
+                    if await self._authenticate_with_cookie():
+                        async with self.session.request(method, **kwargs) as retry_response:
+                            response_text = await retry_response.text()
+                            response = retry_response
                 
                 try:
                     response_data = json.loads(response_text) if response_text else {}
