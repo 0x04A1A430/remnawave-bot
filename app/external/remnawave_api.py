@@ -84,20 +84,21 @@ class RemnaWaveNode:
 
 
 class RemnaWaveAPIError(Exception):
+    def __init__(self, message: str, status_code: int = None, response_data: dict = None):
+        self.message = message
+        self.status_code = status_code
+        self.response_data = response_data
+        super().__init__(self.message)
+
+
+class RemnaWaveAPI:
+    
     def __init__(self, base_url: str, api_key: str, secret_key: Optional[str] = None):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.secret_key = secret_key 
         self.session: Optional[aiohttp.ClientSession] = None
-        self.authenticated = False  
-
-
-class RemnaWaveAPI:
-    
-    def __init__(self, base_url: str, api_key: str):
-        self.base_url = base_url.rstrip('/')
-        self.api_key = api_key
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.authenticated = False 
         
     def _detect_connection_type(self) -> str:
         parsed = urlparse(self.base_url)
