@@ -196,9 +196,13 @@ class RemnaWaveAPI:
         )
         
         if self.secret_key:
+            logger.debug("🍪 Устанавливаем куки для доступа к панели...")
             auth_success = await self._authenticate_with_cookie()
             if not auth_success:
                 logger.warning("⚠️ Не удалось установить куки, продолжаем без них")
+            else:
+                import asyncio
+                await asyncio.sleep(0.1)
                 
         return self
         
