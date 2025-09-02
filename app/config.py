@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     REMNAWAVE_API_URL: str
     REMNAWAVE_API_KEY: str
     REMNAWAVE_SECRET_KEY: Optional[str] = None
+    REMNAWAVE_AUTH_TYPE: str = "bearer"
     
     TRIAL_DURATION_DAYS: int = 3
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
