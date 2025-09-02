@@ -119,40 +119,6 @@ class RemnaWaveAPI:
                 return "local"
         
         return "external"
-
-    async def _authenticate_with_cookie(self) -> bool:
-        if not self.secret_key:
-            logger.debug("🍪 Секретный ключ не указан, пропускаем куки-аутентификацию")
-            return True
-            
-        try:
-            if ':' in self.secret_key:
-                key_name, key_value = self.secret_key.split(':', 1)
-            else:
-                key_name = key_value = self.secret_key
-            
-            auth_url = f"{self.base_url}/auth/login?{key_name}={key_value}"
-            
-            logger.debug(f"🍪 Попытка аутентификации через куки: {auth_url}")
-            
-            async with self.session.get(auth_url, allow_redirects=False) as response:
-                cookies = self.session.cookie_jar.filter_cookies(self.base_url)
-                
-                if key_name in [cookie.key for cookie in cookies.values()]:
-                    logger.info("✅ Куки успешно установлены")
-                    self.authenticated = True
-                    return True
-                else:
-                    self.session.cookie_jar.update_cookies({
-                        key_name: key_value
-                    }, response_url=aiohttp.yarl.URL(self.base_url))
-                    logger.info("✅ Куки установлены вручную")
-                    self.authenticated = True
-                    return True
-                    
-        except Exception as e:
-            logger.error(f"❌ Ошибка при установке куки: {e}")
-            return False
         
     async def __aenter__(self):
         conn_type = self._detect_connection_type()
@@ -167,6 +133,16 @@ class RemnaWaveAPI:
             'X-Forwarded-For': '127.0.0.1',
             'X-Real-IP': '127.0.0.1'
         }
+        
+        cookies = None
+        if self.secret_key:
+            if ':' in self.secret_key:
+                key_name, key_value = self.secret_key.split(':', 1)
+                cookies = {key_name: key_value}
+                logger.debug(f"🍪 Используем куки: {key_name}=***")
+            else:
+                cookies = {self.secret_key: self.secret_key}
+                logger.debug(f"🍪 Используем куки: {self.secret_key}=***")
         
         connector_kwargs = {}
         
@@ -190,20 +166,17 @@ class RemnaWaveAPI:
             
         connector = aiohttp.TCPConnector(**connector_kwargs)
         
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=30),
-            headers=headers,
-            connector=connector
-        )
+        session_kwargs = {
+            'timeout': aiohttp.ClientTimeout(total=30),
+            'headers': headers,
+            'connector': connector
+        }
         
-        if self.secret_key:
-            logger.debug("🍪 Устанавливаем куки для доступа к панели...")
-            auth_success = await self._authenticate_with_cookie()
-            if not auth_success:
-                logger.warning("⚠️ Не удалось установить куки, продолжаем без них")
-            else:
-                import asyncio
-                await asyncio.sleep(0.1)
+        if cookies:
+            session_kwargs['cookies'] = cookies
+            
+        self.session = aiohttp.ClientSession(**session_kwargs)
+        self.authenticated = True 
                 
         return self
         
@@ -235,15 +208,6 @@ class RemnaWaveAPI:
             async with self.session.request(method, **kwargs) as response:
                 response_text = await response.text()
                 
-                if (response.status in [404, 403] and 
-                    self.secret_key and 
-                    not self.authenticated):
-                    logger.debug("🔄 Попытка переаутентификации...")
-                    if await self._authenticate_with_cookie():
-                        async with self.session.request(method, **kwargs) as retry_response:
-                            response_text = await retry_response.text()
-                            response = retry_response
-                
                 try:
                     response_data = json.loads(response_text) if response_text else {}
                 except json.JSONDecodeError:
@@ -251,6 +215,8 @@ class RemnaWaveAPI:
                 
                 if response.status >= 400:
                     error_message = response_data.get('message', f'HTTP {response.status}')
+                    logger.error(f"API Error {response.status}: {error_message}")
+                    logger.error(f"Response: {response_text[:500]}")
                     raise RemnaWaveAPIError(
                         error_message, 
                         response.status, 
