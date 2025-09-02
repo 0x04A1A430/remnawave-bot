@@ -249,7 +249,7 @@ class SubscriptionService:
                 server_prices.append(0)
                 logger.warning(f"⚠️ Сервер ID {server_id} недоступен")
 
-        devices_price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
+        devices_price = max(0, devices - 1) * settings.PRICE_PER_DEVICE
         
         total_price = base_price + traffic_price + total_servers_price + devices_price
         
