@@ -126,7 +126,7 @@ class RemnaWaveAPI:
         logger.info(f"🔗 Подключение к RemnaWave: {self.base_url} (тип: {conn_type})")
             
         headers = {
-            'X-Api-Key': self.api_key, 
+            'X-Api-Key': self.api_key,  
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'X-Forwarded-Proto': 'https',
