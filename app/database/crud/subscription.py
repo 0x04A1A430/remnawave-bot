@@ -35,13 +35,13 @@ async def create_trial_subscription(
     user_id: int,
     duration_days: int = None,
     traffic_limit_gb: int = None,
-    device_limit: int = None,
+    device_limit: int = None, 
     squad_uuid: str = None
 ) -> Subscription:
     
     duration_days = duration_days or settings.TRIAL_DURATION_DAYS
     traffic_limit_gb = traffic_limit_gb or settings.TRIAL_TRAFFIC_LIMIT_GB
-    device_limit = device_limit or settings.TRIAL_DEVICE_LIMIT
+    device_limit = device_limit or settings.DEFAULT_DEVICE_LIMIT
     squad_uuid = squad_uuid or settings.TRIAL_SQUAD_UUID
     
     end_date = datetime.utcnow() + timedelta(days=duration_days)
@@ -70,9 +70,12 @@ async def create_paid_subscription(
     user_id: int,
     duration_days: int,
     traffic_limit_gb: int = 0, 
-    device_limit: int = 1,
+    device_limit: int = None,  # Изменить параметр
     connected_squads: List[str] = None
 ) -> Subscription:
+    
+    if device_limit is None:
+        device_limit = settings.DEFAULT_DEVICE_LIMIT 
     
     end_date = datetime.utcnow() + timedelta(days=duration_days)
     
