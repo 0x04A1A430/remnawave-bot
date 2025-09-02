@@ -161,7 +161,11 @@ class RemnaWaveAPI:
             
         headers = {
             'Authorization': f'Bearer {self.api_key}',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Forwarded-Proto': 'https',
+            'X-Forwarded-For': '127.0.0.1',
+            'X-Real-IP': '127.0.0.1'
         }
         
         connector_kwargs = {}
@@ -169,10 +173,7 @@ class RemnaWaveAPI:
         if conn_type == "local":
             logger.debug("🏠 Использую локальные заголовки proxy")
             headers.update({
-                'X-Forwarded-For': '127.0.0.1',
-                'X-Forwarded-Proto': 'https',
                 'X-Forwarded-Host': 'localhost',
-                'X-Real-IP': '127.0.0.1',
                 'Host': 'localhost'
             })
             
