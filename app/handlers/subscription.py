@@ -328,7 +328,7 @@ async def start_subscription_purchase(
     initial_data = {
         'period_days': None,
         'countries': [],
-        'devices': 1,
+        'devices': settings.DEFAULT_DEVICE_LIMIT,
         'total_price': 0
     }
     
