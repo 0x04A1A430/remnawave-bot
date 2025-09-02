@@ -25,7 +25,8 @@ class RemnaWaveService:
     def __init__(self):
         self.api = RemnaWaveAPI(
             base_url=settings.REMNAWAVE_API_URL,
-            api_key=settings.REMNAWAVE_API_KEY
+            api_key=settings.REMNAWAVE_API_KEY,
+            secret_key=settings.REMNAWAVE_SECRET_KEY
         )
 
     def _parse_remnawave_date(self, date_str: str) -> datetime:
