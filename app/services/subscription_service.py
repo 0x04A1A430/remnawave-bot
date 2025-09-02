@@ -364,7 +364,7 @@ class SubscriptionService:
                     prices_list.append(price)
                     logger.debug(f"🏷️ Страна {server.display_name}: {price/100}₽")
                 else:
-                    default_price = 1000  
+                    default_price = 0  
                     total_price += default_price
                     prices_list.append(default_price)
                     logger.warning(f"⚠️ Сервер {country_uuid} недоступен, используем базовую цену: {default_price/100}₽")
@@ -374,7 +374,7 @@ class SubscriptionService:
             
         except Exception as e:
             logger.error(f"Ошибка получения цен стран: {e}")
-            default_prices = [1000] * len(country_uuids)
+            default_prices = [0] * len(country_uuids)
             return sum(default_prices), default_prices
     
     async def _get_countries_price(self, country_uuids: List[str], db: AsyncSession) -> int:
