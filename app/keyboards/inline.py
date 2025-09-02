@@ -114,9 +114,6 @@ def get_subscription_keyboard(
                         web_app=types.WebAppInfo(url=subscription.subscription_url)
                     )
                 ])
-                keyboard.append([
-                    InlineKeyboardButton(text="📋 Показать ссылку", callback_data="open_subscription_link")
-                ])
             elif connect_mode == "miniapp_custom":
                 if settings.MINIAPP_CUSTOM_URL:
                     keyboard.append([
@@ -124,9 +121,6 @@ def get_subscription_keyboard(
                             text="🚀 Открыть приложение",
                             web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL)
                         )
-                    ])
-                    keyboard.append([
-                        InlineKeyboardButton(text="📋 Показать ссылку подписки", callback_data="open_subscription_link")
                     ])
                 else:
                     keyboard.append([
