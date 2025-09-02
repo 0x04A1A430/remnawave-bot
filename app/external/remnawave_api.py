@@ -121,64 +121,68 @@ class RemnaWaveAPI:
         return "external"
         
     async def __aenter__(self):
-        conn_type = self._detect_connection_type()
-        
-        logger.info(f"🔗 Подключение к RemnaWave: {self.base_url} (тип: {conn_type})")
-            
-        headers = {
-            'X-Api-Key': self.api_key,  
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Forwarded-Proto': 'https',
-            'X-Forwarded-For': '127.0.0.1',
-            'X-Real-IP': '127.0.0.1'
-        }
-        
-        cookies = None
-        if self.secret_key:
-            if ':' in self.secret_key:
-                key_name, key_value = self.secret_key.split(':', 1)
-                cookies = {key_name: key_value}
-                logger.debug(f"🍪 Используем куки: {key_name}=***")
-            else:
-                cookies = {self.secret_key: self.secret_key}
-                logger.debug(f"🍪 Используем куки: {self.secret_key}=***")
-        
-        connector_kwargs = {}
-        
-        if conn_type == "local":
-            logger.debug("🏠 Использую локальные заголовки proxy")
-            headers.update({
-                'X-Forwarded-Host': 'localhost',
-                'Host': 'localhost'
-            })
-            
-            if self.base_url.startswith('https://'):
-                ssl_context = ssl.create_default_context()
-                ssl_context.check_hostname = False
-                ssl_context.verify_mode = ssl.CERT_NONE
-                connector_kwargs['ssl'] = ssl_context
-                logger.debug("🔓 SSL проверка отключена для локального HTTPS")
-                
-        elif conn_type == "external":
-            logger.debug("🌐 Использую внешнее подключение с полной SSL проверкой")
-            pass
-            
-        connector = aiohttp.TCPConnector(**connector_kwargs)
-        
-        session_kwargs = {
-            'timeout': aiohttp.ClientTimeout(total=30),
-            'headers': headers,
-            'connector': connector
-        }
-        
-        if cookies:
-            session_kwargs['cookies'] = cookies
-            
-        self.session = aiohttp.ClientSession(**session_kwargs)
-        self.authenticated = True 
-                
-        return self
+       conn_type = self._detect_connection_type()
+       
+       logger.info(f"🔗 Подключение к RemnaWave: {self.base_url} (тип: {conn_type})")
+           
+       headers = {
+           'Content-Type': 'application/json',
+           'Accept': 'application/json',
+           'X-Forwarded-Proto': 'https',
+           'X-Forwarded-For': '127.0.0.1',
+           'X-Real-IP': '127.0.0.1'
+       }
+       
+       if hasattr(settings, 'REMNAWAVE_AUTH_TYPE') and settings.REMNAWAVE_AUTH_TYPE.lower() == "x-api-key":
+           headers['X-Api-Key'] = self.api_key
+       else:
+           headers['Authorization'] = f'Bearer {self.api_key}'
+       
+       cookies = None
+       if self.secret_key:
+           if ':' in self.secret_key:
+               key_name, key_value = self.secret_key.split(':', 1)
+               cookies = {key_name: key_value}
+               logger.debug(f"🍪 Используем куки: {key_name}=***")
+           else:
+               cookies = {self.secret_key: self.secret_key}
+               logger.debug(f"🍪 Используем куки: {self.secret_key}=***")
+       
+       connector_kwargs = {}
+       
+       if conn_type == "local":
+           logger.debug("🏠 Использую локальные заголовки proxy")
+           headers.update({
+               'X-Forwarded-Host': 'localhost',
+               'Host': 'localhost'
+           })
+           
+           if self.base_url.startswith('https://'):
+               ssl_context = ssl.create_default_context()
+               ssl_context.check_hostname = False
+               ssl_context.verify_mode = ssl.CERT_NONE
+               connector_kwargs['ssl'] = ssl_context
+               logger.debug("🔓 SSL проверка отключена для локального HTTPS")
+               
+       elif conn_type == "external":
+           logger.debug("🌐 Использую внешнее подключение с полной SSL проверкой")
+           pass
+           
+       connector = aiohttp.TCPConnector(**connector_kwargs)
+       
+       session_kwargs = {
+           'timeout': aiohttp.ClientTimeout(total=30),
+           'headers': headers,
+           'connector': connector
+       }
+       
+       if cookies:
+           session_kwargs['cookies'] = cookies
+           
+       self.session = aiohttp.ClientSession(**session_kwargs)
+       self.authenticated = True
+               
+       return self
         
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self.session:
