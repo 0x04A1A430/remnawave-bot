@@ -1369,7 +1369,7 @@ async def select_devices(
         if c['uuid'] in data['countries']
     )
     
-    devices_price = (devices - 1) * settings.PRICE_PER_DEVICE
+    devices_price = (devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
     
     data['devices'] = devices
     data['total_price'] = base_price + countries_price + devices_price
@@ -1414,7 +1414,7 @@ async def devices_continue(
     else:
         traffic_price = TRAFFIC_PRICES.get(data['traffic_gb'], 0)
     
-    devices_price = (data['devices'] - 1) * settings.PRICE_PER_DEVICE
+    devices_price = (devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
     total_price = base_price + traffic_price + countries_price + devices_price
     
     data['total_price'] = total_price
