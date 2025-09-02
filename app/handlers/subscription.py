@@ -412,11 +412,11 @@ async def get_countries_price_by_uuids_fallback(country_uuids: List[str], db: As
                     total_price += price
                     prices_list.append(price)
                 else:
-                    default_price = 1000
+                    default_price = 0
                     total_price += default_price
                     prices_list.append(default_price)
             except Exception:
-                default_price = 1000
+                default_price = 0
                 total_price += default_price
                 prices_list.append(default_price)
         
@@ -424,7 +424,7 @@ async def get_countries_price_by_uuids_fallback(country_uuids: List[str], db: As
         
     except Exception as e:
         logger.error(f"Ошибка fallback функции: {e}")
-        default_prices = [1000] * len(country_uuids)
+        default_prices = [0] * len(country_uuids)
         return sum(default_prices), default_prices
 
 async def handle_manage_country(
@@ -1885,7 +1885,7 @@ async def _get_available_countries():
                 countries.append({
                     "uuid": squad["uuid"],
                     "name": squad_name,
-                    "price_kopeks": 1000, 
+                    "price_kopeks": 0, 
                     "is_available": True
                 })
         
