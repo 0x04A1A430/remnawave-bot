@@ -116,7 +116,7 @@ class RussianTexts(Texts):
     
     MENU_BALANCE = "💰 Баланс"
     MENU_SUBSCRIPTION = "📱 Подписка"
-    MENU_TRIAL = "🎁 Тестовая подписка"
+    MENU_TRIAL = "🧪 Тестовая подписка"
     MENU_BUY_SUBSCRIPTION = "💎 Купить подписку"
     MENU_EXTEND_SUBSCRIPTION = "⏰ Продлить подписку"
     MENU_PROMOCODE = "🎫 Промокод"
