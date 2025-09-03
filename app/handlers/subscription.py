@@ -80,7 +80,7 @@ async def show_subscription_info(
         if subscription.is_trial:
             actual_status = "trial_active"
             status_display = "Тестовая"
-            status_emoji = "🎁"
+            status_emoji = "🎯"
         else:
             actual_status = "paid_active"
             status_display = "Активна"
@@ -116,12 +116,37 @@ async def show_subscription_info(
     subscription_type = "Триал" if subscription.is_trial else "Платная"
     
     if subscription.traffic_limit_gb == 0:
-        traffic_used_display = f"∞ (безлимит) / {subscription.traffic_used_gb:.1f} ГБ"
+        traffic_used_display = f"∞ (безлимит) | Использовано: {subscription.traffic_used_gb:.1f} ГБ"
     else:
         traffic_used_display = f"{subscription.traffic_used_gb:.1f} / {subscription.traffic_limit_gb} ГБ"
     
-    devices_used = await get_current_devices_count(db_user)
-    
+    devices_used_str = "—"
+    devices_list = []
+    devices_count = 0
+
+    try:
+        if db_user.remnawave_uuid:
+            from app.services.remnawave_service import RemnaWaveService
+            service = RemnaWaveService()
+            
+            async with service.api as api:
+                response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+                
+                if response and 'response' in response:
+                    devices_info = response['response']
+                    devices_count = devices_info.get('total', 0)
+                    devices_list = devices_info.get('devices', [])
+                    devices_used_str = str(devices_count)
+                    logger.info(f"Найдено {devices_count} устройств для пользователя {db_user.telegram_id}")
+                else:
+                    logger.warning(f"Не удалось получить информацию об устройствах для {db_user.telegram_id}")
+                    
+    except Exception as e:
+        logger.error(f"Ошибка получения устройств для отображения: {e}")
+        devices_used_str = await get_current_devices_count(db_user)
+
+    servers_names = await get_servers_display_names(subscription.connected_squads)
+    servers_display = servers_names if servers_names else "Нет серверов"
 
     message = f"""👤 {db_user.full_name}
 ━━━━━━━━━━━━━━━━━
@@ -134,8 +159,20 @@ async def show_subscription_info(
 📅 Действует до: {subscription.end_date.strftime("%d.%m.%Y %H:%M")}
 ⏰ Осталось: {time_left_text}
 📈 Трафик: {traffic_used_display}
-🌍 Серверы: {len(subscription.connected_squads)} стран
-📱 Устройства: {devices_used} / {subscription.device_limit}"""
+🌍 Серверы: {servers_display}
+📱 Устройства: {devices_used_str} / {subscription.device_limit}"""
+
+    if devices_list and len(devices_list) > 0:
+        message += f"\n\n<blockquote>📱 <b>Подключенные устройства:</b>\n"
+        for device in devices_list[:5]: 
+            platform = device.get('platform', 'Unknown')
+            device_model = device.get('deviceModel', 'Unknown')
+            device_info = f"{platform} - {device_model}"
+            
+            if len(device_info) > 35:
+                device_info = device_info[:32] + "..."
+            message += f"• {device_info}\n"
+        message += "</blockquote>"
     
     if hasattr(subscription, 'subscription_url') and subscription.subscription_url:
         if actual_status in ['trial_active', 'paid_active']:
@@ -153,6 +190,64 @@ async def show_subscription_info(
         parse_mode="HTML"
     )
     await callback.answer()
+
+async def get_current_devices_detailed(db_user: User) -> dict:
+    try:
+        if not db_user.remnawave_uuid:
+            return {"count": 0, "devices": []}
+        
+        from app.services.remnawave_service import RemnaWaveService
+        service = RemnaWaveService()
+        
+        async with service.api as api:
+            response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+            
+            if response and 'response' in response:
+                devices_info = response['response']
+                total_devices = devices_info.get('total', 0)
+                devices_list = devices_info.get('devices', [])
+                
+                return {
+                    "count": total_devices,
+                    "devices": devices_list[:5] 
+                }
+            else:
+                return {"count": 0, "devices": []}
+                
+    except Exception as e:
+        logger.error(f"Ошибка получения детальной информации об устройствах: {e}")
+        return {"count": 0, "devices": []}
+
+async def get_servers_display_names(squad_uuids: List[str]) -> str:
+    """
+    Получает отображаемые названия серверов по их UUID
+    """
+    if not squad_uuids:
+        return "Нет серверов"
+    
+    try:
+        countries = await _get_available_countries()
+        
+        server_names = []
+        for uuid in squad_uuids:
+            for country in countries:
+                if country['uuid'] == uuid:
+                    server_names.append(country['name'])
+                    break
+        
+        if not server_names:
+            return f"{len(squad_uuids)} стран"
+        
+        if len(server_names) > 6:
+            displayed = ", ".join(server_names[:6])
+            remaining = len(server_names) - 6
+            return f"{displayed} и ещё {remaining}"
+        else:
+            return ", ".join(server_names)
+            
+    except Exception as e:
+        logger.error(f"Ошибка получения названий серверов: {e}")
+        return f"{len(squad_uuids)} стран"
 
 async def get_current_devices_count(db_user: User) -> str:
     try:
