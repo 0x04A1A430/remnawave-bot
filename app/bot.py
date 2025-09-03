@@ -25,6 +25,7 @@ from app.handlers.admin import (
     statistics as admin_statistics, servers as admin_servers,
     maintenance as admin_maintenance  
 )
+from app.handlers.stars_payments import register_stars_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.callback_query.middleware(LoggingMiddleware())
     dp.message.middleware(AuthMiddleware())
     dp.callback_query.middleware(AuthMiddleware())
+    dp.pre_checkout_query.middleware(AuthMiddleware())
     dp.message.middleware(MaintenanceMiddleware())
     dp.callback_query.middleware(MaintenanceMiddleware())
     dp.message.middleware(ThrottlingMiddleware())
@@ -97,6 +99,9 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_maintenance.register_handlers(dp)
 
     common.register_handlers(dp)
+    
+    register_stars_handlers(dp)
+    logger.info("🌟 Зарегистрированы обработчики Telegram Stars платежей")
     
     try:
         await maintenance_service.start_monitoring()
