@@ -356,10 +356,15 @@ async def process_stars_payment_amount(
     texts = get_texts(db_user.language)
     
     if not settings.TELEGRAM_STARS_ENABLED:
-        await message.answer("❌ Оплата Stars временно недоступна")
+        await message.answer("⚠ Оплата Stars временно недоступна")
         return
     
     try:
+        from app.external.telegram_stars import TelegramStarsService
+        
+        amount_rubles = amount_kopeks / 100
+        stars_amount = TelegramStarsService.calculate_stars_from_rubles(amount_rubles)
+        
         payment_service = PaymentService(message.bot)
         invoice_link = await payment_service.create_stars_invoice(
             amount_kopeks=amount_kopeks,
@@ -374,7 +379,9 @@ async def process_stars_payment_amount(
         
         await message.answer(
             f"⭐ <b>Оплата через Telegram Stars</b>\n\n"
-            f"Сумма: {texts.format_price(amount_kopeks)}\n\n"
+            f"💰 Сумма: {texts.format_price(amount_kopeks)}\n"
+            f"⭐ К оплате: {stars_amount} звезд\n"
+            f"📊 Курс: {settings.get_stars_rate():.2f}₽ за звезду\n\n"
             f"Нажмите кнопку ниже для оплаты:",
             reply_markup=keyboard,
             parse_mode="HTML"
@@ -384,7 +391,7 @@ async def process_stars_payment_amount(
         
     except Exception as e:
         logger.error(f"Ошибка создания Stars invoice: {e}")
-        await message.answer("❌ Ошибка создания платежа")
+        await message.answer("⚠ Ошибка создания платежа")
 
 
 @error_handler
