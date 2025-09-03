@@ -113,35 +113,33 @@ async def handle_back_to_menu(
 
 
 def _get_subscription_status(user: User, texts) -> str:
-    """Упрощенная версия для отображения в тексте меню"""
     if not user.subscription:
-        return "Отсутствует"
+        return texts.SUBSCRIPTION_NONE 
     
     subscription = user.subscription
     current_time = datetime.utcnow()
     
     if subscription.end_date <= current_time:
-        return "Истекла"
+        return f"🔴 Истекла\n📅 {subscription.end_date.strftime('%d.%m.%Y')}"
     
     days_left = (subscription.end_date - current_time).days
     
     if subscription.is_trial:
         if days_left > 1:
-            return f"Тестовая ({days_left} дн.)"
+            return f"🎁 Тестовая подписка\n📅 до {subscription.end_date.strftime('%d.%m.%Y')} ({days_left} дн.)"
         elif days_left == 1:
-            return "Тестовая (истекает завтра)"
+            return f"🎁 Тестовая подписка\n⚠️ истекает завтра!"
         else:
-            return "Тестовая (истекает сегодня)"
-    else:
+            return f"🎁 Тестовая подписка\n⚠️ истекает сегодня!"
+    else: 
         if days_left > 7:
-            return f"Активна ({days_left} дн.)"
+            return f"💎 Активна\n📅 до {subscription.end_date.strftime('%d.%m.%Y')} ({days_left} дн.)"
         elif days_left > 1:
-            return f"Активна (истекает через {days_left} дн.)"
+            return f"💎 Активна\n⚠️ истекает через {days_left} дн."
         elif days_left == 1:
-            return "Активна (истекает завтра)"
+            return f"💎 Активна\n⚠️ истекает завтра!"
         else:
-            return "Активна (истекает сегодня)"
-
+            return f"💎 Активна\n⚠️ истекает сегодня!"
 
 def register_handlers(dp: Dispatcher):
     
