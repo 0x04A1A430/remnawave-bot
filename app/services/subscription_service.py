@@ -277,7 +277,7 @@ class SubscriptionService:
                 subscription.connected_squads, db
             )
             
-            devices_price = max(0, subscription.device_limit - 1) * settings.PRICE_PER_DEVICE
+            devices_price = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
             
             traffic_price = TRAFFIC_PRICES.get(subscription.traffic_limit_gb, 0)
             
