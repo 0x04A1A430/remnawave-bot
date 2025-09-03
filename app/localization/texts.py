@@ -105,10 +105,9 @@ class RussianTexts(Texts):
     REFERRAL_CODE_APPLIED = "🎁 Реферальный код применен! Вы получите бонус после первой покупки."
     REFERRAL_CODE_INVALID = "❌ Неверный реферальный код"
     REFERRAL_CODE_SKIP = "⏭️ Пропустить"
-    
+       
     MAIN_MENU = """👤 <b>{user_name}</b>
 ━━━━━━━━━━━━━━━━━
-💰 <b>Баланс:</b> {balance}
 📱 <b>Подписка:</b> {subscription_status}
 ━━━━━━━━━━━━━━━━━
 
@@ -126,6 +125,8 @@ class RussianTexts(Texts):
     MENU_RULES = "📋 Правила сервиса"
     MENU_LANGUAGE = "🌐 Язык"
     MENU_ADMIN = "⚙️ Админ-панель"
+    BALANCE_BUTTON = "💰 Баланс: {balance}"
+    BALANCE_BUTTON_ZERO = "💰 Баланс: 0.00 ₽"
     
     SUBSCRIPTION_NONE = "❌ Нет активной подписки"
     SUBSCRIPTION_TRIAL = "🎁 Тестовая подписка"
