@@ -1369,7 +1369,7 @@ async def select_devices(
         if c['uuid'] in data['countries']
     )
     
-    devices_price = (devices - 1) * settings.PRICE_PER_DEVICE
+    devices_price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
     
     data['devices'] = devices
     data['total_price'] = base_price + countries_price + devices_price
@@ -1474,7 +1474,7 @@ async def confirm_purchase(
             countries_price += country['price_kopeks']
             server_prices.append(country['price_kopeks'])
     
-    devices_price = (data['devices'] - 1) * settings.PRICE_PER_DEVICE
+    devices_price = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
     
     if settings.is_traffic_fixed():
         traffic_price = TRAFFIC_PRICES.get(settings.get_fixed_traffic_limit(), 0)
