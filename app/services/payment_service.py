@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.services.yookassa_service import YooKassaService
+from app.external.telegram_stars import TelegramStarsService
 from app.database.crud.yookassa import create_yookassa_payment, link_yookassa_payment_to_transaction
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import add_user_balance, get_user_by_id
@@ -22,6 +23,7 @@ class PaymentService:
     def __init__(self, bot: Optional[Bot] = None):
         self.bot = bot
         self.yookassa_service = YooKassaService() if settings.is_yookassa_enabled() else None
+        self.stars_service = TelegramStarsService(bot) if bot else None
     
     async def create_stars_invoice(
         self,
@@ -30,27 +32,89 @@ class PaymentService:
         payload: Optional[str] = None
     ) -> str:
         
-        if not self.bot:
+        if not self.bot or not self.stars_service:
             raise ValueError("Bot instance required for Stars payments")
         
         try:
-            stars_amount = max(1, amount_kopeks // 100)
+            amount_rubles = amount_kopeks / 100
+            stars_amount = TelegramStarsService.calculate_stars_from_rubles(amount_rubles)
             
             invoice_link = await self.bot.create_invoice_link(
                 title="Пополнение баланса VPN",
-                description=description,
+                description=f"{description} (≈{stars_amount} ⭐)",
                 payload=payload or f"balance_topup_{amount_kopeks}",
                 provider_token="", 
                 currency="XTR", 
                 prices=[LabeledPrice(label="Пополнение", amount=stars_amount)]
             )
             
-            logger.info(f"Создан Stars invoice на {stars_amount} звезд")
+            logger.info(f"Создан Stars invoice на {stars_amount} звезд (~{amount_rubles:.2f}₽)")
             return invoice_link
             
         except Exception as e:
             logger.error(f"Ошибка создания Stars invoice: {e}")
             raise
+    
+    async def process_stars_payment(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        stars_amount: int,
+        payload: str,
+        telegram_payment_charge_id: str
+    ) -> bool:
+        try:
+            rubles_amount = TelegramStarsService.calculate_rubles_from_stars(stars_amount)
+            amount_kopeks = int(rubles_amount * 100)
+            
+            transaction = await create_transaction(
+                db=db,
+                user_id=user_id,
+                type=TransactionType.DEPOSIT,
+                amount_kopeks=amount_kopeks,
+                description=f"Пополнение через Telegram Stars ({stars_amount} ⭐)",
+                payment_method=PaymentMethod.TELEGRAM_STARS,
+                external_id=telegram_payment_charge_id,
+                is_completed=True
+            )
+            
+            user = await get_user_by_id(db, user_id)
+            if user:
+                await add_user_balance(
+                    db, 
+                    user, 
+                    amount_kopeks, 
+                    f"Пополнение Stars: {rubles_amount:.2f}₽ ({stars_amount} ⭐)"
+                )
+                
+                if self.bot:
+                    try:
+                        await self.bot.send_message(
+                            user.telegram_id,
+                            f"✅ <b>Пополнение успешно!</b>\n\n"
+                            f"⭐ Звезд: {stars_amount}\n"
+                            f"💰 Сумма: {settings.format_price(amount_kopeks)}\n"
+                            f"🏦 Способ: Telegram Stars\n"
+                            f"🆔 Транзакция: {telegram_payment_charge_id[:8]}...\n\n"
+                            f"Баланс пополнен автоматически!",
+                            parse_mode="HTML"
+                        )
+                        logger.info(f"✅ Отправлено уведомление пользователю {user.telegram_id} о пополнении на {rubles_amount:.2f}₽")
+                    except Exception as e:
+                        logger.error(f"Ошибка отправки уведомления о пополнении Stars: {e}")
+                
+                logger.info(
+                    f"✅ Обработан Stars платеж: пользователь {user_id}, "
+                    f"{stars_amount} звезд → {rubles_amount:.2f}₽"
+                )
+                return True
+            else:
+                logger.error(f"Пользователь с ID {user_id} не найден при обработке Stars платежа")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Ошибка обработки Stars платежа: {e}", exc_info=True)
+            return False
     
     async def create_yookassa_payment(
         self,
@@ -196,7 +260,7 @@ class PaymentService:
                                 user.telegram_id,
                                 f"✅ <b>Пополнение успешно!</b>\n\n"
                                 f"💰 Сумма: {settings.format_price(updated_payment.amount_kopeks)}\n"
-                                f"🏦 Способ: Банковская карта\n"
+                                f"🦐 Способ: Банковская карта\n"
                                 f"🆔 Транзакция: {yookassa_payment_id[:8]}...\n\n"
                                 f"Баланс пополнен автоматически!",
                                 parse_mode="HTML"
