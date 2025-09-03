@@ -198,7 +198,7 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
             )
         
         traffic_cost = TRAFFIC_PRICES.get(subscription.traffic_limit_gb, 0)
-        devices_cost = max(0, subscription.device_limit - 1) * settings.PRICE_PER_DEVICE
+        devices_cost = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
         
         total_cost = base_cost + servers_cost + traffic_cost + devices_cost
         
