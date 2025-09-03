@@ -108,7 +108,7 @@ class RussianTexts(Texts):
     
     MAIN_MENU = """👤 <b>{user_name}</b>
 ━━━━━━━━━━━━━━━━━
-{subscription_info}
+📱 <b>Подписка:</b> {subscription_status}
 ━━━━━━━━━━━━━━━━━
 
 Выберите действие:
