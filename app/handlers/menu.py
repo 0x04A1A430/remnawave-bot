@@ -19,7 +19,6 @@ async def show_main_menu(
     db_user: User, 
     db: AsyncSession
 ):
-    
     texts = get_texts(db_user.language)
     
     from datetime import datetime
@@ -34,7 +33,6 @@ async def show_main_menu(
     
     menu_text = texts.MAIN_MENU.format(
         user_name=db_user.full_name,
-        balance=texts.format_price(db_user.balance_kopeks),
         subscription_status=_get_subscription_status(db_user, texts)
     )
     
@@ -45,7 +43,8 @@ async def show_main_menu(
             is_admin=settings.is_admin(db_user.telegram_id),
             has_had_paid_subscription=db_user.has_had_paid_subscription,
             has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active  
+            subscription_is_active=subscription_is_active,
+            balance_kopeks=db_user.balance_kopeks 
         )
     )
     await callback.answer()
@@ -109,7 +108,7 @@ async def handle_back_to_menu(
 
 def _get_subscription_status(user: User, texts) -> str:
     if not user.subscription:
-        return "⌐ Отсутствует"
+        return "❌ Отсутствует"
     
     subscription = user.subscription
     current_time = datetime.utcnow()
