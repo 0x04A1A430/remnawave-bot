@@ -119,14 +119,23 @@ REMNAWAVE_API_KEY=
 # Для панелей установленных скриптом eGames прописывать ключ в формате XXXXXXX:DDDDDDDD - https://panel.example.com/auth/login?XXXXXXX=DDDDDDDD
 REMNAWAVE_SECRET_KEY=your_secret_key_here
 
+# ========= ПОДПИСКИ =========
 # ===== ТРИАЛ ПОДПИСКА =====
 TRIAL_DURATION_DAYS=3
 TRIAL_TRAFFIC_LIMIT_GB=10
 TRIAL_DEVICE_LIMIT=1
 TRIAL_SQUAD_UUID=
-DEFAULT_TRAFFIC_RESET_STRATEGY=MONTH
+
+# ===== ПЛАТНАЯ ПОДПИСКА =====
+# Сколько устройств доступно по дефолту при покупке платной подписки
+DEFAULT_DEVICE_LIMIT=3
+
+# Дефолт параметры для подписок выданных через админку
 DEFAULT_TRAFFIC_LIMIT_GB=100
 DEFAULT_DEVICE_LIMIT=1
+
+# ===== ГЛОБАЛЬНЫЙ ПАРАМЕТР ДЛЯ ВСЕХ ПОДПИСОК =====
+DEFAULT_TRAFFIC_RESET_STRATEGY=MONTH
 
 # ===== НАСТРОЙКИ ТРАФИКА =====
 # Режим выбора трафика:
