@@ -4,12 +4,14 @@ on:
     branches:
       - main
       - master
+      - dev 
     tags:
       - 'v*'
   pull_request:
     branches:
       - main
       - master
+      - dev 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: fr1ngg/remnawave-bedolaga-telegram-bot
@@ -42,6 +44,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
