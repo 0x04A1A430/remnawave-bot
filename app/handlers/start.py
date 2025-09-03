@@ -138,7 +138,6 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         await message.answer(
             texts.MAIN_MENU.format(
                 user_name=user.full_name,
-                balance=texts.format_price(user.balance_kopeks),
                 subscription_status=_get_subscription_status(user, texts)
             ),
             reply_markup=get_main_menu_keyboard(
@@ -146,7 +145,8 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 is_admin=settings.is_admin(user.telegram_id),
                 has_had_paid_subscription=user.has_had_paid_subscription,
                 has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active
+                subscription_is_active=subscription_is_active,
+                balance_kopeks=user.balance_kopeks 
             )
         )
         await state.clear()
@@ -380,6 +380,7 @@ async def process_referral_code_skip(
     await complete_registration_from_callback(callback, state, db)
 
 
+
 async def complete_registration_from_callback(
     callback: types.CallbackQuery,
     state: FSMContext, 
@@ -405,21 +406,24 @@ async def complete_registration_from_callback(
             subscription_is_active = existing_user.subscription.is_active
         
         user_name = existing_user.full_name
+        user_telegram_id = existing_user.telegram_id
+        user_language = existing_user.language
+        has_had_paid_subscription = existing_user.has_had_paid_subscription
         balance_kopeks = existing_user.balance_kopeks
         
         try:
             await callback.message.answer(
                 texts.MAIN_MENU.format(
                     user_name=user_name,
-                    balance=texts.format_price(balance_kopeks),
                     subscription_status=_get_subscription_status(existing_user, texts)
                 ),
                 reply_markup=get_main_menu_keyboard(
-                    language=existing_user.language,
-                    is_admin=settings.is_admin(existing_user.telegram_id),
-                    has_had_paid_subscription=existing_user.has_had_paid_subscription,
+                    language=user_language,
+                    is_admin=settings.is_admin(user_telegram_id),
+                    has_had_paid_subscription=has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
-                    subscription_is_active=subscription_is_active
+                    subscription_is_active=subscription_is_active,
+                    balance_kopeks=balance_kopeks
                 )
             )
         except Exception as e:
@@ -503,7 +507,6 @@ async def complete_registration_from_callback(
     
     has_active_subscription = False 
     subscription_is_active = False
-    
     user_name = user.full_name
     balance_kopeks = user.balance_kopeks
     user_telegram_id = user.telegram_id
@@ -514,7 +517,6 @@ async def complete_registration_from_callback(
         await callback.message.answer(
             texts.MAIN_MENU.format(
                 user_name=user_name,
-                balance=texts.format_price(balance_kopeks),
                 subscription_status=_get_subscription_status_simple(texts)
             ),
             reply_markup=get_main_menu_keyboard(
@@ -522,7 +524,8 @@ async def complete_registration_from_callback(
                 is_admin=settings.is_admin(user_telegram_id),
                 has_had_paid_subscription=has_had_paid_subscription,
                 has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active
+                subscription_is_active=subscription_is_active,
+                balance_kopeks=balance_kopeks
             )
         )
         logger.info(f"✅ Главное меню отправлено для пользователя {user_telegram_id}")
@@ -532,24 +535,25 @@ async def complete_registration_from_callback(
             balance_rubles = balance_kopeks / 100
             await callback.message.answer(
                 f"Добро пожаловать, {user_name}!\n"
-                f"Баланс: {balance_rubles} ₽\n"
+                f"Баланс: {balance_rubles:.2f} ₽\n"
                 f"Подписка: Нет активной подписки",
                 reply_markup=get_main_menu_keyboard(
                     language=user_language,
                     is_admin=settings.is_admin(user_telegram_id),
                     has_had_paid_subscription=has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
-                    subscription_is_active=subscription_is_active
+                    subscription_is_active=subscription_is_active,
+                    balance_kopeks=balance_kopeks
                 )
             )
             logger.info(f"✅ Fallback главное меню отправлено для пользователя {user_telegram_id}")
         except Exception as fallback_error:
-            logger.error(f"❌ Критическая ошибка при отправке fallback меню: {fallback_error}")
+            logger.error(f"⛔ Критическая ошибка при отправке fallback меню: {fallback_error}")
             try:
                 await callback.message.answer(f"Добро пожаловать, {user_name}! Регистрация завершена.")
                 logger.info(f"✅ Простое приветствие отправлено для пользователя {user_telegram_id}")
             except Exception as final_error:
-                logger.error(f"❌ Критическая ошибка при отправке простого сообщения: {final_error}")
+                logger.error(f"⛔ Критическая ошибка при отправке простого сообщения: {final_error}")
     
     logger.info(f"✅ Регистрация завершена для пользователя: {user_telegram_id}")
 
@@ -578,24 +582,30 @@ async def complete_registration(
         if existing_user.subscription:
             subscription_is_active = existing_user.subscription.is_active
         
+        user_name = existing_user.full_name
+        user_telegram_id = existing_user.telegram_id
+        user_language = existing_user.language
+        has_had_paid_subscription = existing_user.has_had_paid_subscription
+        balance_kopeks = existing_user.balance_kopeks
+        
         try:
             await message.answer(
                 texts.MAIN_MENU.format(
-                    user_name=existing_user.full_name,
-                    balance=texts.format_price(existing_user.balance_kopeks),
+                    user_name=user_name,
                     subscription_status=_get_subscription_status(existing_user, texts)
                 ),
                 reply_markup=get_main_menu_keyboard(
-                    language=existing_user.language,
-                    is_admin=settings.is_admin(existing_user.telegram_id),
-                    has_had_paid_subscription=existing_user.has_had_paid_subscription,
+                    language=user_language,
+                    is_admin=settings.is_admin(user_telegram_id),
+                    has_had_paid_subscription=has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
-                    subscription_is_active=subscription_is_active
+                    subscription_is_active=subscription_is_active,
+                    balance_kopeks=balance_kopeks
                 )
             )
         except Exception as e:
             logger.error(f"Ошибка при показе главного меню существующему пользователю: {e}")
-            await message.answer(f"Добро пожаловать, {existing_user.full_name}!")
+            await message.answer(f"Добро пожаловать, {user_name}!")
         
         await state.clear()
         return
@@ -674,7 +684,6 @@ async def complete_registration(
     
     has_active_subscription = False
     subscription_is_active = False
-    
     user_name = user.full_name
     balance_kopeks = user.balance_kopeks
     user_telegram_id = user.telegram_id
@@ -685,7 +694,6 @@ async def complete_registration(
         await message.answer(
             texts.MAIN_MENU.format(
                 user_name=user_name,
-                balance=texts.format_price(balance_kopeks),
                 subscription_status=_get_subscription_status_simple(texts)
             ),
             reply_markup=get_main_menu_keyboard(
@@ -693,7 +701,8 @@ async def complete_registration(
                 is_admin=settings.is_admin(user_telegram_id),
                 has_had_paid_subscription=has_had_paid_subscription,
                 has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active
+                subscription_is_active=subscription_is_active,
+                balance_kopeks=balance_kopeks
             )
         )
         logger.info(f"✅ Главное меню отправлено для пользователя {user_telegram_id}")
@@ -703,19 +712,20 @@ async def complete_registration(
             balance_rubles = balance_kopeks / 100
             await message.answer(
                 f"Добро пожаловать, {user_name}!\n"
-                f"Баланс: {balance_rubles} ₽\n"
+                f"Баланс: {balance_rubles:.2f} ₽\n"
                 f"Подписка: Нет активной подписки",
                 reply_markup=get_main_menu_keyboard(
                     language=user_language,
                     is_admin=settings.is_admin(user_telegram_id),
                     has_had_paid_subscription=has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
-                    subscription_is_active=subscription_is_active
+                    subscription_is_active=subscription_is_active,
+                    balance_kopeks=balance_kopeks
                 )
             )
             logger.info(f"✅ Fallback главное меню отправлено для пользователя {user_telegram_id}")
         except Exception as fallback_error:
-            logger.error(f"❌ Критическая ошибка при отправке fallback меню: {fallback_error}")
+            logger.error(f"⛔ Критическая ошибка при отправке fallback меню: {fallback_error}")
             try:
                 await message.answer(f"Добро пожаловать, {user_name}! Регистрация завершена.")
                 logger.info(f"✅ Простое приветствие отправлено для пользователя {user_telegram_id}")
@@ -726,9 +736,44 @@ async def complete_registration(
 
 
 def _get_subscription_status(user, texts):
-    if user.subscription and user.subscription.is_active:
-        return getattr(texts, 'SUBSCRIPTION_ACTIVE', 'Активна')
-    return getattr(texts, 'SUBSCRIPTION_NONE', 'Нет активной подписки')
+    if not user or not hasattr(user, 'subscription'):
+        return getattr(texts, 'SUBSCRIPTION_NONE', 'Нет активной подписки')
+    
+    if not user.subscription:
+        return getattr(texts, 'SUBSCRIPTION_NONE', 'Нет активной подписки')
+    
+    subscription = user.subscription
+    
+    from datetime import datetime
+    current_time = datetime.utcnow()
+    
+    if hasattr(subscription, 'end_date') and subscription.end_date <= current_time:
+        return f"🔴 Истекла\n📅 {subscription.end_date.strftime('%d.%m.%Y')}"
+    
+    if hasattr(subscription, 'end_date'):
+        days_left = (subscription.end_date - current_time).days
+    else:
+        days_left = 0
+    
+    is_trial = getattr(subscription, 'is_trial', False)
+    
+    if is_trial:
+        if days_left > 1:
+            return f"🎁 Тестовая подписка\n📅 до {subscription.end_date.strftime('%d.%m.%Y')} ({days_left} дн.)"
+        elif days_left == 1:
+            return "🎁 Тестовая подписка\n⚠️ истекает завтра!"
+        else:
+            return "🎁 Тестовая подписка\n⚠️ истекает сегодня!"
+    else: 
+        if days_left > 7:
+            return f"💎 Активна\n📅 до {subscription.end_date.strftime('%d.%m.%Y')} ({days_left} дн.)"
+        elif days_left > 1:
+            return f"💎 Активна\n⚠️ истекает через {days_left} дн."
+        elif days_left == 1:
+            return "💎 Активна\n⚠️ истекает завтра!"
+        else:
+            return "💎 Активна\n⚠️ истекает сегодня!"
+
 
 
 def _get_subscription_status_simple(texts):
