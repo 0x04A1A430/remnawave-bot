@@ -21,20 +21,29 @@ def get_main_menu_keyboard(
     is_admin: bool = False,
     has_had_paid_subscription: bool = False,
     has_active_subscription: bool = False,
-    subscription_is_active: bool = False 
+    subscription_is_active: bool = False,
+    balance_kopeks: int = 0
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     
     if settings.DEBUG:
-        print(f"DEBUG KEYBOARD: language={language}, is_admin={is_admin}, has_had_paid={has_had_paid_subscription}, has_active={has_active_subscription}, sub_active={subscription_is_active}")
+        print(f"DEBUG KEYBOARD: language={language}, is_admin={is_admin}, has_had_paid={has_had_paid_subscription}, has_active={has_active_subscription}, sub_active={subscription_is_active}, balance={balance_kopeks}")
+    
+    if hasattr(texts, 'BALANCE_BUTTON') and balance_kopeks > 0:
+        balance_button_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(balance_kopeks))
+    else:
+        balance_button_text = f"💰 Баланс: {texts.format_price(balance_kopeks)}"
     
     keyboard = [
         [
-            InlineKeyboardButton(text=texts.MENU_BALANCE, callback_data="menu_balance"),
-            InlineKeyboardButton(text=texts.MENU_SUBSCRIPTION, callback_data="menu_subscription")
+            InlineKeyboardButton(text=balance_button_text, callback_data="menu_balance")
         ]
     ]
     
+    if has_active_subscription and subscription_is_active:
+        keyboard.append([
+            InlineKeyboardButton(text=texts.MENU_SUBSCRIPTION, callback_data="menu_subscription")
+        ])
     
     show_trial = not has_had_paid_subscription and not has_active_subscription
     
