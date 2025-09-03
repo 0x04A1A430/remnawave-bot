@@ -305,9 +305,12 @@ def get_devices_keyboard(current: int, language: str = "ru") -> InlineKeyboardMa
     texts = get_texts(language)
     keyboard = []
     
-    for devices in range(settings.DEFAULT_DEVICE_LIMIT, 6):
+    start_devices = settings.DEFAULT_DEVICE_LIMIT
+    end_devices = max(start_devices + 3, 6) 
+    
+    for devices in range(start_devices, end_devices): 
         price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
-        price_text = f" (+{texts.format_price(price)})" if price > 0 else ""
+        price_text = f" (+{texts.format_price(price)})" if price > 0 else " (включено)"
         emoji = "✅" if devices == current else "⚪"
         
         device_word = _get_device_declension(devices)
