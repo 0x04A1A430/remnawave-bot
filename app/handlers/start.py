@@ -146,8 +146,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 is_admin=settings.is_admin(user.telegram_id),
                 has_had_paid_subscription=user.has_had_paid_subscription,
                 has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=user.balance_kopeks
+                subscription_is_active=subscription_is_active
             )
         )
         await state.clear()
@@ -420,8 +419,7 @@ async def complete_registration_from_callback(
                     is_admin=settings.is_admin(existing_user.telegram_id),
                     has_had_paid_subscription=existing_user.has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
-                    subscription_is_active=subscription_is_active,
-                    balance_kopeks=existing_user.balance_kopeks
+                    subscription_is_active=subscription_is_active
                 )
             )
         except Exception as e:
