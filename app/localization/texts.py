@@ -108,8 +108,7 @@ class RussianTexts(Texts):
     
     MAIN_MENU = """👤 <b>{user_name}</b>
 ━━━━━━━━━━━━━━━━━
-💰 <b>Баланс:</b> {balance}
-📱 <b>Подписка:</b> {subscription_status}
+{subscription_info}
 ━━━━━━━━━━━━━━━━━
 
 Выберите действие:
@@ -126,6 +125,8 @@ class RussianTexts(Texts):
     MENU_RULES = "📋 Правила сервиса"
     MENU_LANGUAGE = "🌐 Язык"
     MENU_ADMIN = "⚙️ Админ-панель"
+    BALANCE_BUTTON = "💰 Баланс: {balance}"
+    BALANCE_BUTTON_ZERO = "💰 Баланс: 0.00 ₽"
     
     SUBSCRIPTION_NONE = "❌ Нет активной подписки"
     SUBSCRIPTION_TRIAL = "🎁 Тестовая подписка"
