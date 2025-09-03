@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     MAINTENANCE_MESSAGE: str = "🔧 Ведутся технические работы. Сервис временно недоступен. Попробуйте позже."
     
     TELEGRAM_STARS_ENABLED: bool = True
+    TELEGRAM_STARS_RATE_RUB: float = 1.3
     
     TRIBUTE_ENABLED: bool = False
     TRIBUTE_API_KEY: Optional[str] = None
@@ -281,6 +282,15 @@ class Settings(BaseSettings):
             service_name=self.PAYMENT_SERVICE_NAME,
             description=description
         )
+
+    def get_stars_rate(self) -> float:
+        return self.TELEGRAM_STARS_RATE_RUB
+    
+    def stars_to_rubles(self, stars: int) -> float:
+        return stars * self.get_stars_rate()
+    
+    def rubles_to_stars(self, rubles: float) -> int:
+        return max(1, int(rubles / self.get_stars_rate()))
     
     model_config = {
         "env_file": ".env",
