@@ -13,6 +13,14 @@ class TelegramStarsService:
     def __init__(self, bot: Bot):
         self.bot = bot
     
+    @staticmethod
+    def calculate_stars_from_rubles(rubles: float) -> int:
+        return settings.rubles_to_stars(rubles)
+    
+    @staticmethod
+    def calculate_rubles_from_stars(stars: int) -> float:
+        return settings.stars_to_rubles(stars)
+    
     async def create_invoice(
         self,
         chat_id: int,
@@ -23,7 +31,8 @@ class TelegramStarsService:
         start_parameter: Optional[str] = None
     ) -> Optional[str]:
         try:
-            stars_amount = max(1, amount_kopeks // 100)
+            amount_rubles = amount_kopeks / 100
+            stars_amount = self.calculate_stars_from_rubles(amount_rubles)
             
             invoice_link = await self.bot.create_invoice_link(
                 title=title,
@@ -35,7 +44,10 @@ class TelegramStarsService:
                 start_parameter=start_parameter
             )
             
-            logger.info(f"Создан Stars invoice на {stars_amount} звезд для {chat_id}")
+            logger.info(
+                f"Создан Stars invoice на {stars_amount} звезд (~{amount_rubles:.2f}₽) "
+                f"для {chat_id}, курс: {settings.get_stars_rate():.2f}₽/⭐"
+            )
             return invoice_link
             
         except Exception as e:
@@ -52,7 +64,8 @@ class TelegramStarsService:
         keyboard: Optional[InlineKeyboardMarkup] = None
     ) -> Optional[Dict[str, Any]]:
         try:
-            stars_amount = max(1, amount_kopeks // 100)
+            amount_rubles = amount_kopeks / 100
+            stars_amount = self.calculate_stars_from_rubles(amount_rubles)
             
             message = await self.bot.send_invoice(
                 chat_id=chat_id,
@@ -65,10 +78,14 @@ class TelegramStarsService:
                 reply_markup=keyboard
             )
             
-            logger.info(f"Отправлен Stars invoice {message.message_id} на {stars_amount} звезд")
+            logger.info(
+                f"Отправлен Stars invoice {message.message_id} на {stars_amount} звезд "
+                f"(~{amount_rubles:.2f}₽), курс: {settings.get_stars_rate():.2f}₽/⭐"
+            )
             return {
                 "message_id": message.message_id,
                 "stars_amount": stars_amount,
+                "rubles_amount": amount_rubles,
                 "payload": payload
             }
             
@@ -88,13 +105,8 @@ class TelegramStarsService:
                 ok=ok,
                 error_message=error_message
             )
+            logger.info(f"Ответ на pre_checkout_query: ok={ok}")
             return True
         except Exception as e:
             logger.error(f"Ошибка ответа на pre_checkout_query: {e}")
             return False
-    
-    def calculate_stars_amount(self, rubles: float) -> int:
-        return max(1, int(rubles))
-    
-    def calculate_rubles_from_stars(self, stars: int) -> float:
-        return float(stars)
