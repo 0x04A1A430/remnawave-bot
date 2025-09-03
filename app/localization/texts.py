@@ -129,7 +129,7 @@ class RussianTexts(Texts):
     BALANCE_BUTTON_ZERO = "💰 Баланс: 0.00 ₽"
     
     SUBSCRIPTION_NONE = "❌ Нет активной подписки"
-    SUBSCRIPTION_TRIAL = "🎁 Тестовая подписка"
+    SUBSCRIPTION_TRIAL = "🧪 Тестовая подписка"
     SUBSCRIPTION_ACTIVE = "✅ Активна"
     SUBSCRIPTION_EXPIRED = "⏰ Истекла"
     
