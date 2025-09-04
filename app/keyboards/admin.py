@@ -180,7 +180,7 @@ def get_user_management_keyboard(user_id: int, user_status: str, language: str =
             InlineKeyboardButton(text="📱 Подписка", callback_data=f"admin_user_subscription_{user_id}")
         ],
         [
-            InlineKeyboardButton(text="🌍 Серверы", callback_data=f"admin_user_servers_{user_id}"),  # НОВАЯ КНОПКА
+            InlineKeyboardButton(text="⚙️ Настройка", callback_data=f"admin_user_servers_{user_id}"), 
             InlineKeyboardButton(text="📊 Статистика", callback_data=f"admin_user_statistics_{user_id}")
         ],
         [
