@@ -274,7 +274,7 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
         if subscription.is_trial:
             return 0
         
-        from app.config import TRAFFIC_PRICES, PERIOD_PRICES, settings
+        from app.config import settings
         from app.services.subscription_service import SubscriptionService
         
         subscription_service = SubscriptionService()
@@ -290,7 +290,7 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
                 subscription.connected_squads, db
             )
         
-        traffic_cost = TRAFFIC_PRICES.get(subscription.traffic_limit_gb, 0)
+        traffic_cost = settings.get_traffic_price(subscription.traffic_limit_gb)
         devices_cost = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
         
         total_cost = base_cost + servers_cost + traffic_cost + devices_cost
@@ -305,7 +305,7 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
         return total_cost
         
     except Exception as e:
-        logger.error(f"⚠ Ошибка расчета стоимости подписки: {e}")
+        logger.error(f"⚠️ Ошибка расчета стоимости подписки: {e}")
         return 0
 
 
@@ -1211,12 +1211,19 @@ async def select_period(
     data['total_price'] = PERIOD_PRICES[period_days]
     
     if settings.is_traffic_fixed():
-        fixed_traffic_price = TRAFFIC_PRICES.get(settings.get_fixed_traffic_limit(), 0)
+        fixed_traffic_price = settings.get_traffic_price(settings.get_fixed_traffic_limit())
         data['total_price'] += fixed_traffic_price
+        data['traffic_gb'] = settings.get_fixed_traffic_limit()
     
     await state.set_data(data)
     
     if settings.is_traffic_selectable():
+        available_packages = [pkg for pkg in settings.get_traffic_packages() if pkg['enabled']]
+        
+        if not available_packages:
+            await callback.answer("⚠️ Пакеты трафика не настроены", show_alert=True)
+            return
+            
         await callback.message.edit_text(
             texts.SELECT_TRAFFIC,
             reply_markup=get_traffic_packages_keyboard(db_user.language)
@@ -1243,6 +1250,56 @@ async def select_period(
             await state.set_state(SubscriptionStates.selecting_devices)
     
     await callback.answer()
+
+async def refresh_traffic_config():
+    try:
+        from app.config import refresh_traffic_prices
+        refresh_traffic_prices()
+        
+        packages = settings.get_traffic_packages()
+        enabled_count = sum(1 for pkg in packages if pkg['enabled'])
+        
+        logger.info(f"🔄 Конфигурация трафика обновлена: {enabled_count} активных пакетов")
+        for pkg in packages:
+            if pkg['enabled']:
+                gb_text = "♾️ Безлимит" if pkg['gb'] == 0 else f"{pkg['gb']} ГБ"
+                logger.info(f"   📦 {gb_text}: {pkg['price']/100}₽")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"⚠️ Ошибка обновления конфигурации трафика: {e}")
+        return False
+
+async def get_traffic_packages_info() -> str:
+    try:
+        packages = settings.get_traffic_packages()
+        
+        info_lines = ["📦 Настроенные пакеты трафика:"]
+        
+        enabled_packages = [pkg for pkg in packages if pkg['enabled']]
+        disabled_packages = [pkg for pkg in packages if not pkg['enabled']]
+        
+        if enabled_packages:
+            info_lines.append("\n✅ Активные:")
+            for pkg in enabled_packages:
+                gb_text = "♾️ Безлимит" if pkg['gb'] == 0 else f"{pkg['gb']} ГБ"
+                info_lines.append(f"   • {gb_text}: {pkg['price']/100}₽")
+        
+        if disabled_packages:
+            info_lines.append("\n❌ Отключенные:")
+            for pkg in disabled_packages:
+                gb_text = "♾️ Безлимит" if pkg['gb'] == 0 else f"{pkg['gb']} ГБ"
+                info_lines.append(f"   • {gb_text}: {pkg['price']/100}₽")
+        
+        info_lines.append(f"\n📊 Всего пакетов: {len(packages)}")
+        info_lines.append(f"🟢 Активных: {len(enabled_packages)}")
+        info_lines.append(f"🔴 Отключенных: {len(disabled_packages)}")
+        
+        return "\n".join(info_lines)
+        
+    except Exception as e:
+        return f"⚠️ Ошибка получения информации: {e}"
 
 async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSession):
     
@@ -1813,6 +1870,15 @@ async def create_paid_subscription_with_traffic_mode(
     logger.info(f"📋 Создана подписка с трафиком: {traffic_limit_gb} ГБ (режим: {settings.TRAFFIC_SELECTION_MODE})")
     
     return subscription
+
+def validate_traffic_price(gb: int) -> bool:
+    from app.config import settings
+    
+    price = settings.get_traffic_price(gb)
+    if gb == 0: 
+        return True
+    
+    return price > 0
 
 
 async def handle_subscription_settings(
