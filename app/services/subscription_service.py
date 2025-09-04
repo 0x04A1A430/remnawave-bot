@@ -10,6 +10,12 @@ from app.external.remnawave_api import (
     TrafficLimitStrategy, RemnaWaveAPIError
 )
 from app.database.crud.user import get_user_by_id
+from app.utils.pricing_utils import (
+    calculate_months_from_days,
+    get_remaining_months,
+    calculate_prorated_price,
+    validate_pricing_calculation
+)
 
 logger = logging.getLogger(__name__)
 
