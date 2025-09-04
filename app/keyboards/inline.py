@@ -250,20 +250,46 @@ def get_traffic_packages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
     
-    packages = [
-        (5, texts.TRAFFIC_5GB),
-        (10, texts.TRAFFIC_10GB),
-        (25, texts.TRAFFIC_25GB),
-        (50, texts.TRAFFIC_50GB),
-        (100, texts.TRAFFIC_100GB),
-        (250, texts.TRAFFIC_250GB),
-        (0, texts.TRAFFIC_UNLIMITED) 
-    ]
+    traffic_packages = settings.get_traffic_packages()
     
-    for gb, text in packages:
+    for package in traffic_packages:
+        gb = package["gb"]
+        price = package["price"]
+        enabled = package["enabled"]
+        
+        if not enabled:
+            continue
+        
+        if gb == 0:
+            text = texts.TRAFFIC_UNLIMITED if hasattr(texts, 'TRAFFIC_UNLIMITED') else f"♾️ Безлимит - {settings.format_price(price)}"
+        else:
+            text = f"📊 {gb} ГБ - {settings.format_price(price)}"
+        
         keyboard.append([
             InlineKeyboardButton(text=text, callback_data=f"traffic_{gb}")
         ])
+    
+    if not keyboard:
+        default_packages = [
+            (5, "📊 5 ГБ"),
+            (10, "📊 10 ГБ"), 
+            (25, "📊 25 ГБ"),
+            (50, "📊 50 ГБ"),
+            (100, "📊 100 ГБ"),
+            (250, "📊 250 ГБ"),
+            (500, "📊 500 ГБ"),
+            (1000, "📊 1000 ГБ"),
+            (0, "♾️ Безлимит")
+        ]
+        
+        for gb, text in default_packages:
+            price = settings.get_traffic_price(gb)
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"{text} - {settings.format_price(price)}", 
+                    callback_data=f"traffic_{gb}"
+                )
+            ])
     
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="subscription_config_back")
@@ -637,19 +663,46 @@ def get_add_traffic_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
     
-    packages = [
-        (5, f"📊 +5 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_5GB)}"),
-        (10, f"📊 +10 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_10GB)}"),
-        (25, f"📊 +25 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_25GB)}"),
-        (50, f"📊 +50 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_50GB)}"),
-        (100, f"📊 +100 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_100GB)}"),
-        (0, f"📊 Безлимит - {settings.format_price(settings.PRICE_TRAFFIC_UNLIMITED)}")
-    ]
+    traffic_packages = settings.get_traffic_packages()
     
-    for gb, text in packages:
+    for package in traffic_packages:
+        gb = package["gb"]
+        price = package["price"]
+        enabled = package["enabled"]
+        
+        if not enabled:
+            continue
+        
+        if gb == 0:
+            text = f"📊 Безлимит - {settings.format_price(price)}"
+        else:
+            text = f"📊 +{gb} ГБ - {settings.format_price(price)}"
+        
         keyboard.append([
             InlineKeyboardButton(text=text, callback_data=f"add_traffic_{gb}")
         ])
+    
+    if not keyboard:
+        default_packages = [
+            (5, "📊 +5 ГБ"),
+            (10, "📊 +10 ГБ"),
+            (25, "📊 +25 ГБ"), 
+            (50, "📊 +50 ГБ"),
+            (100, "📊 +100 ГБ"),
+            (250, "📊 +250 ГБ"),
+            (500, "📊 +500 ГБ"),
+            (1000, "📊 +1000 ГБ"),
+            (0, "📊 Безлимит")
+        ]
+        
+        for gb, text in default_packages:
+            price = settings.get_traffic_price(gb)
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"{text} - {settings.format_price(price)}", 
+                    callback_data=f"add_traffic_{gb}"
+                )
+            ])
     
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
