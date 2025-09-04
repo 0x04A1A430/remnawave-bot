@@ -334,6 +334,36 @@ class Settings(BaseSettings):
             return self._get_fallback_traffic_packages()
     
     def _get_fallback_traffic_packages(self) -> List[Dict]:
+        try:
+            if self.TRAFFIC_PACKAGES_CONFIG.strip():
+                packages = []
+                for package_config in self.TRAFFIC_PACKAGES_CONFIG.split(','):
+                    package_config = package_config.strip()
+                    if not package_config:
+                        continue
+                        
+                    parts = package_config.split(':')
+                    if len(parts) != 3:
+                        continue
+                        
+                    try:
+                        gb = int(parts[0])
+                        price = int(parts[1])
+                        enabled = parts[2].lower() == 'true'
+                        
+                        packages.append({
+                            "gb": gb,
+                            "price": price,
+                            "enabled": enabled
+                        })
+                    except ValueError:
+                        continue
+                
+                if packages:
+                    return packages
+        except Exception as e:
+            logger.error(f"Ошибка парсинга TRAFFIC_PACKAGES_CONFIG в fallback: {e}")
+        
         return [
             {"gb": 5, "price": self.PRICE_TRAFFIC_5GB, "enabled": True},
             {"gb": 10, "price": self.PRICE_TRAFFIC_10GB, "enabled": True},
