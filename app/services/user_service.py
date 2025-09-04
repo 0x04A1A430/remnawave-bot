@@ -1,8 +1,8 @@
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete
+from sqlalchemy import select, func, and_, or_, update, delete
+from sqlalchemy.orm import selectinload
 
 from app.database.crud.user import (
     get_user_by_id, get_user_by_telegram_id, get_users_list,
@@ -12,8 +12,9 @@ from app.database.crud.user import (
 from app.database.crud.transaction import get_user_transactions_count
 from app.database.crud.subscription import get_subscription_by_user_id
 from app.database.models import (
-    User, UserStatus, Subscription, Transaction, PromoCodeUse, 
-    ReferralEarning, SubscriptionServer
+    User, UserStatus, Subscription, Transaction, 
+    YooKassaPayment, PromoCodeUse, ReferralEarning,
+    BroadcastHistory, SubscriptionServer, MonitoringLog
 )
 from app.config import settings
 
