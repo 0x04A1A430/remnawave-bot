@@ -132,7 +132,6 @@ DEFAULT_DEVICE_LIMIT=3
 
 # Дефолт параметры для подписок выданных через админку
 DEFAULT_TRAFFIC_LIMIT_GB=100
-DEFAULT_DEVICE_LIMIT=1
 
 # ===== ГЛОБАЛЬНЫЙ ПАРАМЕТР ДЛЯ ВСЕХ ПОДПИСОК =====
 DEFAULT_TRAFFIC_RESET_STRATEGY=MONTH
