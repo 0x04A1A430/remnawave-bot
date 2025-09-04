@@ -271,16 +271,16 @@ def get_traffic_packages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     
     for package in traffic_packages:
         gb = package["gb"]
-        price = package["price"]
+        price = package["price"]  
         enabled = package["enabled"]
         
         if not enabled:
             continue
         
         if gb == 0:
-            text = texts.TRAFFIC_UNLIMITED if hasattr(texts, 'TRAFFIC_UNLIMITED') else f"♾️ Безлимит - {settings.format_price(price)}"
+            text = f"♾️ Безлимит - {settings.format_price(package['price'])}"
         else:
-            text = f"📊 {gb} ГБ - {settings.format_price(price)}"
+            text = f"📊 {gb} ГБ - {settings.format_price(package['price'])}"
         
         keyboard.append([
             InlineKeyboardButton(text=text, callback_data=f"traffic_{gb}")
@@ -299,7 +299,6 @@ def get_traffic_packages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
 
 def get_countries_keyboard(countries: List[dict], selected: List[str], language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
@@ -677,9 +676,9 @@ def get_add_traffic_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             continue
         
         if gb == 0:
-            text = f"📊 Безлимит - {settings.format_price(price)}"
+            text = f"📊 Безлимит - {settings.format_price(package['price'])}"
         else:
-            text = f"📊 +{gb} ГБ - {settings.format_price(price)}"
+            text = f"📊 +{gb} ГБ - {settings.format_price(package['price'])}"
         
         keyboard.append([
             InlineKeyboardButton(text=text, callback_data=f"add_traffic_{gb}")
