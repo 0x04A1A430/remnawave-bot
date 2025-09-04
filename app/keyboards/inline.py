@@ -268,28 +268,14 @@ def get_traffic_packages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         keyboard.append([
             InlineKeyboardButton(text=text, callback_data=f"traffic_{gb}")
         ])
-    
+
     if not keyboard:
-        default_packages = [
-            (5, "📊 5 ГБ"),
-            (10, "📊 10 ГБ"), 
-            (25, "📊 25 ГБ"),
-            (50, "📊 50 ГБ"),
-            (100, "📊 100 ГБ"),
-            (250, "📊 250 ГБ"),
-            (500, "📊 500 ГБ"),
-            (1000, "📊 1000 ГБ"),
-            (0, "♾️ Безлимит")
-        ]
-        
-        for gb, text in default_packages:
-            price = settings.get_traffic_price(gb)
-            keyboard.append([
-                InlineKeyboardButton(
-                    text=f"{text} - {settings.format_price(price)}", 
-                    callback_data=f"traffic_{gb}"
-                )
-            ])
+        keyboard.append([
+            InlineKeyboardButton(
+                text="⚠️ Пакеты трафика не настроены", 
+                callback_data="no_traffic_packages"
+            )
+        ])
     
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="subscription_config_back")
@@ -683,33 +669,18 @@ def get_add_traffic_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ])
     
     if not keyboard:
-        default_packages = [
-            (5, "📊 +5 ГБ"),
-            (10, "📊 +10 ГБ"),
-            (25, "📊 +25 ГБ"), 
-            (50, "📊 +50 ГБ"),
-            (100, "📊 +100 ГБ"),
-            (250, "📊 +250 ГБ"),
-            (500, "📊 +500 ГБ"),
-            (1000, "📊 +1000 ГБ"),
-            (0, "📊 Безлимит")
-        ]
-        
-        for gb, text in default_packages:
-            price = settings.get_traffic_price(gb)
-            keyboard.append([
-                InlineKeyboardButton(
-                    text=f"{text} - {settings.format_price(price)}", 
-                    callback_data=f"add_traffic_{gb}"
-                )
-            ])
+        keyboard.append([
+            InlineKeyboardButton(
+                text="⚠️ Пакеты трафика не настроены", 
+                callback_data="no_traffic_packages"
+            )
+        ])
     
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
 
 def get_add_devices_keyboard(current_devices: int, language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
