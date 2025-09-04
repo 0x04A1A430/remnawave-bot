@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     PRICE_TRAFFIC_1000GB: int = 1299000
     PRICE_TRAFFIC_UNLIMITED: int = 0
     
-    TRAFFIC_PACKAGES_CONFIG: str = "5:10000:true,10:19000:true,25:45000:true,50:85000:true,100:159000:true,250:369000:true,500:699000:true,1000:1299000:true,0:0:true"
+    TRAFFIC_PACKAGES_CONFIG: str = ""
     
     PRICE_PER_DEVICE: int = 5000
     
