@@ -656,82 +656,103 @@ def get_extend_subscription_keyboard(language: str = "ru") -> InlineKeyboardMark
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_add_traffic_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_add_traffic_keyboard(language: str = "ru", subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
+    from app.utils.pricing_utils import get_remaining_months
     from app.config import settings
     
-    if settings.is_traffic_fixed():
-        return get_back_keyboard(language)
+    months_multiplier = 1
+    period_text = ""
+    if subscription_end_date:
+        months_multiplier = get_remaining_months(subscription_end_date)
+        if months_multiplier > 1:
+            period_text = f" (за {months_multiplier} мес)"
     
-    texts = get_texts(language)
-    keyboard = []
+    packages = settings.get_traffic_packages()
+    enabled_packages = [pkg for pkg in packages if pkg['enabled']]
     
-    traffic_packages = settings.get_traffic_packages()
+    if not enabled_packages:
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="❌ Нет доступных пакетов" if language == "ru" else "❌ No packages available",
+                callback_data="no_traffic_packages"
+            )],
+            [InlineKeyboardButton(
+                text="⬅️ Назад" if language == "ru" else "⬅️ Back",
+                callback_data="menu_subscription"
+            )]
+        ])
     
-    for package in traffic_packages:
-        gb = package["gb"]
-        price = package["price"]
-        enabled = package["enabled"]
-        
-        if not enabled:
-            continue
+    buttons = []
+    
+    for package in enabled_packages:
+        gb = package['gb']
+        price_per_month = package['price']
+        total_price = price_per_month * months_multiplier
         
         if gb == 0:
-            text = f"📊 Безлимит - {settings.format_price(package['price'])}"
+            if language == "ru":
+                text = f"♾️ Безлимитный трафик - {total_price/100:.2f} ₽{period_text}"
+            else:
+                text = f"♾️ Unlimited traffic - {total_price/100:.2f} ₽{period_text}"
         else:
-            text = f"📊 +{gb} ГБ - {settings.format_price(package['price'])}"
+            if language == "ru":
+                text = f"📊 +{gb} ГБ трафика - {total_price/100:.2f} ₽{period_text}"
+            else:
+                text = f"📊 +{gb} GB traffic - {total_price/100:.2f} ₽{period_text}"
         
-        keyboard.append([
+        buttons.append([
             InlineKeyboardButton(text=text, callback_data=f"add_traffic_{gb}")
         ])
     
-    if not keyboard:
-        keyboard.append([
-            InlineKeyboardButton(
-                text="⚠️ Пакеты трафика не настроены", 
-                callback_data="no_traffic_packages"
-            )
-        ])
-    
-    keyboard.append([
-        InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
+    buttons.append([
+        InlineKeyboardButton(
+            text="⬅️ Назад" if language == "ru" else "⬅️ Back",
+            callback_data="menu_subscription"
+        )
     ])
     
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-def get_add_devices_keyboard(current_devices: int, language: str = "ru") -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard = []
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
     
-    max_devices = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 100
+def get_add_devices_keyboard(current_devices: int, language: str = "ru", subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
+    from app.utils.pricing_utils import get_remaining_months
+    from app.config import settings
     
-    max_add = min(5, max_devices - current_devices) 
+    months_multiplier = 1
+    period_text = ""
+    if subscription_end_date:
+        months_multiplier = get_remaining_months(subscription_end_date)
+        if months_multiplier > 1:
+            period_text = f" (за {months_multiplier} мес)"
     
-    for add_count in range(1, max_add + 1): 
-        price = add_count * settings.PRICE_PER_DEVICE
-        total_devices = current_devices + add_count
+    device_price_per_month = settings.PRICE_PER_DEVICE
+    
+    buttons = []
+    
+    for count in [1, 2, 3, 4, 5]:
+        new_total = current_devices + count
+        if settings.MAX_DEVICES_LIMIT > 0 and new_total > settings.MAX_DEVICES_LIMIT:
+            continue
         
-        add_device_word = _get_device_declension(add_count)
+        price_per_month = count * device_price_per_month
+        total_price = price_per_month * months_multiplier
         
-        keyboard.append([
-            InlineKeyboardButton(
-                text=f"📱 +{add_count} {add_device_word} (итого: {total_devices}) - {settings.format_price(price)}",
-                callback_data=f"add_devices_{add_count}"
-            )
+        if language == "ru":
+            text = f"📱 +{count} устройство(а) (итого: {new_total}) - {total_price/100:.2f} ₽{period_text}"
+        else:
+            text = f"📱 +{count} device(s) (total: {new_total}) - {total_price/100:.2f} ₽{period_text}"
+        
+        buttons.append([
+            InlineKeyboardButton(text=text, callback_data=f"add_devices_{count}")
         ])
     
-    if max_add == 0:
-        keyboard.append([
-            InlineKeyboardButton(
-                text="⚠️ Достигнут максимум устройств", 
-                callback_data="max_devices_reached"
-            )
-        ])
-    
-    keyboard.append([
-        InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
+    buttons.append([
+        InlineKeyboardButton(
+            text="⬅️ Назад" if language == "ru" else "⬅️ Back", 
+            callback_data="menu_subscription"
+        )
     ])
     
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_reset_traffic_confirm_keyboard(price_kopeks: int, language: str = "ru") -> InlineKeyboardMarkup:
@@ -757,64 +778,69 @@ def get_manage_countries_keyboard(
     countries: List[dict], 
     selected: List[str], 
     current_subscription_countries: List[str],
-    language: str = "ru"
+    language: str = "ru",
+    subscription_end_date: datetime = None
 ) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard = []
+    from app.utils.pricing_utils import get_remaining_months
+    
+    months_multiplier = 1
+    if subscription_end_date:
+        months_multiplier = get_remaining_months(subscription_end_date)
+    
+    buttons = []
+    total_cost = 0
     
     for country in countries:
-        if not country.get('is_available', True):
-            continue
+        uuid = country['uuid']
+        name = country['name']
+        price_per_month = country['price_kopeks']
         
-        is_currently_connected = country['uuid'] in current_subscription_countries
-        is_selected = country['uuid'] in selected
-        
-        if is_currently_connected:
-            if is_selected:
-                emoji = "✅"  
-                status = ""
+        if uuid in current_subscription_countries:
+            if uuid in selected:
+                icon = "✅"
             else:
-                emoji = "➖"  
-                status = " (отключить БЕСПЛАТНО)"
+                icon = "➖"
         else:
-            if is_selected:
-                emoji = "➕"  
-                price_text = f" (+{texts.format_price(country['price_kopeks'])})" if country['price_kopeks'] > 0 else " (Бесплатно)"
-                status = price_text
+            if uuid in selected:
+                icon = "➕"
+                total_cost += price_per_month * months_multiplier
             else:
-                emoji = "⚪"  
-                price_text = f" (+{texts.format_price(country['price_kopeks'])})" if country['price_kopeks'] > 0 else " (Бесплатно)"
-                status = price_text
+                icon = "⚪"
         
-        keyboard.append([
+        if uuid not in current_subscription_countries and uuid in selected:
+            total_price = price_per_month * months_multiplier
+            if months_multiplier > 1:
+                price_text = f" ({price_per_month/100:.2f}₽/мес × {months_multiplier} = {total_price/100:.2f}₽)"
+            else:
+                price_text = f" ({total_price/100:.2f}₽)"
+            display_name = f"{icon} {name}{price_text}"
+        else:
+            display_name = f"{icon} {name}"
+        
+        buttons.append([
             InlineKeyboardButton(
-                text=f"{emoji} {country['name']}{status}",
-                callback_data=f"country_manage_{country['uuid']}"
+                text=display_name,
+                callback_data=f"country_manage_{uuid}"
             )
         ])
     
-    if not keyboard:
-        keyboard.append([
-            InlineKeyboardButton(
-                text="❌ Нет доступных серверов",
-                callback_data="no_servers"
-            )
-        ])
+    if total_cost > 0:
+        apply_text = f"✅ Применить изменения ({total_cost/100:.2f} ₽)"
+    else:
+        apply_text = "✅ Применить изменения"
     
-    added = [c for c in selected if c not in current_subscription_countries]
-    removed = [c for c in current_subscription_countries if c not in selected]
-    
-    apply_text = "✅ Применить изменения"
-    if added or removed:
-        changes_count = len(added) + len(removed)
-        apply_text += f" ({changes_count})"
-    
-    keyboard.extend([
-        [InlineKeyboardButton(text=apply_text, callback_data="countries_apply")],
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="menu_subscription")]
+    buttons.append([
+        InlineKeyboardButton(text=apply_text, callback_data="countries_apply")
     ])
     
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+    buttons.append([
+        InlineKeyboardButton(
+            text="⬅️ Назад" if language == "ru" else "⬅️ Back",
+            callback_data="menu_subscription"
+        )
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def get_device_selection_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     from app.config import settings
