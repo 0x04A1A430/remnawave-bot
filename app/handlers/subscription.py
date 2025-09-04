@@ -149,10 +149,8 @@ async def show_subscription_info(
     servers_display = servers_names if servers_names else "Нет серверов"
 
     message = f"""👤 {db_user.full_name}
-━━━━━━━━━━━━━━━━━
 💰 Баланс: {settings.format_price(db_user.balance_kopeks)}
 📱 Подписка: {status_emoji} {status_display}{warning_text}
-━━━━━━━━━━━━━━━━━
 
 📱 Информация о подписке
 🎭 Тип: {subscription_type}
