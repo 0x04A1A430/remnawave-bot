@@ -230,14 +230,15 @@ class SubscriptionService:
         db: AsyncSession 
     ) -> Tuple[int, List[int]]:
     
-        from app.config import PERIOD_PRICES, TRAFFIC_PRICES
+        from app.config import PERIOD_PRICES
         from app.database.crud.server_squad import get_server_squad_by_id
     
         if settings.MAX_DEVICES_LIMIT > 0 and devices > settings.MAX_DEVICES_LIMIT:
             raise ValueError(f"Превышен максимальный лимит устройств: {settings.MAX_DEVICES_LIMIT}")
     
         base_price = PERIOD_PRICES.get(period_days, 0)
-        traffic_price = TRAFFIC_PRICES.get(traffic_gb, 0)
+        
+        traffic_price = settings.get_traffic_price(traffic_gb)
     
         server_prices = []
         total_servers_price = 0
@@ -272,7 +273,7 @@ class SubscriptionService:
         db: AsyncSession
     ) -> int:
         try:
-            from app.config import PERIOD_PRICES, TRAFFIC_PRICES
+            from app.config import PERIOD_PRICES
             
             base_price = PERIOD_PRICES.get(period_days, 0)
             
@@ -282,7 +283,7 @@ class SubscriptionService:
             
             devices_price = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
             
-            traffic_price = TRAFFIC_PRICES.get(subscription.traffic_limit_gb, 0)
+            traffic_price = settings.get_traffic_price(subscription.traffic_limit_gb)
             
             total_price = base_price + servers_price + devices_price + traffic_price
             
