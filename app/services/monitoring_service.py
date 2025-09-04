@@ -37,6 +37,7 @@ class MonitoringService:
         self.payment_service = PaymentService()
         self.bot = bot
         self._notified_users: Set[str] = set() 
+        self._last_cleanup = datetime.utcnow()
     
     async def start_monitoring(self):
         if self.is_running:
@@ -62,16 +63,14 @@ class MonitoringService:
     async def _monitoring_cycle(self):
         async for db in get_db():
             try:
+                await self._cleanup_notification_cache()
+                
                 await self._check_expired_subscriptions(db)
                 await self._check_expiring_subscriptions(db)
                 await self._check_trial_expiring_soon(db)  
                 await self._process_autopayments(db)
                 await self._cleanup_inactive_users(db)
                 await self._sync_with_remnawave(db)
-                
-                current_hour = datetime.utcnow().hour
-                if current_hour == 0:
-                    self._notified_users.clear()
                 
                 await self._log_monitoring_event(
                     db, "monitoring_cycle_completed", 
@@ -89,6 +88,15 @@ class MonitoringService:
                 )
             finally:
                 break 
+    
+    async def _cleanup_notification_cache(self):
+        current_time = datetime.utcnow()
+        
+        if (current_time - self._last_cleanup).total_seconds() >= 3600:
+            old_count = len(self._notified_users)
+            self._notified_users.clear()
+            self._last_cleanup = current_time
+            logger.info(f"🧹 Очищен кеш уведомлений ({old_count} записей)")
     
     async def _check_expired_subscriptions(self, db: AsyncSession):
         try:
@@ -177,15 +185,20 @@ class MonitoringService:
                     if not user:
                         continue
                     
-                    notification_key = f"expiring_{user.telegram_id}_{days}d"
+                    # Уникальный ключ для предотвращения дублирования
+                    notification_key = f"expiring_{user.telegram_id}_{days}d_{subscription.id}"
+                    
                     if notification_key in self._notified_users:
+                        logger.debug(f"🔄 Пропускаем дублирование уведомления для пользователя {user.telegram_id} (ключ: {notification_key})")
                         continue 
                     
                     if self.bot:
-                        await self._send_subscription_expiring_notification(user, subscription, days)
-                        self._notified_users.add(notification_key)
-                    
-                    logger.info(f"⚠️ Пользователю {user.telegram_id} отправлено уведомление об истечении подписки через {days} дней")
+                        success = await self._send_subscription_expiring_notification(user, subscription, days)
+                        if success:
+                            self._notified_users.add(notification_key)
+                            logger.info(f"✅ Пользователю {user.telegram_id} отправлено уведомление об истечении подписки через {days} дней")
+                        else:
+                            logger.warning(f"❌ Не удалось отправить уведомление пользователю {user.telegram_id}")
                 
                 if expiring_subscriptions:
                     await self._log_monitoring_event(
@@ -220,15 +233,15 @@ class MonitoringService:
                 if not user:
                     continue
                 
-                notification_key = f"trial_2h_{user.telegram_id}"
+                notification_key = f"trial_2h_{user.telegram_id}_{subscription.id}"
                 if notification_key in self._notified_users:
                     continue  
                 
                 if self.bot:
-                    await self._send_trial_ending_notification(user, subscription)
-                    self._notified_users.add(notification_key)
-                
-                logger.info(f"🎁 Пользователю {user.telegram_id} отправлено уведомление об окончании тестовой подписки через 2 часа")
+                    success = await self._send_trial_ending_notification(user, subscription)
+                    if success:
+                        self._notified_users.add(notification_key)
+                        logger.info(f"🎁 Пользователю {user.telegram_id} отправлено уведомление об окончании тестовой подписки через 2 часа")
             
             if trial_expiring:
                 await self._log_monitoring_event(
@@ -257,9 +270,9 @@ class MonitoringService:
             )
         )
         
-        logger.info(f"🔍 Поиск платных подписок, истекающих в ближайшие {days_before} дней")
-        logger.info(f"📅 Текущее время: {current_time}")
-        logger.info(f"📅 Пороговая дата: {threshold_date}")
+        logger.debug(f"🔍 Поиск платных подписок, истекающих в ближайшие {days_before} дней")
+        logger.debug(f"📅 Текущее время: {current_time}")
+        logger.debug(f"📅 Пороговая дата: {threshold_date}")
         
         subscriptions = result.scalars().all()
         logger.info(f"📊 Найдено {len(subscriptions)} платных подписок для уведомлений")
@@ -340,15 +353,15 @@ class MonitoringService:
         except Exception as e:
             logger.error(f"Ошибка обработки автоплатежей: {e}")
     
-    async def _send_subscription_expired_notification(self, user: User):
+    async def _send_subscription_expired_notification(self, user: User) -> bool:
         try:
             message = """
-    ❌ <b>Подписка истекла</b>
+⛔ <b>Подписка истекла</b>
 
-    Ваша подписка истекла. Для восстановления доступа продлите подписку.
+Ваша подписка истекла. Для восстановления доступа продлите подписку.
 
-    🔧 Доступ к серверам заблокирован до продления.
-    """
+🔧 Доступ к серверам заблокирован до продления.
+"""
             
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
             
@@ -363,11 +376,13 @@ class MonitoringService:
                 parse_mode="HTML",
                 reply_markup=keyboard
             )
+            return True
             
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об истечении подписки пользователю {user.telegram_id}: {e}")
+            return False
     
-    async def _send_subscription_expiring_notification(self, user: User, subscription: Subscription, days: int):
+    async def _send_subscription_expiring_notification(self, user: User, subscription: Subscription, days: int) -> bool:
         try:
             from app.utils.formatters import format_days_declension
             
@@ -382,14 +397,14 @@ class MonitoringService:
                 action_text = "💡 Включите автоплатеж или продлите подписку вручную"
             
             message = f"""
-    ⚠️ <b>Подписка истекает через {days_text}!</b>
+⚠️ <b>Подписка истекает через {days_text}!</b>
 
-    Ваша платная подписка истекает {subscription.end_date.strftime("%d.%m.%Y %H:%M")}.
+Ваша платная подписка истекает {subscription.end_date.strftime("%d.%m.%Y %H:%M")}.
 
-    💳 <b>Автоплатеж:</b> {autopay_status}
+💳 <b>Автоплатеж:</b> {autopay_status}
 
-    {action_text}
-    """
+{action_text}
+"""
             
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
             
@@ -405,30 +420,32 @@ class MonitoringService:
                 parse_mode="HTML",
                 reply_markup=keyboard
             )
+            return True
             
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об истечении подписки пользователю {user.telegram_id}: {e}")
+            return False
     
-    async def _send_trial_ending_notification(self, user: User, subscription: Subscription):
+    async def _send_trial_ending_notification(self, user: User, subscription: Subscription) -> bool:
         try:
             texts = get_texts(user.language)
             
             message = f"""
-    🎁 <b>Тестовая подписка скоро закончится!</b>
+🎁 <b>Тестовая подписка скоро закончится!</b>
 
-    Ваша тестовая подписка истекает через 2 часа.
+Ваша тестовая подписка истекает через 2 часа.
 
-    💎 <b>Не хотите остаться без VPN?</b>
-    Переходите на полную подписку со скидкой!
+💎 <b>Не хотите остаться без VPN?</b>
+Переходите на полную подписку со скидкой!
 
-    🔥 <b>Специальное предложение:</b>
-    • 30 дней всего за {settings.format_price(settings.PRICE_30_DAYS)}
-    • Безлимитный трафик
-    • Все серверы доступны
-    • Поддержка до 3 устройств
+🔥 <b>Специальное предложение:</b>
+• 30 дней всего за {settings.format_price(settings.PRICE_30_DAYS)}
+• Безлимитный трафик
+• Все серверы доступны
+• Поддержка до 3 устройств
 
-    ⚡️ Успейте оформить до окончания тестового периода!
-    """
+⚡️ Успейте оформить до окончания тестового периода!
+"""
             
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
             
@@ -443,9 +460,11 @@ class MonitoringService:
                 parse_mode="HTML",
                 reply_markup=keyboard
             )
+            return True
             
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об окончании тестовой подписки пользователю {user.telegram_id}: {e}")
+            return False
     
     async def _send_autopay_success_notification(self, user: User, amount: int, days: int):
         try:
@@ -554,7 +573,7 @@ class MonitoringService:
             
         except Exception as e:
             logger.error(f"Ошибка логирования события мониторинга: {e}")
-    
+
     async def get_monitoring_status(self, db: AsyncSession) -> Dict[str, Any]:
         try:
             from sqlalchemy import select, desc
