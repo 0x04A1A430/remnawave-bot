@@ -1384,6 +1384,12 @@ async def show_server_selection(
     user_id = int(callback.data.split('_')[-1])
     
     try:
+        # Получаем текущие серверы пользователя
+        user = await get_user_by_id(db, user_id)
+        current_squads = []
+        if user and user.subscription:
+            current_squads = user.subscription.connected_squads or []
+        
         servers, _ = await get_all_server_squads(db, available_only=True)
         
         if not servers:
@@ -1395,19 +1401,33 @@ async def show_server_selection(
             )
             return
         
-        text = f"🌍 <b>Выбор сервера</b>\n\nВыберите сервер для пользователя:\n\n"
+        text = f"🌍 <b>Управление серверами</b>\n\n"
+        text += f"Нажмите на сервер чтобы добавить/убрать:\n\n"
         
         keyboard = []
-        for server in servers[:10]: 
-            status_emoji = "✅" if server.is_available else "❌"
+        for server in servers[:15]:
+            # Проверяем, выбран ли этот сервер
+            is_selected = server.squad_uuid in current_squads
+            
+            if is_selected:
+                emoji = "✅"
+                action = "remove"
+            else:
+                emoji = "⚪"
+                action = "add"
+            
             keyboard.append([
                 types.InlineKeyboardButton(
-                    text=f"{status_emoji} {server.display_name}",
-                    callback_data=f"admin_user_select_server_{user_id}_{server.id}"
+                    text=f"{emoji} {server.display_name}",
+                    callback_data=f"admin_user_toggle_server_{user_id}_{server.id}_{action}"
                 )
             ])
         
+        if len(servers) > 15:
+            text += f"\n📝 Показано первых 15 из {len(servers)} серверов"
+        
         keyboard.append([
+            types.InlineKeyboardButton(text="✅ Готово", callback_data=f"admin_user_servers_{user_id}"),
             types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_servers_{user_id}")
         ])
         
@@ -1421,17 +1441,17 @@ async def show_server_selection(
         logger.error(f"Ошибка показа серверов: {e}")
         await callback.answer("❌ Ошибка загрузки серверов", show_alert=True)
 
-
 @admin_required
 @error_handler
-async def change_user_server(
+async def toggle_user_server(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession
 ):
     parts = callback.data.split('_')
-    user_id = int(parts[-2])
-    server_id = int(parts[-1]) 
+    user_id = int(parts[-3])
+    server_id = int(parts[-2])
+    action = parts[-1] 
     
     try:
         user = await get_user_by_id(db, user_id)
@@ -1439,16 +1459,24 @@ async def change_user_server(
             await callback.answer("❌ Пользователь или подписка не найдены", show_alert=True)
             return
         
-        from app.database.crud.server_squad import get_server_squad_by_id
         server = await get_server_squad_by_id(db, server_id)
         if not server:
             await callback.answer("❌ Сервер не найден", show_alert=True)
             return
         
         subscription = user.subscription
-        subscription.connected_squads = [server.squad_uuid] 
-        subscription.updated_at = datetime.utcnow()
+        current_squads = subscription.connected_squads or []
         
+        if action == "add":
+            if server.squad_uuid not in current_squads:
+                current_squads.append(server.squad_uuid)
+                subscription.connected_squads = current_squads
+        else:  
+            if server.squad_uuid in current_squads:
+                current_squads.remove(server.squad_uuid)
+                subscription.connected_squads = current_squads
+        
+        subscription.updated_at = datetime.utcnow()
         await db.commit()
         
         if user.remnawave_uuid:
@@ -1457,24 +1485,20 @@ async def change_user_server(
                 async with remnawave_service.api as api:
                     await api.update_user(
                         uuid=user.remnawave_uuid,
-                        active_internal_squads=[server.squad_uuid]
+                        active_internal_squads=subscription.connected_squads
                     )
-                logger.info(f"✅ Обновлен сервер в RemnaWave для пользователя {user.telegram_id}")
+                logger.info(f"✅ Обновлены серверы в RemnaWave для пользователя {user.telegram_id}")
             except Exception as rw_error:
                 logger.error(f"❌ Ошибка обновления RemnaWave: {rw_error}")
         
-        await callback.message.edit_text(
-            f"✅ Сервер пользователя изменен на:\n{server.display_name}",
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-                [types.InlineKeyboardButton(text="🌍 Управление серверами", callback_data=f"admin_user_servers_{user_id}")]
-            ])
-        )
+        action_text = "добавлен" if action == "add" else "удален"
+        logger.info(f"Админ {db_user.id}: сервер {server.display_name} {action_text} для пользователя {user_id}")
         
-        logger.info(f"Админ {db_user.id} сменил сервер пользователя {user_id} на {server.display_name}")
+        await show_server_selection(callback, db_user, db)
         
     except Exception as e:
-        logger.error(f"Ошибка смены сервера: {e}")
-        await callback.answer("❌ Ошибка смены сервера", show_alert=True)
+        logger.error(f"Ошибка переключения сервера: {e}")
+        await callback.answer("❌ Ошибка изменения сервера", show_alert=True)
 
 
 @admin_required
@@ -2201,8 +2225,8 @@ def register_handlers(dp: Dispatcher):
     )
     
     dp.callback_query.register(
-        change_user_server,
-        F.data.startswith("admin_user_select_server_")
+        toggle_user_server,
+        F.data.startswith("admin_user_toggle_server_")
     )
     
     dp.callback_query.register(
