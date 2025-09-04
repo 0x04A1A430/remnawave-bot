@@ -9,6 +9,7 @@ from app.database.models import (
     Subscription, SubscriptionStatus, User, 
     SubscriptionServer
 )
+from app.utils.pricing_utils import calculate_months_from_days, get_remaining_months
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -407,9 +408,19 @@ async def add_subscription_servers(
     server_squad_ids: List[int],
     paid_prices: List[int] = None
 ) -> Subscription:
-    
     if paid_prices is None:
-        paid_prices = [0] * len(server_squad_ids)
+        months_remaining = get_remaining_months(subscription.end_date)
+        paid_prices = []
+        
+        from app.database.models import ServerSquad
+        for server_id in server_squad_ids:
+            result = await db.execute(
+                select(ServerSquad.price_kopeks)
+                .where(ServerSquad.id == server_id)
+            )
+            server_price_per_month = result.scalar() or 0
+            total_price_for_period = server_price_per_month * months_remaining
+            paid_prices.append(total_price_for_period)
     
     for i, server_id in enumerate(server_squad_ids):
         subscription_server = SubscriptionServer(
@@ -422,9 +433,79 @@ async def add_subscription_servers(
     await db.commit()
     await db.refresh(subscription)
     
-    logger.info(f"🌍 К подписке {subscription.id} добавлено {len(server_squad_ids)} серверов")
+    logger.info(f"🌍 К подписке {subscription.id} добавлено {len(server_squad_ids)} серверов с ценами: {paid_prices}")
     return subscription
 
+async def get_server_monthly_price(
+    db: AsyncSession,
+    server_squad_id: int
+) -> int:
+    from app.database.models import ServerSquad
+    
+    result = await db.execute(
+        select(ServerSquad.price_kopeks)
+        .where(ServerSquad.id == server_squad_id)
+    )
+    return result.scalar() or 0
+
+
+async def get_servers_monthly_prices(
+    db: AsyncSession,
+    server_squad_ids: List[int]
+) -> List[int]:
+    prices = []
+    for server_id in server_squad_ids:
+        price = await get_server_monthly_price(db, server_id)
+        prices.append(price)
+    return prices
+
+async def calculate_subscription_total_cost(
+    db: AsyncSession,
+    period_days: int,
+    traffic_gb: int,
+    server_squad_ids: List[int],
+    devices: int
+) -> Tuple[int, dict]:
+    from app.config import PERIOD_PRICES
+    
+    months_in_period = calculate_months_from_days(period_days)
+    
+    base_price = PERIOD_PRICES.get(period_days, 0)
+    
+    traffic_price_per_month = settings.get_traffic_price(traffic_gb)
+    total_traffic_price = traffic_price_per_month * months_in_period
+    
+    servers_prices = await get_servers_monthly_prices(db, server_squad_ids)
+    servers_price_per_month = sum(servers_prices)
+    total_servers_price = servers_price_per_month * months_in_period
+    
+    additional_devices = max(0, devices - settings.DEFAULT_DEVICE_LIMIT)
+    devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
+    total_devices_price = devices_price_per_month * months_in_period
+    
+    total_cost = base_price + total_traffic_price + total_servers_price + total_devices_price
+    
+    details = {
+        'base_price': base_price,
+        'traffic_price_per_month': traffic_price_per_month,
+        'total_traffic_price': total_traffic_price,
+        'servers_price_per_month': servers_price_per_month,
+        'total_servers_price': total_servers_price,
+        'devices_price_per_month': devices_price_per_month,
+        'total_devices_price': total_devices_price,
+        'months_in_period': months_in_period,
+        'servers_individual_prices': [price * months_in_period for price in servers_prices]
+    }
+    
+    logger.info(f"📊 Расчет стоимости подписки на {period_days} дней ({months_in_period} мес):")
+    logger.info(f"   Базовый период: {base_price/100}₽")
+    logger.info(f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
+    logger.info(f"   Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_price/100}₽")
+    logger.info(f"   Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
+    logger.info(f"   ИТОГО: {total_cost/100}₽")
+    
+    return total_cost, details
+    
 async def get_subscription_server_ids(
     db: AsyncSession,
     subscription_id: int
@@ -497,30 +578,43 @@ async def get_subscription_renewal_cost(
     period_days: int
 ) -> int:
     try:
-        from app.config import PERIOD_PRICES, TRAFFIC_PRICES, settings
+        from app.config import PERIOD_PRICES
+        
+        months_in_period = calculate_months_from_days(period_days)
         
         base_price = PERIOD_PRICES.get(period_days, 0)
-        
-        servers_info = await get_subscription_servers(db, subscription_id)
-        servers_cost = sum(server_info['paid_price_kopeks'] for server_info in servers_info)
         
         subscription = await db.get(Subscription, subscription_id)
         if not subscription:
             return base_price
         
-        traffic_cost = 0
-        if subscription.traffic_limit_gb > 0:
-            traffic_cost = TRAFFIC_PRICES.get(subscription.traffic_limit_gb, 0)
+        servers_info = await get_subscription_servers(db, subscription_id)
+        servers_price_per_month = 0
+        for server_info in servers_info:
+            from app.database.models import ServerSquad
+            result = await db.execute(
+                select(ServerSquad.price_kopeks)
+                .where(ServerSquad.id == server_info['server_id'])
+            )
+            current_server_price = result.scalar() or 0
+            servers_price_per_month += current_server_price
         
-        devices_cost = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
+        total_servers_cost = servers_price_per_month * months_in_period
         
-        total_cost = base_price + servers_cost + traffic_cost + devices_cost
+        traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
+        total_traffic_cost = traffic_price_per_month * months_in_period
         
-        logger.info(f"💰 Расчет продления подписки {subscription_id} на {period_days} дней:")
+        additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
+        devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
+        total_devices_cost = devices_price_per_month * months_in_period
+        
+        total_cost = base_price + total_servers_cost + total_traffic_cost + total_devices_cost
+        
+        logger.info(f"💰 Расчет продления подписки {subscription_id} на {period_days} дней ({months_in_period} мес):")
         logger.info(f"   📅 Период: {base_price/100}₽")
-        logger.info(f"   🌍 Серверы: {servers_cost/100}₽")
-        logger.info(f"   📊 Трафик: {traffic_cost/100}₽")
-        logger.info(f"   📱 Устройства: {devices_cost/100}₽")
+        logger.info(f"   🌍 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_cost/100}₽")
+        logger.info(f"   📊 Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_cost/100}₽")
+        logger.info(f"   📱 Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_cost/100}₽")
         logger.info(f"   💎 ИТОГО: {total_cost/100}₽")
         
         return total_cost
@@ -529,6 +623,49 @@ async def get_subscription_renewal_cost(
         logger.error(f"Ошибка расчета стоимости продления: {e}")
         from app.config import PERIOD_PRICES
         return PERIOD_PRICES.get(period_days, 0)
+
+async def calculate_addon_cost_for_remaining_period(
+    db: AsyncSession,
+    subscription: Subscription,
+    additional_traffic_gb: int = 0,
+    additional_devices: int = 0,
+    additional_server_ids: List[int] = None
+) -> int:
+    if additional_server_ids is None:
+        additional_server_ids = []
+    
+    months_to_pay = get_remaining_months(subscription.end_date)
+    
+    total_cost = 0
+    
+    if additional_traffic_gb > 0:
+        traffic_price_per_month = settings.get_traffic_price(additional_traffic_gb)
+        traffic_total_cost = traffic_price_per_month * months_to_pay
+        total_cost += traffic_total_cost
+        logger.info(f"Трафик +{additional_traffic_gb}ГБ: {traffic_price_per_month/100}₽/мес × {months_to_pay} = {traffic_total_cost/100}₽")
+    
+    if additional_devices > 0:
+        devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
+        devices_total_cost = devices_price_per_month * months_to_pay
+        total_cost += devices_total_cost
+        logger.info(f"Устройства +{additional_devices}: {devices_price_per_month/100}₽/мес × {months_to_pay} = {devices_total_cost/100}₽")
+    
+    if additional_server_ids:
+        from app.database.models import ServerSquad
+        for server_id in additional_server_ids:
+            result = await db.execute(
+                select(ServerSquad.price_kopeks, ServerSquad.display_name)
+                .where(ServerSquad.id == server_id)
+            )
+            server_data = result.first()
+            if server_data:
+                server_price_per_month, server_name = server_data
+                server_total_cost = server_price_per_month * months_to_pay
+                total_cost += server_total_cost
+                logger.info(f"Сервер {server_name}: {server_price_per_month/100}₽/мес × {months_to_pay} = {server_total_cost/100}₽")
+    
+    logger.info(f"💰 Итого доплата за {months_to_pay} мес: {total_cost/100}₽")
+    return total_cost
 
 async def expire_subscription(
     db: AsyncSession,
