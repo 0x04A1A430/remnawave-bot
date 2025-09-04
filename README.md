@@ -130,6 +130,9 @@ TRIAL_SQUAD_UUID=
 # Сколько устройств доступно по дефолту при покупке платной подписки
 DEFAULT_DEVICE_LIMIT=3
 
+# Максимум устройств достопных к покупке (0 = Нет лимита)
+MAX_DEVICES_LIMIT=15
+
 # Дефолт параметры для подписок выданных через админку
 DEFAULT_TRAFFIC_LIMIT_GB=100
 
@@ -163,16 +166,10 @@ PRICE_90_DAYS=36900
 PRICE_180_DAYS=69900
 PRICE_360_DAYS=109900
 
-# Цены за трафик
-PRICE_TRAFFIC_5GB=1000
-PRICE_TRAFFIC_10GB=2000
-PRICE_TRAFFIC_25GB=3000
-PRICE_TRAFFIC_50GB=4000
-PRICE_TRAFFIC_100GB=6000
-PRICE_TRAFFIC_250GB=10000
-PRICE_TRAFFIC_UNLIMITED=15000
+# Выводимые пакеты трафика и их цены в копейках
+TRAFFIC_PACKAGES_CONFIG="5:2000:false,10:3500:false,25:7000:false,50:11000:true,100:15000:true,250:17000:false,500:19000:false,1000:19500:true,0:20000:true"
 
-# Цена за дополнительное устройство
+# Цена за дополнительное устройство (DEFAULT_DEVICE_LIMIT идет бесплатно!)
 PRICE_PER_DEVICE=5000
 
 # ===== РЕФЕРАЛЬНАЯ СИСТЕМА =====
