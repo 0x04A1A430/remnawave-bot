@@ -1381,10 +1381,14 @@ async def show_server_selection(
     db_user: User,
     db: AsyncSession
 ):
-    user_id = int(callback.data.split('_')[-1])
+    if callback.data.startswith("admin_user_change_server_"):
+        user_id = int(callback.data.split('_')[-1])
+    elif callback.data.startswith("admin_user_toggle_server_"):
+        user_id = int(callback.data.split('_')[4]) 
+    else:
+        user_id = int(callback.data.split('_')[4])
     
     try:
-        # Получаем текущие серверы пользователя
         user = await get_user_by_id(db, user_id)
         current_squads = []
         if user and user.subscription:
@@ -1406,7 +1410,6 @@ async def show_server_selection(
         
         keyboard = []
         for server in servers[:15]:
-            # Проверяем, выбран ли этот сервер
             is_selected = server.squad_uuid in current_squads
             
             if is_selected:
