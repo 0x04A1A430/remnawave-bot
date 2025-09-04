@@ -40,6 +40,12 @@ from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 from app.services.referral_service import process_referral_purchase
+from app.utils.pricing_utils import (
+    calculate_months_from_days,
+    get_remaining_months,
+    calculate_prorated_price,
+    validate_pricing_calculation
+)
 
 logger = logging.getLogger(__name__)
 
@@ -451,7 +457,7 @@ async def handle_add_countries(
     subscription = db_user.subscription
     
     if not subscription or subscription.is_trial:
-        await callback.answer("❌ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer("⚠ Эта функция доступна только для платных подписок", show_alert=True)
         return
     
     countries = await _get_available_countries()
@@ -484,7 +490,8 @@ async def handle_add_countries(
             countries, 
             current_countries.copy(), 
             current_countries, 
-            db_user.language
+            db_user.language,
+            subscription.end_date
         ),
         parse_mode="HTML"
     )
@@ -533,7 +540,7 @@ async def handle_manage_country(
     
     subscription = db_user.subscription
     if not subscription or subscription.is_trial:
-        await callback.answer("❌ Только для платных подписок", show_alert=True)
+        await callback.answer("⚠ Только для платных подписок", show_alert=True)
         return
     
     data = await state.get_data()
@@ -558,13 +565,14 @@ async def handle_manage_country(
                 countries, 
                 current_selected, 
                 subscription.connected_squads, 
-                db_user.language
+                db_user.language,
+                subscription.end_date 
             )
         )
         logger.info(f"✅ Клавиатура обновлена")
         
     except Exception as e:
-        logger.error(f"❌ Ошибка обновления клавиатуры: {e}")
+        logger.error(f"⚠ Ошибка обновления клавиатуры: {e}")
     
     await callback.answer()
 
@@ -574,6 +582,8 @@ async def apply_countries_changes(
     db: AsyncSession,
     state: FSMContext
 ):
+    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
+    
     logger.info(f"🔍 Применение изменений стран")
     
     data = await state.get_data()
@@ -593,44 +603,58 @@ async def apply_countries_changes(
     logger.info(f"🔍 Добавлено: {added}, Удалено: {removed}")
     
     countries = await _get_available_countries()
-    cost = 0
+    
+    # Рассчитываем оставшиеся месяцы подписки для новых серверов
+    months_to_pay = get_remaining_months(subscription.end_date)
+    
+    cost_per_month = 0
     added_names = []
     removed_names = []
     
     added_server_prices = []
-    added_server_ids = []
     
     for country in countries:
         if country['uuid'] in added:
-            cost += country['price_kopeks']
+            server_price_per_month = country['price_kopeks']
+            cost_per_month += server_price_per_month
             added_names.append(country['name'])
-            added_server_prices.append(country['price_kopeks'])
         if country['uuid'] in removed:
             removed_names.append(country['name'])
     
-    if cost > 0 and db_user.balance_kopeks < cost:
+    total_cost, charged_months = calculate_prorated_price(cost_per_month, subscription.end_date)
+    
+    # Рассчитываем цены для каждого сервера за весь период
+    for country in countries:
+        if country['uuid'] in added:
+            server_price_per_month = country['price_kopeks']
+            server_total_price = server_price_per_month * charged_months
+            added_server_prices.append(server_total_price)
+    
+    logger.info(f"Стоимость новых серверов: {cost_per_month/100}₽/мес × {charged_months} мес = {total_cost/100}₽")
+    
+    if total_cost > 0 and db_user.balance_kopeks < total_cost:
         await callback.answer(
-            f"❌ Недостаточно средств!\nТребуется: {texts.format_price(cost)}\nУ вас: {texts.format_price(db_user.balance_kopeks)}", 
+            f"⚠ Недостаточно средств!\nТребуется: {texts.format_price(total_cost)} (за {charged_months} мес)\nУ вас: {texts.format_price(db_user.balance_kopeks)}", 
             show_alert=True
         )
         return
     
     try:
-        if added and cost > 0:
+        if added and total_cost > 0:
             success = await subtract_user_balance(
-                db, db_user, cost, 
-                f"Добавление стран: {', '.join(added_names)}"
+                db, db_user, total_cost, 
+                f"Добавление стран: {', '.join(added_names)} на {charged_months} мес"
             )
             if not success:
-                await callback.answer("❌ Ошибка списания средств", show_alert=True)
+                await callback.answer("⚠ Ошибка списания средств", show_alert=True)
                 return
             
             await create_transaction(
                 db=db,
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
-                amount_kopeks=cost,
-                description=f"Добавление стран к подписке: {', '.join(added_names)}"
+                amount_kopeks=total_cost,
+                description=f"Добавление стран к подписке: {', '.join(added_names)} на {charged_months} мес"
             )
         
         if added:
@@ -643,7 +667,7 @@ async def apply_countries_changes(
                 await add_subscription_servers(db, subscription, added_server_ids, added_server_prices)
                 await add_user_to_servers(db, added_server_ids)
                 
-                logger.info(f"📊 Добавлены серверы с ценами: {list(zip(added_server_ids, added_server_prices))}")
+                logger.info(f"📊 Добавлены серверы с ценами за {charged_months} мес: {list(zip(added_server_ids, added_server_prices))}")
         
         subscription.connected_squads = selected_countries
         subscription.updated_at = datetime.utcnow()
@@ -652,12 +676,12 @@ async def apply_countries_changes(
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
         
-        if cost > 0:
+        if total_cost > 0:
             try:
                 await process_referral_purchase(
                     db=db,
                     user_id=db_user.id,
-                    purchase_amount_kopeks=cost,
+                    purchase_amount_kopeks=total_cost,
                     transaction_id=None
                 )
             except Exception as e:
@@ -670,8 +694,8 @@ async def apply_countries_changes(
         if added_names:
             success_text += f"➕ <b>Добавлены страны:</b>\n"
             success_text += "\n".join(f"• {name}" for name in added_names)
-            if cost > 0:
-                success_text += f"\n💰 Списано: {texts.format_price(cost)}"
+            if total_cost > 0:
+                success_text += f"\n💰 Списано: {texts.format_price(total_cost)} (за {charged_months} мес)"
             success_text += "\n"
         
         if removed_names:
@@ -688,10 +712,10 @@ async def apply_countries_changes(
         )
         
         await state.clear()
-        logger.info(f"✅ Пользователь {db_user.telegram_id} обновил страны. Добавлено: {len(added)}, удалено: {len(removed)}")
+        logger.info(f"✅ Пользователь {db_user.telegram_id} обновил страны. Добавлено: {len(added)}, удалено: {len(removed)}, заплатил: {total_cost/100}₽")
         
     except Exception as e:
-        logger.error(f"❌ Ошибка применения изменений: {e}")
+        logger.error(f"⚠ Ошибка применения изменений: {e}")
         await callback.message.edit_text(
             texts.ERROR,
             reply_markup=get_back_keyboard(db_user.language)
@@ -715,11 +739,11 @@ async def handle_add_traffic(
     subscription = db_user.subscription
     
     if not subscription or subscription.is_trial:
-        await callback.answer("⌛ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer("⚠ Эта функция доступна только для платных подписок", show_alert=True)
         return
     
     if subscription.traffic_limit_gb == 0:
-        await callback.answer("⌛ У вас уже безлимитный трафик", show_alert=True)
+        await callback.answer("⚠ У вас уже безлимитный трафик", show_alert=True)
         return
     
     current_traffic = subscription.traffic_limit_gb
@@ -728,23 +752,23 @@ async def handle_add_traffic(
         f"📈 <b>Добавить трафик к подписке</b>\n\n"
         f"Текущий лимит: {texts.format_traffic(current_traffic)}\n"
         f"Выберите дополнительный трафик:",
-        reply_markup=get_add_traffic_keyboard(db_user.language)
+        reply_markup=get_add_traffic_keyboard(db_user.language, subscription.end_date),
+        parse_mode="HTML"
     )
     
     await callback.answer()
-
+    
 
 async def handle_add_devices(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession
 ):
-    
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
     if not subscription or subscription.is_trial:
-        await callback.answer("❌ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer("⚠ Эта функция доступна только для платных подписок", show_alert=True)
         return
     
     current_devices = subscription.device_limit
@@ -753,7 +777,8 @@ async def handle_add_devices(
         f"📱 <b>Добавить устройства к подписке</b>\n\n"
         f"Текущий лимит: {current_devices} устройств\n"
         f"Выберите количество дополнительных устройств:",
-        reply_markup=get_add_devices_keyboard(current_devices, db_user.language)
+        reply_markup=get_add_devices_keyboard(current_devices, db_user.language, subscription.end_date),
+        parse_mode="HTML"
     )
     
     await callback.answer()
@@ -764,15 +789,17 @@ async def handle_extend_subscription(
     db_user: User,
     db: AsyncSession
 ):
+    from app.utils.pricing_utils import calculate_months_from_days, format_period_description
+    
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
     if not subscription or subscription.is_trial:
-        await callback.answer("⌛ Продление доступно только для платных подписок", show_alert=True)
+        await callback.answer("⚠ Продление доступно только для платных подписок", show_alert=True)
         return
     
     if subscription.days_left > 3:
-        await callback.answer("⌛ Продление доступно за 3 дня до окончания подписки", show_alert=True)
+        await callback.answer("⚠ Продление доступно за 3 дня до окончания подписки", show_alert=True)
         return
     
     subscription_service = SubscriptionService()
@@ -782,29 +809,40 @@ async def handle_extend_subscription(
     
     for days in available_periods:
         try:
-            price = await subscription_service.calculate_renewal_price(subscription, days, db)
+            months_in_period = calculate_months_from_days(days)
+            
+            from app.config import PERIOD_PRICES
+            base_price = PERIOD_PRICES.get(days, 0)
+            
+            servers_price_per_month, _ = await subscription_service.get_countries_price_by_uuids(
+                subscription.connected_squads, db
+            )
+            total_servers_price = servers_price_per_month * months_in_period
+            
+            additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
+            devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
+            total_devices_price = devices_price_per_month * months_in_period
+            
+            traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
+            total_traffic_price = traffic_price_per_month * months_in_period
+            
+            price = base_price + total_servers_price + total_devices_price + total_traffic_price
             renewal_prices[days] = price
+            
         except Exception as e:
             logger.error(f"Ошибка расчета цены для периода {days}: {e}")
             continue
     
     if not renewal_prices:
-        await callback.answer("⌛ Нет доступных периодов для продления", show_alert=True)
+        await callback.answer("⚠ Нет доступных периодов для продления", show_alert=True)
         return
     
     prices_text = ""
-    period_display = {
-        14: "14 дней",
-        30: "30 дней", 
-        60: "60 дней",
-        90: "90 дней",
-        180: "180 дней",
-        360: "360 дней"
-    }
     
     for days in available_periods:
-        if days in renewal_prices and days in period_display:
-            prices_text += f"📅 {period_display[days]} - {texts.format_price(renewal_prices[days])}\n"
+        if days in renewal_prices:
+            period_display = format_period_description(days, db_user.language)
+            prices_text += f"📅 {period_display} - {texts.format_price(renewal_prices[days])}\n"
     
     await callback.message.edit_text(
         f"⏰ Продление подписки\n\n"
@@ -869,17 +907,18 @@ async def confirm_add_traffic(
     db_user: User,
     db: AsyncSession
 ):
-    from app.config import settings
-    
-    if settings.is_traffic_fixed():
-        await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
-        return
+    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
     
     traffic_gb = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
-    price = settings.get_traffic_price(traffic_gb)
+    months_to_pay = get_remaining_months(subscription.end_date)
+    
+    traffic_price_per_month = settings.get_traffic_price(traffic_gb)
+    price, charged_months = calculate_prorated_price(traffic_price_per_month, subscription.end_date)
+    
+    logger.info(f"Добавление трафика {traffic_gb}ГБ: {traffic_price_per_month/100}₽/мес × {charged_months} мес = {price/100}₽")
     
     if price == 0 and traffic_gb != 0:
         await callback.answer("⚠️ Цена для этого пакета не настроена", show_alert=True)
@@ -892,7 +931,7 @@ async def confirm_add_traffic(
     try:
         success = await subtract_user_balance(
             db, db_user, price,
-            f"Добавление {traffic_gb} ГБ трафика"
+            f"Добавление {traffic_gb} ГБ трафика на {charged_months} мес"
         )
         
         if not success:
@@ -912,7 +951,7 @@ async def confirm_add_traffic(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=price,
-            description=f"Добавление {traffic_gb} ГБ трафика"
+            description=f"Добавление {traffic_gb} ГБ трафика на {charged_months} мес"
         )
         
         try:
@@ -935,12 +974,14 @@ async def confirm_add_traffic(
             success_text += f"📈 Добавлено: {traffic_gb} ГБ\n"
             success_text += f"Новый лимит: {texts.format_traffic(subscription.traffic_limit_gb)}"
         
+        success_text += f"\n💰 Списано: {texts.format_price(price)} (за {charged_months} мес)"
+        
         await callback.message.edit_text(
             success_text,
             reply_markup=get_back_keyboard(db_user.language)
         )
         
-        logger.info(f"✅ Пользователь {db_user.telegram_id} добавил {traffic_gb} ГБ трафика")
+        logger.info(f"✅ Пользователь {db_user.telegram_id} добавил {traffic_gb} ГБ трафика за {price/100}₽")
         
     except Exception as e:
         logger.error(f"Ошибка добавления трафика: {e}")
@@ -962,6 +1003,7 @@ async def confirm_add_devices(
     db_user: User,
     db: AsyncSession
 ):
+    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
     
     devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
@@ -977,7 +1019,10 @@ async def confirm_add_devices(
         )
         return
     
-    price = devices_count * settings.PRICE_PER_DEVICE
+    devices_price_per_month = devices_count * settings.PRICE_PER_DEVICE
+    price, charged_months = calculate_prorated_price(devices_price_per_month, subscription.end_date)
+    
+    logger.info(f"Добавление {devices_count} устройств: {devices_price_per_month/100}₽/мес × {charged_months} мес = {price/100}₽")
     
     if db_user.balance_kopeks < price:
         await callback.answer("⚠️ Недостаточно средств на балансе", show_alert=True)
@@ -986,7 +1031,7 @@ async def confirm_add_devices(
     try:
         success = await subtract_user_balance(
             db, db_user, price,
-            f"Добавление {devices_count} устройств"
+            f"Добавление {devices_count} устройств на {charged_months} мес"
         )
         
         if not success:
@@ -1003,7 +1048,7 @@ async def confirm_add_devices(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=price,
-            description=f"Добавление {devices_count} устройств"
+            description=f"Добавление {devices_count} устройств на {charged_months} мес"
         )
         
         try:
@@ -1022,11 +1067,12 @@ async def confirm_add_devices(
         await callback.message.edit_text(
             f"✅ Устройства успешно добавлены!\n\n"
             f"📱 Добавлено: {devices_count} устройств\n"
-            f"Новый лимит: {subscription.device_limit} устройств",
+            f"Новый лимит: {subscription.device_limit} устройств\n"
+            f"💰 Списано: {texts.format_price(price)} (за {charged_months} мес)",
             reply_markup=get_back_keyboard(db_user.language)
         )
         
-        logger.info(f"✅ Пользователь {db_user.telegram_id} добавил {devices_count} устройств")
+        logger.info(f"✅ Пользователь {db_user.telegram_id} добавил {devices_count} устройств за {price/100}₽")
         
     except Exception as e:
         logger.error(f"Ошибка добавления устройств: {e}")
@@ -1043,37 +1089,70 @@ async def confirm_extend_subscription(
     db_user: User,
     db: AsyncSession
 ):
+    from app.utils.pricing_utils import calculate_months_from_days, validate_pricing_calculation
+    
     days = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
     if not subscription:
-        await callback.answer("❌ У вас нет активной подписки", show_alert=True)
+        await callback.answer("⚠ У вас нет активной подписки", show_alert=True)
         return
     
-    subscription_service = SubscriptionService()
+    months_in_period = calculate_months_from_days(days)
     
     try:
-        price = await subscription_service.calculate_renewal_price(subscription, days, db)
+        from app.config import PERIOD_PRICES
+        
+        base_price = PERIOD_PRICES.get(days, 0)
+        
+        subscription_service = SubscriptionService()
+        servers_price_per_month, _ = await subscription_service.get_countries_price_by_uuids(
+            subscription.connected_squads, db
+        )
+        total_servers_price = servers_price_per_month * months_in_period
+        
+        additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
+        devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
+        total_devices_price = devices_price_per_month * months_in_period
+        
+        traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
+        total_traffic_price = traffic_price_per_month * months_in_period
+        
+        price = base_price + total_servers_price + total_devices_price + total_traffic_price
+        
+        monthly_additions = servers_price_per_month + devices_price_per_month + traffic_price_per_month
+        is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, price)
+        
+        if not is_valid:
+            logger.error(f"Ошибка в расчете цены продления для пользователя {db_user.telegram_id}")
+            await callback.answer("Ошибка расчета цены. Обратитесь в поддержку.", show_alert=True)
+            return
+        
+        logger.info(f"💰 Расчет продления подписки {subscription.id} на {days} дней ({months_in_period} мес):")
+        logger.info(f"   📅 Период {days} дней: {base_price/100}₽")
+        logger.info(f"   🌍 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_price/100}₽")
+        logger.info(f"   📱 Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
+        logger.info(f"   📊 Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
+        logger.info(f"   💎 ИТОГО: {price/100}₽")
+        
     except Exception as e:
-        logger.error(f"❌ ОШИБКА РАСЧЕТА ЦЕНЫ: {e}")
-        await callback.answer("❌ Ошибка расчета стоимости", show_alert=True)
+        logger.error(f"⚠ ОШИБКА РАСЧЕТА ЦЕНЫ: {e}")
+        await callback.answer("⚠ Ошибка расчета стоимости", show_alert=True)
         return
     
     if db_user.balance_kopeks < price:
-        await callback.answer("❌ Недостаточно средств на балансе", show_alert=True)
+        await callback.answer("⚠ Недостаточно средств на балансе", show_alert=True)
         return
     
     try:
-        logger.info(f"🔄 Начинаем продление подписки {subscription.id} на {days} дней за {price/100}₽")
-        
         success = await subtract_user_balance(
             db, db_user, price,
             f"Продление подписки на {days} дней"
         )
         
         if not success:
-            await callback.answer("❌ Ошибка списания средств", show_alert=True)
+            await callback.answer("⚠ Ошибка списания средств", show_alert=True)
             return
         
         current_time = datetime.utcnow()
@@ -1090,26 +1169,30 @@ async def confirm_extend_subscription(
         await db.refresh(subscription)
         await db.refresh(db_user)
         
+        from app.database.crud.server_squad import get_server_ids_by_uuids
+        from app.database.crud.subscription import add_subscription_servers
+        
+        server_ids = await get_server_ids_by_uuids(db, subscription.connected_squads)
+        if server_ids:
+            server_prices_for_period = [total_servers_price // len(server_ids)] * len(server_ids)
+            await add_subscription_servers(db, subscription, server_ids, server_prices_for_period)
+        
         try:
             remnawave_result = await subscription_service.update_remnawave_user(db, subscription)
             if remnawave_result:
                 logger.info(f"✅ RemnaWave обновлен успешно")
             else:
-                logger.error(f"❌ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE")
+                logger.error(f"⚠ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE")
         except Exception as e:
-            logger.error(f"❌ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE: {e}")
+            logger.error(f"⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE: {e}")
         
-        try:
-            transaction = await create_transaction(
-                db=db,
-                user_id=db_user.id,
-                type=TransactionType.SUBSCRIPTION_PAYMENT,
-                amount_kopeks=price,
-                description=f"Продление подписки на {days} дней"
-            )
-            logger.info(f"✅ Транзакция создана: ID {transaction.id}")
-        except Exception as e:
-            logger.error(f"❌ ОШИБКА СОЗДАНИЯ ТРАНЗАКЦИИ: {e}")
+        await create_transaction(
+            db=db,
+            user_id=db_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=price,
+            description=f"Продление подписки на {days} дней ({months_in_period} мес)"
+        )
         
         try:
             await process_referral_purchase(
@@ -1118,9 +1201,8 @@ async def confirm_extend_subscription(
                 purchase_amount_kopeks=price,
                 transaction_id=None
             )
-            logger.info(f"✅ Рефералы обработаны")
         except Exception as e:
-            logger.error(f"❌ ОШИБКА ОБРАБОТКИ РЕФЕРАЛОВ: {e}")
+            logger.error(f"⚠ ОШИБКА ОБРАБОТКИ РЕФЕРАЛОВ: {e}")
         
         await callback.message.edit_text(
             f"✅ Подписка успешно продлена!\n\n"
@@ -1133,12 +1215,12 @@ async def confirm_extend_subscription(
         logger.info(f"✅ Пользователь {db_user.telegram_id} продлил подписку на {days} дней за {price/100}₽")
         
     except Exception as e:
-        logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ: {e}")
+        logger.error(f"⚠ КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ: {e}")
         import traceback
         logger.error(f"TRACEBACK: {traceback.format_exc()}")
         
         await callback.message.edit_text(
-            "❌ Произошла ошибка при продлении подписки. Обратитесь в поддержку.",
+            "⚠ Произошла ошибка при продлении подписки. Обратитесь в поддержку.",
             reply_markup=get_back_keyboard(db_user.language)
         )
     
@@ -1558,6 +1640,8 @@ async def devices_continue(
     db_user: User,
     db: AsyncSession
 ):
+    from app.utils.pricing_utils import calculate_months_from_days, format_period_description, validate_pricing_calculation
+    
     if not callback.data == "devices_continue":
         await callback.answer("⚠️ Некорректный запрос", show_alert=True)
         return
@@ -1568,30 +1652,48 @@ async def devices_continue(
     countries = await _get_available_countries()
     selected_countries_names = []
     
-    try:
-        subscription_service = SubscriptionService()
-        countries_price, _ = await subscription_service.get_countries_price_by_uuids(data['countries'], db)
-    except AttributeError:
-        logger.warning("Используем fallback функцию для расчета цен стран")
-        countries_price, _ = await get_countries_price_by_uuids_fallback(data['countries'], db)
-    
-    for country in countries:
-        if country['uuid'] in data['countries']:
-            selected_countries_names.append(country['name'])
+    months_in_period = calculate_months_from_days(data['period_days'])
+    period_display = format_period_description(data['period_days'], db_user.language)
     
     base_price = PERIOD_PRICES[data['period_days']]
     
     if settings.is_traffic_fixed():
-        traffic_price = settings.get_traffic_price(settings.get_fixed_traffic_limit())
+        traffic_price_per_month = settings.get_traffic_price(settings.get_fixed_traffic_limit())
         final_traffic_gb = settings.get_fixed_traffic_limit()
     else:
-        traffic_price = settings.get_traffic_price(data['traffic_gb'])
+        traffic_price_per_month = settings.get_traffic_price(data['traffic_gb'])
         final_traffic_gb = data['traffic_gb']
     
-    devices_price = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
-    total_price = base_price + traffic_price + countries_price + devices_price
+    total_traffic_price = traffic_price_per_month * months_in_period
+    
+    countries_price_per_month = 0
+    selected_server_prices = []
+    
+    for country in countries:
+        if country['uuid'] in data['countries']:
+            server_price_per_month = country['price_kopeks']
+            countries_price_per_month += server_price_per_month
+            selected_countries_names.append(country['name'])
+            selected_server_prices.append(server_price_per_month * months_in_period)
+    
+    total_countries_price = countries_price_per_month * months_in_period
+    
+    additional_devices = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT)
+    devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
+    total_devices_price = devices_price_per_month * months_in_period
+    
+    total_price = base_price + total_traffic_price + total_countries_price + total_devices_price
+    
+    monthly_additions = countries_price_per_month + devices_price_per_month + traffic_price_per_month
+    is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, total_price)
+    
+    if not is_valid:
+        logger.error(f"Ошибка в расчете цены подписки для пользователя {db_user.telegram_id}")
+        await callback.answer("Ошибка расчета цены. Обратитесь в поддержку.", show_alert=True)
+        return
     
     data['total_price'] = total_price
+    data['server_prices_for_period'] = selected_server_prices
     await state.set_data(data)
     
     if settings.is_traffic_fixed():
@@ -1608,12 +1710,18 @@ async def devices_continue(
     summary_text = f"""
 📋 <b>Сводка заказа</b>
 
-📅 <b>Период:</b> {data['period_days']} дней
+📅 <b>Период:</b> {period_display}
 📊 <b>Трафик:</b> {traffic_display}
 🌍 <b>Страны:</b> {", ".join(selected_countries_names)}
 📱 <b>Устройства:</b> {data['devices']}
 
-💰 <b>Общая стоимость:</b> {texts.format_price(total_price)}
+💰 <b>Детализация стоимости:</b>
+- Базовый период: {texts.format_price(base_price)}
+- Трафик: {texts.format_price(traffic_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_traffic_price)}
+- Серверы: {texts.format_price(countries_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_countries_price)}
+- Доп. устройства: {texts.format_price(devices_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_devices_price)}
+
+💎 <b>Общая стоимость:</b> {texts.format_price(total_price)}
 
 Подтверждаете покупку?
 """
@@ -1634,30 +1742,57 @@ async def confirm_purchase(
     db_user: User,
     db: AsyncSession
 ):
+    from app.utils.pricing_utils import calculate_months_from_days, validate_pricing_calculation
+    
     data = await state.get_data()
     texts = get_texts(db_user.language)
     
     countries = await _get_available_countries()
     
+    months_in_period = calculate_months_from_days(data['period_days'])
+    
     base_price = PERIOD_PRICES[data['period_days']]
     
-    countries_price = 0
+    countries_price_per_month = 0
     server_prices = []
     for country in countries:
         if country['uuid'] in data['countries']:
-            countries_price += country['price_kopeks']
-            server_prices.append(country['price_kopeks'])
+            server_price_per_month = country['price_kopeks']
+            server_price_total = server_price_per_month * months_in_period
+            countries_price_per_month += server_price_per_month
+            server_prices.append(server_price_total)
     
-    devices_price = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
+    total_countries_price = countries_price_per_month * months_in_period
+    
+    additional_devices = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT)
+    devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
+    total_devices_price = devices_price_per_month * months_in_period
     
     if settings.is_traffic_fixed():
-        traffic_price = settings.get_traffic_price(settings.get_fixed_traffic_limit())
+        traffic_price_per_month = settings.get_traffic_price(settings.get_fixed_traffic_limit())
         final_traffic_gb = settings.get_fixed_traffic_limit()
     else:
-        traffic_price = settings.get_traffic_price(data['traffic_gb'])
+        traffic_price_per_month = settings.get_traffic_price(data['traffic_gb'])
         final_traffic_gb = data['traffic_gb']
     
-    final_price = base_price + traffic_price + countries_price + devices_price
+    total_traffic_price = traffic_price_per_month * months_in_period
+    
+    final_price = base_price + total_traffic_price + total_countries_price + total_devices_price
+    
+    monthly_additions = countries_price_per_month + devices_price_per_month + traffic_price_per_month
+    is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, final_price)
+    
+    if not is_valid:
+        logger.error(f"Ошибка в расчете цены подписки для пользователя {db_user.telegram_id}")
+        await callback.answer("Ошибка расчета цены. Обратитесь в поддержку.", show_alert=True)
+        return
+    
+    logger.info(f"Расчет покупки подписки на {data['period_days']} дней ({months_in_period} мес):")
+    logger.info(f"   Период: {base_price/100}₽")
+    logger.info(f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
+    logger.info(f"   Серверы: {countries_price_per_month/100}₽/мес × {months_in_period} = {total_countries_price/100}₽")
+    logger.info(f"   Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
+    logger.info(f"   ИТОГО: {final_price/100}₽")
     
     if db_user.balance_kopeks < final_price:
         await callback.message.edit_text(
@@ -1684,7 +1819,7 @@ async def confirm_purchase(
         existing_subscription = db_user.subscription
         
         if existing_subscription:
-            logger.info(f"🔄 Обновляем существующую подписку пользователя {db_user.telegram_id}")
+            logger.info(f"Обновляем существующую подписку пользователя {db_user.telegram_id}")
             
             existing_subscription.is_trial = False
             existing_subscription.status = SubscriptionStatus.ACTIVE.value
@@ -1702,10 +1837,8 @@ async def confirm_purchase(
             await db.refresh(existing_subscription)
             subscription = existing_subscription
             
-            logger.info(f"✅ Подписка обновлена. Новая дата окончания: {subscription.end_date}")
-            
         else:
-            logger.info(f"🆕 Создаем новую подписку для пользователя {db_user.telegram_id}")
+            logger.info(f"Создаем новую подписку для пользователя {db_user.telegram_id}")
             subscription = await create_paid_subscription_with_traffic_mode(
                 db=db,
                 user_id=db_user.id,
@@ -1727,23 +1860,19 @@ async def confirm_purchase(
             await add_subscription_servers(db, subscription, server_ids, server_prices)
             await add_user_to_servers(db, server_ids)
             
-            logger.info(f"📊 Сохранены цены серверов: {server_prices}")
-            logger.info(f"📊 Обновлены счетчики пользователей для серверов: {server_ids}")
+            logger.info(f"Сохранены цены серверов за весь период: {server_prices}")
         
         await db.refresh(db_user)
         
         subscription_service = SubscriptionService()
         
         if db_user.remnawave_uuid:
-            logger.info(f"🔄 Обновляем существующего RemnaWave пользователя {db_user.remnawave_uuid}")
             remnawave_user = await subscription_service.update_remnawave_user(db, subscription)
         else:
-            logger.info(f"🆕 Создаем нового RemnaWave пользователя для {db_user.telegram_id}")
             remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
             
         if not remnawave_user:
-            logger.error(f"⚠️ Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}")
-            logger.info(f"🔄 Fallback: принудительное создание нового RemnaWave пользователя")
+            logger.error(f"Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}")
             remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
         
         await create_transaction(
@@ -1751,7 +1880,7 @@ async def confirm_purchase(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=final_price,
-            description=f"Подписка на {data['period_days']} дней"
+            description=f"Подписка на {data['period_days']} дней ({months_in_period} мес)"
         )
         
         try:
@@ -1769,7 +1898,7 @@ async def confirm_purchase(
         
         if remnawave_user and hasattr(subscription, 'subscription_url') and subscription.subscription_url:
             success_text = f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
-            success_text += f"🔗 <b>Ваша ссылка для подключения:</b>\n"
+            success_text += f"📗 <b>Ваша ссылка для подключения:</b>\n"
             success_text += f"<code>{subscription.subscription_url}</code>\n\n"
             success_text += f"📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве"
     
@@ -1796,7 +1925,7 @@ async def confirm_purchase(
                 reply_markup=get_back_keyboard(db_user.language)
             )
         
-        logger.info(f"✅ Пользователь {db_user.telegram_id} купил подписку на {data['period_days']} дней")
+        logger.info(f"✅ Пользователь {db_user.telegram_id} купил подписку на {data['period_days']} дней за {final_price/100}₽")
         
     except Exception as e:
         logger.error(f"Ошибка покупки подписки: {e}")
