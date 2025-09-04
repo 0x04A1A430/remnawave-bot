@@ -8,7 +8,7 @@ import json
 import os
 from typing import Dict, List, Any, Tuple, Optional
 
-from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
+from app.config import settings, PERIOD_PRICES, get_traffic_prices
 from app.states import SubscriptionStates
 from app.database.crud.subscription import (
     get_subscription_by_user_id, create_trial_subscription, 
@@ -43,6 +43,7 @@ from app.services.referral_service import process_referral_purchase
 
 logger = logging.getLogger(__name__)
 
+TRAFFIC_PRICES = get_traffic_prices()
 
 async def show_subscription_info(
     callback: types.CallbackQuery,
@@ -274,7 +275,7 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
         if subscription.is_trial:
             return 0
         
-        from app.config import TRAFFIC_PRICES, PERIOD_PRICES, settings
+        from app.config import settings
         from app.services.subscription_service import SubscriptionService
         
         subscription_service = SubscriptionService()
@@ -290,7 +291,7 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
                 subscription.connected_squads, db
             )
         
-        traffic_cost = TRAFFIC_PRICES.get(subscription.traffic_limit_gb, 0)
+        traffic_cost = settings.get_traffic_price(subscription.traffic_limit_gb)
         devices_cost = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
         
         total_cost = base_cost + servers_cost + traffic_cost + devices_cost
@@ -305,7 +306,7 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
         return total_cost
         
     except Exception as e:
-        logger.error(f"⚠ Ошибка расчета стоимости подписки: {e}")
+        logger.error(f"⚠️ Ошибка расчета стоимости подписки: {e}")
         return 0
 
 
@@ -878,10 +879,14 @@ async def confirm_add_traffic(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
-    price = TRAFFIC_PRICES[traffic_gb]
+    price = settings.get_traffic_price(traffic_gb)
+    
+    if price == 0 and traffic_gb != 0:
+        await callback.answer("⚠️ Цена для этого пакета не настроена", show_alert=True)
+        return
     
     if db_user.balance_kopeks < price:
-        await callback.answer("⌛ Недостаточно средств на балансе", show_alert=True)
+        await callback.answer("⚠️ Недостаточно средств на балансе", show_alert=True)
         return
     
     try:
@@ -891,7 +896,7 @@ async def confirm_add_traffic(
         )
         
         if not success:
-            await callback.answer("⌛ Ошибка списания средств", show_alert=True)
+            await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
             return
         
         if traffic_gb == 0: 
@@ -945,6 +950,11 @@ async def confirm_add_traffic(
         )
     
     await callback.answer()
+
+def update_traffic_prices():
+    from app.config import refresh_traffic_prices
+    refresh_traffic_prices()
+    logger.info("🔄 TRAFFIC_PRICES обновлены из конфигурации")
 
 
 async def confirm_add_devices(
@@ -1249,12 +1259,19 @@ async def select_period(
     data['total_price'] = PERIOD_PRICES[period_days]
     
     if settings.is_traffic_fixed():
-        fixed_traffic_price = TRAFFIC_PRICES.get(settings.get_fixed_traffic_limit(), 0)
+        fixed_traffic_price = settings.get_traffic_price(settings.get_fixed_traffic_limit())
         data['total_price'] += fixed_traffic_price
+        data['traffic_gb'] = settings.get_fixed_traffic_limit()
     
     await state.set_data(data)
     
     if settings.is_traffic_selectable():
+        available_packages = [pkg for pkg in settings.get_traffic_packages() if pkg['enabled']]
+        
+        if not available_packages:
+            await callback.answer("⚠️ Пакеты трафика не настроены", show_alert=True)
+            return
+            
         await callback.message.edit_text(
             texts.SELECT_TRAFFIC,
             reply_markup=get_traffic_packages_keyboard(db_user.language)
@@ -1281,6 +1298,56 @@ async def select_period(
             await state.set_state(SubscriptionStates.selecting_devices)
     
     await callback.answer()
+
+async def refresh_traffic_config():
+    try:
+        from app.config import refresh_traffic_prices
+        refresh_traffic_prices()
+        
+        packages = settings.get_traffic_packages()
+        enabled_count = sum(1 for pkg in packages if pkg['enabled'])
+        
+        logger.info(f"🔄 Конфигурация трафика обновлена: {enabled_count} активных пакетов")
+        for pkg in packages:
+            if pkg['enabled']:
+                gb_text = "♾️ Безлимит" if pkg['gb'] == 0 else f"{pkg['gb']} ГБ"
+                logger.info(f"   📦 {gb_text}: {pkg['price']/100}₽")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"⚠️ Ошибка обновления конфигурации трафика: {e}")
+        return False
+
+async def get_traffic_packages_info() -> str:
+    try:
+        packages = settings.get_traffic_packages()
+        
+        info_lines = ["📦 Настроенные пакеты трафика:"]
+        
+        enabled_packages = [pkg for pkg in packages if pkg['enabled']]
+        disabled_packages = [pkg for pkg in packages if not pkg['enabled']]
+        
+        if enabled_packages:
+            info_lines.append("\n✅ Активные:")
+            for pkg in enabled_packages:
+                gb_text = "♾️ Безлимит" if pkg['gb'] == 0 else f"{pkg['gb']} ГБ"
+                info_lines.append(f"   • {gb_text}: {pkg['price']/100}₽")
+        
+        if disabled_packages:
+            info_lines.append("\n❌ Отключенные:")
+            for pkg in disabled_packages:
+                gb_text = "♾️ Безлимит" if pkg['gb'] == 0 else f"{pkg['gb']} ГБ"
+                info_lines.append(f"   • {gb_text}: {pkg['price']/100}₽")
+        
+        info_lines.append(f"\n📊 Всего пакетов: {len(packages)}")
+        info_lines.append(f"🟢 Активных: {len(enabled_packages)}")
+        info_lines.append(f"🔴 Отключенных: {len(disabled_packages)}")
+        
+        return "\n".join(info_lines)
+        
+    except Exception as e:
+        return f"⚠️ Ошибка получения информации: {e}"
 
 async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSession):
     
@@ -1360,7 +1427,10 @@ async def select_traffic(
     
     data = await state.get_data()
     data['traffic_gb'] = traffic_gb
-    data['total_price'] += TRAFFIC_PRICES[traffic_gb]
+    
+    traffic_price = settings.get_traffic_price(traffic_gb)
+    data['total_price'] += traffic_price
+    
     await state.set_data(data)
     
     if await _should_show_countries_management():
@@ -1391,7 +1461,6 @@ async def select_country(
     db_user: User,
     db: AsyncSession
 ):
-    
     country_uuid = callback.data.split('_')[1]
     data = await state.get_data()
     
@@ -1403,7 +1472,7 @@ async def select_country(
     
     countries = await _get_available_countries()
     
-    base_price = PERIOD_PRICES[data['period_days']] + TRAFFIC_PRICES[data['traffic_gb']]
+    base_price = PERIOD_PRICES[data['period_days']] + settings.get_traffic_price(data['traffic_gb'])
     
     try:
         subscription_service = SubscriptionService()
@@ -1463,7 +1532,7 @@ async def select_devices(
     
     base_price = (
         PERIOD_PRICES[data['period_days']] + 
-        TRAFFIC_PRICES[data['traffic_gb']]
+        settings.get_traffic_price(data['traffic_gb'])
     )
     
     countries = await _get_available_countries()
@@ -1490,7 +1559,7 @@ async def devices_continue(
     db: AsyncSession
 ):
     if not callback.data == "devices_continue":
-        await callback.answer("⌛ Некорректный запрос", show_alert=True)
+        await callback.answer("⚠️ Некорректный запрос", show_alert=True)
         return
     
     data = await state.get_data()
@@ -1513,9 +1582,11 @@ async def devices_continue(
     base_price = PERIOD_PRICES[data['period_days']]
     
     if settings.is_traffic_fixed():
-        traffic_price = TRAFFIC_PRICES.get(data['traffic_gb'], 0)
+        traffic_price = settings.get_traffic_price(settings.get_fixed_traffic_limit())
+        final_traffic_gb = settings.get_fixed_traffic_limit()
     else:
-        traffic_price = TRAFFIC_PRICES.get(data['traffic_gb'], 0)
+        traffic_price = settings.get_traffic_price(data['traffic_gb'])
+        final_traffic_gb = data['traffic_gb']
     
     devices_price = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
     total_price = base_price + traffic_price + countries_price + devices_price
@@ -1524,10 +1595,10 @@ async def devices_continue(
     await state.set_data(data)
     
     if settings.is_traffic_fixed():
-        if data['traffic_gb'] == 0:
+        if final_traffic_gb == 0:
             traffic_display = "Безлимитный"
         else:
-            traffic_display = f"{data['traffic_gb']} ГБ"
+            traffic_display = f"{final_traffic_gb} ГБ"
     else:
         if data['traffic_gb'] == 0:
             traffic_display = "Безлимитный"
@@ -1580,10 +1651,10 @@ async def confirm_purchase(
     devices_price = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
     
     if settings.is_traffic_fixed():
-        traffic_price = TRAFFIC_PRICES.get(settings.get_fixed_traffic_limit(), 0)
+        traffic_price = settings.get_traffic_price(settings.get_fixed_traffic_limit())
         final_traffic_gb = settings.get_fixed_traffic_limit()
     else:
-        traffic_price = TRAFFIC_PRICES.get(data['traffic_gb'], 0)
+        traffic_price = settings.get_traffic_price(data['traffic_gb'])
         final_traffic_gb = data['traffic_gb']
     
     final_price = base_price + traffic_price + countries_price + devices_price
@@ -1671,7 +1742,7 @@ async def confirm_purchase(
             remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
             
         if not remnawave_user:
-            logger.error(f"❌ Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}")
+            logger.error(f"⚠️ Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}")
             logger.info(f"🔄 Fallback: принудительное создание нового RemnaWave пользователя")
             remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
         
@@ -1737,6 +1808,91 @@ async def confirm_purchase(
     await state.clear()
     await callback.answer()
 
+async def add_traffic(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    if settings.is_traffic_fixed():
+        await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
+        return
+    
+    traffic_gb = int(callback.data.split('_')[2])
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    
+    price = settings.get_traffic_price(traffic_gb)
+    
+    if price == 0 and traffic_gb != 0:
+        await callback.answer("⚠️ Цена для этого пакета не настроена", show_alert=True)
+        return
+    
+    if db_user.balance_kopeks < price:
+        await callback.answer("⚠️ Недостаточно средств на балансе", show_alert=True)
+        return
+    
+    try:
+        success = await subtract_user_balance(
+            db, db_user, price,
+            f"Добавление {traffic_gb} ГБ трафика"
+        )
+        
+        if not success:
+            await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
+            return
+        
+        if traffic_gb == 0: 
+            subscription.traffic_limit_gb = 0
+        else:
+            await add_subscription_traffic(db, subscription, traffic_gb)
+        
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+        
+        await create_transaction(
+            db=db,
+            user_id=db_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=price,
+            description=f"Добавление {traffic_gb} ГБ трафика"
+        )
+        
+        try:
+            await process_referral_purchase(
+                db=db,
+                user_id=db_user.id,
+                purchase_amount_kopeks=price,
+                transaction_id=None
+            )
+        except Exception as e:
+            logger.error(f"Ошибка обработки реферальной покупки: {e}")
+        
+        await db.refresh(db_user)
+        await db.refresh(subscription)
+        
+        success_text = f"✅ Трафик успешно добавлен!\n\n"
+        if traffic_gb == 0:
+            success_text += "🎉 Теперь у вас безлимитный трафик!"
+        else:
+            success_text += f"📈 Добавлено: {traffic_gb} ГБ\n"
+            success_text += f"Новый лимит: {texts.format_traffic(subscription.traffic_limit_gb)}"
+        
+        await callback.message.edit_text(
+            success_text,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+        
+        logger.info(f"✅ Пользователь {db_user.telegram_id} добавил {traffic_gb} ГБ трафика")
+        
+    except Exception as e:
+        logger.error(f"Ошибка добавления трафика: {e}")
+        await callback.message.edit_text(
+            texts.ERROR,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+    
+    await callback.answer()
+
 async def create_paid_subscription_with_traffic_mode(
     db: AsyncSession,
     user_id: int,
@@ -1768,6 +1924,15 @@ async def create_paid_subscription_with_traffic_mode(
     logger.info(f"📋 Создана подписка с трафиком: {traffic_limit_gb} ГБ (режим: {settings.TRAFFIC_SELECTION_MODE})")
     
     return subscription
+
+def validate_traffic_price(gb: int) -> bool:
+    from app.config import settings
+    
+    price = settings.get_traffic_price(gb)
+    if gb == 0: 
+        return True
+    
+    return price > 0
 
 
 async def handle_subscription_settings(
@@ -2558,6 +2723,16 @@ async def handle_specific_app_guide(
     )
     await callback.answer()
 
+async def handle_no_traffic_packages(
+    callback: types.CallbackQuery,
+    db_user: User
+):
+    await callback.answer(
+        "⚠️ В данный момент нет доступных пакетов трафика. "
+        "Обратитесь в техподдержку для получения информации.", 
+        show_alert=True
+    )
+
 
 async def handle_open_subscription_link(
     callback: types.CallbackQuery,
@@ -2669,6 +2844,7 @@ def get_reset_devices_confirm_keyboard(language: str = "ru") -> InlineKeyboardMa
 
 
 def register_handlers(dp: Dispatcher):
+    update_traffic_prices()
     
     dp.callback_query.register(
         show_subscription_info,
@@ -2689,7 +2865,6 @@ def register_handlers(dp: Dispatcher):
         start_subscription_purchase,
         F.data.in_(["menu_buy", "subscription_upgrade"])
     )
-    
     
     dp.callback_query.register(
         handle_add_countries,
@@ -2746,7 +2921,6 @@ def register_handlers(dp: Dispatcher):
         F.data == "confirm_reset_devices"
     )
     
-    
     dp.callback_query.register(
         select_period,
         F.data.startswith("period_"),
@@ -2776,7 +2950,6 @@ def register_handlers(dp: Dispatcher):
         F.data == "subscription_confirm",
         SubscriptionStates.confirming_purchase
     )
-    
     
     dp.callback_query.register(
         handle_autopay_menu,
@@ -2858,4 +3031,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_subscription_settings,
         F.data == "subscription_settings"
+    )
+
+    dp.callback_query.register(
+        handle_no_traffic_packages,
+        F.data == "no_traffic_packages"
     )

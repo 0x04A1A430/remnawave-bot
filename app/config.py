@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, Field
 from pathlib import Path
@@ -45,13 +45,17 @@ class Settings(BaseSettings):
     PRICE_180_DAYS: int = 499000
     PRICE_360_DAYS: int = 899000
     
-    PRICE_TRAFFIC_5GB: int = 10000
-    PRICE_TRAFFIC_10GB: int = 19000
-    PRICE_TRAFFIC_25GB: int = 45000
-    PRICE_TRAFFIC_50GB: int = 85000
-    PRICE_TRAFFIC_100GB: int = 159000
-    PRICE_TRAFFIC_250GB: int = 369000
-    PRICE_TRAFFIC_UNLIMITED: int = 0
+    PRICE_TRAFFIC_5GB: int = 2000
+    PRICE_TRAFFIC_10GB: int = 3500
+    PRICE_TRAFFIC_25GB: int = 7000
+    PRICE_TRAFFIC_50GB: int = 11000
+    PRICE_TRAFFIC_100GB: int = 15000
+    PRICE_TRAFFIC_250GB: int = 17000
+    PRICE_TRAFFIC_500GB: int = 19000
+    PRICE_TRAFFIC_1000GB: int = 19500
+    PRICE_TRAFFIC_UNLIMITED: int = 20000
+    
+    TRAFFIC_PACKAGES_CONFIG: str = ""
     
     PRICE_PER_DEVICE: int = 5000
     
@@ -293,6 +297,128 @@ class Settings(BaseSettings):
     def rubles_to_stars(self, rubles: float) -> int:
         return max(1, int(rubles / self.get_stars_rate()))
     
+    def get_traffic_packages(self) -> List[Dict]:
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            packages = []
+            config_str = self.TRAFFIC_PACKAGES_CONFIG.strip()
+            
+            logger.info(f"CONFIG STRING: '{config_str}'")
+            
+            if not config_str:
+                logger.info("CONFIG EMPTY, USING FALLBACK")
+                return self._get_fallback_traffic_packages()
+            
+            logger.info("PARSING CONFIG...")
+            
+            for package_config in config_str.split(','):
+                package_config = package_config.strip()
+                if not package_config:
+                    continue
+                    
+                parts = package_config.split(':')
+                if len(parts) != 3:
+                    continue
+                    
+                try:
+                    gb = int(parts[0])
+                    price = int(parts[1])
+                    enabled = parts[2].lower() == 'true'
+                    
+                    packages.append({
+                        "gb": gb,
+                        "price": price,
+                        "enabled": enabled
+                    })
+                except ValueError:
+                    continue
+            
+            logger.info(f"PARSED {len(packages)} packages from config")
+            return packages if packages else self._get_fallback_traffic_packages()
+            
+        except Exception as e:
+            logger.info(f"ERROR PARSING CONFIG: {e}")
+            return self._get_fallback_traffic_packages()
+    
+    def _get_fallback_traffic_packages(self) -> List[Dict]:
+        try:
+            if self.TRAFFIC_PACKAGES_CONFIG.strip():
+                packages = []
+                for package_config in self.TRAFFIC_PACKAGES_CONFIG.split(','):
+                    package_config = package_config.strip()
+                    if not package_config:
+                        continue
+                        
+                    parts = package_config.split(':')
+                    if len(parts) != 3:
+                        continue
+                        
+                    try:
+                        gb = int(parts[0])
+                        price = int(parts[1])
+                        enabled = parts[2].lower() == 'true'
+                        
+                        packages.append({
+                            "gb": gb,
+                            "price": price,
+                            "enabled": enabled
+                        })
+                    except ValueError:
+                        continue
+                
+                if packages:
+                    return packages
+        except Exception as e:
+            pass
+        
+        return [
+            {"gb": 5, "price": self.PRICE_TRAFFIC_5GB, "enabled": True},
+            {"gb": 10, "price": self.PRICE_TRAFFIC_10GB, "enabled": True},
+            {"gb": 25, "price": self.PRICE_TRAFFIC_25GB, "enabled": True},
+            {"gb": 50, "price": self.PRICE_TRAFFIC_50GB, "enabled": True},
+            {"gb": 100, "price": self.PRICE_TRAFFIC_100GB, "enabled": True},
+            {"gb": 250, "price": self.PRICE_TRAFFIC_250GB, "enabled": True},
+            {"gb": 500, "price": self.PRICE_TRAFFIC_500GB, "enabled": True},
+            {"gb": 1000, "price": self.PRICE_TRAFFIC_1000GB, "enabled": True},
+            {"gb": 0, "price": self.PRICE_TRAFFIC_UNLIMITED, "enabled": True}, 
+        ]
+    
+    def get_traffic_price(self, gb: int) -> int:
+        packages = self.get_traffic_packages()
+        
+        for package in packages:
+            if package["gb"] == gb and package["enabled"]:
+                return package["price"]
+        
+        
+        enabled_packages = [pkg for pkg in packages if pkg["enabled"]]
+        if not enabled_packages:
+            return 0
+        
+        unlimited_package = next((pkg for pkg in enabled_packages if pkg["gb"] == 0), None)
+        
+        finite_packages = [pkg for pkg in enabled_packages if pkg["gb"] > 0]
+        if finite_packages:
+            max_package = max(finite_packages, key=lambda x: x["gb"])
+            
+            if gb > max_package["gb"]:
+                if unlimited_package:
+                    return unlimited_package["price"]
+                else:
+                    return max_package["price"]
+            
+            suitable_packages = [pkg for pkg in finite_packages if pkg["gb"] >= gb]
+            if suitable_packages:
+                nearest_package = min(suitable_packages, key=lambda x: x["gb"])
+                return nearest_package["price"]
+        
+        if unlimited_package:
+            return unlimited_package["price"]
+        
+        return 0
+    
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8"
@@ -311,12 +437,14 @@ PERIOD_PRICES = {
     360: settings.PRICE_360_DAYS,
 }
 
-TRAFFIC_PRICES = {
-    5: settings.PRICE_TRAFFIC_5GB,
-    10: settings.PRICE_TRAFFIC_10GB,
-    25: settings.PRICE_TRAFFIC_25GB,
-    50: settings.PRICE_TRAFFIC_50GB,
-    100: settings.PRICE_TRAFFIC_100GB,
-    250: settings.PRICE_TRAFFIC_250GB,
-    0: settings.PRICE_TRAFFIC_UNLIMITED, 
-}
+def get_traffic_prices() -> Dict[int, int]:
+    packages = settings.get_traffic_packages()
+    return {package["gb"]: package["price"] for package in packages}
+
+TRAFFIC_PRICES = get_traffic_prices()
+
+def refresh_traffic_prices():
+    global TRAFFIC_PRICES
+    TRAFFIC_PRICES = get_traffic_prices()
+
+refresh_traffic_prices()

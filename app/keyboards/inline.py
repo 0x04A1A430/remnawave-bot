@@ -242,27 +242,56 @@ def get_subscription_period_keyboard(language: str = "ru") -> InlineKeyboardMark
 
 
 def get_traffic_packages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    import logging
+    logger = logging.getLogger(__name__)
+    
     from app.config import settings
     
     if settings.is_traffic_fixed():
         return get_back_keyboard(language)
     
+    logger.info(f"🔍 RAW CONFIG: '{settings.TRAFFIC_PACKAGES_CONFIG}'")
+    
+    all_packages = settings.get_traffic_packages()
+    logger.info(f"🔍 ALL PACKAGES: {all_packages}")
+    
+    enabled_packages = [pkg for pkg in all_packages if pkg['enabled']]
+    disabled_packages = [pkg for pkg in all_packages if not pkg['enabled']]
+    
+    logger.info(f"🔍 ENABLED: {len(enabled_packages)} packages")
+    logger.info(f"🔍 DISABLED: {len(disabled_packages)} packages")
+    
+    for pkg in disabled_packages:
+        logger.info(f"🔍 DISABLED PACKAGE: {pkg['gb']}GB = {pkg['price']} kopeks, enabled={pkg['enabled']}")
+    
     texts = get_texts(language)
     keyboard = []
     
-    packages = [
-        (5, texts.TRAFFIC_5GB),
-        (10, texts.TRAFFIC_10GB),
-        (25, texts.TRAFFIC_25GB),
-        (50, texts.TRAFFIC_50GB),
-        (100, texts.TRAFFIC_100GB),
-        (250, texts.TRAFFIC_250GB),
-        (0, texts.TRAFFIC_UNLIMITED) 
-    ]
+    traffic_packages = settings.get_traffic_packages()
     
-    for gb, text in packages:
+    for package in traffic_packages:
+        gb = package["gb"]
+        price = package["price"]  
+        enabled = package["enabled"]
+        
+        if not enabled:
+            continue
+        
+        if gb == 0:
+            text = f"♾️ Безлимит - {settings.format_price(package['price'])}"
+        else:
+            text = f"📊 {gb} ГБ - {settings.format_price(package['price'])}"
+        
         keyboard.append([
             InlineKeyboardButton(text=text, callback_data=f"traffic_{gb}")
+        ])
+
+    if not keyboard:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="⚠️ Пакеты трафика не настроены", 
+                callback_data="no_traffic_packages"
+            )
         ])
     
     keyboard.append([
@@ -270,7 +299,6 @@ def get_traffic_packages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
 
 def get_countries_keyboard(countries: List[dict], selected: List[str], language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
@@ -637,18 +665,31 @@ def get_add_traffic_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
     
-    packages = [
-        (5, f"📊 +5 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_5GB)}"),
-        (10, f"📊 +10 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_10GB)}"),
-        (25, f"📊 +25 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_25GB)}"),
-        (50, f"📊 +50 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_50GB)}"),
-        (100, f"📊 +100 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_100GB)}"),
-        (0, f"📊 Безлимит - {settings.format_price(settings.PRICE_TRAFFIC_UNLIMITED)}")
-    ]
+    traffic_packages = settings.get_traffic_packages()
     
-    for gb, text in packages:
+    for package in traffic_packages:
+        gb = package["gb"]
+        price = package["price"]
+        enabled = package["enabled"]
+        
+        if not enabled:
+            continue
+        
+        if gb == 0:
+            text = f"📊 Безлимит - {settings.format_price(package['price'])}"
+        else:
+            text = f"📊 +{gb} ГБ - {settings.format_price(package['price'])}"
+        
         keyboard.append([
             InlineKeyboardButton(text=text, callback_data=f"add_traffic_{gb}")
+        ])
+    
+    if not keyboard:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="⚠️ Пакеты трафика не настроены", 
+                callback_data="no_traffic_packages"
+            )
         ])
     
     keyboard.append([
@@ -656,7 +697,6 @@ def get_add_traffic_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
 
 def get_add_devices_keyboard(current_devices: int, language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
