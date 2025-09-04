@@ -107,9 +107,7 @@ class RussianTexts(Texts):
     REFERRAL_CODE_SKIP = "⏭️ Пропустить"
        
     MAIN_MENU = """👤 <b>{user_name}</b>
-━━━━━━━━━━━━━━━━━
 📱 <b>Подписка:</b> {subscription_status}
-━━━━━━━━━━━━━━━━━
 
 Выберите действие:
 """
