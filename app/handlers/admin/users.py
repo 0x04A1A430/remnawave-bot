@@ -16,6 +16,8 @@ from app.localization.texts import get_texts
 from app.services.user_service import UserService
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
+from app.services.remnawave_service import RemnaWaveService
+from app.database.crud.server_squad import get_all_server_squads, get_server_squad_by_uuid, get_server_squad_by_id
 
 logger = logging.getLogger(__name__)
 
@@ -1300,6 +1302,617 @@ async def process_subscription_grant_text(
     
     await state.clear()
 
+@admin_required
+@error_handler
+async def show_user_servers_management(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    user_service = UserService()
+    profile = await user_service.get_user_profile(db, user_id)
+    
+    if not profile:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+    
+    user = profile["user"]
+    subscription = profile["subscription"]
+    
+    text = f"🌍 <b>Управление серверами пользователя</b>\n\n"
+    text += f"👤 {user.full_name} (ID: <code>{user.telegram_id}</code>)\n\n"
+    
+    if subscription:
+        current_squads = subscription.connected_squads or []
+        
+        if current_squads:
+            text += f"<b>Текущие серверы ({len(current_squads)}):</b>\n"
+            
+            for squad_uuid in current_squads:
+                try:
+                    server = await get_server_squad_by_uuid(db, squad_uuid)
+                    if server:
+                        text += f"• {server.display_name}\n"
+                    else:
+                        text += f"• {squad_uuid[:8]}... (неизвестный)\n"
+                except Exception as e:
+                    logger.error(f"Ошибка получения сервера {squad_uuid}: {e}")
+                    text += f"• {squad_uuid[:8]}... (ошибка загрузки)\n"
+        else:
+            text += "<b>Серверы:</b> Не подключены\n"
+        
+        text += f"\n<b>Устройства:</b> {subscription.device_limit}\n"
+        traffic_display = f"{subscription.traffic_used_gb:.1f}/"
+        if subscription.traffic_limit_gb == 0:
+            traffic_display += "∞ ГБ"
+        else:
+            traffic_display += f"{subscription.traffic_limit_gb} ГБ"
+        text += f"<b>Трафик:</b> {traffic_display}\n"
+    else:
+        text += "❌ <b>Подписка отсутствует</b>"
+    
+    keyboard = [
+        [
+            types.InlineKeyboardButton(text="🌍 Сменить сервер", callback_data=f"admin_user_change_server_{user_id}"),
+            types.InlineKeyboardButton(text="📱 Устройства", callback_data=f"admin_user_devices_{user_id}")
+        ],
+        [
+            types.InlineKeyboardButton(text="📊 Трафик", callback_data=f"admin_user_traffic_{user_id}"),
+            types.InlineKeyboardButton(text="🔄 Сбросить устройства", callback_data=f"admin_user_reset_devices_{user_id}")
+        ],
+        [
+            types.InlineKeyboardButton(text="⬅️ К пользователю", callback_data=f"admin_user_manage_{user_id}")
+        ]
+    ]
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_server_selection(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    try:
+        user = await get_user_by_id(db, user_id)
+        current_squads = []
+        if user and user.subscription:
+            current_squads = user.subscription.connected_squads or []
+        
+        servers, _ = await get_all_server_squads(db, available_only=True)
+        
+        if not servers:
+            await callback.message.edit_text(
+                "❌ Доступные серверы не найдены",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_servers_{user_id}")]
+                ])
+            )
+            return
+        
+        text = f"🌍 <b>Управление серверами</b>\n\n"
+        text += f"Нажмите на сервер чтобы добавить/убрать:\n\n"
+        
+        keyboard = []
+        for server in servers[:15]:
+            is_selected = server.squad_uuid in current_squads
+            
+            if is_selected:
+                emoji = "✅"
+            else:
+                emoji = "⚪"
+            
+            keyboard.append([
+                types.InlineKeyboardButton(
+                    text=f"{emoji} {server.display_name}",
+                    callback_data=f"admin_user_toggle_server_{user_id}_{server.id}"  
+                )
+            ])
+        
+        if len(servers) > 15:
+            text += f"\n📝 Показано первых 15 из {len(servers)} серверов"
+        
+        keyboard.append([
+            types.InlineKeyboardButton(text="✅ Готово", callback_data=f"admin_user_servers_{user_id}"),
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_servers_{user_id}")
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        await callback.answer()
+        
+    except Exception as e:
+        logger.error(f"Ошибка показа серверов: {e}")
+        await callback.answer("❌ Ошибка загрузки серверов", show_alert=True)
+
+@admin_required
+@error_handler
+async def toggle_user_server(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    parts = callback.data.split('_')
+    user_id = int(parts[4]) 
+    server_id = int(parts[5])
+    
+    try:
+        user = await get_user_by_id(db, user_id)
+        if not user or not user.subscription:
+            await callback.answer("❌ Пользователь или подписка не найдены", show_alert=True)
+            return
+        
+        server = await get_server_squad_by_id(db, server_id)
+        if not server:
+            await callback.answer("❌ Сервер не найден", show_alert=True)
+            return
+        
+        subscription = user.subscription
+        current_squads = list(subscription.connected_squads or [])
+        
+        if server.squad_uuid in current_squads:
+            current_squads.remove(server.squad_uuid)
+            action_text = "удален"
+        else:
+            current_squads.append(server.squad_uuid)
+            action_text = "добавлен"
+        
+        subscription.connected_squads = current_squads
+        subscription.updated_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(subscription)
+        
+        if user.remnawave_uuid:
+            try:
+                remnawave_service = RemnaWaveService()
+                async with remnawave_service.api as api:
+                    await api.update_user(
+                        uuid=user.remnawave_uuid,
+                        active_internal_squads=current_squads
+                    )
+                logger.info(f"✅ Обновлены серверы в RemnaWave для пользователя {user.telegram_id}")
+            except Exception as rw_error:
+                logger.error(f"❌ Ошибка обновления RemnaWave: {rw_error}")
+        
+        logger.info(f"Админ {db_user.id}: сервер {server.display_name} {action_text} для пользователя {user_id}")
+        
+        await refresh_server_selection_screen(callback, user_id, db_user, db)
+        
+    except Exception as e:
+        logger.error(f"Ошибка переключения сервера: {e}")
+        await callback.answer("❌ Ошибка изменения сервера", show_alert=True)
+
+async def refresh_server_selection_screen(
+    callback: types.CallbackQuery,
+    user_id: int,
+    db_user: User,
+    db: AsyncSession
+):
+    try:
+        user = await get_user_by_id(db, user_id)
+        current_squads = []
+        if user and user.subscription:
+            current_squads = user.subscription.connected_squads or []
+        
+        servers, _ = await get_all_server_squads(db, available_only=True)
+        
+        if not servers:
+            await callback.message.edit_text(
+                "❌ Доступные серверы не найдены",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_servers_{user_id}")]
+                ])
+            )
+            return
+        
+        text = f"🌍 <b>Управление серверами</b>\n\n"
+        text += f"Нажмите на сервер чтобы добавить/убрать:\n\n"
+        
+        keyboard = []
+        for server in servers[:15]:
+            is_selected = server.squad_uuid in current_squads
+            emoji = "✅" if is_selected else "⚪"
+            
+            keyboard.append([
+                types.InlineKeyboardButton(
+                    text=f"{emoji} {server.display_name}",
+                    callback_data=f"admin_user_toggle_server_{user_id}_{server.id}"
+                )
+            ])
+        
+        if len(servers) > 15:
+            text += f"\n📝 Показано первых 15 из {len(servers)} серверов"
+        
+        keyboard.append([
+            types.InlineKeyboardButton(text="✅ Готово", callback_data=f"admin_user_servers_{user_id}"),
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_servers_{user_id}")
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка обновления экрана серверов: {e}")
+
+
+@admin_required
+@error_handler
+async def start_devices_edit(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    await state.update_data(editing_devices_user_id=user_id)
+    
+    await callback.message.edit_text(
+        "📱 <b>Изменение количества устройств</b>\n\n"
+        "Введите новое количество устройств (от 1 до 10):\n"
+        "• Текущее значение будет заменено\n"
+        "• Примеры: 1, 2, 5, 10\n\n"
+        "Или нажмите /cancel для отмены",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [
+                types.InlineKeyboardButton(text="1", callback_data=f"admin_user_devices_set_{user_id}_1"),
+                types.InlineKeyboardButton(text="2", callback_data=f"admin_user_devices_set_{user_id}_2"),
+                types.InlineKeyboardButton(text="3", callback_data=f"admin_user_devices_set_{user_id}_3")
+            ],
+            [
+                types.InlineKeyboardButton(text="5", callback_data=f"admin_user_devices_set_{user_id}_5"),
+                types.InlineKeyboardButton(text="10", callback_data=f"admin_user_devices_set_{user_id}_10")
+            ],
+            [
+                types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_user_servers_{user_id}")
+            ]
+        ])
+    )
+    
+    await state.set_state(AdminStates.editing_user_devices)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def set_user_devices_button(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    parts = callback.data.split('_')
+    user_id = int(parts[-2])
+    devices = int(parts[-1])
+    
+    success = await _update_user_devices(db, user_id, devices, db_user.id)
+    
+    if success:
+        await callback.message.edit_text(
+            f"✅ Количество устройств изменено на: {devices}",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="🌍 Управление серверами", callback_data=f"admin_user_servers_{user_id}")]
+            ])
+        )
+    else:
+        await callback.message.edit_text(
+            "❌ Ошибка изменения количества устройств",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="🌍 Управление серверами", callback_data=f"admin_user_servers_{user_id}")]
+            ])
+        )
+    
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_devices_edit_text(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession
+):
+    data = await state.get_data()
+    user_id = data.get("editing_devices_user_id")
+    
+    if not user_id:
+        await message.answer("❌ Ошибка: пользователь не найден")
+        await state.clear()
+        return
+    
+    try:
+        devices = int(message.text.strip())
+        
+        if devices <= 0 or devices > 10:
+            await message.answer("❌ Количество устройств должно быть от 1 до 10")
+            return
+        
+        success = await _update_user_devices(db, user_id, devices, db_user.id)
+        
+        if success:
+            await message.answer(
+                f"✅ Количество устройств изменено на: {devices}",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="🌍 Управление серверами", callback_data=f"admin_user_servers_{user_id}")]
+                ])
+            )
+        else:
+            await message.answer("❌ Ошибка изменения количества устройств")
+        
+    except ValueError:
+        await message.answer("❌ Введите корректное число устройств")
+        return
+    
+    await state.clear()
+
+
+@admin_required
+@error_handler
+async def start_traffic_edit(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    await state.update_data(editing_traffic_user_id=user_id)
+    
+    await callback.message.edit_text(
+        "📊 <b>Изменение лимита трафика</b>\n\n"
+        "Введите новый лимит трафика в ГБ:\n"
+        "• 0 - безлимитный трафик\n"
+        "• Примеры: 50, 100, 500, 1000\n"
+        "• Максимум: 10000 ГБ\n\n"
+        "Или нажмите /cancel для отмены",
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+            [
+                types.InlineKeyboardButton(text="50 ГБ", callback_data=f"admin_user_traffic_set_{user_id}_50"),
+                types.InlineKeyboardButton(text="100 ГБ", callback_data=f"admin_user_traffic_set_{user_id}_100")
+            ],
+            [
+                types.InlineKeyboardButton(text="500 ГБ", callback_data=f"admin_user_traffic_set_{user_id}_500"),
+                types.InlineKeyboardButton(text="1000 ГБ", callback_data=f"admin_user_traffic_set_{user_id}_1000")
+            ],
+            [
+                types.InlineKeyboardButton(text="♾️ Безлимит", callback_data=f"admin_user_traffic_set_{user_id}_0")
+            ],
+            [
+                types.InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_user_servers_{user_id}")
+            ]
+        ])
+    )
+    
+    await state.set_state(AdminStates.editing_user_traffic)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def set_user_traffic_button(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    parts = callback.data.split('_')
+    user_id = int(parts[-2])
+    traffic_gb = int(parts[-1])
+    
+    success = await _update_user_traffic(db, user_id, traffic_gb, db_user.id)
+    
+    if success:
+        traffic_text = "♾️ безлимитный" if traffic_gb == 0 else f"{traffic_gb} ГБ"
+        await callback.message.edit_text(
+            f"✅ Лимит трафика изменен на: {traffic_text}",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="🌍 Управление серверами", callback_data=f"admin_user_servers_{user_id}")]
+            ])
+        )
+    else:
+        await callback.message.edit_text(
+            "❌ Ошибка изменения лимита трафика",
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text="🌍 Управление серверами", callback_data=f"admin_user_servers_{user_id}")]
+            ])
+        )
+    
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_traffic_edit_text(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession
+):
+    data = await state.get_data()
+    user_id = data.get("editing_traffic_user_id")
+    
+    if not user_id:
+        await message.answer("❌ Ошибка: пользователь не найден")
+        await state.clear()
+        return
+    
+    try:
+        traffic_gb = int(message.text.strip())
+        
+        if traffic_gb < 0 or traffic_gb > 10000:
+            await message.answer("❌ Лимит трафика должен быть от 0 до 10000 ГБ (0 = безлимит)")
+            return
+        
+        success = await _update_user_traffic(db, user_id, traffic_gb, db_user.id)
+        
+        if success:
+            traffic_text = "♾️ безлимитный" if traffic_gb == 0 else f"{traffic_gb} ГБ"
+            await message.answer(
+                f"✅ Лимит трафика изменен на: {traffic_text}",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="🌍 Управление серверами", callback_data=f"admin_user_servers_{user_id}")]
+                ])
+            )
+        else:
+            await message.answer("❌ Ошибка изменения лимита трафика")
+        
+    except ValueError:
+        await message.answer("❌ Введите корректное число ГБ")
+        return
+    
+    await state.clear()
+
+
+@admin_required
+@error_handler
+async def confirm_reset_devices(
+    callback: types.CallbackQuery,
+    db_user: User
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    await callback.message.edit_text(
+        "🔄 <b>Сброс устройств пользователя</b>\n\n"
+        "⚠️ <b>ВНИМАНИЕ!</b>\n"
+        "Вы уверены, что хотите сбросить все HWID устройства этого пользователя?\n\n"
+        "Это действие:\n"
+        "• Удалит все привязанные устройства\n"
+        "• Пользователь сможет заново подключить устройства\n"
+        "• Действие необратимо!\n\n"
+        "Продолжить?",
+        reply_markup=get_confirmation_keyboard(
+            f"admin_user_reset_devices_confirm_{user_id}",
+            f"admin_user_servers_{user_id}",
+            db_user.language
+        )
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def reset_user_devices(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    try:
+        user = await get_user_by_id(db, user_id)
+        if not user or not user.remnawave_uuid:
+            await callback.answer("❌ Пользователь не найден или не связан с RemnaWave", show_alert=True)
+            return
+        
+        remnawave_service = RemnaWaveService()
+        async with remnawave_service.api as api:
+            success = await api.reset_user_devices(user.remnawave_uuid)
+        
+        if success:
+            await callback.message.edit_text(
+                "✅ Устройства пользователя успешно сброшены",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="🌍 Управление серверами", callback_data=f"admin_user_servers_{user_id}")]
+                ])
+            )
+            logger.info(f"Админ {db_user.id} сбросил устройства пользователя {user_id}")
+        else:
+            await callback.message.edit_text(
+                "❌ Ошибка сброса устройств",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="🌍 Управление серверами", callback_data=f"admin_user_servers_{user_id}")]
+                ])
+            )
+        
+    except Exception as e:
+        logger.error(f"Ошибка сброса устройств: {e}")
+        await callback.answer("❌ Ошибка сброса устройств", show_alert=True)
+
+async def _update_user_devices(db: AsyncSession, user_id: int, devices: int, admin_id: int) -> bool:
+    try:
+        user = await get_user_by_id(db, user_id)
+        if not user or not user.subscription:
+            logger.error(f"Пользователь {user_id} или подписка не найдены")
+            return False
+        
+        subscription = user.subscription
+        old_devices = subscription.device_limit
+        subscription.device_limit = devices
+        subscription.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
+        if user.remnawave_uuid:
+            try:
+                remnawave_service = RemnaWaveService()
+                async with remnawave_service.api as api:
+                    await api.update_user(
+                        uuid=user.remnawave_uuid,
+                        hwid_device_limit=devices
+                    )
+                logger.info(f"✅ Обновлен лимит устройств в RemnaWave для пользователя {user.telegram_id}")
+            except Exception as rw_error:
+                logger.error(f"❌ Ошибка обновления лимита устройств в RemnaWave: {rw_error}")
+        
+        logger.info(f"Админ {admin_id} изменил лимит устройств пользователя {user_id}: {old_devices} -> {devices}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка обновления лимита устройств: {e}")
+        await db.rollback()
+        return False
+
+
+async def _update_user_traffic(db: AsyncSession, user_id: int, traffic_gb: int, admin_id: int) -> bool:
+    try:
+        user = await get_user_by_id(db, user_id)
+        if not user or not user.subscription:
+            logger.error(f"Пользователь {user_id} или подписка не найдены")
+            return False
+        
+        subscription = user.subscription
+        old_traffic = subscription.traffic_limit_gb
+        subscription.traffic_limit_gb = traffic_gb
+        subscription.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
+        if user.remnawave_uuid:
+            try:
+                from app.external.remnawave_api import TrafficLimitStrategy
+                
+                remnawave_service = RemnaWaveService()
+                async with remnawave_service.api as api:
+                    await api.update_user(
+                        uuid=user.remnawave_uuid,
+                        traffic_limit_bytes=traffic_gb * (1024**3) if traffic_gb > 0 else 0,
+                        traffic_limit_strategy=TrafficLimitStrategy.MONTH
+                    )
+                logger.info(f"✅ Обновлен лимит трафика в RemnaWave для пользователя {user.telegram_id}")
+            except Exception as rw_error:
+                logger.error(f"❌ Ошибка обновления лимита трафика в RemnaWave: {rw_error}")
+        
+        traffic_text_old = "безлимитный" if old_traffic == 0 else f"{old_traffic} ГБ"
+        traffic_text_new = "безлимитный" if traffic_gb == 0 else f"{traffic_gb} ГБ"
+        logger.info(f"Админ {admin_id} изменил лимит трафика пользователя {user_id}: {traffic_text_old} -> {traffic_text_new}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка обновления лимита трафика: {e}")
+        await db.rollback()
+        return False
+
 
 async def _extend_subscription_by_days(db: AsyncSession, user_id: int, days: int, admin_id: int) -> bool:
     try:
@@ -1647,4 +2260,59 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(
         process_subscription_grant_text,
         AdminStates.granting_subscription
+    )
+
+    dp.callback_query.register(
+        show_user_servers_management,
+        F.data.startswith("admin_user_servers_")
+    )
+    
+    dp.callback_query.register(
+        show_server_selection,
+        F.data.startswith("admin_user_change_server_")
+    )
+    
+    dp.callback_query.register(
+        toggle_user_server,
+        F.data.startswith("admin_user_toggle_server_") & ~F.data.endswith("_add") & ~F.data.endswith("_remove")
+    )
+    
+    dp.callback_query.register(
+        start_devices_edit,
+        F.data.startswith("admin_user_devices_") & ~F.data.contains("set")
+    )
+    
+    dp.callback_query.register(
+        set_user_devices_button,
+        F.data.startswith("admin_user_devices_set_")
+    )
+    
+    dp.message.register(
+        process_devices_edit_text,
+        AdminStates.editing_user_devices
+    )
+    
+    dp.callback_query.register(
+        start_traffic_edit,
+        F.data.startswith("admin_user_traffic_") & ~F.data.contains("set")
+    )
+    
+    dp.callback_query.register(
+        set_user_traffic_button,
+        F.data.startswith("admin_user_traffic_set_")
+    )
+    
+    dp.message.register(
+        process_traffic_edit_text,
+        AdminStates.editing_user_traffic
+    )
+    
+    dp.callback_query.register(
+        confirm_reset_devices,
+        F.data.startswith("admin_user_reset_devices_") & ~F.data.contains("confirm")
+    )
+    
+    dp.callback_query.register(
+        reset_user_devices,
+        F.data.startswith("admin_user_reset_devices_confirm_")
     )
