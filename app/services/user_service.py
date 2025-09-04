@@ -224,109 +224,165 @@ class UserService:
             return False
     
     async def delete_user_account(
-        self,
-        db: AsyncSession,
-        user_id: int,
+        self, 
+        db: AsyncSession, 
+        user_id: int, 
         admin_id: int
     ) -> bool:
         try:
             user = await get_user_by_id(db, user_id)
             if not user:
-                logger.warning(f"Пользователь {user_id} не найден для удаления")
+                logger.error(f"Пользователь {user_id} не найден для удаления")
                 return False
             
-            logger.info(f"🗑️ Начинаем полное удаление пользователя {user_id} (Telegram ID: {user.telegram_id})")
+            logger.info(f"🗑️ Начинаем удаление пользователя {user.telegram_id} (ID: {user_id})")
             
             if user.remnawave_uuid:
                 try:
                     from app.services.subscription_service import SubscriptionService
                     subscription_service = SubscriptionService()
                     await subscription_service.disable_remnawave_user(user.remnawave_uuid)
-                    logger.info(f"✅ RemnaWave пользователь {user.remnawave_uuid} деактивирован")
+                    logger.info(f"   ✅ RemnaWave пользователь {user.remnawave_uuid} деактивирован")
                 except Exception as e:
-                    logger.error(f"❌ Ошибка деактивации RemnaWave пользователя: {e}")
+                    logger.warning(f"   ⚠️ Ошибка деактивации в RemnaWave: {e}")
             
-            if user.subscription:
-                try:
-                    await db.execute(
-                        delete(SubscriptionServer).where(
-                            SubscriptionServer.subscription_id == user.subscription.id
-                        )
+            from sqlalchemy import select, delete
+            from app.database.models import YooKassaPayment
+            
+            yookassa_result = await db.execute(
+                select(YooKassaPayment).where(YooKassaPayment.user_id == user_id)
+            )
+            yookassa_payments = yookassa_result.scalars().all()
+            
+            if yookassa_payments:
+                logger.info(f"   🔄 Удаляем {len(yookassa_payments)} YooKassa платежей")
+                await db.execute(
+                    delete(YooKassaPayment).where(YooKassaPayment.user_id == user_id)
+                )
+                await db.flush() 
+                logger.info(f"   ✅ YooKassa платежи удалены")
+            
+            from app.database.models import Transaction
+            
+            transactions_result = await db.execute(
+                select(Transaction).where(Transaction.user_id == user_id)
+            )
+            transactions = transactions_result.scalars().all()
+            
+            if transactions:
+                logger.info(f"   🔄 Удаляем {len(transactions)} транзакций")
+                await db.execute(
+                    delete(Transaction).where(Transaction.user_id == user_id)
+                )
+                await db.flush()
+                logger.info(f"   ✅ Транзакции удалены")
+            
+            from app.database.models import PromoCodeUse
+            
+            await db.execute(
+                delete(PromoCodeUse).where(PromoCodeUse.user_id == user_id)
+            )
+            await db.flush()
+            
+            from app.database.models import ReferralEarning
+            
+            await db.execute(
+                delete(ReferralEarning).where(
+                    or_(
+                        ReferralEarning.user_id == user_id,
+                        ReferralEarning.referral_id == user_id
                     )
-                    logger.info(f"🗑️ Удалены записи SubscriptionServer для подписки {user.subscription.id}")
-                except Exception as e:
-                    logger.error(f"❌ Ошибка удаления SubscriptionServer: {e}")
+                )
+            )
+            await db.flush()
+            
+            from app.database.models import BroadcastHistory
+            
+            await db.execute(
+                delete(BroadcastHistory).where(BroadcastHistory.admin_id == user_id)
+            )
+            await db.flush()
+            
+            from app.database.models import SubscriptionServer
             
             if user.subscription:
-                try:
-                    await db.delete(user.subscription)
-                    logger.info(f"🗑️ Удалена подписка пользователя {user_id}")
-                except Exception as e:
-                    logger.error(f"❌ Ошибка удаления подписки: {e}")
-            
-            try:
                 await db.execute(
-                    delete(PromoCodeUse).where(PromoCodeUse.user_id == user.id)
+                    delete(SubscriptionServer).where(
+                        SubscriptionServer.subscription_id == user.subscription.id
+                    )
                 )
-                logger.info(f"🗑️ Удалены использования промокодов пользователя {user_id}")
-            except Exception as e:
-                logger.error(f"❌ Ошибка удаления использований промокодов: {e}")
+                await db.flush()
             
-            try:
+            from app.database.models import Subscription
+            
+            if user.subscription:
+                logger.info(f"   🔄 Удаляем подписку ID {user.subscription.id}")
                 await db.execute(
-                    delete(ReferralEarning).where(ReferralEarning.user_id == user.id)
+                    delete(Subscription).where(Subscription.user_id == user_id)
                 )
-                logger.info(f"🗑️ Удалены реферальные доходы пользователя {user_id}")
-            except Exception as e:
-                logger.error(f"❌ Ошибка удаления реферальных доходов: {e}")
+                await db.flush()
+                logger.info(f"   ✅ Подписка удалена")
             
-            try:
-                await db.execute(
-                    delete(ReferralEarning).where(ReferralEarning.referral_id == user.id)
-                )
-                logger.info(f"🗑️ Удалены реферальные записи о пользователе {user_id}")
-            except Exception as e:
-                logger.error(f"❌ Ошибка удаления реферальных записей: {e}")
+            await db.execute(
+                update(User)
+                .where(User.referred_by_id == user_id)
+                .values(referred_by_id=None)
+            )
+            await db.flush()
             
-            try:
-                from sqlalchemy import update
-                await db.execute(
-                    update(User)
-                    .where(User.referred_by_id == user.id)
-                    .values(referred_by_id=None)
-                )
-                logger.info(f"🗑️ Очищены реферальные ссылки у рефералов пользователя {user_id}")
-            except Exception as e:
-                logger.error(f"❌ Ошибка очистки реферальных ссылок: {e}")
+            logger.info(f"   🔄 Удаляем пользователя")
+            await db.execute(
+                delete(User).where(User.id == user_id)
+            )
             
-            try:
-                await db.execute(
-                    delete(Transaction).where(Transaction.user_id == user.id)
-                )
-                logger.info(f"🗑️ Удалены транзакции пользователя {user_id}")
-            except Exception as e:
-                logger.error(f"❌ Ошибка удаления транзакций: {e}")
+            await db.commit()
             
-            try:
-                user.status = UserStatus.DELETED.value
-                user.balance_kopeks = 0
-                user.remnawave_uuid = None
-                user.updated_at = datetime.utcnow()
-                
-                await db.commit()
-                logger.info(f"✅ Пользователь {user_id} помечен как удаленный и обнулен")
-            except Exception as e:
-                logger.error(f"❌ Ошибка обновления статуса пользователя: {e}")
-                await db.rollback()
-                return False
+            logger.info(f"✅ Пользователь {user.telegram_id} полностью удален администратором {admin_id}")
             
-            logger.info(f"✅ Пользователь {user_id} (Telegram ID: {user.telegram_id}) полностью удален админом {admin_id}")
+            await self._log_user_action(
+                db, 
+                admin_id, 
+                f"Полное удаление пользователя {user.telegram_id} (ID: {user_id})",
+                success=True
+            )
+            
             return True
             
         except Exception as e:
-            logger.error(f"❌ Критическая ошибка удаления пользователя {user_id}: {e}")
+            logger.error(f"❌ Ошибка удаления пользователя {user_id}: {e}")
             await db.rollback()
+            
+            try:
+                await self._log_user_action(
+                    db, 
+                    admin_id, 
+                    f"Ошибка удаления пользователя ID {user_id}: {str(e)}",
+                    success=False
+                )
+            except:
+                pass
+            
             return False
+
+    async def _log_user_action(self, db: AsyncSession, admin_id: int, message: str, success: bool = True):
+        try:
+            from app.database.models import MonitoringLog
+            
+            log_entry = MonitoringLog(
+                event_type="admin_user_action",
+                message=message,
+                data={
+                    "admin_id": admin_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                },
+                is_success=success
+            )
+            
+            db.add(log_entry)
+            await db.commit()
+            
+        except Exception as e:
+            logger.error(f"Ошибка логирования: {e}")
     
     async def get_user_statistics(self, db: AsyncSession) -> Dict[str, Any]:
         try:
