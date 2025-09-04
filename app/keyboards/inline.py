@@ -5,7 +5,9 @@ from datetime import datetime
 
 from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
 from app.localization.texts import get_texts
+import logging
 
+logger = logging.getLogger(__name__)
 
 def get_rules_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
