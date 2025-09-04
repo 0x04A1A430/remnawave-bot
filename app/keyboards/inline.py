@@ -787,6 +787,7 @@ def get_manage_countries_keyboard(
     months_multiplier = 1
     if subscription_end_date:
         months_multiplier = get_remaining_months(subscription_end_date)
+        logger.info(f"🔍 Расчет для управления странами: осталось {months_multiplier} месяцев до {subscription_end_date}")
     
     buttons = []
     total_cost = 0
@@ -812,6 +813,7 @@ def get_manage_countries_keyboard(
             total_price = price_per_month * months_multiplier
             if months_multiplier > 1:
                 price_text = f" ({price_per_month/100:.2f}₽/мес × {months_multiplier} = {total_price/100:.2f}₽)"
+                logger.info(f"🔍 Сервер {name}: {price_per_month/100}₽/мес × {months_multiplier} мес = {total_price/100}₽")
             else:
                 price_text = f" ({total_price/100:.2f}₽)"
             display_name = f"{icon} {name}{price_text}"
@@ -827,6 +829,7 @@ def get_manage_countries_keyboard(
     
     if total_cost > 0:
         apply_text = f"✅ Применить изменения ({total_cost/100:.2f} ₽)"
+        logger.info(f"🔍 Общая стоимость новых серверов: {total_cost/100}₽")
     else:
         apply_text = "✅ Применить изменения"
     
