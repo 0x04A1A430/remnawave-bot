@@ -457,7 +457,7 @@ async def handle_add_countries(
     subscription = db_user.subscription
     
     if not subscription or subscription.is_trial:
-        await callback.answer("❌ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer("⚠ Эта функция доступна только для платных подписок", show_alert=True)
         return
     
     countries = await _get_available_countries()
@@ -490,7 +490,8 @@ async def handle_add_countries(
             countries, 
             current_countries.copy(), 
             current_countries, 
-            db_user.language
+            db_user.language,
+            subscription.end_date
         ),
         parse_mode="HTML"
     )
@@ -737,11 +738,11 @@ async def handle_add_traffic(
     subscription = db_user.subscription
     
     if not subscription or subscription.is_trial:
-        await callback.answer("⌛ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer("⚠ Эта функция доступна только для платных подписок", show_alert=True)
         return
     
     if subscription.traffic_limit_gb == 0:
-        await callback.answer("⌛ У вас уже безлимитный трафик", show_alert=True)
+        await callback.answer("⚠ У вас уже безлимитный трафик", show_alert=True)
         return
     
     current_traffic = subscription.traffic_limit_gb
@@ -750,23 +751,23 @@ async def handle_add_traffic(
         f"📈 <b>Добавить трафик к подписке</b>\n\n"
         f"Текущий лимит: {texts.format_traffic(current_traffic)}\n"
         f"Выберите дополнительный трафик:",
-        reply_markup=get_add_traffic_keyboard(db_user.language)
+        reply_markup=get_add_traffic_keyboard(db_user.language, subscription.end_date),
+        parse_mode="HTML"
     )
     
     await callback.answer()
-
+    
 
 async def handle_add_devices(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession
 ):
-    
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
     if not subscription or subscription.is_trial:
-        await callback.answer("❌ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer("⚠ Эта функция доступна только для платных подписок", show_alert=True)
         return
     
     current_devices = subscription.device_limit
@@ -775,7 +776,8 @@ async def handle_add_devices(
         f"📱 <b>Добавить устройства к подписке</b>\n\n"
         f"Текущий лимит: {current_devices} устройств\n"
         f"Выберите количество дополнительных устройств:",
-        reply_markup=get_add_devices_keyboard(current_devices, db_user.language)
+        reply_markup=get_add_devices_keyboard(current_devices, db_user.language, subscription.end_date),
+        parse_mode="HTML"
     )
     
     await callback.answer()
