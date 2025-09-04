@@ -2181,3 +2181,58 @@ def register_handlers(dp: Dispatcher):
         process_subscription_grant_text,
         AdminStates.granting_subscription
     )
+
+    dp.callback_query.register(
+        show_user_servers_management,
+        F.data.startswith("admin_user_servers_")
+    )
+    
+    dp.callback_query.register(
+        show_server_selection,
+        F.data.startswith("admin_user_change_server_")
+    )
+    
+    dp.callback_query.register(
+        change_user_server,
+        F.data.startswith("admin_user_select_server_")
+    )
+    
+    dp.callback_query.register(
+        start_devices_edit,
+        F.data.startswith("admin_user_devices_") & ~F.data.contains("set")
+    )
+    
+    dp.callback_query.register(
+        set_user_devices_button,
+        F.data.startswith("admin_user_devices_set_")
+    )
+    
+    dp.message.register(
+        process_devices_edit_text,
+        AdminStates.editing_user_devices
+    )
+    
+    dp.callback_query.register(
+        start_traffic_edit,
+        F.data.startswith("admin_user_traffic_") & ~F.data.contains("set")
+    )
+    
+    dp.callback_query.register(
+        set_user_traffic_button,
+        F.data.startswith("admin_user_traffic_set_")
+    )
+    
+    dp.message.register(
+        process_traffic_edit_text,
+        AdminStates.editing_user_traffic
+    )
+    
+    dp.callback_query.register(
+        confirm_reset_devices,
+        F.data.startswith("admin_user_reset_devices_") & ~F.data.contains("confirm")
+    )
+    
+    dp.callback_query.register(
+        reset_user_devices,
+        F.data.startswith("admin_user_reset_devices_confirm_")
+    )
