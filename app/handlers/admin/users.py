@@ -1488,24 +1488,65 @@ async def toggle_user_server(
         
         logger.info(f"Админ {db_user.id}: сервер {server.display_name} {action_text} для пользователя {user_id}")
         
-        new_callback_data = f"admin_user_change_server_{user_id}"
-        
-        class MockCallback:
-            def __init__(self, original_callback, new_data):
-                self.message = original_callback.message
-                self.from_user = original_callback.from_user
-                self.data = new_data
-            
-            async def answer(self, *args, **kwargs):
-                return await original_callback.answer(*args, **kwargs)
-        
-        mock_callback = MockCallback(callback, new_callback_data)
-        
-        await show_server_selection(mock_callback, db_user, db)
+        await refresh_server_selection_screen(callback, user_id, db_user, db)
         
     except Exception as e:
         logger.error(f"Ошибка переключения сервера: {e}")
         await callback.answer("❌ Ошибка изменения сервера", show_alert=True)
+
+async def refresh_server_selection_screen(
+    callback: types.CallbackQuery,
+    user_id: int,
+    db_user: User,
+    db: AsyncSession
+):
+    try:
+        user = await get_user_by_id(db, user_id)
+        current_squads = []
+        if user and user.subscription:
+            current_squads = user.subscription.connected_squads or []
+        
+        servers, _ = await get_all_server_squads(db, available_only=True)
+        
+        if not servers:
+            await callback.message.edit_text(
+                "❌ Доступные серверы не найдены",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_servers_{user_id}")]
+                ])
+            )
+            return
+        
+        text = f"🌍 <b>Управление серверами</b>\n\n"
+        text += f"Нажмите на сервер чтобы добавить/убрать:\n\n"
+        
+        keyboard = []
+        for server in servers[:15]:
+            is_selected = server.squad_uuid in current_squads
+            emoji = "✅" if is_selected else "⚪"
+            
+            keyboard.append([
+                types.InlineKeyboardButton(
+                    text=f"{emoji} {server.display_name}",
+                    callback_data=f"admin_user_toggle_server_{user_id}_{server.id}"
+                )
+            ])
+        
+        if len(servers) > 15:
+            text += f"\n📝 Показано первых 15 из {len(servers)} серверов"
+        
+        keyboard.append([
+            types.InlineKeyboardButton(text="✅ Готово", callback_data=f"admin_user_servers_{user_id}"),
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_servers_{user_id}")
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка обновления экрана серверов: {e}")
 
 
 @admin_required
