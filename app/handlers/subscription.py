@@ -1806,7 +1806,7 @@ async def confirm_purchase(
         )
     
     await state.clear()
-    await callback.answer()_fixed():
+    await callback.answer()
         await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
         return
     
