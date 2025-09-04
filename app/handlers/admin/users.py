@@ -1460,7 +1460,7 @@ async def toggle_user_server(
             return
         
         subscription = user.subscription
-        current_squads = list(subscription.connected_squads or []) 
+        current_squads = list(subscription.connected_squads or [])
         
         if server.squad_uuid in current_squads:
             current_squads.remove(server.squad_uuid)
@@ -1472,7 +1472,7 @@ async def toggle_user_server(
         subscription.connected_squads = current_squads
         subscription.updated_at = datetime.utcnow()
         await db.commit()
-        await db.refresh(subscription)  
+        await db.refresh(subscription)
         
         if user.remnawave_uuid:
             try:
@@ -1488,7 +1488,20 @@ async def toggle_user_server(
         
         logger.info(f"Админ {db_user.id}: сервер {server.display_name} {action_text} для пользователя {user_id}")
         
-        await show_server_selection(callback, db_user, db)
+        new_callback_data = f"admin_user_change_server_{user_id}"
+        
+        class MockCallback:
+            def __init__(self, original_callback, new_data):
+                self.message = original_callback.message
+                self.from_user = original_callback.from_user
+                self.data = new_data
+            
+            async def answer(self, *args, **kwargs):
+                return await original_callback.answer(*args, **kwargs)
+        
+        mock_callback = MockCallback(callback, new_callback_data)
+        
+        await show_server_selection(mock_callback, db_user, db)
         
     except Exception as e:
         logger.error(f"Ошибка переключения сервера: {e}")
