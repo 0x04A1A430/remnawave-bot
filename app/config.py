@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, Field
 from pathlib import Path
@@ -51,7 +51,11 @@ class Settings(BaseSettings):
     PRICE_TRAFFIC_50GB: int = 85000
     PRICE_TRAFFIC_100GB: int = 159000
     PRICE_TRAFFIC_250GB: int = 369000
+    PRICE_TRAFFIC_500GB: int = 699000
+    PRICE_TRAFFIC_1000GB: int = 1299000
     PRICE_TRAFFIC_UNLIMITED: int = 0
+    
+    TRAFFIC_PACKAGES_CONFIG: str = "5:10000:true,10:19000:true,25:45000:true,50:85000:true,100:159000:true,250:369000:true,500:699000:true,1000:1299000:true,0:0:true"
     
     PRICE_PER_DEVICE: int = 5000
     
@@ -293,6 +297,62 @@ class Settings(BaseSettings):
     def rubles_to_stars(self, rubles: float) -> int:
         return max(1, int(rubles / self.get_stars_rate()))
     
+    def get_traffic_packages(self) -> List[Dict]:
+        try:
+            packages = []
+            config_str = self.TRAFFIC_PACKAGES_CONFIG.strip()
+            
+            if not config_str:
+                return self._get_fallback_traffic_packages()
+            
+            for package_config in config_str.split(','):
+                package_config = package_config.strip()
+                if not package_config:
+                    continue
+                    
+                parts = package_config.split(':')
+                if len(parts) != 3:
+                    continue
+                    
+                try:
+                    gb = int(parts[0])
+                    price = int(parts[1])
+                    enabled = parts[2].lower() == 'true'
+                    
+                    if enabled:
+                        packages.append({
+                            "gb": gb,
+                            "price": price,
+                            "enabled": enabled
+                        })
+                except ValueError:
+                    continue
+            
+            return packages if packages else self._get_fallback_traffic_packages()
+            
+        except Exception:
+            return self._get_fallback_traffic_packages()
+    
+    def _get_fallback_traffic_packages(self) -> List[Dict]:
+        return [
+            {"gb": 5, "price": self.PRICE_TRAFFIC_5GB, "enabled": True},
+            {"gb": 10, "price": self.PRICE_TRAFFIC_10GB, "enabled": True},
+            {"gb": 25, "price": self.PRICE_TRAFFIC_25GB, "enabled": True},
+            {"gb": 50, "price": self.PRICE_TRAFFIC_50GB, "enabled": True},
+            {"gb": 100, "price": self.PRICE_TRAFFIC_100GB, "enabled": True},
+            {"gb": 250, "price": self.PRICE_TRAFFIC_250GB, "enabled": True},
+            {"gb": 500, "price": self.PRICE_TRAFFIC_500GB, "enabled": True},
+            {"gb": 1000, "price": self.PRICE_TRAFFIC_1000GB, "enabled": True},
+            {"gb": 0, "price": self.PRICE_TRAFFIC_UNLIMITED, "enabled": True},
+        ]
+    
+    def get_traffic_price(self, gb: int) -> int:
+        packages = self.get_traffic_packages()
+        for package in packages:
+            if package["gb"] == gb and package["enabled"]:
+                return package["price"]
+        return 0
+    
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8"
@@ -311,12 +371,14 @@ PERIOD_PRICES = {
     360: settings.PRICE_360_DAYS,
 }
 
-TRAFFIC_PRICES = {
-    5: settings.PRICE_TRAFFIC_5GB,
-    10: settings.PRICE_TRAFFIC_10GB,
-    25: settings.PRICE_TRAFFIC_25GB,
-    50: settings.PRICE_TRAFFIC_50GB,
-    100: settings.PRICE_TRAFFIC_100GB,
-    250: settings.PRICE_TRAFFIC_250GB,
-    0: settings.PRICE_TRAFFIC_UNLIMITED, 
-}
+def get_traffic_prices() -> Dict[int, int]:
+    packages = settings.get_traffic_packages()
+    return {package["gb"]: package["price"] for package in packages}
+
+TRAFFIC_PRICES = get_traffic_prices()
+
+def refresh_traffic_prices():
+    global TRAFFIC_PRICES
+    TRAFFIC_PRICES = get_traffic_prices()
+
+refresh_traffic_prices()
