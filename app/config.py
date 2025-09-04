@@ -387,9 +387,36 @@ class Settings(BaseSettings):
     
     def get_traffic_price(self, gb: int) -> int:
         packages = self.get_traffic_packages()
+        
         for package in packages:
             if package["gb"] == gb and package["enabled"]:
                 return package["price"]
+        
+        
+        enabled_packages = [pkg for pkg in packages if pkg["enabled"]]
+        if not enabled_packages:
+            return 0
+        
+        unlimited_package = next((pkg for pkg in enabled_packages if pkg["gb"] == 0), None)
+        
+        finite_packages = [pkg for pkg in enabled_packages if pkg["gb"] > 0]
+        if finite_packages:
+            max_package = max(finite_packages, key=lambda x: x["gb"])
+            
+            if gb > max_package["gb"]:
+                if unlimited_package:
+                    return unlimited_package["price"]
+                else:
+                    return max_package["price"]
+            
+            suitable_packages = [pkg for pkg in finite_packages if pkg["gb"] >= gb]
+            if suitable_packages:
+                nearest_package = min(suitable_packages, key=lambda x: x["gb"])
+                return nearest_package["price"]
+        
+        if unlimited_package:
+            return unlimited_package["price"]
+        
         return 0
     
     model_config = {
