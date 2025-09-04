@@ -8,7 +8,7 @@ import json
 import os
 from typing import Dict, List, Any, Tuple, Optional
 
-from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
+from app.config import settings, PERIOD_PRICES, get_traffic_prices
 from app.states import SubscriptionStates
 from app.database.crud.subscription import (
     get_subscription_by_user_id, create_trial_subscription, 
@@ -2970,3 +2970,6 @@ def register_handlers(dp: Dispatcher):
         handle_subscription_settings,
         F.data == "subscription_settings"
     )
+
+    global TRAFFIC_PRICES
+    TRAFFIC_PRICES = get_traffic_prices()
