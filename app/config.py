@@ -372,7 +372,7 @@ class Settings(BaseSettings):
             {"gb": 250, "price": self.PRICE_TRAFFIC_250GB, "enabled": True},
             {"gb": 500, "price": self.PRICE_TRAFFIC_500GB, "enabled": True},
             {"gb": 1000, "price": self.PRICE_TRAFFIC_1000GB, "enabled": True},
-            {"gb": 0, "price": 50000, "enabled": True}, 
+            {"gb": 0, "price": self.PRICE_TRAFFIC_UNLIMITED, "enabled": True}, 
         ]
     
     def get_traffic_price(self, gb: int) -> int:
