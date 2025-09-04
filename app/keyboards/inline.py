@@ -315,21 +315,30 @@ def get_devices_keyboard(current: int, language: str = "ru") -> InlineKeyboardMa
     keyboard = []
     
     start_devices = settings.DEFAULT_DEVICE_LIMIT
-    end_devices = max(start_devices + 3, 6) 
+    max_devices = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 50
+    end_devices = min(max_devices + 1, start_devices + 10)
+    
+    buttons = []
     
     for devices in range(start_devices, end_devices): 
         price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
-        price_text = f" (+{texts.format_price(price)})" if price > 0 else " (включено)"
+        price_text = f" (+{texts.format_price(price)})" if price > 0 else " (вкл.)"
         emoji = "✅" if devices == current else "⚪"
         
-        device_word = _get_device_declension(devices)
+        button_text = f"{emoji} {devices}{price_text}"
         
-        keyboard.append([
+        buttons.append(
             InlineKeyboardButton(
-                text=f"{emoji} {devices} {device_word}{price_text}",
+                text=button_text,
                 callback_data=f"devices_{devices}"
             )
-        ])
+        )
+    
+    for i in range(0, len(buttons), 2):
+        if i + 1 < len(buttons):
+            keyboard.append([buttons[i], buttons[i + 1]])
+        else:
+            keyboard.append([buttons[i]])
     
     keyboard.extend([
         [InlineKeyboardButton(text="✅ Продолжить", callback_data="devices_continue")],
@@ -653,9 +662,11 @@ def get_add_devices_keyboard(current_devices: int, language: str = "ru") -> Inli
     texts = get_texts(language)
     keyboard = []
     
-    max_devices = 10 
+    max_devices = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 100
     
-    for add_count in range(1, min(6, max_devices - current_devices + 1)): 
+    max_add = min(5, max_devices - current_devices) 
+    
+    for add_count in range(1, max_add + 1): 
         price = add_count * settings.PRICE_PER_DEVICE
         total_devices = current_devices + add_count
         
@@ -665,6 +676,14 @@ def get_add_devices_keyboard(current_devices: int, language: str = "ru") -> Inli
             InlineKeyboardButton(
                 text=f"📱 +{add_count} {add_device_word} (итого: {total_devices}) - {settings.format_price(price)}",
                 callback_data=f"add_devices_{add_count}"
+            )
+        ])
+    
+    if max_add == 0:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="⚠️ Достигнут максимум устройств", 
+                callback_data="max_devices_reached"
             )
         ])
     
