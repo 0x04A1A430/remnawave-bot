@@ -16,6 +16,7 @@ from app.localization.texts import get_texts
 from app.services.user_service import UserService
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
+from app.services.remnawave_service import RemnaWaveService
 
 logger = logging.getLogger(__name__)
 
@@ -1330,19 +1331,24 @@ async def show_user_servers_management(
             
             for squad_uuid in current_squads:
                 try:
-                    from app.database.crud.server_squad import get_server_squad_by_uuid
                     server = await get_server_squad_by_uuid(db, squad_uuid)
                     if server:
                         text += f"• {server.display_name}\n"
                     else:
                         text += f"• {squad_uuid[:8]}... (неизвестный)\n"
-                except:
+                except Exception as e:
+                    logger.error(f"Ошибка получения сервера {squad_uuid}: {e}")
                     text += f"• {squad_uuid[:8]}... (ошибка загрузки)\n"
         else:
             text += "<b>Серверы:</b> Не подключены\n"
         
         text += f"\n<b>Устройства:</b> {subscription.device_limit}\n"
-        text += f"<b>Трафик:</b> {subscription.traffic_used_gb:.1f}/{subscription.traffic_limit_gb} ГБ\n"
+        traffic_display = f"{subscription.traffic_used_gb:.1f}/"
+        if subscription.traffic_limit_gb == 0:
+            traffic_display += "∞ ГБ"
+        else:
+            traffic_display += f"{subscription.traffic_limit_gb} ГБ"
+        text += f"<b>Трафик:</b> {traffic_display}\n"
     else:
         text += "❌ <b>Подписка отсутствует</b>"
     
@@ -1424,7 +1430,7 @@ async def change_user_server(
 ):
     parts = callback.data.split('_')
     user_id = int(parts[-2])
-    server_id = int(parts[-1])
+    server_id = int(parts[-1]) 
     
     try:
         user = await get_user_by_id(db, user_id)
@@ -1432,13 +1438,14 @@ async def change_user_server(
             await callback.answer("❌ Пользователь или подписка не найдены", show_alert=True)
             return
         
-        server = await get_server_squad_by_uuid(db, server_id) 
+        from app.database.crud.server_squad import get_server_squad_by_id
+        server = await get_server_squad_by_id(db, server_id)
         if not server:
             await callback.answer("❌ Сервер не найден", show_alert=True)
             return
         
         subscription = user.subscription
-        subscription.connected_squads = [server.squad_uuid]
+        subscription.connected_squads = [server.squad_uuid] 
         subscription.updated_at = datetime.utcnow()
         
         await db.commit()
