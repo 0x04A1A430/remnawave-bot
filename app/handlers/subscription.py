@@ -2723,6 +2723,16 @@ async def handle_specific_app_guide(
     )
     await callback.answer()
 
+async def handle_no_traffic_packages(
+    callback: types.CallbackQuery,
+    db_user: User
+):
+    await callback.answer(
+        "⚠️ В данный момент нет доступных пакетов трафика. "
+        "Обратитесь в техподдержку для получения информации.", 
+        show_alert=True
+    )
+
 
 async def handle_open_subscription_link(
     callback: types.CallbackQuery,
@@ -3021,4 +3031,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_subscription_settings,
         F.data == "subscription_settings"
+    )
+
+    dp.callback_query.register(
+        handle_no_traffic_packages,
+        F.data == "no_traffic_packages"
     )
