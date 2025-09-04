@@ -871,80 +871,42 @@ async def confirm_add_traffic(
     from app.config import settings
     
     if settings.is_traffic_fixed():
-        await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
-        return
-    
-    traffic_gb = int(callback.data.split('_')[2])
-    texts = get_texts(db_user.language)
-    subscription = db_user.subscription
-    
-    price = TRAFFIC_PRICES[traffic_gb]
-    
-    if db_user.balance_kopeks < price:
-        await callback.answer("⌛ Недостаточно средств на балансе", show_alert=True)
-        return
-    
-    try:
-        success = await subtract_user_balance(
-            db, db_user, price,
-            f"Добавление {traffic_gb} ГБ трафика"
-        )
-        
-        if not success:
-            await callback.answer("⌛ Ошибка списания средств", show_alert=True)
-            return
-        
-        if traffic_gb == 0: 
-            subscription.traffic_limit_gb = 0
+        if data['traffic_gb'] == 0:
+            traffic_display = "Безлимитный"
         else:
-            await add_subscription_traffic(db, subscription, traffic_gb)
-        
-        subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
-        
-        await create_transaction(
-            db=db,
-            user_id=db_user.id,
-            type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=price,
-            description=f"Добавление {traffic_gb} ГБ трафика"
-        )
-        
-        try:
-            await process_referral_purchase(
-                db=db,
-                user_id=db_user.id,
-                purchase_amount_kopeks=price,
-                transaction_id=None
-            )
-        except Exception as e:
-            logger.error(f"Ошибка обработки реферальной покупки: {e}")
-        
-        await db.refresh(db_user)
-        await db.refresh(subscription)
-        
-        success_text = f"✅ Трафик успешно добавлен!\n\n"
-        if traffic_gb == 0:
-            success_text += "🎉 Теперь у вас безлимитный трафик!"
+            traffic_display = f"{data['traffic_gb']} ГБ"
+    else:
+        if data['traffic_gb'] == 0:
+            traffic_display = "Безлимитный"
         else:
-            success_text += f"📈 Добавлено: {traffic_gb} ГБ\n"
-            success_text += f"Новый лимит: {texts.format_traffic(subscription.traffic_limit_gb)}"
-        
-        await callback.message.edit_text(
-            success_text,
-            reply_markup=get_back_keyboard(db_user.language)
-        )
-        
-        logger.info(f"✅ Пользователь {db_user.telegram_id} добавил {traffic_gb} ГБ трафика")
-        
-    except Exception as e:
-        logger.error(f"Ошибка добавления трафика: {e}")
-        await callback.message.edit_text(
-            texts.ERROR,
-            reply_markup=get_back_keyboard(db_user.language)
-        )
+            traffic_display = f"{data['traffic_gb']} ГБ"
     
+    summary_text = f"""
+📋 <b>Сводка заказа</b>
+
+📅 <b>Период:</b> {data['period_days']} дней
+📊 <b>Трафик:</b> {traffic_display}
+🌍 <b>Страны:</b> {", ".join(selected_countries_names)}
+📱 <b>Устройства:</b> {data['devices']}
+
+💰 <b>Общая стоимость:</b> {texts.format_price(total_price)}
+
+Подтверждаете покупку?
+"""
+    
+    await callback.message.edit_text(
+        summary_text,
+        reply_markup=get_subscription_confirm_keyboard(db_user.language),
+        parse_mode="HTML"
+    )
+    
+    await state.set_state(SubscriptionStates.confirming_purchase)
     await callback.answer()
+
+def update_traffic_prices():
+    from app.config import refresh_traffic_prices
+    refresh_traffic_prices()
+    logger.info("🔄 TRAFFIC_PRICES обновлены из конфигурации")
 
 
 async def confirm_add_devices(
@@ -1360,7 +1322,10 @@ async def select_traffic(
     
     data = await state.get_data()
     data['traffic_gb'] = traffic_gb
-    data['total_price'] += TRAFFIC_PRICES[traffic_gb]
+    
+    traffic_price = settings.get_traffic_price(traffic_gb)
+    data['total_price'] += traffic_price
+    
     await state.set_data(data)
     
     if await _should_show_countries_management():
@@ -1490,7 +1455,7 @@ async def devices_continue(
     db: AsyncSession
 ):
     if not callback.data == "devices_continue":
-        await callback.answer("⌛ Некорректный запрос", show_alert=True)
+        await callback.answer("⚠️ Некорректный запрос", show_alert=True)
         return
     
     data = await state.get_data()
@@ -1513,9 +1478,11 @@ async def devices_continue(
     base_price = PERIOD_PRICES[data['period_days']]
     
     if settings.is_traffic_fixed():
-        traffic_price = TRAFFIC_PRICES.get(data['traffic_gb'], 0)
+        traffic_price = settings.get_traffic_price(settings.get_fixed_traffic_limit())
+        final_traffic_gb = settings.get_fixed_traffic_limit()
     else:
-        traffic_price = TRAFFIC_PRICES.get(data['traffic_gb'], 0)
+        traffic_price = settings.get_traffic_price(data['traffic_gb'])
+        final_traffic_gb = data['traffic_gb']
     
     devices_price = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
     total_price = base_price + traffic_price + countries_price + devices_price
@@ -1524,10 +1491,10 @@ async def devices_continue(
     await state.set_data(data)
     
     if settings.is_traffic_fixed():
-        if data['traffic_gb'] == 0:
+        if final_traffic_gb == 0:
             traffic_display = "Безлимитный"
         else:
-            traffic_display = f"{data['traffic_gb']} ГБ"
+            traffic_display = f"{final_traffic_gb} ГБ"
     else:
         if data['traffic_gb'] == 0:
             traffic_display = "Безлимитный"
@@ -1580,10 +1547,10 @@ async def confirm_purchase(
     devices_price = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
     
     if settings.is_traffic_fixed():
-        traffic_price = TRAFFIC_PRICES.get(settings.get_fixed_traffic_limit(), 0)
+        traffic_price = settings.get_traffic_price(settings.get_fixed_traffic_limit())
         final_traffic_gb = settings.get_fixed_traffic_limit()
     else:
-        traffic_price = TRAFFIC_PRICES.get(data['traffic_gb'], 0)
+        traffic_price = settings.get_traffic_price(data['traffic_gb'])
         final_traffic_gb = data['traffic_gb']
     
     final_price = base_price + traffic_price + countries_price + devices_price
@@ -1671,7 +1638,7 @@ async def confirm_purchase(
             remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
             
         if not remnawave_user:
-            logger.error(f"❌ Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}")
+            logger.error(f"⚠️ Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}")
             logger.info(f"🔄 Fallback: принудительное создание нового RemnaWave пользователя")
             remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
         
@@ -1735,6 +1702,84 @@ async def confirm_purchase(
         )
     
     await state.clear()
+    await callback.answer()_fixed():
+        await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
+        return
+    
+    traffic_gb = int(callback.data.split('_')[2])
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    
+    price = settings.get_traffic_price(traffic_gb)
+    
+    if price == 0 and traffic_gb != 0:
+        await callback.answer("⚠️ Цена для этого пакета не настроена", show_alert=True)
+        return
+    
+    if db_user.balance_kopeks < price:
+        await callback.answer("⚠️ Недостаточно средств на балансе", show_alert=True)
+        return
+    
+    try:
+        success = await subtract_user_balance(
+            db, db_user, price,
+            f"Добавление {traffic_gb} ГБ трафика"
+        )
+        
+        if not success:
+            await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
+            return
+        
+        if traffic_gb == 0: 
+            subscription.traffic_limit_gb = 0
+        else:
+            await add_subscription_traffic(db, subscription, traffic_gb)
+        
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+        
+        await create_transaction(
+            db=db,
+            user_id=db_user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=price,
+            description=f"Добавление {traffic_gb} ГБ трафика"
+        )
+        
+        try:
+            await process_referral_purchase(
+                db=db,
+                user_id=db_user.id,
+                purchase_amount_kopeks=price,
+                transaction_id=None
+            )
+        except Exception as e:
+            logger.error(f"Ошибка обработки реферальной покупки: {e}")
+        
+        await db.refresh(db_user)
+        await db.refresh(subscription)
+        
+        success_text = f"✅ Трафик успешно добавлен!\n\n"
+        if traffic_gb == 0:
+            success_text += "🎉 Теперь у вас безлимитный трафик!"
+        else:
+            success_text += f"📈 Добавлено: {traffic_gb} ГБ\n"
+            success_text += f"Новый лимит: {texts.format_traffic(subscription.traffic_limit_gb)}"
+        
+        await callback.message.edit_text(
+            success_text,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+        
+        logger.info(f"✅ Пользователь {db_user.telegram_id} добавил {traffic_gb} ГБ трафика")
+        
+    except Exception as e:
+        logger.error(f"Ошибка добавления трафика: {e}")
+        await callback.message.edit_text(
+            texts.ERROR,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+    
     await callback.answer()
 
 async def create_paid_subscription_with_traffic_mode(
