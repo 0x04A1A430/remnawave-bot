@@ -540,7 +540,7 @@ async def handle_manage_country(
     
     subscription = db_user.subscription
     if not subscription or subscription.is_trial:
-        await callback.answer("❌ Только для платных подписок", show_alert=True)
+        await callback.answer("⚠ Только для платных подписок", show_alert=True)
         return
     
     data = await state.get_data()
@@ -565,13 +565,14 @@ async def handle_manage_country(
                 countries, 
                 current_selected, 
                 subscription.connected_squads, 
-                db_user.language
+                db_user.language,
+                subscription.end_date 
             )
         )
         logger.info(f"✅ Клавиатура обновлена")
         
     except Exception as e:
-        logger.error(f"❌ Ошибка обновления клавиатуры: {e}")
+        logger.error(f"⚠ Ошибка обновления клавиатуры: {e}")
     
     await callback.answer()
 
