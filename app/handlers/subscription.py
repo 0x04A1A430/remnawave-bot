@@ -43,6 +43,7 @@ from app.services.referral_service import process_referral_purchase
 
 logger = logging.getLogger(__name__)
 
+TRAFFIC_PRICES = get_traffic_prices()
 
 async def show_subscription_info(
     callback: types.CallbackQuery,
