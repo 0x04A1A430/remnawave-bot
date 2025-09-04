@@ -1382,16 +1382,28 @@ async def show_server_selection(
     db: AsyncSession
 ):
     user_id = int(callback.data.split('_')[-1])
-    
+    await _show_servers_for_user(callback, user_id, db)
+    await callback.answer()
+
+async def _show_servers_for_user(
+    callback: types.CallbackQuery,
+    user_id: int,
+    db: AsyncSession
+):
     try:
         user = await get_user_by_id(db, user_id)
         current_squads = []
         if user and user.subscription:
             current_squads = user.subscription.connected_squads or []
         
-        servers, _ = await get_all_server_squads(db, available_only=True)
+        all_servers, _ = await get_all_server_squads(db, available_only=False)
         
-        if not servers:
+        servers_to_show = []
+        for server in all_servers:
+            if server.is_available or server.squad_uuid in current_squads:
+                servers_to_show.append(server)
+        
+        if not servers_to_show:
             await callback.message.edit_text(
                 "❌ Доступные серверы не найдены",
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
@@ -1401,26 +1413,41 @@ async def show_server_selection(
             return
         
         text = f"🌍 <b>Управление серверами</b>\n\n"
-        text += f"Нажмите на сервер чтобы добавить/убрать:\n\n"
+        text += f"Нажмите на сервер чтобы добавить/убрать:\n"
+        text += f"✅ - выбранный сервер\n"
+        text += f"⚪ - доступный сервер\n"
+        text += f"🔒 - неактивный (только для уже назначенных)\n\n"
         
         keyboard = []
-        for server in servers[:15]:
+        selected_servers = [s for s in servers_to_show if s.squad_uuid in current_squads]
+        available_servers = [s for s in servers_to_show if s.squad_uuid not in current_squads and s.is_available]
+        inactive_servers = [s for s in servers_to_show if s.squad_uuid not in current_squads and not s.is_available]
+        
+        sorted_servers = selected_servers + available_servers + inactive_servers
+        
+        for server in sorted_servers[:20]: 
             is_selected = server.squad_uuid in current_squads
             
             if is_selected:
                 emoji = "✅"
-            else:
+            elif server.is_available:
                 emoji = "⚪"
+            else:
+                emoji = "🔒"
+            
+            display_name = server.display_name
+            if not server.is_available and not is_selected:
+                display_name += " (неактивный)"
             
             keyboard.append([
                 types.InlineKeyboardButton(
-                    text=f"{emoji} {server.display_name}",
-                    callback_data=f"admin_user_toggle_server_{user_id}_{server.id}"  
+                    text=f"{emoji} {display_name}",
+                    callback_data=f"admin_user_toggle_server_{user_id}_{server.id}"
                 )
             ])
         
-        if len(servers) > 15:
-            text += f"\n📝 Показано первых 15 из {len(servers)} серверов"
+        if len(servers_to_show) > 20:
+            text += f"\n📝 Показано первых 20 из {len(servers_to_show)} серверов"
         
         keyboard.append([
             types.InlineKeyboardButton(text="✅ Готово", callback_data=f"admin_user_servers_{user_id}"),
@@ -1431,11 +1458,9 @@ async def show_server_selection(
             text,
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
         )
-        await callback.answer()
         
     except Exception as e:
         logger.error(f"Ошибка показа серверов: {e}")
-        await callback.answer("❌ Ошибка загрузки серверов", show_alert=True)
 
 @admin_required
 @error_handler
