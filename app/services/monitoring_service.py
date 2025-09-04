@@ -176,35 +176,52 @@ class MonitoringService:
     async def _check_expiring_subscriptions(self, db: AsyncSession):
         try:
             warning_days = settings.get_autopay_warning_days()
+            all_processed_users = set() 
             
             for days in warning_days:
                 expiring_subscriptions = await self._get_expiring_paid_subscriptions(db, days)
+                sent_count = 0
                 
                 for subscription in expiring_subscriptions:
                     user = await get_user_by_id(db, subscription.user_id)
                     if not user:
                         continue
                     
-                    # Уникальный ключ для предотвращения дублирования
                     notification_key = f"expiring_{user.telegram_id}_{days}d_{subscription.id}"
+                    user_key = f"user_{user.telegram_id}_today"
                     
-                    if notification_key in self._notified_users:
-                        logger.debug(f"🔄 Пропускаем дублирование уведомления для пользователя {user.telegram_id} (ключ: {notification_key})")
-                        continue 
+                    if (notification_key in self._notified_users or 
+                        user_key in all_processed_users):
+                        logger.debug(f"🔄 Пропускаем дублирование для пользователя {user.telegram_id} на {days} дней")
+                        continue
+                    
+                    should_send = True
+                    for other_days in warning_days:
+                        if other_days < days: 
+                            other_subs = await self._get_expiring_paid_subscriptions(db, other_days)
+                            if any(s.user_id == user.id for s in other_subs):
+                                should_send = False
+                                logger.debug(f"🎯 Пропускаем уведомление на {days} дней для пользователя {user.telegram_id}, есть более срочное на {other_days} дней")
+                                break
+                    
+                    if not should_send:
+                        continue
                     
                     if self.bot:
                         success = await self._send_subscription_expiring_notification(user, subscription, days)
                         if success:
                             self._notified_users.add(notification_key)
+                            all_processed_users.add(user_key)
+                            sent_count += 1
                             logger.info(f"✅ Пользователю {user.telegram_id} отправлено уведомление об истечении подписки через {days} дней")
                         else:
                             logger.warning(f"❌ Не удалось отправить уведомление пользователю {user.telegram_id}")
                 
-                if expiring_subscriptions:
+                if sent_count > 0:
                     await self._log_monitoring_event(
                         db, "expiring_notifications_sent",
-                        f"Отправлено {len(expiring_subscriptions)} уведомлений об истечении через {days} дней",
-                        {"days": days, "count": len(expiring_subscriptions)}
+                        f"Отправлено {sent_count} уведомлений об истечении через {days} дней",
+                        {"days": days, "count": sent_count}
                     )
                     
         except Exception as e:
@@ -354,6 +371,7 @@ class MonitoringService:
             logger.error(f"Ошибка обработки автоплатежей: {e}")
     
     async def _send_subscription_expired_notification(self, user: User) -> bool:
+        """Отправляет уведомление об истечении подписки"""
         try:
             message = """
 ⛔ <b>Подписка истекла</b>
