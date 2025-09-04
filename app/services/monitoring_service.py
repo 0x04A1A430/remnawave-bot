@@ -371,7 +371,6 @@ class MonitoringService:
             logger.error(f"Ошибка обработки автоплатежей: {e}")
     
     async def _send_subscription_expired_notification(self, user: User) -> bool:
-        """Отправляет уведомление об истечении подписки"""
         try:
             message = """
 ⛔ <b>Подписка истекла</b>
