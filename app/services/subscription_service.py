@@ -229,36 +229,39 @@ class SubscriptionService:
         devices: int,
         db: AsyncSession 
     ) -> Tuple[int, List[int]]:
-
+    
         from app.config import PERIOD_PRICES, TRAFFIC_PRICES
         from app.database.crud.server_squad import get_server_squad_by_id
-
+    
+        if settings.MAX_DEVICES_LIMIT > 0 and devices > settings.MAX_DEVICES_LIMIT:
+            raise ValueError(f"Превышен максимальный лимит устройств: {settings.MAX_DEVICES_LIMIT}")
+    
         base_price = PERIOD_PRICES.get(period_days, 0)
         traffic_price = TRAFFIC_PRICES.get(traffic_gb, 0)
-
+    
         server_prices = []
         total_servers_price = 0
-
+    
         for server_id in server_squad_ids:
             server = await get_server_squad_by_id(db, server_id)
             if server and server.is_available and not server.is_full:
                 server_prices.append(server.price_kopeks)
                 total_servers_price += server.price_kopeks
-                logger.debug(f"🏷️ Сервер {server.display_name}: {server.price_kopeks/100}₽")
+                logger.debug(f"Сервер {server.display_name}: {server.price_kopeks/100}₽")
             else:
                 server_prices.append(0)
-                logger.warning(f"⚠️ Сервер ID {server_id} недоступен")
-
+                logger.warning(f"Сервер ID {server_id} недоступен")
+    
         devices_price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
         
         total_price = base_price + traffic_price + total_servers_price + devices_price
         
-        logger.info(f"💰 Расчет стоимости новой подписки:")
-        logger.info(f"   📅 Период {period_days} дней: {base_price/100}₽")
-        logger.info(f"   📊 Трафик {traffic_gb} ГБ: {traffic_price/100}₽")
-        logger.info(f"   🌍 Серверы ({len(server_squad_ids)}): {total_servers_price/100}₽")
-        logger.info(f"   📱 Устройства ({devices}): {devices_price/100}₽")
-        logger.info(f"   💎 ИТОГО: {total_price/100}₽")
+        logger.info(f"Расчет стоимости новой подписки:")
+        logger.info(f"   Период {period_days} дней: {base_price/100}₽")
+        logger.info(f"   Трафик {traffic_gb} ГБ: {traffic_price/100}₽")
+        logger.info(f"   Серверы ({len(server_squad_ids)}): {total_servers_price/100}₽")
+        logger.info(f"   Устройства ({devices}): {devices_price/100}₽")
+        logger.info(f"   ИТОГО: {total_price/100}₽")
         
         return total_price, server_prices
     
