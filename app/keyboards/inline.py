@@ -242,10 +242,27 @@ def get_subscription_period_keyboard(language: str = "ru") -> InlineKeyboardMark
 
 
 def get_traffic_packages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    import logging
+    logger = logging.getLogger(__name__)
+    
     from app.config import settings
     
     if settings.is_traffic_fixed():
         return get_back_keyboard(language)
+    
+    logger.info(f"🔍 RAW CONFIG: '{settings.TRAFFIC_PACKAGES_CONFIG}'")
+    
+    all_packages = settings.get_traffic_packages()
+    logger.info(f"🔍 ALL PACKAGES: {all_packages}")
+    
+    enabled_packages = [pkg for pkg in all_packages if pkg['enabled']]
+    disabled_packages = [pkg for pkg in all_packages if not pkg['enabled']]
+    
+    logger.info(f"🔍 ENABLED: {len(enabled_packages)} packages")
+    logger.info(f"🔍 DISABLED: {len(disabled_packages)} packages")
+    
+    for pkg in disabled_packages:
+        logger.info(f"🔍 DISABLED PACKAGE: {pkg['gb']}GB = {pkg['price']} kopeks, enabled={pkg['enabled']}")
     
     texts = get_texts(language)
     keyboard = []
