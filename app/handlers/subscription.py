@@ -1637,7 +1637,7 @@ async def devices_continue(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import calculate_months_from_days, format_period_description
+    from app.utils.pricing_utils import calculate_months_from_days, format_period_description, validate_pricing_calculation
     
     if not callback.data == "devices_continue":
         await callback.answer("⚠️ Некорректный запрос", show_alert=True)
@@ -1648,17 +1648,6 @@ async def devices_continue(
     
     countries = await _get_available_countries()
     selected_countries_names = []
-    
-    try:
-        subscription_service = SubscriptionService()
-        countries_price, _ = await subscription_service.get_countries_price_by_uuids(data['countries'], db)
-    except AttributeError:
-        logger.warning("Используем fallback функцию для расчета цен стран")
-        countries_price, _ = await get_countries_price_by_uuids_fallback(data['countries'], db)
-    
-    for country in countries:
-        if country['uuid'] in data['countries']:
-            selected_countries_names.append(country['name'])
     
     months_in_period = calculate_months_from_days(data['period_days'])
     period_display = format_period_description(data['period_days'], db_user.language)
@@ -1674,7 +1663,16 @@ async def devices_continue(
     
     total_traffic_price = traffic_price_per_month * months_in_period
     
-    countries_price_per_month = countries_price // months_in_period if months_in_period > 0 else countries_price
+    countries_price_per_month = 0
+    selected_server_prices = []
+    
+    for country in countries:
+        if country['uuid'] in data['countries']:
+            server_price_per_month = country['price_kopeks']
+            countries_price_per_month += server_price_per_month
+            selected_countries_names.append(country['name'])
+            selected_server_prices.append(server_price_per_month * months_in_period)
+    
     total_countries_price = countries_price_per_month * months_in_period
     
     additional_devices = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT)
@@ -1683,7 +1681,16 @@ async def devices_continue(
     
     total_price = base_price + total_traffic_price + total_countries_price + total_devices_price
     
+    monthly_additions = countries_price_per_month + devices_price_per_month + traffic_price_per_month
+    is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, total_price)
+    
+    if not is_valid:
+        logger.error(f"Ошибка в расчете цены подписки для пользователя {db_user.telegram_id}")
+        await callback.answer("Ошибка расчета цены. Обратитесь в поддержку.", show_alert=True)
+        return
+    
     data['total_price'] = total_price
+    data['server_prices_for_period'] = selected_server_prices
     await state.set_data(data)
     
     if settings.is_traffic_fixed():
