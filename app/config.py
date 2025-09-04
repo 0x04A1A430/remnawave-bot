@@ -319,12 +319,11 @@ class Settings(BaseSettings):
                     price = int(parts[1])
                     enabled = parts[2].lower() == 'true'
                     
-                    if enabled:
-                        packages.append({
-                            "gb": gb,
-                            "price": price,
-                            "enabled": enabled
-                        })
+                    packages.append({
+                        "gb": gb,
+                        "price": price,
+                        "enabled": enabled
+                    })
                 except ValueError:
                     continue
             
