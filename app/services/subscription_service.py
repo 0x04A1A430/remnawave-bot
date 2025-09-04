@@ -410,7 +410,7 @@ class SubscriptionService:
         if settings.MAX_DEVICES_LIMIT > 0 and devices > settings.MAX_DEVICES_LIMIT:
             raise ValueError(f"Превышен максимальный лимит устройств: {settings.MAX_DEVICES_LIMIT}")
         
-        months_in_period = max(1, round(period_days / 30))
+        months_in_period = calculate_months_from_days(period_days)
         
         base_price = PERIOD_PRICES.get(period_days, 0)
         
@@ -456,7 +456,7 @@ class SubscriptionService:
         try:
             from app.config import PERIOD_PRICES
             
-            months_in_period = max(1, round(period_days / 30))
+            months_in_period = calculate_months_from_days(period_days)
             
             base_price = PERIOD_PRICES.get(period_days, 0)
             
@@ -501,11 +501,7 @@ class SubscriptionService:
             additional_server_ids = []
         
         current_time = datetime.utcnow()
-        if subscription.end_date <= current_time:
-            months_to_pay = 1
-        else:
-            remaining_days = (subscription.end_date - current_time).days
-            months_to_pay = max(1, round(remaining_days / 30))
+        months_to_pay = get_remaining_months(subscription.end_date)
         
         total_price = 0
         
