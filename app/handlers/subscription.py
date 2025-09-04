@@ -959,10 +959,20 @@ async def confirm_add_devices(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
+    new_total_devices = subscription.device_limit + devices_count
+    
+    if settings.MAX_DEVICES_LIMIT > 0 and new_total_devices > settings.MAX_DEVICES_LIMIT:
+        await callback.answer(
+            f"⚠️ Превышен максимальный лимит устройств ({settings.MAX_DEVICES_LIMIT}). "
+            f"У вас: {subscription.device_limit}, добавляете: {devices_count}",
+            show_alert=True
+        )
+        return
+    
     price = devices_count * settings.PRICE_PER_DEVICE
     
     if db_user.balance_kopeks < price:
-        await callback.answer("❌ Недостаточно средств на балансе", show_alert=True)
+        await callback.answer("⚠️ Недостаточно средств на балансе", show_alert=True)
         return
     
     try:
@@ -972,7 +982,7 @@ async def confirm_add_devices(
         )
         
         if not success:
-            await callback.answer("❌ Ошибка списания средств", show_alert=True)
+            await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
             return
         
         await add_subscription_devices(db, subscription, devices_count)
