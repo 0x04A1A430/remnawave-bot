@@ -40,6 +40,12 @@ from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 from app.services.referral_service import process_referral_purchase
+from app.utils.pricing_utils import (
+    calculate_months_from_days,
+    get_remaining_months,
+    calculate_prorated_price,
+    validate_pricing_calculation
+)
 
 logger = logging.getLogger(__name__)
 
