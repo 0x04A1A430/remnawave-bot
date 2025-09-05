@@ -91,6 +91,7 @@ async def get_referral_earnings_sum(
 
 
 async def get_referral_statistics(db: AsyncSession) -> dict:
+    
     users_with_referrals_result = await db.execute(
         select(func.count(func.distinct(User.id)))
         .where(User.referred_by_id.isnot(None))
@@ -117,41 +118,72 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
     
     total_paid = referral_paid + transaction_paid
     
-    top_referrers_result = await db.execute(
+    referrals_stats_result = await db.execute(
         select(
             User.referred_by_id.label('referrer_id'),
-            func.count(User.id).label('referrals_count'),
-            func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0).label('referral_earnings'),
-            func.coalesce(func.sum(Transaction.amount_kopeks), 0).label('transaction_earnings')
+            func.count(User.id).label('referrals_count')
         )
-        .outerjoin(
-            ReferralEarning, 
-            ReferralEarning.user_id == User.referred_by_id
-        )
-        .outerjoin(
-            Transaction,
-            and_(
-                Transaction.user_id == User.referred_by_id,
-                Transaction.type == TransactionType.REFERRAL_REWARD.value
-            )
-        )
-        .where(
-            and_(
-                User.referred_by_id.isnot(None),
-                User.referred_by_id != User.id 
-            )
-        )
+        .where(User.referred_by_id.isnot(None))
         .group_by(User.referred_by_id)
-        .order_by(func.count(User.id).desc())
-        .limit(5)
     )
-    top_referrers_raw = top_referrers_result.all()
+    referrals_stats = {row.referrer_id: row.referrals_count for row in referrals_stats_result.all()}
+    
+    referral_earnings_result = await db.execute(
+        select(
+            ReferralEarning.user_id.label('referrer_id'),
+            func.sum(ReferralEarning.amount_kopeks).label('referral_earnings')
+        )
+        .group_by(ReferralEarning.user_id)
+    )
+    referral_earnings = {row.referrer_id: row.referral_earnings for row in referral_earnings_result.all()}
+    
+    transaction_earnings_result = await db.execute(
+        select(
+            Transaction.user_id.label('referrer_id'),
+            func.sum(Transaction.amount_kopeks).label('transaction_earnings')
+        )
+        .where(Transaction.type == TransactionType.REFERRAL_REWARD.value)
+        .group_by(Transaction.user_id)
+    )
+    transaction_earnings = {row.referrer_id: row.transaction_earnings for row in transaction_earnings_result.all()}
+    
+    top_referrers_data = {}
+    
+    for referrer_id, count in referrals_stats.items():
+        if referrer_id not in top_referrers_data:
+            top_referrers_data[referrer_id] = {
+                'referrals_count': 0,
+                'total_earned': 0
+            }
+        top_referrers_data[referrer_id]['referrals_count'] = count
+    
+    for referrer_id, earnings in referral_earnings.items():
+        if referrer_id not in top_referrers_data:
+            top_referrers_data[referrer_id] = {
+                'referrals_count': 0,
+                'total_earned': 0
+            }
+        top_referrers_data[referrer_id]['total_earned'] += earnings or 0
+    
+    for referrer_id, earnings in transaction_earnings.items():
+        if referrer_id not in top_referrers_data:
+            top_referrers_data[referrer_id] = {
+                'referrals_count': 0,
+                'total_earned': 0
+            }
+        top_referrers_data[referrer_id]['total_earned'] += earnings or 0
+    
+    sorted_referrers = sorted(
+        top_referrers_data.items(),
+        key=lambda x: (x[1]['total_earned'], x[1]['referrals_count']),
+        reverse=True
+    )
     
     top_referrers = []
-    for row in top_referrers_raw:
+    for referrer_id, stats in sorted_referrers[:5]:
         user_result = await db.execute(
             select(User.id, User.username, User.first_name, User.last_name, User.telegram_id)
-            .where(User.id == row.referrer_id)
+            .where(User.id == referrer_id)
         )
         user = user_result.first()
         
@@ -166,23 +198,21 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
             else:
                 display_name = f"ID{user.telegram_id}"
             
-            total_earned = (row.referral_earnings or 0) + (row.transaction_earnings or 0)
-            
             top_referrers.append({
-                "user_id": row.referrer_id,
+                "user_id": referrer_id,
                 "display_name": display_name,
                 "username": user.username,
-                "total_earned_kopeks": total_earned,
-                "referrals_count": row.referrals_count
+                "total_earned_kopeks": stats['total_earned'],
+                "referrals_count": stats['referrals_count']
             })
     
-    today = datetime.utcnow().date()
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     
-    today_referral_earnings = await db.execute(
+    today_referral_earnings_result = await db.execute(
         select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0))
         .where(ReferralEarning.created_at >= today)
     )
-    today_transaction_earnings = await db.execute(
+    today_transaction_earnings_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
         .where(
             and_(
@@ -191,14 +221,14 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
             )
         )
     )
-    today_earnings = today_referral_earnings.scalar() + today_transaction_earnings.scalar()
+    today_earnings = today_referral_earnings_result.scalar() + today_transaction_earnings_result.scalar()
     
     week_ago = datetime.utcnow() - timedelta(days=7)
-    week_referral_earnings = await db.execute(
+    week_referral_earnings_result = await db.execute(
         select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0))
         .where(ReferralEarning.created_at >= week_ago)
     )
-    week_transaction_earnings = await db.execute(
+    week_transaction_earnings_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
         .where(
             and_(
@@ -207,14 +237,14 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
             )
         )
     )
-    week_earnings = week_referral_earnings.scalar() + week_transaction_earnings.scalar()
+    week_earnings = week_referral_earnings_result.scalar() + week_transaction_earnings_result.scalar()
     
     month_ago = datetime.utcnow() - timedelta(days=30)
-    month_referral_earnings = await db.execute(
+    month_referral_earnings_result = await db.execute(
         select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0))
         .where(ReferralEarning.created_at >= month_ago)
     )
-    month_transaction_earnings = await db.execute(
+    month_transaction_earnings_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
         .where(
             and_(
@@ -223,7 +253,9 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
             )
         )
     )
-    month_earnings = month_referral_earnings.scalar() + month_transaction_earnings.scalar()
+    month_earnings = month_referral_earnings_result.scalar() + month_transaction_earnings_result.scalar()
+    
+    logger.info(f"Реферальная статистика: {users_with_referrals} рефералов, {active_referrers} рефереров, выплачено {total_paid} копеек")
     
     return {
         "users_with_referrals": users_with_referrals,
@@ -248,13 +280,14 @@ async def get_user_referral_stats(db: AsyncSession, user_id: int) -> dict:
     month_ago = datetime.utcnow() - timedelta(days=30)
     month_earned = await get_referral_earnings_sum(db, user_id, start_date=month_ago)
     
+    from app.database.models import Subscription
     active_referrals_result = await db.execute(
         select(func.count(User.id))
-        .join(User.subscription)
+        .join(Subscription, User.id == Subscription.user_id)
         .where(
             and_(
                 User.referred_by_id == user_id,
-                User.subscription.has()
+                Subscription.is_active == True
             )
         )
     )
