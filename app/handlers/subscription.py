@@ -699,6 +699,11 @@ async def apply_countries_changes(
         await subscription_service.update_remnawave_user(db, subscription)
         
         if total_cost > 0:
+
+        try:
+            logger.info(f"Списано {total_cost/100}₽ за добавление стран")
+        except Exception as e:
+            logger.error(f"Ошибка обработки платежа: {e}")
         
         await db.refresh(subscription)
         
