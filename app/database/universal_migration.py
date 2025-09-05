@@ -291,6 +291,82 @@ async def add_referral_system_columns():
         logger.error(f"Ошибка миграции реферальной системы: {e}")
         return False
 
+async def create_subscription_conversions_table():
+    
+    table_exists = await check_table_exists('subscription_conversions')
+    if table_exists:
+        logger.info("Таблица subscription_conversions уже существует")
+        return True
+    
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE subscription_conversions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    converted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    trial_duration_days INTEGER NULL,
+                    payment_method VARCHAR(50) NULL,
+                    first_payment_amount_kopeks INTEGER NULL,
+                    first_paid_period_days INTEGER NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                );
+                
+                CREATE INDEX idx_subscription_conversions_user_id ON subscription_conversions(user_id);
+                CREATE INDEX idx_subscription_conversions_converted_at ON subscription_conversions(converted_at);
+                """
+                
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE subscription_conversions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    converted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    trial_duration_days INTEGER NULL,
+                    payment_method VARCHAR(50) NULL,
+                    first_payment_amount_kopeks INTEGER NULL,
+                    first_paid_period_days INTEGER NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                );
+                
+                CREATE INDEX idx_subscription_conversions_user_id ON subscription_conversions(user_id);
+                CREATE INDEX idx_subscription_conversions_converted_at ON subscription_conversions(converted_at);
+                """
+                
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE subscription_conversions (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    converted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    trial_duration_days INT NULL,
+                    payment_method VARCHAR(50) NULL,
+                    first_payment_amount_kopeks INT NULL,
+                    first_paid_period_days INT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                );
+                
+                CREATE INDEX idx_subscription_conversions_user_id ON subscription_conversions(user_id);
+                CREATE INDEX idx_subscription_conversions_converted_at ON subscription_conversions(converted_at);
+                """
+            else:
+                logger.error(f"Неподдерживаемый тип БД для создания таблицы: {db_type}")
+                return False
+            
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица subscription_conversions успешно создана")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы subscription_conversions: {e}")
+        return False
+
 async def fix_subscription_duplicates_universal():
     
     async with engine.begin() as conn:
@@ -390,6 +466,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей YooKassa payments")
         
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ КОНВЕРСИЙ ПОДПИСОК ===")
+        conversions_created = await create_subscription_conversions_table()
+        if conversions_created:
+            logger.info("✅ Таблица subscription_conversions готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей subscription_conversions")
+        
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))
             unique_users = await conn.execute(text("SELECT COUNT(DISTINCT user_id) FROM subscriptions"))
@@ -425,6 +508,7 @@ async def run_universal_migration():
                 logger.info("✅ Реферальная система обновлена")
                 logger.info("✅ RemnaWave v2.1.5 колонки добавлены")
                 logger.info("✅ YooKassa таблица готова")
+                logger.info("✅ Таблица конверсий подписок создана")
                 logger.info("✅ Дубликаты подписок исправлены")
                 return True
                 
@@ -440,12 +524,15 @@ async def check_migration_status():
             "has_made_first_topup_column": False,
             "yookassa_table": False,
             "remnawave_v2_columns": False,
-            "subscription_duplicates": False
+            "subscription_duplicates": False,
+            "subscription_conversions_table": False
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
         
         status["yookassa_table"] = await check_table_exists('yookassa_payments')
+        
+        status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
         
         remnawave_columns = ['lifetime_used_traffic_bytes', 'last_remnawave_sync', 'trojan_password', 'vless_uuid', 'ss_password']
         remnawave_status = []
@@ -466,15 +553,39 @@ async def check_migration_status():
             duplicates_count = duplicates_check.fetchone()[0]
             status["subscription_duplicates"] = (duplicates_count == 0)
         
-        for check_name, check_status in status.items():
+        check_names = {
+            "has_made_first_topup_column": "Колонка реферальной системы",
+            "yookassa_table": "Таблица YooKassa payments",
+            "subscription_conversions_table": "Таблица конверсий подписок",
+            "remnawave_v2_columns": "Колонки RemnaWave v2.1.5",
+            "subscription_duplicates": "Отсутствие дубликатов подписок"
+        }
+        
+        for check_key, check_status in status.items():
+            check_name = check_names.get(check_key, check_key)
             icon = "✅" if check_status else "❌"
             logger.info(f"{icon} {check_name}: {'OK' if check_status else 'ТРЕБУЕТ ВНИМАНИЯ'}")
         
         all_good = all(status.values())
         if all_good:
             logger.info("🎉 Все миграции выполнены успешно!")
+            
+            try:
+                async with engine.begin() as conn:
+                    conversions_count = await conn.execute(text("SELECT COUNT(*) FROM subscription_conversions"))
+                    users_count = await conn.execute(text("SELECT COUNT(*) FROM users"))
+                    
+                    conv_count = conversions_count.fetchone()[0]
+                    usr_count = users_count.fetchone()[0]
+                    
+                    logger.info(f"📊 Статистика: {usr_count} пользователей, {conv_count} конверсий записано")
+            except Exception as stats_error:
+                logger.debug(f"Не удалось получить дополнительную статистику: {stats_error}")
+                
         else:
             logger.warning("⚠️ Некоторые миграции требуют внимания")
+            missing_migrations = [check_names[k] for k, v in status.items() if not v]
+            logger.warning(f"Требуют выполнения: {', '.join(missing_migrations)}")
         
         return status
         
