@@ -150,7 +150,15 @@ async def add_user_balance(
         
         logger.info(f"🔍 Проверка реферальной логики для описания: '{description}'")
         
-        if any(word in description.lower() for word in ["пополнение", "stars", "yookassa", "topup"]) and not any(word in description.lower() for word in ["комиссия", "бонус"]):
+        topup_keywords = ["пополнение", "stars", "yookassa", "topup"]
+        
+        exclude_keywords = ["комиссия", "бонус", "реферальн", "выплата", "вознаграждение"]
+        
+        has_topup_keywords = any(word in description.lower() for word in topup_keywords)
+        
+        has_exclude_keywords = any(word in description.lower() for word in exclude_keywords)
+        
+        if has_topup_keywords and not has_exclude_keywords:
             logger.info(f"📞 Вызов process_referral_topup для пользователя {user.id}")
             try:
                 from app.services.referral_service import process_referral_topup
@@ -158,7 +166,12 @@ async def add_user_balance(
             except Exception as e:
                 logger.error(f"Ошибка обработки реферального пополнения: {e}")
         else:
-            logger.info(f"❌ Описание '{description}' не подходит для реферальной логики")
+            if has_exclude_keywords:
+                logger.info(f"❌ Описание '{description}' содержит исключающие слова для реферальной логики")
+            elif not has_topup_keywords:
+                logger.info(f"❌ Описание '{description}' не содержит ключевых слов пополнения")
+            else:
+                logger.info(f"❌ Описание '{description}' не подходит для реферальной логики")
         
         logger.info(f"💰 Баланс пользователя {user.telegram_id} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
         return True
