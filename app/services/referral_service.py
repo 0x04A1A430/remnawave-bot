@@ -50,14 +50,11 @@ async def process_referral_topup(
     try:
         user = await get_user_by_id(db, user_id)
         if not user or not user.referred_by_id:
+            logger.info(f"Пользователь {user_id} не является рефералом")
             return True
         
         if topup_amount_kopeks < settings.REFERRAL_MINIMUM_TOPUP_KOPEKS:
-            logger.info(f"Пополнение {user_id} на {topup_amount_kopeks/100}₽ меньше минимума {settings.REFERRAL_MINIMUM_TOPUP_KOPEKS/100}₽")
-            return True
-        
-        if user.has_made_first_topup:
-            logger.info(f"Пользователь {user_id} уже делал пополнения - бонусы не выдаются")
+            logger.info(f"Пополнение {user_id} на {topup_amount_kopeks/100}₽ меньше минимума")
             return True
         
         referrer = await get_user_by_id(db, user.referred_by_id)
@@ -65,39 +62,55 @@ async def process_referral_topup(
             logger.error(f"Реферер {user.referred_by_id} не найден")
             return False
         
-        user.has_made_first_topup = True
-        await db.commit()
-        
-        if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
-            await add_user_balance(
-                db, user, settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
-                f"Бонус за первое пополнение по реферальной программе"
-            )
+        if not user.has_made_first_topup:
+            user.has_made_first_topup = True
+            await db.commit()
             
-            logger.info(f"💰 Реферал {user_id} получил бонус {settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS/100}₽")
-        
-        if settings.REFERRAL_INVITER_BONUS_KOPEKS > 0:
-            await add_user_balance(
-                db, referrer, settings.REFERRAL_INVITER_BONUS_KOPEKS,
-                f"Бонус за первое пополнение реферала {user.full_name}"
-            )
+            if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
+                await add_user_balance(
+                    db, user, settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
+                    f"Бонус за первое пополнение по реферальной программе"
+                )
+                logger.info(f"💰 Реферал {user_id} получил бонус {settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS/100}₽")
             
-            await create_referral_earning(
-                db=db,
-                user_id=referrer.id,
-                referral_id=user_id,
-                amount_kopeks=settings.REFERRAL_INVITER_BONUS_KOPEKS,
-                reason="referral_first_topup"
-            )
-            
-            logger.info(f"💰 Реферер {referrer.telegram_id} получил бонус {settings.REFERRAL_INVITER_BONUS_KOPEKS/100}₽")
+            if settings.REFERRAL_INVITER_BONUS_KOPEKS > 0:
+                await add_user_balance(
+                    db, referrer, settings.REFERRAL_INVITER_BONUS_KOPEKS,
+                    f"Бонус за первое пополнение реферала {user.full_name}"
+                )
+                
+                await create_referral_earning(
+                    db=db,
+                    user_id=referrer.id,
+                    referral_id=user_id,
+                    amount_kopeks=settings.REFERRAL_INVITER_BONUS_KOPEKS,
+                    reason="referral_first_topup"
+                )
+                logger.info(f"💰 Реферер {referrer.telegram_id} получил бонус {settings.REFERRAL_INVITER_BONUS_KOPEKS/100}₽")
+        else:
+            if settings.REFERRAL_COMMISSION_PERCENT > 0:
+                commission_amount = int(topup_amount_kopeks * settings.REFERRAL_COMMISSION_PERCENT / 100)
+                
+                if commission_amount > 0:
+                    await add_user_balance(
+                        db, referrer, commission_amount,
+                        f"Комиссия {settings.REFERRAL_COMMISSION_PERCENT}% с пополнения {user.full_name}"
+                    )
+                    
+                    await create_referral_earning(
+                        db=db,
+                        user_id=referrer.id,
+                        referral_id=user_id,
+                        amount_kopeks=commission_amount,
+                        reason="referral_commission_topup"
+                    )
+                    
+                    logger.info(f"💰 Комиссия с пополнения: {referrer.telegram_id} получил {commission_amount/100}₽")
         
         return True
         
     except Exception as e:
         logger.error(f"Ошибка обработки пополнения реферала: {e}")
-        import traceback
-        logger.error(f"Полный traceback: {traceback.format_exc()}")
         return False
 
 
