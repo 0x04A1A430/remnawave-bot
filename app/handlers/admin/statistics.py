@@ -182,7 +182,7 @@ async def show_revenue_statistics(
     text += f"\n<b>Обновлено:</b> {current_time}"
     
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-        [types.InlineKeyboardButton(text="📈 Период", callback_data="admin_revenue_period")],
+      # [types.InlineKeyboardButton(text="📈 Период", callback_data="admin_revenue_period")],
         [types.InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_stats_revenue")],
         [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_statistics")]
     ])
