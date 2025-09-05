@@ -199,9 +199,10 @@ async def get_referral_statistics(db: AsyncSession) -> dict:
                 display_name = f"ID{user.telegram_id}"
             
             top_referrers.append({
-                "user_id": referrer_id,
+                "user_id": user.telegram_id, 
                 "display_name": display_name,
                 "username": user.username,
+                "telegram_id": user.telegram_id,
                 "total_earned_kopeks": stats['total_earned'],
                 "referrals_count": stats['referrals_count']
             })
