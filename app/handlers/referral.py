@@ -43,32 +43,40 @@ async def show_referral_info(
     referral_text += f"🆔 <b>Ваш код:</b> <code>{db_user.referral_code}</code>\n\n"
     
     if summary['recent_earnings']:
-        referral_text += f"💰 <b>Последние начисления:</b>\n"
-        for earning in summary['recent_earnings'][:3]: 
-            reason_text = {
-                "referral_first_topup": "🎉 Первое пополнение",
-                "referral_commission_topup": "💰 Комиссия с пополнения", 
-                "referral_commission": "💰 Комиссия с покупки",
-                "referral_registration_pending": "⏳ Ожидание пополнения"
-            }.get(earning['reason'], earning['reason'])
-            
-            referral_text += f"• {reason_text}: <b>{texts.format_price(earning['amount_kopeks'])}</b> от {earning['referral_name']}\n"
-        referral_text += "\n"
+        meaningful_earnings = [
+            earning for earning in summary['recent_earnings'][:5] 
+            if earning['amount_kopeks'] > 0
+        ]
+        
+        if meaningful_earnings:
+            referral_text += f"💰 <b>Последние начисления:</b>\n"
+            for earning in meaningful_earnings[:3]: 
+                reason_text = {
+                    "referral_first_topup": "🎉 Первое пополнение",
+                    "referral_commission_topup": "💰 Комиссия с пополнения", 
+                    "referral_commission": "💰 Комиссия с покупки"
+                }.get(earning['reason'], earning['reason'])
+                
+                referral_text += f"• {reason_text}: <b>{texts.format_price(earning['amount_kopeks'])}</b> от {earning['referral_name']}\n"
+            referral_text += "\n"
     
     if summary['earnings_by_type']:
         referral_text += f"📈 <b>Доходы по типам:</b>\n"
         
         if 'referral_first_topup' in summary['earnings_by_type']:
             data = summary['earnings_by_type']['referral_first_topup']
-            referral_text += f"• Бонусы за первые пополнения: <b>{data['count']}</b> ({texts.format_price(data['total_amount_kopeks'])})\n"
+            if data['total_amount_kopeks'] > 0:
+                referral_text += f"• Бонусы за первые пополнения: <b>{data['count']}</b> ({texts.format_price(data['total_amount_kopeks'])})\n"
         
         if 'referral_commission_topup' in summary['earnings_by_type']:
             data = summary['earnings_by_type']['referral_commission_topup']
-            referral_text += f"• Комиссии с пополнений: <b>{data['count']}</b> ({texts.format_price(data['total_amount_kopeks'])})\n"
+            if data['total_amount_kopeks'] > 0:
+                referral_text += f"• Комиссии с пополнений: <b>{data['count']}</b> ({texts.format_price(data['total_amount_kopeks'])})\n"
         
         if 'referral_commission' in summary['earnings_by_type']:
             data = summary['earnings_by_type']['referral_commission']
-            referral_text += f"• Комиссии с покупок: <b>{data['count']}</b> ({texts.format_price(data['total_amount_kopeks'])})\n"
+            if data['total_amount_kopeks'] > 0:
+                referral_text += f"• Комиссии с покупок: <b>{data['count']}</b> ({texts.format_price(data['total_amount_kopeks'])})\n"
         
         referral_text += "\n"
     
@@ -95,7 +103,9 @@ async def show_detailed_referral_list(
     if not referrals_data['referrals']:
         await callback.message.edit_text(
             "📋 У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!",
-            reply_markup=get_back_keyboard(db_user.language)
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_referrals")]
+            ])
         )
         await callback.answer()
         return
@@ -173,7 +183,7 @@ async def show_referral_analytics(
             text += f"{i}. {ref['referral_name']}: {texts.format_price(ref['total_earned_kopeks'])} ({ref['earnings_count']} начислений)\n"
         text += "\n"
     
-    text += "📈 Продолжайте приглашать людей и получайте бонусы!"
+    text += "📈 Продолжайте развивать свою реферальную сеть!"
     
     await callback.message.edit_text(
         text,
@@ -197,7 +207,7 @@ async def create_invite_message(
     invite_text = f"🎉 Присоединяйся к VPN сервису!\n\n"
     invite_text += f"💎 При первом пополнении от {texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)} ты получишь {texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)} бонусом на баланс!\n\n"
     invite_text += f"🚀 Быстрое подключение\n"
-    invite_text += f"🌍 Серверы в популярных локациях\n"
+    invite_text += f"🌍 Серверы по всему миру\n"
     invite_text += f"🔒 Надежная защита\n\n"
     invite_text += f"👇 Переходи по ссылке:\n{referral_link}"
     
@@ -223,7 +233,6 @@ async def create_invite_message(
 
 
 def register_handlers(dp: Dispatcher):
-    """Регистрация обработчиков рефералов"""
     
     dp.callback_query.register(
         show_referral_info,
