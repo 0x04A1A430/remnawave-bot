@@ -4,7 +4,7 @@ from enum import Enum
 
 from sqlalchemy import (
     Column, Integer, String, DateTime, Boolean, Text, 
-    ForeignKey, Float, JSON, BigInteger
+    ForeignKey, Float, JSON, BigInteger, mapped_column
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, Mapped
