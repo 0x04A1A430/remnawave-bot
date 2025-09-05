@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from aiogram import Dispatcher, types, F
+from aiogram import Dispatcher, types, F, Bot
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,7 @@ from app.keyboards.inline import (
 from app.localization.texts import get_texts
 from app.services.referral_service import process_referral_registration
 from app.utils.user_utils import generate_unique_referral_code
+
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +280,7 @@ async def process_rules_accept(
                     await state.set_data(data)
                     logger.info(f"✅ Реферер найден: {referrer.id}")
                 
-                await complete_registration_from_callback(callback, state, db)
+                await complete_registration_from_callback(callback, state, db, callback.bot)
             else:
                 try:
                     await callback.message.answer(
@@ -352,7 +353,7 @@ async def process_referral_code_input(
         logger.info(f"❌ Неверный реферальный код")
         return
     
-    await complete_registration(message, state, db)
+    await complete_registration(message, state, db, message.bot)
 
 
 async def process_referral_code_skip(
@@ -377,14 +378,15 @@ async def process_referral_code_skip(
         except:
             pass
     
-    await complete_registration_from_callback(callback, state, db)
+    await complete_registration_from_callback(callback, state, db, callback.bot)
 
 
 
 async def complete_registration_from_callback(
     callback: types.CallbackQuery,
     state: FSMContext, 
-    db: AsyncSession
+    db: AsyncSession,
+    bot: Bot = None
 ):
     
     logger.info(f"🏁 COMPLETE: Завершение регистрации для пользователя {callback.from_user.id}")
@@ -497,7 +499,7 @@ async def complete_registration_from_callback(
     
     if referrer_id:
         try:
-            await process_referral_registration(db, user.id, referrer_id)
+            await process_referral_registration(db, user.id, referrer_id, bot or callback.bot)
             bonus_message = f"🎉 Вы получили {settings.REFERRED_USER_REWARD/100}₽ за регистрацию по реферальной ссылке!"
             await callback.message.answer(bonus_message)
         except Exception as e:
@@ -561,7 +563,8 @@ async def complete_registration_from_callback(
 async def complete_registration(
     message: types.Message, 
     state: FSMContext, 
-    db: AsyncSession
+    db: AsyncSession,
+    bot: Bot = None
 ):
     
     logger.info(f"🏁 COMPLETE: Завершение регистрации для пользователя {message.from_user.id}")
@@ -674,7 +677,7 @@ async def complete_registration(
     
     if referrer_id:
         try:
-            await process_referral_registration(db, user.id, referrer_id)
+            await process_referral_registration(db, user.id, referrer_id, bot or message.bot)
             bonus_message = f"🎉 Вы получили {settings.REFERRED_USER_REWARD/100}₽ за регистрацию по реферальной ссылке!"
             await message.answer(bonus_message)
         except Exception as e:
