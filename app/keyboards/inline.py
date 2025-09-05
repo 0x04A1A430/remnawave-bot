@@ -122,7 +122,7 @@ def get_subscription_keyboard(
             if connect_mode == "miniapp_subscription":
                 keyboard.append([
                     InlineKeyboardButton(
-                        text="🚀 Открыть в мини-приложении",
+                        text="🔗 Подключиться",
                         web_app=types.WebAppInfo(url=subscription.subscription_url)
                     )
                 ])
@@ -130,7 +130,7 @@ def get_subscription_keyboard(
                 if settings.MINIAPP_CUSTOM_URL:
                     keyboard.append([
                         InlineKeyboardButton(
-                            text="🚀 Открыть приложение",
+                            text="🔗 Подключиться",
                             web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL)
                         )
                     ])
