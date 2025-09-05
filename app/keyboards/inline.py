@@ -525,14 +525,35 @@ def get_subscription_expiring_keyboard(subscription_id: int, language: str = "ru
 
 def get_referral_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    return InlineKeyboardMarkup(inline_keyboard=[
+    
+    keyboard = [
         [
-            InlineKeyboardButton(text=texts.CREATE_INVITE, callback_data="referral_create_invite")
+            InlineKeyboardButton(
+                text="📝 Создать приглашение",
+                callback_data="referral_create_invite"
+            )
         ],
         [
-            InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
+            InlineKeyboardButton(
+                text="👥 Список рефералов",
+                callback_data="referral_list"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📊 Аналитика",
+                callback_data="referral_analytics"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=texts.BACK,
+                callback_data="menu"
+            )
         ]
-    ])
+    ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_support_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
