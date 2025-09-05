@@ -69,6 +69,7 @@ class Settings(BaseSettings):
 
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
+    REFERRED_USER_REWARD: int = 0 
     
     AUTOPAY_WARNING_DAYS: str = "3,1"
     
