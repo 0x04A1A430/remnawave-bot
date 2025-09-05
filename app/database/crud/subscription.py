@@ -354,6 +354,69 @@ async def get_subscriptions_statistics(db: AsyncSession) -> dict:
     )
     purchased_month = month_result.scalar()
     
+    users_with_paid_subs = await db.execute(
+        select(func.count(User.id))
+        .where(User.has_had_paid_subscription == True)
+    )
+    total_users_with_paid = users_with_paid_subs.scalar()
+    
+    users_with_any_subscription = await db.execute(
+        select(func.count(func.distinct(Subscription.user_id)))
+    )
+    total_users_with_trial = users_with_any_subscription.scalar()
+    
+    users_with_trial_subs = await db.execute(
+        select(func.count(func.distinct(Subscription.user_id)))
+        .where(Subscription.is_trial == True)
+    )
+    users_had_trial = users_with_trial_subs.scalar()
+    
+    if users_had_trial > 0:
+        trial_to_paid_conversion = round((total_users_with_paid / users_had_trial) * 100, 1)
+    else:
+        trial_to_paid_conversion = 0
+    
+    renewals_result = await db.execute(
+        select(func.count(Subscription.id))
+        .join(User, Subscription.user_id == User.id)
+        .where(
+            and_(
+                Subscription.is_trial == False,
+                User.has_had_paid_subscription == True,
+                Subscription.created_at >= month_ago
+            )
+        )
+    )
+    renewals_count = renewals_result.scalar()
+    
+    actual_renewals_result = await db.execute(
+        select(func.count(Subscription.id))
+        .where(
+            and_(
+                Subscription.is_trial == False,
+                Subscription.created_at >= month_ago,
+                Subscription.user_id.in_(
+                    select(Subscription.user_id)
+                    .where(
+                        and_(
+                            Subscription.is_trial == False,
+                            Subscription.created_at < Subscription.created_at
+                        )
+                    )
+                    .group_by(Subscription.user_id)
+                    .having(func.count(Subscription.id) > 1)
+                )
+            )
+        )
+    )
+    actual_renewals = actual_renewals_result.scalar()
+    
+    logger.info(f"📊 Статистика конверсии:")
+    logger.info(f"   Пользователей с триальными подписками: {users_had_trial}")
+    logger.info(f"   Пользователей с платными подписками: {total_users_with_paid}")
+    logger.info(f"   Конверсия: {trial_to_paid_conversion}%")
+    logger.info(f"   Продлений за месяц: {actual_renewals}")
+    
     return {
         "total_subscriptions": total_subscriptions,
         "active_subscriptions": active_subscriptions,
@@ -361,7 +424,9 @@ async def get_subscriptions_statistics(db: AsyncSession) -> dict:
         "paid_subscriptions": paid_subscriptions,
         "purchased_today": purchased_today,
         "purchased_week": purchased_week,
-        "purchased_month": purchased_month
+        "purchased_month": purchased_month,
+        "trial_to_paid_conversion": trial_to_paid_conversion, 
+        "renewals_count": actual_renewals 
     }
 
 
