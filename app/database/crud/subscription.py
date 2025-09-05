@@ -426,9 +426,8 @@ async def get_subscriptions_statistics(db: AsyncSession) -> dict:
         "purchased_week": purchased_week,
         "purchased_month": purchased_month,
         "trial_to_paid_conversion": trial_to_paid_conversion, 
-        "renewals_count": actual_renewals 
+        "renewals_count": renewals_count  
     }
-
 
 async def update_subscription_usage(
     db: AsyncSession,
