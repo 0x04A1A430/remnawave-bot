@@ -334,6 +334,33 @@ class Transaction(Base):
     def amount_rubles(self) -> float:
         return self.amount_kopeks / 100
 
+class SubscriptionConversion(Base):
+    __tablename__ = "subscription_conversions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    converted_at = Column(DateTime, default=func.now())
+    
+    trial_duration_days = Column(Integer, nullable=True)
+    
+    payment_method = Column(String(50), nullable=True)
+    
+    first_payment_amount_kopeks = Column(Integer, nullable=True)
+    
+    first_paid_period_days = Column(Integer, nullable=True)
+    
+    created_at = Column(DateTime, default=func.now())
+    
+    user = relationship("User", backref="subscription_conversions")
+    
+    @property
+    def first_payment_amount_rubles(self) -> float:
+        return (self.first_payment_amount_kopeks or 0) / 100
+    
+    def __repr__(self):
+        return f"<SubscriptionConversion(user_id={self.user_id}, converted_at={self.converted_at})>"
+
 
 class PromoCode(Base):
     __tablename__ = "promocodes"
