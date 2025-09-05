@@ -1778,107 +1778,77 @@ async def confirm_purchase(
     logger.info(f"   ИТОГО: {final_price/100}₽")
     
     if db_user.balance_kopeks < final_price:
-                await callback.message.edit_text(
-                    texts.INSUFFICIENT_BALANCE,
-                    reply_markup=get_back_keyboard(db_user.language)
-                )
-                await callback.answer()
-                return
+        await callback.message.edit_text(
+            texts.INSUFFICIENT_BALANCE,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+        await callback.answer()
+        return
+    
+    try:
+        success = await subtract_user_balance(
+            db, db_user, final_price,
+            f"Покупка подписки на {data['period_days']} дней"
+        )
+        
+        if not success:
+            await callback.message.edit_text(
+                texts.INSUFFICIENT_BALANCE,
+                reply_markup=get_back_keyboard(db_user.language)
+            )
+            await callback.answer()
+            return
+        
+        existing_subscription = db_user.subscription
+        
+        if existing_subscription:
+            logger.info(f"Обновляем существующую подписку пользователя {db_user.telegram_id}")
             
-            try:
-                success = await subtract_user_balance(
-                    db, db_user, final_price,
-                    f"Покупка подписки на {data['period_days']} дней"
-                )
+            if existing_subscription.is_trial:
+                logger.info(f"Конверсия из триала в платную для пользователя {db_user.telegram_id}")
                 
-                if not success:
-                    await callback.message.edit_text(
-                        texts.INSUFFICIENT_BALANCE,
-                        reply_markup=get_back_keyboard(db_user.language)
-                    )
-                    await callback.answer()
-                    return
+                trial_duration = (datetime.utcnow() - existing_subscription.start_date).days
                 
-                existing_subscription = db_user.subscription
-                
-                if existing_subscription:
-                    logger.info(f"Обновляем существующую подписку пользователя {db_user.telegram_id}")
-                    
-                    if existing_subscription.is_trial:
-                        logger.info(f"🎯 Конверсия из триала в платную для пользователя {db_user.telegram_id}")
-                        
-                        trial_duration = (datetime.utcnow() - existing_subscription.start_date).days
-                        
-                        try:
-                            from app.database.crud.subscription_conversion import create_subscription_conversion
-                            await create_subscription_conversion(
-                                db=db,
-                                user_id=db_user.id,
-                                trial_duration_days=trial_duration,
-                                payment_method="balance", 
-                                first_payment_amount_kopeks=final_price,
-                                first_paid_period_days=data['period_days']
-                            )
-                            logger.info(f"✅ Записана конверсия: {trial_duration} дн. триал → {data['period_days']} дн. платная за {final_price/100}₽")
-                        except Exception as conversion_error:
-                            logger.error(f"❌ Ошибка записи конверсии: {conversion_error}")
-                    
-                    existing_subscription.is_trial = False
-                    existing_subscription.status = SubscriptionStatus.ACTIVE.value
-                    existing_subscription.traffic_limit_gb = final_traffic_gb
-                    existing_subscription.device_limit = data['devices']
-                    existing_subscription.connected_squads = data['countries']
-                    
-                    existing_subscription.start_date = datetime.utcnow()
-                    existing_subscription.end_date = datetime.utcnow() + timedelta(days=data['period_days'])
-                    existing_subscription.updated_at = datetime.utcnow()
-                    
-                    existing_subscription.traffic_used_gb = 0.0
-                    
-                    await db.commit()
-                    await db.refresh(existing_subscription)
-                    subscription = existing_subscription
-                    
-                else:
-                    logger.info(f"Создаем новую подписку для пользователя {db_user.telegram_id}")
-                    subscription = await create_paid_subscription_with_traffic_mode(
+                try:
+                    from app.database.crud.subscription_conversion import create_subscription_conversion
+                    await create_subscription_conversion(
                         db=db,
                         user_id=db_user.id,
-                        duration_days=data['period_days'],
-                        device_limit=data['devices'],
-                        connected_squads=data['countries'],
-                        traffic_gb=final_traffic_gb
+                        trial_duration_days=trial_duration,
+                        payment_method="balance",
+                        first_payment_amount_kopeks=final_price,
+                        first_paid_period_days=data['period_days']
                     )
-                            logger.info(f"✅ Записана конверсия: {trial_duration} дн. триал → {data['period_days']} дн. платная за {final_price/100}₽")
-                        except Exception as conversion_error:
-                            logger.error(f"❌ Ошибка записи конверсии: {conversion_error}")
-                    
-                    existing_subscription.is_trial = False
-                    existing_subscription.status = SubscriptionStatus.ACTIVE.value
-                    existing_subscription.traffic_limit_gb = final_traffic_gb
-                    existing_subscription.device_limit = data['devices']
-                    existing_subscription.connected_squads = data['countries']
-                    
-                    existing_subscription.start_date = datetime.utcnow()
-                    existing_subscription.end_date = datetime.utcnow() + timedelta(days=data['period_days'])
-                    existing_subscription.updated_at = datetime.utcnow()
-                    
-                    existing_subscription.traffic_used_gb = 0.0
-                    
-                    await db.commit()
-                    await db.refresh(existing_subscription)
-                    subscription = existing_subscription
-                    
-                else:
-                    logger.info(f"Создаем новую подписку для пользователя {db_user.telegram_id}")
-                    subscription = await create_paid_subscription_with_traffic_mode(
-                        db=db,
-                        user_id=db_user.id,
-                        duration_days=data['period_days'],
-                        device_limit=data['devices'],
-                        connected_squads=data['countries'],
-                        traffic_gb=final_traffic_gb
-                    )
+                    logger.info(f"Записана конверсия: {trial_duration} дн. триал → {data['period_days']} дн. платная за {final_price/100}₽")
+                except Exception as conversion_error:
+                    logger.error(f"Ошибка записи конверсии: {conversion_error}")
+            
+            existing_subscription.is_trial = False
+            existing_subscription.status = SubscriptionStatus.ACTIVE.value
+            existing_subscription.traffic_limit_gb = final_traffic_gb
+            existing_subscription.device_limit = data['devices']
+            existing_subscription.connected_squads = data['countries']
+            
+            existing_subscription.start_date = datetime.utcnow()
+            existing_subscription.end_date = datetime.utcnow() + timedelta(days=data['period_days'])
+            existing_subscription.updated_at = datetime.utcnow()
+            
+            existing_subscription.traffic_used_gb = 0.0
+            
+            await db.commit()
+            await db.refresh(existing_subscription)
+            subscription = existing_subscription
+            
+        else:
+            logger.info(f"Создаем новую подписку для пользователя {db_user.telegram_id}")
+            subscription = await create_paid_subscription_with_traffic_mode(
+                db=db,
+                user_id=db_user.id,
+                duration_days=data['period_days'],
+                device_limit=data['devices'],
+                connected_squads=data['countries'],
+                traffic_gb=final_traffic_gb
+            )
         
         from app.utils.user_utils import mark_user_as_had_paid_subscription
         await mark_user_as_had_paid_subscription(db, db_user)
@@ -1915,15 +1885,14 @@ async def confirm_purchase(
             description=f"Подписка на {data['period_days']} дней ({months_in_period} мес)"
         )
         
-        
         await db.refresh(db_user)
         await db.refresh(subscription)
         
         if remnawave_user and hasattr(subscription, 'subscription_url') and subscription.subscription_url:
             success_text = f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
-            success_text += f"📗 <b>Ваша ссылка для импорта в VPN приложениe:</b>\n"
+            success_text += f"Ваша ссылка для импорта в VPN приложение:\n"
             success_text += f"<code>{subscription.subscription_url}</code>\n\n"
-            success_text += f"📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве"
+            success_text += f"Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве"
 
             connect_mode = settings.CONNECT_BUTTON_MODE
 
@@ -1931,35 +1900,34 @@ async def confirm_purchase(
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="🔗 Подключиться",
+                            text="Подключиться",
                             web_app=types.WebAppInfo(url=subscription.subscription_url),
                         )
                     ],
-                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text="Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="В главное меню", callback_data="back_to_menu")],
                 ])
             elif connect_mode == "miniapp_custom":
                 if not settings.MINIAPP_CUSTOM_URL:
-                    await callback.answer("⚠ Кастомная ссылка для мини-приложения не настроена", show_alert=True)
+                    await callback.answer("Кастомная ссылка для мини-приложения не настроена", show_alert=True)
                     return
 
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="🔗 Подключиться",
+                            text="Подключиться",
                             web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                         )
                     ],
-                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text="Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="В главное меню", callback_data="back_to_menu")],
                 ])
             else:
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")],
-                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text="Подключиться", callback_data="subscription_connect")],
+                    [InlineKeyboardButton(text="Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="В главное меню", callback_data="back_to_menu")],
                 ])
-
     
             await callback.message.edit_text(
                 success_text,
@@ -1968,11 +1936,11 @@ async def confirm_purchase(
             )
         else:
             await callback.message.edit_text(
-                f"{texts.SUBSCRIPTION_PURCHASED}\n\n⚠️ Ссылка генерируется, перейдите в раздел 'Моя подписка' через несколько секунд.",
+                f"{texts.SUBSCRIPTION_PURCHASED}\n\nСсылка генерируется, перейдите в раздел 'Моя подписка' через несколько секунд.",
                 reply_markup=get_back_keyboard(db_user.language)
             )
         
-        logger.info(f"✅ Пользователь {db_user.telegram_id} купил подписку на {data['period_days']} дней за {final_price/100}₽")
+        logger.info(f"Пользователь {db_user.telegram_id} купил подписку на {data['period_days']} дней за {final_price/100}₽")
         
     except Exception as e:
         logger.error(f"Ошибка покупки подписки: {e}")
