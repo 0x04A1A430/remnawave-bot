@@ -1778,29 +1778,29 @@ async def confirm_purchase(
     logger.info(f"   ИТОГО: {final_price/100}₽")
     
     if db_user.balance_kopeks < final_price:
-        await callback.message.edit_text(
-            texts.INSUFFICIENT_BALANCE,
-            reply_markup=get_back_keyboard(db_user.language)
-        )
-        await callback.answer()
-        return
-    
-    try:
-        success = await subtract_user_balance(
-            db, db_user, final_price,
-            f"Покупка подписки на {data['period_days']} дней"
-        )
-        
-        if not success:
-            await callback.message.edit_text(
-                texts.INSUFFICIENT_BALANCE,
-                reply_markup=get_back_keyboard(db_user.language)
-            )
-            await callback.answer()
-            return
-        
-        existing_subscription = db_user.subscription
-        
+                await callback.message.edit_text(
+                    texts.INSUFFICIENT_BALANCE,
+                    reply_markup=get_back_keyboard(db_user.language)
+                )
+                await callback.answer()
+                return
+            
+            try:
+                success = await subtract_user_balance(
+                    db, db_user, final_price,
+                    f"Покупка подписки на {data['period_days']} дней"
+                )
+                
+                if not success:
+                    await callback.message.edit_text(
+                        texts.INSUFFICIENT_BALANCE,
+                        reply_markup=get_back_keyboard(db_user.language)
+                    )
+                    await callback.answer()
+                    return
+                
+                existing_subscription = db_user.subscription
+                
                 if existing_subscription:
                     logger.info(f"Обновляем существующую подписку пользователя {db_user.telegram_id}")
                     
@@ -1815,10 +1815,40 @@ async def confirm_purchase(
                                 db=db,
                                 user_id=db_user.id,
                                 trial_duration_days=trial_duration,
-                                payment_method="balance",  
+                                payment_method="balance", 
                                 first_payment_amount_kopeks=final_price,
                                 first_paid_period_days=data['period_days']
                             )
+                            logger.info(f"✅ Записана конверсия: {trial_duration} дн. триал → {data['period_days']} дн. платная за {final_price/100}₽")
+                        except Exception as conversion_error:
+                            logger.error(f"❌ Ошибка записи конверсии: {conversion_error}")
+                    
+                    existing_subscription.is_trial = False
+                    existing_subscription.status = SubscriptionStatus.ACTIVE.value
+                    existing_subscription.traffic_limit_gb = final_traffic_gb
+                    existing_subscription.device_limit = data['devices']
+                    existing_subscription.connected_squads = data['countries']
+                    
+                    existing_subscription.start_date = datetime.utcnow()
+                    existing_subscription.end_date = datetime.utcnow() + timedelta(days=data['period_days'])
+                    existing_subscription.updated_at = datetime.utcnow()
+                    
+                    existing_subscription.traffic_used_gb = 0.0
+                    
+                    await db.commit()
+                    await db.refresh(existing_subscription)
+                    subscription = existing_subscription
+                    
+                else:
+                    logger.info(f"Создаем новую подписку для пользователя {db_user.telegram_id}")
+                    subscription = await create_paid_subscription_with_traffic_mode(
+                        db=db,
+                        user_id=db_user.id,
+                        duration_days=data['period_days'],
+                        device_limit=data['devices'],
+                        connected_squads=data['countries'],
+                        traffic_gb=final_traffic_gb
+                    )
                             logger.info(f"✅ Записана конверсия: {trial_duration} дн. триал → {data['period_days']} дн. платная за {final_price/100}₽")
                         except Exception as conversion_error:
                             logger.error(f"❌ Ошибка записи конверсии: {conversion_error}")
