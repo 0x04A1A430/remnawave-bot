@@ -148,7 +148,7 @@ async def add_user_balance(
         
         logger.info(f"🔍 Проверка реферальной логики для описания: '{description}'")
         
-        if any(word in description.lower() for word in ["пополнение", "stars", "yookassa", "topup"]):
+        if any(word in description.lower() for word in ["пополнение", "stars", "yookassa", "topup"]) and not any(word in description.lower() for word in ["комиссия", "бонус"]):
             logger.info(f"📞 Вызов process_referral_topup для пользователя {user.id}")
             try:
                 from app.services.referral_service import process_referral_topup
