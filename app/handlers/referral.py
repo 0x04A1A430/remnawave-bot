@@ -35,7 +35,7 @@ async def show_referral_info(
     referral_text += f"🎁 <b>Как работают награды:</b>\n"
     referral_text += f"• Новый пользователь получает: {texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)} при первом пополнении от {texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)}\n"
     referral_text += f"• Вы получаете при первом пополнении реферала: {texts.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)}\n"
-    referral_text += f"• Комиссия с каждой покупки реферала: {settings.REFERRAL_COMMISSION_PERCENT}%\n\n"
+    referral_text += f"• Комиссия с каждого пополнения реферала: {settings.REFERRAL_COMMISSION_PERCENT}%\n\n"
     
     referral_text += f"🔗 <b>Ваша реферальная ссылка:</b>\n"
     referral_text += f"<code>{referral_link}</code>\n\n"
