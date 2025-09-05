@@ -274,3 +274,25 @@ async def get_referral_analytics(db: AsyncSession, user_id: int) -> Dict:
             },
             'top_referrals': []
         }
+
+
+async def mark_user_as_had_paid_subscription(db: AsyncSession, user_id: int) -> bool:
+    try:
+        from app.database.crud.user import get_user_by_id
+        
+        user = await get_user_by_id(db, user_id)
+        if not user:
+            logger.error(f"Пользователь {user_id} не найден")
+            return False
+        
+        if not user.has_had_paid_subscription:
+            user.has_had_paid_subscription = True
+            user.updated_at = datetime.utcnow()
+            await db.commit()
+            logger.info(f"✅ Пользователь {user_id} отмечен как имевший платную подписку")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка отметки пользователя {user_id} как имевшего платную подписку: {e}")
+        return False
