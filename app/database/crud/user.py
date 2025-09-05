@@ -126,7 +126,8 @@ async def add_user_balance(
     user: User,
     amount_kopeks: int,
     description: str = "Пополнение баланса",
-    create_transaction: bool = True
+    create_transaction: bool = True,
+    bot = None 
 ) -> bool:
     try:
         old_balance = user.balance_kopeks
@@ -157,7 +158,7 @@ async def add_user_balance(
         if has_topup_keywords and not has_exclude_keywords:
             try:
                 from app.services.referral_service import process_referral_topup
-                await process_referral_topup(db, user.id, amount_kopeks)
+                await process_referral_topup(db, user.id, amount_kopeks, bot)
             except Exception as e:
                 logger.error(f"Ошибка обработки реферального пополнения: {e}")
         
