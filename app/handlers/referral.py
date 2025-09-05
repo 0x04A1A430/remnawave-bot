@@ -17,7 +17,6 @@ async def show_referral_info(
     db_user: User,
     db: AsyncSession
 ):
-    
     texts = get_texts(db_user.language)
     
     summary = await get_user_referral_summary(db, db_user.id)
@@ -29,13 +28,13 @@ async def show_referral_info(
     
     referral_text += f"📊 <b>Ваша статистика:</b>\n"
     referral_text += f"• Приглашено пользователей: {summary['invited_count']}\n"
-    referral_text += f"• Купили подписку: {summary['paid_referrals_count']}\n"
+    referral_text += f"• Сделали первое пополнение: {summary['paid_referrals_count']}\n"
     referral_text += f"• Заработано всего: {texts.format_price(summary['total_earned_kopeks'])}\n"
     referral_text += f"• За последний месяц: {texts.format_price(summary['month_earned_kopeks'])}\n\n"
     
     referral_text += f"🎁 <b>Как работают награды:</b>\n"
-    referral_text += f"• Новый пользователь получает: {texts.format_price(settings.REFERRED_USER_REWARD)}\n"
-    referral_text += f"• Вы получаете при первой покупке реферала: {texts.format_price(settings.REFERRAL_REGISTRATION_REWARD)}\n"
+    referral_text += f"• Новый пользователь получает: {texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)} при первом пополнении от {texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)}\n"
+    referral_text += f"• Вы получаете при первом пополнении реферала: {texts.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)}\n"
     referral_text += f"• Комиссия с каждой покупки реферала: {settings.REFERRAL_COMMISSION_PERCENT}%\n\n"
     
     referral_text += f"🔗 <b>Ваша реферальная ссылка:</b>\n"
@@ -46,9 +45,9 @@ async def show_referral_info(
         referral_text += f"💰 <b>Последние начисления:</b>\n"
         for earning in summary['recent_earnings'][:3]: 
             reason_text = {
-                "referral_first_purchase": "🎉 Первая покупка",
-                "referral_commission": "💰 Комиссия",
-                "referral_registration_pending": "⏳ Ожидание покупки"
+                "referral_first_topup": "🎉 Первое пополнение",
+                "referral_commission_topup": "💰 Комиссия с пополнения",
+                "referral_registration_pending": "⏳ Ожидание пополнения"
             }.get(earning['reason'], earning['reason'])
             
             referral_text += f"• {reason_text}: {texts.format_price(earning['amount_kopeks'])} от {earning['referral_name']}\n"
@@ -68,14 +67,13 @@ async def create_invite_message(
     callback: types.CallbackQuery,
     db_user: User
 ):
-    
     texts = get_texts(db_user.language)
     
     bot_username = (await callback.bot.get_me()).username
     referral_link = f"https://t.me/{bot_username}?start={db_user.referral_code}"
     
     invite_text = f"🎉 Присоединяйся к VPN сервису!\n\n"
-    invite_text += f"💎 При регистрации по моей ссылке ты получишь {texts.format_price(settings.REFERRED_USER_REWARD)} на баланс!\n\n"
+    invite_text += f"💎 При первом пополнении от {texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)} ты получишь {texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)} бонусом на баланс!\n\n"
     invite_text += f"🚀 Быстрое подключение\n"
     invite_text += f"🌍 Серверы по всему миру\n"
     invite_text += f"🔒 Надежная защита\n\n"
