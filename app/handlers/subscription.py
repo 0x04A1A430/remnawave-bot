@@ -39,7 +39,6 @@ from app.keyboards.inline import (
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
-from app.services.referral_service import process_referral_purchase
 from app.utils.pricing_utils import (
     calculate_months_from_days,
     get_remaining_months,
@@ -629,7 +628,6 @@ async def apply_countries_changes(
     
     countries = await _get_available_countries()
     
-    # Рассчитываем оставшиеся месяцы подписки для новых серверов
     months_to_pay = get_remaining_months(subscription.end_date)
     
     cost_per_month = 0
@@ -648,7 +646,6 @@ async def apply_countries_changes(
     
     total_cost, charged_months = calculate_prorated_price(cost_per_month, subscription.end_date)
     
-    # Рассчитываем цены для каждого сервера за весь период
     for country in countries:
         if country['uuid'] in added:
             server_price_per_month = country['price_kopeks']
@@ -702,15 +699,6 @@ async def apply_countries_changes(
         await subscription_service.update_remnawave_user(db, subscription)
         
         if total_cost > 0:
-            try:
-                await process_referral_purchase(
-                    db=db,
-                    user_id=db_user.id,
-                    purchase_amount_kopeks=total_cost,
-                    transaction_id=None
-                )
-            except Exception as e:
-                logger.error(f"Ошибка обработки реферальной покупки: {e}")
         
         await db.refresh(subscription)
         
@@ -979,15 +967,6 @@ async def confirm_add_traffic(
             description=f"Добавление {traffic_gb} ГБ трафика на {charged_months} мес"
         )
         
-        try:
-            await process_referral_purchase(
-                db=db,
-                user_id=db_user.id,
-                purchase_amount_kopeks=price,
-                transaction_id=None
-            )
-        except Exception as e:
-            logger.error(f"Ошибка обработки реферальной покупки: {e}")
         
         await db.refresh(db_user)
         await db.refresh(subscription)
@@ -1076,15 +1055,6 @@ async def confirm_add_devices(
             description=f"Добавление {devices_count} устройств на {charged_months} мес"
         )
         
-        try:
-            await process_referral_purchase(
-                db=db,
-                user_id=db_user.id,
-                purchase_amount_kopeks=price,
-                transaction_id=None
-            )
-        except Exception as e:
-            logger.error(f"Ошибка обработки реферальной покупки: {e}")
         
         await db.refresh(db_user)
         await db.refresh(subscription)
@@ -1219,15 +1189,6 @@ async def confirm_extend_subscription(
             description=f"Продление подписки на {days} дней ({months_in_period} мес)"
         )
         
-        try:
-            await process_referral_purchase(
-                db=db,
-                user_id=db_user.id,
-                purchase_amount_kopeks=price,
-                transaction_id=None
-            )
-        except Exception as e:
-            logger.error(f"⚠ ОШИБКА ОБРАБОТКИ РЕФЕРАЛОВ: {e}")
         
         await callback.message.edit_text(
             f"✅ Подписка успешно продлена!\n\n"
@@ -1907,15 +1868,6 @@ async def confirm_purchase(
             description=f"Подписка на {data['period_days']} дней ({months_in_period} мес)"
         )
         
-        try:
-            await process_referral_purchase(
-                db=db,
-                user_id=db_user.id,
-                purchase_amount_kopeks=final_price,
-                transaction_id=None 
-            )
-        except Exception as e:
-            logger.error(f"Ошибка обработки реферальной покупки: {e}")
         
         await db.refresh(db_user)
         await db.refresh(subscription)
@@ -2034,15 +1986,6 @@ async def add_traffic(
             description=f"Добавление {traffic_gb} ГБ трафика"
         )
         
-        try:
-            await process_referral_purchase(
-                db=db,
-                user_id=db_user.id,
-                purchase_amount_kopeks=price,
-                transaction_id=None
-            )
-        except Exception as e:
-            logger.error(f"Ошибка обработки реферальной покупки: {e}")
         
         await db.refresh(db_user)
         await db.refresh(subscription)
@@ -2542,15 +2485,6 @@ async def confirm_add_countries_to_subscription(
         await subscription_service.update_remnawave_user(db, subscription)
         
         if new_countries and total_price > 0:
-            try:
-                await process_referral_purchase(
-                    db=db,
-                    user_id=db_user.id,
-                    purchase_amount_kopeks=total_price,
-                    transaction_id=None
-                )
-            except Exception as e:
-                logger.error(f"Ошибка обработки реферальной покупки: {e}")
         
         await db.refresh(db_user)
         await db.refresh(subscription)
