@@ -4,10 +4,10 @@ from enum import Enum
 
 from sqlalchemy import (
     Column, Integer, String, DateTime, Boolean, Text, 
-    ForeignKey, Float, JSON, BigInteger, mapped_column
+    ForeignKey, Float, JSON, BigInteger
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, Mapped
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 
 
