@@ -374,21 +374,46 @@ async def activate_trial(
         
         if remnawave_user and hasattr(subscription, 'subscription_url') and subscription.subscription_url:
             trial_success_text = f"{texts.TRIAL_ACTIVATED}\n\n"
-            trial_success_text += f"🔗 <b>Ваша ссылка для подключения:</b>\n"
+            trial_success_text += f"🔗 <b>Ваша ссылка для импорта в VPN приложениe:</b>\n"
             trial_success_text += f"<code>{subscription.subscription_url}</code>\n\n"
             trial_success_text += f"📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве"
+
+            connect_mode = settings.CONNECT_BUTTON_MODE
+
+            if connect_mode == "miniapp_subscription":
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔗 Подключиться",
+                            web_app=types.WebAppInfo(url=subscription.subscription_url),
+                        )
+                    ],
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                ])
+            elif connect_mode == "miniapp_custom":
+                if not settings.MINIAPP_CUSTOM_URL:
+                    await callback.answer("⚠ Кастомная ссылка для мини-приложения не настроена", show_alert=True)
+                    return
+
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔗 Подключиться",
+                            web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
+                        )
+                    ],
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                ])
+            else:
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")],
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                ])
     
-            connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [
-                    InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
-                ],
-                [
-                    InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")
-                ],
-                [
-                    InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")
-                ]
-            ])
+
     
             await callback.message.edit_text(
                 trial_success_text,
@@ -1479,8 +1504,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
         info_text += f"\n💰 <b>Стоимость подписки в месяц:</b> {texts.format_price(subscription_cost)}"
     
     if subscription_url and subscription_url != "Генерируется...":
-        info_text += f"\n\n🔗 <b>Ссылка для подключения:</b>\n<code>{subscription_url}</code>"
-        info_text += f"\n\n📱 Скопируйте ссылку и добавьте в ваше VPN приложение"
+        info_text += f"\n\n🔗 <b>Ваша ссылка для импорта в VPN приложениe:</b>\n<code>{subscription_url}</code>"
     
     return info_text
 
@@ -1898,21 +1922,45 @@ async def confirm_purchase(
         
         if remnawave_user and hasattr(subscription, 'subscription_url') and subscription.subscription_url:
             success_text = f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
-            success_text += f"📗 <b>Ваша ссылка для подключения:</b>\n"
+            success_text += f"📗 <b>Ваша ссылка для импорта в VPN приложениe:</b>\n"
             success_text += f"<code>{subscription.subscription_url}</code>\n\n"
             success_text += f"📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве"
-    
-            connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [
-                    InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
-                ],
-                [
-                    InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")
-                ],
-                [
-                    InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")
-                ]
-            ])
+
+            connect_mode = settings.CONNECT_BUTTON_MODE
+
+            if connect_mode == "miniapp_subscription":
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔗 Подключиться",
+                            web_app=types.WebAppInfo(url=subscription.subscription_url),
+                        )
+                    ],
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                ])
+            elif connect_mode == "miniapp_custom":
+                if not settings.MINIAPP_CUSTOM_URL:
+                    await callback.answer("⚠ Кастомная ссылка для мини-приложения не настроена", show_alert=True)
+                    return
+
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🔗 Подключиться",
+                            web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
+                        )
+                    ],
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                ])
+            else:
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")],
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                ])
+
     
             await callback.message.edit_text(
                 success_text,
@@ -2649,7 +2697,7 @@ async def handle_connect_subscription(
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🔗 Открыть подписку в мини-приложении", 
+                    text="🔗 Подключиться", 
                     web_app=types.WebAppInfo(url=subscription.subscription_url)
                 )
             ],
@@ -2676,7 +2724,7 @@ async def handle_connect_subscription(
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🚀 Открыть приложение", 
+                    text="🔗 Подключиться", 
                     web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL)
                 )
             ],
