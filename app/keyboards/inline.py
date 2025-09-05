@@ -548,7 +548,7 @@ def get_referral_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text=texts.BACK,
-                callback_data="menu" 
+                callback_data="back_to_menu" 
             )
         ]
     ]
