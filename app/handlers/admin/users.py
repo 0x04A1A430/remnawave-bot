@@ -827,6 +827,8 @@ async def show_user_statistics(
     user = profile["user"]
     subscription = profile["subscription"]
     
+    referral_stats = await get_detailed_referral_stats(db, user.id)
+    
     text = f"📊 <b>Статистика пользователя</b>\n\n"
     text += f"👤 {user.full_name} (ID: <code>{user.telegram_id}</code>)\n\n"
     
@@ -839,7 +841,7 @@ async def show_user_statistics(
     text += f"<b>Подписка:</b>\n"
     if subscription:
         sub_status = "✅ Активна" if subscription.is_active else "❌ Неактивна"
-        sub_type = " (триал)" if subscription.is_trial else " (платная)"
+        sub_type = " (пробная)" if subscription.is_trial else " (платная)"
         text += f"• Статус: {sub_status}{sub_type}\n"
         text += f"• Трафик: {subscription.traffic_used_gb:.1f}/{subscription.traffic_limit_gb} ГБ\n"
         text += f"• Устройства: {subscription.device_limit}\n"
@@ -848,11 +850,39 @@ async def show_user_statistics(
         text += f"• Отсутствует\n"
     
     text += f"\n<b>Реферальная программа:</b>\n"
+    
     if user.referred_by_id:
-        text += f"• Пришел по рефералке\n"
+        referrer = await get_user_by_id(db, user.referred_by_id)
+        if referrer:
+            text += f"• Пришел по реферальной ссылке от <b>{referrer.full_name}</b>\n"
+        else:
+            text += f"• Пришел по реферальной ссылке (реферер не найден)\n"
     else:
         text += f"• Прямая регистрация\n"
-    text += f"• Реферальный код: <code>{user.referral_code}</code>\n"
+    
+    text += f"• Реферальный код: <code>{user.referral_code}</code>\n\n"
+    
+    if referral_stats['invited_count'] > 0:
+        text += f"<b>Доходы от рефералов:</b>\n"
+        text += f"• Всего приглашено: {referral_stats['invited_count']}\n"
+        text += f"• Активных рефералов: {referral_stats['active_referrals']}\n"
+        text += f"• Общий доход: {settings.format_price(referral_stats['total_earned_kopeks'])}\n"
+        text += f"• Доход за месяц: {settings.format_price(referral_stats['month_earned_kopeks'])}\n"
+        
+        if referral_stats['referrals_detail']:
+            text += f"\n<b>Детали по рефералам:</b>\n"
+            for detail in referral_stats['referrals_detail'][:5]: 
+                referral_name = detail['referral_name']
+                earned = settings.format_price(detail['total_earned_kopeks'])
+                status = "🟢" if detail['is_active'] else "🔴"
+                text += f"• {status} {referral_name}: {earned}\n"
+            
+            if len(referral_stats['referrals_detail']) > 5:
+                text += f"• ... и еще {len(referral_stats['referrals_detail']) - 5} рефералов\n"
+    else:
+        text += f"<b>Реферальная программа:</b>\n"
+        text += f"• Рефералов нет\n"
+        text += f"• Доходов нет\n"
     
     await callback.message.edit_text(
         text,
@@ -861,6 +891,54 @@ async def show_user_statistics(
         ])
     )
     await callback.answer()
+
+async def get_detailed_referral_stats(db: AsyncSession, user_id: int) -> dict:
+    from app.database.crud.referral import get_user_referral_stats, get_referral_earnings_by_user
+    from sqlalchemy import select, func
+    from sqlalchemy.orm import selectinload
+    
+    base_stats = await get_user_referral_stats(db, user_id)
+    
+    referrals_query = select(User).options(
+        selectinload(User.subscription)
+    ).where(User.referred_by_id == user_id)
+    
+    referrals_result = await db.execute(referrals_query)
+    referrals = referrals_result.scalars().all()
+    
+    earnings_by_referral = {}
+    all_earnings = await get_referral_earnings_by_user(db, user_id)
+    
+    for earning in all_earnings:
+        referral_id = earning.referral_id
+        if referral_id not in earnings_by_referral:
+            earnings_by_referral[referral_id] = 0
+        earnings_by_referral[referral_id] += earning.amount_kopeks
+    
+    referrals_detail = []
+    for referral in referrals:
+        earned = earnings_by_referral.get(referral.id, 0)
+        is_active = referral.subscription and referral.subscription.is_active if referral.subscription else False
+        
+        referrals_detail.append({
+            'referral_id': referral.id,
+            'referral_name': referral.full_name,
+            'referral_telegram_id': referral.telegram_id,
+            'total_earned_kopeks': earned,
+            'is_active': is_active,
+            'registration_date': referral.created_at,
+            'has_subscription': bool(referral.subscription)
+        })
+    
+    referrals_detail.sort(key=lambda x: x['total_earned_kopeks'], reverse=True)
+    
+    return {
+        'invited_count': base_stats['invited_count'],
+        'active_referrals': base_stats['active_referrals'], 
+        'total_earned_kopeks': base_stats['total_earned_kopeks'],
+        'month_earned_kopeks': base_stats['month_earned_kopeks'],
+        'referrals_detail': referrals_detail
+    }
 
 @admin_required
 @error_handler
