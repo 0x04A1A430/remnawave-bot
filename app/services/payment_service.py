@@ -67,7 +67,6 @@ class PaymentService:
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(stars_amount)
             amount_kopeks = int(rubles_amount * 100)
             
-            # Создаем транзакцию
             transaction = await create_transaction(
                 db=db,
                 user_id=user_id,
@@ -97,7 +96,7 @@ class PaymentService:
                     logger.info(f"📞 Вызов process_referral_topup для пользователя {user_id}")
                     try:
                         from app.services.referral_service import process_referral_topup
-                        await process_referral_topup(db, user_id, amount_kopeks)
+                        await process_referral_topup(db, user_id, amount_kopeks, self.bot)
                     except Exception as e:
                         logger.error(f"Ошибка обработки реферального пополнения: {e}")
                 else:
@@ -268,7 +267,18 @@ class PaymentService:
                 
                 user = await get_user_by_id(db, updated_payment.user_id)
                 if user:
-                    await add_user_balance(db, user, updated_payment.amount_kopeks, f"Пополнение YooKassa: {updated_payment.amount_kopeks/100:.2f}₽")
+                    old_balance = user.balance_kopeks
+                    user.balance_kopeks += updated_payment.amount_kopeks
+                    user.updated_at = datetime.utcnow()
+                    
+                    await db.commit()
+                    await db.refresh(user)
+                    
+                    try:
+                        from app.services.referral_service import process_referral_topup
+                        await process_referral_topup(db, user.id, updated_payment.amount_kopeks, self.bot)
+                    except Exception as e:
+                        logger.error(f"Ошибка обработки реферального пополнения YooKassa: {e}")
                     
                     if self.bot:
                         try:
@@ -276,7 +286,7 @@ class PaymentService:
                                 user.telegram_id,
                                 f"✅ <b>Пополнение успешно!</b>\n\n"
                                 f"💰 Сумма: {settings.format_price(updated_payment.amount_kopeks)}\n"
-                                f"🦐 Способ: Банковская карта\n"
+                                f"🏦 Способ: Банковская карта\n"
                                 f"🆔 Транзакция: {yookassa_payment_id[:8]}...\n\n"
                                 f"Баланс пополнен автоматически!",
                                 parse_mode="HTML"

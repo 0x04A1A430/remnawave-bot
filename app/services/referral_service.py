@@ -1,18 +1,33 @@
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
+from aiogram import Bot
 
 from app.config import settings
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.crud.referral import create_referral_earning
-from app.database.models import TransactionType
+from app.database.models import TransactionType, ReferralEarning
 
 logger = logging.getLogger(__name__)
+
+
+async def send_referral_notification(
+    bot: Bot,
+    user_id: int,
+    message: str
+):
+    try:
+        await bot.send_message(user_id, message, parse_mode="HTML")
+        logger.info(f"✅ Уведомление отправлено пользователю {user_id}")
+    except Exception as e:
+        logger.error(f"❌ Ошибка отправки уведомления пользователю {user_id}: {e}")
 
 
 async def process_referral_registration(
     db: AsyncSession,
     new_user_id: int,
-    referrer_id: int
+    referrer_id: int,
+    bot: Bot = None
 ):
     try:
         new_user = await get_user_by_id(db, new_user_id)
@@ -34,6 +49,25 @@ async def process_referral_registration(
             reason="referral_registration_pending"
         )
         
+        if bot:
+            referral_notification = (
+                f"🎉 <b>Добро пожаловать!</b>\n\n"
+                f"Вы перешли по реферальной ссылке пользователя <b>{referrer.full_name}</b>!\n\n"
+                f"💰 При первом пополнении от {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)} "
+                f"вы получите бонус {settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}!\n\n"
+                f"🎁 Ваш реферер также получит награду за ваше первое пополнение."
+            )
+            await send_referral_notification(bot, new_user.telegram_id, referral_notification)
+            
+            inviter_notification = (
+                f"👥 <b>Новый реферал!</b>\n\n"
+                f"По вашей ссылке зарегистрировался пользователь <b>{new_user.full_name}</b>!\n\n"
+                f"💰 Когда он пополнит баланс от {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)}, "
+                f"вы получите {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)}\n\n"
+                f"📈 С каждого последующего пополнения вы будете получать {settings.REFERRAL_COMMISSION_PERCENT}% комиссии."
+            )
+            await send_referral_notification(bot, referrer.telegram_id, inviter_notification)
+        
         logger.info(f"✅ Зарегистрирован реферал {new_user_id} для {referrer_id}. Бонусы будут выданы после пополнения.")
         return True
         
@@ -45,7 +79,8 @@ async def process_referral_registration(
 async def process_referral_topup(
     db: AsyncSession,
     user_id: int,
-    topup_amount_kopeks: int
+    topup_amount_kopeks: int,
+    bot: Bot = None
 ):
     try:
         user = await get_user_by_id(db, user_id)
@@ -66,17 +101,41 @@ async def process_referral_topup(
             user.has_made_first_topup = True
             await db.commit()
             
+            try:
+                await db.execute(
+                    delete(ReferralEarning).where(
+                        ReferralEarning.user_id == referrer.id,
+                        ReferralEarning.referral_id == user_id,
+                        ReferralEarning.reason == "referral_registration_pending"
+                    )
+                )
+                await db.commit()
+                logger.info(f"🗑️ Удалена запись 'ожидание пополнения' для реферала {user_id}")
+            except Exception as e:
+                logger.error(f"Ошибка удаления записи ожидания: {e}")
+            
             if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
                 await add_user_balance(
                     db, user, settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
-                    f"Бонус за первое пополнение по реферальной программе"
+                    f"Бонус за первое пополнение по реферальной программе",
+                    bot=bot
                 )
                 logger.info(f"💰 Реферал {user_id} получил бонус {settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS/100}₽")
+                
+                if bot:
+                    bonus_notification = (
+                        f"🎉 <b>Бонус получен!</b>\n\n"
+                        f"За первое пополнение вы получили бонус "
+                        f"{settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}!\n\n"
+                        f"💎 Средства зачислены на ваш баланс."
+                    )
+                    await send_referral_notification(bot, user.telegram_id, bonus_notification)
             
             if settings.REFERRAL_INVITER_BONUS_KOPEKS > 0:
                 await add_user_balance(
                     db, referrer, settings.REFERRAL_INVITER_BONUS_KOPEKS,
-                    f"Бонус за первое пополнение реферала {user.full_name}"
+                    f"Бонус за первое пополнение реферала {user.full_name}",
+                    bot=bot
                 )
                 
                 await create_referral_earning(
@@ -87,6 +146,16 @@ async def process_referral_topup(
                     reason="referral_first_topup"
                 )
                 logger.info(f"💰 Реферер {referrer.telegram_id} получил бонус {settings.REFERRAL_INVITER_BONUS_KOPEKS/100}₽")
+                
+                if bot:
+                    inviter_bonus_notification = (
+                        f"💰 <b>Реферальная награда!</b>\n\n"
+                        f"Ваш реферал <b>{user.full_name}</b> сделал первое пополнение!\n\n"
+                        f"🎁 Вы получили награду: {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)}\n\n"
+                        f"📈 Теперь с каждого его пополнения вы будете получать {settings.REFERRAL_COMMISSION_PERCENT}% комиссии."
+                    )
+                    await send_referral_notification(bot, referrer.telegram_id, inviter_bonus_notification)
+        
         else:
             if settings.REFERRAL_COMMISSION_PERCENT > 0:
                 commission_amount = int(topup_amount_kopeks * settings.REFERRAL_COMMISSION_PERCENT / 100)
@@ -94,7 +163,8 @@ async def process_referral_topup(
                 if commission_amount > 0:
                     await add_user_balance(
                         db, referrer, commission_amount,
-                        f"Комиссия {settings.REFERRAL_COMMISSION_PERCENT}% с пополнения {user.full_name}"
+                        f"Комиссия {settings.REFERRAL_COMMISSION_PERCENT}% с пополнения {user.full_name}",
+                        bot=bot
                     )
                     
                     await create_referral_earning(
@@ -106,6 +176,17 @@ async def process_referral_topup(
                     )
                     
                     logger.info(f"💰 Комиссия с пополнения: {referrer.telegram_id} получил {commission_amount/100}₽")
+                    
+                    if bot:
+                        commission_notification = (
+                            f"💰 <b>Реферальная комиссия!</b>\n\n"
+                            f"Ваш реферал <b>{user.full_name}</b> пополнил баланс на "
+                            f"{settings.format_price(topup_amount_kopeks)}\n\n"
+                            f"🎁 Ваша комиссия ({settings.REFERRAL_COMMISSION_PERCENT}%): "
+                            f"{settings.format_price(commission_amount)}\n\n"
+                            f"💎 Средства зачислены на ваш баланс."
+                        )
+                        await send_referral_notification(bot, referrer.telegram_id, commission_notification)
         
         return True
         
@@ -118,7 +199,8 @@ async def process_referral_purchase(
     db: AsyncSession,
     user_id: int,
     purchase_amount_kopeks: int,
-    transaction_id: int = None
+    transaction_id: int = None,
+    bot: Bot = None
 ):
     try:
         user = await get_user_by_id(db, user_id)
@@ -141,7 +223,8 @@ async def process_referral_purchase(
         if commission_amount > 0:
             await add_user_balance(
                 db, referrer, commission_amount,
-                f"Комиссия {commission_percent}% с покупки {user.full_name}"
+                f"Комиссия {commission_percent}% с покупки {user.full_name}",
+                bot=bot
             )
             
             await create_referral_earning(
@@ -154,6 +237,17 @@ async def process_referral_purchase(
             )
             
             logger.info(f"💰 Комиссия с покупки: {referrer.telegram_id} получил {commission_amount/100}₽")
+            
+            if bot:
+                purchase_commission_notification = (
+                    f"💰 <b>Комиссия с покупки!</b>\n\n"
+                    f"Ваш реферал <b>{user.full_name}</b> совершил покупку на "
+                    f"{settings.format_price(purchase_amount_kopeks)}\n\n"
+                    f"🎁 Ваша комиссия ({commission_percent}%): "
+                    f"{settings.format_price(commission_amount)}\n\n"
+                    f"💎 Средства зачислены на ваш баланс."
+                )
+                await send_referral_notification(bot, referrer.telegram_id, purchase_commission_notification)
         
         if not user.has_had_paid_subscription:
             user.has_had_paid_subscription = True

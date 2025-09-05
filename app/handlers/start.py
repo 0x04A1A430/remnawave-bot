@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from aiogram import Dispatcher, types, F
+from aiogram import Dispatcher, types, F, Bot
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,7 @@ from app.keyboards.inline import (
 from app.localization.texts import get_texts
 from app.services.referral_service import process_referral_registration
 from app.utils.user_utils import generate_unique_referral_code
+
 
 logger = logging.getLogger(__name__)
 
@@ -386,7 +387,6 @@ async def complete_registration_from_callback(
     state: FSMContext, 
     db: AsyncSession
 ):
-    
     logger.info(f"🏁 COMPLETE: Завершение регистрации для пользователя {callback.from_user.id}")
     
     existing_user = await get_user_by_telegram_id(db, callback.from_user.id)
@@ -497,9 +497,8 @@ async def complete_registration_from_callback(
     
     if referrer_id:
         try:
-            await process_referral_registration(db, user.id, referrer_id)
-            bonus_message = f"🎉 Вы получили {settings.REFERRED_USER_REWARD/100}₽ за регистрацию по реферальной ссылке!"
-            await callback.message.answer(bonus_message)
+            await process_referral_registration(db, user.id, referrer_id, callback.bot)
+            logger.info(f"✅ Реферальная регистрация обработана для {user.id}")
         except Exception as e:
             logger.error(f"Ошибка при обработке реферальной регистрации: {e}")
     
@@ -557,13 +556,11 @@ async def complete_registration_from_callback(
     
     logger.info(f"✅ Регистрация завершена для пользователя: {user_telegram_id}")
 
-
 async def complete_registration(
     message: types.Message, 
     state: FSMContext, 
     db: AsyncSession
 ):
-    
     logger.info(f"🏁 COMPLETE: Завершение регистрации для пользователя {message.from_user.id}")
     
     existing_user = await get_user_by_telegram_id(db, message.from_user.id)
@@ -674,9 +671,8 @@ async def complete_registration(
     
     if referrer_id:
         try:
-            await process_referral_registration(db, user.id, referrer_id)
-            bonus_message = f"🎉 Вы получили {settings.REFERRED_USER_REWARD/100}₽ за регистрацию по реферальной ссылке!"
-            await message.answer(bonus_message)
+            await process_referral_registration(db, user.id, referrer_id, message.bot)
+            logger.info(f"✅ Реферальная регистрация обработана для {user.id}")
         except Exception as e:
             logger.error(f"Ошибка при обработке реферальной регистрации: {e}")
     

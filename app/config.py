@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 10000 
     REFERRAL_INVITER_BONUS_KOPEKS: int = 10000 
     REFERRAL_COMMISSION_PERCENT: int = 25 
+
+    REFERRAL_NOTIFICATIONS_ENABLED: bool = True
+    REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
+    REFERRED_USER_REWARD: int = 0 
     
     AUTOPAY_WARNING_DAYS: str = "3,1"
     
@@ -297,6 +301,19 @@ class Settings(BaseSettings):
     
     def rubles_to_stars(self, rubles: float) -> int:
         return max(1, int(rubles / self.get_stars_rate()))
+
+    def get_referral_settings(self) -> Dict:
+        return {
+            "minimum_topup_kopeks": self.REFERRAL_MINIMUM_TOPUP_KOPEKS,
+            "first_topup_bonus_kopeks": self.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
+            "inviter_bonus_kopeks": self.REFERRAL_INVITER_BONUS_KOPEKS,
+            "commission_percent": self.REFERRAL_COMMISSION_PERCENT,
+            "notifications_enabled": self.REFERRAL_NOTIFICATIONS_ENABLED,
+            "referred_user_reward": self.REFERRED_USER_REWARD
+        }
+    
+    def is_referral_notifications_enabled(self) -> bool:
+        return self.REFERRAL_NOTIFICATIONS_ENABLED
     
     def get_traffic_packages(self) -> List[Dict]:
         import logging
