@@ -67,6 +67,7 @@ class PaymentService:
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(stars_amount)
             amount_kopeks = int(rubles_amount * 100)
             
+            # Создаем транзакцию
             transaction = await create_transaction(
                 db=db,
                 user_id=user_id,
@@ -80,12 +81,27 @@ class PaymentService:
             
             user = await get_user_by_id(db, user_id)
             if user:
-                await add_user_balance(
-                    db, 
-                    user, 
-                    amount_kopeks, 
-                    f"Пополнение Stars: {rubles_amount:.2f}₽ ({stars_amount} ⭐)"
-                )
+                old_balance = user.balance_kopeks
+                user.balance_kopeks += amount_kopeks
+                user.updated_at = datetime.utcnow()
+                
+                await db.commit()
+                await db.refresh(user)
+                
+                logger.info(f"💰 Баланс пользователя {user.telegram_id} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
+                
+                description_for_referral = f"Пополнение Stars: {rubles_amount:.2f}₽ ({stars_amount} ⭐)"
+                logger.info(f"🔍 Проверка реферальной логики для описания: '{description_for_referral}'")
+                
+                if any(word in description_for_referral.lower() for word in ["пополнение", "stars", "yookassa", "topup"]) and not any(word in description_for_referral.lower() for word in ["комиссия", "бонус"]):
+                    logger.info(f"📞 Вызов process_referral_topup для пользователя {user_id}")
+                    try:
+                        from app.services.referral_service import process_referral_topup
+                        await process_referral_topup(db, user_id, amount_kopeks)
+                    except Exception as e:
+                        logger.error(f"Ошибка обработки реферального пополнения: {e}")
+                else:
+                    logger.info(f"❌ Описание '{description_for_referral}' не подходит для реферальной логики")
                 
                 if self.bot:
                     try:
