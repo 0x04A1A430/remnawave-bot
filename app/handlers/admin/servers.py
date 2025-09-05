@@ -52,9 +52,6 @@ async def show_servers_menu(
             types.InlineKeyboardButton(text="📈 Подробная статистика", callback_data="admin_servers_stats")
         ],
         [
-            types.InlineKeyboardButton(text="➕ Добавить сервер", callback_data="admin_servers_add")
-        ],
-        [
             types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_subscriptions")
         ]
     ]
@@ -130,10 +127,6 @@ async def show_servers_list(
         keyboard.append(nav_row)
     
     keyboard.extend([
-        [
-            types.InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_servers_list"),
-            types.InlineKeyboardButton(text="➕ Добавить", callback_data="admin_servers_add")
-        ],
         [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_servers")]
     ])
     

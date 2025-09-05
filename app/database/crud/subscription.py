@@ -354,6 +354,37 @@ async def get_subscriptions_statistics(db: AsyncSession) -> dict:
     )
     purchased_month = month_result.scalar()
     
+    try:
+        from app.database.crud.subscription_conversion import get_conversion_statistics
+        conversion_stats = await get_conversion_statistics(db)
+        
+        trial_to_paid_conversion = conversion_stats.get("conversion_rate", 0)
+        renewals_count = conversion_stats.get("month_conversions", 0)
+        
+        logger.info(f"📊 Статистика конверсии из таблицы conversions:")
+        logger.info(f"   Общее количество конверсий: {conversion_stats.get('total_conversions', 0)}")
+        logger.info(f"   Процент конверсии: {trial_to_paid_conversion}%")
+        logger.info(f"   Конверсий за месяц: {renewals_count}")
+        
+    except ImportError:
+        logger.warning("⚠️ Таблица subscription_conversions не найдена, используем старую логику")
+        
+        users_with_paid_result = await db.execute(
+            select(func.count(User.id))
+            .where(User.has_had_paid_subscription == True)
+        )
+        users_with_paid = users_with_paid_result.scalar()
+        
+        total_users_result = await db.execute(select(func.count(User.id)))
+        total_users = total_users_result.scalar()
+        
+        if total_users > 0:
+            trial_to_paid_conversion = round((users_with_paid / total_users) * 100, 1)
+        else:
+            trial_to_paid_conversion = 0
+            
+        renewals_count = 0
+    
     return {
         "total_subscriptions": total_subscriptions,
         "active_subscriptions": active_subscriptions,
@@ -361,9 +392,10 @@ async def get_subscriptions_statistics(db: AsyncSession) -> dict:
         "paid_subscriptions": paid_subscriptions,
         "purchased_today": purchased_today,
         "purchased_week": purchased_week,
-        "purchased_month": purchased_month
+        "purchased_month": purchased_month,
+        "trial_to_paid_conversion": trial_to_paid_conversion, 
+        "renewals_count": renewals_count 
     }
-
 
 async def update_subscription_usage(
     db: AsyncSession,

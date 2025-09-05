@@ -76,7 +76,7 @@ def get_admin_promocodes_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="➕ Создать", callback_data="admin_promo_create")
         ],
         [
-            InlineKeyboardButton(text="📊 Статистика", callback_data="admin_promo_stats")
+            InlineKeyboardButton(text="📊 Общая статистика", callback_data="admin_promo_general_stats")
         ],
         [
             InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")

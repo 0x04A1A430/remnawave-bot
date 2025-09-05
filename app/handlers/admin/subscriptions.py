@@ -260,11 +260,11 @@ async def show_subscriptions_stats(
 """
     
     keyboard = [
-        [
-            types.InlineKeyboardButton(text="📊 Экспорт данных", callback_data="admin_subs_export"),
-            types.InlineKeyboardButton(text="📈 Графики", callback_data="admin_subs_charts")
-        ],
-        [types.InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_subs_stats")],
+       # [
+       #     types.InlineKeyboardButton(text="📊 Экспорт данных", callback_data="admin_subs_export"),
+       #     types.InlineKeyboardButton(text="📈 Графики", callback_data="admin_subs_charts")
+       # ],
+       # [types.InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_subs_stats")],
         [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_subscriptions")]
     ]
     
