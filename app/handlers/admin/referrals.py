@@ -137,16 +137,19 @@ async def show_top_referrers(
         text = "🏆 <b>Топ рефереров</b>\n\n"
         
         if top_referrers:
-            for i, referrer in enumerate(top_referrers[:20], 1):
+            for i, referrer in enumerate(top_referrers[:20], 1):  
                 earned = referrer.get('total_earned_kopeks', 0)
                 count = referrer.get('referrals_count', 0)
                 display_name = referrer.get('display_name', 'N/A')
                 username = referrer.get('username', '')
+                telegram_id = referrer.get('telegram_id', 'N/A')
                 
                 if username:
-                    display_text = f"@{username}"
+                    display_text = f"@{username} (ID{telegram_id})"
+                elif display_name and display_name != f"ID{telegram_id}":
+                    display_text = f"{display_name} (ID{telegram_id})"
                 else:
-                    display_text = display_name
+                    display_text = f"ID{telegram_id}"
                 
                 emoji = ""
                 if i == 1:
