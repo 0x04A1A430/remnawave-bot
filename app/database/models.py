@@ -125,6 +125,7 @@ class User(Base):
     trojan_password = Column(String(255), nullable=True)
     vless_uuid = Column(String(255), nullable=True)
     ss_password = Column(String(255), nullable=True)
+    as_made_first_topup: Column(Boolean, default=False, nullable=False)
     
     @property
     def balance_rubles(self) -> float:
