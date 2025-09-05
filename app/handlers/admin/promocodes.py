@@ -969,6 +969,38 @@ async def show_promocode_stats(
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer()
 
+@admin_required
+@error_handler
+async def show_general_promocode_stats(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    total_codes = await get_promocodes_count(db)
+    active_codes = await get_promocodes_count(db, is_active=True)
+    
+    text = f"""
+📊 <b>Общая статистика промокодов</b>
+
+📈 <b>Основные показатели:</b>
+- Всего промокодов: {total_codes}
+- Активных: {active_codes}
+- Неактивных: {total_codes - active_codes}
+
+Для детальной статистики выберите конкретный промокод из списка.
+"""
+    
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+        [
+            types.InlineKeyboardButton(text="🎫 К промокодам", callback_data="admin_promo_list")
+        ],
+        [
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_promocodes")
+        ]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer()
 
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_promocodes_menu, F.data == "admin_promocodes")
@@ -984,6 +1016,7 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(start_edit_promocode_amount, F.data.startswith("promo_edit_amount_"))
     dp.callback_query.register(start_edit_promocode_days, F.data.startswith("promo_edit_days_"))
     dp.callback_query.register(start_edit_promocode_uses, F.data.startswith("promo_edit_uses_"))
+    dp.callback_query.register(show_general_promocode_stats, F.data == "admin_promo_general_stats")
     
     dp.callback_query.register(
         show_promocode_edit_menu, 
@@ -997,3 +1030,4 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(process_promocode_value, AdminStates.setting_promocode_value)
     dp.message.register(process_promocode_uses, AdminStates.setting_promocode_uses)
     dp.message.register(process_promocode_expiry, AdminStates.setting_promocode_expiry)
+    
