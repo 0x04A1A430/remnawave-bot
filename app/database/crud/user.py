@@ -146,6 +146,18 @@ async def add_user_balance(
         await db.commit()
         await db.refresh(user)
         
+        logger.info(f"🔍 Проверка реферальной логики для описания: '{description}'")
+        
+        if any(word in description.lower() for word in ["пополнение", "stars", "yookassa", "topup"]):
+            logger.info(f"📞 Вызов process_referral_topup для пользователя {user.id}")
+            try:
+                from app.services.referral_service import process_referral_topup
+                await process_referral_topup(db, user.id, amount_kopeks)
+            except Exception as e:
+                logger.error(f"Ошибка обработки реферального пополнения: {e}")
+        else:
+            logger.info(f"❌ Описание '{description}' не подходит для реферальной логики")
+        
         logger.info(f"💰 Баланс пользователя {user.telegram_id} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
         return True
         
