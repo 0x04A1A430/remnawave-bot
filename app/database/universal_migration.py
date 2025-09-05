@@ -241,6 +241,56 @@ async def add_remnawave_v2_columns():
         logger.error(f"Ошибка при добавлении колонок RemnaWave v2.1.5: {e}")
         return 0
 
+async def add_referral_system_columns():
+    logger.info("=== МИГРАЦИЯ РЕФЕРАЛЬНОЙ СИСТЕМЫ ===")
+    
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            
+            column_exists = await check_column_exists('users', 'has_made_first_topup')
+            
+            if not column_exists:
+                logger.info("Добавление колонки has_made_first_topup в таблицу users")
+                
+                if db_type == 'sqlite':
+                    column_def = 'BOOLEAN DEFAULT 0'
+                else:
+                    column_def = 'BOOLEAN DEFAULT FALSE'
+                
+                await conn.execute(text(f"ALTER TABLE users ADD COLUMN has_made_first_topup {column_def}"))
+                logger.info("Колонка has_made_first_topup успешно добавлена")
+                
+                logger.info("Обновление существующих пользователей...")
+                
+                if db_type == 'sqlite':
+                    update_sql = """
+                        UPDATE users 
+                        SET has_made_first_topup = 1 
+                        WHERE balance_kopeks > 0 OR has_had_paid_subscription = 1
+                    """
+                else:
+                    update_sql = """
+                        UPDATE users 
+                        SET has_made_first_topup = TRUE 
+                        WHERE balance_kopeks > 0 OR has_had_paid_subscription = TRUE
+                    """
+                
+                result = await conn.execute(text(update_sql))
+                updated_count = result.rowcount
+                
+                logger.info(f"Обновлено {updated_count} пользователей с has_made_first_topup = TRUE")
+                logger.info("✅ Миграция реферальной системы завершена")
+                
+                return True
+            else:
+                logger.info("Колонка has_made_first_topup уже существует")
+                return True
+                
+    except Exception as e:
+        logger.error(f"Ошибка миграции реферальной системы: {e}")
+        return False
+
 async def fix_subscription_duplicates_universal():
     
     async with engine.begin() as conn:
@@ -321,7 +371,6 @@ async def fix_subscription_duplicates_universal():
             raise
 
 async def run_universal_migration():
-    
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
     try:
@@ -329,6 +378,10 @@ async def run_universal_migration():
         logger.info(f"Тип базы данных: {db_type}")
         
         await add_remnawave_v2_columns()
+        
+        referral_migration_success = await add_referral_system_columns()
+        if not referral_migration_success:
+            logger.warning("⚠️ Проблемы с миграцией реферальной системы")
         
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ YOOKASSA ===")
         yookassa_created = await create_yookassa_payments_table()
@@ -349,6 +402,7 @@ async def run_universal_migration():
             
             if total_count == unique_count:
                 logger.info("База данных уже в корректном состоянии")
+                logger.info("=== МИГРАЦИЯ ЗАВЕРШЕНА УСПЕШНО ===")
                 return True
         
         deleted_count = await fix_subscription_duplicates_universal()
@@ -368,8 +422,62 @@ async def run_universal_migration():
                 return False
             else:
                 logger.info("=== МИГРАЦИЯ ЗАВЕРШЕНА УСПЕШНО ===")
+                logger.info("✅ Реферальная система обновлена")
+                logger.info("✅ RemnaWave v2.1.5 колонки добавлены")
+                logger.info("✅ YooKassa таблица готова")
+                logger.info("✅ Дубликаты подписок исправлены")
                 return True
                 
     except Exception as e:
         logger.error(f"=== ОШИБКА ВЫПОЛНЕНИЯ МИГРАЦИИ: {e} ===")
         return False
+
+async def check_migration_status():
+    logger.info("=== ПРОВЕРКА СТАТУСА МИГРАЦИЙ ===")
+    
+    try:
+        status = {
+            "has_made_first_topup_column": False,
+            "yookassa_table": False,
+            "remnawave_v2_columns": False,
+            "subscription_duplicates": False
+        }
+        
+        status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
+        
+        status["yookassa_table"] = await check_table_exists('yookassa_payments')
+        
+        remnawave_columns = ['lifetime_used_traffic_bytes', 'last_remnawave_sync', 'trojan_password', 'vless_uuid', 'ss_password']
+        remnawave_status = []
+        for col in remnawave_columns:
+            exists = await check_column_exists('users', col)
+            remnawave_status.append(exists)
+        status["remnawave_v2_columns"] = all(remnawave_status)
+        
+        async with engine.begin() as conn:
+            duplicates_check = await conn.execute(text("""
+                SELECT COUNT(*) FROM (
+                    SELECT user_id, COUNT(*) as count 
+                    FROM subscriptions 
+                    GROUP BY user_id 
+                    HAVING COUNT(*) > 1
+                ) as dups
+            """))
+            duplicates_count = duplicates_check.fetchone()[0]
+            status["subscription_duplicates"] = (duplicates_count == 0)
+        
+        for check_name, check_status in status.items():
+            icon = "✅" if check_status else "❌"
+            logger.info(f"{icon} {check_name}: {'OK' if check_status else 'ТРЕБУЕТ ВНИМАНИЯ'}")
+        
+        all_good = all(status.values())
+        if all_good:
+            logger.info("🎉 Все миграции выполнены успешно!")
+        else:
+            logger.warning("⚠️ Некоторые миграции требуют внимания")
+        
+        return status
+        
+    except Exception as e:
+        logger.error(f"Ошибка проверки статуса миграций: {e}")
+        return None
