@@ -137,10 +137,16 @@ async def show_top_referrers(
         text = "🏆 <b>Топ рефереров</b>\n\n"
         
         if top_referrers:
-            for i, referrer in enumerate(top_referrers[:20], 1): 
+            for i, referrer in enumerate(top_referrers[:20], 1):
                 earned = referrer.get('total_earned_kopeks', 0)
                 count = referrer.get('referrals_count', 0)
-                user_id = referrer.get('user_id', 'N/A')
+                display_name = referrer.get('display_name', 'N/A')
+                username = referrer.get('username', '')
+                
+                if username:
+                    display_text = f"@{username}"
+                else:
+                    display_text = display_name
                 
                 emoji = ""
                 if i == 1:
@@ -150,7 +156,7 @@ async def show_top_referrers(
                 elif i == 3:
                     emoji = "🥉 "
                 
-                text += f"{emoji}{i}. ID {user_id}\n"
+                text += f"{emoji}{i}. {display_text}\n"
                 text += f"   💰 {settings.format_price(earned)} | 👥 {count} реф.\n\n"
         else:
             text += "Нет данных о рефererах\n"
