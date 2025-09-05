@@ -892,6 +892,7 @@ async def show_user_statistics(
     )
     await callback.answer()
 
+
 async def get_detailed_referral_stats(db: AsyncSession, user_id: int) -> dict:
     from app.database.crud.referral import get_user_referral_stats, get_referral_earnings_by_user
     from sqlalchemy import select, func
@@ -916,9 +917,18 @@ async def get_detailed_referral_stats(db: AsyncSession, user_id: int) -> dict:
         earnings_by_referral[referral_id] += earning.amount_kopeks
     
     referrals_detail = []
+    current_time = datetime.utcnow()
+    
     for referral in referrals:
         earned = earnings_by_referral.get(referral.id, 0)
-        is_active = referral.subscription and referral.subscription.is_active if referral.subscription else False
+        
+        is_active = False
+        if referral.subscription:
+            from app.database.models import SubscriptionStatus
+            is_active = (
+                referral.subscription.status == SubscriptionStatus.ACTIVE.value and 
+                referral.subscription.end_date > current_time
+            )
         
         referrals_detail.append({
             'referral_id': referral.id,
@@ -939,7 +949,7 @@ async def get_detailed_referral_stats(db: AsyncSession, user_id: int) -> dict:
         'month_earned_kopeks': base_stats['month_earned_kopeks'],
         'referrals_detail': referrals_detail
     }
-
+    
 @admin_required
 @error_handler
 async def extend_user_subscription(
