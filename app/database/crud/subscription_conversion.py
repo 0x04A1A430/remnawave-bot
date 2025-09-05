@@ -58,16 +58,16 @@ async def get_conversion_statistics(db: AsyncSession) -> dict:
     )
     total_conversions = total_conversions_result.scalar()
     
-    users_with_trials_result = await db.execute(
-        select(func.count(func.distinct(User.id)))
-        .where(
-            (User.has_had_paid_subscription == True) | 
-            (User.subscription.has() & (User.subscription.any())) 
-        )
+    users_with_paid_result = await db.execute(
+        select(func.count(User.id))
+        .where(User.has_had_paid_subscription == True)
     )
+    users_with_paid = users_with_paid_result.scalar()
     
     if total_conversions > 0:
-        conversion_rate = 100.0 
+        conversion_rate = round((total_conversions / max(total_conversions, users_with_paid)) * 100, 1)
+    elif users_with_paid > 0:
+        conversion_rate = 100.0
     else:
         conversion_rate = 0.0
     
@@ -88,9 +88,14 @@ async def get_conversion_statistics(db: AsyncSession) -> dict:
     )
     month_conversions = month_conversions_result.scalar()
     
+    logger.info(f"📊 Статистика конверсий:")
+    logger.info(f"   Всего записей о конверсиях: {total_conversions}")
+    logger.info(f"   Пользователей с платными подписками: {users_with_paid}")
+    logger.info(f"   Рассчитанная конверсия: {conversion_rate}%")
+    
     return {
         "total_conversions": total_conversions,
-        "conversion_rate": round(conversion_rate, 1),
+        "conversion_rate": conversion_rate,
         "avg_trial_duration_days": round(avg_trial_duration, 1),
         "avg_first_payment_rubles": round((avg_first_payment or 0) / 100, 2),
         "month_conversions": month_conversions
@@ -98,7 +103,6 @@ async def get_conversion_statistics(db: AsyncSession) -> dict:
 
 
 async def get_users_had_trial_count(db: AsyncSession) -> int:
-    """Получить количество пользователей, которые когда-либо имели триальную подписку"""
     
     conversions_count_result = await db.execute(
         select(func.count(func.distinct(SubscriptionConversion.user_id)))
