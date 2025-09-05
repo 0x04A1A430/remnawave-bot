@@ -125,26 +125,41 @@ async def add_user_balance(
     db: AsyncSession,
     user: User,
     amount_kopeks: int,
-    description: str = "Пополнение баланса"
+    description: str = "Пополнение баланса",
+    create_transaction: bool = True
 ) -> bool:
     try:
         old_balance = user.balance_kopeks
         user.balance_kopeks += amount_kopeks
         user.updated_at = datetime.utcnow()
         
-        from app.database.crud.transaction import create_transaction
-        from app.database.models import TransactionType
-        
-        await create_transaction(
-            db=db,
-            user_id=user.id,
-            type=TransactionType.DEPOSIT,
-            amount_kopeks=amount_kopeks,
-            description=description
-        )
+        if create_transaction:
+            from app.database.crud.transaction import create_transaction as create_trans
+            from app.database.models import TransactionType
+            
+            await create_trans(
+                db=db,
+                user_id=user.id,
+                type=TransactionType.DEPOSIT,
+                amount_kopeks=amount_kopeks,
+                description=description
+            )
         
         await db.commit()
         await db.refresh(user)
+        
+        topup_keywords = ["пополнение", "stars", "yookassa", "topup"]
+        exclude_keywords = ["комиссия", "бонус", "реферальн", "выплата", "вознаграждение"]
+        
+        has_topup_keywords = any(word in description.lower() for word in topup_keywords)
+        has_exclude_keywords = any(word in description.lower() for word in exclude_keywords)
+        
+        if has_topup_keywords and not has_exclude_keywords:
+            try:
+                from app.services.referral_service import process_referral_topup
+                await process_referral_topup(db, user.id, amount_kopeks)
+            except Exception as e:
+                logger.error(f"Ошибка обработки реферального пополнения: {e}")
         
         logger.info(f"💰 Баланс пользователя {user.telegram_id} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
         return True
@@ -153,7 +168,7 @@ async def add_user_balance(
         logger.error(f"Ошибка изменения баланса пользователя {user.id}: {e}")
         await db.rollback()
         return False
-
+        
 async def add_user_balance_by_id(
     db: AsyncSession,
     telegram_id: int, 

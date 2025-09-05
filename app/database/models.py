@@ -7,7 +7,7 @@ from sqlalchemy import (
     ForeignKey, Float, JSON, BigInteger
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, Mapped
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 
 
@@ -125,6 +125,7 @@ class User(Base):
     trojan_password = Column(String(255), nullable=True)
     vless_uuid = Column(String(255), nullable=True)
     ss_password = Column(String(255), nullable=True)
+    has_made_first_topup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     @property
     def balance_rubles(self) -> float:
