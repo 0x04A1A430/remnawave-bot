@@ -1,11 +1,12 @@
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
 from aiogram import Bot
 
 from app.config import settings
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.crud.referral import create_referral_earning
-from app.database.models import TransactionType
+from app.database.models import TransactionType, ReferralEarning
 
 logger = logging.getLogger(__name__)
 
@@ -100,10 +101,24 @@ async def process_referral_topup(
             user.has_made_first_topup = True
             await db.commit()
             
+            try:
+                await db.execute(
+                    delete(ReferralEarning).where(
+                        ReferralEarning.user_id == referrer.id,
+                        ReferralEarning.referral_id == user_id,
+                        ReferralEarning.reason == "referral_registration_pending"
+                    )
+                )
+                await db.commit()
+                logger.info(f"🗑️ Удалена запись 'ожидание пополнения' для реферала {user_id}")
+            except Exception as e:
+                logger.error(f"Ошибка удаления записи ожидания: {e}")
+            
             if settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS > 0:
                 await add_user_balance(
                     db, user, settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
-                    f"Бонус за первое пополнение по реферальной программе"
+                    f"Бонус за первое пополнение по реферальной программе",
+                    bot=bot
                 )
                 logger.info(f"💰 Реферал {user_id} получил бонус {settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS/100}₽")
                 
@@ -119,7 +134,8 @@ async def process_referral_topup(
             if settings.REFERRAL_INVITER_BONUS_KOPEKS > 0:
                 await add_user_balance(
                     db, referrer, settings.REFERRAL_INVITER_BONUS_KOPEKS,
-                    f"Бонус за первое пополнение реферала {user.full_name}"
+                    f"Бонус за первое пополнение реферала {user.full_name}",
+                    bot=bot
                 )
                 
                 await create_referral_earning(
@@ -147,7 +163,8 @@ async def process_referral_topup(
                 if commission_amount > 0:
                     await add_user_balance(
                         db, referrer, commission_amount,
-                        f"Комиссия {settings.REFERRAL_COMMISSION_PERCENT}% с пополнения {user.full_name}"
+                        f"Комиссия {settings.REFERRAL_COMMISSION_PERCENT}% с пополнения {user.full_name}",
+                        bot=bot
                     )
                     
                     await create_referral_earning(
@@ -206,7 +223,8 @@ async def process_referral_purchase(
         if commission_amount > 0:
             await add_user_balance(
                 db, referrer, commission_amount,
-                f"Комиссия {commission_percent}% с покупки {user.full_name}"
+                f"Комиссия {commission_percent}% с покупки {user.full_name}",
+                bot=bot
             )
             
             await create_referral_earning(
