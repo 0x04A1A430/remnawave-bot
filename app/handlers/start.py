@@ -280,7 +280,7 @@ async def process_rules_accept(
                     await state.set_data(data)
                     logger.info(f"✅ Реферер найден: {referrer.id}")
                 
-                await complete_registration_from_callback(callback, state, db, callback.bot)
+                await complete_registration_from_callback(callback, state, db)
             else:
                 try:
                     await callback.message.answer(
@@ -353,7 +353,7 @@ async def process_referral_code_input(
         logger.info(f"❌ Неверный реферальный код")
         return
     
-    await complete_registration(message, state, db, message.bot)
+    await complete_registration(message, state, db)
 
 
 async def process_referral_code_skip(
@@ -378,7 +378,7 @@ async def process_referral_code_skip(
         except:
             pass
     
-    await complete_registration_from_callback(callback, state, db, callback.bot)
+    await complete_registration_from_callback(callback, state, db)
 
 
 
