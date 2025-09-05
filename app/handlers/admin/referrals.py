@@ -1,6 +1,7 @@
 import logging
 from aiogram import Dispatcher, types, F
 from sqlalchemy.ext.asyncio import AsyncSession
+import datetime
 
 from app.config import settings
 from app.database.models import User
@@ -25,6 +26,8 @@ async def show_referral_statistics(
         avg_per_referrer = 0
         if stats.get('active_referrers', 0) > 0:
             avg_per_referrer = stats.get('total_paid_kopeks', 0) / stats['active_referrers']
+        
+        current_time = datetime.datetime.now().strftime("%H:%M:%S")
         
         text = f"""
 🤝 <b>Реферальная статистика</b>
@@ -51,7 +54,11 @@ async def show_referral_statistics(
                 earned = referrer.get('total_earned_kopeks', 0)
                 count = referrer.get('referrals_count', 0)
                 user_id = referrer.get('user_id', 'N/A')
-                text += f"{i}. ID {user_id}: {settings.format_price(earned)} ({count} реф.)\n"
+                
+                if count > 0:
+                    text += f"{i}. ID {user_id}: {settings.format_price(earned)} ({count} реф.)\n"
+                else:
+                    logger.warning(f"Реферер {user_id} имеет {count} рефералов, но есть в топе")
         else:
             text += "Нет данных\n"
         
@@ -64,6 +71,8 @@ async def show_referral_statistics(
 - Бонус новому пользователю: {settings.format_price(settings.REFERRED_USER_REWARD)}
 - Комиссия с покупок: {settings.REFERRAL_COMMISSION_PERCENT}%
 - Уведомления: {'✅ Включены' if settings.REFERRAL_NOTIFICATIONS_ENABLED else '❌ Отключены'}
+
+<i>🕐 Обновлено: {current_time}</i>
 """
         
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
@@ -73,12 +82,20 @@ async def show_referral_statistics(
             [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")]
         ])
         
-        await callback.message.edit_text(text, reply_markup=keyboard)
-        await callback.answer()
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard)
+            await callback.answer("Обновлено")
+        except Exception as edit_error:
+            if "message is not modified" in str(edit_error):
+                await callback.answer("Данные актуальны")
+            else:
+                logger.error(f"Ошибка редактирования сообщения: {edit_error}")
+                await callback.answer("Ошибка обновления")
         
     except Exception as e:
         logger.error(f"Ошибка в show_referral_statistics: {e}", exc_info=True)
         
+        current_time = datetime.datetime.now().strftime("%H:%M:%S")
         text = f"""
 🤝 <b>Реферальная статистика</b>
 
@@ -90,6 +107,8 @@ async def show_referral_statistics(
 - Бонус пригласившему: {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)}
 - Бонус новому пользователю: {settings.format_price(settings.REFERRED_USER_REWARD)}
 - Комиссия с покупок: {settings.REFERRAL_COMMISSION_PERCENT}%
+
+<i>🕐 Время: {current_time}</i>
 """
         
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
@@ -97,7 +116,10 @@ async def show_referral_statistics(
             [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")]
         ])
         
-        await callback.message.edit_text(text, reply_markup=keyboard)
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard)
+        except:
+            pass
         await callback.answer("Произошла ошибка при загрузке статистики")
 
 
@@ -115,7 +137,7 @@ async def show_top_referrers(
         text = "🏆 <b>Топ рефереров</b>\n\n"
         
         if top_referrers:
-            for i, referrer in enumerate(top_referrers[:20], 1):
+            for i, referrer in enumerate(top_referrers[:20], 1): 
                 earned = referrer.get('total_earned_kopeks', 0)
                 count = referrer.get('referrals_count', 0)
                 user_id = referrer.get('user_id', 'N/A')
