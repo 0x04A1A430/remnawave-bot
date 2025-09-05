@@ -20,13 +20,16 @@ async def show_referral_statistics(
     db_user: User,
     db: AsyncSession
 ):
+    """Показать статистику реферальной системы"""
     try:
         stats = await get_referral_statistics(db)
         
+        # Вычисляем средний доход на реферера
         avg_per_referrer = 0
         if stats.get('active_referrers', 0) > 0:
             avg_per_referrer = stats.get('total_paid_kopeks', 0) / stats['active_referrers']
         
+        # Добавляем временную метку для принудительного обновления
         current_time = datetime.datetime.now().strftime("%H:%M:%S")
         
         text = f"""
@@ -48,6 +51,7 @@ async def show_referral_statistics(
 <b>Топ-5 рефереров:</b>
 """
         
+        # Добавляем топ рефереров
         top_referrers = stats.get('top_referrers', [])
         if top_referrers:
             for i, referrer in enumerate(top_referrers[:5], 1):
@@ -55,6 +59,7 @@ async def show_referral_statistics(
                 count = referrer.get('referrals_count', 0)
                 user_id = referrer.get('user_id', 'N/A')
                 
+                # Проверяем, что данные корректные
                 if count > 0:
                     text += f"{i}. ID {user_id}: {settings.format_price(earned)} ({count} реф.)\n"
                 else:
@@ -75,6 +80,7 @@ async def show_referral_statistics(
 <i>🕐 Обновлено: {current_time}</i>
 """
         
+        # Создаем клавиатуру
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="🔄 Обновить", callback_data="admin_referrals")],
             [types.InlineKeyboardButton(text="👥 Топ рефереров", callback_data="admin_referrals_top")],
@@ -82,10 +88,12 @@ async def show_referral_statistics(
             [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")]
         ])
         
+        # Пытаемся отредактировать сообщение, если не получается - просто отвечаем
         try:
             await callback.message.edit_text(text, reply_markup=keyboard)
             await callback.answer("Обновлено")
         except Exception as edit_error:
+            # Если сообщение не изменилось, просто отвечаем на callback
             if "message is not modified" in str(edit_error):
                 await callback.answer("Данные актуальны")
             else:
@@ -95,6 +103,7 @@ async def show_referral_statistics(
     except Exception as e:
         logger.error(f"Ошибка в show_referral_statistics: {e}", exc_info=True)
         
+        # Показываем базовую информацию в случае ошибки
         current_time = datetime.datetime.now().strftime("%H:%M:%S")
         text = f"""
 🤝 <b>Реферальная статистика</b>
@@ -130,6 +139,7 @@ async def show_top_referrers(
     db_user: User,
     db: AsyncSession
 ):
+    """Показать расширенный топ рефереров"""
     try:
         stats = await get_referral_statistics(db)
         top_referrers = stats.get('top_referrers', [])
@@ -137,13 +147,14 @@ async def show_top_referrers(
         text = "🏆 <b>Топ рефереров</b>\n\n"
         
         if top_referrers:
-            for i, referrer in enumerate(top_referrers[:20], 1):  
+            for i, referrer in enumerate(top_referrers[:20], 1):  # Показываем топ-20
                 earned = referrer.get('total_earned_kopeks', 0)
                 count = referrer.get('referrals_count', 0)
                 display_name = referrer.get('display_name', 'N/A')
                 username = referrer.get('username', '')
                 telegram_id = referrer.get('telegram_id', 'N/A')
                 
+                # Формируем отображаемое имя
                 if username:
                     display_text = f"@{username} (ID{telegram_id})"
                 elif display_name and display_name != f"ID{telegram_id}":
@@ -151,6 +162,7 @@ async def show_top_referrers(
                 else:
                     display_text = f"ID{telegram_id}"
                 
+                # Добавляем эмодзи для топ-3
                 emoji = ""
                 if i == 1:
                     emoji = "🥇 "
