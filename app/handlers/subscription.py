@@ -2482,8 +2482,6 @@ async def confirm_add_countries_to_subscription(
         subscription_service = SubscriptionService()
         await subscription_service.update_remnawave_user(db, subscription)
         
-        if new_countries and total_price > 0:
-        
         await db.refresh(db_user)
         await db.refresh(subscription)
         
