@@ -281,14 +281,17 @@ async def get_user_referral_stats(db: AsyncSession, user_id: int) -> dict:
     month_ago = datetime.utcnow() - timedelta(days=30)
     month_earned = await get_referral_earnings_sum(db, user_id, start_date=month_ago)
     
-    from app.database.models import Subscription
+    from app.database.models import Subscription, SubscriptionStatus
+    current_time = datetime.utcnow()
+    
     active_referrals_result = await db.execute(
         select(func.count(User.id))
         .join(Subscription, User.id == Subscription.user_id)
         .where(
             and_(
                 User.referred_by_id == user_id,
-                Subscription.is_active == True
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date > current_time
             )
         )
     )
