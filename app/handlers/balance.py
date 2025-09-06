@@ -19,6 +19,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.utils.pagination import paginate_list
 from app.utils.decorators import error_handler
+from app.services.admin_notification_service import AdminNotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -526,43 +527,6 @@ async def check_yookassa_payment_status(
         logger.error(f"Ошибка проверки статуса платежа: {e}")
         await callback.answer("❌ Ошибка проверки статуса", show_alert=True)
 
-@error_handler
-async def add_user_balance(
-    db: AsyncSession,
-    user: User,
-    amount_kopeks: int,
-    description: str = "Пополнение баланса"
-) -> bool:
-    try:
-        old_balance = user.balance_kopeks
-        user.balance_kopeks += amount_kopeks
-        user.updated_at = datetime.utcnow()
-        
-        from app.database.crud.transaction import create_transaction
-        from app.database.models import TransactionType
-        
-        await create_transaction(
-            db=db,
-            user_id=user.id,
-            type=TransactionType.DEPOSIT,
-            amount_kopeks=amount_kopeks,
-            description=description
-        )
-        
-        await db.commit()
-        await db.refresh(user)
-        
-        if "пополнение" in description.lower() or "topup" in description.lower():
-            from app.services.referral_service import process_referral_topup
-            await process_referral_topup(db, user.id, amount_kopeks)
-        
-        logger.info(f"💰 Баланс пользователя {user.telegram_id} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Ошибка изменения баланса пользователя {user.id}: {e}")
-        await db.rollback()
-        return False
 
 
 def register_handlers(dp: Dispatcher):
