@@ -19,7 +19,6 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.utils.pagination import paginate_list
 from app.utils.decorators import error_handler
-from app.services.admin_notification_service import AdminNotificationService
 
 logger = logging.getLogger(__name__)
 
