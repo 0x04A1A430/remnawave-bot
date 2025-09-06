@@ -356,3 +356,16 @@ async def create_unique_tribute_transaction(
         external_id=external_id,
         is_completed=True
     )
+
+async def get_transaction_by_id(
+    db: AsyncSession,
+    transaction_id: int
+) -> Optional[Transaction]:
+    try:
+        result = await db.execute(
+            select(Transaction).where(Transaction.id == transaction_id)
+        )
+        return result.scalar_one_or_none()
+    except Exception as e:
+        logger.error(f"Ошибка получения транзакции {transaction_id}: {e}")
+        return None
