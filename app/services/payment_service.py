@@ -81,6 +81,7 @@ class PaymentService:
             user = await get_user_by_id(db, user_id)
             if user:
                 old_balance = user.balance_kopeks
+                
                 user.balance_kopeks += amount_kopeks
                 user.updated_at = datetime.utcnow()
                 
@@ -93,7 +94,7 @@ class PaymentService:
                 logger.info(f"🔍 Проверка реферальной логики для описания: '{description_for_referral}'")
                 
                 if any(word in description_for_referral.lower() for word in ["пополнение", "stars", "yookassa", "topup"]) and not any(word in description_for_referral.lower() for word in ["комиссия", "бонус"]):
-                    logger.info(f"📞 Вызов process_referral_topup для пользователя {user_id}")
+                    logger.info(f"🔞 Вызов process_referral_topup для пользователя {user_id}")
                     try:
                         from app.services.referral_service import process_referral_topup
                         await process_referral_topup(db, user_id, amount_kopeks, self.bot)
@@ -104,12 +105,22 @@ class PaymentService:
                 
                 if self.bot:
                     try:
+                        from app.services.admin_notification_service import AdminNotificationService
+                        notification_service = AdminNotificationService(self.bot)
+                        await notification_service.send_balance_topup_notification(
+                            user, transaction, old_balance
+                        )
+                    except Exception as e:
+                        logger.error(f"Ошибка отправки уведомления о пополнении Stars: {e}")
+                
+                if self.bot:
+                    try:
                         await self.bot.send_message(
                             user.telegram_id,
                             f"✅ <b>Пополнение успешно!</b>\n\n"
                             f"⭐ Звезд: {stars_amount}\n"
                             f"💰 Сумма: {settings.format_price(amount_kopeks)}\n"
-                            f"🏦 Способ: Telegram Stars\n"
+                            f"🦊 Способ: Telegram Stars\n"
                             f"🆔 Транзакция: {telegram_payment_charge_id[:8]}...\n\n"
                             f"Баланс пополнен автоматически!",
                             parse_mode="HTML"
@@ -268,6 +279,7 @@ class PaymentService:
                 user = await get_user_by_id(db, updated_payment.user_id)
                 if user:
                     old_balance = user.balance_kopeks
+                    
                     user.balance_kopeks += updated_payment.amount_kopeks
                     user.updated_at = datetime.utcnow()
                     
@@ -282,11 +294,21 @@ class PaymentService:
                     
                     if self.bot:
                         try:
+                            from app.services.admin_notification_service import AdminNotificationService
+                            notification_service = AdminNotificationService(self.bot)
+                            await notification_service.send_balance_topup_notification(
+                                user, transaction, old_balance
+                            )
+                        except Exception as e:
+                            logger.error(f"Ошибка отправки уведомления о пополнении YooKassa: {e}")
+                    
+                    if self.bot:
+                        try:
                             await self.bot.send_message(
                                 user.telegram_id,
                                 f"✅ <b>Пополнение успешно!</b>\n\n"
                                 f"💰 Сумма: {settings.format_price(updated_payment.amount_kopeks)}\n"
-                                f"🏦 Способ: Банковская карта\n"
+                                f"🦊 Способ: Банковская карта\n"
                                 f"🆔 Транзакция: {yookassa_payment_id[:8]}...\n\n"
                                 f"Баланс пополнен автоматически!",
                                 parse_mode="HTML"
