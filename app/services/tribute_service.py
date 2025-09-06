@@ -90,7 +90,6 @@ class TributeService:
         return {"status": "ok", "event": event_type}
     
     async def _handle_successful_payment(self, payment_data: Dict[str, Any]):
-        
         try:
             user_id = payment_data["user_id"]
             amount_kopeks = payment_data["amount_kopeks"]
@@ -143,6 +142,21 @@ class TributeService:
                 
                 logger.info(f"✅ Баланс пользователя {user_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
                 logger.info(f"✅ Создана транзакция ID: {transaction.id}")
+                
+                try:
+                    from app.services.referral_service import process_referral_topup
+                    await process_referral_topup(session, user_id, amount_kopeks, self.bot)
+                except Exception as e:
+                    logger.error(f"Ошибка обработки реферального пополнения Tribute: {e}")
+                
+                try:
+                    from app.services.admin_notification_service import AdminNotificationService
+                    notification_service = AdminNotificationService(self.bot)
+                    await notification_service.send_balance_topup_notification(
+                        user, transaction, old_balance
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка отправки уведомления о Tribute пополнении: {e}")
                 
                 await self._send_success_notification(user_id, amount_kopeks)
                 
