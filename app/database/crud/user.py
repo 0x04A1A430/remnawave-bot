@@ -48,7 +48,6 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optiona
 
 
 async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> Optional[User]:
-    
     result = await db.execute(
         select(User).where(User.referral_code == referral_code)
     )
@@ -92,7 +91,8 @@ async def create_user(
         referred_by_id=referred_by_id,
         referral_code=referral_code,
         balance_kopeks=0,
-        has_had_paid_subscription=False
+        has_had_paid_subscription=False,
+        has_made_first_topup=False 
     )
     
     db.add(user)
@@ -149,18 +149,6 @@ async def add_user_balance(
         await db.commit()
         await db.refresh(user)
         
-        topup_keywords = ["пополнение", "stars", "yookassa", "topup"]
-        exclude_keywords = ["комиссия", "бонус", "реферальн", "выплата", "вознаграждение"]
-        
-        has_topup_keywords = any(word in description.lower() for word in topup_keywords)
-        has_exclude_keywords = any(word in description.lower() for word in exclude_keywords)
-        
-        if has_topup_keywords and not has_exclude_keywords:
-            try:
-                from app.services.referral_service import process_referral_topup
-                await process_referral_topup(db, user.id, amount_kopeks, bot)
-            except Exception as e:
-                logger.error(f"Ошибка обработки реферального пополнения: {e}")
         
         logger.info(f"💰 Баланс пользователя {user.telegram_id} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
         return True
@@ -169,7 +157,8 @@ async def add_user_balance(
         logger.error(f"Ошибка изменения баланса пользователя {user.id}: {e}")
         await db.rollback()
         return False
-        
+
+
 async def add_user_balance_by_id(
     db: AsyncSession,
     telegram_id: int, 
@@ -187,11 +176,7 @@ async def add_user_balance_by_id(
     except Exception as e:
         logger.error(f"Ошибка пополнения баланса пользователя {telegram_id}: {e}")
         return False
-        
-    except Exception as e:
-        logger.error(f"❌ Ошибка пополнения баланса пользователя {user_id}: {e}")
-        await db.rollback()
-        return False
+
 
 async def subtract_user_balance(
     db: AsyncSession, 
@@ -362,7 +347,7 @@ async def get_users_statistics(db: AsyncSession) -> dict:
             )
         )
     )
-    new_month = month_result.scalar()
+    new_month = new_month_result.scalar()
     
     return {
         "total_users": total_users,
