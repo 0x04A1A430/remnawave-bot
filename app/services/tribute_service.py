@@ -90,7 +90,6 @@ class TributeService:
         return {"status": "ok", "event": event_type}
     
     async def _handle_successful_payment(self, payment_data: Dict[str, Any]):
-        """Обработка успешного платежа - ПОЛНОСТЬЮ ПЕРЕРАБОТАННАЯ ВЕРСИЯ"""
         
         try:
             user_id = payment_data["user_id"]
@@ -100,26 +99,29 @@ class TributeService:
             logger.info(f"Обрабатываем успешный Tribute платеж: user_id={user_id}, amount={amount_kopeks}, payment_id={payment_id}")
             
             async for session in get_db():
-                from app.database.crud.transaction import check_tribute_payment_duplicate, create_unique_tribute_transaction
-                
-                duplicate_transaction = await check_tribute_payment_duplicate(
-                    session, payment_id, amount_kopeks, user_id
-                )
-                
-                if duplicate_transaction:
-                    logger.warning(f"Найден дубликат платежа:")
-                    logger.warning(f"   Transaction ID: {duplicate_transaction.id}")
-                    logger.warning(f"   Amount: {duplicate_transaction.amount_kopeks} коп")
-                    logger.warning(f"   Created: {duplicate_transaction.created_at}")
-                    logger.warning(f"Платеж игнорирован")
-                    return
-                
                 user = await get_user_by_telegram_id(session, user_id)
                 if not user:
                     logger.error(f"Пользователь {user_id} не найден")
                     return
                 
                 logger.info(f"Найден пользователь {user.telegram_id}, текущий баланс: {user.balance_kopeks} коп")
+                
+                from app.database.crud.transaction import check_tribute_payment_duplicate
+                
+                duplicate_transaction = await check_tribute_payment_duplicate(
+                    session, payment_id, amount_kopeks, user_id
+                )
+                
+                if duplicate_transaction:
+                    logger.warning(f"Найден дубликат платежа в течение 24ч:")
+                    logger.warning(f"   Transaction ID: {duplicate_transaction.id}")
+                    logger.warning(f"   Amount: {duplicate_transaction.amount_kopeks} коп")
+                    logger.warning(f"   Created: {duplicate_transaction.created_at}")
+                    logger.warning(f"   External ID: {duplicate_transaction.external_id}")
+                    logger.warning(f"Платеж игнорирован - это дубликат свежего платежа")
+                    return
+                
+                from app.database.crud.transaction import create_unique_tribute_transaction
                 
                 transaction = await create_unique_tribute_transaction(
                     db=session,
@@ -133,20 +135,24 @@ class TributeService:
                 user.balance_kopeks += amount_kopeks
                 user.updated_at = datetime.utcnow()
                 
+                if not user.has_made_first_topup:
+                    user.has_made_first_topup = True
+                    logger.info(f"Отмечен первый топап для пользователя {user_id}")
+                
                 await session.commit()
                 
-                logger.info(f"Баланс пользователя {user_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
+                logger.info(f"✅ Баланс пользователя {user_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
+                logger.info(f"✅ Создана транзакция ID: {transaction.id}")
                 
                 await self._send_success_notification(user_id, amount_kopeks)
                 
-                logger.info(f"Успешно обработан Tribute платеж: {amount_kopeks/100}₽ для пользователя {user_id}")
+                logger.info(f"🎉 Успешно обработан Tribute платеж: {amount_kopeks/100}₽ для пользователя {user_id}")
                 break
                 
         except Exception as e:
-            logger.error(f"Ошибка обработки успешного Tribute платежа: {e}", exc_info=True)
+            logger.error(f"❌ Ошибка обработки успешного Tribute платежа: {e}", exc_info=True)
     
     async def _handle_failed_payment(self, payment_data: Dict[str, Any]):
-        """Обработка неудачного платежа"""
         
         try:
             user_id = payment_data["user_id"]
@@ -170,7 +176,6 @@ class TributeService:
             logger.error(f"Ошибка обработки неудачного Tribute платежа: {e}")
     
     async def _handle_refund(self, refund_data: Dict[str, Any]):
-        """Обработка возврата"""
         
         try:
             user_id = refund_data["user_id"]
@@ -203,7 +208,6 @@ class TributeService:
             logger.error(f"Ошибка обработки возврата Tribute: {e}")
     
     async def _send_success_notification(self, user_id: int, amount_kopeks: int):
-        """Отправка уведомления об успешном платеже"""
         
         try:
             amount_rubles = amount_kopeks / 100
@@ -232,7 +236,6 @@ class TributeService:
             logger.error(f"Ошибка отправки уведомления об успешном платеже: {e}")
     
     async def _send_failure_notification(self, user_id: int):
-        """Отправка уведомления о неудачном платеже"""
         
         try:
             text = (
@@ -261,7 +264,6 @@ class TributeService:
             logger.error(f"Ошибка отправки уведомления о неудачном платеже: {e}")
     
     async def _send_refund_notification(self, user_id: int, amount_kopeks: int):
-        """Отправка уведомления о возврате"""
         
         try:
             amount_rubles = amount_kopeks / 100
@@ -296,7 +298,6 @@ class TributeService:
         amount_kopeks: int,
         description: str = "Принудительная обработка Tribute платежа"
     ) -> bool:
-        """Принудительная обработка платежа (для отладки)"""
         
         try:
             logger.info(f"🔧 ПРИНУДИТЕЛЬНАЯ ОБРАБОТКА: payment_id={payment_id}, user_id={user_id}, amount={amount_kopeks}")

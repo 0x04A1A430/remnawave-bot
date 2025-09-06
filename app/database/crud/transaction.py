@@ -277,12 +277,12 @@ async def get_revenue_by_period(
     
     return [{"date": row.date, "amount_kopeks": row.amount} for row in result]
 
+
 async def find_tribute_transactions_by_payment_id(
     db: AsyncSession, 
     payment_id: str, 
     user_telegram_id: Optional[int] = None
 ) -> List[Transaction]:
-    """Найти все Tribute транзакции по payment_id"""
     
     query = select(Transaction).options(selectinload(Transaction.user))
     
@@ -313,18 +313,27 @@ async def check_tribute_payment_duplicate(
     amount_kopeks: int,
     user_telegram_id: int
 ) -> Optional[Transaction]:
+    cutoff_time = datetime.utcnow() - timedelta(hours=24)
     
-    transactions = await find_tribute_transactions_by_payment_id(
-        db, payment_id, user_telegram_id
-    )
+    exact_external_id = f"donation_{payment_id}"
     
-    for transaction in transactions:
-        if (transaction.amount_kopeks == amount_kopeks and 
-            transaction.is_completed and
-            transaction.user.telegram_id == user_telegram_id):
-            return transaction
+    query = select(Transaction).options(selectinload(Transaction.user)).where(
+        and_(
+            Transaction.payment_method == PaymentMethod.TRIBUTE.value,
+            Transaction.external_id == exact_external_id, 
+            Transaction.amount_kopeks == amount_kopeks,
+            Transaction.is_completed == True,
+            Transaction.created_at >= cutoff_time  
+        )
+    ).join(User).where(User.telegram_id == user_telegram_id)
     
-    return None
+    result = await db.execute(query)
+    transaction = result.scalar_one_or_none()
+    
+    if transaction:
+        logger.info(f"🔍 Найден дубликат платежа в течение 24ч: {transaction.id}")
+    
+    return transaction
 
 
 async def create_unique_tribute_transaction(
@@ -334,7 +343,6 @@ async def create_unique_tribute_transaction(
     amount_kopeks: int,
     description: str
 ) -> Transaction:
-    """Создать уникальную Tribute транзакцию с защитой от дубликатов"""
     
     external_id = f"donation_{payment_id}"
     
@@ -356,16 +364,3 @@ async def create_unique_tribute_transaction(
         external_id=external_id,
         is_completed=True
     )
-
-async def get_transaction_by_id(
-    db: AsyncSession,
-    transaction_id: int
-) -> Optional[Transaction]:
-    try:
-        result = await db.execute(
-            select(Transaction).where(Transaction.id == transaction_id)
-        )
-        return result.scalar_one_or_none()
-    except Exception as e:
-        logger.error(f"Ошибка получения транзакции {transaction_id}: {e}")
-        return None
