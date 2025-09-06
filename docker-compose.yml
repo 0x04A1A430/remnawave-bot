@@ -35,7 +35,9 @@ services:
       retries: 3
 
   bot:
-    image: fr1ngg/remnawave-bedolaga-telegram-bot:latest
+    build:
+      context: .   # директория где лежит Dockerfile
+      dockerfile: Dockerfile
     container_name: remnawave_bot
     restart: unless-stopped
     depends_on:
