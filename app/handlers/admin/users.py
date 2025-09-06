@@ -2206,6 +2206,133 @@ async def cleanup_inactive_users(
     )
     await callback.answer()
 
+@admin_required
+@error_handler
+async def change_subscription_type(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    user_id = int(callback.data.split('_')[-1])
+    
+    user_service = UserService()
+    profile = await user_service.get_user_profile(db, user_id)
+    
+    if not profile or not profile["subscription"]:
+        await callback.answer("❌ Пользователь или подписка не найдены", show_alert=True)
+        return
+    
+    subscription = profile["subscription"]
+    current_type = "🎁 Триал" if subscription.is_trial else "💎 Платная"
+    
+    text = f"🔄 <b>Смена типа подписки</b>\n\n"
+    text += f"👤 {profile['user'].full_name}\n"
+    text += f"📱 Текущий тип: {current_type}\n\n"
+    text += f"Выберите новый тип подписки:"
+    
+    keyboard = []
+    
+    if subscription.is_trial:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="💎 Сделать платной", 
+                callback_data=f"admin_sub_type_paid_{user_id}"
+            )
+        ])
+    else:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="🎁 Сделать триальной", 
+                callback_data=f"admin_sub_type_trial_{user_id}"
+            )
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton(
+            text="⬅️ Назад", 
+            callback_data=f"admin_user_subscription_{user_id}"
+        )
+    ])
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def change_subscription_type_confirm(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    parts = callback.data.split('_')
+    new_type = parts[-2]  # 'paid' или 'trial'
+    user_id = int(parts[-1])
+    
+    success = await _change_subscription_type(db, user_id, new_type, db_user.id)
+    
+    if success:
+        type_text = "платной" if new_type == "paid" else "триальной"
+        await callback.message.edit_text(
+            f"✅ Тип подписки успешно изменен на {type_text}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    else:
+        await callback.message.edit_text(
+            "❌ Ошибка изменения типа подписки",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📱 К подписке", callback_data=f"admin_user_subscription_{user_id}")]
+            ])
+        )
+    
+    await callback.answer()
+
+
+async def _change_subscription_type(db: AsyncSession, user_id: int, new_type: str, admin_id: int) -> bool:
+    try:
+        from app.database.crud.subscription import get_subscription_by_user_id
+        from app.services.subscription_service import SubscriptionService
+        
+        subscription = await get_subscription_by_user_id(db, user_id)
+        if not subscription:
+            logger.error(f"Подписка не найдена для пользователя {user_id}")
+            return False
+        
+        new_is_trial = (new_type == "trial")
+        
+        if subscription.is_trial == new_is_trial:
+            logger.info(f"Тип подписки уже установлен корректно для пользователя {user_id}")
+            return True
+        
+        old_type = "триальной" if subscription.is_trial else "платной"
+        new_type_text = "триальной" if new_is_trial else "платной"
+        
+        subscription.is_trial = new_is_trial
+        subscription.updated_at = datetime.utcnow()
+        
+        if not new_is_trial and subscription.is_trial:
+            user = await get_user_by_id(db, user_id)
+            if user:
+                user.has_had_paid_subscription = True
+        
+        await db.commit()
+        
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+        
+        logger.info(f"Админ {admin_id} изменил тип подписки пользователя {user_id}: {old_type} -> {new_type_text}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка изменения типа подписки: {e}")
+        await db.rollback()
+        return False
+
 
 def register_handlers(dp: Dispatcher):
     
@@ -2428,4 +2555,14 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         reset_user_devices,
         F.data.startswith("admin_user_reset_devices_confirm_")
+    )
+
+    dp.callback_query.register(
+        change_subscription_type,
+        F.data.startswith("admin_sub_change_type_")
+    )
+    
+    dp.callback_query.register(
+        change_subscription_type_confirm,
+        F.data.startswith("admin_sub_type_")
     )
