@@ -78,7 +78,7 @@ async def process_referral_registration(
 
 async def process_referral_topup(
     db: AsyncSession,
-    user_id: int,
+    user_id: int, 
     topup_amount_kopeks: int,
     bot: Bot = None
 ):
@@ -105,12 +105,12 @@ async def process_referral_topup(
                 await db.execute(
                     delete(ReferralEarning).where(
                         ReferralEarning.user_id == referrer.id,
-                        ReferralEarning.referral_id == user_id,
+                        ReferralEarning.referral_id == user.id, 
                         ReferralEarning.reason == "referral_registration_pending"
                     )
                 )
                 await db.commit()
-                logger.info(f"🗑️ Удалена запись 'ожидание пополнения' для реферала {user_id}")
+                logger.info(f"🗑️ Удалена запись 'ожидание пополнения' для реферала {user.id}")
             except Exception as e:
                 logger.error(f"Ошибка удаления записи ожидания: {e}")
             
@@ -120,7 +120,7 @@ async def process_referral_topup(
                     f"Бонус за первое пополнение по реферальной программе",
                     bot=bot
                 )
-                logger.info(f"💰 Реферал {user_id} получил бонус {settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS/100}₽")
+                logger.info(f"💰 Реферал {user.id} получил бонус {settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS/100}₽")
                 
                 if bot:
                     bonus_notification = (
@@ -141,7 +141,7 @@ async def process_referral_topup(
                 await create_referral_earning(
                     db=db,
                     user_id=referrer.id,
-                    referral_id=user_id,
+                    referral_id=user.id, 
                     amount_kopeks=settings.REFERRAL_INVITER_BONUS_KOPEKS,
                     reason="referral_first_topup"
                 )
@@ -170,7 +170,7 @@ async def process_referral_topup(
                     await create_referral_earning(
                         db=db,
                         user_id=referrer.id,
-                        referral_id=user_id,
+                        referral_id=user.id,
                         amount_kopeks=commission_amount,
                         reason="referral_commission_topup"
                     )
@@ -230,7 +230,7 @@ async def process_referral_purchase(
             await create_referral_earning(
                 db=db,
                 user_id=referrer.id,
-                referral_id=user_id,
+                referral_id=user.id, 
                 amount_kopeks=commission_amount,
                 reason="referral_commission",
                 referral_transaction_id=transaction_id
