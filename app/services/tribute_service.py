@@ -54,14 +54,8 @@ class TributeService:
     
     async def process_webhook(
         self,
-        payload: str,
-        signature: Optional[str] = None
+        payload: str
     ) -> Dict[str, Any]:
-
-        if signature and settings.TRIBUTE_API_KEY:
-            if not self.tribute_api.verify_webhook_signature(payload, signature):
-                logger.warning("Неверная подпись Tribute webhook")
-                return {"status": "error", "reason": "invalid_signature"}
         
         try:
             webhook_data = json.loads(payload)
