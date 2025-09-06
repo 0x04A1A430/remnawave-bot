@@ -44,16 +44,18 @@ class AuthMiddleware(BaseMiddleware):
                         current_state = await state.get_state()
                     
                     registration_states = [
-                        RegistrationStates.waiting_for_rules_accept,
-                        RegistrationStates.waiting_for_referral_code
+                        RegistrationStates.waiting_for_rules_accept.state,
+                        RegistrationStates.waiting_for_referral_code.state
                     ]
-                    
+
                     is_registration_process = (
                         (isinstance(event, Message) and event.text and event.text.startswith('/start'))
-                        or (isinstance(event, CallbackQuery) and current_state and 
-                            any(str(state) in str(current_state) for state in registration_states))
-                        or (isinstance(event, CallbackQuery) and event.data and 
-                            (event.data in ['rules_accept', 'rules_decline', 'referral_skip']))
+                        or (current_state in registration_states)
+                        or (
+                            isinstance(event, CallbackQuery)
+                            and event.data
+                            and (event.data in ['rules_accept', 'rules_decline', 'referral_skip'])
+                        )
                     )
                     
                     if is_registration_process:
@@ -93,16 +95,18 @@ class AuthMiddleware(BaseMiddleware):
                             current_state = await state.get_state()
                         
                         registration_states = [
-                            RegistrationStates.waiting_for_rules_accept,
-                            RegistrationStates.waiting_for_referral_code
+                            RegistrationStates.waiting_for_rules_accept.state,
+                            RegistrationStates.waiting_for_referral_code.state
                         ]
-                        
+
                         is_start_or_registration = (
                             (isinstance(event, Message) and event.text and event.text.startswith('/start'))
-                            or (isinstance(event, CallbackQuery) and current_state and 
-                                any(str(state) in str(current_state) for state in registration_states))
-                            or (isinstance(event, CallbackQuery) and event.data and 
-                                (event.data in ['rules_accept', 'rules_decline', 'referral_skip']))
+                            or (current_state in registration_states)
+                            or (
+                                isinstance(event, CallbackQuery)
+                                and event.data
+                                and (event.data in ['rules_accept', 'rules_decline', 'referral_skip'])
+                            )
                         )
                         
                         if is_start_or_registration:
