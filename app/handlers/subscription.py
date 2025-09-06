@@ -21,7 +21,7 @@ from app.database.crud.user import subtract_user_balance
 from app.database.crud.transaction import create_transaction, get_user_transactions
 from app.database.models import (
     User, TransactionType, SubscriptionStatus, 
-    SubscriptionServer  
+    SubscriptionServer, Subscription 
 )
 from app.keyboards.inline import (
     get_subscription_keyboard, get_trial_keyboard,
