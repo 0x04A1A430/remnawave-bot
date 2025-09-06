@@ -91,7 +91,7 @@ class TributeService:
     
     async def _handle_successful_payment(self, payment_data: Dict[str, Any]):
         try:
-            user_id = payment_data["user_id"]
+            user_id = payment_data["user_id"] 
             amount_kopeks = payment_data["amount_kopeks"]
             payment_id = payment_data["payment_id"]
             
@@ -145,7 +145,7 @@ class TributeService:
                 
                 try:
                     from app.services.referral_service import process_referral_topup
-                    await process_referral_topup(session, user_id, amount_kopeks, self.bot)
+                    await process_referral_topup(session, user.id, amount_kopeks, self.bot)
                 except Exception as e:
                     logger.error(f"Ошибка обработки реферального пополнения Tribute: {e}")
                 
