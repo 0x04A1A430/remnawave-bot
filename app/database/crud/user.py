@@ -347,7 +347,7 @@ async def get_users_statistics(db: AsyncSession) -> dict:
             )
         )
     )
-    new_month = new_month_result.scalar()
+    new_month = month_result.scalar()
     
     return {
         "total_users": total_users,
