@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     BOT_TOKEN: str
     ADMIN_IDS: str = ""
     SUPPORT_USERNAME: str = "@support"
+
+    ADMIN_NOTIFICATIONS_ENABLED: bool = False
+    ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
+    ADMIN_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
     
     DATABASE_URL: str
     REDIS_URL: str = "redis://localhost:6379/0"
