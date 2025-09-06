@@ -1048,13 +1048,20 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 <tr>
 <td>6</td>
+<td><strong>@kr33njee</strong></td>
+<td>₽800</td>
+<td>За поддержку и доверие</td>
+</tr>
+
+<tr>
+<td>7</td>
 <td><strong>@SmartSystemCompany</strong></td>
 <td>₽600</td>
 <td>За поддержку и доверие</td>
 </tr>
 
 <tr>
-<td>7</td>
+<td>8</td>
 <td><strong>@PhiLin58</strong></td>
 <td>₽300</td>
 <td>За участие в развитии</td>
