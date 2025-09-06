@@ -134,10 +134,6 @@ class TributeService:
                 user.balance_kopeks += amount_kopeks
                 user.updated_at = datetime.utcnow()
                 
-                if not user.has_made_first_topup:
-                    user.has_made_first_topup = True
-                    logger.info(f"Отмечен первый топап для пользователя {user_telegram_id}")
-                
                 await session.commit()
                 
                 logger.info(f"✅ Баланс пользователя {user_telegram_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
@@ -148,6 +144,11 @@ class TributeService:
                     await process_referral_topup(session, user.id, amount_kopeks, self.bot)
                 except Exception as e:
                     logger.error(f"Ошибка обработки реферального пополнения Tribute: {e}")
+                    
+                if not user.has_made_first_topup:
+                    user.has_made_first_topup = True
+                    logger.info(f"Отмечен первый топап для пользователя {user_telegram_id}")
+                
                 
                 try:
                     from app.services.admin_notification_service import AdminNotificationService
