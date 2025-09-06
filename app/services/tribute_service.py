@@ -1,6 +1,4 @@
 import logging
-import hashlib
-import hmac
 import json
 from typing import Optional, Dict, Any
 from datetime import datetime
@@ -59,8 +57,8 @@ class TributeService:
         payload: str,
         signature: Optional[str] = None
     ) -> Dict[str, Any]:
-        
-        if signature and settings.TRIBUTE_WEBHOOK_SECRET:
+
+        if signature and settings.TRIBUTE_API_KEY:
             if not self.tribute_api.verify_webhook_signature(payload, signature):
                 logger.warning("Неверная подпись Tribute webhook")
                 return {"status": "error", "reason": "invalid_signature"}

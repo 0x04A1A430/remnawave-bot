@@ -79,7 +79,7 @@ class WebhookServer:
             headers={
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, X-Tribute-Signature',
+                'Access-Control-Allow-Headers': 'Content-Type, trbt-signature',
             }
         )
     
@@ -111,10 +111,10 @@ class WebhookServer:
                     status=400
                 )
             
-            signature = request.headers.get('X-Tribute-Signature')
+            signature = request.headers.get('trbt-signature')
             logger.info(f"🔐 Signature: {signature}")
-            
-            if signature and settings.TRIBUTE_WEBHOOK_SECRET:
+
+            if signature and settings.TRIBUTE_API_KEY:
                 from app.external.tribute import TributeService as TributeAPI
                 tribute_api = TributeAPI()
                 if not tribute_api.verify_webhook_signature(payload, signature):
