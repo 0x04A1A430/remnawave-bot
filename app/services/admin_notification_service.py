@@ -241,7 +241,11 @@ class AdminNotificationService:
             'manual': '🛠️ Вручную (админ)',
             'balance': '💰 С баланса'
         }
-        return method_names.get(payment_method, f'❓ {payment_method or "Неизвестно"}')
+        
+        if not payment_method:
+            return '💰 С баланса'
+            
+        return method_names.get(payment_method, f'💰 С баланса')
     
     def _format_traffic(self, traffic_gb: int) -> str:
         if traffic_gb == 0:
