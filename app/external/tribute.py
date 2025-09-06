@@ -10,10 +10,9 @@ logger = logging.getLogger(__name__)
 
 
 class TributeService:
-    
+
     def __init__(self):
         self.api_key = settings.TRIBUTE_API_KEY
-        self.webhook_secret = settings.TRIBUTE_WEBHOOK_SECRET
         self.donate_link = settings.TRIBUTE_DONATE_LINK
     
     async def create_payment_link(
@@ -38,27 +37,27 @@ class TributeService:
             return None
     
     def verify_webhook_signature(self, payload: str, signature: str) -> bool:
-        
-        if not self.webhook_secret:
-            logger.warning("Webhook secret не настроен, пропускаем проверку")
-            return True 
-        
+
+        if not self.api_key:
+            logger.warning("API key не настроен, пропускаем проверку")
+            return True
+
         try:
             expected_signature = hmac.new(
-                self.webhook_secret.encode(),
+                self.api_key.encode(),
                 payload.encode(),
                 hashlib.sha256
             ).hexdigest()
-            
+
             is_valid = hmac.compare_digest(signature, expected_signature)
-            
+
             if is_valid:
                 logger.info("✅ Подпись Tribute webhook проверена успешно")
             else:
                 logger.error("❌ Неверная подпись Tribute webhook")
-            
+
             return is_valid
-            
+
         except Exception as e:
             logger.error(f"Ошибка проверки подписи webhook: {e}")
             return False

@@ -93,7 +93,6 @@ class Settings(BaseSettings):
     
     TRIBUTE_ENABLED: bool = False
     TRIBUTE_API_KEY: Optional[str] = None
-    TRIBUTE_WEBHOOK_SECRET: Optional[str] = None
     TRIBUTE_DONATE_LINK: Optional[str] = None
     TRIBUTE_WEBHOOK_PATH: str = "/tribute-webhook"
     TRIBUTE_WEBHOOK_PORT: int = 8081
