@@ -21,7 +21,7 @@ from app.database.crud.user import subtract_user_balance
 from app.database.crud.transaction import create_transaction, get_user_transactions
 from app.database.models import (
     User, TransactionType, SubscriptionStatus, 
-    SubscriptionServer  
+    SubscriptionServer, Subscription 
 )
 from app.keyboards.inline import (
     get_subscription_keyboard, get_trial_keyboard,
@@ -38,6 +38,7 @@ from app.keyboards.inline import (
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
+from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_service import SubscriptionService
 from app.utils.pricing_utils import (
     calculate_months_from_days,
@@ -349,6 +350,8 @@ async def activate_trial(
     db_user: User,
     db: AsyncSession
 ):
+    from app.services.admin_notification_service import AdminNotificationService
+    
     texts = get_texts(db_user.language)
     
     if db_user.subscription or db_user.has_had_paid_subscription:
@@ -370,6 +373,12 @@ async def activate_trial(
         )
         
         await db.refresh(db_user)
+        
+        try:
+            notification_service = AdminNotificationService(callback.bot)
+            await notification_service.send_trial_activation_notification(db_user, subscription)
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о триале: {e}")
         
         if remnawave_user and hasattr(subscription, 'subscription_url') and subscription.subscription_url:
             trial_success_text = f"{texts.TRIAL_ACTIVATED}\n\n"
@@ -411,8 +420,6 @@ async def activate_trial(
                     [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
                     [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
                 ])
-    
-
     
             await callback.message.edit_text(
                 trial_success_text,
@@ -1083,6 +1090,7 @@ async def confirm_extend_subscription(
     db: AsyncSession
 ):
     from app.utils.pricing_utils import calculate_months_from_days, validate_pricing_calculation
+    from app.services.admin_notification_service import AdminNotificationService
     
     days = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
@@ -1093,6 +1101,8 @@ async def confirm_extend_subscription(
         return
     
     months_in_period = calculate_months_from_days(days)
+    
+    old_end_date = subscription.end_date
     
     try:
         from app.config import PERIOD_PRICES
@@ -1124,7 +1134,7 @@ async def confirm_extend_subscription(
         
         logger.info(f"💰 Расчет продления подписки {subscription.id} на {days} дней ({months_in_period} мес):")
         logger.info(f"   📅 Период {days} дней: {base_price/100}₽")
-        logger.info(f"   🌍 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_price/100}₽")
+        logger.info(f"   🌐 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_price/100}₽")
         logger.info(f"   📱 Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
         logger.info(f"   📊 Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
         logger.info(f"   💎 ИТОГО: {price/100}₽")
@@ -1179,7 +1189,7 @@ async def confirm_extend_subscription(
         except Exception as e:
             logger.error(f"⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE: {e}")
         
-        await create_transaction(
+        transaction = await create_transaction(
             db=db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
@@ -1187,6 +1197,13 @@ async def confirm_extend_subscription(
             description=f"Продление подписки на {days} дней ({months_in_period} мес)"
         )
         
+        try:
+            notification_service = AdminNotificationService(callback.bot)
+            await notification_service.send_subscription_extension_notification(
+                db_user, subscription, transaction, days, old_end_date
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о продлении: {e}")
         
         await callback.message.edit_text(
             f"✅ Подписка успешно продлена!\n\n"
@@ -1726,6 +1743,7 @@ async def confirm_purchase(
     db: AsyncSession
 ):
     from app.utils.pricing_utils import calculate_months_from_days, validate_pricing_calculation
+    from app.services.admin_notification_service import AdminNotificationService
     
     data = await state.get_data()
     texts = get_texts(db_user.language)
@@ -1800,12 +1818,14 @@ async def confirm_purchase(
             return
         
         existing_subscription = db_user.subscription
+        was_trial_conversion = False
         
         if existing_subscription:
             logger.info(f"Обновляем существующую подписку пользователя {db_user.telegram_id}")
             
             if existing_subscription.is_trial:
                 logger.info(f"Конверсия из триала в платную для пользователя {db_user.telegram_id}")
+                was_trial_conversion = True
                 
                 trial_duration = (datetime.utcnow() - existing_subscription.start_date).days
                 
@@ -1877,13 +1897,21 @@ async def confirm_purchase(
             logger.error(f"Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}")
             remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
         
-        await create_transaction(
+        transaction = await create_transaction(
             db=db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=final_price,
             description=f"Подписка на {data['period_days']} дней ({months_in_period} мес)"
         )
+        
+        try:
+            notification_service = AdminNotificationService(callback.bot)
+            await notification_service.send_subscription_purchase_notification(
+                db_user, subscription, transaction, data['period_days'], was_trial_conversion
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о покупке: {e}")
         
         await db.refresh(db_user)
         await db.refresh(subscription)
@@ -2965,6 +2993,57 @@ def get_reset_devices_confirm_keyboard(language: str = "ru") -> InlineKeyboardMa
             InlineKeyboardButton(text="❌ Отмена", callback_data="menu_subscription")
         ]
     ])
+
+async def send_trial_notification(callback: types.CallbackQuery, db_user: User, subscription: Subscription):
+    try:
+        notification_service = AdminNotificationService(callback.bot)
+        await notification_service.send_trial_activation_notification(db_user, subscription)
+    except Exception as e:
+        logger.error(f"Ошибка отправки уведомления о триале: {e}")
+
+async def send_purchase_notification(
+    callback: types.CallbackQuery, 
+    db_user: User, 
+    subscription: Subscription, 
+    transaction_id: int,
+    period_days: int,
+    was_trial_conversion: bool = False
+):
+    try:
+        from app.database.crud.transaction import get_transaction_by_id
+        from app.database.database import AsyncSessionLocal
+        
+        async with AsyncSessionLocal() as db:
+            transaction = await get_transaction_by_id(db, transaction_id)
+            if transaction:
+                notification_service = AdminNotificationService(callback.bot)
+                await notification_service.send_subscription_purchase_notification(
+                    db_user, subscription, transaction, period_days, was_trial_conversion
+                )
+    except Exception as e:
+        logger.error(f"Ошибка отправки уведомления о покупке: {e}")
+
+async def send_extension_notification(
+    callback: types.CallbackQuery,
+    db_user: User,
+    subscription: Subscription,
+    transaction_id: int,
+    extended_days: int,
+    old_end_date: datetime
+):
+    try:
+        from app.database.crud.transaction import get_transaction_by_id
+        from app.database.database import AsyncSessionLocal
+        
+        async with AsyncSessionLocal() as db:
+            transaction = await get_transaction_by_id(db, transaction_id)
+            if transaction:
+                notification_service = AdminNotificationService(callback.bot)
+                await notification_service.send_subscription_extension_notification(
+                    db_user, subscription, transaction, extended_days, old_end_date
+                )
+    except Exception as e:
+        logger.error(f"Ошибка отправки уведомления о продлении: {e}")
 
 
 def register_handlers(dp: Dispatcher):

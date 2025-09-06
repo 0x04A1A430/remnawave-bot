@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     BOT_TOKEN: str
     ADMIN_IDS: str = ""
     SUPPORT_USERNAME: str = "@support"
+
+    ADMIN_NOTIFICATIONS_ENABLED: bool = False
+    ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
+    ADMIN_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
     
     DATABASE_URL: str
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -301,6 +305,19 @@ class Settings(BaseSettings):
     
     def rubles_to_stars(self, rubles: float) -> int:
         return max(1, int(rubles / self.get_stars_rate()))
+
+    def get_admin_notifications_chat_id(self) -> Optional[int]:
+        if not self.ADMIN_NOTIFICATIONS_CHAT_ID:
+            return None
+        
+        try:
+            return int(self.ADMIN_NOTIFICATIONS_CHAT_ID)
+        except (ValueError, TypeError):
+            return None
+    
+    def is_admin_notifications_enabled(self) -> bool:
+        return (self.ADMIN_NOTIFICATIONS_ENABLED and 
+                self.get_admin_notifications_chat_id() is not None)
 
     def get_referral_settings(self) -> Dict:
         return {
