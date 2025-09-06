@@ -58,12 +58,6 @@ services:
       - "${YOOKASSA_WEBHOOK_PORT:-8082}:8082"
     networks:
       - bot_network
-    user: "1000:1000"
-    command: >
-      bash -c "
-        mkdir -p /app/logs /app/data &&
-        python main.py
-      "
 
 volumes:
   postgres_data:
