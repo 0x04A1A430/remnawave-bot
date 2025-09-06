@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 async def tribute_webhook(request):
     try:
-        signature = request.headers.get('X-Signature', '')
+        signature = request.headers.get('trbt-signature', '')
         payload = await request.text()
         
         tribute_service = TributeService()

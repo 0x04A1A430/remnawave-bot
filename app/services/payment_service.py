@@ -429,17 +429,17 @@ class PaymentService:
         signature: str
     ) -> bool:
         
-        if not settings.TRIBUTE_WEBHOOK_SECRET:
+        if not settings.TRIBUTE_API_KEY:
             return False
-        
+
         try:
             message = str(data).encode()
             expected_signature = hmac.new(
-                settings.TRIBUTE_WEBHOOK_SECRET.encode(),
+                settings.TRIBUTE_API_KEY.encode(),
                 message,
                 hashlib.sha256
             ).hexdigest()
-            
+
             return hmac.compare_digest(signature, expected_signature)
             
         except Exception as e:
