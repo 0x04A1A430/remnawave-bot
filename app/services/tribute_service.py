@@ -91,16 +91,16 @@ class TributeService:
     
     async def _handle_successful_payment(self, payment_data: Dict[str, Any]):
         try:
-            user_id = payment_data["user_id"] 
+            user_telegram_id = payment_data["user_id"] 
             amount_kopeks = payment_data["amount_kopeks"]
             payment_id = payment_data["payment_id"]
             
-            logger.info(f"Обрабатываем успешный Tribute платеж: user_id={user_id}, amount={amount_kopeks}, payment_id={payment_id}")
+            logger.info(f"Обрабатываем успешный Tribute платеж: user_telegram_id={user_telegram_id}, amount={amount_kopeks}, payment_id={payment_id}")
             
             async for session in get_db():
-                user = await get_user_by_telegram_id(session, user_id)
+                user = await get_user_by_telegram_id(session, user_telegram_id)
                 if not user:
-                    logger.error(f"Пользователь {user_id} не найден")
+                    logger.error(f"Пользователь {user_telegram_id} не найден")
                     return
                 
                 logger.info(f"Найден пользователь {user.telegram_id}, текущий баланс: {user.balance_kopeks} коп")
@@ -108,7 +108,7 @@ class TributeService:
                 from app.database.crud.transaction import check_tribute_payment_duplicate
                 
                 duplicate_transaction = await check_tribute_payment_duplicate(
-                    session, payment_id, amount_kopeks, user_id
+                    session, payment_id, amount_kopeks, user_telegram_id
                 )
                 
                 if duplicate_transaction:
@@ -136,11 +136,11 @@ class TributeService:
                 
                 if not user.has_made_first_topup:
                     user.has_made_first_topup = True
-                    logger.info(f"Отмечен первый топап для пользователя {user_id}")
+                    logger.info(f"Отмечен первый топап для пользователя {user_telegram_id}")
                 
                 await session.commit()
                 
-                logger.info(f"✅ Баланс пользователя {user_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
+                logger.info(f"✅ Баланс пользователя {user_telegram_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
                 logger.info(f"✅ Создана транзакция ID: {transaction.id}")
                 
                 try:
@@ -158,13 +158,13 @@ class TributeService:
                 except Exception as e:
                     logger.error(f"Ошибка отправки уведомления о Tribute пополнении: {e}")
                 
-                await self._send_success_notification(user_id, amount_kopeks)
+                await self._send_success_notification(user_telegram_id, amount_kopeks)
                 
-                logger.info(f"🎉 Успешно обработан Tribute платеж: {amount_kopeks/100}₽ для пользователя {user_id}")
+                logger.info(f"🎉 Успешно обработан Tribute платеж: {amount_kopeks/100}₽ для пользователя {user_telegram_id}")
                 break
                 
         except Exception as e:
-            logger.error(f"❌ Ошибка обработки успешного Tribute платежа: {e}", exc_info=True)
+            logger.error(f"⌘ Ошибка обработки успешного Tribute платежа: {e}", exc_info=True)
     
     async def _handle_failed_payment(self, payment_data: Dict[str, Any]):
         
@@ -253,7 +253,7 @@ class TributeService:
         
         try:
             text = (
-                "❌ **Платеж не прошел**\n\n"
+                "⌘ **Платеж не прошел**\n\n"
                 "К сожалению, ваш платеж через Tribute был отклонен.\n\n"
                 "Возможные причины:\n"
                 "• Недостаточно средств на карте\n"
@@ -319,7 +319,7 @@ class TributeService:
             async for session in get_db():
                 user = await get_user_by_telegram_id(session, user_id)
                 if not user:
-                    logger.error(f"❌ Пользователь {user_id} не найден")
+                    logger.error(f"⌘ Пользователь {user_id} не найден")
                     return False
                 
                 external_id = f"force_donation_{payment_id}_{int(datetime.utcnow().timestamp())}"
@@ -349,7 +349,7 @@ class TributeService:
                 return True
                 
         except Exception as e:
-            logger.error(f"❌ Ошибка принудительной обработки: {e}", exc_info=True)
+            logger.error(f"⌘ Ошибка принудительной обработки: {e}", exc_info=True)
             return False
     
     async def get_payment_status(self, payment_id: str) -> Optional[Dict[str, Any]]:
