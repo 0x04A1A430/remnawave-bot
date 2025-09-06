@@ -99,6 +99,20 @@ class TributeService:
             logger.info(f"Обрабатываем успешный Tribute платеж: user_id={user_id}, amount={amount_kopeks}, payment_id={payment_id}")
             
             async for session in get_db():
+                from app.database.crud.transaction import check_tribute_payment_duplicate, create_unique_tribute_transaction
+                
+                duplicate_transaction = await check_tribute_payment_duplicate(
+                    session, payment_id, amount_kopeks, user_id
+                )
+                
+                if duplicate_transaction:
+                    logger.warning(f"Найден дубликат платежа:")
+                    logger.warning(f"   Transaction ID: {duplicate_transaction.id}")
+                    logger.warning(f"   Amount: {duplicate_transaction.amount_kopeks} коп")
+                    logger.warning(f"   Created: {duplicate_transaction.created_at}")
+                    logger.warning(f"Платеж игнорирован")
+                    return
+                
                 user = await get_user_by_telegram_id(session, user_id)
                 if not user:
                     logger.error(f"Пользователь {user_id} не найден")
@@ -106,22 +120,7 @@ class TributeService:
                 
                 logger.info(f"Найден пользователь {user.telegram_id}, текущий баланс: {user.balance_kopeks} коп")
                 
-                from app.database.crud.transaction import check_tribute_payment_duplicate
-                
-                duplicate_transaction = await check_tribute_payment_duplicate(
-                    session, payment_id, amount_kopeks, user_id
-                )
-                
-                if duplicate_transaction:
-                    logger.warning(f"Найден дубликат платежа в течение 24ч:")
-                    logger.warning(f"   Transaction ID: {duplicate_transaction.id}")
-                    logger.warning(f"   Amount: {duplicate_transaction.amount_kopeks} коп")
-                    logger.warning(f"   Created: {duplicate_transaction.created_at}")
-                    logger.warning(f"   External ID: {duplicate_transaction.external_id}")
-                    logger.warning(f"Платеж игнорирован - это дубликат свежего платежа")
-                    return
-                
-                from app.database.crud.transaction import create_unique_tribute_transaction
+                old_balance = user.balance_kopeks
                 
                 transaction = await create_unique_tribute_transaction(
                     db=session,
@@ -131,26 +130,30 @@ class TributeService:
                     description=f"Пополнение через Tribute: {amount_kopeks/100}₽ (ID: {payment_id})"
                 )
                 
-                old_balance = user.balance_kopeks
                 user.balance_kopeks += amount_kopeks
                 user.updated_at = datetime.utcnow()
                 
-                if not user.has_made_first_topup:
-                    user.has_made_first_topup = True
-                    logger.info(f"Отмечен первый топап для пользователя {user_id}")
-                
                 await session.commit()
                 
-                logger.info(f"✅ Баланс пользователя {user_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
-                logger.info(f"✅ Создана транзакция ID: {transaction.id}")
+                logger.info(f"Баланс пользователя {user_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
                 
                 await self._send_success_notification(user_id, amount_kopeks)
                 
-                logger.info(f"🎉 Успешно обработан Tribute платеж: {amount_kopeks/100}₽ для пользователя {user_id}")
+                try:
+                    from app.services.admin_notification_service import AdminNotificationService
+                    notification_service = AdminNotificationService(self.bot)
+                    await notification_service.send_balance_topup_notification(
+                        user, transaction, old_balance
+                    )
+                    logger.info(f"✅ Уведомление о Tribute пополнении отправлено в админ группу")
+                except Exception as e:
+                    logger.error(f"❌ Ошибка отправки уведомления о Tribute пополнении: {e}")
+                
+                logger.info(f"Успешно обработан Tribute платеж: {amount_kopeks/100}₽ для пользователя {user_id}")
                 break
                 
         except Exception as e:
-            logger.error(f"❌ Ошибка обработки успешного Tribute платежа: {e}", exc_info=True)
+            logger.error(f"Ошибка обработки успешного Tribute платежа: {e}", exc_info=True)
     
     async def _handle_failed_payment(self, payment_data: Dict[str, Any]):
         
