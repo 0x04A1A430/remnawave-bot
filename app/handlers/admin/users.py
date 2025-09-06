@@ -292,6 +292,12 @@ async def show_user_subscription(
                     text="📊 Трафик", 
                     callback_data=f"admin_sub_traffic_{user_id}"
                 )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text="🔄 Тип подписки", 
+                    callback_data=f"admin_sub_change_type_{user_id}"
+                )
             ]
         ]
         
