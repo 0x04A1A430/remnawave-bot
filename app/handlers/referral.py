@@ -90,11 +90,19 @@ async def show_referral_info(
     
     referral_text += "📢 Приглашайте друзей и зарабатывайте!"
     
-    await callback.message.edit_text(
-        referral_text,
-        reply_markup=get_referral_keyboard(db_user.language),
-        parse_mode="HTML"
-    )
+    if callback.message.text:
+        await callback.message.edit_text(
+            referral_text,
+            reply_markup=get_referral_keyboard(db_user.language),
+            parse_mode="HTML"
+        )
+    else:
+        await callback.message.delete()
+        await callback.message.answer(
+            referral_text,
+            reply_markup=get_referral_keyboard(db_user.language),
+            parse_mode="HTML"
+        )
     await callback.answer()
 
 
