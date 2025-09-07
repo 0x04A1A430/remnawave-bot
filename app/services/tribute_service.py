@@ -146,7 +146,7 @@ class TributeService:
                     from app.services.admin_notification_service import AdminNotificationService
                     notification_service = AdminNotificationService(self.bot)
                     await notification_service.send_balance_topup_notification(
-                        user, transaction, old_balance
+                        session, user, transaction, old_balance
                     )
                 except Exception as e:
                     logger.error(f"Ошибка отправки уведомления о Tribute пополнении: {e}")
