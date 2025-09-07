@@ -227,7 +227,7 @@ async def check_panel_status(
         }.get(status_data["status"], "❓ Статус неизвестен")
         
         message_parts = [
-            f"🌐 <b>Статус панели RemnaWave</b>\n",
+            f"🌐 <b>Статус панели Remnawave</b>\n",
             f"{status_text}",
             f"⚡ Время отклика: {status_data.get('response_time', 0)}с",
             f"👥 Пользователей онлайн: {status_data.get('users_online', 0)}",
