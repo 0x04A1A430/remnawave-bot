@@ -165,6 +165,18 @@ async def process_new_message_text(
         )
         return
     
+    from app.utils.validators import validate_html_tags, get_html_help_text
+    
+    is_valid, error_msg = validate_html_tags(message_text)
+    if not is_valid:
+        await message.answer(
+            f"❌ <b>Ошибка в HTML разметке:</b>\n{error_msg}\n\n"
+            f"{get_html_help_text()}\n\n"
+            f"Исправьте ошибку и попробуйте еще раз, или отправьте /cancel для отмены.",
+            parse_mode="HTML"
+        )
+        return
+    
     try:
         new_message = await create_user_message(
             db=db,
@@ -172,12 +184,6 @@ async def process_new_message_text(
             created_by=db_user.id,
             is_active=True
         )
-        
-        try:
-            await message.answer("Тест", parse_mode="HTML", disable_notification=True)
-            await message.delete()
-        except Exception as e:
-            logger.warning(f"HTML разметка может быть некорректной: {e}")
         
         await state.clear()
         
@@ -199,7 +205,6 @@ async def process_new_message_text(
             "❌ Произошла ошибка при создании сообщения. Попробуйте еще раз.",
             reply_markup=get_user_messages_keyboard(db_user.language)
         )
-
 
 @admin_required
 @error_handler
