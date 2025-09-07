@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User, Subscription, Transaction
+from app.database.crud.user import get_user_by_id
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +20,27 @@ class AdminNotificationService:
         self.topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
         self.enabled = getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     
+    async def _get_referrer_info(self, db: AsyncSession, referred_by_id: Optional[int]) -> str:
+        if not referred_by_id:
+            return "Нет"
+        
+        try:
+            referrer = await get_user_by_id(db, referred_by_id)
+            if not referrer:
+                return f"ID {referred_by_id} (не найден)"
+            
+            if referrer.username:
+                return f"@{referrer.username} (ID: {referred_by_id})"
+            else:
+                return f"ID {referrer.telegram_id}"
+                
+        except Exception as e:
+            logger.error(f"Ошибка получения данных рефера {referred_by_id}: {e}")
+            return f"ID {referred_by_id}"
+    
     async def send_trial_activation_notification(
         self,
+        db: AsyncSession,
         user: User,
         subscription: Subscription
     ) -> bool:
@@ -29,6 +49,7 @@ class AdminNotificationService:
         
         try:
             user_status = "🆕 Новый" if not user.has_had_paid_subscription else "🔄 Существующий"
+            referrer_info = await self._get_referrer_info(db, user.referred_by_id)
             
             message = f"""🎯 <b>АКТИВАЦИЯ ТРИАЛА</b>
 
@@ -44,7 +65,7 @@ class AdminNotificationService:
 🌐 Сервер: {subscription.connected_squads[0] if subscription.connected_squads else 'По умолчанию'}
 
 📆 <b>Действует до:</b> {subscription.end_date.strftime('%d.%m.%Y %H:%M')}
-🔗 <b>Реферер:</b> {f'ID {user.referred_by_id}' if user.referred_by_id else 'Нет'}
+🔗 <b>Реферер:</b> {referrer_info}
 
 ⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
             
@@ -56,6 +77,7 @@ class AdminNotificationService:
     
     async def send_subscription_purchase_notification(
         self,
+        db: AsyncSession,
         user: User,
         subscription: Subscription,
         transaction: Transaction,
@@ -76,8 +98,8 @@ class AdminNotificationService:
                 user_status = "🆕 Первая покупка"
             
             servers_info = await self._get_servers_info(subscription.connected_squads)
-            
             payment_method = self._get_payment_method_display(transaction.payment_method)
+            referrer_info = await self._get_referrer_info(db, user.referred_by_id)
             
             message = f"""💎 <b>{event_type}</b>
 
@@ -99,7 +121,7 @@ class AdminNotificationService:
 
 📆 <b>Действует до:</b> {subscription.end_date.strftime('%d.%m.%Y %H:%M')}
 💰 <b>Баланс после покупки:</b> {settings.format_price(user.balance_kopeks)}
-🔗 <b>Реферер:</b> {f'ID {user.referred_by_id}' if user.referred_by_id else 'Нет'}
+🔗 <b>Реферер:</b> {referrer_info}
 
 ⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
             
@@ -111,6 +133,7 @@ class AdminNotificationService:
     
     async def send_balance_topup_notification(
         self,
+        db: AsyncSession,
         user: User,
         transaction: Transaction,
         old_balance: int
@@ -120,10 +143,9 @@ class AdminNotificationService:
         
         try:
             topup_status = "🆕 Первое пополнение" if not user.has_made_first_topup else "🔄 Пополнение"
-            
             payment_method = self._get_payment_method_display(transaction.payment_method)
-            
             balance_change = user.balance_kopeks - old_balance
+            referrer_info = await self._get_referrer_info(db, user.referred_by_id)
             
             message = f"""💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>
 
@@ -142,7 +164,7 @@ class AdminNotificationService:
 📈 Стало: {settings.format_price(user.balance_kopeks)}
 ➕ Изменение: +{settings.format_price(balance_change)}
 
-🔗 <b>Реферер:</b> {f'ID {user.referred_by_id}' if user.referred_by_id else 'Нет'}
+🔗 <b>Реферер:</b> {referrer_info}
 📱 <b>Подписка:</b> {self._get_subscription_status(user)}
 
 ⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
@@ -155,6 +177,7 @@ class AdminNotificationService:
     
     async def send_subscription_extension_notification(
         self,
+        db: AsyncSession,
         user: User,
         subscription: Subscription,
         transaction: Transaction,
@@ -166,7 +189,6 @@ class AdminNotificationService:
         
         try:
             payment_method = self._get_payment_method_display(transaction.payment_method)
-            
             servers_info = await self._get_servers_info(subscription.connected_squads)
             
             message = f"""⏰ <b>ПРОДЛЕНИЕ ПОДПИСКИ</b>
