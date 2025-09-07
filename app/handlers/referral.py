@@ -3,6 +3,7 @@ from pathlib import Path
 
 import qrcode
 from aiogram import Dispatcher, F, types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import FSInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -128,12 +129,21 @@ async def show_referral_qr(
         inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_referrals")]]
     )
 
-    await callback.message.delete()
-    await callback.message.answer_photo(
-        photo,
-        caption=f"🔗 Ваша реферальная ссылка:\n{referral_link}",
-        reply_markup=keyboard,
-    )
+    try:
+        await callback.message.edit_media(
+            types.InputMediaPhoto(
+                media=photo,
+                caption=f"🔗 Ваша реферальная ссылка:\n{referral_link}",
+            ),
+            reply_markup=keyboard,
+        )
+    except TelegramBadRequest:
+        await callback.message.delete()
+        await callback.message.answer_photo(
+            photo,
+            caption=f"🔗 Ваша реферальная ссылка:\n{referral_link}",
+            reply_markup=keyboard,
+        )
     await callback.answer()
 
 
