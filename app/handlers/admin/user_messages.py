@@ -235,10 +235,11 @@ async def list_user_messages(
     for msg in messages:
         status_emoji = "🟢" if msg.is_active else "🔴"
         preview = msg.message_text[:100] + "..." if len(msg.message_text) > 100 else msg.message_text
+        preview = preview.replace('<', '&lt;').replace('>', '&gt;')
         
         text += (
             f"{status_emoji} <b>ID {msg.id}</b>\n"
-            f"<i>{preview}</i>\n"
+            f"{preview}\n"
             f"📅 {msg.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
         )
     
