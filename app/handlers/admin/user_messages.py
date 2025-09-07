@@ -169,7 +169,7 @@ async def process_new_message_text(
             f"❌ <b>Ошибка в HTML разметке:</b>\n{error_msg}\n\n"
             f"{get_html_help_text()}\n\n"
             f"Исправьте ошибку и попробуйте еще раз, или отправьте /cancel для отмены.",
-            parse_mode="HTML"
+            parse_mode=None 
         )
         return
     
