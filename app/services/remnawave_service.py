@@ -1581,3 +1581,139 @@ class RemnaWaveService:
             except Exception as e:
                 logger.error(f"Ошибка отправки ручного уведомления: {e}")
                 return False
+
+        async def get_panel_status_summary(self) -> Dict[str, Any]:
+            try:
+                status_data = await self.check_panel_health()
+                
+                status_descriptions = {
+                    "online": "🟢 Панель работает нормально",
+                    "offline": "🔴 Панель недоступна",
+                    "degraded": "🟡 Панель работает со сбоями",
+                    "maintenance": "🔧 Панель на обслуживании"
+                }
+                
+                status = status_data.get("status", "offline")
+                
+                summary = {
+                    "status": status,
+                    "description": status_descriptions.get(status, "❓ Статус неизвестен"),
+                    "response_time": status_data.get("response_time", 0),
+                    "api_available": status_data.get("api_available", False),
+                    "nodes_status": f"{status_data.get('nodes_online', 0)}/{status_data.get('total_nodes', 0)} нод онлайн",
+                    "users_online": status_data.get("users_online", 0),
+                    "last_check": status_data.get("last_check"),
+                    "has_issues": status in ["offline", "degraded"]
+                }
+                
+                if status == "offline":
+                    summary["recommendation"] = "Проверьте подключение к серверу и работоспособность панели"
+                elif status == "degraded":
+                    summary["recommendation"] = "Рекомендуется проверить состояние нод и производительность сервера"
+                else:
+                    summary["recommendation"] = "Все системы работают нормально"
+                
+                return summary
+                
+            except Exception as e:
+                logger.error(f"Ошибка получения сводки статуса панели: {e}")
+                return {
+                    "status": "error",
+                    "description": "❌ Ошибка проверки статуса",
+                    "response_time": 0,
+                    "api_available": False,
+                    "nodes_status": "неизвестно",
+                    "users_online": 0,
+                    "last_check": datetime.utcnow(),
+                    "has_issues": True,
+                    "recommendation": "Обратитесь к системному администратору",
+                    "error": str(e)
+                }
+        
+        async def check_panel_health(self) -> Dict[str, Any]:
+            try:
+                start_time = datetime.utcnow()
+                
+                async with self.api as api:
+                    try:
+                        system_stats = await api.get_system_stats()
+                        api_available = True
+                        api_error = None
+                    except Exception as e:
+                        api_available = False
+                        api_error = str(e)
+                        system_stats = {}
+                    
+                    try:
+                        nodes = await api.get_all_nodes()
+                        nodes_online = sum(1 for node in nodes if node.is_connected and node.is_node_online)
+                        total_nodes = len(nodes)
+                        nodes_health = "healthy" if nodes_online > 0 else "unhealthy"
+                    except Exception:
+                        nodes_online = 0
+                        total_nodes = 0
+                        nodes_health = "unknown"
+                    
+                    end_time = datetime.utcnow()
+                    response_time = (end_time - start_time).total_seconds()
+                    
+                    if not api_available:
+                        status = "offline"
+                    elif response_time > 10: 
+                        status = "degraded"
+                    elif nodes_health == "unhealthy":
+                        status = "degraded"
+                    else:
+                        status = "online"
+                    
+                    return {
+                        "status": status,
+                        "api_available": api_available,
+                        "api_error": api_error,
+                        "response_time": round(response_time, 2),
+                        "nodes_online": nodes_online,
+                        "total_nodes": total_nodes,
+                        "nodes_health": nodes_health,
+                        "users_online": system_stats.get('onlineStats', {}).get('onlineNow', 0),
+                        "total_users": system_stats.get('users', {}).get('totalUsers', 0),
+                        "last_check": end_time,
+                        "api_url": settings.REMNAWAVE_API_URL
+                    }
+                
+            except Exception as e:
+                logger.error(f"Ошибка проверки здоровья панели: {e}")
+                return {
+                    "status": "offline",
+                    "api_available": False,
+                    "api_error": str(e),
+                    "response_time": 0,
+                    "nodes_online": 0,
+                    "total_nodes": 0,
+                    "nodes_health": "unknown",
+                    "last_check": datetime.utcnow(),
+                    "api_url": settings.REMNAWAVE_API_URL
+                }
+        
+        async def send_manual_status_notification(self, bot, status: str, message: str = ""):
+            try:
+                from app.services.admin_notification_service import AdminNotificationService
+                
+                notification_service = AdminNotificationService(bot)
+                
+                details = {
+                    "api_url": settings.REMNAWAVE_API_URL,
+                    "last_check": datetime.utcnow(),
+                    "manual_message": message
+                }
+                
+                if status == "maintenance":
+                    details["maintenance_reason"] = message or "Плановое обслуживание"
+                
+                await notification_service.send_remnawave_panel_status_notification(status, details)
+                
+                logger.info(f"Отправлено ручное уведомление о статусе панели: {status}")
+                return True
+                
+            except Exception as e:
+                logger.error(f"Ошибка отправки ручного уведомления: {e}")
+                return False
