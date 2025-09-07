@@ -1,12 +1,20 @@
 import logging
-from aiogram import Dispatcher, types, F
+from pathlib import Path
+
+import qrcode
+from aiogram import Dispatcher, F, types
+from aiogram.types import FSInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
-from app.keyboards.inline import get_referral_keyboard, get_back_keyboard
+from app.keyboards.inline import get_referral_keyboard
 from app.localization.texts import get_texts
-from app.utils.user_utils import get_user_referral_summary, get_detailed_referral_list, get_referral_analytics
+from app.utils.user_utils import (
+    get_detailed_referral_list,
+    get_referral_analytics,
+    get_user_referral_summary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +94,36 @@ async def show_referral_info(
         referral_text,
         reply_markup=get_referral_keyboard(db_user.language),
         parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+async def show_referral_qr(
+    callback: types.CallbackQuery,
+    db_user: User,
+):
+    texts = get_texts(db_user.language)
+
+    bot_username = (await callback.bot.get_me()).username
+    referral_link = f"https://t.me/{bot_username}?start={db_user.referral_code}"
+
+    qr_dir = Path("data") / "referral_qr"
+    qr_dir.mkdir(parents=True, exist_ok=True)
+
+    file_path = qr_dir / f"{db_user.id}.png"
+    if not file_path.exists():
+        img = qrcode.make(referral_link)
+        img.save(file_path)
+
+    photo = FSInputFile(file_path)
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_referrals")]]
+    )
+
+    await callback.message.answer_photo(
+        photo,
+        caption=f"🔗 Ваша реферальная ссылка:\n{referral_link}",
+        reply_markup=keyboard,
     )
     await callback.answer()
 
@@ -242,6 +280,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         create_invite_message,
         F.data == "referral_create_invite"
+    )
+
+    dp.callback_query.register(
+        show_referral_qr,
+        F.data == "referral_show_qr"
     )
     
     dp.callback_query.register(
