@@ -297,3 +297,243 @@ class AdminNotificationService:
         except Exception as e:
             logger.warning(f"Не удалось получить названия серверов: {e}")
             return f"{len(squad_uuids)} шт."
+
+
+    async def send_maintenance_status_notification(
+        self,
+        event_type: str,
+        status: str,
+        details: Dict[str, Any] = None
+    ) -> bool:
+        if not self._is_enabled():
+            return False
+        
+        try:
+            details = details or {}
+            
+            if event_type == "enable":
+                if details.get("auto_enabled", False):
+                    icon = "⚠️"
+                    title = "АВТОМАТИЧЕСКОЕ ВКЛЮЧЕНИЕ ТЕХРАБОТ"
+                    alert_type = "warning"
+                else:
+                    icon = "🔧"
+                    title = "ВКЛЮЧЕНИЕ ТЕХРАБОТ"
+                    alert_type = "info"
+                    
+            elif event_type == "disable":
+                icon = "✅"
+                title = "ОТКЛЮЧЕНИЕ ТЕХРАБОТ"
+                alert_type = "success"
+                
+            elif event_type == "api_status":
+                if status == "online":
+                    icon = "🟢"
+                    title = "API REMNAWAVE ВОССТАНОВЛЕНО"
+                    alert_type = "success"
+                else:
+                    icon = "🔴"
+                    title = "API REMNAWAVE НЕДОСТУПНО"
+                    alert_type = "error"
+                    
+            elif event_type == "monitoring":
+                if status == "started":
+                    icon = "🔍"
+                    title = "МОНИТОРИНГ ЗАПУЩЕН"
+                    alert_type = "info"
+                else:
+                    icon = "⏹️"
+                    title = "МОНИТОРИНГ ОСТАНОВЛЕН"
+                    alert_type = "info"
+            else:
+                icon = "ℹ️"
+                title = "СИСТЕМА ТЕХРАБОТ"
+                alert_type = "info"
+            
+            message_parts = [f"{icon} <b>{title}</b>", ""]
+            
+            if event_type == "enable":
+                if details.get("reason"):
+                    message_parts.append(f"📋 <b>Причина:</b> {details['reason']}")
+                
+                if details.get("enabled_at"):
+                    enabled_at = details["enabled_at"]
+                    if isinstance(enabled_at, str):
+                        from datetime import datetime
+                        enabled_at = datetime.fromisoformat(enabled_at)
+                    message_parts.append(f"🕐 <b>Время включения:</b> {enabled_at.strftime('%d.%m.%Y %H:%M:%S')}")
+                
+                message_parts.append(f"🤖 <b>Автоматически:</b> {'Да' if details.get('auto_enabled', False) else 'Нет'}")
+                message_parts.append("")
+                message_parts.append("❗ Обычные пользователи временно не могут использовать бота.")
+                
+            elif event_type == "disable":
+                if details.get("disabled_at"):
+                    disabled_at = details["disabled_at"]
+                    if isinstance(disabled_at, str):
+                        from datetime import datetime
+                        disabled_at = datetime.fromisoformat(disabled_at)
+                    message_parts.append(f"🕐 <b>Время отключения:</b> {disabled_at.strftime('%d.%m.%Y %H:%M:%S')}")
+                
+                if details.get("duration"):
+                    duration = details["duration"]
+                    if isinstance(duration, (int, float)):
+                        hours = int(duration // 3600)
+                        minutes = int((duration % 3600) // 60)
+                        if hours > 0:
+                            duration_str = f"{hours}ч {minutes}мин"
+                        else:
+                            duration_str = f"{minutes}мин"
+                        message_parts.append(f"⏱️ <b>Длительность:</b> {duration_str}")
+                
+                message_parts.append(f"🤖 <b>Было автоматическим:</b> {'Да' if details.get('was_auto', False) else 'Нет'}")
+                message_parts.append("")
+                message_parts.append("✅ Сервис снова доступен для пользователей.")
+                
+            elif event_type == "api_status":
+                message_parts.append(f"🔗 <b>API URL:</b> {details.get('api_url', 'неизвестно')}")
+                
+                if status == "online":
+                    if details.get("response_time"):
+                        message_parts.append(f"⚡ <b>Время отклика:</b> {details['response_time']} сек")
+                        
+                    if details.get("consecutive_failures", 0) > 0:
+                        message_parts.append(f"🔄 <b>Неудачных попыток было:</b> {details['consecutive_failures']}")
+                        
+                    message_parts.append("")
+                    message_parts.append("API снова отвечает на запросы.")
+                    
+                else: 
+                    if details.get("consecutive_failures"):
+                        message_parts.append(f"🔄 <b>Попытка №:</b> {details['consecutive_failures']}")
+                        
+                    if details.get("error"):
+                        error_msg = str(details["error"])[:100]  
+                        message_parts.append(f"❌ <b>Ошибка:</b> {error_msg}")
+                        
+                    message_parts.append("")
+                    message_parts.append("⚠️ Началась серия неудачных проверок API.")
+                    
+            elif event_type == "monitoring":
+                if status == "started":
+                    if details.get("check_interval"):
+                        message_parts.append(f"🔄 <b>Интервал проверки:</b> {details['check_interval']} сек")
+                        
+                    if details.get("auto_enable_configured") is not None:
+                        auto_enable = "Включено" if details["auto_enable_configured"] else "Отключено"
+                        message_parts.append(f"🤖 <b>Автовключение:</b> {auto_enable}")
+                        
+                    if details.get("max_failures"):
+                        message_parts.append(f"🎯 <b>Порог ошибок:</b> {details['max_failures']}")
+                        
+                    message_parts.append("")
+                    message_parts.append("Система будет следить за доступностью API.")
+                    
+                else:  
+                    message_parts.append("Автоматический мониторинг API остановлен.")
+            
+            from datetime import datetime
+            message_parts.append("")
+            message_parts.append(f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>")
+            
+            message = "\n".join(message_parts)
+            
+            return await self._send_message(message)
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о техработах: {e}")
+            return False
+    
+    async def send_remnawave_panel_status_notification(
+        self,
+        status: str,
+        details: Dict[str, Any] = None
+    ) -> bool:
+        if not self._is_enabled():
+            return False
+        
+        try:
+            details = details or {}
+            
+            status_config = {
+                "online": {"icon": "🟢", "title": "ПАНЕЛЬ REMNAWAVE ДОСТУПНА", "alert_type": "success"},
+                "offline": {"icon": "🔴", "title": "ПАНЕЛЬ REMNAWAVE НЕДОСТУПНА", "alert_type": "error"},
+                "degraded": {"icon": "🟡", "title": "ПАНЕЛЬ REMNAWAVE РАБОТАЕТ СО СБОЯМИ", "alert_type": "warning"},
+                "maintenance": {"icon": "🔧", "title": "ПАНЕЛЬ REMNAWAVE НА ОБСЛУЖИВАНИИ", "alert_type": "info"}
+            }
+            
+            config = status_config.get(status, status_config["offline"])
+            
+            message_parts = [
+                f"{config['icon']} <b>{config['title']}</b>",
+                ""
+            ]
+            
+            if details.get("api_url"):
+                message_parts.append(f"🔗 <b>URL:</b> {details['api_url']}")
+                
+            if details.get("response_time"):
+                message_parts.append(f"⚡ <b>Время отклика:</b> {details['response_time']} сек")
+                
+            if details.get("last_check"):
+                last_check = details["last_check"]
+                if isinstance(last_check, str):
+                    from datetime import datetime
+                    last_check = datetime.fromisoformat(last_check)
+                message_parts.append(f"🕐 <b>Последняя проверка:</b> {last_check.strftime('%H:%M:%S')}")
+                
+            if status == "online":
+                if details.get("uptime"):
+                    message_parts.append(f"⏱️ <b>Время работы:</b> {details['uptime']}")
+                    
+                if details.get("users_online"):
+                    message_parts.append(f"👥 <b>Пользователей онлайн:</b> {details['users_online']}")
+                    
+                message_parts.append("")
+                message_parts.append("✅ Все системы работают нормально.")
+                
+            elif status == "offline":
+                if details.get("error"):
+                    error_msg = str(details["error"])[:150]
+                    message_parts.append(f"❌ <b>Ошибка:</b> {error_msg}")
+                    
+                if details.get("consecutive_failures"):
+                    message_parts.append(f"🔄 <b>Неудачных попыток:</b> {details['consecutive_failures']}")
+                    
+                message_parts.append("")
+                message_parts.append("⚠️ Панель недоступна. Проверьте соединение и статус сервера.")
+                
+            elif status == "degraded":
+                if details.get("issues"):
+                    issues = details["issues"]
+                    if isinstance(issues, list):
+                        message_parts.append("⚠️ <b>Обнаруженные проблемы:</b>")
+                        for issue in issues[:3]: 
+                            message_parts.append(f"   • {issue}")
+                    else:
+                        message_parts.append(f"⚠️ <b>Проблема:</b> {issues}")
+                        
+                message_parts.append("")
+                message_parts.append("Панель работает, но возможны задержки или сбои.")
+                
+            elif status == "maintenance":
+                if details.get("maintenance_reason"):
+                    message_parts.append(f"🔧 <b>Причина:</b> {details['maintenance_reason']}")
+                    
+                if details.get("estimated_duration"):
+                    message_parts.append(f"⏰ <b>Ожидаемая длительность:</b> {details['estimated_duration']}")
+                    
+                message_parts.append("")
+                message_parts.append("Панель временно недоступна для обслуживания.")
+            
+            from datetime import datetime
+            message_parts.append("")
+            message_parts.append(f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>")
+            
+            message = "\n".join(message_parts)
+            
+            return await self._send_message(message)
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о статусе панели RemnaWave: {e}")
+            return False
