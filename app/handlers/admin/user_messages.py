@@ -166,8 +166,7 @@ async def process_new_message_text(
     is_valid, error_msg = validate_html_tags(message_text)
     if not is_valid:
         await message.answer(
-            f"❌ <b>Ошибка в HTML разметке:</b>\n{error_msg}\n\n"
-            f"{get_html_help_text()}\n\n"
+            f"❌ Ошибка в HTML разметке: {error_msg}\n\n"
             f"Исправьте ошибку и попробуйте еще раз, или отправьте /cancel для отмены.",
             parse_mode=None 
         )
