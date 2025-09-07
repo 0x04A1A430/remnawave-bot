@@ -120,6 +120,7 @@ async def show_referral_qr(
         inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_referrals")]]
     )
 
+    await callback.message.delete()
     await callback.message.answer_photo(
         photo,
         caption=f"🔗 Ваша реферальная ссылка:\n{referral_link}",
