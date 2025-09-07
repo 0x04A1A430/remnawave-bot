@@ -4,32 +4,77 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from app.localization.texts import get_texts
 
 
-def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
-    texts = get_texts(language)
+def get_admin_main_keyboard(language: str = "ru"):
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text=texts.ADMIN_USERS, callback_data="admin_users"),
-            InlineKeyboardButton(text=texts.ADMIN_SUBSCRIPTIONS, callback_data="admin_subscriptions")
+            InlineKeyboardButton(
+                text="📊 Статистика",
+                callback_data="admin_statistics"
+            ),
+            InlineKeyboardButton(
+                text="👥 Пользователи",
+                callback_data="admin_users"
+            )
         ],
         [
-            InlineKeyboardButton(text=texts.ADMIN_PROMOCODES, callback_data="admin_promocodes"),
-            InlineKeyboardButton(text=texts.ADMIN_MESSAGES, callback_data="admin_messages")
+            InlineKeyboardButton(
+                text="🎫 Промокоды",
+                callback_data="admin_promocodes"
+            ),
+            InlineKeyboardButton(
+                text="🙋 Рефералы",
+                callback_data="admin_referrals"
+            )
         ],
         [
-            InlineKeyboardButton(text=texts.ADMIN_MONITORING, callback_data="admin_monitoring"),
-            InlineKeyboardButton(text=texts.ADMIN_REFERRALS, callback_data="admin_referrals")
+            InlineKeyboardButton(
+                text="📨 Рассылки",
+                callback_data="admin_messages"
+            ),
+            InlineKeyboardButton(
+                text="🔍 Мониторинг",
+                callback_data="admin_monitoring"
+            )
         ],
         [
-            InlineKeyboardButton(text=texts.ADMIN_RULES, callback_data="admin_rules"),
-            InlineKeyboardButton(text=texts.ADMIN_REMNAWAVE, callback_data="admin_remnawave")
+            InlineKeyboardButton(
+                text="📢 Сообщения меню", 
+                callback_data="user_messages_panel"
+            )
         ],
         [
-            InlineKeyboardButton(text=texts.ADMIN_STATISTICS, callback_data="admin_statistics"),
-            InlineKeyboardButton(text="🔧 Техработы", callback_data="maintenance_panel")
+            InlineKeyboardButton(
+                text="🌎 Сервера",
+                callback_data="admin_servers"
+            ),
+            InlineKeyboardButton(
+                text="📱 Подписки",
+                callback_data="admin_subscriptions"
+            )
         ],
         [
-            InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
+            InlineKeyboardButton(
+                text="📖 Правила",
+                callback_data="admin_rules"
+            ),
+            InlineKeyboardButton(
+                text="🚧 Тех. работы",
+                callback_data="admin_maintenance"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🔗 RemnaWave",
+                callback_data="admin_remnawave"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🔙 Главное меню",
+                callback_data="main_menu"
+            )
         ]
     ])
 
