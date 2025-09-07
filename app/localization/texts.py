@@ -204,8 +204,11 @@ class RussianTexts(Texts):
 Подтвердить покупку?
 """
     
-    INSUFFICIENT_BALANCE = "❌ Недостаточно средств на балансе. Пополните баланс на {amount} и попробуйте снова."
-    GO_TO_BALANCE_TOP_UP = "Перейти к пополнению баланса"
+    INSUFFICIENT_BALANCE = """❌ Недостаточно средств на балансе.  
+    
+    <b>Пополните баланс на {amount} и попробуйте снова.</b>
+    """
+    GO_TO_BALANCE_TOP_UP = "💳 Перейти к пополнению баланса"
     SUBSCRIPTION_PURCHASED = "🎉 Подписка успешно приобретена!"
     
     BALANCE_INFO = """
@@ -448,8 +451,10 @@ To get started, select interface language:
     MENU_BALANCE = "💰 Balance"
     MENU_SUBSCRIPTION = "📱 Subscription"
     MENU_TRIAL = "🎁 Trial subscription"
-    INSUFFICIENT_BALANCE = "❌ Insufficient balance. Top up {amount} and try again."
-    GO_TO_BALANCE_TOP_UP = "Go to balance top up"
+    INSUFFICIENT_BALANCE = """❌ Insufficient balance. " \
+    
+    Top up {amount} and try again."""
+    GO_TO_BALANCE_TOP_UP = "💳 Go to balance top up"
     
 
 LANGUAGES = {
