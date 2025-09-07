@@ -381,7 +381,7 @@ async def process_stars_payment_amount(
             f"⭐ <b>Оплата через Telegram Stars</b>\n\n"
             f"💰 Сумма: {texts.format_price(amount_kopeks)}\n"
             f"⭐ К оплате: {stars_amount} звезд\n"
-            f"📊 Курс: {settings.get_stars_rate():.2f}₽ за звезду\n\n"
+            f"📊 Курс: {int(settings.get_stars_rate())}₽ за звезду\n\n"
             f"Нажмите кнопку ниже для оплаты:",
             reply_markup=keyboard,
             parse_mode="HTML"
@@ -465,7 +465,7 @@ async def process_yookassa_payment_amount(
         await state.clear()
         
         logger.info(f"Создан платеж YooKassa для пользователя {db_user.telegram_id}: "
-                   f"{amount_kopeks/100}₽, ID: {payment_result['yookassa_payment_id']}")
+                   f"{amount_kopeks//100}₽, ID: {payment_result['yookassa_payment_id']}")
         
     except Exception as e:
         logger.error(f"Ошибка создания YooKassa платежа: {e}")

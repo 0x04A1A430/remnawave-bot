@@ -636,9 +636,9 @@ async def process_balance_edit(
         
         description = f"Изменение баланса администратором {db_user.full_name}"
         if amount_kopeks > 0:
-            description = f"Пополнение администратором: +{amount_rubles} ₽"
+            description = f"Пополнение администратором: +{int(amount_rubles)} ₽"
         else:
-            description = f"Списание администратором: {amount_rubles} ₽"
+            description = f"Списание администратором: {int(amount_rubles)} ₽"
         
         success = await user_service.update_user_balance(
             db, user_id, amount_kopeks, description, db_user.id

@@ -715,14 +715,14 @@ def get_add_traffic_keyboard(language: str = "ru", subscription_end_date: dateti
         
         if gb == 0:
             if language == "ru":
-                text = f"♾️ Безлимитный трафик - {total_price/100:.2f} ₽{period_text}"
+                text = f"♾️ Безлимитный трафик - {total_price//100} ₽{period_text}"
             else:
-                text = f"♾️ Unlimited traffic - {total_price/100:.2f} ₽{period_text}"
+                text = f"♾️ Unlimited traffic - {total_price//100} ₽{period_text}"
         else:
             if language == "ru":
-                text = f"📊 +{gb} ГБ трафика - {total_price/100:.2f} ₽{period_text}"
+                text = f"📊 +{gb} ГБ трафика - {total_price//100} ₽{period_text}"
             else:
-                text = f"📊 +{gb} GB traffic - {total_price/100:.2f} ₽{period_text}"
+                text = f"📊 +{gb} GB traffic - {total_price//100} ₽{period_text}"
         
         buttons.append([
             InlineKeyboardButton(text=text, callback_data=f"add_traffic_{gb}")
@@ -761,9 +761,9 @@ def get_add_devices_keyboard(current_devices: int, language: str = "ru", subscri
         total_price = price_per_month * months_multiplier
         
         if language == "ru":
-            text = f"📱 +{count} устройство(а) (итого: {new_total}) - {total_price/100:.2f} ₽{period_text}"
+            text = f"📱 +{count} устройство(а) (итого: {new_total}) - {total_price//100} ₽{period_text}"
         else:
-            text = f"📱 +{count} device(s) (total: {new_total}) - {total_price/100:.2f} ₽{period_text}"
+            text = f"📱 +{count} device(s) (total: {new_total}) - {total_price//100} ₽{period_text}"
         
         buttons.append([
             InlineKeyboardButton(text=text, callback_data=f"add_devices_{count}")
@@ -835,10 +835,10 @@ def get_manage_countries_keyboard(
         if uuid not in current_subscription_countries and uuid in selected:
             total_price = price_per_month * months_multiplier
             if months_multiplier > 1:
-                price_text = f" ({price_per_month/100:.2f}₽/мес × {months_multiplier} = {total_price/100:.2f}₽)"
+                price_text = f" ({price_per_month//100}₽/мес × {months_multiplier} = {total_price//100}₽)"
                 logger.info(f"🔍 Сервер {name}: {price_per_month/100}₽/мес × {months_multiplier} мес = {total_price/100}₽")
             else:
-                price_text = f" ({total_price/100:.2f}₽)"
+                price_text = f" ({total_price//100}₽)"
             display_name = f"{icon} {name}{price_text}"
         else:
             display_name = f"{icon} {name}"
@@ -851,7 +851,7 @@ def get_manage_countries_keyboard(
         ])
     
     if total_cost > 0:
-        apply_text = f"✅ Применить изменения ({total_cost/100:.2f} ₽)"
+        apply_text = f"✅ Применить изменения ({total_cost//100} ₽)"
         logger.info(f"🔍 Общая стоимость новых серверов: {total_cost/100}₽")
     else:
         apply_text = "✅ Применить изменения"

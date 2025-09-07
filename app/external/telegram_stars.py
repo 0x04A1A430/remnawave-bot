@@ -45,8 +45,8 @@ class TelegramStarsService:
             )
             
             logger.info(
-                f"Создан Stars invoice на {stars_amount} звезд (~{amount_rubles:.2f}₽) "
-                f"для {chat_id}, курс: {settings.get_stars_rate():.2f}₽/⭐"
+                f"Создан Stars invoice на {stars_amount} звезд (~{int(amount_rubles)}₽) "
+                f"для {chat_id}, курс: {int(settings.get_stars_rate())}₽/⭐"
             )
             return invoice_link
             
@@ -80,7 +80,7 @@ class TelegramStarsService:
             
             logger.info(
                 f"Отправлен Stars invoice {message.message_id} на {stars_amount} звезд "
-                f"(~{amount_rubles:.2f}₽), курс: {settings.get_stars_rate():.2f}₽/⭐"
+                f"(~{int(amount_rubles)}₽), курс: {int(settings.get_stars_rate())}₽/⭐"
             )
             return {
                 "message_id": message.message_id,

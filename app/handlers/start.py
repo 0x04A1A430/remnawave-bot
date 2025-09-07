@@ -521,10 +521,10 @@ async def complete_registration_from_callback(
     except Exception as e:
         logger.error(f"Ошибка при отправке главного меню: {e}")
         try:
-            balance_rubles = user.balance_kopeks / 100
+            balance_rubles = user.balance_kopeks // 100
             await callback.message.answer(
                 f"Добро пожаловать, {user.full_name}!\n"
-                f"Баланс: {balance_rubles:.2f} ₽\n"
+                f"Баланс: {balance_rubles} ₽\n"
                 f"Подписка: Нет активной подписки",
                 reply_markup=get_main_menu_keyboard(
                     language=user.language,
@@ -684,10 +684,10 @@ async def complete_registration(
     except Exception as e:
         logger.error(f"Ошибка при отправке главного меню: {e}")
         try:
-            balance_rubles = user.balance_kopeks / 100
+            balance_rubles = user.balance_kopeks // 100
             await message.answer(
                 f"Добро пожаловать, {user.full_name}!\n"
-                f"Баланс: {balance_rubles:.2f} ₽\n"
+                f"Баланс: {balance_rubles} ₽\n"
                 f"Подписка: Нет активной подписки",
                 reply_markup=get_main_menu_keyboard(
                     language=user.language,

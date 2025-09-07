@@ -37,7 +37,7 @@ async def show_servers_menu(
 • С подключениями: {stats['servers_with_connections']}
 
 💰 <b>Выручка от серверов:</b>
-• Общая: {stats['total_revenue_rubles']:.2f} ₽
+• Общая: {int(stats['total_revenue_rubles'])} ₽
 
 Выберите действие:
 """
@@ -83,7 +83,7 @@ async def show_servers_list(
         
         for i, server in enumerate(servers, 1 + (page - 1) * 10):
             status_emoji = "✅" if server.is_available else "❌"
-            price_text = f"{server.price_rubles:.2f} ₽" if server.price_kopeks > 0 else "Бесплатно"
+            price_text = f"{int(server.price_rubles)} ₽" if server.price_kopeks > 0 else "Бесплатно"
             
             text += f"{i}. {status_emoji} {server.display_name}\n"
             text += f"   💰 Цена: {price_text}"
@@ -222,7 +222,7 @@ async def show_server_edit_menu(
         return
     
     status_emoji = "✅ Доступен" if server.is_available else "❌ Недоступен"
-    price_text = f"{server.price_rubles:.2f} ₽" if server.price_kopeks > 0 else "Бесплатно"
+    price_text = f"{int(server.price_rubles)} ₽" if server.price_kopeks > 0 else "Бесплатно"
     
     text = f"""
 🌐 <b>Редактирование сервера</b>
@@ -304,7 +304,7 @@ async def toggle_server_availability(
     server = await get_server_squad_by_id(db, server_id)
     
     status_emoji = "✅ Доступен" if server.is_available else "❌ Недоступен"
-    price_text = f"{server.price_rubles:.2f} ₽" if server.price_kopeks > 0 else "Бесплатно"
+    price_text = f"{int(server.price_rubles)} ₽" if server.price_kopeks > 0 else "Бесплатно"
     
     text = f"""
 🌐 <b>Редактирование сервера</b>
@@ -378,7 +378,7 @@ async def start_server_edit_price(
     await state.set_data({'server_id': server_id})
     await state.set_state(AdminStates.editing_server_price)
     
-    current_price = f"{server.price_rubles:.2f} ₽" if server.price_kopeks > 0 else "Бесплатно"
+    current_price = f"{int(server.price_rubles)} ₽" if server.price_kopeks > 0 else "Бесплатно"
     
     await callback.message.edit_text(
         f"💰 <b>Редактирование цены</b>\n\n"
@@ -424,7 +424,7 @@ async def process_server_price_edit(
             
             await cache.delete("available_countries")
             
-            price_text = f"{price_rubles:.2f} ₽" if price_kopeks > 0 else "Бесплатно"
+            price_text = f"{int(price_rubles)} ₽" if price_kopeks > 0 else "Бесплатно"
             await message.answer(
                 f"✅ Цена сервера изменена на: <b>{price_text}</b>",
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
@@ -613,8 +613,8 @@ async def show_server_detailed_stats(
 • С активными подключениями: {stats['servers_with_connections']}
 
 <b>💰 Финансовая статистика:</b>
-• Общая выручка: {stats['total_revenue_rubles']:.2f} ₽
-• Средняя цена за сервер: {(stats['total_revenue_rubles'] / max(stats['servers_with_connections'], 1)):.2f} ₽
+• Общая выручка: {int(stats['total_revenue_rubles'])} ₽
+• Средняя цена за сервер: {int(stats['total_revenue_rubles'] / max(stats['servers_with_connections'], 1))} ₽
 
 <b>🔥 Топ серверов по цене:</b>
 """
@@ -622,7 +622,7 @@ async def show_server_detailed_stats(
     sorted_servers = sorted(available_servers, key=lambda x: x.price_kopeks, reverse=True)
     
     for i, server in enumerate(sorted_servers[:5], 1):
-        price_text = f"{server.price_rubles:.2f} ₽" if server.price_kopeks > 0 else "Бесплатно"
+        price_text = f"{int(server.price_rubles)} ₽" if server.price_kopeks > 0 else "Бесплатно"
         text += f"{i}. {server.display_name} - {price_text}\n"
     
     if not sorted_servers:
