@@ -1007,22 +1007,22 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 <tr>
 <td>🥇</td>
-<td><strong>Илья (@ispanec_nn)</strong></td>
-<td>$30</td>
+<td><strong>@pilot_737800</strong></td>
+<td>₽2,750</td>
 <td>За веру в проект с самого начала</td>
 </tr>
 
 <tr>
 <td>🥈</td>
 <td><strong>@Legacyyy777</strong></td>
-<td>₽2,400</td>
+<td>₽2,600</td>
 <td>За ценные предложения по улучшению</td>
 </tr>
 
 <tr>
 <td>🥉</td>
-<td><strong>@pilot_737800</strong></td>
-<td>₽2,250</td>
+<td><strong>Илья (@ispanec_nn)</strong></td>
+<td>$30</td>
 <td>За активное тестирование и фидбек</td>
 </tr>
 
