@@ -193,7 +193,6 @@ def validate_html_tags(text: str) -> tuple[bool, str]:
 
 
 def get_html_help_text() -> str:
-    """Возвращает текст справки по HTML тегам"""
     return """<b>Поддерживаемые HTML теги:</b>
 
 - <code>&lt;b&gt;жирный&lt;/b&gt;</code> или <code>&lt;strong&gt;жирный&lt;/strong&gt;</code>
