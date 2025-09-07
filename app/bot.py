@@ -98,6 +98,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_remnawave.register_handlers(dp)
     admin_statistics.register_handlers(dp)
     admin_maintenance.register_handlers(dp)
+    admin_user_messages.register_handlers(dp) 
 
     common.register_handlers(dp)
     
