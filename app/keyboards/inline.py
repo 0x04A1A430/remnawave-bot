@@ -104,6 +104,19 @@ def get_back_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     ])
 
 
+def get_insufficient_balance_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=texts.GO_TO_BALANCE_TOP_UP,
+                callback_data="balance_topup",
+            )
+        ],
+        [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")],
+    ])
+
+
 def get_subscription_keyboard(
     language: str = "ru", 
     has_subscription: bool = False, 
@@ -415,15 +428,7 @@ def get_balance_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
 def get_payment_methods_keyboard(amount_kopeks: int, language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
-    
-    if settings.TELEGRAM_STARS_ENABLED:
-        keyboard.append([
-            InlineKeyboardButton(
-                text="⭐ Telegram Stars", 
-                callback_data="topup_stars"
-            )
-        ])
-    
+ 
     if settings.is_yookassa_enabled():
         keyboard.append([
             InlineKeyboardButton(
@@ -435,11 +440,19 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = "ru") -> In
     if settings.TRIBUTE_ENABLED:
         keyboard.append([
             InlineKeyboardButton(
-                text="💎 Банковская карта (Tribute)", 
+                text="💳 Банковская карта (Tribute)", 
                 callback_data="topup_tribute"
             )
         ])
-    
+
+    if settings.TELEGRAM_STARS_ENABLED:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="⭐ Telegram Stars", 
+                callback_data="topup_stars"
+            )
+        ])
+
     keyboard.append([
         InlineKeyboardButton(
             text="🛠️ Через поддержку", 
