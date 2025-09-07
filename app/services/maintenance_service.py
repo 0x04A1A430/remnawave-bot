@@ -223,7 +223,7 @@ class MaintenanceService:
             await self._load_status_from_cache()
             
             self._check_task = asyncio.create_task(self._monitoring_loop())
-            logger.info(f"🔄 Запущен мониторинг API RemnaWave (интервал: {settings.get_maintenance_check_interval()}с)")
+            logger.info(f"🔄 Запущен мониторинг API Remnawave (интервал: {settings.get_maintenance_check_interval()}с)")
             
             await self._notify_admins(f"""Мониторинг технических работ запущен
 
@@ -271,7 +271,7 @@ class MaintenanceService:
                 
                 if is_connected:
                     if not self._status.api_status:
-                        await self._notify_admins(f"""API RemnaWave восстановлено!
+                        await self._notify_admins(f"""API Remnawave восстановлено!
 
 ✅ <b>Статус:</b> Доступно
 🕐 <b>Время восстановления:</b> {self._status.last_check.strftime('%H:%M:%S')}
@@ -293,7 +293,7 @@ API снова отвечает на запросы.""", "success")
                     self._status.consecutive_failures += 1
                     
                     if was_available:
-                        await self._notify_admins(f"""API RemnaWave недоступно!
+                        await self._notify_admins(f"""API Remnawave недоступно!
 
 ❌ <b>Статус:</b> Недоступно
 🕐 <b>Время обнаружения:</b> {self._status.last_check.strftime('%H:%M:%S')}
@@ -316,7 +316,7 @@ API снова отвечает на запросы.""", "success")
             logger.error(f"Ошибка проверки API: {e}")
             
             if self._status.api_status:
-                await self._notify_admins(f"""Ошибка при проверке API RemnaWave
+                await self._notify_admins(f"""Ошибка при проверке API Remnawave
 
 ❌ <b>Ошибка:</b> {str(e)}
 🕐 <b>Время:</b> {datetime.utcnow().strftime('%H:%M:%S')}
@@ -436,7 +436,7 @@ API снова отвечает на запросы.""", "success")
             
             emoji = status_emojis.get(status, "ℹ️")
             
-            message = f"""Статус панели RemnaWave изменился
+            message = f"""Статус панели Remnawave изменился
 
 {emoji} <b>Статус:</b> {status.upper()}
 🔗 <b>URL:</b> {settings.REMNAWAVE_API_URL}
@@ -445,11 +445,11 @@ API снова отвечает на запросы.""", "success")
             alert_type = "error" if status in ["offline", "error"] else "info"
             await self._notify_admins(message, alert_type)
             
-            logger.info(f"Отправлено уведомление о статусе RemnaWave: {status}")
+            logger.info(f"Отправлено уведомление о статусе Remnawave: {status}")
             return True
             
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления о статусе RemnaWave: {e}")
+            logger.error(f"Ошибка отправки уведомления о статусе Remnawave: {e}")
             return False
 
 
