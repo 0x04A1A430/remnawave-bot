@@ -23,7 +23,8 @@ from app.handlers.admin import (
     monitoring as admin_monitoring, referrals as admin_referrals,
     rules as admin_rules, remnawave as admin_remnawave,
     statistics as admin_statistics, servers as admin_servers,
-    maintenance as admin_maintenance  
+    maintenance as admin_maintenance,
+    user_messages as admin_user_messages 
 )
 from app.handlers.stars_payments import register_stars_handlers
 
