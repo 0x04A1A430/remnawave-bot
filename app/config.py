@@ -15,7 +15,18 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
     ADMIN_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
     
-    DATABASE_URL: str
+    DATABASE_URL: str = ""
+    
+    POSTGRES_HOST: str = "postgres"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str = "remnawave_bot"
+    POSTGRES_USER: str = "remnawave_user" 
+    POSTGRES_PASSWORD: str = "secure_password_123"
+    
+    SQLITE_PATH: str = "./data/bot.db"
+    
+    DATABASE_MODE: str = "auto"
+    
     REDIS_URL: str = "redis://localhost:6379/0"
     
     REMNAWAVE_API_URL: str
@@ -114,7 +125,6 @@ class Settings(BaseSettings):
     PAYMENT_BALANCE_TEMPLATE: str = "{service_name} - {description}"
     PAYMENT_SUBSCRIPTION_TEMPLATE: str = "{service_name} - {description}"
 
-
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
     
@@ -138,6 +148,48 @@ class Settings(BaseSettings):
         log_path = Path(v)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         return str(log_path)
+    
+    def get_database_url(self) -> str:
+        if self.DATABASE_URL and self.DATABASE_URL.strip():
+            return self.DATABASE_URL
+            
+        mode = self.DATABASE_MODE.lower()
+        
+        if mode == "sqlite":
+            return self._get_sqlite_url()
+        elif mode == "postgresql":
+            return self._get_postgresql_url()
+        elif mode == "auto":
+            if os.getenv("DOCKER_ENV") == "true" or os.path.exists("/.dockerenv"):
+                return self._get_postgresql_url()
+            else:
+                return self._get_sqlite_url()
+        else:
+            return self._get_auto_database_url()
+    
+    def _get_sqlite_url(self) -> str:
+        sqlite_path = Path(self.SQLITE_PATH)
+        sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+        return f"sqlite+aiosqlite:///{sqlite_path.absolute()}"
+    
+    def _get_postgresql_url(self) -> str:
+        return (f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+                f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}")
+    
+    def _get_auto_database_url(self) -> str:
+        if (os.getenv("DOCKER_ENV") == "true" or 
+            os.path.exists("/.dockerenv")):
+            return self._get_postgresql_url()
+        else:
+            return self._get_sqlite_url()
+    
+    def is_postgresql(self) -> bool:
+        """Проверяет, используется ли PostgreSQL"""
+        return "postgresql" in self.get_database_url()
+    
+    def is_sqlite(self) -> bool:
+        """Проверяет, используется ли SQLite"""
+        return "sqlite" in self.get_database_url()
     
     def is_admin(self, user_id: int) -> bool:
         return user_id in self.get_admin_ids()
@@ -251,7 +303,7 @@ class Settings(BaseSettings):
                 period_str = period_str.strip()
                 if period_str:
                     period = int(period_str)
-                    if period in PERIOD_PRICES:
+                    if hasattr(self, f'PRICE_{period}_DAYS'):
                         periods.append(period)
             
             return periods if periods else [30, 90, 180]
@@ -270,7 +322,7 @@ class Settings(BaseSettings):
                 period_str = period_str.strip()
                 if period_str:
                     period = int(period_str)
-                    if period in PERIOD_PRICES:
+                    if hasattr(self, f'PRICE_{period}_DAYS'):
                         periods.append(period)
             
             return periods if periods else [30, 90, 180]
@@ -455,12 +507,12 @@ class Settings(BaseSettings):
     
     model_config = {
         "env_file": ".env",
-        "env_file_encoding": "utf-8"
+        "env_file_encoding": "utf-8",
+        "extra": "ignore"  
     }
 
 
 settings = Settings()
-
 
 PERIOD_PRICES = {
     14: settings.PRICE_14_DAYS,
@@ -482,3 +534,6 @@ def refresh_traffic_prices():
     TRAFFIC_PRICES = get_traffic_prices()
 
 refresh_traffic_prices()
+
+settings._original_database_url = settings.DATABASE_URL
+settings.DATABASE_URL = settings.get_database_url()
