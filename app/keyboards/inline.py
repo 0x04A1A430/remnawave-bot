@@ -535,6 +535,12 @@ def get_referral_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
+                text="📱 Показать QR код",
+                callback_data="referral_show_qr"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 text="👥 Список рефералов",
                 callback_data="referral_list"
             )
