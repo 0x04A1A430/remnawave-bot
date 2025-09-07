@@ -11,8 +11,7 @@ ALLOWED_HTML_TAGS = {
     'code',                 
     'pre',                
     'a',                  
-    'blockquote',           
-    'spoiler', 'tg-spoiler' 
+    'blockquote'
 }
 
 def validate_email(email: str) -> bool:
@@ -203,6 +202,5 @@ def get_html_help_text() -> str:
 - <code>&lt;pre&gt;блок кода&lt;/pre&gt;</code>
 - <code>&lt;a href="url"&gt;ссылка&lt;/a&gt;</code>
 - <code>&lt;blockquote&gt;цитата&lt;/blockquote&gt;</code>
-- <code>&lt;spoiler&gt;спойлер&lt;/spoiler&gt;</code>
 
-<b>Неподдерживаемые теги:</b> &lt;br&gt;, &lt;p&gt;, &lt;div&gt;, &lt;span&gt; и другие"""
+<b>Неподдерживаемые теги:</b> &lt;br&gt;, &lt;p&gt;, &lt;div&gt;, &lt;span&gt;, &lt;spoiler&gt; и другие"""
