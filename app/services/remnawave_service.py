@@ -200,7 +200,7 @@ class RemnaWaveService:
                     return result
                 
             except RemnaWaveAPIError as e:
-                logger.error(f"Ошибка RemnaWave API при получении статистики: {e}")
+                logger.error(f"Ошибка Remnawave API при получении статистики: {e}")
                 return {"error": str(e)}
             except Exception as e:
                 logger.error(f"Общая ошибка получения системной статистики: {e}")
@@ -271,11 +271,11 @@ class RemnaWaveService:
                         'traffic_limit_bytes': node.traffic_limit_bytes
                     })
                 
-                logger.info(f"✅ Получено {len(result)} нод из RemnaWave")
+                logger.info(f"✅ Получено {len(result)} нод из Remnawave")
                 return result
                 
         except Exception as e:
-            logger.error(f"Ошибка получения нод из RemnaWave: {e}")
+            logger.error(f"Ошибка получения нод из Remnawave: {e}")
             return []
 
     async def test_connection(self) -> bool:
@@ -283,11 +283,11 @@ class RemnaWaveService:
         try:
             async with self.api as api:
                 stats = await api.get_system_stats()
-                logger.info("✅ Соединение с RemnaWave API работает")
+                logger.info("✅ Соединение с Remnawave API работает")
                 return True
                 
         except Exception as e:
-            logger.error(f"❌ Ошибка соединения с RemnaWave API: {e}")
+            logger.error(f"❌ Ошибка соединения с Remnawave API: {e}")
             return False
     
     async def get_node_details(self, node_uuid: str) -> Optional[Dict[str, Any]]:
@@ -378,11 +378,11 @@ class RemnaWaveService:
                         'inbounds': squad.inbounds
                     })
                 
-                logger.info(f"✅ Получено {len(result)} сквадов из RemnaWave")
+                logger.info(f"✅ Получено {len(result)} сквадов из Remnawave")
                 return result
                 
         except Exception as e:
-            logger.error(f"Ошибка получения сквадов из RemnaWave: {e}")
+            logger.error(f"Ошибка получения сквадов из Remnawave: {e}")
             return []
     
     async def create_squad(self, name: str, inbounds: List[str]) -> Optional[str]:
@@ -1283,10 +1283,10 @@ class RemnaWaveService:
                                     if rw_user:
                                         subscription.remnawave_short_uuid = rw_user.short_uuid
                                         subscription.subscription_url = rw_user.subscription_url
-                                        logger.info(f"🔧 Восстановлены данные RemnaWave для {user.telegram_id}")
+                                        logger.info(f"🔧 Восстановлены данные Remnawave для {user.telegram_id}")
                                         issues_fixed += 1
                             except Exception as rw_error:
-                                logger.warning(f"⚠️ Не удалось получить данные RemnaWave для {user.telegram_id}: {rw_error}")
+                                logger.warning(f"⚠️ Не удалось получить данные Remnawave для {user.telegram_id}: {rw_error}")
                     
                         if subscription.traffic_limit_gb < 0:
                             subscription.traffic_limit_gb = 0
@@ -1353,7 +1353,7 @@ class RemnaWaveService:
                 recommendations["should_sync"] = True
                 recommendations["sync_type"] = "all"
                 recommendations["priority"] = "high"
-                recommendations["reasons"].append(f"Найдено {users_without_uuid} пользователей без связи с RemnaWave")
+                recommendations["reasons"].append(f"Найдено {users_without_uuid} пользователей без связи с Remnawave")
                 recommendations["estimated_time"] = "3-5 минут"
         
             if active_expired > 5:
@@ -1401,7 +1401,7 @@ class RemnaWaveService:
             return status_result
                 
         except Exception as e:
-            logger.error(f"Ошибка мониторинга статуса панели RemnaWave: {e}")
+            logger.error(f"Ошибка мониторинга статуса панели Remnawave: {e}")
             return {"status": "error", "error": str(e)}
         
 
