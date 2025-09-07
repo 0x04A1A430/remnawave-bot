@@ -582,3 +582,24 @@ class SubscriptionServer(Base):
     
     subscription = relationship("Subscription", backref="subscription_servers")
     server_squad = relationship("ServerSquad", backref="subscription_servers")
+
+class UserMessage(Base):
+    __tablename__ = "user_messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    message_text = Column(Text, nullable=False)
+    
+    is_active = Column(Boolean, default=True)
+    
+    sort_order = Column(Integer, default=0)
+    
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    creator = relationship("User", backref="created_messages")
+    
+    def __repr__(self):
+        return f"<UserMessage(id={self.id}, active={self.is_active}, text='{self.message_text[:50]}...')>"
