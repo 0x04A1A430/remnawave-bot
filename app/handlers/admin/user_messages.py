@@ -13,7 +13,6 @@ from app.database.crud.user_message import (
 from app.database.models import User
 from app.keyboards.admin import get_admin_main_keyboard
 from app.utils.decorators import admin_required, error_handler
-from app.utils.pagination import create_pagination_keyboard
 from app.localization.texts import get_texts
 
 logger = logging.getLogger(__name__)
