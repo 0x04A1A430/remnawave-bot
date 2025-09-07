@@ -179,8 +179,8 @@ class Settings(BaseSettings):
             return ["ru", "en"]
     
     def format_price(self, price_kopeks: int) -> str:
-        rubles = price_kopeks / 100
-        return f"{rubles:.2f} ₽"
+        rubles = price_kopeks // 100
+        return f"{rubles} ₽"
     
     def kopeks_to_rubles(self, kopeks: int) -> float:
         return kopeks / 100

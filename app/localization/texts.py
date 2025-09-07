@@ -57,7 +57,7 @@ class Texts:
     
     @staticmethod
     def format_price(kopeks: int) -> str:
-        return f"{kopeks / 100:.2f} ₽"
+        return f"{int(kopeks / 100)} ₽"
     
     @staticmethod
     def format_traffic(gb: float) -> str:
@@ -125,7 +125,7 @@ class RussianTexts(Texts):
     MENU_LANGUAGE = "🌐 Язык"
     MENU_ADMIN = "⚙️ Админ-панель"
     BALANCE_BUTTON = "💰 Баланс: {balance}"
-    BALANCE_BUTTON_ZERO = "💰 Баланс: 0.00 ₽"
+    BALANCE_BUTTON_ZERO = "💰 Баланс: 0 ₽"
     
     SUBSCRIPTION_NONE = "❌ Нет активной подписки"
     SUBSCRIPTION_TRIAL = "🧪 Тестовая подписка"

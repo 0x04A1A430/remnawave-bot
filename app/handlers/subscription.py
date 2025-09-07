@@ -1415,13 +1415,13 @@ async def get_traffic_packages_info() -> str:
             info_lines.append("\n✅ Активные:")
             for pkg in enabled_packages:
                 gb_text = "♾️ Безлимит" if pkg['gb'] == 0 else f"{pkg['gb']} ГБ"
-                info_lines.append(f"   • {gb_text}: {pkg['price']/100}₽")
+                info_lines.append(f"   • {gb_text}: {pkg['price']//100}₽")
         
         if disabled_packages:
             info_lines.append("\n❌ Отключенные:")
             for pkg in disabled_packages:
                 gb_text = "♾️ Безлимит" if pkg['gb'] == 0 else f"{pkg['gb']} ГБ"
-                info_lines.append(f"   • {gb_text}: {pkg['price']/100}₽")
+                info_lines.append(f"   • {gb_text}: {pkg['price']//100}₽")
         
         info_lines.append(f"\n📊 Всего пакетов: {len(packages)}")
         info_lines.append(f"🟢 Активных: {len(enabled_packages)}")
