@@ -92,7 +92,7 @@ async def handle_successful_payment(
             await message.answer(
                 f"🎉 <b>Платеж успешно обработан!</b>\n\n"
                 f"⭐ Потрачено звезд: {payment.total_amount}\n"
-                f"💰 Зачислено на баланс: {rubles_amount:.2f} ₽\n"
+                f"💰 Зачислено на баланс: {int(rubles_amount)} ₽\n"
                 f"🆔 ID транзакции: {payment.telegram_payment_charge_id[:8]}...\n\n"
                 f"Спасибо за пополнение! 🚀",
                 parse_mode="HTML"
@@ -100,7 +100,7 @@ async def handle_successful_payment(
             
             logger.info(
                 f"✅ Stars платеж успешно обработан: "
-                f"пользователь {user.id}, {payment.total_amount} звезд → {rubles_amount:.2f}₽"
+                f"пользователь {user.id}, {payment.total_amount} звезд → {int(rubles_amount)}₽"
             )
         else:
             logger.error(f"Ошибка обработки Stars платежа для пользователя {user.id}")

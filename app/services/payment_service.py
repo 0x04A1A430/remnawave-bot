@@ -48,7 +48,7 @@ class PaymentService:
                 prices=[LabeledPrice(label="Пополнение", amount=stars_amount)]
             )
             
-            logger.info(f"Создан Stars invoice на {stars_amount} звезд (~{amount_rubles:.2f}₽)")
+            logger.info(f"Создан Stars invoice на {stars_amount} звезд (~{int(amount_rubles)}₽)")
             return invoice_link
             
         except Exception as e:
@@ -90,7 +90,7 @@ class PaymentService:
                 
                 logger.info(f"💰 Баланс пользователя {user.telegram_id} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
                 
-                description_for_referral = f"Пополнение Stars: {rubles_amount:.2f}₽ ({stars_amount} ⭐)"
+                description_for_referral = f"Пополнение Stars: {int(rubles_amount)}₽ ({stars_amount} ⭐)"
                 logger.info(f"🔍 Проверка реферальной логики для описания: '{description_for_referral}'")
                 
                 if any(word in description_for_referral.lower() for word in ["пополнение", "stars", "yookassa", "topup"]) and not any(word in description_for_referral.lower() for word in ["комиссия", "бонус"]):
@@ -125,13 +125,15 @@ class PaymentService:
                             f"Баланс пополнен автоматически!",
                             parse_mode="HTML"
                         )
-                        logger.info(f"✅ Отправлено уведомление пользователю {user.telegram_id} о пополнении на {rubles_amount:.2f}₽")
+                        logger.info(
+                            f"✅ Отправлено уведомление пользователю {user.telegram_id} о пополнении на {int(rubles_amount)}₽"
+                        )
                     except Exception as e:
                         logger.error(f"Ошибка отправки уведомления о пополнении Stars: {e}")
                 
                 logger.info(
                     f"✅ Обработан Stars платеж: пользователь {user_id}, "
-                    f"{stars_amount} звезд → {rubles_amount:.2f}₽"
+                    f"{stars_amount} звезд → {int(rubles_amount)}₽"
                 )
                 return True
             else:
@@ -313,7 +315,7 @@ class PaymentService:
                                 f"Баланс пополнен автоматически!",
                                 parse_mode="HTML"
                             )
-                            logger.info(f"✅ Отправлено уведомление пользователю {user.telegram_id} о пополнении на {updated_payment.amount_kopeks/100:.2f}₽")
+                            logger.info(f"✅ Отправлено уведомление пользователю {user.telegram_id} о пополнении на {updated_payment.amount_kopeks//100}₽")
                         except Exception as e:
                             logger.error(f"Ошибка отправки уведомления о пополнении: {e}")
                 else:
@@ -352,7 +354,7 @@ class PaymentService:
             
             user = await get_user_by_id(db, payment.user_id)
             if user:
-                await add_user_balance(db, user, payment.amount_kopeks, f"Пополнение YooKassa: {payment.amount_kopeks/100:.2f}₽")
+                await add_user_balance(db, user, payment.amount_kopeks, f"Пополнение YooKassa: {payment.amount_kopeks//100}₽")
             
             logger.info(f"Успешно обработан платеж YooKassa {payment.yookassa_payment_id}: "
                        f"пользователь {payment.user_id} получил {payment.amount_kopeks/100}₽")

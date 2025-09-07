@@ -1415,13 +1415,13 @@ async def get_traffic_packages_info() -> str:
             info_lines.append("\n✅ Активные:")
             for pkg in enabled_packages:
                 gb_text = "♾️ Безлимит" if pkg['gb'] == 0 else f"{pkg['gb']} ГБ"
-                info_lines.append(f"   • {gb_text}: {pkg['price']/100}₽")
+                info_lines.append(f"   • {gb_text}: {pkg['price']//100}₽")
         
         if disabled_packages:
             info_lines.append("\n❌ Отключенные:")
             for pkg in disabled_packages:
                 gb_text = "♾️ Безлимит" if pkg['gb'] == 0 else f"{pkg['gb']} ГБ"
-                info_lines.append(f"   • {gb_text}: {pkg['price']/100}₽")
+                info_lines.append(f"   • {gb_text}: {pkg['price']//100}₽")
         
         info_lines.append(f"\n📊 Всего пакетов: {len(packages)}")
         info_lines.append(f"🟢 Активных: {len(enabled_packages)}")
@@ -1918,9 +1918,9 @@ async def confirm_purchase(
         
         if remnawave_user and hasattr(subscription, 'subscription_url') and subscription.subscription_url:
             success_text = f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
-            success_text += f"Ваша ссылка для импорта в VPN приложение:\n"
+            success_text += f"🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n"
             success_text += f"<code>{subscription.subscription_url}</code>\n\n"
-            success_text += f"Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве"
+            success_text += f"📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве"
 
             connect_mode = settings.CONNECT_BUTTON_MODE
 
@@ -1928,12 +1928,12 @@ async def confirm_purchase(
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="Подключиться",
+                            text="🔗 Подключиться",
                             web_app=types.WebAppInfo(url=subscription.subscription_url),
                         )
                     ],
-                    [InlineKeyboardButton(text="Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
                 ])
             elif connect_mode == "miniapp_custom":
                 if not settings.MINIAPP_CUSTOM_URL:
@@ -1943,18 +1943,18 @@ async def confirm_purchase(
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="Подключиться",
+                            text="🔗 Подключиться",
                             web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                         )
                     ],
-                    [InlineKeyboardButton(text="Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
                 ])
             else:
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="Подключиться", callback_data="subscription_connect")],
-                    [InlineKeyboardButton(text="Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")],
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
                 ])
     
             await callback.message.edit_text(
