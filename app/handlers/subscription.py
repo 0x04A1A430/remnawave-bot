@@ -34,7 +34,8 @@ from app.keyboards.inline import (
     get_manage_countries_keyboard,
     get_device_selection_keyboard, get_connection_guide_keyboard,
     get_app_selection_keyboard, get_specific_app_keyboard,
-    get_subscription_settings_keyboard, get_extend_subscription_keyboard_with_prices
+    get_subscription_settings_keyboard, get_extend_subscription_keyboard_with_prices,
+    get_insufficient_balance_keyboard
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
@@ -1796,9 +1797,10 @@ async def confirm_purchase(
     logger.info(f"   ИТОГО: {final_price/100}₽")
     
     if db_user.balance_kopeks < final_price:
+        missing_kopeks = final_price - db_user.balance_kopeks
         await callback.message.edit_text(
-            texts.INSUFFICIENT_BALANCE,
-            reply_markup=get_back_keyboard(db_user.language)
+            texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
+            reply_markup=get_insufficient_balance_keyboard(db_user.language),
         )
         await callback.answer()
         return
@@ -1810,9 +1812,10 @@ async def confirm_purchase(
         )
         
         if not success:
+            missing_kopeks = final_price - db_user.balance_kopeks
             await callback.message.edit_text(
-                texts.INSUFFICIENT_BALANCE,
-                reply_markup=get_back_keyboard(db_user.language)
+                texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
+                reply_markup=get_insufficient_balance_keyboard(db_user.language),
             )
             await callback.answer()
             return
