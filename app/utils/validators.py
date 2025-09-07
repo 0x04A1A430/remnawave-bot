@@ -1,7 +1,19 @@
 import re
 from typing import Optional, Union
 from datetime import datetime
+import html
 
+ALLOWED_HTML_TAGS = {
+    'b', 'strong',           
+    'i', 'em',              
+    'u', 'ins',             
+    's', 'strike', 'del',  
+    'code',                 
+    'pre',                
+    'a',                  
+    'blockquote',           
+    'spoiler', 'tg-spoiler' 
+}
 
 def validate_email(email: str) -> bool:
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -105,13 +117,24 @@ def validate_subscription_period(days: Union[str, int]) -> Optional[int]:
 
 
 def sanitize_html(text: str) -> str:
-    allowed_tags = ['b', 'strong', 'i', 'em', 'u', 'ins', 's', 'strike', 'del', 'code', 'pre']
+    if not text:
+        return text
     
-    for tag in allowed_tags:
-        text = re.sub(f'<{tag}>', f'<{tag}>', text, flags=re.IGNORECASE)
-        text = re.sub(f'</{tag}>', f'</{tag}>', text, flags=re.IGNORECASE)
+    text = html.escape(text)
     
-    text = re.sub(r'<(?!/?(?:' + '|'.join(allowed_tags) + r')\b)[^>]*>', '', text)
+    for tag in ALLOWED_HTML_TAGS:
+        text = re.sub(
+            f'&lt;{tag}(&gt;|\\s[^&]*&gt;)', 
+            lambda m: m.group(0).replace('&lt;', '<').replace('&gt;', '>'),
+            text, 
+            flags=re.IGNORECASE
+        )
+        text = re.sub(
+            f'&lt;/{tag}&gt;', 
+            f'</{tag}>', 
+            text, 
+            flags=re.IGNORECASE
+        )
     
     return text
 
@@ -135,3 +158,51 @@ def validate_referral_code(code: str) -> bool:
         return user_id_part.isdigit()
     
     return validate_promocode(code)
+
+def validate_html_tags(text: str) -> tuple[bool, str]:
+    if not text:
+        return True, ""
+    
+    tag_pattern = r'<(/?)([a-zA-Z][a-zA-Z0-9-]*)[^>]*>'
+    tags = re.findall(tag_pattern, text)
+    
+    for is_closing, tag_name in tags:
+        tag_name_lower = tag_name.lower()
+        
+        if tag_name_lower not in ALLOWED_HTML_TAGS:
+            return False, f"Неподдерживаемый тег: <{tag_name}>"
+    
+    tag_stack = []
+    for is_closing, tag_name in tags:
+        tag_name_lower = tag_name.lower()
+        
+        if not is_closing: 
+            tag_stack.append(tag_name_lower)
+        else:  
+            if not tag_stack:
+                return False, f"Закрывающий тег без открывающего: </{tag_name}>"
+            
+            last_tag = tag_stack.pop()
+            if last_tag != tag_name_lower:
+                return False, f"Неправильная вложенность тегов: ожидался </{last_tag}>, найден </{tag_name}>"
+    
+    if tag_stack:
+        return False, f"Незакрытый тег: <{tag_stack[-1]}>"
+    
+    return True, ""
+
+
+def get_html_help_text() -> str:
+    return """<b>Поддерживаемые HTML теги:</b>
+
+- <code>&lt;b&gt;жирный&lt;/b&gt;</code> или <code>&lt;strong&gt;жирный&lt;/strong&gt;</code>
+- <code>&lt;i&gt;курсив&lt;/i&gt;</code> или <code>&lt;em&gt;курсив&lt;/em&gt;</code>  
+- <code>&lt;u&gt;подчеркнутый&lt;/u&gt;</code>
+- <code>&lt;s&gt;зачеркнутый&lt;/s&gt;</code>
+- <code>&lt;code&gt;моноширинный&lt;/code&gt;</code>
+- <code>&lt;pre&gt;блок кода&lt;/pre&gt;</code>
+- <code>&lt;a href="url"&gt;ссылка&lt;/a&gt;</code>
+- <code>&lt;blockquote&gt;цитата&lt;/blockquote&gt;</code>
+- <code>&lt;spoiler&gt;спойлер&lt;/spoiler&gt;</code>
+
+<b>Неподдерживаемые теги:</b> &lt;br&gt;, &lt;p&gt;, &lt;div&gt;, &lt;span&gt; и другие"""

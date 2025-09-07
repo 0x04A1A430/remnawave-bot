@@ -122,17 +122,13 @@ async def add_user_message_start(
     db_user: User,
     db: AsyncSession
 ):
+    from app.utils.validators import get_html_help_text
+    
     await callback.message.edit_text(
-        "📝 <b>Добавление нового сообщения</b>\n\n"
-        "Введите текст сообщения, которое будет показываться в главном меню.\n\n"
-        "Поддерживаются HTML теги:\n"
-        "• <code>&lt;b&gt;жирный&lt;/b&gt;</code>\n"
-        "• <code>&lt;i&gt;курсив&lt;/i&gt;</code>\n"
-        "• <code>&lt;u&gt;подчеркнутый&lt;/u&gt;</code>\n"
-        "• <code>&lt;s&gt;зачеркнутый&lt;/s&gt;</code>\n"
-        "• <code>&lt;code&gt;моноширинный&lt;/code&gt;</code>\n"
-        "• <code>&lt;a href=\"url\"&gt;ссылка&lt;/a&gt;</code>\n\n"
-        "Отправьте /cancel для отмены.",
+        f"📝 <b>Добавление нового сообщения</b>\n\n"
+        f"Введите текст сообщения, которое будет показываться в главном меню.\n\n"
+        f"{get_html_help_text()}\n\n"
+        f"Отправьте /cancel для отмены.",
         parse_mode="HTML"
     )
     
@@ -165,6 +161,17 @@ async def process_new_message_text(
         )
         return
     
+    from app.utils.validators import validate_html_tags, get_html_help_text
+    
+    is_valid, error_msg = validate_html_tags(message_text)
+    if not is_valid:
+        await message.answer(
+            f"❌ Ошибка в HTML разметке: {error_msg}\n\n"
+            f"Исправьте ошибку и попробуйте еще раз, или отправьте /cancel для отмены.",
+            parse_mode=None 
+        )
+        return
+    
     try:
         new_message = await create_user_message(
             db=db,
@@ -172,12 +179,6 @@ async def process_new_message_text(
             created_by=db_user.id,
             is_active=True
         )
-        
-        try:
-            await message.answer("Тест", parse_mode="HTML", disable_notification=True)
-            await message.delete()
-        except Exception as e:
-            logger.warning(f"HTML разметка может быть некорректной: {e}")
         
         await state.clear()
         
@@ -199,7 +200,6 @@ async def process_new_message_text(
             "❌ Произошла ошибка при создании сообщения. Попробуйте еще раз.",
             reply_markup=get_user_messages_keyboard(db_user.language)
         )
-
 
 @admin_required
 @error_handler
