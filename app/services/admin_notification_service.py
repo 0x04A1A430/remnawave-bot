@@ -535,7 +535,7 @@ class AdminNotificationService:
             return await self._send_message(message)
             
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления о статусе панели RemnaWave: {e}")
+            logger.error(f"Ошибка отправки уведомления о статусе панели Remnawave: {e}")
             return False
 
     async def send_remnawave_panel_status_notification(
@@ -632,7 +632,7 @@ class AdminNotificationService:
             return await self._send_message(message)
             
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления о статусе панели RemnaWave: {e}")
+            logger.error(f"Ошибка отправки уведомления о статусе панели Remnawave: {e}")
             return False
 
 
