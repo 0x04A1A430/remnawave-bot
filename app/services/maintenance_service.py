@@ -33,7 +33,6 @@ class MaintenanceService:
         self._last_notification_sent = None 
         
     def set_bot(self, bot):
-        """Устанавливает ссылку на бота для отправки уведомлений"""
         self._bot = bot
         logger.info("Бот установлен для maintenance_service")
     
@@ -58,11 +57,48 @@ class MaintenanceService:
         else:
             return settings.get_maintenance_message()
     
+    async def _send_admin_notification(self, message: str, alert_type: str = "info"):
+        if not self._bot:
+            logger.warning("Бот не установлен, уведомления не могут быть отправлены")
+            return False
+        
+        try:
+            from app.services.admin_notification_service import AdminNotificationService
+            
+            notification_service = AdminNotificationService(self._bot)
+            
+            if not notification_service._is_enabled():
+                logger.debug("Уведомления администраторов отключены")
+                return False
+            
+            emoji_map = {
+                "error": "🚨",
+                "warning": "⚠️", 
+                "success": "✅",
+                "info": "ℹ️"
+            }
+            emoji = emoji_map.get(alert_type, "ℹ️")
+            
+            formatted_message = f"{emoji} <b>ТЕХНИЧЕСКИЕ РАБОТЫ</b>\n\n{message}\n\n⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"
+            
+            return await notification_service._send_message(formatted_message)
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления через AdminNotificationService: {e}")
+            return False
+    
     async def _notify_admins(self, message: str, alert_type: str = "info"):
-        """Отправка уведомлений администраторам"""
         if not self._bot:
             logger.warning("Бот не установлен, уведомления не могут быть отправлены")
             return
+        
+        notification_sent = await self._send_admin_notification(message, alert_type)
+        
+        if notification_sent:
+            logger.info("Уведомление успешно отправлено через AdminNotificationService")
+            return
+        
+        logger.info("Отправляем уведомление напрямую администраторам")
         
         cache_key = f"maintenance_notification_{alert_type}"
         if await cache.get(cache_key):
@@ -116,15 +152,13 @@ class MaintenanceService:
             
             await self._save_status_to_cache()
             
-            notification_msg = f"""
-Режим технических работ ВКЛЮЧЕН
+            notification_msg = f"""Режим технических работ ВКЛЮЧЕН
 
 📋 <b>Причина:</b> {self._status.reason}
 🤖 <b>Автоматически:</b> {'Да' if auto else 'Нет'}
 🕐 <b>Время:</b> {self._status.enabled_at.strftime('%d.%m.%Y %H:%M:%S')}
 
-Обычные пользователи временно не смогут использовать бота.
-"""
+Обычные пользователи временно не смогут использовать бота."""
             
             await self._notify_admins(notification_msg, "warning" if auto else "info")
             
@@ -163,15 +197,13 @@ class MaintenanceService:
                 else:
                     duration_str = f"\n⏱️ <b>Длительность:</b> {minutes}мин"
             
-            notification_msg = f"""
-Режим технических работ ВЫКЛЮЧЕН
+            notification_msg = f"""Режим технических работ ВЫКЛЮЧЕН
 
 🤖 <b>Автоматически:</b> {'Да' if was_auto else 'Нет'}
 🕐 <b>Время:</b> {datetime.utcnow().strftime('%d.%m.%Y %H:%M:%S')}
 {duration_str}
 
-Сервис снова доступен для пользователей.
-"""
+Сервис снова доступен для пользователей."""
             
             await self._notify_admins(notification_msg, "success")
             
@@ -191,17 +223,15 @@ class MaintenanceService:
             await self._load_status_from_cache()
             
             self._check_task = asyncio.create_task(self._monitoring_loop())
-            logger.info(f"🔄 Запущен мониторинг API RemnaWave (интервал: {settings.get_maintenance_check_interval()}с)")
+            logger.info(f"🔄 Запущен мониторинг API Remnawave (интервал: {settings.get_maintenance_check_interval()}с)")
             
-            await self._notify_admins(f"""
-Мониторинг технических работ запущен
+            await self._notify_admins(f"""Мониторинг технических работ запущен
 
 🔄 <b>Интервал проверки:</b> {settings.get_maintenance_check_interval()} секунд
 🤖 <b>Автовключение:</b> {'Включено' if settings.is_maintenance_auto_enable() else 'Отключено'}
 🎯 <b>Порог ошибок:</b> {self._max_consecutive_failures}
 
-Система будет следить за доступностью API.
-""", "info")
+Система будет следить за доступностью API.""", "info")
             
             return True
             
@@ -240,17 +270,14 @@ class MaintenanceService:
                 is_connected = await test_api_connection(api)
                 
                 if is_connected:
-                    # API восстановилось
                     if not self._status.api_status:
-                        await self._notify_admins(f"""
-API RemnaWave восстановлено!
+                        await self._notify_admins(f"""API Remnawave восстановлено!
 
 ✅ <b>Статус:</b> Доступно
 🕐 <b>Время восстановления:</b> {self._status.last_check.strftime('%H:%M:%S')}
 🔄 <b>Неудачных попыток было:</b> {self._status.consecutive_failures}
 
-API снова отвечает на запросы.
-""", "success")
+API снова отвечает на запросы.""", "success")
                     
                     self._status.api_status = True
                     self._status.consecutive_failures = 0
@@ -266,15 +293,13 @@ API снова отвечает на запросы.
                     self._status.consecutive_failures += 1
                     
                     if was_available:
-                        await self._notify_admins(f"""
-API RemnaWave недоступно!
+                        await self._notify_admins(f"""API Remnawave недоступно!
 
 ❌ <b>Статус:</b> Недоступно
 🕐 <b>Время обнаружения:</b> {self._status.last_check.strftime('%H:%M:%S')}
 🔄 <b>Попытка:</b> {self._status.consecutive_failures}
 
-Началась серия неудачных проверок API.
-""", "error")
+Началась серия неудачных проверок API.""", "error")
                     
                     if (self._status.consecutive_failures >= self._max_consecutive_failures and
                         not self._status.is_active and
@@ -291,14 +316,12 @@ API RemnaWave недоступно!
             logger.error(f"Ошибка проверки API: {e}")
             
             if self._status.api_status:
-                await self._notify_admins(f"""
-Ошибка при проверке API RemnaWave
+                await self._notify_admins(f"""Ошибка при проверке API Remnawave
 
 ❌ <b>Ошибка:</b> {str(e)}
 🕐 <b>Время:</b> {datetime.utcnow().strftime('%H:%M:%S')}
 
-Не удалось выполнить проверку доступности API.
-""", "error")
+Не удалось выполнить проверку доступности API.""", "error")
             
             self._status.api_status = False
             self._status.consecutive_failures += 1
@@ -401,6 +424,33 @@ API RemnaWave недоступно!
                 "checked_at": end_time,
                 "consecutive_failures": self._status.consecutive_failures
             }
+    
+    async def send_remnawave_status_notification(self, status: str, details: str = "") -> bool:
+        try:
+            status_emojis = {
+                "online": "🟢",
+                "offline": "🔴", 
+                "warning": "🟡",
+                "error": "⚠️"
+            }
+            
+            emoji = status_emojis.get(status, "ℹ️")
+            
+            message = f"""Статус панели Remnawave изменился
+
+{emoji} <b>Статус:</b> {status.upper()}
+🔗 <b>URL:</b> {settings.REMNAWAVE_API_URL}
+{details}"""
+            
+            alert_type = "error" if status in ["offline", "error"] else "info"
+            await self._notify_admins(message, alert_type)
+            
+            logger.info(f"Отправлено уведомление о статусе Remnawave: {status}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о статусе Remnawave: {e}")
+            return False
 
 
 maintenance_service = MaintenanceService()

@@ -147,7 +147,7 @@ async def sync_servers_with_remnawave(
 ):
     
     await callback.message.edit_text(
-        "🔄 Синхронизация с RemnaWave...\n\nПодождите, это может занять время.",
+        "🔄 Синхронизация с Remnawave...\n\nПодождите, это может занять время.",
         reply_markup=None
     )
     
@@ -157,7 +157,7 @@ async def sync_servers_with_remnawave(
         
         if not squads:
             await callback.message.edit_text(
-                "❌ Не удалось получить данные о сквадах из RemnaWave.\n\nПроверьте настройки API.",
+                "❌ Не удалось получить данные о сквадах из Remnawave.\n\nПроверьте настройки API.",
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
                     [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_servers")]
                 ])

@@ -376,7 +376,7 @@ async def activate_trial(
         
         try:
             notification_service = AdminNotificationService(callback.bot)
-            await notification_service.send_trial_activation_notification(db_user, subscription)
+            await notification_service.send_trial_activation_notification(db, db_user, subscription)
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о триале: {e}")
         
@@ -1200,7 +1200,7 @@ async def confirm_extend_subscription(
         try:
             notification_service = AdminNotificationService(callback.bot)
             await notification_service.send_subscription_extension_notification(
-                db_user, subscription, transaction, days, old_end_date
+                db, db_user, subscription, transaction, days, old_end_date
             )
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о продлении: {e}")
@@ -1908,7 +1908,7 @@ async def confirm_purchase(
         try:
             notification_service = AdminNotificationService(callback.bot)
             await notification_service.send_subscription_purchase_notification(
-                db_user, subscription, transaction, data['period_days'], was_trial_conversion
+                db, db_user, subscription, transaction, data['period_days'], was_trial_conversion
             )
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о покупке: {e}")
@@ -2994,15 +2994,16 @@ def get_reset_devices_confirm_keyboard(language: str = "ru") -> InlineKeyboardMa
         ]
     ])
 
-async def send_trial_notification(callback: types.CallbackQuery, db_user: User, subscription: Subscription):
+async def send_trial_notification(callback: types.CallbackQuery, db: AsyncSession, db_user: User, subscription: Subscription):
     try:
         notification_service = AdminNotificationService(callback.bot)
-        await notification_service.send_trial_activation_notification(db_user, subscription)
+        await notification_service.send_trial_activation_notification(db, db_user, subscription)
     except Exception as e:
         logger.error(f"Ошибка отправки уведомления о триале: {e}")
 
 async def send_purchase_notification(
     callback: types.CallbackQuery, 
+    db: AsyncSession,
     db_user: User, 
     subscription: Subscription, 
     transaction_id: int,
@@ -3011,20 +3012,19 @@ async def send_purchase_notification(
 ):
     try:
         from app.database.crud.transaction import get_transaction_by_id
-        from app.database.database import AsyncSessionLocal
         
-        async with AsyncSessionLocal() as db:
-            transaction = await get_transaction_by_id(db, transaction_id)
-            if transaction:
-                notification_service = AdminNotificationService(callback.bot)
-                await notification_service.send_subscription_purchase_notification(
-                    db_user, subscription, transaction, period_days, was_trial_conversion
-                )
+        transaction = await get_transaction_by_id(db, transaction_id)
+        if transaction:
+            notification_service = AdminNotificationService(callback.bot)
+            await notification_service.send_subscription_purchase_notification(
+                db, db_user, subscription, transaction, period_days, was_trial_conversion
+            )
     except Exception as e:
         logger.error(f"Ошибка отправки уведомления о покупке: {e}")
 
 async def send_extension_notification(
     callback: types.CallbackQuery,
+    db: AsyncSession,
     db_user: User,
     subscription: Subscription,
     transaction_id: int,
@@ -3033,15 +3033,13 @@ async def send_extension_notification(
 ):
     try:
         from app.database.crud.transaction import get_transaction_by_id
-        from app.database.database import AsyncSessionLocal
         
-        async with AsyncSessionLocal() as db:
-            transaction = await get_transaction_by_id(db, transaction_id)
-            if transaction:
-                notification_service = AdminNotificationService(callback.bot)
-                await notification_service.send_subscription_extension_notification(
-                    db_user, subscription, transaction, extended_days, old_end_date
-                )
+        transaction = await get_transaction_by_id(db, transaction_id)
+        if transaction:
+            notification_service = AdminNotificationService(callback.bot)
+            await notification_service.send_subscription_extension_notification(
+                db, db_user, subscription, transaction, extended_days, old_end_date
+            )
     except Exception as e:
         logger.error(f"Ошибка отправки уведомления о продлении: {e}")
 

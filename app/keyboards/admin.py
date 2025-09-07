@@ -580,25 +580,72 @@ def get_admin_pagination_keyboard(
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_maintenance_keyboard(language: str = "ru", is_active: bool = False, monitoring_active: bool = False) -> InlineKeyboardMarkup:
+def get_maintenance_keyboard(
+    language: str, 
+    is_maintenance_active: bool, 
+    is_monitoring_active: bool,
+    panel_has_issues: bool = False
+) -> InlineKeyboardMarkup:
+    keyboard = []
     
-    if language == "en":
-        toggle_text = "🔴 Disable maintenance" if is_active else "🔧 Enable maintenance"
-        monitoring_text = "⏹️ Stop monitoring" if monitoring_active else "🔄 Start monitoring"
-        check_api_text = "🔍 Check API"
-        back_text = "⬅️ Back to admin"
+    if is_maintenance_active:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="🟢 Выключить техработы", 
+                callback_data="maintenance_toggle"
+            )
+        ])
     else:
-        toggle_text = "🔴 Выключить техработы" if is_active else "🔧 Включить техработы"
-        monitoring_text = "⏹️ Остановить мониторинг" if monitoring_active else "🔄 Запустить мониторинг"
-        check_api_text = "🔍 Проверить API"
-        back_text = "⬅️ Назад в админку"
+        keyboard.append([
+            InlineKeyboardButton(
+                text="🔧 Включить техработы", 
+                callback_data="maintenance_toggle"
+            )
+        ])
     
-    keyboard = [
-        [InlineKeyboardButton(text=toggle_text, callback_data="maintenance_toggle")],
-        [InlineKeyboardButton(text=monitoring_text, callback_data="maintenance_monitoring")],
-        [InlineKeyboardButton(text=check_api_text, callback_data="maintenance_check_api")],
-        [InlineKeyboardButton(text=back_text, callback_data="admin_panel")]
-    ]
+    if is_monitoring_active:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="⏹️ Остановить мониторинг", 
+                callback_data="maintenance_monitoring"
+            )
+        ])
+    else:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="▶️ Запустить мониторинг", 
+                callback_data="maintenance_monitoring"
+            )
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton(
+            text="🔍 Проверить API", 
+            callback_data="maintenance_check_api"
+        ),
+        InlineKeyboardButton(
+            text="🌐 Статус панели" + ("⚠️" if panel_has_issues else ""), 
+            callback_data="maintenance_check_panel"
+        )
+    ])
+    
+    keyboard.append([
+        InlineKeyboardButton(
+            text="📢 Отправить уведомление", 
+            callback_data="maintenance_manual_notify"
+        )
+    ])
+    
+    keyboard.append([
+        InlineKeyboardButton(
+            text="🔄 Обновить", 
+            callback_data="maintenance_panel"
+        ),
+        InlineKeyboardButton(
+            text="◀️ Назад", 
+            callback_data="admin_panel"
+        )
+    ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 

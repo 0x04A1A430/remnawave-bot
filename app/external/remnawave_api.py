@@ -123,7 +123,7 @@ class RemnaWaveAPI:
     async def __aenter__(self):
         conn_type = self._detect_connection_type()
         
-        logger.info(f"🔗 Подключение к RemnaWave: {self.base_url} (тип: {conn_type})")
+        logger.info(f"🔗 Подключение к Remnawave: {self.base_url} (тип: {conn_type})")
             
         headers = {
             'Authorization': f'Bearer {self.api_key}',
