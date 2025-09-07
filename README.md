@@ -779,6 +779,7 @@ bedolaga_bot/
 │   │   ├── 🎁 promocode_service.py    # Промокоды
 │   │   ├── 🚧 maintenance_service.py  # Промокоды
 │   │   ├── 👥 referral_service.py     # Рефералы
+│   │   ├── 💬 admin_notification_service.py     # Уведомления для администраторов в чаты
 │   │   ├── 🔍 monitoring_service.py   # Мониторинг
 │   │   ├── 🎖️ tribute_service.py      # Tribute платежи
 │   │   ├── 💳 yookassa_service.py     # YooKassa платежи
