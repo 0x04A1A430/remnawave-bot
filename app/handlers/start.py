@@ -17,6 +17,7 @@ from app.keyboards.inline import (
 from app.localization.texts import get_texts
 from app.services.referral_service import process_referral_registration
 from app.utils.user_utils import generate_unique_referral_code
+from app.database.crud.user_message import get_random_active_message
 
 
 logger = logging.getLogger(__name__)
@@ -136,11 +137,10 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         if user.subscription:
             subscription_is_active = user.subscription.is_active
         
+        menu_text = await get_main_menu_text(user, texts, db)
+        
         await message.answer(
-            texts.MAIN_MENU.format(
-                user_name=user.full_name,
-                subscription_status=_get_subscription_status(user, texts)
-            ),
+            menu_text,
             reply_markup=get_main_menu_keyboard(
                 language=user.language,
                 is_admin=settings.is_admin(user.telegram_id),
@@ -148,7 +148,8 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 has_active_subscription=has_active_subscription,
                 subscription_is_active=subscription_is_active,
                 balance_kopeks=user.balance_kopeks 
-            )
+            ),
+            parse_mode="HTML"
         )
         await state.clear()
         return
@@ -405,30 +406,24 @@ async def complete_registration_from_callback(
         if existing_user.subscription:
             subscription_is_active = existing_user.subscription.is_active
         
-        user_name = existing_user.full_name
-        user_telegram_id = existing_user.telegram_id
-        user_language = existing_user.language
-        has_had_paid_subscription = existing_user.has_had_paid_subscription
-        balance_kopeks = existing_user.balance_kopeks
+        menu_text = await get_main_menu_text(existing_user, texts, db)
         
         try:
             await callback.message.answer(
-                texts.MAIN_MENU.format(
-                    user_name=user_name,
-                    subscription_status=_get_subscription_status(existing_user, texts)
-                ),
+                menu_text,
                 reply_markup=get_main_menu_keyboard(
-                    language=user_language,
-                    is_admin=settings.is_admin(user_telegram_id),
-                    has_had_paid_subscription=has_had_paid_subscription,
+                    language=existing_user.language,
+                    is_admin=settings.is_admin(existing_user.telegram_id),
+                    has_had_paid_subscription=existing_user.has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
                     subscription_is_active=subscription_is_active,
-                    balance_kopeks=balance_kopeks
-                )
+                    balance_kopeks=existing_user.balance_kopeks
+                ),
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"Ошибка при показе главного меню существующему пользователю: {e}")
-            await callback.message.answer(f"Добро пожаловать, {user_name}!")
+            await callback.message.answer(f"Добро пожаловать, {existing_user.full_name}!")
         
         await state.clear()
         return
@@ -506,55 +501,50 @@ async def complete_registration_from_callback(
     
     has_active_subscription = False 
     subscription_is_active = False
-    user_name = user.full_name
-    balance_kopeks = user.balance_kopeks
-    user_telegram_id = user.telegram_id
-    user_language = user.language
-    has_had_paid_subscription = user.has_had_paid_subscription
+    
+    menu_text = await get_main_menu_text_simple(user.full_name, texts, db)
     
     try:
         await callback.message.answer(
-            texts.MAIN_MENU.format(
-                user_name=user_name,
-                subscription_status=_get_subscription_status_simple(texts)
-            ),
+            menu_text,
             reply_markup=get_main_menu_keyboard(
-                language=user_language,
-                is_admin=settings.is_admin(user_telegram_id),
-                has_had_paid_subscription=has_had_paid_subscription,
+                language=user.language,
+                is_admin=settings.is_admin(user.telegram_id),
+                has_had_paid_subscription=user.has_had_paid_subscription,
                 has_active_subscription=has_active_subscription,
                 subscription_is_active=subscription_is_active,
-                balance_kopeks=balance_kopeks
-            )
+                balance_kopeks=user.balance_kopeks
+            ),
+            parse_mode="HTML"
         )
-        logger.info(f"✅ Главное меню отправлено для пользователя {user_telegram_id}")
+        logger.info(f"✅ Главное меню отправлено для пользователя {user.telegram_id}")
     except Exception as e:
         logger.error(f"Ошибка при отправке главного меню: {e}")
         try:
-            balance_rubles = balance_kopeks / 100
+            balance_rubles = user.balance_kopeks / 100
             await callback.message.answer(
-                f"Добро пожаловать, {user_name}!\n"
+                f"Добро пожаловать, {user.full_name}!\n"
                 f"Баланс: {balance_rubles:.2f} ₽\n"
                 f"Подписка: Нет активной подписки",
                 reply_markup=get_main_menu_keyboard(
-                    language=user_language,
-                    is_admin=settings.is_admin(user_telegram_id),
-                    has_had_paid_subscription=has_had_paid_subscription,
+                    language=user.language,
+                    is_admin=settings.is_admin(user.telegram_id),
+                    has_had_paid_subscription=user.has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
                     subscription_is_active=subscription_is_active,
-                    balance_kopeks=balance_kopeks
+                    balance_kopeks=user.balance_kopeks
                 )
             )
-            logger.info(f"✅ Fallback главное меню отправлено для пользователя {user_telegram_id}")
+            logger.info(f"✅ Fallback главное меню отправлено для пользователя {user.telegram_id}")
         except Exception as fallback_error:
             logger.error(f"⛔ Критическая ошибка при отправке fallback меню: {fallback_error}")
             try:
-                await callback.message.answer(f"Добро пожаловать, {user_name}! Регистрация завершена.")
-                logger.info(f"✅ Простое приветствие отправлено для пользователя {user_telegram_id}")
+                await callback.message.answer(f"Добро пожаловать, {user.full_name}! Регистрация завершена.")
+                logger.info(f"✅ Простое приветствие отправлено для пользователя {user.telegram_id}")
             except Exception as final_error:
                 logger.error(f"⛔ Критическая ошибка при отправке простого сообщения: {final_error}")
     
-    logger.info(f"✅ Регистрация завершена для пользователя: {user_telegram_id}")
+    logger.info(f"✅ Регистрация завершена для пользователя: {user.telegram_id}")
 
 async def complete_registration(
     message: types.Message, 
@@ -579,30 +569,24 @@ async def complete_registration(
         if existing_user.subscription:
             subscription_is_active = existing_user.subscription.is_active
         
-        user_name = existing_user.full_name
-        user_telegram_id = existing_user.telegram_id
-        user_language = existing_user.language
-        has_had_paid_subscription = existing_user.has_had_paid_subscription
-        balance_kopeks = existing_user.balance_kopeks
+        menu_text = await get_main_menu_text(existing_user, texts, db)
         
         try:
             await message.answer(
-                texts.MAIN_MENU.format(
-                    user_name=user_name,
-                    subscription_status=_get_subscription_status(existing_user, texts)
-                ),
+                menu_text,
                 reply_markup=get_main_menu_keyboard(
-                    language=user_language,
-                    is_admin=settings.is_admin(user_telegram_id),
-                    has_had_paid_subscription=has_had_paid_subscription,
+                    language=existing_user.language,
+                    is_admin=settings.is_admin(existing_user.telegram_id),
+                    has_had_paid_subscription=existing_user.has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
                     subscription_is_active=subscription_is_active,
-                    balance_kopeks=balance_kopeks
-                )
+                    balance_kopeks=existing_user.balance_kopeks
+                ),
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"Ошибка при показе главного меню существующему пользователю: {e}")
-            await message.answer(f"Добро пожаловать, {user_name}!")
+            await message.answer(f"Добро пожаловать, {existing_user.full_name}!")
         
         await state.clear()
         return
@@ -680,55 +664,51 @@ async def complete_registration(
     
     has_active_subscription = False
     subscription_is_active = False
-    user_name = user.full_name
-    balance_kopeks = user.balance_kopeks
-    user_telegram_id = user.telegram_id
-    user_language = user.language
-    has_had_paid_subscription = user.has_had_paid_subscription
+    
+    menu_text = await get_main_menu_text_simple(user.full_name, texts, db)
     
     try:
         await message.answer(
-            texts.MAIN_MENU.format(
-                user_name=user_name,
-                subscription_status=_get_subscription_status_simple(texts)
-            ),
+            menu_text,
             reply_markup=get_main_menu_keyboard(
-                language=user_language,
-                is_admin=settings.is_admin(user_telegram_id),
-                has_had_paid_subscription=has_had_paid_subscription,
+                language=user.language,
+                is_admin=settings.is_admin(user.telegram_id),
+                has_had_paid_subscription=user.has_had_paid_subscription,
                 has_active_subscription=has_active_subscription,
                 subscription_is_active=subscription_is_active,
-                balance_kopeks=balance_kopeks
-            )
+                balance_kopeks=user.balance_kopeks
+            ),
+            parse_mode="HTML"
         )
-        logger.info(f"✅ Главное меню отправлено для пользователя {user_telegram_id}")
+        logger.info(f"✅ Главное меню отправлено для пользователя {user.telegram_id}")
     except Exception as e:
         logger.error(f"Ошибка при отправке главного меню: {e}")
         try:
-            balance_rubles = balance_kopeks / 100
+            balance_rubles = user.balance_kopeks / 100
             await message.answer(
-                f"Добро пожаловать, {user_name}!\n"
+                f"Добро пожаловать, {user.full_name}!\n"
                 f"Баланс: {balance_rubles:.2f} ₽\n"
                 f"Подписка: Нет активной подписки",
                 reply_markup=get_main_menu_keyboard(
-                    language=user_language,
-                    is_admin=settings.is_admin(user_telegram_id),
-                    has_had_paid_subscription=has_had_paid_subscription,
+                    language=user.language,
+                    is_admin=settings.is_admin(user.telegram_id),
+                    has_had_paid_subscription=user.has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
                     subscription_is_active=subscription_is_active,
-                    balance_kopeks=balance_kopeks
-                )
+                    balance_kopeks=user.balance_kopeks
+                ),
+                parse_mode="HTML"
             )
-            logger.info(f"✅ Fallback главное меню отправлено для пользователя {user_telegram_id}")
+            logger.info(f"✅ Fallback главное меню отправлено для пользователя {user.telegram_id}")
         except Exception as fallback_error:
             logger.error(f"⛔ Критическая ошибка при отправке fallback меню: {fallback_error}")
             try:
-                await message.answer(f"Добро пожаловать, {user_name}! Регистрация завершена.")
-                logger.info(f"✅ Простое приветствие отправлено для пользователя {user_telegram_id}")
+                await message.answer(f"Добро пожаловать, {user.full_name}! Регистрация завершена.")
+                logger.info(f"✅ Простое приветствие отправлено для пользователя {user.telegram_id}")
             except:
                 pass
     
-    logger.info(f"✅ Регистрация завершена для пользователя: {user_telegram_id}")
+    logger.info(f"✅ Регистрация завершена для пользователя: {user.telegram_id}")
 
 
 def _get_subscription_status(user, texts):
@@ -787,6 +767,55 @@ def get_referral_code_keyboard(language: str):
         )]
     ])
 
+async def get_main_menu_text(user, texts, db: AsyncSession):
+    
+    base_text = texts.MAIN_MENU.format(
+        user_name=user.full_name,
+        subscription_status=_get_subscription_status(user, texts)
+    )
+    
+    try:
+        random_message = await get_random_active_message(db)
+        if random_message:
+            if "Выберите действие:" in base_text:
+                parts = base_text.split("Выберите действие:")
+                if len(parts) == 2:
+                    return f"{parts[0]}\n{random_message}\n\nВыберите действие:{parts[1]}"
+            
+            if "Выберите действие:" in base_text:
+                return base_text.replace("Выберите действие:", f"\n{random_message}\n\nВыберите действие:")
+            else:
+                return f"{base_text}\n\n{random_message}"
+                
+    except Exception as e:
+        logger.error(f"Ошибка получения случайного сообщения: {e}")
+    
+    return base_text
+
+async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
+    
+    base_text = texts.MAIN_MENU.format(
+        user_name=user_name,
+        subscription_status=_get_subscription_status_simple(texts)
+    )
+    
+    try:
+        random_message = await get_random_active_message(db)
+        if random_message:
+            if "Выберите действие:" in base_text:
+                parts = base_text.split("Выберите действие:")
+                if len(parts) == 2:
+                    return f"{parts[0]}\n{random_message}\n\nВыберите действие:{parts[1]}"
+            
+            if "Выберите действие:" in base_text:
+                return base_text.replace("Выберите действие:", f"\n{random_message}\n\nВыберите действие:")
+            else:
+                return f"{base_text}\n\n{random_message}"
+                
+    except Exception as e:
+        logger.error(f"Ошибка получения случайного сообщения: {e}")
+    
+    return base_text
 
 def register_handlers(dp: Dispatcher):
     
