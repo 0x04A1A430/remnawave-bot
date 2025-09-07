@@ -432,6 +432,104 @@ async def show_messages_stats(
     )
     await callback.answer()
 
+@admin_required
+@error_handler
+async def edit_user_message_start(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+    db: AsyncSession
+):
+    try:
+        message_id = int(callback.data.split(":")[1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Неверный ID сообщения", show_alert=True)
+        return
+    
+    message = await get_user_message_by_id(db, message_id)
+    
+    if not message:
+        await callback.answer("❌ Сообщение не найдено", show_alert=True)
+        return
+    
+    await callback.message.edit_text(
+        f"✏️ <b>Редактирование сообщения ID {message.id}</b>\n\n"
+        f"<b>Текущий текст:</b>\n"
+        f"<blockquote>{message.message_text}</blockquote>\n\n"
+        f"Введите новый текст сообщения или отправьте /cancel для отмены:",
+        parse_mode="HTML"
+    )
+    
+    await state.set_data({"editing_message_id": message_id})
+    await state.set_state(UserMessageStates.waiting_for_edit_text)
+    await callback.answer()
+
+@admin_required
+@error_handler
+async def process_edit_message_text(
+    message: types.Message,
+    state: FSMContext,
+    db_user: User,
+    db: AsyncSession
+):
+    if message.text == "/cancel":
+        await state.clear()
+        await message.answer(
+            "❌ Редактирование отменено.",
+            reply_markup=get_user_messages_keyboard(db_user.language)
+        )
+        return
+    
+    data = await state.get_data()
+    message_id = data.get("editing_message_id")
+    
+    if not message_id:
+        await state.clear()
+        await message.answer("❌ Ошибка: ID сообщения не найден")
+        return
+    
+    new_text = message.text.strip()
+    
+    if len(new_text) > 4000:
+        await message.answer(
+            "❌ Сообщение слишком длинное. Максимум 4000 символов.\n"
+            "Попробуйте еще раз или отправьте /cancel для отмены."
+        )
+        return
+    
+    try:
+        updated_message = await update_user_message(
+            db=db,
+            message_id=message_id,
+            message_text=new_text
+        )
+        
+        if updated_message:
+            await state.clear()
+            await message.answer(
+                f"✅ <b>Сообщение обновлено!</b>\n\n"
+                f"<b>ID:</b> {updated_message.id}\n"
+                f"<b>Обновлено:</b> {updated_message.updated_at.strftime('%d.%m.%Y %H:%M')}\n\n"
+                f"<b>Новый текст:</b>\n"
+                f"<blockquote>{new_text}</blockquote>",
+                reply_markup=get_user_messages_keyboard(db_user.language),
+                parse_mode="HTML"
+            )
+        else:
+            await state.clear()
+            await message.answer(
+                "❌ Сообщение не найдено или ошибка обновления.",
+                reply_markup=get_user_messages_keyboard(db_user.language)
+            )
+        
+    except Exception as e:
+        logger.error(f"Ошибка обновления сообщения: {e}")
+        await state.clear()
+        await message.answer(
+            "❌ Произошла ошибка при обновлении сообщения.",
+            reply_markup=get_user_messages_keyboard(db_user.language)
+        )
+
 
 def register_handlers(dp: Dispatcher):
     
@@ -448,6 +546,16 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(
         process_new_message_text,
         StateFilter(UserMessageStates.waiting_for_message_text)
+    )
+
+    dp.callback_query.register(
+        edit_user_message_start,
+        F.data.startswith("edit_user_message:")
+    )
+    
+    dp.message.register(
+        process_edit_message_text,
+        StateFilter(UserMessageStates.waiting_for_edit_text)
     )
     
     dp.callback_query.register(
