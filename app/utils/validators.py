@@ -117,13 +117,24 @@ def validate_subscription_period(days: Union[str, int]) -> Optional[int]:
 
 
 def sanitize_html(text: str) -> str:
-    allowed_tags = ['b', 'strong', 'i', 'em', 'u', 'ins', 's', 'strike', 'del', 'code', 'pre']
+    if not text:
+        return text
     
-    for tag in allowed_tags:
-        text = re.sub(f'<{tag}>', f'<{tag}>', text, flags=re.IGNORECASE)
-        text = re.sub(f'</{tag}>', f'</{tag}>', text, flags=re.IGNORECASE)
+    text = html.escape(text)
     
-    text = re.sub(r'<(?!/?(?:' + '|'.join(allowed_tags) + r')\b)[^>]*>', '', text)
+    for tag in ALLOWED_HTML_TAGS:
+        text = re.sub(
+            f'&lt;{tag}(&gt;|\\s[^&]*&gt;)', 
+            lambda m: m.group(0).replace('&lt;', '<').replace('&gt;', '>'),
+            text, 
+            flags=re.IGNORECASE
+        )
+        text = re.sub(
+            f'&lt;/{tag}&gt;', 
+            f'</{tag}>', 
+            text, 
+            flags=re.IGNORECASE
+        )
     
     return text
 
@@ -180,27 +191,6 @@ def validate_html_tags(text: str) -> tuple[bool, str]:
     
     return True, ""
 
-def sanitize_html_advanced(text: str) -> str:
-    if not text:
-        return text
-    
-    text = html.escape(text)
-    
-    for tag in ALLOWED_HTML_TAGS:
-        text = re.sub(
-            f'&lt;{tag}(&gt;|\\s[^&]*&gt;)', 
-            lambda m: m.group(0).replace('&lt;', '<').replace('&gt;', '>'),
-            text, 
-            flags=re.IGNORECASE
-        )
-        text = re.sub(
-            f'&lt;/{tag}&gt;', 
-            f'</{tag}>', 
-            text, 
-            flags=re.IGNORECASE
-        )
-    
-    return text
 
 def get_html_help_text() -> str:
     """Возвращает текст справки по HTML тегам"""
