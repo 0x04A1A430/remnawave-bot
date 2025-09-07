@@ -239,7 +239,7 @@ async def list_user_messages(
         text += (
             f"{status_emoji} <b>ID {msg.id}</b>\n"
             f"<i>{preview}</i>\n"
-            f"<small>Создано: {msg.created_at.strftime('%d.%m.%Y %H:%M')}</small>\n\n"
+            f"📅 {msg.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
         )
     
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -271,7 +271,7 @@ async def list_user_messages(
         )
     )
     
-    if len(messages) == limit: 
+    if len(messages) == limit:  
         nav_buttons.append(
             InlineKeyboardButton(
                 text="Вперед ➡️",
