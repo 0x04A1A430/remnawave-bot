@@ -26,10 +26,10 @@ def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text=texts.ADMIN_STATISTICS, callback_data="admin_statistics"),
-            InlineKeyboardButton(text="🔧 Техработы", callback_data="user_messages_panel")
+            InlineKeyboardButton(text="🔧 Техработы", callback_data="maintenance_panel")
         ],
         [
-            InlineKeyboardButton(text="📢 Сообщения в меню", callback_data="admin_statistics")
+            InlineKeyboardButton(text="📢 Сообщения в меню", callback_data="user_messages_panel")
         ],
         [
             InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
