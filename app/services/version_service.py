@@ -77,11 +77,16 @@ class VersionService:
     def _get_current_version(self) -> str:
         import os
         
-        env_version = os.getenv('VERSION', '').strip()
-        if env_version and not any(char in env_version for char in ['-', 'unknown']):
-            return env_version
+        current = os.getenv('VERSION', '').strip()
         
-        return "latest-stable" 
+        if current:
+            if '-' in current and current.startswith('v'):
+                base_version = current.split('-')[0] 
+                if base_version.count('.') == 2: 
+                    return base_version
+            return current
+        
+        return "UNKNOW"
     
     def set_notification_service(self, notification_service):
         self._notification_service = notification_service
