@@ -138,7 +138,7 @@ def get_subscription_keyboard(
     
     texts = get_texts(language)
     keyboard = []
-    
+
     if has_subscription:
         if subscription and subscription.subscription_url:
             connect_mode = settings.CONNECT_BUTTON_MODE
@@ -166,17 +166,15 @@ def get_subscription_keyboard(
                 keyboard.append([
                     InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
                 ])
-        
-        if not is_trial and subscription and subscription.days_left <= 3:
-            keyboard.append([
-                InlineKeyboardButton(text="⏰ Продлить", callback_data="subscription_extend")
-            ])
-        
+
         if not is_trial:
+            keyboard.append([
+                InlineKeyboardButton(text=texts.MENU_EXTEND_SUBSCRIPTION, callback_data="subscription_extend")
+            ])
             keyboard.append([
                 InlineKeyboardButton(text="💳 Автоплатеж", callback_data="subscription_autopay")
             ])
-        
+
         if is_trial:
             keyboard.append([
                 InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data="subscription_upgrade")
@@ -537,7 +535,7 @@ def get_subscription_expiring_keyboard(subscription_id: int, language: str = "ru
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="⏰ Продлить подписку", 
+                text=texts.MENU_EXTEND_SUBSCRIPTION, 
                 callback_data="subscription_extend"
             )
         ],
