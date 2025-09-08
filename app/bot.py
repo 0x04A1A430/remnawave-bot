@@ -24,7 +24,8 @@ from app.handlers.admin import (
     rules as admin_rules, remnawave as admin_remnawave,
     statistics as admin_statistics, servers as admin_servers,
     maintenance as admin_maintenance,
-    user_messages as admin_user_messages 
+    user_messages as admin_user_messages,
+    updates as admin_updates 
 )
 from app.handlers.stars_payments import register_stars_handlers
 
@@ -68,6 +69,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         storage = MemoryStorage()
     
     dp = Dispatcher(storage=storage)
+    
     dp.message.middleware(LoggingMiddleware())
     dp.callback_query.middleware(LoggingMiddleware())
     dp.message.middleware(AuthMiddleware())
@@ -79,6 +81,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.callback_query.middleware(ThrottlingMiddleware())
     dp.message.middleware(SubscriptionStatusMiddleware())
     dp.callback_query.middleware(SubscriptionStatusMiddleware())
+    
     start.register_handlers(dp)
     menu.register_handlers(dp)
     subscription.register_handlers(dp)
@@ -86,6 +89,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     promocode.register_handlers(dp)
     referral.register_handlers(dp)
     support.register_handlers(dp)
+    
     admin_main.register_handlers(dp)
     admin_users.register_handlers(dp)
     admin_subscriptions.register_handlers(dp)
@@ -98,12 +102,13 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_remnawave.register_handlers(dp)
     admin_statistics.register_handlers(dp)
     admin_maintenance.register_handlers(dp)
-    admin_user_messages.register_handlers(dp) 
+    admin_user_messages.register_handlers(dp)
+    admin_updates.register_handlers(dp)
 
     common.register_handlers(dp)
     
     register_stars_handlers(dp)
-    logger.info("🌟 Зарегистрированы обработчики Telegram Stars платежей")
+    logger.info("⭐ Зарегистрированы обработчики Telegram Stars платежей")
     
     try:
         await maintenance_service.start_monitoring()
