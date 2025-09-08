@@ -19,8 +19,19 @@ def get_rules_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     ])
 
 
+def get_post_registration_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="🚀 Подключиться бесплатно 🚀", callback_data="menu_trial"
+            )
+        ],
+        [InlineKeyboardButton(text="Пропустить ➡️", callback_data="back_to_menu")],
+    ])
+
+
 def get_main_menu_keyboard(
-    language: str = "ru", 
+    language: str = "ru",
     is_admin: bool = False,
     has_had_paid_subscription: bool = False,
     has_active_subscription: bool = False,
