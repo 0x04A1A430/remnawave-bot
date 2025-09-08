@@ -390,6 +390,10 @@ WEBHOOK_PATH=/webhook
 APP_CONFIG_PATH=app-config.json
 ENABLE_DEEP_LINKS=true
 APP_CONFIG_CACHE_TTL=3600
+
+VERSION_CHECK_ENABLED=true
+VERSION_CHECK_REPO=fr1ngg/remnawave-bedolaga-telegram-bot
+VERSION_CHECK_INTERVAL_HOURS=1
 ```
 
 </details>
