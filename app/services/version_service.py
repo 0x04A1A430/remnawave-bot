@@ -45,8 +45,8 @@ class VersionInfo:
             return "Без описания"
         
         description = self.body.strip()
-        if len(description) > 150:
-            description = description[:147] + "..."
+        if len(description) > 350:
+            description = description[:347] + "..."
         
         return description
 
