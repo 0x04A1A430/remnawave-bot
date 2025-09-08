@@ -34,8 +34,7 @@ from app.keyboards.inline import (
     get_manage_countries_keyboard,
     get_device_selection_keyboard, get_connection_guide_keyboard,
     get_app_selection_keyboard, get_specific_app_keyboard,
-    get_subscription_settings_keyboard, get_extend_subscription_keyboard_with_prices,
-    get_insufficient_balance_keyboard
+    get_subscription_settings_keyboard, get_insufficient_balance_keyboard
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
@@ -1231,30 +1230,33 @@ async def confirm_extend_subscription(
 
 def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=f"📅 30 дней - {texts.format_price(prices[30])}", 
-                callback_data="extend_period_30"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"📅 90 дней - {texts.format_price(prices[90])}", 
-                callback_data="extend_period_90"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"📅 180 дней - {texts.format_price(prices[180])}", 
-                callback_data="extend_period_180"
-            )
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
-        ]
+    keyboard = []
+
+    available_periods = settings.get_available_renewal_periods()
+
+    period_display = {
+        14: "14 дней",
+        30: "30 дней",
+        60: "60 дней",
+        90: "90 дней",
+        180: "180 дней",
+        360: "360 дней",
+    }
+
+    for days in available_periods:
+        if days in prices and days in period_display:
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"📅 {period_display[days]} - {texts.format_price(prices[days])}",
+                    callback_data=f"extend_period_{days}"
+                )
+            ])
+
+    keyboard.append([
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
     ])
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 async def confirm_reset_traffic(
