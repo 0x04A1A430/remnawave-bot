@@ -26,10 +26,8 @@ class VersionInfo:
     
     @property
     def version_obj(self):
-        """Объект версии для сравнения"""
         try:
             clean_ver = self.clean_version
-            # Обработка dev версий
             if 'dev' in clean_ver:
                 base_ver = clean_ver.split('-dev')[0]
                 return version.parse(f"{base_ver}.dev")
@@ -43,11 +41,9 @@ class VersionInfo:
     
     @property
     def short_description(self) -> str:
-        """Краткое описание релиза"""
         if not self.body:
             return "Без описания"
         
-        # Берем первые 150 символов
         description = self.body.strip()
         if len(description) > 150:
             description = description[:147] + "..."
@@ -61,35 +57,31 @@ class VersionService:
         self.repo = getattr(settings, 'VERSION_CHECK_REPO', 'fr1ngg/remnawave-bedolaga-telegram-bot')
         self.enabled = getattr(settings, 'VERSION_CHECK_ENABLED', True)
         self.current_version = self._get_current_version()
-        self.cache_ttl = 3600  # 1 час кеш
+        self.cache_ttl = 3600  
         self._cache: Dict = {}
         self._last_check: Optional[datetime] = None
         self._notification_service = None
     
-    def _get_current_version(self) -> str:
-        # Сначала пробуем получить из env переменных (Docker build args)
-        import os
-        current = os.getenv('VERSION', '').strip()
-        
-        if current:
-            return current
-            
-        # Пробуем получить из git (для dev окружения)
+    async def get_latest_stable_version(self) -> str:
         try:
-            import subprocess
-            result = subprocess.run(
-                ['git', 'describe', '--tags', '--always'], 
-                capture_output=True, 
-                text=True, 
-                timeout=5
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
+            url = f"https://api.github.com/repos/{self.repo}/releases/latest"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return data['tag_name']
         except Exception:
             pass
+        return "UNKNOW"
+    
+    def _get_current_version(self) -> str:
+        import os
         
-        # Fallback версия
-        return "v2.2.3-unknown"
+        env_version = os.getenv('VERSION', '').strip()
+        if env_version and not any(char in env_version for char in ['-', 'unknown']):
+            return env_version
+        
+        return "latest-stable" 
     
     def set_notification_service(self, notification_service):
         self._notification_service = notification_service
@@ -111,7 +103,6 @@ class VersionService:
                 if release_ver > current_ver:
                     newer_releases.append(release)
             
-            # Сортируем по версии (новые сверху)
             newer_releases.sort(key=lambda x: x.version_obj, reverse=True)
             
             has_updates = len(newer_releases) > 0
@@ -140,7 +131,7 @@ class VersionService:
                         data = await response.json()
                         releases = []
                         
-                        for release_data in data[:20]:  # Берем последние 20 релизов
+                        for release_data in data[:20]: 
                             release = VersionInfo(
                                 tag_name=release_data['tag_name'],
                                 published_at=release_data['published_at'],
@@ -169,7 +160,6 @@ class VersionService:
     def _parse_version(self, version_str: str):
         try:
             clean_ver = re.sub(r'^v', '', version_str)
-            # Обработка dev версий
             if 'dev' in clean_ver:
                 base_ver = clean_ver.split('-dev')[0]
                 return version.parse(f"{base_ver}.dev")
@@ -184,21 +174,18 @@ class VersionService:
             return
         
         try:
-            # Проверяем, не отправляли ли уже уведомление о последней версии
             latest_version = newer_releases[0]
             cache_key = f"notified_{latest_version.tag_name}"
             
             if self._cache.get(cache_key):
                 return
             
-            # Формируем сообщение
             await self._notification_service.send_version_update_notification(
                 current_version=self.current_version,
                 latest_version=latest_version,
                 total_updates=len(newer_releases)
             )
             
-            # Помечаем, что уведомление отправлено
             self._cache[cache_key] = True
             
         except Exception as e:
@@ -209,7 +196,6 @@ class VersionService:
             has_updates, newer_releases = await self.check_for_updates()
             all_releases = await self._fetch_releases()
             
-            # Находим текущую версию в списке релизов
             current_release = None
             current_ver = self._parse_version(self.current_version)
             
@@ -222,7 +208,7 @@ class VersionService:
                 'current_version': self.current_version,
                 'current_release': current_release,
                 'has_updates': has_updates,
-                'newer_releases': newer_releases[:5],  # Показываем только 5 последних
+                'newer_releases': newer_releases[:5],
                 'total_newer': len(newer_releases),
                 'last_check': self._last_check,
                 'repo_url': f"https://github.com/{self.repo}"
@@ -251,7 +237,7 @@ class VersionService:
         
         while True:
             try:
-                await asyncio.sleep(3600)  # Проверяем каждый час
+                await asyncio.sleep(3600) 
                 await self.check_for_updates()
                 
             except asyncio.CancelledError:
@@ -259,7 +245,7 @@ class VersionService:
                 break
             except Exception as e:
                 logger.error(f"Ошибка в периодической проверке обновлений: {e}")
-                await asyncio.sleep(300)  # При ошибке ждем 5 минут
+                await asyncio.sleep(300) 
     
     def format_version_display(self, version_info: VersionInfo) -> str:
         status_icon = ""
@@ -273,5 +259,4 @@ class VersionService:
         return f"{status_icon} {version_info.tag_name}"
 
 
-# Глобальный экземпляр сервиса
 version_service = VersionService()
