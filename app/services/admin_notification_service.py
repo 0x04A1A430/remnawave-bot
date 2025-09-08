@@ -130,6 +130,78 @@ class AdminNotificationService:
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о покупке: {e}")
             return False
+
+    async def send_version_update_notification(
+        self,
+        current_version: str,
+        latest_version, 
+        total_updates: int
+    ) -> bool:
+        """Отправляет уведомление о новых обновлениях"""
+        if not self._is_enabled():
+            return False
+        
+        try:
+            if latest_version.prerelease:
+                update_type = "🧪 ПРЕДВАРИТЕЛЬНАЯ ВЕРСИЯ"
+                type_icon = "🧪"
+            elif latest_version.is_dev:
+                update_type = "🔧 DEV ВЕРСИЯ"
+                type_icon = "🔧"
+            else:
+                update_type = "📦 НОВАЯ ВЕРСИЯ"
+                type_icon = "📦"
+            
+            description = latest_version.short_description
+            if len(description) > 200:
+                description = description[:197] + "..."
+            
+            message = f"""{type_icon} <b>{update_type} ДОСТУПНА</b>
+    
+    📦 <b>Текущая версия:</b> <code>{current_version}</code>
+    🆕 <b>Новая версия:</b> <code>{latest_version.tag_name}</code>
+    📅 <b>Дата релиза:</b> {latest_version.formatted_date}
+    
+    📝 <b>Описание:</b>
+    {description}
+    
+    🔢 <b>Всего доступно обновлений:</b> {total_updates}
+    🔗 <b>Репозиторий:</b> https://github.com/{getattr(self, 'repo', 'fr1ngg/remnawave-bedolaga-telegram-bot')}
+    
+    ℹ️ Для обновления перезапустите контейнер с новым тегом или обновите код из репозитория.
+    
+    ⚙️ <i>Автоматическая проверка обновлений • {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
+            
+            return await self._send_message(message)
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления об обновлении: {e}")
+            return False
+    
+    async def send_version_check_error_notification(
+        self,
+        error_message: str,
+        current_version: str
+    ) -> bool:
+        if not self._is_enabled():
+            return False
+        
+        try:
+            message = f"""⚠️ <b>ОШИБКА ПРОВЕРКИ ОБНОВЛЕНИЙ</b>
+    
+    📦 <b>Текущая версия:</b> <code>{current_version}</code>
+    ❌ <b>Ошибка:</b> {error_message}
+    
+    🔄 Следующая попытка через час.
+    ⚙️ Проверьте доступность GitHub API и настройки сети.
+    
+    ⚙️ <i>Система автоматических обновлений • {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
+            
+            return await self._send_message(message)
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления об ошибке проверки версий: {e}")
+            return False
     
     async def send_balance_topup_notification(
         self,
