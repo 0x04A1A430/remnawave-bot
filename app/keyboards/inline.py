@@ -5,6 +5,7 @@ from datetime import datetime
 
 from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
 from app.localization.texts import get_texts
+from app.utils.pricing_utils import format_period_description
 import logging
 
 logger = logging.getLogger(__name__)
@@ -1056,31 +1057,23 @@ def get_specific_app_keyboard(
 def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
-    
+
     available_periods = settings.get_available_renewal_periods()
-    
-    period_display = {
-        14: "14 дней",
-        30: "30 дней", 
-        60: "60 дней",
-        90: "90 дней",
-        180: "180 дней",
-        360: "360 дней"
-    }
-    
+
     for days in available_periods:
-        if days in prices and days in period_display:
+        if days in prices:
+            period_display = format_period_description(days, language)
             keyboard.append([
                 InlineKeyboardButton(
-                    text=f"📅 {period_display[days]} - {texts.format_price(prices[days])}", 
+                    text=f"📅 {period_display} - {texts.format_price(prices[days])}",
                     callback_data=f"extend_period_{days}"
                 )
             ])
-    
+
     keyboard.append([
         InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
     ])
-    
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_cryptobot_payment_keyboard(
