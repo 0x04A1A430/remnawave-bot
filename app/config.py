@@ -141,6 +141,10 @@ class Settings(BaseSettings):
     APP_CONFIG_PATH: str = "app-config.json"
     ENABLE_DEEP_LINKS: bool = True
     APP_CONFIG_CACHE_TTL: int = 3600 
+
+    VERSION_CHECK_ENABLED: bool = True
+    VERSION_CHECK_REPO: str = "fr1ngg/remnawave-bedolaga-telegram-bot"
+    VERSION_CHECK_INTERVAL_HOURS: int = 1
     
     @field_validator('LOG_FILE', mode='before')
     @classmethod
@@ -427,6 +431,15 @@ class Settings(BaseSettings):
         except Exception as e:
             logger.info(f"ERROR PARSING CONFIG: {e}")
             return self._get_fallback_traffic_packages()
+
+    def is_version_check_enabled(self) -> bool:
+        return self.VERSION_CHECK_ENABLED
+    
+    def get_version_check_repo(self) -> str:
+        return self.VERSION_CHECK_REPO
+    
+    def get_version_check_interval(self) -> int:
+        return self.VERSION_CHECK_INTERVAL_HOURS
     
     def _get_fallback_traffic_packages(self) -> List[Dict]:
         try:
