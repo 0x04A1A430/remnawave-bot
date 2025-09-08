@@ -13,6 +13,7 @@ from app.database.database import init_db
 from app.services.monitoring_service import monitoring_service
 from app.services.maintenance_service import maintenance_service
 from app.services.payment_service import PaymentService
+from app.services.version_service import version_service
 from app.external.webhook_server import WebhookServer
 from app.external.yookassa_webhook import start_yookassa_webhook_server
 from app.database.universal_migration import run_universal_migration
@@ -49,6 +50,7 @@ async def main():
     yookassa_server_task = None
     monitoring_task = None
     maintenance_task = None
+    version_check_task = None
     polling_task = None
     
     try:
@@ -77,7 +79,15 @@ async def main():
         bot, dp = await setup_bot()
         
         monitoring_service.bot = bot
-        maintenance_service.set_bot(bot) 
+        maintenance_service.set_bot(bot)
+        
+        from app.services.admin_notification_service import AdminNotificationService
+        admin_notification_service = AdminNotificationService(bot)
+        version_service.bot = bot
+        version_service.set_notification_service(admin_notification_service)
+        logger.info(f"🔄 Сервис версий настроен для репозитория: {version_service.repo}")
+        logger.info(f"📦 Текущая версия: {version_service.current_version}")
+        
         logger.info("🔗 Бот подключен к сервисам мониторинга и техработ")
         
         payment_service = PaymentService(bot)
@@ -108,7 +118,13 @@ async def main():
             logger.info("🔧 Служба техработ уже запущена")
             maintenance_task = None
         
-        logger.info("🔄 Запуск polling...")
+        if settings.is_version_check_enabled():
+            logger.info("🔄 Запуск сервиса проверки версий...")
+            version_check_task = asyncio.create_task(version_service.start_periodic_check())
+        else:
+            logger.info("ℹ️ Проверка версий отключена")
+        
+        logger.info("📄 Запуск polling...")
         polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=True))
         
         logger.info("=" * 50)
@@ -117,6 +133,10 @@ async def main():
             logger.info(f"   Tribute: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.TRIBUTE_WEBHOOK_PATH}")
         if settings.is_yookassa_enabled():
             logger.info(f"   YooKassa: {settings.WEBHOOK_URL}:{settings.YOOKASSA_WEBHOOK_PORT}{settings.YOOKASSA_WEBHOOK_PATH}")
+        logger.info("🔄 Активные фоновые сервисы:")
+        logger.info(f"   Мониторинг: {'Включен' if monitoring_task else 'Отключен'}")
+        logger.info(f"   Техработы: {'Включен' if maintenance_task else 'Отключен'}")
+        logger.info(f"   Проверка версий: {'Включен' if version_check_task else 'Отключен'}")
         logger.info("=" * 50)
         
         try:
@@ -143,6 +163,14 @@ async def main():
                     if exception:
                         logger.error(f"Служба техработ завершилась с ошибкой: {exception}")
                         maintenance_task = asyncio.create_task(maintenance_service.start_monitoring())
+                
+                if version_check_task and version_check_task.done():
+                    exception = version_check_task.exception()
+                    if exception:
+                        logger.error(f"Сервис проверки версий завершился с ошибкой: {exception}")
+                        if settings.is_version_check_enabled():
+                            logger.info("🔄 Перезапуск сервиса проверки версий...")
+                            version_check_task = asyncio.create_task(version_service.start_periodic_check())
                         
                 if polling_task.done():
                     exception = polling_task.exception()
@@ -183,6 +211,14 @@ async def main():
             maintenance_task.cancel()
             try:
                 await maintenance_task
+            except asyncio.CancelledError:
+                pass
+        
+        if version_check_task and not version_check_task.done():
+            logger.info("ℹ️ Остановка сервиса проверки версий...")
+            version_check_task.cancel()
+            try:
+                await version_check_task
             except asyncio.CancelledError:
                 pass
         
