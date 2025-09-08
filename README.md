@@ -1012,7 +1012,7 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 <tr>
 <td>🥇</td>
 <td><strong>@pilot_737800</strong></td>
-<td>₽2,750</td>
+<td>₽4,750</td>
 <td>За веру в проект с самого начала</td>
 </tr>
 
