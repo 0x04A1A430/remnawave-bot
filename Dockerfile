@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-ARG VERSION="unknown"
+ARG VERSION="2.2.3"
 ARG BUILD_DATE
 ARG VCS_REF
 
