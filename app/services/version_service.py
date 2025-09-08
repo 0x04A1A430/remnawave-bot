@@ -168,7 +168,7 @@ class VersionService:
             if 'dev' in clean_ver:
                 base_ver = clean_ver.split('-dev')[0]
                 return version.parse(f"{base_ver}.dev")
-            if 'unknown' in clean_ver:
+            if 'unknow' in clean_ver.lower(): 
                 return version.parse("0.0.0")
             return version.parse(clean_ver)
         except Exception:
