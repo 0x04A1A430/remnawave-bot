@@ -34,8 +34,8 @@ from app.keyboards.inline import (
     get_manage_countries_keyboard,
     get_device_selection_keyboard, get_connection_guide_keyboard,
     get_app_selection_keyboard, get_specific_app_keyboard,
-    get_subscription_settings_keyboard, get_extend_subscription_keyboard_with_prices,
-    get_insufficient_balance_keyboard
+    get_subscription_settings_keyboard, get_insufficient_balance_keyboard,
+    get_extend_subscription_keyboard_with_prices,
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
@@ -45,7 +45,8 @@ from app.utils.pricing_utils import (
     calculate_months_from_days,
     get_remaining_months,
     calculate_prorated_price,
-    validate_pricing_calculation
+    validate_pricing_calculation,
+    format_period_description,
 )
 
 logger = logging.getLogger(__name__)
@@ -808,17 +809,11 @@ async def handle_extend_subscription(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import calculate_months_from_days, format_period_description
-    
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
     if not subscription or subscription.is_trial:
         await callback.answer("⚠ Продление доступно только для платных подписок", show_alert=True)
-        return
-    
-    if subscription.days_left > 3:
-        await callback.answer("⚠ Продление доступно за 3 дня до окончания подписки", show_alert=True)
         return
     
     subscription_service = SubscriptionService()
@@ -1227,34 +1222,6 @@ async def confirm_extend_subscription(
         )
     
     await callback.answer()
-
-
-def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=f"📅 30 дней - {texts.format_price(prices[30])}", 
-                callback_data="extend_period_30"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"📅 90 дней - {texts.format_price(prices[90])}", 
-                callback_data="extend_period_90"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"📅 180 дней - {texts.format_price(prices[180])}", 
-                callback_data="extend_period_180"
-            )
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
-        ]
-    ])
 
 
 async def confirm_reset_traffic(

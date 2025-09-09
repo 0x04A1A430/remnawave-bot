@@ -12,7 +12,7 @@ from app.database.crud.user import (
 )
 from app.database.models import UserStatus
 from app.keyboards.inline import (
-    get_rules_keyboard, get_main_menu_keyboard
+    get_rules_keyboard, get_main_menu_keyboard, get_post_registration_keyboard
 )
 from app.localization.texts import get_texts
 from app.services.referral_service import process_referral_registration
@@ -498,52 +498,28 @@ async def complete_registration_from_callback(
             logger.error(f"Ошибка при обработке реферальной регистрации: {e}")
     
     await state.clear()
-    
-    has_active_subscription = False 
-    subscription_is_active = False
-    
-    menu_text = await get_main_menu_text_simple(user.full_name, texts, db)
-    
+
+    user_name = callback.from_user.first_name or callback.from_user.username or "друг"
+
+    offer_text = (
+        f"<b>Привет, {user.full_name}!</b>\n\n"
+        f"🎁 <b>{settings.TRIAL_DURATION_DAYS} дней VPN бесплатно!</b>\n"
+        "Подключайтесь за минуту и забудьте о блокировках.\n\n"
+        "✅ До <b>1 Гбит/с</b> скорость\n"
+        "✅ Умный VPN — можно не отключать для большинства российских сервисов\n"
+        "✅ Современные протоколы — максимум защиты и анонимности\n\n"
+        f"👉 Всего <b>{int(settings.PRICE_30_DAYS/100)}₽/мес за 1 устройство</b>\n\n"
+        "👇 Жмите кнопку и подключайтесь!"
+    )
+
     try:
         await callback.message.answer(
-            menu_text,
-            reply_markup=get_main_menu_keyboard(
-                language=user.language,
-                is_admin=settings.is_admin(user.telegram_id),
-                has_had_paid_subscription=user.has_had_paid_subscription,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=user.balance_kopeks
-            ),
-            parse_mode="HTML"
+            offer_text,
+            reply_markup=get_post_registration_keyboard(),
         )
-        logger.info(f"✅ Главное меню отправлено для пользователя {user.telegram_id}")
     except Exception as e:
-        logger.error(f"Ошибка при отправке главного меню: {e}")
-        try:
-            balance_rubles = user.balance_kopeks // 100
-            await callback.message.answer(
-                f"Добро пожаловать, {user.full_name}!\n"
-                f"Баланс: {balance_rubles} ₽\n"
-                f"Подписка: Нет активной подписки",
-                reply_markup=get_main_menu_keyboard(
-                    language=user.language,
-                    is_admin=settings.is_admin(user.telegram_id),
-                    has_had_paid_subscription=user.has_had_paid_subscription,
-                    has_active_subscription=has_active_subscription,
-                    subscription_is_active=subscription_is_active,
-                    balance_kopeks=user.balance_kopeks
-                )
-            )
-            logger.info(f"✅ Fallback главное меню отправлено для пользователя {user.telegram_id}")
-        except Exception as fallback_error:
-            logger.error(f"⛔ Критическая ошибка при отправке fallback меню: {fallback_error}")
-            try:
-                await callback.message.answer(f"Добро пожаловать, {user.full_name}! Регистрация завершена.")
-                logger.info(f"✅ Простое приветствие отправлено для пользователя {user.telegram_id}")
-            except Exception as final_error:
-                logger.error(f"⛔ Критическая ошибка при отправке простого сообщения: {final_error}")
-    
+        logger.error(f"Ошибка при отправке предложения триала: {e}")
+
     logger.info(f"✅ Регистрация завершена для пользователя: {user.telegram_id}")
 
 async def complete_registration(
@@ -661,53 +637,27 @@ async def complete_registration(
             logger.error(f"Ошибка при обработке реферальной регистрации: {e}")
     
     await state.clear()
-    
-    has_active_subscription = False
-    subscription_is_active = False
-    
-    menu_text = await get_main_menu_text_simple(user.full_name, texts, db)
-    
+
+    user_name = message.from_user.first_name or message.from_user.username or "друг"
+    offer_text = (
+        f"Привет, {user_name}!\n\n"
+        f"Подключите VPN бесплатно! Дарим вам {settings.TRIAL_DURATION_DAYS} дней!\n\n"
+        "Наши преимущества:\n"
+        " • Высокая скорость соединения — до 1гб/с\n"
+        " • Умный VPN — можно не отключать для большинства российских сервисов\n"
+        " • Самые современные протоколы — высокая защита от блокировки\n\n"
+        "Стоимость 100₽/мес за 1 устройство\n\n"
+        "👇Жмите на кнопку👇 чтобы подключить в 1 клик"
+    )
+
     try:
         await message.answer(
-            menu_text,
-            reply_markup=get_main_menu_keyboard(
-                language=user.language,
-                is_admin=settings.is_admin(user.telegram_id),
-                has_had_paid_subscription=user.has_had_paid_subscription,
-                has_active_subscription=has_active_subscription,
-                subscription_is_active=subscription_is_active,
-                balance_kopeks=user.balance_kopeks
-            ),
-            parse_mode="HTML"
+            offer_text,
+            reply_markup=get_post_registration_keyboard(),
         )
-        logger.info(f"✅ Главное меню отправлено для пользователя {user.telegram_id}")
     except Exception as e:
-        logger.error(f"Ошибка при отправке главного меню: {e}")
-        try:
-            balance_rubles = user.balance_kopeks // 100
-            await message.answer(
-                f"Добро пожаловать, {user.full_name}!\n"
-                f"Баланс: {balance_rubles} ₽\n"
-                f"Подписка: Нет активной подписки",
-                reply_markup=get_main_menu_keyboard(
-                    language=user.language,
-                    is_admin=settings.is_admin(user.telegram_id),
-                    has_had_paid_subscription=user.has_had_paid_subscription,
-                    has_active_subscription=has_active_subscription,
-                    subscription_is_active=subscription_is_active,
-                    balance_kopeks=user.balance_kopeks
-                ),
-                parse_mode="HTML"
-            )
-            logger.info(f"✅ Fallback главное меню отправлено для пользователя {user.telegram_id}")
-        except Exception as fallback_error:
-            logger.error(f"⛔ Критическая ошибка при отправке fallback меню: {fallback_error}")
-            try:
-                await message.answer(f"Добро пожаловать, {user.full_name}! Регистрация завершена.")
-                logger.info(f"✅ Простое приветствие отправлено для пользователя {user.telegram_id}")
-            except:
-                pass
-    
+        logger.error(f"Ошибка при отправке предложения триала: {e}")
+
     logger.info(f"✅ Регистрация завершена для пользователя: {user.telegram_id}")
 
 

@@ -55,7 +55,7 @@ async def process_referral_registration(
                 f"Вы перешли по реферальной ссылке пользователя <b>{referrer.full_name}</b>!\n\n"
                 f"💰 При первом пополнении от {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)} "
                 f"вы получите бонус {settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}!\n\n"
-                f"🎁 Ваш реферер также получит награду за ваше первое пополнение."
+                # f"🎁 Ваш реферер также получит награду за ваше первое пополнение."
             )
             await send_referral_notification(bot, new_user.telegram_id, referral_notification)
             

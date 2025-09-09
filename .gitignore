@@ -2,6 +2,7 @@
 *
 
 # Исключения: разрешаем только нужные файлы
+!.dockerignore
 !.env.example
 !Dockerfile
 !app-config.json
