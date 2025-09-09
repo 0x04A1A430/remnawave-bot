@@ -45,6 +45,7 @@ class PaymentMethod(Enum):
     TELEGRAM_STARS = "telegram_stars"
     TRIBUTE = "tribute"
     YOOKASSA = "yookassa" 
+    CRYPTOBOT = "cryptobot"
     MANUAL = "manual"  
 
 class YooKassaPayment(Base):
@@ -94,6 +95,55 @@ class YooKassaPayment(Base):
     
     def __repr__(self):
         return f"<YooKassaPayment(id={self.id}, yookassa_id={self.yookassa_payment_id}, amount={self.amount_rubles}₽, status={self.status})>"
+
+class CryptoBotPayment(Base):
+    __tablename__ = "cryptobot_payments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    invoice_id = Column(String(255), unique=True, nullable=False, index=True)
+    amount = Column(String(50), nullable=False)
+    asset = Column(String(10), nullable=False)
+    
+    status = Column(String(50), nullable=False)
+    description = Column(Text, nullable=True)
+    payload = Column(Text, nullable=True)
+    
+    bot_invoice_url = Column(Text, nullable=True)
+    mini_app_invoice_url = Column(Text, nullable=True)
+    web_app_invoice_url = Column(Text, nullable=True)
+    
+    paid_at = Column(DateTime, nullable=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    user = relationship("User", backref="cryptobot_payments")
+    transaction = relationship("Transaction", backref="cryptobot_payment")
+    
+    @property
+    def amount_float(self) -> float:
+        try:
+            return float(self.amount)
+        except (ValueError, TypeError):
+            return 0.0
+    
+    @property
+    def is_paid(self) -> bool:
+        return self.status == "paid"
+    
+    @property
+    def is_pending(self) -> bool:
+        return self.status == "active"
+    
+    @property
+    def is_expired(self) -> bool:
+        return self.status == "expired"
+    
+    def __repr__(self):
+        return f"<CryptoBotPayment(id={self.id}, invoice_id={self.invoice_id}, amount={self.amount} {self.asset}, status={self.status})>"
 
 
 class User(Base):

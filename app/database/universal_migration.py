@@ -74,11 +74,11 @@ async def check_column_exists(table_name: str, column_name: str) -> bool:
         logger.error(f"Ошибка проверки существования колонки {column_name}: {e}")
         return False
 
-async def create_yookassa_payments_table():
-    
-    table_exists = await check_table_exists('yookassa_payments')
+async def create_cryptobot_payments_table():
+    """Создание таблицы cryptobot_payments"""
+    table_exists = await check_table_exists('cryptobot_payments')
     if table_exists:
-        logger.info("Таблица yookassa_payments уже существует")
+        logger.info("Таблица cryptobot_payments уже существует")
         return True
     
     try:
@@ -87,106 +87,94 @@ async def create_yookassa_payments_table():
             
             if db_type == 'sqlite':
                 create_sql = """
-                CREATE TABLE yookassa_payments (
+                CREATE TABLE cryptobot_payments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
-                    yookassa_payment_id VARCHAR(255) UNIQUE NOT NULL,
-                    amount_kopeks INTEGER NOT NULL,
-                    currency VARCHAR(3) DEFAULT 'RUB' NOT NULL,
-                    description TEXT NULL,
+                    invoice_id VARCHAR(255) UNIQUE NOT NULL,
+                    amount VARCHAR(50) NOT NULL,
+                    asset VARCHAR(10) NOT NULL,
                     status VARCHAR(50) NOT NULL,
-                    is_paid BOOLEAN DEFAULT 0,
-                    is_captured BOOLEAN DEFAULT 0,
-                    confirmation_url TEXT NULL,
-                    metadata_json TEXT NULL,
+                    description TEXT NULL,
+                    payload TEXT NULL,
+                    bot_invoice_url TEXT NULL,
+                    mini_app_invoice_url TEXT NULL,
+                    web_app_invoice_url TEXT NULL,
+                    paid_at DATETIME NULL,
                     transaction_id INTEGER NULL,
-                    payment_method_type VARCHAR(50) NULL,
-                    refundable BOOLEAN DEFAULT 0,
-                    test_mode BOOLEAN DEFAULT 0,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    yookassa_created_at DATETIME NULL,
-                    captured_at DATETIME NULL,
                     FOREIGN KEY (user_id) REFERENCES users(id),
                     FOREIGN KEY (transaction_id) REFERENCES transactions(id)
                 );
                 
-                CREATE INDEX idx_yookassa_payments_user_id ON yookassa_payments(user_id);
-                CREATE INDEX idx_yookassa_payments_yookassa_id ON yookassa_payments(yookassa_payment_id);
-                CREATE INDEX idx_yookassa_payments_status ON yookassa_payments(status);
+                CREATE INDEX idx_cryptobot_payments_user_id ON cryptobot_payments(user_id);
+                CREATE INDEX idx_cryptobot_payments_invoice_id ON cryptobot_payments(invoice_id);
+                CREATE INDEX idx_cryptobot_payments_status ON cryptobot_payments(status);
                 """
                 
             elif db_type == 'postgresql':
                 create_sql = """
-                CREATE TABLE yookassa_payments (
+                CREATE TABLE cryptobot_payments (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
-                    yookassa_payment_id VARCHAR(255) UNIQUE NOT NULL,
-                    amount_kopeks INTEGER NOT NULL,
-                    currency VARCHAR(3) DEFAULT 'RUB' NOT NULL,
-                    description TEXT NULL,
+                    invoice_id VARCHAR(255) UNIQUE NOT NULL,
+                    amount VARCHAR(50) NOT NULL,
+                    asset VARCHAR(10) NOT NULL,
                     status VARCHAR(50) NOT NULL,
-                    is_paid BOOLEAN DEFAULT FALSE,
-                    is_captured BOOLEAN DEFAULT FALSE,
-                    confirmation_url TEXT NULL,
-                    metadata_json JSONB NULL,
+                    description TEXT NULL,
+                    payload TEXT NULL,
+                    bot_invoice_url TEXT NULL,
+                    mini_app_invoice_url TEXT NULL,
+                    web_app_invoice_url TEXT NULL,
+                    paid_at TIMESTAMP NULL,
                     transaction_id INTEGER NULL,
-                    payment_method_type VARCHAR(50) NULL,
-                    refundable BOOLEAN DEFAULT FALSE,
-                    test_mode BOOLEAN DEFAULT FALSE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    yookassa_created_at TIMESTAMP NULL,
-                    captured_at TIMESTAMP NULL,
                     FOREIGN KEY (user_id) REFERENCES users(id),
                     FOREIGN KEY (transaction_id) REFERENCES transactions(id)
                 );
                 
-                CREATE INDEX idx_yookassa_payments_user_id ON yookassa_payments(user_id);
-                CREATE INDEX idx_yookassa_payments_yookassa_id ON yookassa_payments(yookassa_payment_id);
-                CREATE INDEX idx_yookassa_payments_status ON yookassa_payments(status);
+                CREATE INDEX idx_cryptobot_payments_user_id ON cryptobot_payments(user_id);
+                CREATE INDEX idx_cryptobot_payments_invoice_id ON cryptobot_payments(invoice_id);
+                CREATE INDEX idx_cryptobot_payments_status ON cryptobot_payments(status);
                 """
                 
             elif db_type == 'mysql':
                 create_sql = """
-                CREATE TABLE yookassa_payments (
+                CREATE TABLE cryptobot_payments (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     user_id INT NOT NULL,
-                    yookassa_payment_id VARCHAR(255) UNIQUE NOT NULL,
-                    amount_kopeks INT NOT NULL,
-                    currency VARCHAR(3) DEFAULT 'RUB' NOT NULL,
-                    description TEXT NULL,
+                    invoice_id VARCHAR(255) UNIQUE NOT NULL,
+                    amount VARCHAR(50) NOT NULL,
+                    asset VARCHAR(10) NOT NULL,
                     status VARCHAR(50) NOT NULL,
-                    is_paid BOOLEAN DEFAULT FALSE,
-                    is_captured BOOLEAN DEFAULT FALSE,
-                    confirmation_url TEXT NULL,
-                    metadata_json JSON NULL,
+                    description TEXT NULL,
+                    payload TEXT NULL,
+                    bot_invoice_url TEXT NULL,
+                    mini_app_invoice_url TEXT NULL,
+                    web_app_invoice_url TEXT NULL,
+                    paid_at DATETIME NULL,
                     transaction_id INT NULL,
-                    payment_method_type VARCHAR(50) NULL,
-                    refundable BOOLEAN DEFAULT FALSE,
-                    test_mode BOOLEAN DEFAULT FALSE,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    yookassa_created_at DATETIME NULL,
-                    captured_at DATETIME NULL,
                     FOREIGN KEY (user_id) REFERENCES users(id),
                     FOREIGN KEY (transaction_id) REFERENCES transactions(id)
                 );
                 
-                CREATE INDEX idx_yookassa_payments_user_id ON yookassa_payments(user_id);
-                CREATE INDEX idx_yookassa_payments_yookassa_id ON yookassa_payments(yookassa_payment_id);
-                CREATE INDEX idx_yookassa_payments_status ON yookassa_payments(status);
+                CREATE INDEX idx_cryptobot_payments_user_id ON cryptobot_payments(user_id);
+                CREATE INDEX idx_cryptobot_payments_invoice_id ON cryptobot_payments(invoice_id);
+                CREATE INDEX idx_cryptobot_payments_status ON cryptobot_payments(status);
                 """
             else:
                 logger.error(f"Неподдерживаемый тип БД для создания таблицы: {db_type}")
                 return False
             
             await conn.execute(text(create_sql))
-            logger.info("Таблица yookassa_payments успешно создана")
+            logger.info("Таблица cryptobot_payments успешно создана")
             return True
             
     except Exception as e:
-        logger.error(f"Ошибка создания таблицы yookassa_payments: {e}")
+        logger.error(f"Ошибка создания таблицы cryptobot_payments: {e}")
         return False
 
 async def create_user_messages_table():
@@ -305,58 +293,6 @@ async def fix_foreign_keys_for_user_deletion():
         logger.error(f"Ошибка обновления внешних ключей: {e}")
         return False
 
-async def add_remnawave_v2_columns():
-    
-    columns_to_add = {
-        'lifetime_used_traffic_bytes': 'BIGINT DEFAULT 0',
-        'last_remnawave_sync': 'TIMESTAMP NULL',
-        'trojan_password': 'VARCHAR(255) NULL',
-        'vless_uuid': 'VARCHAR(255) NULL',
-        'ss_password': 'VARCHAR(255) NULL'
-    }
-    
-    logger.info("=== ПРОВЕРКА КОЛОНОК REMNAWAVE V2.1.5 ===")
-    
-    try:
-        async with engine.begin() as conn:
-            db_type = await get_database_type()
-            columns_added = 0
-            
-            for column_name, column_def in columns_to_add.items():
-                exists = await check_column_exists('users', column_name)
-                
-                if not exists:
-                    logger.info(f"Добавление колонки {column_name} в таблицу users")
-                    
-                    if db_type == 'sqlite':
-                        if column_def.startswith('BIGINT'):
-                            column_def = column_def.replace('BIGINT', 'INTEGER')
-                        column_def = column_def.replace('TIMESTAMP', 'DATETIME')
-                    elif db_type == 'mysql':
-                        column_def = column_def.replace('TIMESTAMP', 'DATETIME')
-                    
-                    try:
-                        await conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_def}"))
-                        columns_added += 1
-                        logger.info(f"Колонка {column_name} успешно добавлена")
-                    except Exception as e:
-                        logger.error(f"Ошибка добавления колонки {column_name}: {e}")
-                        continue
-                        
-                else:
-                    logger.debug(f"Колонка {column_name} уже существует")
-            
-            if columns_added > 0:
-                logger.info(f"Добавлено {columns_added} новых колонок для RemnaWave v2.1.5")
-            else:
-                logger.info("Все колонки RemnaWave v2.1.5 уже существуют")
-                
-            return columns_added
-            
-    except Exception as e:
-        logger.error(f"Ошибка при добавлении колонок RemnaWave v2.1.5: {e}")
-        return 0
-
 async def add_referral_system_columns():
     logger.info("=== МИГРАЦИЯ РЕФЕРАЛЬНОЙ СИСТЕМЫ ===")
     
@@ -408,7 +344,7 @@ async def add_referral_system_columns():
         return False
 
 async def create_subscription_conversions_table():
-    
+    """Создание таблицы subscription_conversions"""
     table_exists = await check_table_exists('subscription_conversions')
     if table_exists:
         logger.info("Таблица subscription_conversions уже существует")
@@ -484,7 +420,7 @@ async def create_subscription_conversions_table():
         return False
 
 async def fix_subscription_duplicates_universal():
-    
+    """Исправление дублирующихся подписок"""
     async with engine.begin() as conn:
         db_type = await get_database_type()
         logger.info(f"Обнаружен тип базы данных: {db_type}")
@@ -569,19 +505,20 @@ async def run_universal_migration():
         db_type = await get_database_type()
         logger.info(f"Тип базы данных: {db_type}")
         
-        await add_remnawave_v2_columns()
-        
+        # Миграция реферальной системы
         referral_migration_success = await add_referral_system_columns()
         if not referral_migration_success:
             logger.warning("⚠️ Проблемы с миграцией реферальной системы")
         
-        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ YOOKASSA ===")
-        yookassa_created = await create_yookassa_payments_table()
-        if yookassa_created:
-            logger.info("✅ Таблица YooKassa payments готова")
+        # Создание таблицы CryptoBot payments
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ CRYPTOBOT ===")
+        cryptobot_created = await create_cryptobot_payments_table()
+        if cryptobot_created:
+            logger.info("✅ Таблица CryptoBot payments готова")
         else:
-            logger.warning("⚠️ Проблемы с таблицей YooKassa payments")
+            logger.warning("⚠️ Проблемы с таблицей CryptoBot payments")
 
+        # Создание таблицы user_messages
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_MESSAGES ===")
         user_messages_created = await create_user_messages_table()
         if user_messages_created:
@@ -589,6 +526,7 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей user_messages")
         
+        # Обновление внешних ключей
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()
         if fk_updated:
@@ -596,6 +534,7 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с обновлением внешних ключей")
         
+        # Создание таблицы конверсий подписок
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ КОНВЕРСИЙ ПОДПИСОК ===")
         conversions_created = await create_subscription_conversions_table()
         if conversions_created:
@@ -603,6 +542,7 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей subscription_conversions")
         
+        # Проверка и исправление дублирующихся подписок
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))
             unique_users = await conn.execute(text("SELECT COUNT(DISTINCT user_id) FROM subscriptions"))
@@ -620,6 +560,7 @@ async def run_universal_migration():
         
         deleted_count = await fix_subscription_duplicates_universal()
         
+        # Финальная проверка
         async with engine.begin() as conn:
             final_check = await conn.execute(text("""
                 SELECT user_id, COUNT(*) as count 
@@ -636,8 +577,7 @@ async def run_universal_migration():
             else:
                 logger.info("=== МИГРАЦИЯ ЗАВЕРШЕНА УСПЕШНО ===")
                 logger.info("✅ Реферальная система обновлена")
-                logger.info("✅ RemnaWave v2.1.5 колонки добавлены")
-                logger.info("✅ YooKassa таблица готова")
+                logger.info("✅ CryptoBot таблица готова")
                 logger.info("✅ Таблица конверсий подписок создана")
                 logger.info("✅ Дубликаты подписок исправлены")
                 return True
@@ -652,25 +592,21 @@ async def check_migration_status():
     try:
         status = {
             "has_made_first_topup_column": False,
-            "yookassa_table": False,
-            "remnawave_v2_columns": False,
+            "cryptobot_table": False,
             "subscription_duplicates": False,
             "subscription_conversions_table": False
         }
         
+        # Проверка колонки реферальной системы
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
         
-        status["yookassa_table"] = await check_table_exists('yookassa_payments')
+        # Проверка таблицы CryptoBot
+        status["cryptobot_table"] = await check_table_exists('cryptobot_payments')
         
+        # Проверка таблицы конверсий подписок
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
         
-        remnawave_columns = ['lifetime_used_traffic_bytes', 'last_remnawave_sync', 'trojan_password', 'vless_uuid', 'ss_password']
-        remnawave_status = []
-        for col in remnawave_columns:
-            exists = await check_column_exists('users', col)
-            remnawave_status.append(exists)
-        status["remnawave_v2_columns"] = all(remnawave_status)
-        
+        # Проверка дублирующихся подписок
         async with engine.begin() as conn:
             duplicates_check = await conn.execute(text("""
                 SELECT COUNT(*) FROM (
@@ -683,11 +619,11 @@ async def check_migration_status():
             duplicates_count = duplicates_check.fetchone()[0]
             status["subscription_duplicates"] = (duplicates_count == 0)
         
+        # Вывод результатов
         check_names = {
             "has_made_first_topup_column": "Колонка реферальной системы",
-            "yookassa_table": "Таблица YooKassa payments",
+            "cryptobot_table": "Таблица CryptoBot payments",
             "subscription_conversions_table": "Таблица конверсий подписок",
-            "remnawave_v2_columns": "Колонки RemnaWave v2.1.5",
             "subscription_duplicates": "Отсутствие дубликатов подписок"
         }
         
@@ -722,5 +658,3 @@ async def check_migration_status():
     except Exception as e:
         logger.error(f"Ошибка проверки статуса миграций: {e}")
         return None
-
-

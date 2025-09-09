@@ -445,6 +445,14 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = "ru") -> In
             )
         ])
 
+    if settings.is_cryptobot_enabled():
+        keyboard.append([
+            InlineKeyboardButton(
+                text="🪙 Криптовалюта (CryptoBot)", 
+                callback_data="topup_cryptobot"
+            )
+        ])
+
     if settings.TELEGRAM_STARS_ENABLED:
         keyboard.append([
             InlineKeyboardButton(
@@ -1065,3 +1073,33 @@ def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) ->
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_cryptobot_payment_keyboard(
+    payment_id: str,
+    local_payment_id: int,
+    amount_usd: float,
+    asset: str,
+    bot_invoice_url: str,
+    language: str = "ru"
+) -> InlineKeyboardMarkup:
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="🪙 Оплатить",
+                url=bot_invoice_url
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📊 Проверить статус",
+                callback_data=f"check_cryptobot_{local_payment_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="💰 Мой баланс",
+                callback_data="menu_balance"
+            )
+        ]
+    ])

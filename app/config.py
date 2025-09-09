@@ -125,6 +125,17 @@ class Settings(BaseSettings):
     PAYMENT_BALANCE_TEMPLATE: str = "{service_name} - {description}"
     PAYMENT_SUBSCRIPTION_TEMPLATE: str = "{service_name} - {description}"
 
+    CRYPTOBOT_ENABLED: bool = False
+    CRYPTOBOT_API_TOKEN: Optional[str] = None
+    CRYPTOBOT_WEBHOOK_SECRET: Optional[str] = None
+    CRYPTOBOT_BASE_URL: str = "https://pay.crypt.bot"
+    CRYPTOBOT_TESTNET: bool = False
+    CRYPTOBOT_WEBHOOK_PATH: str = "/cryptobot-webhook"
+    CRYPTOBOT_WEBHOOK_PORT: int = 8083
+    CRYPTOBOT_DEFAULT_ASSET: str = "USDT"
+    CRYPTOBOT_ASSETS: str = "USDT,TON,BTC,ETH"
+    CRYPTOBOT_INVOICE_EXPIRES_HOURS: int = 24
+
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
     
@@ -283,6 +294,27 @@ class Settings(BaseSettings):
         elif self.WEBHOOK_URL:
             return f"{self.WEBHOOK_URL}/payment-success"
         return "https://t.me/"
+
+    def is_cryptobot_enabled(self) -> bool:
+        return (self.CRYPTOBOT_ENABLED and 
+                self.CRYPTOBOT_API_TOKEN is not None)
+    
+    def get_cryptobot_base_url(self) -> str:
+        if self.CRYPTOBOT_TESTNET:
+            return "https://testnet-pay.crypt.bot"
+        return self.CRYPTOBOT_BASE_URL
+    
+    def get_cryptobot_assets(self) -> List[str]:
+        try:
+            assets = self.CRYPTOBOT_ASSETS.strip()
+            if not assets:
+                return ["USDT", "TON"]
+            return [asset.strip() for asset in assets.split(',') if asset.strip()]
+        except (ValueError, AttributeError):
+            return ["USDT", "TON"]
+    
+    def get_cryptobot_invoice_expires_seconds(self) -> int:
+        return self.CRYPTOBOT_INVOICE_EXPIRES_HOURS * 3600
 
     def is_maintenance_mode(self) -> bool:
         return self.MAINTENANCE_MODE
