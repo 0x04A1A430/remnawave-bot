@@ -15,6 +15,7 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.models import TransactionType, PaymentMethod
 from app.external.cryptobot import CryptoBotService
+from app.utils.currency_converter import currency_converter
 
 logger = logging.getLogger(__name__)
 
@@ -577,15 +578,32 @@ class PaymentService:
             )
             
             if not updated_payment.transaction_id:
-                amount_rubles = updated_payment.amount_float
-                amount_kopeks = int(amount_rubles * 100)
+                # Получаем сумму в USD из платежа
+                amount_usd = updated_payment.amount_float
+                
+                # Конвертируем в рубли по текущему курсу с улучшенной обработкой ошибок
+                try:
+                    amount_rubles = await currency_converter.usd_to_rub(amount_usd)
+                    amount_kopeks = int(amount_rubles * 100)
+                    conversion_rate = amount_rubles / amount_usd if amount_usd > 0 else 0
+                    logger.info(f"Конвертация USD->RUB: ${amount_usd} -> {amount_rubles}₽ (курс: {conversion_rate:.2f})")
+                except Exception as e:
+                    logger.warning(f"Ошибка конвертации валют для платежа {invoice_id}, используем курс 1:1: {e}")
+                    amount_rubles = amount_usd
+                    amount_kopeks = int(amount_usd * 100)
+                    conversion_rate = 1.0
+                
+                # Проверяем корректность конвертированной суммы
+                if amount_kopeks <= 0:
+                    logger.error(f"Некорректная сумма после конвертации: {amount_kopeks} копеек для платежа {invoice_id}")
+                    return False
                 
                 transaction = await create_transaction(
                     db,
                     user_id=updated_payment.user_id,
                     type=TransactionType.DEPOSIT,
                     amount_kopeks=amount_kopeks,
-                    description=f"Пополнение через CryptoBot ({updated_payment.amount} {updated_payment.asset})",
+                    description=f"Пополнение через CryptoBot ({updated_payment.amount} {updated_payment.asset} → {amount_rubles:.2f}₽)",
                     payment_method=PaymentMethod.CRYPTOBOT,
                     external_id=invoice_id,
                     is_completed=True
@@ -627,12 +645,13 @@ class PaymentService:
                                 user.telegram_id,
                                 f"✅ <b>Пополнение успешно!</b>\n\n"
                                 f"💰 Сумма: {settings.format_price(amount_kopeks)}\n"
-                                f"🪙 Актив: {updated_payment.asset}\n"
+                                f"🪙 Платеж: {updated_payment.amount} {updated_payment.asset}\n"
+                                f"💱 Курс: 1 USD = {conversion_rate:.2f}₽\n"
                                 f"🆔 Транзакция: {invoice_id[:8]}...\n\n"
                                 f"Баланс пополнен автоматически!",
                                 parse_mode="HTML"
                             )
-                            logger.info(f"✅ Отправлено уведомление пользователю {user.telegram_id} о пополнении на {amount_rubles}$ ({updated_payment.asset})")
+                            logger.info(f"✅ Отправлено уведомление пользователю {user.telegram_id} о пополнении на {amount_rubles:.2f}₽ ({updated_payment.asset})")
                         except Exception as e:
                             logger.error(f"Ошибка отправки уведомления о пополнении CryptoBot: {e}")
                 else:
