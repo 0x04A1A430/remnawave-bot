@@ -14,6 +14,7 @@ from app.database.crud.yookassa import create_yookassa_payment, link_yookassa_pa
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.models import TransactionType, PaymentMethod
+from app.external.cryptobot import CryptoBotService
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class PaymentService:
         self.bot = bot
         self.yookassa_service = YooKassaService() if settings.is_yookassa_enabled() else None
         self.stars_service = TelegramStarsService(bot) if bot else None
+        self.cryptobot_service = CryptoBotService() if settings.is_cryptobot_enabled() else None
     
     async def create_stars_invoice(
         self,
@@ -462,4 +464,184 @@ class PaymentService:
             
         except Exception as e:
             logger.error(f"Ошибка обработки платежа: {e}")
+            return False
+
+    async def create_cryptobot_payment(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        amount_usd: float,
+        asset: str = "USDT",
+        description: str = "Пополнение баланса",
+        payload: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        
+        if not self.cryptobot_service:
+            logger.error("CryptoBot сервис не инициализирован")
+            return None
+        
+        try:
+            amount_str = f"{amount_usd:.2f}"
+            
+            invoice_data = await self.cryptobot_service.create_invoice(
+                amount=amount_str,
+                asset=asset,
+                description=description,
+                payload=payload or f"balance_topup_{user_id}_{int(amount_usd * 100)}",
+                expires_in=settings.get_cryptobot_invoice_expires_seconds()
+            )
+            
+            if not invoice_data:
+                logger.error("Ошибка создания CryptoBot invoice")
+                return None
+            
+            from app.database.crud.cryptobot import create_cryptobot_payment
+            
+            local_payment = await create_cryptobot_payment(
+                db=db,
+                user_id=user_id,
+                invoice_id=str(invoice_data['invoice_id']),
+                amount=amount_str,
+                asset=asset,
+                status="active",
+                description=description,
+                payload=payload,
+                bot_invoice_url=invoice_data.get('bot_invoice_url'),
+                mini_app_invoice_url=invoice_data.get('mini_app_invoice_url'),
+                web_app_invoice_url=invoice_data.get('web_app_invoice_url')
+            )
+            
+            logger.info(f"Создан CryptoBot платеж {invoice_data['invoice_id']} на {amount_str} {asset} для пользователя {user_id}")
+            
+            return {
+                "local_payment_id": local_payment.id,
+                "invoice_id": invoice_data['invoice_id'],
+                "amount": amount_str,
+                "asset": asset,
+                "bot_invoice_url": invoice_data.get('bot_invoice_url'),
+                "mini_app_invoice_url": invoice_data.get('mini_app_invoice_url'),
+                "web_app_invoice_url": invoice_data.get('web_app_invoice_url'),
+                "pay_url": invoice_data.get('pay_url'),
+                "status": "active",
+                "created_at": local_payment.created_at
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка создания CryptoBot платежа: {e}")
+            return None
+    
+    async def process_cryptobot_webhook(self, db: AsyncSession, webhook_data: dict) -> bool:
+        try:
+            from app.database.crud.cryptobot import (
+                get_cryptobot_payment_by_invoice_id,
+                update_cryptobot_payment_status,
+                link_cryptobot_payment_to_transaction
+            )
+            from app.database.crud.transaction import create_transaction
+            from app.database.models import TransactionType, PaymentMethod
+            
+            update_type = webhook_data.get("update_type")
+            
+            if update_type != "invoice_paid":
+                logger.info(f"Пропуск CryptoBot webhook с типом: {update_type}")
+                return True
+            
+            payload = webhook_data.get("payload", {})
+            invoice_id = str(payload.get("invoice_id"))
+            status = "paid"
+            
+            if not invoice_id:
+                logger.error("CryptoBot webhook без invoice_id")
+                return False
+            
+            payment = await get_cryptobot_payment_by_invoice_id(db, invoice_id)
+            if not payment:
+                logger.error(f"CryptoBot платеж не найден в БД: {invoice_id}")
+                return False
+            
+            if payment.status == "paid":
+                logger.info(f"CryptoBot платеж {invoice_id} уже обработан")
+                return True
+            
+            paid_at_str = payload.get("paid_at")
+            paid_at = None
+            if paid_at_str:
+                try:
+                    paid_at = datetime.fromisoformat(paid_at_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                except:
+                    paid_at = datetime.utcnow()
+            else:
+                paid_at = datetime.utcnow()
+            
+            updated_payment = await update_cryptobot_payment_status(
+                db, invoice_id, status, paid_at
+            )
+            
+            if not updated_payment.transaction_id:
+                amount_rubles = updated_payment.amount_float
+                amount_kopeks = int(amount_rubles * 100)
+                
+                transaction = await create_transaction(
+                    db,
+                    user_id=updated_payment.user_id,
+                    type=TransactionType.DEPOSIT,
+                    amount_kopeks=amount_kopeks,
+                    description=f"Пополнение через CryptoBot ({updated_payment.amount} {updated_payment.asset})",
+                    payment_method=PaymentMethod.CRYPTOBOT,
+                    external_id=invoice_id,
+                    is_completed=True
+                )
+                
+                await link_cryptobot_payment_to_transaction(
+                    db, invoice_id, transaction.id
+                )
+                
+                user = await get_user_by_id(db, updated_payment.user_id)
+                if user:
+                    old_balance = user.balance_kopeks
+                    
+                    user.balance_kopeks += amount_kopeks
+                    user.updated_at = datetime.utcnow()
+                    
+                    await db.commit()
+                    await db.refresh(user)
+                    
+                    try:
+                        from app.services.referral_service import process_referral_topup
+                        await process_referral_topup(db, user.id, amount_kopeks, self.bot)
+                    except Exception as e:
+                        logger.error(f"Ошибка обработки реферального пополнения CryptoBot: {e}")
+                    
+                    if self.bot:
+                        try:
+                            from app.services.admin_notification_service import AdminNotificationService
+                            notification_service = AdminNotificationService(self.bot)
+                            await notification_service.send_balance_topup_notification(
+                                db, user, transaction, old_balance
+                            )
+                        except Exception as e:
+                            logger.error(f"Ошибка отправки уведомления о пополнении CryptoBot: {e}")
+                    
+                    if self.bot:
+                        try:
+                            await self.bot.send_message(
+                                user.telegram_id,
+                                f"✅ <b>Пополнение успешно!</b>\n\n"
+                                f"💰 Сумма: {settings.format_price(amount_kopeks)}\n"
+                                f"🪙 Актив: {updated_payment.asset}\n"
+                                f"🆔 Транзакция: {invoice_id[:8]}...\n\n"
+                                f"Баланс пополнен автоматически!",
+                                parse_mode="HTML"
+                            )
+                            logger.info(f"✅ Отправлено уведомление пользователю {user.telegram_id} о пополнении на {amount_rubles}$ ({updated_payment.asset})")
+                        except Exception as e:
+                            logger.error(f"Ошибка отправки уведомления о пополнении CryptoBot: {e}")
+                else:
+                    logger.error(f"Пользователь с ID {updated_payment.user_id} не найден при пополнении баланса")
+                    return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка обработки CryptoBot webhook: {e}", exc_info=True)
             return False
