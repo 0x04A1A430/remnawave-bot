@@ -90,12 +90,13 @@ async def show_referral_info(
         referral_text += "\n"
     
     referral_text += "📢 Приглашайте друзей и зарабатывайте!"
-    
-    logo = FSInputFile("vpn_logo.png")
-    if callback.message.photo:
+
+    is_qr = callback.message.caption and callback.message.caption.startswith("🔗 Ваша реферальная ссылка")
+    media = callback.message.photo[-1].file_id if callback.message.photo and not is_qr else FSInputFile("vpn_logo.png")
+    if callback.message.photo and not is_qr:
         await callback.message.edit_media(
             types.InputMediaPhoto(
-                media=logo,
+                media=media,
                 caption=referral_text,
                 parse_mode="HTML",
             ),
@@ -104,7 +105,7 @@ async def show_referral_info(
     else:
         await callback.message.delete()
         await callback.message.answer_photo(
-            logo,
+            FSInputFile("vpn_logo.png"),
             caption=referral_text,
             reply_markup=get_referral_keyboard(db_user.language),
             parse_mode="HTML",
@@ -160,14 +161,14 @@ async def show_detailed_referral_list(
     page: int = 1
 ):
     texts = get_texts(db_user.language)
-    logo = FSInputFile("vpn_logo.png")
+    media = callback.message.photo[-1].file_id if callback.message.photo else FSInputFile("vpn_logo.png")
 
     referrals_data = await get_detailed_referral_list(db, db_user.id, limit=10, offset=(page - 1) * 10)
 
     if not referrals_data['referrals']:
         await callback.message.edit_media(
             types.InputMediaPhoto(
-                media=logo,
+                media=media,
                 caption="📋 У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!",
             ),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
@@ -221,7 +222,7 @@ async def show_detailed_referral_list(
     
     await callback.message.edit_media(
         types.InputMediaPhoto(
-            media=logo,
+            media=media,
             caption=text,
             parse_mode="HTML",
         ),
@@ -236,7 +237,7 @@ async def show_referral_analytics(
     db: AsyncSession
 ):
     texts = get_texts(db_user.language)
-    logo = FSInputFile("vpn_logo.png")
+    media = callback.message.photo[-1].file_id if callback.message.photo else FSInputFile("vpn_logo.png")
 
     analytics = await get_referral_analytics(db, db_user.id)
 
@@ -258,7 +259,7 @@ async def show_referral_analytics(
     
     await callback.message.edit_media(
         types.InputMediaPhoto(
-            media=logo,
+            media=media,
             caption=text,
             parse_mode="HTML",
         ),
@@ -274,7 +275,7 @@ async def create_invite_message(
     db_user: User
 ):
     texts = get_texts(db_user.language)
-    
+
     bot_username = (await callback.bot.get_me()).username
     referral_link = f"https://t.me/{bot_username}?start={db_user.referral_code}"
     
@@ -296,9 +297,10 @@ async def create_invite_message(
         )]
     ])
     
+    media = callback.message.photo[-1].file_id if callback.message.photo else FSInputFile("vpn_logo.png")
     await callback.message.edit_media(
         types.InputMediaPhoto(
-            media=logo,
+            media=media,
             caption=(
                 f"📝 <b>Приглашение создано!</b>\n\n"
                 f"Нажмите кнопку «📤 Поделиться» чтобы отправить приглашение в любой чат, или скопируйте текст ниже:\n\n"

@@ -12,8 +12,8 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
     return await _original_answer(self, text, **kwargs)
 
 async def _edit_with_photo(self: Message, text: str, **kwargs):
-    if LOGO_PATH.exists():
-        media_kwargs = {"media": FSInputFile(LOGO_PATH), "caption": text}
+    if self.photo:
+        media_kwargs = {"media": self.photo[-1].file_id, "caption": text}
         if "parse_mode" in kwargs:
             media_kwargs["parse_mode"] = kwargs.pop("parse_mode")
         return await self.edit_media(InputMediaPhoto(**media_kwargs), **kwargs)
