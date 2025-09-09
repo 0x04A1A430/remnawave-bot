@@ -40,6 +40,58 @@ async def check_table_exists(table_name: str) -> bool:
         logger.error(f"Ошибка проверки существования таблицы {table_name}: {e}")
         return False
 
+async def fix_users_table():
+    """Добавляет отсутствующие базовые колонки в таблицу users"""
+    
+    logger.info("=== ИСПРАВЛЕНИЕ ТАБЛИЦЫ USERS ===")
+    
+    required_columns = {
+        'balance_kopeks': 'INTEGER DEFAULT 0',
+        'has_had_paid_subscription': 'BOOLEAN DEFAULT FALSE',
+        'used_promocodes': 'INTEGER DEFAULT 0',
+        'referral_code': 'VARCHAR(20) NULL',
+        'referred_by_id': 'INTEGER NULL'
+    }
+    
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            columns_added = 0
+            
+            for column_name, column_def in required_columns.items():
+                exists = await check_column_exists('users', column_name)
+                
+                if not exists:
+                    logger.info(f"Добавление колонки {column_name} в таблицу users")
+                    
+                    if db_type == 'sqlite':
+                        if 'BOOLEAN DEFAULT FALSE' in column_def:
+                            column_def = column_def.replace('BOOLEAN DEFAULT FALSE', 'BOOLEAN DEFAULT 0')
+                        elif 'BOOLEAN DEFAULT TRUE' in column_def:
+                            column_def = column_def.replace('BOOLEAN DEFAULT TRUE', 'BOOLEAN DEFAULT 1')
+                    
+                    try:
+                        await conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_def}"))
+                        columns_added += 1
+                        logger.info(f"Колонка {column_name} успешно добавлена")
+                    except Exception as e:
+                        logger.error(f"Ошибка добавления колонки {column_name}: {e}")
+                        continue
+                        
+                else:
+                    logger.debug(f"Колонка {column_name} уже существует")
+            
+            if columns_added > 0:
+                logger.info(f"Добавлено {columns_added} базовых колонок в users")
+            else:
+                logger.info("Все базовые колонки users уже существуют")
+                
+            return True
+            
+    except Exception as e:
+        logger.error(f"Ошибка при исправлении таблицы users: {e}")
+        return False
+
 async def check_column_exists(table_name: str, column_name: str) -> bool:
     try:
         async with engine.begin() as conn:
@@ -364,6 +416,17 @@ async def add_referral_system_columns():
         async with engine.begin() as conn:
             db_type = await get_database_type()
             
+            # Сначала проверяем существование базовых колонок
+            balance_exists = await check_column_exists('users', 'balance_kopeks')
+            subscription_exists = await check_column_exists('users', 'has_had_paid_subscription')
+            
+            if not balance_exists or not subscription_exists:
+                logger.warning("Отсутствуют базовые колонки users, сначала исправляем структуру")
+                users_fixed = await fix_users_table()
+                if not users_fixed:
+                    logger.error("Не удалось исправить структуру таблицы users")
+                    return False
+            
             column_exists = await check_column_exists('users', 'has_made_first_topup')
             
             if not column_exists:
@@ -396,7 +459,7 @@ async def add_referral_system_columns():
                 updated_count = result.rowcount
                 
                 logger.info(f"Обновлено {updated_count} пользователей с has_made_first_topup = TRUE")
-                logger.info("✅ Миграция реферальной системы завершена")
+                logger.info("Миграция реферальной системы завершена")
                 
                 return True
             else:
@@ -730,81 +793,51 @@ async def run_universal_migration():
         db_type = await get_database_type()
         logger.info(f"Тип базы данных: {db_type}")
         
+        # Исправляем таблицу users
+        logger.info("=== ИСПРАВЛЕНИЕ СТРУКТУРЫ USERS ===")
+        users_fixed = await fix_users_table()
+        if users_fixed:
+            logger.info("Структура users исправлена")
+        else:
+            logger.warning("Проблемы с исправлением users")
+        
         # Исправляем таблицу subscriptions
         logger.info("=== ИСПРАВЛЕНИЕ СТРУКТУРЫ SUBSCRIPTIONS ===")
         subscriptions_fixed = await fix_subscriptions_table()
         if subscriptions_fixed:
-            logger.info("✅ Структура subscriptions исправлена")
+            logger.info("Структура subscriptions исправлена")
         else:
-            logger.warning("⚠️ Проблемы с исправлением subscriptions")
+            logger.warning("Проблемы с исправлением subscriptions")
         
         await add_remnawave_v2_columns()
         
         referral_migration_success = await add_referral_system_columns()
         if not referral_migration_success:
-            logger.warning("⚠️ Проблемы с миграцией реферальной системы")
+            logger.warning("Проблемы с миграцией реферальной системы")
         
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ YOOKASSA ===")
         yookassa_created = await create_yookassa_payments_table()
         if yookassa_created:
-            logger.info("✅ Таблица YooKassa payments готова")
+            logger.info("Таблица YooKassa payments готова")
         else:
-            logger.warning("⚠️ Проблемы с таблицей YooKassa payments")
+            logger.warning("Проблемы с таблицей YooKassa payments")
         
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ CRYPTOBOT ===")
         cryptobot_created = await create_cryptobot_payments_table()
         if cryptobot_created:
-            logger.info("✅ Таблица CryptoBot payments готова")
+            logger.info("Таблица CryptoBot payments готова")
         else:
-            logger.warning("⚠️ Проблемы с таблицей CryptoBot payments")
+            logger.warning("Проблемы с таблицей CryptoBot payments")
         
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ КОНВЕРСИЙ ПОДПИСОК ===")
         conversions_created = await create_subscription_conversions_table()
         if conversions_created:
-            logger.info("✅ Таблица subscription_conversions готова")
+            logger.info("Таблица subscription_conversions готова")
         else:
-            logger.warning("⚠️ Проблемы с таблицей subscription_conversions")
+            logger.warning("Проблемы с таблицей subscription_conversions")
         
-        async with engine.begin() as conn:
-            total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))
-            unique_users = await conn.execute(text("SELECT COUNT(DISTINCT user_id) FROM subscriptions WHERE user_id IS NOT NULL"))
-            
-            total_count = total_subs.fetchone()[0]
-            unique_count = unique_users.fetchone()[0]
-            
-            logger.info(f"Всего подписок: {total_count}")
-            logger.info(f"Уникальных пользователей: {unique_count}")
-            
-            if total_count == unique_count:
-                logger.info("База данных уже в корректном состоянии")
-                logger.info("=== МИГРАЦИЯ ЗАВЕРШЕНА УСПЕШНО ===")
-                return True
-        
-        deleted_count = await fix_subscription_duplicates_universal()
-        
-        async with engine.begin() as conn:
-            final_check = await conn.execute(text("""
-                SELECT user_id, COUNT(*) as count 
-                FROM subscriptions 
-                WHERE user_id IS NOT NULL
-                GROUP BY user_id 
-                HAVING COUNT(*) > 1
-            """))
-            
-            remaining_duplicates = final_check.fetchall()
-            
-            if remaining_duplicates:
-                logger.warning(f"Остались дубликаты у {len(remaining_duplicates)} пользователей")
-                return False
-            else:
-                logger.info("=== МИГРАЦИЯ ЗАВЕРШЕНА УСПЕШНО ===")
-                logger.info("✅ Реферальная система обновлена")
-                logger.info("✅ RemnaWave v2.1.5 колонки добавлены")
-                logger.info("✅ YooKassa таблица готова")
-                logger.info("✅ CryptoBot таблица готова")
-                logger.info("✅ Таблица конверсий подписок создана")
-                logger.info("✅ Дубликаты подписок исправлены")
-                return True
+        logger.info("=== МИГРАЦИЯ ЗАВЕРШЕНА УСПЕШНО ===")
+        return True
                 
     except Exception as e:
         logger.error(f"=== ОШИБКА ВЫПОЛНЕНИЯ МИГРАЦИИ: {e} ===")
