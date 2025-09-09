@@ -416,6 +416,12 @@ async def activate_trial(
                     [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
                     [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
                 ])
+            elif connect_mode == "link":
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🔗 Подключиться", url=subscription.subscription_url)],
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                ])
             else:
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")],
@@ -1920,6 +1926,12 @@ async def confirm_purchase(
                     [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
                     [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
                 ])
+            elif connect_mode == "link":
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🔗 Подключиться", url=subscription.subscription_url)],
+                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                ])
             else:
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")],
@@ -2687,7 +2699,30 @@ async def handle_connect_subscription(
             reply_markup=keyboard,
             parse_mode="HTML"
         )
-        
+
+    elif connect_mode == "link":
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔗 Подключиться",
+                    url=subscription.subscription_url
+                )
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+            ]
+        ])
+
+        await callback.message.edit_text(
+            f"""
+🚀 <b>Подключить подписку</b>
+
+🔗 Нажмите кнопку ниже, чтобы открыть ссылку подписки:
+            """,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+
     else:
         device_text = f"""
 📱 <b>Подключить подписку</b>
