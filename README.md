@@ -35,7 +35,7 @@
 
 ### ⚡ **Полная автоматизация VPN бизнеса**
 - 🎯 **Готовое решение** - разверни за 5 минут, начни продавать сегодня
-- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + ЮKassa
+- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + ЮKassa + P2P
 - 🔄 **Автоматизация 99%** - от регистрации до продления подписок
 - 📊 **Детальная аналитика** - полная картина вашего бизнеса
 - 💬 **Уведомления в топики** - Уведомление в топик канала об: Активация триала 💎 Покупка подписки 🔄 Конверсия из триала в платную ⏰ Продление подписки 💰 Пополнение баланса
@@ -308,6 +308,18 @@ DEFAULT_AUTOPAY_DAYS_BEFORE=3
 MIN_BALANCE_FOR_AUTOPAY_KOPEKS=10000
 
 # ===== ПЛАТЕЖНЫЕ СИСТЕМЫ =====
+
+# CRYPTOBOT
+CRYPTOBOT_ENABLED=true
+CRYPTOBOT_API_TOKEN=123456789:AAzQcZWQqQAbsfgPnOLr4FHC8Doa4L7KryC
+CRYPTOBOT_WEBHOOK_SECRET=your_webhook_secret_here
+CRYPTOBOT_BASE_URL=https://pay.crypt.bot
+CRYPTOBOT_TESTNET=false
+CRYPTOBOT_WEBHOOK_PATH=/cryptobot-webhook
+CRYPTOBOT_WEBHOOK_PORT=8083
+CRYPTOBOT_DEFAULT_ASSET=USDT
+CRYPTOBOT_ASSETS=USDT,TON,BTC,ETH,LTC,BNB,TRX,USDC
+CRYPTOBOT_INVOICE_EXPIRES_HOURS=24
 
 # Telegram Stars (работает автоматически)
 TELEGRAM_STARS_ENABLED=true
@@ -753,6 +765,7 @@ bedolaga_bot/
 │   │       ├── 🎫 promocodes.py  # Управление промокодами
 │   │       ├── 🚧 maintenance.py # Тех работы
 │   │       ├── 📨 messages.py    # Рассылки
+│   │       ├── 📨 user_messages.py # Рандомные сообщения в меню
 │   │       ├── ⚙️ main.py        # Админское меню
 │   │       ├── 📖 rules.py       # Правила
 │   │       ├── 🙋 referrals.py   # Правила
@@ -772,6 +785,7 @@ bedolaga_bot/
 │   │       ├── 📜 rules.py           # Правила сервиса
 │   │       ├── 📜 subscription_conversion.py # Правила сервиса
 │   │       ├── 💳 yookassa.py        # YooKassa операции
+│   │       ├── 💳 cryptobot.py        # CryptoBot операции
 │   │       ├── 🌐 server_squad.py    # Серверы и сквады
 │   │       ├── 🎁 promocode.py       # Промокоды
 │   │       └── 👥 referral.py        # Рефералы
@@ -785,6 +799,7 @@ bedolaga_bot/
 │   │   ├── 👥 referral_service.py     # Рефералы
 │   │   ├── 💬 admin_notification_service.py     # Уведомления для администраторов в чаты
 │   │   ├── 🔍 monitoring_service.py   # Мониторинг
+│   │   ├── ♻️ version_service.py      # Проверка версий бота
 │   │   ├── 🎖️ tribute_service.py      # Tribute платежи
 │   │   ├── 💳 yookassa_service.py     # YooKassa платежи
 │   │   └── 🌐 remnawave_service.py    # Интеграция с RemnaWave
@@ -797,6 +812,7 @@ bedolaga_bot/
 │   │   ├── 📄 pagination.py          # Пагинация
 │   │   ├── 📄 pricing_utils.py       # Цены
 │   │   ├── 👤 user_utils.py          # Утилиты для пользователей
+│   │   ├── 🫰 currency_converter.py  # Курсы для CryptoBota
 │   │   └── ⚡ cache.py                # Кеширование
 │   │
 │   ├── 🛡️ middlewares/                # Middleware
@@ -885,6 +901,14 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # CryptoBot webhook endpoint
+    handle /cryptobot-webhook* {
+        reverse_proxy localhost:8081 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
     }
     
     # Для YooKassa
