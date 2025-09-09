@@ -560,11 +560,14 @@ class SentNotification(Base):
     __tablename__ = "sent_notifications"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
     notification_type = Column(String(50), nullable=False)
     days_before = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=func.now())
+
+    user = relationship("User", backref="sent_notifications")
+    subscription = relationship("Subscription", backref="sent_notifications")
 
 class BroadcastHistory(Base):
     __tablename__ = "broadcast_history"
