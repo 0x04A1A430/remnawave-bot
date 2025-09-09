@@ -247,6 +247,36 @@ class UserService:
                     logger.warning(f"⚠️ Ошибка деактивации RemnaWave: {e}")
             
             try:
+                from app.database.models import UserMessage
+                from sqlalchemy import update
+                
+                result = await db.execute(
+                    update(UserMessage)
+                    .where(UserMessage.created_by == user_id)
+                    .values(created_by=None)
+                )
+                if result.rowcount > 0:
+                    logger.info(f"🔄 Обновлено {result.rowcount} пользовательских сообщений")
+                await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка обновления пользовательских сообщений: {e}")
+            
+            try:
+                from app.database.models import PromoCode
+                from sqlalchemy import update
+                
+                result = await db.execute(
+                    update(PromoCode)
+                    .where(PromoCode.created_by == user_id)
+                    .values(created_by=None)
+                )
+                if result.rowcount > 0:
+                    logger.info(f"🔄 Обновлено {result.rowcount} промокодов")
+                await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка обновления промокодов: {e}")
+            
+            try:
                 from app.database.models import YooKassaPayment
                 from sqlalchemy import select
                 
@@ -259,6 +289,11 @@ class UserService:
                     logger.info(f"🔄 Удаляем {len(yookassa_payments)} YooKassa платежей")
                     await db.execute(
                         delete(YooKassaPayment).where(YooKassaPayment.user_id == user_id)
+                    )
+                    await db.flush()
+                    logger.info(f"✅ YooKassa платежи удалены")
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления YooKassa платежей: {e}")
                     )
                     await db.flush()
                     logger.info(f"✅ YooKassa платежи удалены")
