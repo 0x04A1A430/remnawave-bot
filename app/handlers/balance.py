@@ -542,22 +542,32 @@ async def start_cryptobot_payment(
         await callback.answer("❌ Оплата криптовалютой временно недоступна", show_alert=True)
         return
     
+    from app.utils.currency_converter import currency_converter
+    try:
+        current_rate = await currency_converter.get_usd_to_rub_rate()
+        rate_text = f"💱 Текущий курс: 1 USD = {current_rate:.2f} ₽"
+    except Exception as e:
+        logger.warning(f"Не удалось получить курс валют: {e}")
+        current_rate = 95.0
+        rate_text = f"💱 Курс: 1 USD ≈ {current_rate:.0f} ₽"
+    
     available_assets = settings.get_cryptobot_assets()
     assets_text = ", ".join(available_assets)
     
     await callback.message.edit_text(
         f"🪙 <b>Пополнение криптовалютой</b>\n\n"
-        f"Введите сумму для пополнения от 1 до 10,000 USD:\n\n"
+        f"Введите сумму для пополнения в рублях от 100 до 100,000 ₽:\n\n"
         f"💰 Доступные активы: {assets_text}\n"
         f"⚡ Мгновенное зачисление на баланс\n"
         f"🔒 Безопасная оплата через CryptoBot\n\n"
-        f"Сумма будет конвертирована по курсу 1 USD = 1 рубль.",
+        f"{rate_text}\n"
+        f"Сумма будет автоматически конвертирована в USD для оплаты.",
         reply_markup=get_back_keyboard(db_user.language),
         parse_mode="HTML"
     )
     
     await state.set_state(BalanceStates.waiting_for_amount)
-    await state.update_data(payment_method="cryptobot")
+    await state.update_data(payment_method="cryptobot", current_rate=current_rate)
     await callback.answer()
 
 @error_handler
@@ -574,17 +584,39 @@ async def process_cryptobot_payment_amount(
         await message.answer("❌ Оплата криптовалютой временно недоступна")
         return
     
-    amount_usd = amount_kopeks / 100
+    amount_rubles = amount_kopeks / 100
     
-    if amount_usd < 1:
-        await message.answer("Минимальная сумма пополнения: 1 USD")
+    if amount_rubles < 100:
+        await message.answer("Минимальная сумма пополнения: 100 ₽")
         return
     
-    if amount_usd > 10000:
-        await message.answer("Максимальная сумма пополнения: 10,000 USD")
+    if amount_rubles > 100000:
+        await message.answer("Максимальная сумма пополнения: 100,000 ₽")
         return
     
     try:
+        # Получаем курс из состояния или запрашиваем заново
+        data = await state.get_data()
+        current_rate = data.get('current_rate')
+        
+        if not current_rate:
+            from app.utils.currency_converter import currency_converter
+            current_rate = await currency_converter.get_usd_to_rub_rate()
+        
+        # Конвертируем рубли в доллары
+        amount_usd = amount_rubles / current_rate
+        
+        # Округляем до 2 знаков после запятой
+        amount_usd = round(amount_usd, 2)
+        
+        if amount_usd < 1:
+            await message.answer("❌ Минимальная сумма для оплаты в USD: 1.00 USD")
+            return
+        
+        if amount_usd > 1000:
+            await message.answer("❌ Максимальная сумма для оплаты в USD: 1,000 USD")
+            return
+        
         payment_service = PaymentService(message.bot)
         
         payment_result = await payment_service.create_cryptobot_payment(
@@ -592,7 +624,7 @@ async def process_cryptobot_payment_amount(
             user_id=db_user.id,
             amount_usd=amount_usd,
             asset=settings.CRYPTOBOT_DEFAULT_ASSET,
-            description=f"Пополнение баланса на {amount_usd} USD",
+            description=f"Пополнение баланса на {amount_rubles:.0f} ₽ ({amount_usd:.2f} USD)",
             payload=f"balance_{db_user.id}_{amount_kopeks}"
         )
         
@@ -619,8 +651,10 @@ async def process_cryptobot_payment_amount(
         
         await message.answer(
             f"🪙 <b>Оплата криптовалютой</b>\n\n"
-            f"💰 Сумма: {amount_usd} USD\n"
+            f"💰 Сумма к зачислению: {amount_rubles:.0f} ₽\n"
+            f"💵 К оплате: {amount_usd:.2f} USD\n"
             f"🪙 Актив: {payment_result['asset']}\n"
+            f"💱 Курс: 1 USD = {current_rate:.2f} ₽\n"
             f"🆔 ID платежа: {payment_result['invoice_id'][:8]}...\n\n"
             f"📱 <b>Инструкция:</b>\n"
             f"1. Нажмите кнопку 'Оплатить'\n"
@@ -637,7 +671,7 @@ async def process_cryptobot_payment_amount(
         await state.clear()
         
         logger.info(f"Создан CryptoBot платеж для пользователя {db_user.telegram_id}: "
-                   f"{amount_usd} USD, ID: {payment_result['invoice_id']}")
+                   f"{amount_rubles:.0f} ₽ ({amount_usd:.2f} USD), ID: {payment_result['invoice_id']}")
         
     except Exception as e:
         logger.error(f"Ошибка создания CryptoBot платежа: {e}")
