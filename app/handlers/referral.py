@@ -116,8 +116,9 @@ async def show_referral_qr(
     callback: types.CallbackQuery,
     db_user: User,
 ):
+    await callback.answer()
+
     texts = get_texts(db_user.language)
-    logo = FSInputFile("vpn_logo.png")
 
     bot_username = (await callback.bot.get_me()).username
     referral_link = f"https://t.me/{bot_username}?start={db_user.referral_code}"
@@ -150,7 +151,6 @@ async def show_referral_qr(
             caption=f"🔗 Ваша реферальная ссылка:\n{referral_link}",
             reply_markup=keyboard,
         )
-    await callback.answer()
 
 
 async def show_detailed_referral_list(
