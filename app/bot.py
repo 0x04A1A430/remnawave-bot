@@ -29,6 +29,10 @@ from app.handlers.admin import (
 )
 from app.handlers.stars_payments import register_stars_handlers
 
+from app.utils.message_patch import patch_message_methods
+
+patch_message_methods()
+
 logger = logging.getLogger(__name__)
 
 
