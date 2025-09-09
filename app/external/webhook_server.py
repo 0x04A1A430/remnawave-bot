@@ -202,11 +202,11 @@ class WebhookServer:
                     )
 
             from app.services.payment_service import PaymentService
-            from app.database.database import get_database
+            from app.database.database import AsyncSessionLocal
             
             payment_service = PaymentService(self.bot)
             
-            async with get_database() as db:
+            async with AsyncSessionLocal() as db:
                 result = await payment_service.process_cryptobot_webhook(db, webhook_data)
             
             if result:
