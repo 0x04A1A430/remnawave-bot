@@ -337,6 +337,10 @@ async def process_topup_amount(
             from app.database.database import AsyncSessionLocal
             async with AsyncSessionLocal() as db:
                 await process_yookassa_payment_amount(message, db_user, db, amount_kopeks, state)
+        elif payment_method == "cryptobot":
+            from app.database.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
+                await process_cryptobot_payment_amount(message, db_user, db, amount_kopeks, state)
         else:
             await message.answer("Неизвестный способ оплаты")
         
@@ -526,6 +530,169 @@ async def check_yookassa_payment_status(
         logger.error(f"Ошибка проверки статуса платежа: {e}")
         await callback.answer("❌ Ошибка проверки статуса", show_alert=True)
 
+@error_handler
+async def start_cryptobot_payment(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext
+):
+    texts = get_texts(db_user.language)
+    
+    if not settings.is_cryptobot_enabled():
+        await callback.answer("❌ Оплата криптовалютой временно недоступна", show_alert=True)
+        return
+    
+    available_assets = settings.get_cryptobot_assets()
+    assets_text = ", ".join(available_assets)
+    
+    await callback.message.edit_text(
+        f"🪙 <b>Пополнение криптовалютой</b>\n\n"
+        f"Введите сумму для пополнения от 1 до 10,000 USD:\n\n"
+        f"💰 Доступные активы: {assets_text}\n"
+        f"⚡ Мгновенное зачисление на баланс\n"
+        f"🔒 Безопасная оплата через CryptoBot\n\n"
+        f"Сумма будет конвертирована по курсу 1 USD = 1 рубль.",
+        reply_markup=get_back_keyboard(db_user.language),
+        parse_mode="HTML"
+    )
+    
+    await state.set_state(BalanceStates.waiting_for_amount)
+    await state.update_data(payment_method="cryptobot")
+    await callback.answer()
+
+@error_handler
+async def process_cryptobot_payment_amount(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    amount_kopeks: int,
+    state: FSMContext
+):
+    texts = get_texts(db_user.language)
+    
+    if not settings.is_cryptobot_enabled():
+        await message.answer("❌ Оплата криптовалютой временно недоступна")
+        return
+    
+    amount_usd = amount_kopeks / 100
+    
+    if amount_usd < 1:
+        await message.answer("Минимальная сумма пополнения: 1 USD")
+        return
+    
+    if amount_usd > 10000:
+        await message.answer("Максимальная сумма пополнения: 10,000 USD")
+        return
+    
+    try:
+        payment_service = PaymentService(message.bot)
+        
+        payment_result = await payment_service.create_cryptobot_payment(
+            db=db,
+            user_id=db_user.id,
+            amount_usd=amount_usd,
+            asset=settings.CRYPTOBOT_DEFAULT_ASSET,
+            description=f"Пополнение баланса на {amount_usd} USD",
+            payload=f"balance_{db_user.id}_{amount_kopeks}"
+        )
+        
+        if not payment_result:
+            await message.answer("❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.")
+            await state.clear()
+            return
+        
+        bot_invoice_url = payment_result.get("bot_invoice_url")
+        mini_app_invoice_url = payment_result.get("mini_app_invoice_url")
+        
+        payment_url = bot_invoice_url or mini_app_invoice_url
+        
+        if not payment_url:
+            await message.answer("❌ Ошибка получения ссылки для оплаты. Обратитесь в поддержку.")
+            await state.clear()
+            return
+        
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="🪙 Оплатить", url=payment_url)],
+            [types.InlineKeyboardButton(text="📊 Проверить статус", callback_data=f"check_cryptobot_{payment_result['local_payment_id']}")],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")]
+        ])
+        
+        await message.answer(
+            f"🪙 <b>Оплата криптовалютой</b>\n\n"
+            f"💰 Сумма: {amount_usd} USD\n"
+            f"🪙 Актив: {payment_result['asset']}\n"
+            f"🆔 ID платежа: {payment_result['invoice_id'][:8]}...\n\n"
+            f"📱 <b>Инструкция:</b>\n"
+            f"1. Нажмите кнопку 'Оплатить'\n"
+            f"2. Выберите удобный актив\n"
+            f"3. Переведите указанную сумму\n"
+            f"4. Деньги поступят на баланс автоматически\n\n"
+            f"🔒 Оплата проходит через защищенную систему CryptoBot\n"
+            f"⚡ Поддерживаемые активы: USDT, TON, BTC, ETH\n\n"
+            f"❓ Если возникнут проблемы, обратитесь в {settings.SUPPORT_USERNAME}",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        
+        await state.clear()
+        
+        logger.info(f"Создан CryptoBot платеж для пользователя {db_user.telegram_id}: "
+                   f"{amount_usd} USD, ID: {payment_result['invoice_id']}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка создания CryptoBot платежа: {e}")
+        await message.answer("❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.")
+        await state.clear()
+
+@error_handler
+async def check_cryptobot_payment_status(
+    callback: types.CallbackQuery,
+    db: AsyncSession
+):
+    try:
+        local_payment_id = int(callback.data.split('_')[-1])
+        
+        from app.database.crud.cryptobot import get_cryptobot_payment_by_id
+        payment = await get_cryptobot_payment_by_id(db, local_payment_id)
+        
+        if not payment:
+            await callback.answer("❌ Платеж не найден", show_alert=True)
+            return
+        
+        status_emoji = {
+            "active": "⏳",
+            "paid": "✅",
+            "expired": "❌"
+        }
+        
+        status_text = {
+            "active": "Ожидает оплаты",
+            "paid": "Оплачен",
+            "expired": "Истек"
+        }
+        
+        emoji = status_emoji.get(payment.status, "❓")
+        status = status_text.get(payment.status, "Неизвестно")
+        
+        message_text = (f"🪙 Статус платежа:\n\n"
+                       f"🆔 ID: {payment.invoice_id[:8]}...\n"
+                       f"💰 Сумма: {payment.amount} {payment.asset}\n"
+                       f"📊 Статус: {emoji} {status}\n"
+                       f"📅 Создан: {payment.created_at.strftime('%d.%m.%Y %H:%M')}\n")
+        
+        if payment.is_paid:
+            message_text += "\n✅ Платеж успешно завершен!\n\nСредства зачислены на баланс."
+        elif payment.is_pending:
+            message_text += "\n⏳ Платеж ожидает оплаты. Нажмите кнопку 'Оплатить' выше."
+        elif payment.is_expired:
+            message_text += f"\n❌ Платеж истек. Обратитесь в {settings.SUPPORT_USERNAME}"
+        
+        await callback.answer(message_text, show_alert=True)
+        
+    except Exception as e:
+        logger.error(f"Ошибка проверки статуса CryptoBot платежа: {e}")
+        await callback.answer("❌ Ошибка проверки статуса", show_alert=True)
+
 
 
 def register_handlers(dp: Dispatcher):
@@ -578,4 +745,14 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(
         process_topup_amount,
         BalanceStates.waiting_for_amount
+    )
+
+    dp.callback_query.register(
+        start_cryptobot_payment,
+        F.data == "topup_cryptobot"
+    )
+    
+    dp.callback_query.register(
+        check_cryptobot_payment_status,
+        F.data.startswith("check_cryptobot_")
     )
