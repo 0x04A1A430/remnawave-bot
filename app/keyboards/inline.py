@@ -163,6 +163,10 @@ def get_subscription_keyboard(
                     keyboard.append([
                         InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
                     ])
+            elif connect_mode == "link":
+                keyboard.append([
+                    InlineKeyboardButton(text="🔗 Подключиться", url=subscription.subscription_url)
+                ])
             else:
                 keyboard.append([
                     InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
