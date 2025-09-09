@@ -83,6 +83,16 @@ class RemnaWaveNode:
     traffic_limit_bytes: Optional[int]
 
 
+@dataclass
+class SubscriptionInfo:
+    is_found: bool
+    user: Optional[Dict[str, Any]]
+    links: List[str]
+    ss_conf_links: Dict[str, str]
+    subscription_url: str
+    happ: Optional[Dict[str, str]]
+
+
 class RemnaWaveAPIError(Exception):
     def __init__(self, message: str, status_code: int = None, response_data: dict = None):
         self.message = message
@@ -123,7 +133,7 @@ class RemnaWaveAPI:
     async def __aenter__(self):
         conn_type = self._detect_connection_type()
         
-        logger.info(f"🔗 Подключение к Remnawave: {self.base_url} (тип: {conn_type})")
+        logger.info(f"Подключение к Remnawave: {self.base_url} (тип: {conn_type})")
             
         headers = {
             'Authorization': f'Bearer {self.api_key}',
@@ -139,15 +149,15 @@ class RemnaWaveAPI:
             if ':' in self.secret_key:
                 key_name, key_value = self.secret_key.split(':', 1)
                 cookies = {key_name: key_value}
-                logger.debug(f"🍪 Используем куки: {key_name}=***")
+                logger.debug(f"Используем куки: {key_name}=***")
             else:
                 cookies = {self.secret_key: self.secret_key}
-                logger.debug(f"🍪 Используем куки: {self.secret_key}=***")
+                logger.debug(f"Используем куки: {self.secret_key}=***")
         
         connector_kwargs = {}
         
         if conn_type == "local":
-            logger.debug("🏠 Использую локальные заголовки proxy")
+            logger.debug("Используют локальные заголовки proxy")
             headers.update({
                 'X-Forwarded-Host': 'localhost',
                 'Host': 'localhost'
@@ -158,10 +168,10 @@ class RemnaWaveAPI:
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE
                 connector_kwargs['ssl'] = ssl_context
-                logger.debug("🔓 SSL проверка отключена для локального HTTPS")
+                logger.debug("SSL проверка отключена для локального HTTPS")
                 
         elif conn_type == "external":
-            logger.debug("🌐 Использую внешнее подключение с полной SSL проверкой")
+            logger.debug("Используют внешнее подключение с полной SSL проверкой")
             pass
             
         connector = aiohttp.TCPConnector(**connector_kwargs)
@@ -280,7 +290,10 @@ class RemnaWaveAPI:
     async def get_user_by_telegram_id(self, telegram_id: int) -> List[RemnaWaveUser]:
         try:
             response = await self._make_request('GET', f'/api/users/by-telegram-id/{telegram_id}')
-            return [self._parse_user(user) for user in response['response']]
+            users_data = response.get('response', [])
+            if not users_data:
+                return []
+            return [self._parse_user(user) for user in users_data]
         except RemnaWaveAPIError as e:
             if e.status_code == 404:
                 return []
@@ -440,9 +453,47 @@ class RemnaWaveAPI:
         return response['response']['eventSent']
     
     
-    async def get_subscription_info(self, short_uuid: str) -> Dict[str, Any]:
+    async def get_subscription_info(self, short_uuid: str) -> SubscriptionInfo:
         response = await self._make_request('GET', f'/api/sub/{short_uuid}/info')
-        return response['response']
+        return self._parse_subscription_info(response['response'])
+    
+    async def get_subscription_by_short_uuid(self, short_uuid: str) -> str:
+        async with self.session.get(f"{self.base_url}/api/sub/{short_uuid}") as response:
+            if response.status >= 400:
+                raise RemnaWaveAPIError(f"Failed to get subscription: {response.status}")
+            return await response.text()
+    
+    async def get_subscription_by_client_type(self, short_uuid: str, client_type: str) -> str:
+        valid_types = ["stash", "singbox", "singbox-legacy", "mihomo", "json", "v2ray-json", "clash"]
+        if client_type not in valid_types:
+            raise ValueError(f"Invalid client type. Must be one of: {valid_types}")
+        
+        async with self.session.get(f"{self.base_url}/api/sub/{short_uuid}/{client_type}") as response:
+            if response.status >= 400:
+                raise RemnaWaveAPIError(f"Failed to get subscription: {response.status}")
+            return await response.text()
+    
+    async def get_subscription_links(self, short_uuid: str) -> Dict[str, str]:
+        base_url = f"{self.base_url}/api/sub/{short_uuid}"
+        
+        links = {
+            "base": base_url,
+            "stash": f"{base_url}/stash",
+            "singbox": f"{base_url}/singbox", 
+            "singbox_legacy": f"{base_url}/singbox-legacy",
+            "mihomo": f"{base_url}/mihomo",
+            "json": f"{base_url}/json",
+            "v2ray_json": f"{base_url}/v2ray-json",
+            "clash": f"{base_url}/clash"
+        }
+        
+        return links
+    
+    async def get_outline_subscription(self, short_uuid: str, encoded_tag: str) -> str:
+        async with self.session.get(f"{self.base_url}/api/sub/outline/{short_uuid}/ss/{encoded_tag}") as response:
+            if response.status >= 400:
+                raise RemnaWaveAPIError(f"Failed to get outline subscription: {response.status}")
+            return await response.text()
     
     
     async def get_system_stats(self) -> Dict[str, Any]:
@@ -571,6 +622,16 @@ class RemnaWaveAPI:
             users_online=node_data.get('usersOnline'),
             traffic_used_bytes=node_data.get('trafficUsedBytes'),
             traffic_limit_bytes=node_data.get('trafficLimitBytes')
+        )
+    
+    def _parse_subscription_info(self, data: Dict) -> SubscriptionInfo:
+        return SubscriptionInfo(
+            is_found=data['isFound'],
+            user=data.get('user'),
+            links=data.get('links', []),
+            ss_conf_links=data.get('ssConfLinks', {}),
+            subscription_url=data.get('subscriptionUrl', ''),
+            happ=data.get('happ')
         )
 
 
