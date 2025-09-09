@@ -483,6 +483,167 @@ async def create_subscription_conversions_table():
         logger.error(f"Ошибка создания таблицы subscription_conversions: {e}")
         return False
 
+async def fix_subscriptions_table():
+    """Исправляет структуру таблицы subscriptions, добавляя отсутствующую колонку user_id"""
+    
+    logger.info("=== ИСПРАВЛЕНИЕ ТАБЛИЦЫ SUBSCRIPTIONS ===")
+    
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            
+            # Проверяем существование колонки user_id
+            user_id_exists = await check_column_exists('subscriptions', 'user_id')
+            
+            if not user_id_exists:
+                logger.info("Добавляем отсутствующую колонку user_id в таблицу subscriptions")
+                
+                if db_type == 'sqlite':
+                    column_def = 'INTEGER'
+                elif db_type == 'postgresql':
+                    column_def = 'INTEGER'
+                elif db_type == 'mysql':
+                    column_def = 'INT'
+                else:
+                    logger.error(f"Неподдерживаемый тип БД: {db_type}")
+                    return False
+                
+                # Добавляем колонку user_id
+                await conn.execute(text(f"ALTER TABLE subscriptions ADD COLUMN user_id {column_def}"))
+                logger.info("Колонка user_id добавлена в subscriptions")
+                
+                # Создаем внешний ключ если это возможно
+                try:
+                    if db_type == 'postgresql':
+                        await conn.execute(text("""
+                            ALTER TABLE subscriptions 
+                            ADD CONSTRAINT fk_subscriptions_user_id 
+                            FOREIGN KEY (user_id) REFERENCES users(id)
+                        """))
+                        
+                        await conn.execute(text("""
+                            ALTER TABLE subscriptions 
+                            ADD CONSTRAINT uq_subscriptions_user_id 
+                            UNIQUE (user_id)
+                        """))
+                        logger.info("Добавлены ограничения для user_id")
+                    
+                except Exception as fk_error:
+                    logger.warning(f"Не удалось добавить ограничения для user_id: {fk_error}")
+                
+                return True
+            else:
+                logger.info("Колонка user_id уже существует в subscriptions")
+                return True
+                
+    except Exception as e:
+        logger.error(f"Ошибка исправления таблицы subscriptions: {e}")
+        return False
+
+async def create_cryptobot_payments_table():
+    """Создает таблицу для CryptoBot платежей"""
+    
+    table_exists = await check_table_exists('cryptobot_payments')
+    if table_exists:
+        logger.info("Таблица cryptobot_payments уже существует")
+        return True
+    
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE cryptobot_payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    invoice_id VARCHAR(255) UNIQUE NOT NULL,
+                    amount VARCHAR(50) NOT NULL,
+                    asset VARCHAR(10) NOT NULL,
+                    status VARCHAR(50) NOT NULL,
+                    description TEXT NULL,
+                    payload TEXT NULL,
+                    bot_invoice_url TEXT NULL,
+                    mini_app_invoice_url TEXT NULL,
+                    web_app_invoice_url TEXT NULL,
+                    paid_at DATETIME NULL,
+                    transaction_id INTEGER NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+                
+                CREATE INDEX idx_cryptobot_payments_user_id ON cryptobot_payments(user_id);
+                CREATE INDEX idx_cryptobot_payments_invoice_id ON cryptobot_payments(invoice_id);
+                CREATE INDEX idx_cryptobot_payments_status ON cryptobot_payments(status);
+                """
+                
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE cryptobot_payments (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    invoice_id VARCHAR(255) UNIQUE NOT NULL,
+                    amount VARCHAR(50) NOT NULL,
+                    asset VARCHAR(10) NOT NULL,
+                    status VARCHAR(50) NOT NULL,
+                    description TEXT NULL,
+                    payload TEXT NULL,
+                    bot_invoice_url TEXT NULL,
+                    mini_app_invoice_url TEXT NULL,
+                    web_app_invoice_url TEXT NULL,
+                    paid_at TIMESTAMP NULL,
+                    transaction_id INTEGER NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+                
+                CREATE INDEX idx_cryptobot_payments_user_id ON cryptobot_payments(user_id);
+                CREATE INDEX idx_cryptobot_payments_invoice_id ON cryptobot_payments(invoice_id);
+                CREATE INDEX idx_cryptobot_payments_status ON cryptobot_payments(status);
+                """
+                
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE cryptobot_payments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    invoice_id VARCHAR(255) UNIQUE NOT NULL,
+                    amount VARCHAR(50) NOT NULL,
+                    asset VARCHAR(10) NOT NULL,
+                    status VARCHAR(50) NOT NULL,
+                    description TEXT NULL,
+                    payload TEXT NULL,
+                    bot_invoice_url TEXT NULL,
+                    mini_app_invoice_url TEXT NULL,
+                    web_app_invoice_url TEXT NULL,
+                    paid_at DATETIME NULL,
+                    transaction_id INT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+                
+                CREATE INDEX idx_cryptobot_payments_user_id ON cryptobot_payments(user_id);
+                CREATE INDEX idx_cryptobot_payments_invoice_id ON cryptobot_payments(invoice_id);
+                CREATE INDEX idx_cryptobot_payments_status ON cryptobot_payments(status);
+                """
+            else:
+                logger.error(f"Неподдерживаемый тип БД для создания таблицы: {db_type}")
+                return False
+            
+            await conn.execute(text(create_sql))
+            logger.info("Таблица cryptobot_payments успешно создана")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы cryptobot_payments: {e}")
+        return False
+
 async def fix_subscription_duplicates_universal():
     
     async with engine.begin() as conn:
@@ -569,6 +730,14 @@ async def run_universal_migration():
         db_type = await get_database_type()
         logger.info(f"Тип базы данных: {db_type}")
         
+        # Исправляем таблицу subscriptions
+        logger.info("=== ИСПРАВЛЕНИЕ СТРУКТУРЫ SUBSCRIPTIONS ===")
+        subscriptions_fixed = await fix_subscriptions_table()
+        if subscriptions_fixed:
+            logger.info("✅ Структура subscriptions исправлена")
+        else:
+            logger.warning("⚠️ Проблемы с исправлением subscriptions")
+        
         await add_remnawave_v2_columns()
         
         referral_migration_success = await add_referral_system_columns()
@@ -581,20 +750,13 @@ async def run_universal_migration():
             logger.info("✅ Таблица YooKassa payments готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей YooKassa payments")
-
-        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_MESSAGES ===")
-        user_messages_created = await create_user_messages_table()
-        if user_messages_created:
-            logger.info("✅ Таблица user_messages готова")
-        else:
-            logger.warning("⚠️ Проблемы с таблицей user_messages")
         
-        logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
-        fk_updated = await fix_foreign_keys_for_user_deletion()
-        if fk_updated:
-            logger.info("✅ Внешние ключи обновлены")
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ CRYPTOBOT ===")
+        cryptobot_created = await create_cryptobot_payments_table()
+        if cryptobot_created:
+            logger.info("✅ Таблица CryptoBot payments готова")
         else:
-            logger.warning("⚠️ Проблемы с обновлением внешних ключей")
+            logger.warning("⚠️ Проблемы с таблицей CryptoBot payments")
         
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ КОНВЕРСИЙ ПОДПИСОК ===")
         conversions_created = await create_subscription_conversions_table()
@@ -605,7 +767,7 @@ async def run_universal_migration():
         
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))
-            unique_users = await conn.execute(text("SELECT COUNT(DISTINCT user_id) FROM subscriptions"))
+            unique_users = await conn.execute(text("SELECT COUNT(DISTINCT user_id) FROM subscriptions WHERE user_id IS NOT NULL"))
             
             total_count = total_subs.fetchone()[0]
             unique_count = unique_users.fetchone()[0]
@@ -624,6 +786,7 @@ async def run_universal_migration():
             final_check = await conn.execute(text("""
                 SELECT user_id, COUNT(*) as count 
                 FROM subscriptions 
+                WHERE user_id IS NOT NULL
                 GROUP BY user_id 
                 HAVING COUNT(*) > 1
             """))
@@ -638,6 +801,7 @@ async def run_universal_migration():
                 logger.info("✅ Реферальная система обновлена")
                 logger.info("✅ RemnaWave v2.1.5 колонки добавлены")
                 logger.info("✅ YooKassa таблица готова")
+                logger.info("✅ CryptoBot таблица готова")
                 logger.info("✅ Таблица конверсий подписок создана")
                 logger.info("✅ Дубликаты подписок исправлены")
                 return True
@@ -651,17 +815,19 @@ async def check_migration_status():
     
     try:
         status = {
+            "subscriptions_user_id_column": False,
             "has_made_first_topup_column": False,
             "yookassa_table": False,
+            "cryptobot_table": False,
             "remnawave_v2_columns": False,
             "subscription_duplicates": False,
             "subscription_conversions_table": False
         }
         
+        status["subscriptions_user_id_column"] = await check_column_exists('subscriptions', 'user_id')
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
-        
         status["yookassa_table"] = await check_table_exists('yookassa_payments')
-        
+        status["cryptobot_table"] = await check_table_exists('cryptobot_payments')
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
         
         remnawave_columns = ['lifetime_used_traffic_bytes', 'last_remnawave_sync', 'trojan_password', 'vless_uuid', 'ss_password']
@@ -676,6 +842,7 @@ async def check_migration_status():
                 SELECT COUNT(*) FROM (
                     SELECT user_id, COUNT(*) as count 
                     FROM subscriptions 
+                    WHERE user_id IS NOT NULL
                     GROUP BY user_id 
                     HAVING COUNT(*) > 1
                 ) as dups
@@ -684,8 +851,10 @@ async def check_migration_status():
             status["subscription_duplicates"] = (duplicates_count == 0)
         
         check_names = {
+            "subscriptions_user_id_column": "Колонка user_id в subscriptions",
             "has_made_first_topup_column": "Колонка реферальной системы",
             "yookassa_table": "Таблица YooKassa payments",
+            "cryptobot_table": "Таблица CryptoBot payments",
             "subscription_conversions_table": "Таблица конверсий подписок",
             "remnawave_v2_columns": "Колонки RemnaWave v2.1.5",
             "subscription_duplicates": "Отсутствие дубликатов подписок"
@@ -699,19 +868,6 @@ async def check_migration_status():
         all_good = all(status.values())
         if all_good:
             logger.info("🎉 Все миграции выполнены успешно!")
-            
-            try:
-                async with engine.begin() as conn:
-                    conversions_count = await conn.execute(text("SELECT COUNT(*) FROM subscription_conversions"))
-                    users_count = await conn.execute(text("SELECT COUNT(*) FROM users"))
-                    
-                    conv_count = conversions_count.fetchone()[0]
-                    usr_count = users_count.fetchone()[0]
-                    
-                    logger.info(f"📊 Статистика: {usr_count} пользователей, {conv_count} конверсий записано")
-            except Exception as stats_error:
-                logger.debug(f"Не удалось получить дополнительную статистику: {stats_error}")
-                
         else:
             logger.warning("⚠️ Некоторые миграции требуют внимания")
             missing_migrations = [check_names[k] for k, v in status.items() if not v]
