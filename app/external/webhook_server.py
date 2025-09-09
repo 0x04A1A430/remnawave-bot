@@ -60,13 +60,13 @@ class WebhookServer:
             
             await self.site.start()
             
-            logger.info(f"✅ Webhook сервер запущен на порту {settings.TRIBUTE_WEBHOOK_PORT}")
-            logger.info(f"🎯 Tribute webhook URL: http://0.0.0.0:{settings.TRIBUTE_WEBHOOK_PORT}{settings.TRIBUTE_WEBHOOK_PATH}")
+            logger.info(f"Webhook сервер запущен на порту {settings.TRIBUTE_WEBHOOK_PORT}")
+            logger.info(f"Tribute webhook URL: http://0.0.0.0:{settings.TRIBUTE_WEBHOOK_PORT}{settings.TRIBUTE_WEBHOOK_PATH}")
             if settings.is_cryptobot_enabled():
-                logger.info(f"🪙 CryptoBot webhook URL: http://0.0.0.0:{settings.TRIBUTE_WEBHOOK_PORT}{settings.CRYPTOBOT_WEBHOOK_PATH}")
+                logger.info(f"CryptoBot webhook URL: http://0.0.0.0:{settings.TRIBUTE_WEBHOOK_PORT}{settings.CRYPTOBOT_WEBHOOK_PATH}")
             
         except Exception as e:
-            logger.error(f"❌ Ошибка запуска webhook сервера: {e}")
+            logger.error(f"Ошибка запуска webhook сервера: {e}")
             raise
     
     async def stop(self):
@@ -96,39 +96,106 @@ class WebhookServer:
     async def _tribute_webhook_handler(self, request: web.Request) -> web.Response:
         
         try:
-            logger.info(f"🔥 Получен Tribute webhook: {request.method} {request.path}")
-            logger.info(f"📋 Headers: {dict(request.headers)}")
+            logger.info(f"Получен Tribute webhook: {request.method} {request.path}")
+            logger.info(f"Headers: {dict(request.headers)}")
             
             raw_body = await request.read()
             
             if not raw_body:
-                logger.warning("⚠️ Получен пустой webhook от Tribute")
+                logger.warning("Получен пустой webhook от Tribute")
                 return web.json_response(
                     {"status": "error", "reason": "empty_body"},
                     status=400
                 )
             
             payload = raw_body.decode('utf-8')
-            logger.info(f"📄 Payload: {payload}")
+            logger.info(f"Payload: {payload}")
             
             try:
                 webhook_data = json.loads(payload)
-                logger.info(f"📊 Распарсенные данные: {webhook_data}")
+                logger.info(f"Распарсенные данные: {webhook_data}")
             except json.JSONDecodeError as e:
-                logger.error(f"❌ Ошибка парсинга JSON: {e}")
+                logger.error(f"Ошибка парсинга JSON: {e}")
+                return web.json_response(
+                    {"status": "error", "reason": "invalid_json"},
+                    status=400
+                )
+            
+            signature = request.headers.get('trbt-signature')
+            logger.info(f"Signature: {signature}")
+
+            if not signature:
+                logger.error("Отсутствует заголовок подписи Tribute webhook")
+                return web.json_response(
+                    {"status": "error", "reason": "missing_signature"},
+                    status=401
+                )
+
+            if settings.TRIBUTE_API_KEY:
+                from app.external.tribute import TributeService as TributeAPI
+                tribute_api = TributeAPI()
+                if not tribute_api.verify_webhook_signature(payload, signature):
+                    logger.error("Неверная подпись Tribute webhook")
+                    return web.json_response(
+                        {"status": "error", "reason": "invalid_signature"},
+                        status=401
+                    )
+
+            result = await self.tribute_service.process_webhook(payload)
+            
+            if result:
+                logger.info(f"Tribute webhook обработан успешно: {result}")
+                return web.json_response({"status": "ok", "result": result}, status=200)
+            else:
+                logger.error("Ошибка обработки Tribute webhook")
+                return web.json_response(
+                    {"status": "error", "reason": "processing_failed"},
+                    status=400
+                )
+            
+        except Exception as e:
+            logger.error(f"Критическая ошибка обработки Tribute webhook: {e}", exc_info=True)
+            return web.json_response(
+                {"status": "error", "reason": "internal_error", "message": str(e)},
+                status=500
+            )
+    
+    async def _cryptobot_webhook_handler(self, request: web.Request) -> web.Response:
+        
+        try:
+            logger.info(f"Получен CryptoBot webhook: {request.method} {request.path}")
+            logger.info(f"Headers: {dict(request.headers)}")
+            
+            raw_body = await request.read()
+            
+            if not raw_body:
+                logger.warning("Получен пустой CryptoBot webhook")
+                return web.json_response(
+                    {"status": "error", "reason": "empty_body"},
+                    status=400
+                )
+            
+            payload = raw_body.decode('utf-8')
+            logger.info(f"CryptoBot Payload: {payload}")
+            
+            try:
+                webhook_data = json.loads(payload)
+                logger.info(f"CryptoBot данные: {webhook_data}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Ошибка парсинга CryptoBot JSON: {e}")
                 return web.json_response(
                     {"status": "error", "reason": "invalid_json"},
                     status=400
                 )
             
             signature = request.headers.get('Crypto-Pay-API-Signature')
-            logger.info(f"🔐 CryptoBot Signature: {signature}")
+            logger.info(f"CryptoBot Signature: {signature}")
 
             if signature and settings.CRYPTOBOT_WEBHOOK_SECRET:
                 from app.external.cryptobot import CryptoBotService
                 cryptobot_service = CryptoBotService()
                 if not cryptobot_service.verify_webhook_signature(payload, signature):
-                    logger.error("❌ Неверная подпись CryptoBot webhook")
+                    logger.error("Неверная подпись CryptoBot webhook")
                     return web.json_response(
                         {"status": "error", "reason": "invalid_signature"},
                         status=401
@@ -143,17 +210,17 @@ class WebhookServer:
                 result = await payment_service.process_cryptobot_webhook(db, webhook_data)
             
             if result:
-                logger.info(f"✅ CryptoBot webhook обработан успешно")
+                logger.info(f"CryptoBot webhook обработан успешно")
                 return web.json_response({"status": "ok"}, status=200)
             else:
-                logger.error("❌ Ошибка обработки CryptoBot webhook")
+                logger.error("Ошибка обработки CryptoBot webhook")
                 return web.json_response(
                     {"status": "error", "reason": "processing_failed"},
                     status=400
                 )
             
         except Exception as e:
-            logger.error(f"❌ Критическая ошибка обработки CryptoBot webhook: {e}", exc_info=True)
+            logger.error(f"Критическая ошибка обработки CryptoBot webhook: {e}", exc_info=True)
             return web.json_response(
                 {"status": "error", "reason": "internal_error", "message": str(e)},
                 status=500
@@ -169,71 +236,4 @@ class WebhookServer:
             "port": settings.TRIBUTE_WEBHOOK_PORT,
             "tribute_path": settings.TRIBUTE_WEBHOOK_PATH,
             "cryptobot_path": settings.CRYPTOBOT_WEBHOOK_PATH if settings.is_cryptobot_enabled() else None
-        })400
-                )
-            
-            signature = request.headers.get('trbt-signature')
-            logger.info(f"🔐 Signature: {signature}")
-
-            if not signature:
-                logger.error("❌ Отсутствует заголовок подписи Tribute webhook")
-                return web.json_response(
-                    {"status": "error", "reason": "missing_signature"},
-                    status=401
-                )
-
-            if settings.TRIBUTE_API_KEY:
-                from app.external.tribute import TributeService as TributeAPI
-                tribute_api = TributeAPI()
-                if not tribute_api.verify_webhook_signature(payload, signature):
-                    logger.error("❌ Неверная подпись Tribute webhook")
-                    return web.json_response(
-                        {"status": "error", "reason": "invalid_signature"},
-                        status=401
-                    )
-
-            result = await self.tribute_service.process_webhook(payload)
-            
-            if result:
-                logger.info(f"✅ Tribute webhook обработан успешно: {result}")
-                return web.json_response({"status": "ok", "result": result}, status=200)
-            else:
-                logger.error("❌ Ошибка обработки Tribute webhook")
-                return web.json_response(
-                    {"status": "error", "reason": "processing_failed"},
-                    status=400
-                )
-            
-        except Exception as e:
-            logger.error(f"❌ Критическая ошибка обработки Tribute webhook: {e}", exc_info=True)
-            return web.json_response(
-                {"status": "error", "reason": "internal_error", "message": str(e)},
-                status=500
-            )
-    
-    async def _cryptobot_webhook_handler(self, request: web.Request) -> web.Response:
-        
-        try:
-            logger.info(f"🪙 Получен CryptoBot webhook: {request.method} {request.path}")
-            logger.info(f"📋 Headers: {dict(request.headers)}")
-            
-            raw_body = await request.read()
-            
-            if not raw_body:
-                logger.warning("⚠️ Получен пустой CryptoBot webhook")
-                return web.json_response(
-                    {"status": "error", "reason": "empty_body"},
-                    status=400
-                )
-            
-            payload = raw_body.decode('utf-8')
-            logger.info(f"📄 CryptoBot Payload: {payload}")
-            
-            try:
-                webhook_data = json.loads(payload)
-                logger.info(f"📊 CryptoBot данные: {webhook_data}")
-            except json.JSONDecodeError as e:
-                logger.error(f"❌ Ошибка парсинга CryptoBot JSON: {e}")
-                return web.json_response(
-                    {"status": "error", "reason": "invalid_json"},
-                    status=
+        })
