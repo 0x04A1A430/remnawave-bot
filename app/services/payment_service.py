@@ -515,15 +515,14 @@ class PaymentService:
             
             return {
                 "local_payment_id": local_payment.id,
-                "invoice_id": invoice_data['invoice_id'],
+                "invoice_id": str(invoice_data['invoice_id']),
                 "amount": amount_str,
                 "asset": asset,
                 "bot_invoice_url": invoice_data.get('bot_invoice_url'),
                 "mini_app_invoice_url": invoice_data.get('mini_app_invoice_url'),
                 "web_app_invoice_url": invoice_data.get('web_app_invoice_url'),
-                "pay_url": invoice_data.get('pay_url'),
                 "status": "active",
-                "created_at": local_payment.created_at
+                "created_at": local_payment.created_at.isoformat() if local_payment.created_at else None
             }
             
         except Exception as e:
