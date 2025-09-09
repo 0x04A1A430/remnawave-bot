@@ -34,7 +34,9 @@ jobs:
           driver-opts: |
             network=host
 
+      # Логинимся только если это НЕ PR или PR из того же репозитория
       - name: Log in to Container Registry
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -61,6 +63,20 @@ jobs:
             echo "🔀 Собираем PR версию: $VERSION"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Определяем, нужно ли пушить образ
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            if [[ "${{ github.event.pull_request.head.repo.full_name }}" == "${{ github.repository }}" ]]; then
+              echo "should_push=true" >> $GITHUB_OUTPUT
+              echo "✅ PR из того же репозитория - будем пушить"
+            else
+              echo "should_push=false" >> $GITHUB_OUTPUT
+              echo "⚠️ PR из внешнего форка - только build без push"
+            fi
+          else
+            echo "should_push=true" >> $GITHUB_OUTPUT
+            echo "✅ Push/Tag - будем пушить"
+          fi
 
       - name: Extract metadata
         id: meta
@@ -83,7 +99,7 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
-          push: true
+          push: ${{ steps.version.outputs.should_push }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
@@ -101,7 +117,7 @@ jobs:
 
       - name: Generate security report
         uses: docker/scout-action@v1
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.version.outputs.should_push == 'true'
         with:
           command: quickview,compare
           image: ${{ steps.meta.outputs.tags }}
@@ -112,7 +128,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Summary
-        if: github.event_name != 'pull_request'
+        if: steps.version.outputs.should_push == 'true'
         run: |
           echo "## 🚀 Docker Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Параметр | Значение |" >> $GITHUB_STEP_SUMMARY
@@ -124,3 +140,16 @@ jobs:
           echo "| **Образ** | \`${{ env.IMAGE_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Ветка** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Статус** | ✅ Опубликован |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Build Summary (No Push)
+        if: steps.version.outputs.should_push == 'false'
+        run: |
+          echo "## 🔨 Docker Build Summary (Test Only)" >> $GITHUB_STEP_SUMMARY
+          echo "| Параметр | Значение |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Версия** | \`${{ steps.version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Коммит** | \`${{ steps.version.outputs.short_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Дата сборки** | \`${{ steps.version.outputs.build_date }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Статус** | ✅ Собран успешно (без публикации) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Примечание:** Образ собран но не опубликован, так как это PR из внешнего форка." >> $GITHUB_STEP_SUMMARY
