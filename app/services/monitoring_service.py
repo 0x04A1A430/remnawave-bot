@@ -17,6 +17,10 @@ from app.database.crud.user import (
     get_user_by_id, get_inactive_users, delete_user,
     subtract_user_balance
 )
+from app.database.crud.notification import (
+    notification_sent,
+    record_notification,
+)
 from app.database.models import MonitoringLog, SubscriptionStatus, Subscription, User
 from app.services.subscription_service import SubscriptionService
 from app.services.payment_service import PaymentService
@@ -186,31 +190,30 @@ class MonitoringService:
                     user = await get_user_by_id(db, subscription.user_id)
                     if not user:
                         continue
-                    
-                    notification_key = f"expiring_{user.telegram_id}_{days}d_{subscription.id}"
+
                     user_key = f"user_{user.telegram_id}_today"
-                    
-                    if (notification_key in self._notified_users or 
+
+                    if (await notification_sent(db, user.id, subscription.id, "expiring", days) or
                         user_key in all_processed_users):
                         logger.debug(f"🔄 Пропускаем дублирование для пользователя {user.telegram_id} на {days} дней")
                         continue
-                    
+
                     should_send = True
                     for other_days in warning_days:
-                        if other_days < days: 
+                        if other_days < days:
                             other_subs = await self._get_expiring_paid_subscriptions(db, other_days)
                             if any(s.user_id == user.id for s in other_subs):
                                 should_send = False
                                 logger.debug(f"🎯 Пропускаем уведомление на {days} дней для пользователя {user.telegram_id}, есть более срочное на {other_days} дней")
                                 break
-                    
+
                     if not should_send:
                         continue
-                    
+
                     if self.bot:
                         success = await self._send_subscription_expiring_notification(user, subscription, days)
                         if success:
-                            self._notified_users.add(notification_key)
+                            await record_notification(db, user.id, subscription.id, "expiring", days)
                             all_processed_users.add(user_key)
                             sent_count += 1
                             logger.info(f"✅ Пользователю {user.telegram_id} отправлено уведомление об истечении подписки через {days} дней")
@@ -249,15 +252,14 @@ class MonitoringService:
                 user = subscription.user
                 if not user:
                     continue
-                
-                notification_key = f"trial_2h_{user.telegram_id}_{subscription.id}"
-                if notification_key in self._notified_users:
-                    continue  
-                
+
+                if await notification_sent(db, user.id, subscription.id, "trial_2h"):
+                    continue
+
                 if self.bot:
                     success = await self._send_trial_ending_notification(user, subscription)
                     if success:
-                        self._notified_users.add(notification_key)
+                        await record_notification(db, user.id, subscription.id, "trial_2h")
                         logger.info(f"🎁 Пользователю {user.telegram_id} отправлено уведомление об окончании тестовой подписки через 2 часа")
             
             if trial_expiring:
