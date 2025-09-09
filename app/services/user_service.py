@@ -294,7 +294,6 @@ class UserService:
                     logger.info(f"✅ YooKassa платежи удалены")
             except Exception as e:
                 logger.error(f"❌ Ошибка удаления YooKassa платежей: {e}")
-                    )
                     await db.flush()
                     logger.info(f"✅ YooKassa платежи удалены")
             except Exception as e:
