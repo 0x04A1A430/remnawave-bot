@@ -189,6 +189,122 @@ async def create_yookassa_payments_table():
         logger.error(f"Ошибка создания таблицы yookassa_payments: {e}")
         return False
 
+async def create_user_messages_table():
+    """Создание таблицы user_messages"""
+    table_exists = await check_table_exists('user_messages')
+    if table_exists:
+        logger.info("Таблица user_messages уже существует")
+        return True
+    
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE user_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    message_text TEXT NOT NULL,
+                    is_active BOOLEAN DEFAULT 1,
+                    sort_order INTEGER DEFAULT 0,
+                    created_by INTEGER NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+                );
+                
+                CREATE INDEX idx_user_messages_active ON user_messages(is_active);
+                CREATE INDEX idx_user_messages_sort ON user_messages(sort_order, created_at);
+                """
+                
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE user_messages (
+                    id SERIAL PRIMARY KEY,
+                    message_text TEXT NOT NULL,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    sort_order INTEGER DEFAULT 0,
+                    created_by INTEGER NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+                );
+                
+                CREATE INDEX idx_user_messages_active ON user_messages(is_active);
+                CREATE INDEX idx_user_messages_sort ON user_messages(sort_order, created_at);
+                """
+                
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE user_messages (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    message_text TEXT NOT NULL,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    sort_order INT DEFAULT 0,
+                    created_by INT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+                );
+                
+                CREATE INDEX idx_user_messages_active ON user_messages(is_active);
+                CREATE INDEX idx_user_messages_sort ON user_messages(sort_order, created_at);
+                """
+            else:
+                logger.error(f"Неподдерживаемый тип БД для создания таблицы: {db_type}")
+                return False
+            
+            await conn.execute(text(create_sql))
+            logger.info("Таблица user_messages успешно создана")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы user_messages: {e}")
+        return False
+
+async def fix_foreign_keys_for_user_deletion():
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            
+            if db_type == 'postgresql':
+                try:
+                    await conn.execute(text("""
+                        ALTER TABLE user_messages 
+                        DROP CONSTRAINT IF EXISTS user_messages_created_by_fkey;
+                    """))
+                    
+                    await conn.execute(text("""
+                        ALTER TABLE user_messages 
+                        ADD CONSTRAINT user_messages_created_by_fkey 
+                        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+                    """))
+                    logger.info("Обновлен внешний ключ user_messages.created_by")
+                except Exception as e:
+                    logger.warning(f"Ошибка обновления FK user_messages: {e}")
+                
+                try:
+                    await conn.execute(text("""
+                        ALTER TABLE promocodes 
+                        DROP CONSTRAINT IF EXISTS promocodes_created_by_fkey;
+                    """))
+                    
+                    await conn.execute(text("""
+                        ALTER TABLE promocodes 
+                        ADD CONSTRAINT promocodes_created_by_fkey 
+                        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+                    """))
+                    logger.info("Обновлен внешний ключ promocodes.created_by")
+                except Exception as e:
+                    logger.warning(f"Ошибка обновления FK promocodes: {e}")
+            
+            logger.info("Внешние ключи обновлены для безопасного удаления пользователей")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Ошибка обновления внешних ключей: {e}")
+        return False
+
 async def add_remnawave_v2_columns():
     
     columns_to_add = {
@@ -465,6 +581,20 @@ async def run_universal_migration():
             logger.info("✅ Таблица YooKassa payments готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей YooKassa payments")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_MESSAGES ===")
+        user_messages_created = await create_user_messages_table()
+        if user_messages_created:
+            logger.info("✅ Таблица user_messages готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей user_messages")
+        
+        logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
+        fk_updated = await fix_foreign_keys_for_user_deletion()
+        if fk_updated:
+            logger.info("✅ Внешние ключи обновлены")
+        else:
+            logger.warning("⚠️ Проблемы с обновлением внешних ключей")
         
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ КОНВЕРСИЙ ПОДПИСОК ===")
         conversions_created = await create_subscription_conversions_table()
@@ -592,3 +722,5 @@ async def check_migration_status():
     except Exception as e:
         logger.error(f"Ошибка проверки статуса миграций: {e}")
         return None
+
+
