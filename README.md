@@ -772,7 +772,7 @@ bedolaga_bot/
 │   │       ├── 🌎 servers.py     # Сервера
 │   │       ├── 📱 subscriptions.py  # Подписки
 │   │       ├── 🔍 monitoring.py  # Мониторинг
-│   │       └── 🔗 remnawave.py   # Система RemnaWave
+│   │       └── 🔗 remnawave.py   # Система Remnawave
 │   │
 │   ├── 🗄️ database/                  # База данных
 │   │   ├── 📊 models.py              # Модели SQLAlchemy
@@ -802,7 +802,7 @@ bedolaga_bot/
 │   │   ├── ♻️ version_service.py      # Проверка версий бота
 │   │   ├── 🎖️ tribute_service.py      # Tribute платежи
 │   │   ├── 💳 yookassa_service.py     # YooKassa платежи
-│   │   └── 🌐 remnawave_service.py    # Интеграция с RemnaWave
+│   │   └── 🌐 remnawave_service.py    # Интеграция с Remnawave
 │   │
 │   ├── 🛠️ utils/                     # Утилиты
 │   │   ├── 🎨 decorators.py          # Декораторы
@@ -832,10 +832,11 @@ bedolaga_bot/
 │   │   └── 👑 admin.py           # Админские клавиатуры
 │   │
 │   └── 🔌 external/               # Внешние API
-│       ├── 🌐 remnawave_api.py    # RemnaWave API
+│       ├── 🌐 remnawave_api.py    # Remnawave API
 │       ├── ⭐ telegram_stars.py   # Telegram Stars
 │       ├── 💳 yookassa_webhook.py # YooKassa webhook
 │       ├── 🌐 webhook_server.py   # Webhook сервер
+│       ├── 💳 cryptobot.py        # CryptoBot Api
 │       └── 🎖️ tribute.py          # Tribute платежи
 │
 ├── 🔄 migrations/                # Миграции БД
@@ -970,7 +971,7 @@ your-domain.com {
 
 ## 🛡️ Безопасность
 
-### 🔐 Защита панели RemnaWave
+### 🔐 Защита панели Remnawave
 
 Бот поддерживает интеграцию с системой защиты панели через куки-аутентификацию:
 
