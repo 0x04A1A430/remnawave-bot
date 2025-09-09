@@ -4,7 +4,7 @@ from aiogram.types import Message, FSInputFile, InputMediaPhoto
 LOGO_PATH = Path("vpn_logo.png")
 
 
-def _is_qr_message(message: Message) -> bool:
+def is_qr_message(message: Message) -> bool:
     return bool(message.caption and message.caption.startswith("\U0001F517 Ваша реферальная ссылка"))
 
 
@@ -21,7 +21,7 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
 async def _edit_with_photo(self: Message, text: str, **kwargs):
     if self.photo:
         media = self.photo[-1].file_id
-        if _is_qr_message(self) and LOGO_PATH.exists():
+        if is_qr_message(self) and LOGO_PATH.exists():
             media = FSInputFile(LOGO_PATH)
         media_kwargs = {"media": media, "caption": text}
         if "parse_mode" in kwargs:

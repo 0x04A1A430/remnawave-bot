@@ -2,15 +2,11 @@ from aiogram import types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import FSInputFile, InputMediaPhoto
 
-from .message_patch import LOGO_PATH
-
-
-def _is_qr_message(message: types.Message) -> bool:
-    return bool(message.caption and message.caption.startswith("\uD83D\uDD17 Ваша реферальная ссылка"))
+from .message_patch import LOGO_PATH, is_qr_message
 
 
 def _resolve_media(message: types.Message):
-    if message.photo and not _is_qr_message(message):
+    if message.photo and not is_qr_message(message):
         return message.photo[-1].file_id
     return FSInputFile(LOGO_PATH)
 
