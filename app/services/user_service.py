@@ -13,7 +13,7 @@ from app.database.crud.transaction import get_user_transactions_count
 from app.database.crud.subscription import get_subscription_by_user_id
 from app.database.models import (
     User, UserStatus, Subscription, Transaction, PromoCodeUse, 
-    ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory
+    ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory, CryptoBotPayment
 )
 from app.config import settings
 
@@ -294,6 +294,25 @@ class UserService:
                     logger.info(f"✅ YooKassa платежи удалены")
             except Exception as e:
                 logger.error(f"❌ Ошибка удаления YooKassa платежей: {e}")
+
+            try:
+                from app.database.models import CryptoBotPayment
+                from sqlalchemy import select, delete
+                
+                cryptobot_result = await db.execute(
+                    select(CryptoBotPayment).where(CryptoBotPayment.user_id == user_id)
+                )
+                cryptobot_payments = cryptobot_result.scalars().all()
+                
+                if cryptobot_payments:
+                    logger.info(f"🔄 Удаляем {len(cryptobot_payments)} CryptoBot платежей")
+                    await db.execute(
+                        delete(CryptoBotPayment).where(CryptoBotPayment.user_id == user_id)
+                    )
+                    await db.flush()
+                    logger.info(f"✅ CryptoBot платежи удалены")
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления CryptoBot платежей: {e}")
             
             try:
                 transactions_result = await db.execute(
