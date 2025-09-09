@@ -41,16 +41,32 @@ async def check_table_exists(table_name: str) -> bool:
         return False
 
 async def fix_users_table():
-    """Добавляет отсутствующие базовые колонки в таблицу users"""
+    """Добавляет все отсутствующие колонки в таблицу users"""
     
-    logger.info("=== ИСПРАВЛЕНИЕ ТАБЛИЦЫ USERS ===")
+    logger.info("=== ПОЛНОЕ ИСПРАВЛЕНИЕ ТАБЛИЦЫ USERS ===")
     
     required_columns = {
+        'telegram_id': 'BIGINT NOT NULL',
+        'username': 'VARCHAR(255) NULL',
+        'first_name': 'VARCHAR(255) NULL', 
+        'last_name': 'VARCHAR(255) NULL',
+        'status': 'VARCHAR(20) DEFAULT \'active\'',
+        'language': 'VARCHAR(5) DEFAULT \'ru\'',
         'balance_kopeks': 'INTEGER DEFAULT 0',
-        'has_had_paid_subscription': 'BOOLEAN DEFAULT FALSE',
         'used_promocodes': 'INTEGER DEFAULT 0',
+        'has_had_paid_subscription': 'BOOLEAN DEFAULT FALSE',
+        'referred_by_id': 'INTEGER NULL',
         'referral_code': 'VARCHAR(20) NULL',
-        'referred_by_id': 'INTEGER NULL'
+        'created_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+        'updated_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+        'last_activity': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+        'remnawave_uuid': 'VARCHAR(255) NULL',
+        'lifetime_used_traffic_bytes': 'BIGINT DEFAULT 0',
+        'last_remnawave_sync': 'TIMESTAMP NULL',
+        'trojan_password': 'VARCHAR(255) NULL',
+        'vless_uuid': 'VARCHAR(255) NULL',
+        'ss_password': 'VARCHAR(255) NULL',
+        'has_made_first_topup': 'BOOLEAN DEFAULT FALSE'
     }
     
     try:
@@ -64,11 +80,19 @@ async def fix_users_table():
                 if not exists:
                     logger.info(f"Добавление колонки {column_name} в таблицу users")
                     
+                    # Адаптируем определение колонки под тип БД
                     if db_type == 'sqlite':
                         if 'BOOLEAN DEFAULT FALSE' in column_def:
                             column_def = column_def.replace('BOOLEAN DEFAULT FALSE', 'BOOLEAN DEFAULT 0')
                         elif 'BOOLEAN DEFAULT TRUE' in column_def:
                             column_def = column_def.replace('BOOLEAN DEFAULT TRUE', 'BOOLEAN DEFAULT 1')
+                        if 'BIGINT' in column_def:
+                            column_def = column_def.replace('BIGINT', 'INTEGER')
+                        if 'TIMESTAMP' in column_def:
+                            column_def = column_def.replace('TIMESTAMP', 'DATETIME')
+                    elif db_type == 'mysql':
+                        if 'TIMESTAMP' in column_def:
+                            column_def = column_def.replace('TIMESTAMP', 'DATETIME')
                     
                     try:
                         await conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_def}"))
@@ -82,9 +106,9 @@ async def fix_users_table():
                     logger.debug(f"Колонка {column_name} уже существует")
             
             if columns_added > 0:
-                logger.info(f"Добавлено {columns_added} базовых колонок в users")
+                logger.info(f"Добавлено {columns_added} колонок в таблицу users")
             else:
-                logger.info("Все базовые колонки users уже существуют")
+                logger.info("Все необходимые колонки users уже существуют")
                 
             return True
             
@@ -413,58 +437,40 @@ async def add_referral_system_columns():
     logger.info("=== МИГРАЦИЯ РЕФЕРАЛЬНОЙ СИСТЕМЫ ===")
     
     try:
+        # Проверяем существование has_made_first_topup
+        column_exists = await check_column_exists('users', 'has_made_first_topup')
+        
+        if not column_exists:
+            logger.error("Колонка has_made_first_topup не найдена, таблица users не была правильно исправлена")
+            return False
+        
         async with engine.begin() as conn:
             db_type = await get_database_type()
             
-            # Сначала проверяем существование базовых колонок
-            balance_exists = await check_column_exists('users', 'balance_kopeks')
-            subscription_exists = await check_column_exists('users', 'has_had_paid_subscription')
+            logger.info("Обновление существующих пользователей...")
             
-            if not balance_exists or not subscription_exists:
-                logger.warning("Отсутствуют базовые колонки users, сначала исправляем структуру")
-                users_fixed = await fix_users_table()
-                if not users_fixed:
-                    logger.error("Не удалось исправить структуру таблицы users")
-                    return False
-            
-            column_exists = await check_column_exists('users', 'has_made_first_topup')
-            
-            if not column_exists:
-                logger.info("Добавление колонки has_made_first_topup в таблицу users")
-                
-                if db_type == 'sqlite':
-                    column_def = 'BOOLEAN DEFAULT 0'
-                else:
-                    column_def = 'BOOLEAN DEFAULT FALSE'
-                
-                await conn.execute(text(f"ALTER TABLE users ADD COLUMN has_made_first_topup {column_def}"))
-                logger.info("Колонка has_made_first_topup успешно добавлена")
-                
-                logger.info("Обновление существующих пользователей...")
-                
-                if db_type == 'sqlite':
-                    update_sql = """
-                        UPDATE users 
-                        SET has_made_first_topup = 1 
-                        WHERE balance_kopeks > 0 OR has_had_paid_subscription = 1
-                    """
-                else:
-                    update_sql = """
-                        UPDATE users 
-                        SET has_made_first_topup = TRUE 
-                        WHERE balance_kopeks > 0 OR has_had_paid_subscription = TRUE
-                    """
-                
-                result = await conn.execute(text(update_sql))
-                updated_count = result.rowcount
-                
-                logger.info(f"Обновлено {updated_count} пользователей с has_made_first_topup = TRUE")
-                logger.info("Миграция реферальной системы завершена")
-                
-                return True
+            if db_type == 'sqlite':
+                update_sql = """
+                    UPDATE users 
+                    SET has_made_first_topup = 1 
+                    WHERE (balance_kopeks > 0 OR has_had_paid_subscription = 1)
+                    AND has_made_first_topup = 0
+                """
             else:
-                logger.info("Колонка has_made_first_topup уже существует")
-                return True
+                update_sql = """
+                    UPDATE users 
+                    SET has_made_first_topup = TRUE 
+                    WHERE (balance_kopeks > 0 OR has_had_paid_subscription = TRUE)
+                    AND has_made_first_topup = FALSE
+                """
+            
+            result = await conn.execute(text(update_sql))
+            updated_count = result.rowcount
+            
+            logger.info(f"Обновлено {updated_count} пользователей с has_made_first_topup = TRUE")
+            logger.info("Миграция реферальной системы завершена успешно")
+            
+            return True
                 
     except Exception as e:
         logger.error(f"Ошибка миграции реферальной системы: {e}")
@@ -547,60 +553,102 @@ async def create_subscription_conversions_table():
         return False
 
 async def fix_subscriptions_table():
-    """Исправляет структуру таблицы subscriptions, добавляя отсутствующую колонку user_id"""
+    """Добавляет все отсутствующие колонки в таблицу subscriptions"""
     
-    logger.info("=== ИСПРАВЛЕНИЕ ТАБЛИЦЫ SUBSCRIPTIONS ===")
+    logger.info("=== ПОЛНОЕ ИСПРАВЛЕНИЕ ТАБЛИЦЫ SUBSCRIPTIONS ===")
+    
+    required_columns = {
+        'user_id': 'INTEGER NOT NULL',
+        'status': 'VARCHAR(20) DEFAULT \'trial\'',
+        'is_trial': 'BOOLEAN DEFAULT TRUE',
+        'start_date': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+        'end_date': 'TIMESTAMP NOT NULL',
+        'traffic_limit_gb': 'INTEGER DEFAULT 0',
+        'traffic_used_gb': 'FLOAT DEFAULT 0.0',
+        'subscription_url': 'VARCHAR(500) NULL',
+        'device_limit': 'INTEGER DEFAULT 1',
+        'connected_squads': 'JSON NULL',
+        'autopay_enabled': 'BOOLEAN DEFAULT FALSE',
+        'autopay_days_before': 'INTEGER DEFAULT 3',
+        'created_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+        'updated_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+        'remnawave_short_uuid': 'VARCHAR(255) NULL'
+    }
     
     try:
         async with engine.begin() as conn:
             db_type = await get_database_type()
+            columns_added = 0
             
-            # Проверяем существование колонки user_id
-            user_id_exists = await check_column_exists('subscriptions', 'user_id')
-            
-            if not user_id_exists:
-                logger.info("Добавляем отсутствующую колонку user_id в таблицу subscriptions")
+            for column_name, column_def in required_columns.items():
+                exists = await check_column_exists('subscriptions', column_name)
                 
-                if db_type == 'sqlite':
-                    column_def = 'INTEGER'
-                elif db_type == 'postgresql':
-                    column_def = 'INTEGER'
-                elif db_type == 'mysql':
-                    column_def = 'INT'
+                if not exists:
+                    logger.info(f"Добавление колонки {column_name} в таблицу subscriptions")
+                    
+                    # Адаптируем определение колонки под тип БД
+                    if db_type == 'sqlite':
+                        if 'BOOLEAN DEFAULT FALSE' in column_def:
+                            column_def = column_def.replace('BOOLEAN DEFAULT FALSE', 'BOOLEAN DEFAULT 0')
+                        elif 'BOOLEAN DEFAULT TRUE' in column_def:
+                            column_def = column_def.replace('BOOLEAN DEFAULT TRUE', 'BOOLEAN DEFAULT 1')
+                        if 'TIMESTAMP' in column_def:
+                            column_def = column_def.replace('TIMESTAMP', 'DATETIME')
+                        if 'JSON' in column_def:
+                            column_def = column_def.replace('JSON', 'TEXT')
+                        if 'FLOAT' in column_def:
+                            column_def = column_def.replace('FLOAT', 'REAL')
+                    elif db_type == 'mysql':
+                        if 'TIMESTAMP' in column_def:
+                            column_def = column_def.replace('TIMESTAMP', 'DATETIME')
+                    elif db_type == 'postgresql':
+                        if 'JSON' in column_def:
+                            column_def = column_def.replace('JSON', 'JSONB')
+                    
+                    try:
+                        await conn.execute(text(f"ALTER TABLE subscriptions ADD COLUMN {column_name} {column_def}"))
+                        columns_added += 1
+                        logger.info(f"Колонка {column_name} успешно добавлена")
+                    except Exception as e:
+                        logger.error(f"Ошибка добавления колонки {column_name}: {e}")
+                        continue
+                        
                 else:
-                    logger.error(f"Неподдерживаемый тип БД: {db_type}")
-                    return False
-                
-                # Добавляем колонку user_id
-                await conn.execute(text(f"ALTER TABLE subscriptions ADD COLUMN user_id {column_def}"))
-                logger.info("Колонка user_id добавлена в subscriptions")
-                
-                # Создаем внешний ключ если это возможно
-                try:
-                    if db_type == 'postgresql':
+                    logger.debug(f"Колонка {column_name} уже существует")
+            
+            if columns_added > 0:
+                logger.info(f"Добавлено {columns_added} колонок в таблицу subscriptions")
+            else:
+                logger.info("Все необходимые колонки subscriptions уже существуют")
+            
+            # Создаем внешний ключ если возможно
+            try:
+                user_id_exists = await check_column_exists('subscriptions', 'user_id')
+                if user_id_exists and db_type == 'postgresql':
+                    # Проверяем существование constraint'а
+                    check_constraint = await conn.execute(text("""
+                        SELECT constraint_name 
+                        FROM information_schema.table_constraints 
+                        WHERE table_name = 'subscriptions' 
+                        AND constraint_type = 'FOREIGN KEY'
+                        AND constraint_name = 'fk_subscriptions_user_id'
+                    """))
+                    
+                    if not check_constraint.fetchone():
                         await conn.execute(text("""
                             ALTER TABLE subscriptions 
                             ADD CONSTRAINT fk_subscriptions_user_id 
                             FOREIGN KEY (user_id) REFERENCES users(id)
                         """))
-                        
-                        await conn.execute(text("""
-                            ALTER TABLE subscriptions 
-                            ADD CONSTRAINT uq_subscriptions_user_id 
-                            UNIQUE (user_id)
-                        """))
-                        logger.info("Добавлены ограничения для user_id")
-                    
-                except Exception as fk_error:
-                    logger.warning(f"Не удалось добавить ограничения для user_id: {fk_error}")
+                        logger.info("Добавлен внешний ключ для user_id")
                 
-                return True
-            else:
-                logger.info("Колонка user_id уже существует в subscriptions")
-                return True
+            except Exception as fk_error:
+                logger.warning(f"Не удалось добавить внешний ключ: {fk_error}")
                 
+            return True
+            
     except Exception as e:
-        logger.error(f"Ошибка исправления таблицы subscriptions: {e}")
+        logger.error(f"Ошибка при исправлении таблицы subscriptions: {e}")
         return False
 
 async def create_cryptobot_payments_table():
