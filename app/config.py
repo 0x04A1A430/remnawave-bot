@@ -295,6 +295,27 @@ class Settings(BaseSettings):
             return f"{self.WEBHOOK_URL}/payment-success"
         return "https://t.me/"
 
+    def is_cryptobot_enabled(self) -> bool:
+        return (self.CRYPTOBOT_ENABLED and 
+                self.CRYPTOBOT_API_TOKEN is not None)
+    
+    def get_cryptobot_base_url(self) -> str:
+        if self.CRYPTOBOT_TESTNET:
+            return "https://testnet-pay.crypt.bot"
+        return self.CRYPTOBOT_BASE_URL
+    
+    def get_cryptobot_assets(self) -> List[str]:
+        try:
+            assets = self.CRYPTOBOT_ASSETS.strip()
+            if not assets:
+                return ["USDT", "TON"]
+            return [asset.strip() for asset in assets.split(',') if asset.strip()]
+        except (ValueError, AttributeError):
+            return ["USDT", "TON"]
+    
+    def get_cryptobot_invoice_expires_seconds(self) -> int:
+        return self.CRYPTOBOT_INVOICE_EXPIRES_HOURS * 3600
+
     def is_maintenance_mode(self) -> bool:
         return self.MAINTENANCE_MODE
     
