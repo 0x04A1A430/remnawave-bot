@@ -6,9 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import (
-    Subscription, SubscriptionStatus, User, 
+    Subscription, SubscriptionStatus, User,
     SubscriptionServer
 )
+from app.database.crud.notification import clear_notifications
 from app.utils.pricing_utils import calculate_months_from_days, get_remaining_months
 from app.config import settings
 
@@ -121,10 +122,11 @@ async def extend_subscription(
     
     await db.commit()
     await db.refresh(subscription)
-    
+    await clear_notifications(db, subscription.id)
+
     logger.info(f"✅ Подписка продлена до: {subscription.end_date}")
     logger.info(f"📊 Новые параметры: статус={subscription.status}, окончание={subscription.end_date}")
-    
+
     return subscription
 
 

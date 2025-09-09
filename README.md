@@ -362,6 +362,7 @@ PAYMENT_SUBSCRIPTION_TEMPLATE={service_name} - {description}
 # guide - открывает гайд подключения (режим 1)
 # miniapp_subscription - открывает ссылку подписки в мини-приложении (режим 2)
 # miniapp_custom - открывает заданную ссылку в мини-приложении (режим 3)
+# link - открывает ссылку подписки напрямую (режим 4)
 CONNECT_BUTTON_MODE=guide
 
 # URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
