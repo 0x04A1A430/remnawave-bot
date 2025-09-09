@@ -67,6 +67,8 @@ services:
       # Timezone
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+      # Логотип для сообщений
+      - ./vpn_logo.png:/app/vpn_logo.png:ro
     ports:
       - "${TRIBUTE_WEBHOOK_PORT:-8081}:8081"
       - "${YOOKASSA_WEBHOOK_PORT:-8082}:8082"

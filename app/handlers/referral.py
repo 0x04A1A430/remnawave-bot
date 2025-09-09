@@ -91,18 +91,23 @@ async def show_referral_info(
     
     referral_text += "📢 Приглашайте друзей и зарабатывайте!"
     
-    if callback.message.text:
-        await callback.message.edit_text(
-            referral_text,
+    logo = FSInputFile("vpn_logo.png")
+    if callback.message.photo:
+        await callback.message.edit_media(
+            types.InputMediaPhoto(
+                media=logo,
+                caption=referral_text,
+                parse_mode="HTML",
+            ),
             reply_markup=get_referral_keyboard(db_user.language),
-            parse_mode="HTML"
         )
     else:
         await callback.message.delete()
-        await callback.message.answer(
-            referral_text,
+        await callback.message.answer_photo(
+            logo,
+            caption=referral_text,
             reply_markup=get_referral_keyboard(db_user.language),
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
     await callback.answer()
 
@@ -112,6 +117,7 @@ async def show_referral_qr(
     db_user: User,
 ):
     texts = get_texts(db_user.language)
+    logo = FSInputFile("vpn_logo.png")
 
     bot_username = (await callback.bot.get_me()).username
     referral_link = f"https://t.me/{bot_username}?start={db_user.referral_code}"
@@ -154,15 +160,19 @@ async def show_detailed_referral_list(
     page: int = 1
 ):
     texts = get_texts(db_user.language)
-    
+    logo = FSInputFile("vpn_logo.png")
+
     referrals_data = await get_detailed_referral_list(db, db_user.id, limit=10, offset=(page - 1) * 10)
-    
+
     if not referrals_data['referrals']:
-        await callback.message.edit_text(
-            "📋 У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!",
+        await callback.message.edit_media(
+            types.InputMediaPhoto(
+                media=logo,
+                caption="📋 У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!",
+            ),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
                 [types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_referrals")]
-            ])
+            ]),
         )
         await callback.answer()
         return
@@ -209,10 +219,13 @@ async def show_detailed_referral_list(
         callback_data="menu_referrals"
     )])
     
-    await callback.message.edit_text(
-        text,
+    await callback.message.edit_media(
+        types.InputMediaPhoto(
+            media=logo,
+            caption=text,
+            parse_mode="HTML",
+        ),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -223,9 +236,10 @@ async def show_referral_analytics(
     db: AsyncSession
 ):
     texts = get_texts(db_user.language)
-    
+    logo = FSInputFile("vpn_logo.png")
+
     analytics = await get_referral_analytics(db, db_user.id)
-    
+
     text = f"📊 <b>Аналитика рефералов</b>\n\n"
     
     text += f"💰 <b>Доходы по периодам:</b>\n"
@@ -242,12 +256,15 @@ async def show_referral_analytics(
     
     text += "📈 Продолжайте развивать свою реферальную сеть!"
     
-    await callback.message.edit_text(
-        text,
+    await callback.message.edit_media(
+        types.InputMediaPhoto(
+            media=logo,
+            caption=text,
+            parse_mode="HTML",
+        ),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_referrals")]
         ]),
-        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -279,12 +296,17 @@ async def create_invite_message(
         )]
     ])
     
-    await callback.message.edit_text(
-        f"📝 <b>Приглашение создано!</b>\n\n"
-        f"Нажмите кнопку «📤 Поделиться» чтобы отправить приглашение в любой чат, или скопируйте текст ниже:\n\n"
-        f"<code>{invite_text}</code>",
+    await callback.message.edit_media(
+        types.InputMediaPhoto(
+            media=logo,
+            caption=(
+                f"📝 <b>Приглашение создано!</b>\n\n"
+                f"Нажмите кнопку «📤 Поделиться» чтобы отправить приглашение в любой чат, или скопируйте текст ниже:\n\n"
+                f"<code>{invite_text}</code>"
+            ),
+            parse_mode="HTML",
+        ),
         reply_markup=keyboard,
-        parse_mode="HTML"
     )
     await callback.answer()
 
