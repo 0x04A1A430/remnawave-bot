@@ -17,6 +17,7 @@ from app.services.version_service import version_service
 from app.external.webhook_server import WebhookServer
 from app.external.yookassa_webhook import start_yookassa_webhook_server
 from app.database.universal_migration import run_universal_migration
+from app.services.backup_service import backup_service
 
 
 class GracefulExit:
@@ -89,6 +90,20 @@ async def main():
         logger.info(f"📦 Текущая версия: {version_service.current_version}")
         
         logger.info("🔗 Бот подключен к сервисам мониторинга и техработ")
+
+        logger.info("🗄️ Инициализация сервиса бекапов...")
+        try:
+            backup_service.bot = bot
+            
+            # Запускаем автобекапы если они включены
+            settings_obj = await backup_service.get_backup_settings()
+            if settings_obj.auto_backup_enabled:
+                await backup_service.start_auto_backup()
+                logger.info("✅ Автобекапы запущены")
+            
+            logger.info("✅ Сервис бекапов инициализирован")
+        except Exception as e:
+            logger.error(f"❌ Ошибка инициализации сервиса бекапов: {e}")
         
         payment_service = PaymentService(bot)
         
@@ -221,6 +236,12 @@ async def main():
                 await version_check_task
             except asyncio.CancelledError:
                 pass
+
+        logger.info("ℹ️ Остановка сервиса бекапов...")
+        try:
+            await backup_service.stop_auto_backup()
+        except Exception as e:
+            logger.error(f"Ошибка остановки сервиса бекапов: {e}")
         
         if polling_task and not polling_task.done():
             logger.info("ℹ️ Остановка polling...")
