@@ -156,6 +156,14 @@ class Settings(BaseSettings):
     VERSION_CHECK_ENABLED: bool = True
     VERSION_CHECK_REPO: str = "fr1ngg/remnawave-bedolaga-telegram-bot"
     VERSION_CHECK_INTERVAL_HOURS: int = 1
+
+    BACKUP_AUTO_ENABLED: bool = True
+    BACKUP_INTERVAL_HOURS: int = 24
+    BACKUP_TIME: str = "03:00"
+    BACKUP_MAX_KEEP: int = 7
+    BACKUP_COMPRESSION: bool = True
+    BACKUP_INCLUDE_LOGS: bool = False
+    BACKUP_LOCATION: str = "/app/data/backups"
     
     @field_validator('LOG_FILE', mode='before')
     @classmethod
