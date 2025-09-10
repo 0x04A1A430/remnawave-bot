@@ -33,6 +33,9 @@ def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="🔄 Обновления", callback_data="admin_updates")
         ],
         [
+            InlineKeyboardButton(text="🗄️ Бекапы", callback_data="backup_panel")
+        ],
+        [
             InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
         ]
     ])
@@ -660,3 +663,6 @@ def get_sync_simplified_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     ]
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+
