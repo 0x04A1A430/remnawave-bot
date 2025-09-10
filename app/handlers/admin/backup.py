@@ -5,17 +5,13 @@ from pathlib import Path
 from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
 from app.services.backup_service import backup_service
 from app.utils.decorators import admin_required, error_handler
-from app.keyboards.admin import (
-    get_admin_main_keyboard, 
-    get_confirmation_keyboard,
-    get_admin_pagination_keyboard
-)
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +23,79 @@ class BackupStates(StatesGroup):
 
 def get_backup_main_keyboard(language: str = "ru"):
     """Главная клавиатура настроек бекапов"""
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🚀 Создать бекап", callback_data="backup_create"),
+            InlineKeyboardButton(text="📥 Восстановить", callback_data="backup_restore")
+        ],
+        [
+            InlineKeyboardButton(text="📋 Список бекапов", callback_data="backup_list"),
+            InlineKeyboardButton(text="📊 Журнал операций", callback_data="backup_logs")
+        ],
+        [
+            InlineKeyboardButton(text="⚙️ Настройки", callback_data="backup_settings"),
+            InlineKeyboardButton(text="🔄 Автобекапы", callback_data="backup_auto_toggle")
+        ],
+        [
+            InlineKeyboardButton(text="◀️ Назад", callback_data="admin_panel")
+        ]
+    ])
+
+
+def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5):
+    """Клавиатура со списком бекапов"""
+    keyboard = []
+    
+    # Пагинация
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    page_backups = backups[start_idx:end_idx]
+    
+    for backup in page_backups:
+        # Форматируем дату
+        try:
+            if backup.get("timestamp"):
+                dt = datetime.fromisoformat(backup["timestamp"].replace('Z', '+00:00'))
+                date_str = dt.strftime("%d.%m %H:%M")
+            else:
+                date_str = "?"
+        except:
+            date_str = "?"
+        
+        size_str = f"{backup.get('file_size_mb', 0):.1f}MB"
+        records_str = backup.get('total_records', '?')
+        
+        button_text = f"📦 {date_str} • {size_str} • {records_str} записей"
+        callback_data = f"backup_manage_{backup['filename']}"
+        
+        keyboard.append([InlineKeyboardButton(text=button_text, callback_data=callback_data)])
+    
+    # Пагинация
+    if len(backups) > per_page:
+        total_pages = (len(backups) + per_page - 1) // per_page
+        nav_row = []
+        
+        if page > 1:
+            nav_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"backup_list_page_{page-1}"))
+        
+        nav_row.append(InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="noop"))
+        
+        if page < total_pages:
+            nav_row.append(InlineKeyboardButton(text="➡️", callback_data=f"backup_list_page_{page+1}"))
+        
+        keyboard.append(nav_row)
+    
+    # Управляющие кнопки
+    keyboard.extend([
+        [InlineKeyboardButton(text="🔄 Обновить", callback_data="backup_list")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="backup_panel")]
+    ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_backup_manage_keyboard(backup_filename: str):
     """Клавиатура управления конкретным бекапом"""
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="📥 Восстановить", callback_data=f"backup_restore_file_{backup_filename}"),
@@ -52,8 +112,6 @@ def get_backup_manage_keyboard(backup_filename: str):
 
 def get_backup_settings_keyboard(settings_obj):
     """Клавиатура настроек бекапов"""
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    
     auto_status = "✅ Включены" if settings_obj.auto_backup_enabled else "❌ Отключены"
     compression_status = "✅ Включено" if settings_obj.compression_enabled else "❌ Отключено"
     logs_status = "✅ Включены" if settings_obj.include_logs else "❌ Отключены"
@@ -516,81 +574,6 @@ async def handle_backup_file_upload(
 
 @admin_required
 @error_handler
-async def restore_uploaded_backup(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession
-):
-    """Восстанавливает загруженный бекап"""
-    if callback.data.startswith("backup_restore_uploaded_clear_"):
-        filename = callback.data.replace("backup_restore_uploaded_clear_", "")
-        clear_existing = True
-    else:
-        filename = callback.data.replace("backup_restore_uploaded_", "")
-        clear_existing = False
-    
-    await callback.answer("🔄 Восстановление запущено...")
-    
-    temp_path = backup_service.backup_dir / filename
-    
-    if not temp_path.exists():
-        await callback.message.edit_text(
-            "❌ Временный файл не найден. Попробуйте загрузить файл заново.",
-            reply_markup=get_backup_main_keyboard(db_user.language)
-        )
-        return
-    
-    # Показываем прогресс
-    action_text = "очисткой и восстановлением" if clear_existing else "восстановлением"
-    progress_msg = await callback.message.edit_text(
-        f"📥 <b>Восстановление из загруженного файла...</b>\n\n"
-        f"⏳ Работаем с {action_text} данных...\n"
-        f"Это может занять несколько минут.",
-        parse_mode="HTML"
-    )
-    
-    try:
-        # Выполняем восстановление
-        success, message = await backup_service.restore_backup(
-            str(temp_path),
-            clear_existing=clear_existing
-        )
-        
-        # Удаляем временный файл
-        try:
-            temp_path.unlink()
-        except:
-            pass
-        
-        if success:
-            await progress_msg.edit_text(
-                f"✅ <b>Восстановление завершено!</b>\n\n{message}",
-                parse_mode="HTML",
-                reply_markup=get_backup_main_keyboard(db_user.language)
-            )
-        else:
-            await progress_msg.edit_text(
-                f"❌ <b>Ошибка восстановления</b>\n\n{message}",
-                parse_mode="HTML",
-                reply_markup=get_backup_main_keyboard(db_user.language)
-            )
-    
-    except Exception as e:
-        # Удаляем временный файл при ошибке
-        try:
-            temp_path.unlink()
-        except:
-            pass
-        
-        await progress_msg.edit_text(
-            f"❌ <b>Ошибка восстановления</b>\n\n{str(e)}",
-            parse_mode="HTML",
-            reply_markup=get_backup_main_keyboard(db_user.language)
-        )
-
-
-@admin_required
-@error_handler
 async def show_backup_settings(
     callback: types.CallbackQuery,
     db_user: User,
@@ -703,11 +686,6 @@ def register_handlers(dp: Dispatcher):
         F.data.startswith("backup_restore_execute_") | F.data.startswith("backup_restore_clear_")
     )
     
-    dp.callback_query.register(
-        restore_uploaded_backup,
-        F.data.startswith("backup_restore_uploaded_")
-    )
-    
     # Настройки
     dp.callback_query.register(
         show_backup_settings,
@@ -723,74 +701,4 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(
         handle_backup_file_upload,
         BackupStates.waiting_backup_file
-    )d=[
-        [
-            InlineKeyboardButton(text="🚀 Создать бекап", callback_data="backup_create"),
-            InlineKeyboardButton(text="📥 Восстановить", callback_data="backup_restore")
-        ],
-        [
-            InlineKeyboardButton(text="📋 Список бекапов", callback_data="backup_list"),
-            InlineKeyboardButton(text="📊 Журнал операций", callback_data="backup_logs")
-        ],
-        [
-            InlineKeyboardButton(text="⚙️ Настройки", callback_data="backup_settings"),
-            InlineKeyboardButton(text="🔄 Автобекапы", callback_data="backup_auto_toggle")
-        ],
-        [
-            InlineKeyboardButton(text="◀️ Назад", callback_data="admin_panel")
-        ]
-    ])
-
-
-def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5):
-    """Клавиатура со списком бекапов"""
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    
-    keyboard = []
-    
-    # Пагинация
-    start_idx = (page - 1) * per_page
-    end_idx = start_idx + per_page
-    page_backups = backups[start_idx:end_idx]
-    
-    for backup in page_backups:
-        # Форматируем дату
-        try:
-            if backup.get("timestamp"):
-                dt = datetime.fromisoformat(backup["timestamp"].replace('Z', '+00:00'))
-                date_str = dt.strftime("%d.%m %H:%M")
-            else:
-                date_str = "?"
-        except:
-            date_str = "?"
-        
-        size_str = f"{backup.get('file_size_mb', 0):.1f}MB"
-        records_str = backup.get('total_records', '?')
-        
-        button_text = f"📦 {date_str} • {size_str} • {records_str} записей"
-        callback_data = f"backup_manage_{backup['filename']}"
-        
-        keyboard.append([InlineKeyboardButton(text=button_text, callback_data=callback_data)])
-    
-    # Пагинация
-    if len(backups) > per_page:
-        total_pages = (len(backups) + per_page - 1) // per_page
-        nav_row = []
-        
-        if page > 1:
-            nav_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"backup_list_page_{page-1}"))
-        
-        nav_row.append(InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="noop"))
-        
-        if page < total_pages:
-            nav_row.append(InlineKeyboardButton(text="➡️", callback_data=f"backup_list_page_{page+1}"))
-        
-        keyboard.append(nav_row)
-    
-    # Управляющие кнопки
-    keyboard.extend([
-        [InlineKeyboardButton(text="🔄 Обновить", callback_data="backup_list")],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="backup_panel")]
-    ])
-    
-    return InlineKeyboardMarkup(inline_keyboar
+    )
