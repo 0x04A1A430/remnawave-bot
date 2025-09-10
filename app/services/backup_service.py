@@ -71,6 +71,7 @@ class BackupService:
             self.backup_models.append(MonitoringLog)
 
     def _load_settings(self) -> BackupSettings:
+        """Загружает настройки бекапов из переменных окружения или БД"""
         return BackupSettings(
             auto_backup_enabled=os.getenv("BACKUP_AUTO_ENABLED", "true").lower() == "true",
             backup_interval_hours=int(os.getenv("BACKUP_INTERVAL_HOURS", "24")),
@@ -146,7 +147,7 @@ class BackupService:
                 total_records=total_records,
                 compressed=compress,
                 created_by=created_by,
-                file_size_bytes=0 
+                file_size_bytes=0  
             )
             
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -277,10 +278,33 @@ class BackupService:
                                     if column is None:
                                         continue
                                     
-                                    if 'DateTime' in str(column.type) and isinstance(value, str):
+                                    column_type_str = str(column.type).upper()
+                                    if ('DATETIME' in column_type_str or 'TIMESTAMP' in column_type_str) and isinstance(value, str):
                                         try:
-                                            processed_data[key] = datetime.fromisoformat(value)
-                                        except:
+                                            if 'T' in value:
+                                                processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                                            else:
+                                                processed_data[key] = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+                                        except (ValueError, TypeError) as e:
+                                            logger.warning(f"Не удалось парсить дату {value} для поля {key}: {e}")
+                                            processed_data[key] = datetime.utcnow() 
+                                    elif ('BOOLEAN' in column_type_str or 'BOOL' in column_type_str) and isinstance(value, str):
+                                        processed_data[key] = value.lower() in ('true', '1', 'yes', 'on')
+                                    elif ('INTEGER' in column_type_str or 'INT' in column_type_str) and isinstance(value, str):
+                                        try:
+                                            processed_data[key] = int(value)
+                                        except ValueError:
+                                            processed_data[key] = 0
+                                    elif ('FLOAT' in column_type_str or 'REAL' in column_type_str or 'NUMERIC' in column_type_str) and isinstance(value, str):
+                                        try:
+                                            processed_data[key] = float(value)
+                                        except ValueError:
+                                            processed_data[key] = 0.0
+                                    elif 'JSON' in column_type_str and isinstance(value, str):
+                                        try:
+                                            import json
+                                            processed_data[key] = json.loads(value)
+                                        except (ValueError, TypeError):
                                             processed_data[key] = value
                                     else:
                                         processed_data[key] = value
@@ -422,7 +446,6 @@ class BackupService:
             if len(backups) > self._settings.max_backups_keep:
                 backups.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
                 
-                # Удаляем лишние
                 for backup in backups[self._settings.max_backups_keep:]:
                     try:
                         await self.delete_backup(backup["filename"])
@@ -463,6 +486,7 @@ class BackupService:
             logger.info(f"🔄 Автобекапы включены, интервал: {self._settings.backup_interval_hours}ч")
 
     async def stop_auto_backup(self):
+        """Останавливает автоматические бекапы"""
         if self._auto_backup_task and not self._auto_backup_task.done():
             self._auto_backup_task.cancel()
             logger.info("⏹️ Автобекапы остановлены")
@@ -484,7 +508,7 @@ class BackupService:
                 break
             except Exception as e:
                 logger.error(f"Ошибка в цикле автобекапов: {e}")
-                await asyncio.sleep(3600)
+                await asyncio.sleep(3600) 
 
     async def _send_backup_notification(
         self, 
