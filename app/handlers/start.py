@@ -791,3 +791,4 @@ def register_handlers(dp: Dispatcher):
     logger.info("✅ Зарегистрирован handle_potential_referral_code")
     
     logger.info("🔧 === КОНЕЦ регистрации обработчиков start.py ===")
+ 
