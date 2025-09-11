@@ -224,6 +224,11 @@ def register_welcome_text_handlers(dp: Dispatcher):
     )
     
     dp.callback_query.register(
+        show_formatting_help,
+        F.data == "show_formatting_help"
+    )
+    
+    dp.callback_query.register(
         show_preview_welcome_text,
         F.data == "preview_welcome_text"
     )
