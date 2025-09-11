@@ -11,6 +11,7 @@ from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_referral_keyboard
 from app.localization.texts import get_texts
+from app.utils.photo_message import edit_or_answer_photo
 from app.utils.user_utils import (
     get_detailed_referral_list,
     get_referral_analytics,
@@ -90,20 +91,12 @@ async def show_referral_info(
         referral_text += "\n"
     
     referral_text += "📢 Приглашайте друзей и зарабатывайте!"
-    
-    if callback.message.text:
-        await callback.message.edit_text(
-            referral_text,
-            reply_markup=get_referral_keyboard(db_user.language),
-            parse_mode="HTML"
-        )
-    else:
-        await callback.message.delete()
-        await callback.message.answer(
-            referral_text,
-            reply_markup=get_referral_keyboard(db_user.language),
-            parse_mode="HTML"
-        )
+
+    await edit_or_answer_photo(
+        callback,
+        referral_text,
+        get_referral_keyboard(db_user.language),
+    )
     await callback.answer()
 
 
@@ -111,6 +104,8 @@ async def show_referral_qr(
     callback: types.CallbackQuery,
     db_user: User,
 ):
+    await callback.answer()
+
     texts = get_texts(db_user.language)
 
     bot_username = (await callback.bot.get_me()).username
@@ -144,7 +139,6 @@ async def show_referral_qr(
             caption=f"🔗 Ваша реферальная ссылка:\n{referral_link}",
             reply_markup=keyboard,
         )
-    await callback.answer()
 
 
 async def show_detailed_referral_list(
@@ -154,15 +148,17 @@ async def show_detailed_referral_list(
     page: int = 1
 ):
     texts = get_texts(db_user.language)
-    
+
     referrals_data = await get_detailed_referral_list(db, db_user.id, limit=10, offset=(page - 1) * 10)
-    
+
     if not referrals_data['referrals']:
-        await callback.message.edit_text(
+        await edit_or_answer_photo(
+            callback,
             "📋 У вас пока нет рефералов.\n\nПоделитесь своей реферальной ссылкой, чтобы начать зарабатывать!",
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_referrals")]
-            ])
+            types.InlineKeyboardMarkup(
+                inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_referrals")]]
+            ),
+            parse_mode=None,
         )
         await callback.answer()
         return
@@ -205,14 +201,14 @@ async def show_detailed_referral_list(
         keyboard.append(nav_buttons)
     
     keyboard.append([types.InlineKeyboardButton(
-        text=texts.BACK, 
+        text=texts.BACK,
         callback_data="menu_referrals"
     )])
-    
-    await callback.message.edit_text(
+
+    await edit_or_answer_photo(
+        callback,
         text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-        parse_mode="HTML"
+        types.InlineKeyboardMarkup(inline_keyboard=keyboard),
     )
     await callback.answer()
 
@@ -223,31 +219,31 @@ async def show_referral_analytics(
     db: AsyncSession
 ):
     texts = get_texts(db_user.language)
-    
+
     analytics = await get_referral_analytics(db, db_user.id)
-    
+
     text = f"📊 <b>Аналитика рефералов</b>\n\n"
-    
+
     text += f"💰 <b>Доходы по периодам:</b>\n"
     text += f"• Сегодня: {texts.format_price(analytics['earnings_by_period']['today'])}\n"
     text += f"• За неделю: {texts.format_price(analytics['earnings_by_period']['week'])}\n"
     text += f"• За месяц: {texts.format_price(analytics['earnings_by_period']['month'])}\n"
     text += f"• За квартал: {texts.format_price(analytics['earnings_by_period']['quarter'])}\n\n"
-    
+
     if analytics['top_referrals']:
         text += f"🏆 <b>Топ-{len(analytics['top_referrals'])} рефералов:</b>\n"
         for i, ref in enumerate(analytics['top_referrals'], 1):
             text += f"{i}. {ref['referral_name']}: {texts.format_price(ref['total_earned_kopeks'])} ({ref['earnings_count']} начислений)\n"
         text += "\n"
-    
+
     text += "📈 Продолжайте развивать свою реферальную сеть!"
-    
-    await callback.message.edit_text(
+
+    await edit_or_answer_photo(
+        callback,
         text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+        types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_referrals")]
         ]),
-        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -257,34 +253,36 @@ async def create_invite_message(
     db_user: User
 ):
     texts = get_texts(db_user.language)
-    
+
     bot_username = (await callback.bot.get_me()).username
     referral_link = f"https://t.me/{bot_username}?start={db_user.referral_code}"
-    
+
     invite_text = f"🎉 Присоединяйся к VPN сервису!\n\n"
     invite_text += f"💎 При первом пополнении от {texts.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)} ты получишь {texts.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)} бонусом на баланс!\n\n"
     invite_text += f"🚀 Быстрое подключение\n"
     invite_text += f"🌍 Серверы по всему миру\n"
     invite_text += f"🔒 Надежная защита\n\n"
     invite_text += f"👇 Переходи по ссылке:\n{referral_link}"
-    
+
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
         [types.InlineKeyboardButton(
             text="📤 Поделиться",
-            switch_inline_query=invite_text 
+            switch_inline_query=invite_text
         )],
         [types.InlineKeyboardButton(
             text=texts.BACK,
             callback_data="menu_referrals"
         )]
     ])
-    
-    await callback.message.edit_text(
-        f"📝 <b>Приглашение создано!</b>\n\n"
-        f"Нажмите кнопку «📤 Поделиться» чтобы отправить приглашение в любой чат, или скопируйте текст ниже:\n\n"
-        f"<code>{invite_text}</code>",
-        reply_markup=keyboard,
-        parse_mode="HTML"
+
+    await edit_or_answer_photo(
+        callback,
+        (
+            f"📝 <b>Приглашение создано!</b>\n\n"
+            f"Нажмите кнопку «📤 Поделиться» чтобы отправить приглашение в любой чат, или скопируйте текст ниже:\n\n"
+            f"<code>{invite_text}</code>"
+        ),
+        keyboard,
     )
     await callback.answer()
 
