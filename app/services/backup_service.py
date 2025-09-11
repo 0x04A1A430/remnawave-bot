@@ -1,5 +1,5 @@
 import asyncio
-import json
+import json as json_lib
 import logging
 import gzip
 import os
@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class BackupMetadata:
-    """Метаданные бекапа"""
     timestamp: str
     version: str = "1.0"
     database_type: str = "postgresql"
@@ -42,10 +41,9 @@ class BackupMetadata:
 
 @dataclass
 class BackupSettings:
-    """Настройки системы бекапов"""
     auto_backup_enabled: bool = True
     backup_interval_hours: int = 24
-    backup_time: str = "03:00"  # время бекапа в формате HH:MM
+    backup_time: str = "03:00"
     max_backups_keep: int = 7
     compression_enabled: bool = True
     include_logs: bool = False
@@ -61,7 +59,6 @@ class BackupService:
         self._auto_backup_task = None
         self._settings = self._load_settings()
         
-        # Определяем все модели для бекапа
         self.backup_models = [
             User, Subscription, Transaction, PromoCode, PromoCodeUse,
             ReferralEarning, ServiceRule, SystemSetting,
@@ -70,12 +67,10 @@ class BackupService:
             YooKassaPayment, CryptoBotPayment
         ]
         
-        # Опционально включаем логи
         if self._settings.include_logs:
             self.backup_models.append(MonitoringLog)
 
     def _load_settings(self) -> BackupSettings:
-        """Загружает настройки бекапов из переменных окружения или БД"""
         return BackupSettings(
             auto_backup_enabled=os.getenv("BACKUP_AUTO_ENABLED", "true").lower() == "true",
             backup_interval_hours=int(os.getenv("BACKUP_INTERVAL_HOURS", "24")),
@@ -92,20 +87,12 @@ class BackupService:
         compress: bool = True,
         include_logs: bool = None
     ) -> Tuple[bool, str, Optional[str]]:
-        """
-        Создает полный бекап базы данных
-        
-        Returns:
-            (success, message, backup_file_path)
-        """
         try:
             logger.info("🔄 Начинаем создание бекапа...")
             
-            # Определяем включать ли логи
             if include_logs is None:
                 include_logs = self._settings.include_logs
             
-            # Создаем временные модели для бекапа
             models_to_backup = self.backup_models.copy()
             if not include_logs and MonitoringLog in models_to_backup:
                 models_to_backup.remove(MonitoringLog)
@@ -117,27 +104,22 @@ class BackupService:
             
             async for db in get_db():
                 try:
-                    # Собираем данные из всех таблиц
                     for model in models_to_backup:
                         table_name = model.__tablename__
                         logger.info(f"📊 Экспортируем таблицу: {table_name}")
                         
-                        # Получаем все записи
                         result = await db.execute(select(model))
                         records = result.scalars().all()
                         
-                        # Конвертируем в сериализуемый формат
                         table_data = []
                         for record in records:
                             record_dict = {}
                             for column in model.__table__.columns:
                                 value = getattr(record, column.name)
                                 
-                                # Обрабатываем специальные типы данных
                                 if isinstance(value, datetime):
                                     record_dict[column.name] = value.isoformat()
                                 elif hasattr(value, '__dict__'):
-                                    # Для enum и других сложных типов
                                     record_dict[column.name] = str(value)
                                 else:
                                     record_dict[column.name] = value
@@ -156,7 +138,6 @@ class BackupService:
                 finally:
                     await db.close()
             
-            # Создаем метаданные
             metadata = BackupMetadata(
                 timestamp=datetime.utcnow().isoformat(),
                 database_type="postgresql" if settings.is_postgresql() else "sqlite",
@@ -165,10 +146,9 @@ class BackupService:
                 total_records=total_records,
                 compressed=compress,
                 created_by=created_by,
-                file_size_bytes=0  # будет обновлено после сохранения
+                file_size_bytes=0
             )
             
-            # Формируем имя файла
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             filename = f"backup_{timestamp}.json"
             if compress:
@@ -176,37 +156,32 @@ class BackupService:
             
             backup_path = self.backup_dir / filename
             
-            # Создаем итоговую структуру бекапа
             backup_structure = {
                 "metadata": asdict(metadata),
                 "data": backup_data
             }
             
-            # Сохраняем файл
             if compress:
-                backup_json_str = json.dumps(backup_structure, ensure_ascii=False, indent=2)
+                backup_json_str = json_lib.dumps(backup_structure, ensure_ascii=False, indent=2)
                 async with aiofiles.open(backup_path, 'wb') as f:
                     compressed_data = gzip.compress(backup_json_str.encode('utf-8'))
                     await f.write(compressed_data)
             else:
                 async with aiofiles.open(backup_path, 'w', encoding='utf-8') as f:
-                    await f.write(json.dumps(backup_structure, ensure_ascii=False, indent=2))
+                    await f.write(json_lib.dumps(backup_structure, ensure_ascii=False, indent=2))
             
-            # Обновляем размер файла в метаданных
             file_size = backup_path.stat().st_size
             backup_structure["metadata"]["file_size_bytes"] = file_size
             
-            # Пересохраняем с обновленными метаданными
             if compress:
-                backup_json_str = json.dumps(backup_structure, ensure_ascii=False, indent=2)
+                backup_json_str = json_lib.dumps(backup_structure, ensure_ascii=False, indent=2)
                 async with aiofiles.open(backup_path, 'wb') as f:
                     compressed_data = gzip.compress(backup_json_str.encode('utf-8'))
                     await f.write(compressed_data)
             else:
                 async with aiofiles.open(backup_path, 'w', encoding='utf-8') as f:
-                    await f.write(json.dumps(backup_structure, ensure_ascii=False, indent=2))
+                    await f.write(json_lib.dumps(backup_structure, ensure_ascii=False, indent=2))
             
-            # Очищаем старые бекапы
             await self._cleanup_old_backups()
             
             size_mb = file_size / 1024 / 1024
@@ -218,7 +193,6 @@ class BackupService:
             
             logger.info(message)
             
-            # Отправляем уведомление админам
             if self.bot:
                 await self._send_backup_notification(
                     "success", message, str(backup_path)
@@ -240,13 +214,6 @@ class BackupService:
         backup_file_path: str,
         clear_existing: bool = False
     ) -> Tuple[bool, str]:
-        """
-        Восстанавливает данные из бекапа
-        
-        Args:
-            backup_file_path: путь к файлу бекапа
-            clear_existing: очистить существующие данные перед восстановлением
-        """
         try:
             logger.info(f"🔄 Начинаем восстановление из {backup_file_path}")
             
@@ -254,16 +221,15 @@ class BackupService:
             if not backup_path.exists():
                 return False, f"❌ Файл бекапа не найден: {backup_file_path}"
             
-            # Загружаем данные из бекапа
             if backup_path.suffix == '.gz':
                 async with aiofiles.open(backup_path, 'rb') as f:
                     compressed_data = await f.read()
-                    json_data = gzip.decompress(compressed_data).decode('utf-8')
-                    backup_structure = json.loads(json_data)
+                    uncompressed_data = gzip.decompress(compressed_data).decode('utf-8')
+                    backup_structure = json_lib.loads(uncompressed_data)
             else:
                 async with aiofiles.open(backup_path, 'r', encoding='utf-8') as f:
-                    content = await f.read()
-                    backup_structure = json.loads(content)
+                    file_content = await f.read()
+                    backup_structure = json_lib.loads(file_content)
             
             metadata = backup_structure.get("metadata", {})
             backup_data = backup_structure.get("data", {})
@@ -279,18 +245,14 @@ class BackupService:
             
             async for db in get_db():
                 try:
-                    # Начинаем транзакцию
                     if clear_existing:
                         logger.warning("🗑️ Очищаем существующие данные...")
-                        # Очищаем таблицы в правильном порядке (с учетом foreign keys)
                         await self._clear_database_tables(db)
                     
-                    # Восстанавливаем данные по таблицам
                     for table_name, records in backup_data.items():
                         if not records:
                             continue
                         
-                        # Находим соответствующую модель
                         model = None
                         for m in self.backup_models:
                             if m.__tablename__ == table_name:
@@ -305,60 +267,77 @@ class BackupService:
                         
                         for record_data in records:
                             try:
-                                # Обрабатываем специальные типы данных
                                 processed_data = {}
                                 for key, value in record_data.items():
                                     if value is None:
                                         processed_data[key] = None
                                         continue
                                     
-                                    # Получаем информацию о колонке
                                     column = getattr(model.__table__.columns, key, None)
                                     if column is None:
                                         continue
                                     
-                                    # Обрабатываем datetime
                                     column_type_str = str(column.type).upper()
                                     if ('DATETIME' in column_type_str or 'TIMESTAMP' in column_type_str) and isinstance(value, str):
                                         try:
-                                            # Пробуем разные форматы datetime
                                             if 'T' in value:
-                                                # ISO формат
                                                 processed_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
                                             else:
-                                                # Другие форматы
                                                 processed_data[key] = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
                                         except (ValueError, TypeError) as e:
                                             logger.warning(f"Не удалось парсить дату {value} для поля {key}: {e}")
-                                            processed_data[key] = datetime.utcnow()  # Fallback на текущее время
-                                    # Обрабатываем Boolean
+                                            processed_data[key] = datetime.utcnow()
                                     elif ('BOOLEAN' in column_type_str or 'BOOL' in column_type_str) and isinstance(value, str):
                                         processed_data[key] = value.lower() in ('true', '1', 'yes', 'on')
-                                    # Обрабатываем Integer
                                     elif ('INTEGER' in column_type_str or 'INT' in column_type_str) and isinstance(value, str):
                                         try:
                                             processed_data[key] = int(value)
                                         except ValueError:
                                             processed_data[key] = 0
-                                    # Обрабатываем Float
                                     elif ('FLOAT' in column_type_str or 'REAL' in column_type_str or 'NUMERIC' in column_type_str) and isinstance(value, str):
                                         try:
                                             processed_data[key] = float(value)
                                         except ValueError:
                                             processed_data[key] = 0.0
-                                    # Обрабатываем JSON
                                     elif 'JSON' in column_type_str and isinstance(value, str):
                                         try:
-                                            import json
-                                            processed_data[key] = json.loads(value)
+                                            processed_data[key] = json_lib.loads(value)
                                         except (ValueError, TypeError):
                                             processed_data[key] = value
                                     else:
                                         processed_data[key] = value
                                 
-                                # Создаем объект модели
-                                instance = model(**processed_data)
-                                db.add(instance)
+                                # Проверяем существует ли запись с таким ID
+                                primary_key_col = None
+                                for col in model.__table__.columns:
+                                    if col.primary_key:
+                                        primary_key_col = col.name
+                                        break
+                                
+                                if primary_key_col and primary_key_col in processed_data:
+                                    # Проверяем существование записи
+                                    existing_record = await db.execute(
+                                        select(model).where(
+                                            getattr(model, primary_key_col) == processed_data[primary_key_col]
+                                        )
+                                    )
+                                    existing = existing_record.scalar_one_or_none()
+                                    
+                                    if existing:
+                                        # Обновляем существующую запись
+                                        for key, value in processed_data.items():
+                                            if key != primary_key_col:  # Не обновляем primary key
+                                                setattr(existing, key, value)
+                                        logger.debug(f"Обновлена существующая запись {primary_key_col}={processed_data[primary_key_col]} в {table_name}")
+                                    else:
+                                        # Создаем новую запись
+                                        instance = model(**processed_data)
+                                        db.add(instance)
+                                else:
+                                    # Если нет primary key или он не в данных, просто добавляем
+                                    instance = model(**processed_data)
+                                    db.add(instance)
+                                
                                 restored_records += 1
                                 
                             except Exception as e:
@@ -368,7 +347,6 @@ class BackupService:
                         restored_tables += 1
                         logger.info(f"✅ Таблица {table_name} восстановлена")
                     
-                    # Коммитим все изменения
                     await db.commit()
                     
                     break
@@ -402,8 +380,6 @@ class BackupService:
             return False, error_msg
 
     async def _clear_database_tables(self, db: AsyncSession):
-        """Очищает все таблицы в правильном порядке"""
-        # Порядок очистки с учетом foreign key constraints
         tables_order = [
             "subscription_servers", "sent_notifications", "broadcast_history",
             "subscription_conversions", "referral_earnings", "promocode_uses",
@@ -420,19 +396,17 @@ class BackupService:
                 logger.warning(f"⚠️ Не удалось очистить таблицу {table_name}: {e}")
 
     async def get_backup_list(self) -> List[Dict[str, Any]]:
-        """Возвращает список доступных бекапов"""
         backups = []
         
         try:
             for backup_file in sorted(self.backup_dir.glob("backup_*.json*"), reverse=True):
                 try:
-                    # Загружаем метаданные
                     if backup_file.suffix == '.gz':
                         with gzip.open(backup_file, 'rt', encoding='utf-8') as f:
-                            backup_structure = json.load(f)
+                            backup_structure = json_lib.load(f)
                     else:
                         with open(backup_file, 'r', encoding='utf-8') as f:
-                            backup_structure = json.load(f)
+                            backup_structure = json_lib.load(f)
                     
                     metadata = backup_structure.get("metadata", {})
                     file_stats = backup_file.stat()
@@ -454,7 +428,6 @@ class BackupService:
                     
                 except Exception as e:
                     logger.error(f"Ошибка чтения метаданных {backup_file}: {e}")
-                    # Добавляем базовую информацию
                     file_stats = backup_file.stat()
                     backups.append({
                         "filename": backup_file.name,
@@ -476,7 +449,6 @@ class BackupService:
         return backups
 
     async def delete_backup(self, backup_filename: str) -> Tuple[bool, str]:
-        """Удаляет файл бекапа"""
         try:
             backup_path = self.backup_dir / backup_filename
             
@@ -495,15 +467,12 @@ class BackupService:
             return False, error_msg
 
     async def _cleanup_old_backups(self):
-        """Удаляет старые бекапы согласно настройкам"""
         try:
             backups = await self.get_backup_list()
             
             if len(backups) > self._settings.max_backups_keep:
-                # Сортируем по дате (самые старые в конце)
                 backups.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
                 
-                # Удаляем лишние
                 for backup in backups[self._settings.max_backups_keep:]:
                     try:
                         await self.delete_backup(backup["filename"])
@@ -515,18 +484,14 @@ class BackupService:
             logger.error(f"Ошибка очистки старых бекапов: {e}")
 
     async def get_backup_settings(self) -> BackupSettings:
-        """Возвращает текущие настройки бекапов"""
         return self._settings
 
     async def update_backup_settings(self, **kwargs) -> bool:
-        """Обновляет настройки бекапов"""
         try:
-            # Обновляем настройки
             for key, value in kwargs.items():
                 if hasattr(self._settings, key):
                     setattr(self._settings, key, value)
             
-            # Перезапускаем автобекапы если нужно
             if self._settings.auto_backup_enabled:
                 await self.start_auto_backup()
             else:
@@ -539,7 +504,6 @@ class BackupService:
             return False
 
     async def start_auto_backup(self):
-        """Запускает автоматические бекапы"""
         if self._auto_backup_task and not self._auto_backup_task.done():
             self._auto_backup_task.cancel()
         
@@ -548,13 +512,11 @@ class BackupService:
             logger.info(f"🔄 Автобекапы включены, интервал: {self._settings.backup_interval_hours}ч")
 
     async def stop_auto_backup(self):
-        """Останавливает автоматические бекапы"""
         if self._auto_backup_task and not self._auto_backup_task.done():
             self._auto_backup_task.cancel()
             logger.info("⏹️ Автобекапы остановлены")
 
     async def _auto_backup_loop(self):
-        """Цикл автоматических бекапов"""
         while True:
             try:
                 await asyncio.sleep(self._settings.backup_interval_hours * 3600)
@@ -571,7 +533,7 @@ class BackupService:
                 break
             except Exception as e:
                 logger.error(f"Ошибка в цикле автобекапов: {e}")
-                await asyncio.sleep(3600)  # Ждем час при ошибке
+                await asyncio.sleep(3600)
 
     async def _send_backup_notification(
         self, 
@@ -579,7 +541,6 @@ class BackupService:
         message: str, 
         file_path: str = None
     ):
-        """Отправляет уведомление о бекапе админам"""
         try:
             if not settings.is_admin_notifications_enabled():
                 return
@@ -599,7 +560,6 @@ class BackupService:
             
             notification_text += f"\n\n⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"
             
-            # Отправляем через AdminNotificationService если доступен
             try:
                 from app.services.admin_notification_service import AdminNotificationService
                 admin_service = AdminNotificationService(self.bot)
@@ -611,5 +571,4 @@ class BackupService:
             logger.error(f"Ошибка отправки уведомления о бекапе: {e}")
 
 
-# Глобальный экземпляр сервиса
 backup_service = BackupService()
