@@ -136,9 +136,10 @@ class Settings(BaseSettings):
     CRYPTOBOT_ASSETS: str = "USDT,TON,BTC,ETH"
     CRYPTOBOT_INVOICE_EXPIRES_HOURS: int = 24
 
-    CONNECT_BUTTON_MODE: str = "guide"
+    CONNECT_BUTTON_MODE: str = "link"
     MINIAPP_CUSTOM_URL: str = ""
     ENABLE_LOGO_MODE: bool = True
+    LOGO_FILE: str = "vpn_logo.png"
     
     DEFAULT_LANGUAGE: str = "ru"
     AVAILABLE_LANGUAGES: str = "ru,en"

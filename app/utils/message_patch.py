@@ -3,7 +3,7 @@ from aiogram.types import Message, FSInputFile, InputMediaPhoto
 
 from app.config import settings
 
-LOGO_PATH = Path("vpn_logo.png")
+LOGO_PATH = Path(settings.LOGO_FILE)
 
 
 def is_qr_message(message: Message) -> bool:
