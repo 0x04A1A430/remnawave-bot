@@ -138,6 +138,7 @@ class Settings(BaseSettings):
 
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
+    ENABLE_LOGO_MODE: bool = True
     
     DEFAULT_LANGUAGE: str = "ru"
     AVAILABLE_LANGUAGES: str = "ru,en"

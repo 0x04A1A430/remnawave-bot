@@ -1,6 +1,8 @@
 from pathlib import Path
 from aiogram.types import Message, FSInputFile, InputMediaPhoto
 
+from app.config import settings
+
 LOGO_PATH = Path("vpn_logo.png")
 
 
@@ -31,6 +33,8 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
 
 
 def patch_message_methods():
+    if not settings.ENABLE_LOGO_MODE:
+        return
     Message.answer = _answer_with_photo
     Message.edit_text = _edit_with_photo
 
