@@ -545,6 +545,7 @@ WEBHOOK_PATH=/webhook
 - 🔔 Автоуведомления о продлении
 - 💬 Система поддержки с HTML разметкой
 - 📝 Настройка правил сервиса
+- Настраиваемое приветственное сообщение с предложением активации триала
 
 📨 **Уведомления в закрытый канал**
 - 🎯 Активация триала
@@ -831,6 +832,7 @@ bedolaga_bot/
 │   │       ├── 🚧 maintenance.py # Тех работы
 │   │       ├── 📨 messages.py    # Рассылки
 │   │       ├── 📨 user_messages.py # Рандомные сообщения в меню
+│   │       ├── 📨 welcome_text.py  # Приветственное сообщение 
 │   │       ├── ⚙️ main.py        # Админское меню
 │   │       ├── 📖 rules.py       # Правила
 │   │       ├── 🙋 referrals.py   # Правила
@@ -850,7 +852,8 @@ bedolaga_bot/
 │   │       ├── 📜 rules.py           # Правила сервиса
 │   │       ├── 📜 subscription_conversion.py # Правила сервиса
 │   │       ├── 💳 yookassa.py        # YooKassa операции
-│   │       ├── 💳 cryptobot.py        # CryptoBot операции
+│   │       ├── 📨 welcome_text.py    # Приветственное сообщение 
+│   │       ├── 💳 cryptobot.py       # CryptoBot операции
 │   │       ├── 🌐 server_squad.py    # Серверы и сквады
 │   │       ├── 🎁 promocode.py       # Промокоды
 │   │       └── 👥 referral.py        # Рефералы
@@ -996,6 +999,10 @@ server {
 ```caddyfile
 your-domain.com {
     handle /tribute-webhook* {
+        reverse_proxy localhost:8081
+    }
+
+    handle /cryptobot-webhook* {
         reverse_proxy localhost:8081
     }
     

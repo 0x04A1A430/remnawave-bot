@@ -660,3 +660,15 @@ class UserMessage(Base):
     
     def __repr__(self):
         return f"<UserMessage(id={self.id}, active={self.is_active}, text='{self.message_text[:50]}...')>"
+
+class WelcomeText(Base):
+    __tablename__ = "welcome_texts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    text_content = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    creator = relationship("User", backref="created_welcome_texts")

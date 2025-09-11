@@ -388,7 +388,7 @@ async def complete_registration_from_callback(
     state: FSMContext, 
     db: AsyncSession
 ):
-    logger.info(f"🏁 COMPLETE: Завершение регистрации для пользователя {callback.from_user.id}")
+    logger.info(f"🎯 COMPLETE: Завершение регистрации для пользователя {callback.from_user.id}")
     
     existing_user = await get_user_by_telegram_id(db, callback.from_user.id)
     
@@ -499,18 +499,10 @@ async def complete_registration_from_callback(
     
     await state.clear()
 
+    from app.database.crud.welcome_text import get_welcome_text_for_user
+    
     user_name = callback.from_user.first_name or callback.from_user.username or "друг"
-
-    offer_text = (
-        f"<b>Привет, {user.full_name}!</b>\n\n"
-        f"🎁 <b>{settings.TRIAL_DURATION_DAYS} дней VPN бесплатно!</b>\n"
-        "Подключайтесь за минуту и забудьте о блокировках.\n\n"
-        "✅ До <b>1 Гбит/с</b> скорость\n"
-        "✅ Умный VPN — можно не отключать для большинства российских сервисов\n"
-        "✅ Современные протоколы — максимум защиты и анонимности\n\n"
-        f"👉 Всего <b>{int(settings.PRICE_30_DAYS/100)}₽/мес за 1 устройство</b>\n\n"
-        "👇 Жмите кнопку и подключайтесь!"
-    )
+    offer_text = await get_welcome_text_for_user(db, user_name)
 
     try:
         await callback.message.answer(
@@ -527,7 +519,7 @@ async def complete_registration(
     state: FSMContext, 
     db: AsyncSession
 ):
-    logger.info(f"🏁 COMPLETE: Завершение регистрации для пользователя {message.from_user.id}")
+    logger.info(f"🎯 COMPLETE: Завершение регистрации для пользователя {message.from_user.id}")
     
     existing_user = await get_user_by_telegram_id(db, message.from_user.id)
     
@@ -638,17 +630,9 @@ async def complete_registration(
     
     await state.clear()
 
-    user_name = message.from_user.first_name or message.from_user.username or "друг"
-    offer_text = (
-        f"Привет, {user_name}!\n\n"
-        f"Подключите VPN бесплатно! Дарим вам {settings.TRIAL_DURATION_DAYS} дней!\n\n"
-        "Наши преимущества:\n"
-        " • Высокая скорость соединения — до 1гб/с\n"
-        " • Умный VPN — можно не отключать для большинства российских сервисов\n"
-        " • Самые современные протоколы — высокая защита от блокировки\n\n"
-        "Стоимость 100₽/мес за 1 устройство\n\n"
-        "👇Жмите на кнопку👇 чтобы подключить в 1 клик"
-    )
+    from app.database.crud.welcome_text import get_welcome_text_for_user
+    
+    offer_text = await get_welcome_text_for_user(db, message.from_user)
 
     try:
         await message.answer(
@@ -807,3 +791,4 @@ def register_handlers(dp: Dispatcher):
     logger.info("✅ Зарегистрирован handle_potential_referral_code")
     
     logger.info("🔧 === КОНЕЦ регистрации обработчиков start.py ===")
+ 

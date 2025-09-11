@@ -25,7 +25,8 @@ from app.handlers.admin import (
     statistics as admin_statistics, servers as admin_servers,
     maintenance as admin_maintenance,
     user_messages as admin_user_messages,
-    updates as admin_updates, backup as admin_backup
+    updates as admin_updates, backup as admin_backup,
+    welcome_text as admin_welcome_text
 )
 from app.handlers.stars_payments import register_stars_handlers
 
@@ -106,6 +107,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_user_messages.register_handlers(dp)
     admin_updates.register_handlers(dp)
     admin_backup.register_handlers(dp)
+    admin_welcome_text.register_welcome_text_handlers(dp)
 
     common.register_handlers(dp)
     
