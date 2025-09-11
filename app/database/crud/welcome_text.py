@@ -59,12 +59,23 @@ async def get_current_welcome_text_or_default() -> str:
     )
 
 def replace_placeholders(text: str, user) -> str:
+    first_name = getattr(user, 'first_name', None)
+    username = getattr(user, 'username', None)
+    
+    first_name = first_name.strip() if first_name else None
+    username = username.strip() if username else None
+    
+    user_name = first_name or username or "друг"
+    display_first_name = first_name or "друг"
+    display_username = f"@{username}" if username else (first_name or "друг")
+    clean_username = username or first_name or "друг"
+    
     replacements = {
-        '{user_name}': user.first_name or user.username or "друг",
-        '{first_name}': user.first_name or "друг", 
-        '{username}': f"@{user.username}" if user.username else user.first_name or "друг",
-        '{username_clean}': user.username or user.first_name or "друг",
-        'Egor': user.first_name or user.username or "Друг" 
+        '{user_name}': user_name,
+        '{first_name}': display_first_name, 
+        '{username}': display_username,
+        '{username_clean}': clean_username,
+        'Egor': user_name  
     }
     
     result = text
