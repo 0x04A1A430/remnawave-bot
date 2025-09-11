@@ -11,7 +11,8 @@ from app.utils.decorators import admin_required, error_handler
 from app.database.crud.welcome_text import (
     get_active_welcome_text, 
     set_welcome_text, 
-    get_current_welcome_text_or_default
+    get_current_welcome_text_or_default,
+    get_available_placeholders
 )
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,8 @@ async def show_welcome_text_panel(
 ):
     await callback.message.edit_text(
         "👋 Управление приветственным текстом\n\n"
-        "Здесь вы можете изменить текст, который показывается новым пользователям после регистрации.",
+        "Здесь вы можете изменить текст, который показывается новым пользователям после регистрации.\n\n"
+        "💡 Доступные плейсхолдеры для автозамены:",
         reply_markup=get_welcome_text_keyboard(db_user.language)
     )
     await callback.answer()
@@ -45,10 +47,40 @@ async def show_current_welcome_text(
     else:
         status = "📝 Текущий приветственный текст:"
     
+    placeholders = get_available_placeholders()
+    placeholders_text = "\n".join([f"• <code>{key}</code> - {desc}" for key, desc in placeholders.items()])
+    
     await callback.message.edit_text(
         f"{status}\n\n"
         f"<code>{current_text}</code>\n\n"
-        f"💡 В тексте можно использовать имя пользователя - оно автоматически заменит 'Egor'",
+        f"💡 Доступные плейсхолдеры:\n{placeholders_text}",
+        reply_markup=get_welcome_text_keyboard(db_user.language),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@admin_required
+@error_handler
+async def show_placeholders_help(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    placeholders = get_available_placeholders()
+    placeholders_text = "\n".join([f"• <code>{key}</code>\n  {desc}" for key, desc in placeholders.items()])
+    
+    help_text = (
+        "💡 Доступные плейсхолдеры для автозамены:\n\n"
+        f"{placeholders_text}\n\n"
+        "📌 Примеры использования:\n"
+        "• <code>Привет, {user_name}! Добро пожаловать!</code>\n"
+        "• <code>Здравствуйте, {first_name}! Рады видеть вас!</code>\n"
+        "• <code>Привет, {username}! Спасибо за регистрацию!</code>\n\n"
+        "При отсутствии данных пользователя используется слово 'друг'."
+    )
+    
+    await callback.message.edit_text(
+        help_text,
         reply_markup=get_welcome_text_keyboard(db_user.language),
         parse_mode="HTML"
     )
@@ -67,10 +99,14 @@ async def start_edit_welcome_text(
     if not current_text:
         current_text = await get_current_welcome_text_or_default()
     
+    placeholders = get_available_placeholders()
+    placeholders_text = "\n".join([f"• <code>{key}</code> - {desc}" for key, desc in placeholders.items()])
+    
     await callback.message.edit_text(
         f"📝 Редактирование приветственного текста\n\n"
         f"Текущий текст:\n"
         f"<code>{current_text}</code>\n\n"
+        f"💡 Доступные плейсхолдеры:\n{placeholders_text}\n\n"
         f"Отправьте новый текст:",
         parse_mode="HTML"
     )
@@ -99,10 +135,14 @@ async def process_welcome_text_edit(
     success = await set_welcome_text(db, new_text, db_user.id)
     
     if success:
+        placeholders = get_available_placeholders()
+        placeholders_text = "\n".join([f"• <code>{key}</code>" for key in placeholders.keys()])
+        
         await message.answer(
             f"✅ Приветственный текст успешно обновлен!\n\n"
             f"Новый текст:\n"
-            f"<code>{new_text}</code>",
+            f"<code>{new_text}</code>\n\n"
+            f"💡 Будут заменяться плейсхолдеры: {placeholders_text}",
             reply_markup=get_welcome_text_keyboard(db_user.language),
             parse_mode="HTML"
         )
@@ -128,7 +168,8 @@ async def reset_welcome_text(
         await callback.message.edit_text(
             f"✅ Приветственный текст сброшен на стандартный!\n\n"
             f"Стандартный текст:\n"
-            f"<code>{default_text}</code>",
+            f"<code>{default_text}</code>\n\n"
+            f"💡 Плейсхолдер <code>{{user_name}}</code> будет заменяться на имя пользователя",
             reply_markup=get_welcome_text_keyboard(db_user.language),
             parse_mode="HTML"
         )
@@ -140,6 +181,32 @@ async def reset_welcome_text(
     
     await callback.answer()
 
+@admin_required
+@error_handler
+async def show_preview_welcome_text(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    from app.database.crud.welcome_text import get_welcome_text_for_user
+    
+    class TestUser:
+        def __init__(self):
+            self.first_name = "Иван"
+            self.username = "test_user"
+    
+    test_user = TestUser()
+    preview_text = await get_welcome_text_for_user(db, test_user)
+    
+    await callback.message.edit_text(
+        f"👁️ Предварительный просмотр\n\n"
+        f"Как будет выглядеть текст для пользователя 'Иван' (@test_user):\n\n"
+        f"<code>{preview_text}</code>",
+        reply_markup=get_welcome_text_keyboard(db_user.language),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
 def register_welcome_text_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_welcome_text_panel,
@@ -149,6 +216,16 @@ def register_welcome_text_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_current_welcome_text,
         F.data == "show_welcome_text"
+    )
+    
+    dp.callback_query.register(
+        show_placeholders_help,
+        F.data == "show_placeholders_help"
+    )
+    
+    dp.callback_query.register(
+        show_preview_welcome_text,
+        F.data == "preview_welcome_text"
     )
     
     dp.callback_query.register(
