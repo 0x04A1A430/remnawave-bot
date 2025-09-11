@@ -75,7 +75,6 @@ async def check_column_exists(table_name: str, column_name: str) -> bool:
         return False
 
 async def create_cryptobot_payments_table():
-    """Создание таблицы cryptobot_payments"""
     table_exists = await check_table_exists('cryptobot_payments')
     if table_exists:
         logger.info("Таблица cryptobot_payments уже существует")
@@ -178,7 +177,6 @@ async def create_cryptobot_payments_table():
         return False
 
 async def create_user_messages_table():
-    """Создание таблицы user_messages"""
     table_exists = await check_table_exists('user_messages')
     if table_exists:
         logger.info("Таблица user_messages уже существует")
@@ -248,6 +246,75 @@ async def create_user_messages_table():
             
     except Exception as e:
         logger.error(f"Ошибка создания таблицы user_messages: {e}")
+        return False
+
+async def create_welcome_texts_table():
+    table_exists = await check_table_exists('welcome_texts')
+    if table_exists:
+        logger.info("Таблица welcome_texts уже существует")
+        return True
+    
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE welcome_texts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    text_content TEXT NOT NULL,
+                    is_active BOOLEAN DEFAULT 1,
+                    created_by INTEGER NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+                );
+                
+                CREATE INDEX idx_welcome_texts_active ON welcome_texts(is_active);
+                CREATE INDEX idx_welcome_texts_updated ON welcome_texts(updated_at);
+                """
+                
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE welcome_texts (
+                    id SERIAL PRIMARY KEY,
+                    text_content TEXT NOT NULL,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_by INTEGER NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+                );
+                
+                CREATE INDEX idx_welcome_texts_active ON welcome_texts(is_active);
+                CREATE INDEX idx_welcome_texts_updated ON welcome_texts(updated_at);
+                """
+                
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE welcome_texts (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    text_content TEXT NOT NULL,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_by INT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+                );
+                
+                CREATE INDEX idx_welcome_texts_active ON welcome_texts(is_active);
+                CREATE INDEX idx_welcome_texts_updated ON welcome_texts(updated_at);
+                """
+            else:
+                logger.error(f"Неподдерживаемый тип БД для создания таблицы: {db_type}")
+                return False
+            
+            await conn.execute(text(create_sql))
+            logger.info("Таблица welcome_texts успешно создана")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы welcome_texts: {e}")
         return False
 
 async def fix_foreign_keys_for_user_deletion():
@@ -344,7 +411,6 @@ async def add_referral_system_columns():
         return False
 
 async def create_subscription_conversions_table():
-    """Создание таблицы subscription_conversions"""
     table_exists = await check_table_exists('subscription_conversions')
     if table_exists:
         logger.info("Таблица subscription_conversions уже существует")
@@ -420,7 +486,6 @@ async def create_subscription_conversions_table():
         return False
 
 async def fix_subscription_duplicates_universal():
-    """Исправление дублирующихся подписок"""
     async with engine.begin() as conn:
         db_type = await get_database_type()
         logger.info(f"Обнаружен тип базы данных: {db_type}")
@@ -505,12 +570,10 @@ async def run_universal_migration():
         db_type = await get_database_type()
         logger.info(f"Тип базы данных: {db_type}")
         
-        # Миграция реферальной системы
         referral_migration_success = await add_referral_system_columns()
         if not referral_migration_success:
             logger.warning("⚠️ Проблемы с миграцией реферальной системы")
         
-        # Создание таблицы CryptoBot payments
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ CRYPTOBOT ===")
         cryptobot_created = await create_cryptobot_payments_table()
         if cryptobot_created:
@@ -518,15 +581,20 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей CryptoBot payments")
 
-        # Создание таблицы user_messages
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_MESSAGES ===")
         user_messages_created = await create_user_messages_table()
         if user_messages_created:
             logger.info("✅ Таблица user_messages готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей user_messages")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ WELCOME_TEXTS ===")
+        welcome_texts_created = await create_welcome_texts_table()
+        if welcome_texts_created:
+            logger.info("✅ Таблица welcome_texts готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей welcome_texts")
         
-        # Обновление внешних ключей
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()
         if fk_updated:
@@ -534,7 +602,6 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с обновлением внешних ключей")
         
-        # Создание таблицы конверсий подписок
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ КОНВЕРСИЙ ПОДПИСОК ===")
         conversions_created = await create_subscription_conversions_table()
         if conversions_created:
@@ -542,7 +609,6 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей subscription_conversions")
         
-        # Проверка и исправление дублирующихся подписок
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))
             unique_users = await conn.execute(text("SELECT COUNT(DISTINCT user_id) FROM subscriptions"))
@@ -560,7 +626,6 @@ async def run_universal_migration():
         
         deleted_count = await fix_subscription_duplicates_universal()
         
-        # Финальная проверка
         async with engine.begin() as conn:
             final_check = await conn.execute(text("""
                 SELECT user_id, COUNT(*) as count 
@@ -593,20 +658,22 @@ async def check_migration_status():
         status = {
             "has_made_first_topup_column": False,
             "cryptobot_table": False,
+            "user_messages_table": False,
+            "welcome_texts_table": False,
             "subscription_duplicates": False,
             "subscription_conversions_table": False
         }
         
-        # Проверка колонки реферальной системы
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
         
-        # Проверка таблицы CryptoBot
         status["cryptobot_table"] = await check_table_exists('cryptobot_payments')
         
-        # Проверка таблицы конверсий подписок
+        status["user_messages_table"] = await check_table_exists('user_messages')
+        
+        status["welcome_texts_table"] = await check_table_exists('welcome_texts')
+        
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
         
-        # Проверка дублирующихся подписок
         async with engine.begin() as conn:
             duplicates_check = await conn.execute(text("""
                 SELECT COUNT(*) FROM (
@@ -619,10 +686,11 @@ async def check_migration_status():
             duplicates_count = duplicates_check.fetchone()[0]
             status["subscription_duplicates"] = (duplicates_count == 0)
         
-        # Вывод результатов
         check_names = {
             "has_made_first_topup_column": "Колонка реферальной системы",
             "cryptobot_table": "Таблица CryptoBot payments",
+            "user_messages_table": "Таблица пользовательских сообщений",
+            "welcome_texts_table": "Таблица приветственных текстов",
             "subscription_conversions_table": "Таблица конверсий подписок",
             "subscription_duplicates": "Отсутствие дубликатов подписок"
         }
@@ -640,11 +708,13 @@ async def check_migration_status():
                 async with engine.begin() as conn:
                     conversions_count = await conn.execute(text("SELECT COUNT(*) FROM subscription_conversions"))
                     users_count = await conn.execute(text("SELECT COUNT(*) FROM users"))
+                    welcome_texts_count = await conn.execute(text("SELECT COUNT(*) FROM welcome_texts"))
                     
                     conv_count = conversions_count.fetchone()[0]
                     usr_count = users_count.fetchone()[0]
+                    welcome_count = welcome_texts_count.fetchone()[0]
                     
-                    logger.info(f"📊 Статистика: {usr_count} пользователей, {conv_count} конверсий записано")
+                    logger.info(f"📊 Статистика: {usr_count} пользователей, {conv_count} конверсий, {welcome_count} приветственных текстов")
             except Exception as stats_error:
                 logger.debug(f"Не удалось получить дополнительную статистику: {stats_error}")
                 
