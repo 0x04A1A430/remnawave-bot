@@ -22,7 +22,6 @@ class BackupStates(StatesGroup):
 
 
 def get_backup_main_keyboard(language: str = "ru"):
-    """Главная клавиатура настроек бекапов"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="🚀 Создать бекап", callback_data="backup_create"),
@@ -30,11 +29,7 @@ def get_backup_main_keyboard(language: str = "ru"):
         ],
         [
             InlineKeyboardButton(text="📋 Список бекапов", callback_data="backup_list"),
-            InlineKeyboardButton(text="📊 Журнал операций", callback_data="backup_logs")
-        ],
-        [
-            InlineKeyboardButton(text="⚙️ Настройки", callback_data="backup_settings"),
-            InlineKeyboardButton(text="🔄 Автобекапы", callback_data="backup_auto_toggle")
+            InlineKeyboardButton(text="⚙️ Настройки", callback_data="backup_settings")
         ],
         [
             InlineKeyboardButton(text="◀️ Назад", callback_data="admin_panel")
@@ -43,16 +38,13 @@ def get_backup_main_keyboard(language: str = "ru"):
 
 
 def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5):
-    """Клавиатура со списком бекапов"""
     keyboard = []
     
-    # Пагинация
     start_idx = (page - 1) * per_page
     end_idx = start_idx + per_page
     page_backups = backups[start_idx:end_idx]
     
     for backup in page_backups:
-        # Форматируем дату
         try:
             if backup.get("timestamp"):
                 dt = datetime.fromisoformat(backup["timestamp"].replace('Z', '+00:00'))
@@ -70,7 +62,6 @@ def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5):
         
         keyboard.append([InlineKeyboardButton(text=button_text, callback_data=callback_data)])
     
-    # Пагинация
     if len(backups) > per_page:
         total_pages = (len(backups) + per_page - 1) // per_page
         nav_row = []
@@ -85,9 +76,7 @@ def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5):
         
         keyboard.append(nav_row)
     
-    # Управляющие кнопки
     keyboard.extend([
-        [InlineKeyboardButton(text="🔄 Обновить", callback_data="backup_list")],
         [InlineKeyboardButton(text="◀️ Назад", callback_data="backup_panel")]
     ])
     
@@ -95,11 +84,9 @@ def get_backup_list_keyboard(backups: list, page: int = 1, per_page: int = 5):
 
 
 def get_backup_manage_keyboard(backup_filename: str):
-    """Клавиатура управления конкретным бекапом"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="📥 Восстановить", callback_data=f"backup_restore_file_{backup_filename}"),
-            InlineKeyboardButton(text="📄 Информация", callback_data=f"backup_info_{backup_filename}")
+            InlineKeyboardButton(text="📥 Восстановить", callback_data=f"backup_restore_file_{backup_filename}")
         ],
         [
             InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"backup_delete_{backup_filename}")
@@ -111,7 +98,6 @@ def get_backup_manage_keyboard(backup_filename: str):
 
 
 def get_backup_settings_keyboard(settings_obj):
-    """Клавиатура настроек бекапов"""
     auto_status = "✅ Включены" if settings_obj.auto_backup_enabled else "❌ Отключены"
     compression_status = "✅ Включено" if settings_obj.compression_enabled else "❌ Отключено"
     logs_status = "✅ Включены" if settings_obj.include_logs else "❌ Отключены"
@@ -136,16 +122,6 @@ def get_backup_settings_keyboard(settings_obj):
             )
         ],
         [
-            InlineKeyboardButton(
-                text=f"⏰ Интервал: {settings_obj.backup_interval_hours}ч", 
-                callback_data="backup_set_interval"
-            ),
-            InlineKeyboardButton(
-                text=f"📦 Хранить: {settings_obj.max_backups_keep}шт", 
-                callback_data="backup_set_retention"
-            )
-        ],
-        [
             InlineKeyboardButton(text="◀️ Назад", callback_data="backup_panel")
         ]
     ])
@@ -158,7 +134,6 @@ async def show_backup_panel(
     db_user: User,
     db: AsyncSession
 ):
-    """Показывает главную панель бекапов"""
     settings_obj = await backup_service.get_backup_settings()
     
     status_auto = "✅ Включены" if settings_obj.auto_backup_enabled else "❌ Отключены"
@@ -177,7 +152,6 @@ async def show_backup_panel(
 • Создание полного бекапа всех данных
 • Восстановление из файла бекапа
 • Управление автоматическими бекапами
-• Просмотр истории операций
 """
     
     await callback.message.edit_text(
@@ -195,10 +169,8 @@ async def create_backup_handler(
     db_user: User,
     db: AsyncSession
 ):
-    """Запускает создание бекапа"""
     await callback.answer("🔄 Создание бекапа запущено...")
     
-    # Показываем сообщение о начале процесса
     progress_msg = await callback.message.edit_text(
         "🔄 <b>Создание бекапа...</b>\n\n"
         "⏳ Экспортируем данные из базы...\n"
@@ -233,8 +205,6 @@ async def show_backup_list(
     db_user: User,
     db: AsyncSession
 ):
-    """Показывает список бекапов"""
-    # Извлекаем номер страницы из callback_data
     page = 1
     if callback.data.startswith("backup_list_page_"):
         try:
@@ -270,7 +240,6 @@ async def manage_backup_file(
     db_user: User,
     db: AsyncSession
 ):
-    """Управление конкретным файлом бекапа"""
     filename = callback.data.replace("backup_manage_", "")
     
     backups = await backup_service.get_backup_list()
@@ -285,7 +254,6 @@ async def manage_backup_file(
         await callback.answer("❌ Файл бекапа не найден", show_alert=True)
         return
     
-    # Форматируем информацию о бекапе
     try:
         if backup_info.get("timestamp"):
             dt = datetime.fromisoformat(backup_info["timestamp"].replace('Z', '+00:00'))
@@ -324,7 +292,6 @@ async def delete_backup_confirm(
     db_user: User,
     db: AsyncSession
 ):
-    """Подтверждение удаления бекапа"""
     filename = callback.data.replace("backup_delete_", "")
     
     text = f"🗑️ <b>Удаление бекапа</b>\n\n"
@@ -354,7 +321,6 @@ async def delete_backup_execute(
     db_user: User,
     db: AsyncSession
 ):
-    """Выполняет удаление бекапа"""
     filename = callback.data.replace("backup_delete_confirm_", "")
     
     success, message = await backup_service.delete_backup(filename)
@@ -385,7 +351,6 @@ async def restore_backup_start(
     db: AsyncSession,
     state: FSMContext
 ):
-    """Начинает процесс восстановления из бекапа"""
     if callback.data.startswith("backup_restore_file_"):
         # Восстановление из конкретного файла
         filename = callback.data.replace("backup_restore_file_", "")
@@ -408,7 +373,6 @@ async def restore_backup_start(
             ]
         ])
     else:
-        # Восстановление из загруженного файла
         text = """📥 <b>Восстановление из бекапа</b>
 
 📎 Отправьте файл бекапа (.json или .json.gz)
@@ -442,7 +406,6 @@ async def restore_backup_execute(
     db_user: User,
     db: AsyncSession
 ):
-    """Выполняет восстановление бекапа"""
     if callback.data.startswith("backup_restore_execute_"):
         filename = callback.data.replace("backup_restore_execute_", "")
         clear_existing = False
@@ -465,10 +428,8 @@ async def restore_backup_execute(
         parse_mode="HTML"
     )
     
-    # Формируем путь к файлу
     backup_path = backup_service.backup_dir / filename
     
-    # Выполняем восстановление
     success, message = await backup_service.restore_backup(
         str(backup_path),
         clear_existing=clear_existing
@@ -496,7 +457,6 @@ async def handle_backup_file_upload(
     db: AsyncSession,
     state: FSMContext
 ):
-    """Обрабатывает загрузку файла бекапа"""
     if not message.document:
         await message.answer(
             "❌ Пожалуйста, отправьте файл бекапа (.json или .json.gz)",
@@ -508,7 +468,6 @@ async def handle_backup_file_upload(
     
     document = message.document
     
-    # Проверяем расширение файла
     if not (document.file_name.endswith('.json') or document.file_name.endswith('.json.gz')):
         await message.answer(
             "❌ Неподдерживаемый формат файла. Загрузите .json или .json.gz файл",
@@ -518,7 +477,6 @@ async def handle_backup_file_upload(
         )
         return
     
-    # Проверяем размер файла (максимум 50MB)
     if document.file_size > 50 * 1024 * 1024:
         await message.answer(
             "❌ Файл слишком большой (максимум 50MB)",
@@ -529,15 +487,12 @@ async def handle_backup_file_upload(
         return
     
     try:
-        # Скачиваем файл
         file = await message.bot.get_file(document.file_id)
         
-        # Создаем временный файл
         temp_path = backup_service.backup_dir / f"uploaded_{document.file_name}"
         
         await message.bot.download_file(file.file_path, temp_path)
         
-        # Подтверждение восстановления
         text = f"""📥 <b>Файл загружен</b>
 
 📄 <b>Имя:</b> <code>{document.file_name}</code>
@@ -579,7 +534,6 @@ async def show_backup_settings(
     db_user: User,
     db: AsyncSession
 ):
-    """Показывает настройки бекапов"""
     settings_obj = await backup_service.get_backup_settings()
     
     text = f"""⚙️ <b>Настройки системы бекапов</b>
@@ -612,7 +566,6 @@ async def toggle_backup_setting(
     db_user: User,
     db: AsyncSession
 ):
-    """Переключает настройки бекапов"""
     settings_obj = await backup_service.get_backup_settings()
     
     if callback.data == "backup_toggle_auto":
@@ -633,38 +586,31 @@ async def toggle_backup_setting(
         status = "включены" if new_value else "отключены"
         await callback.answer(f"Логи в бекапе {status}")
     
-    # Обновляем отображение настроек
     await show_backup_settings(callback, db_user, db)
 
 
 def register_handlers(dp: Dispatcher):
-    """Регистрирует обработчики бекапов"""
     
-    # Главная панель
     dp.callback_query.register(
         show_backup_panel,
         F.data == "backup_panel"
     )
     
-    # Создание бекапа
     dp.callback_query.register(
         create_backup_handler,
         F.data == "backup_create"
     )
     
-    # Список бекапов
     dp.callback_query.register(
         show_backup_list,
         F.data.startswith("backup_list")
     )
     
-    # Управление бекапом
     dp.callback_query.register(
         manage_backup_file,
         F.data.startswith("backup_manage_")
     )
     
-    # Удаление бекапа
     dp.callback_query.register(
         delete_backup_confirm,
         F.data.startswith("backup_delete_") & ~F.data.startswith("backup_delete_confirm_")
@@ -675,7 +621,6 @@ def register_handlers(dp: Dispatcher):
         F.data.startswith("backup_delete_confirm_")
     )
     
-    # Восстановление
     dp.callback_query.register(
         restore_backup_start,
         F.data.in_(["backup_restore"]) | F.data.startswith("backup_restore_file_")
@@ -686,7 +631,6 @@ def register_handlers(dp: Dispatcher):
         F.data.startswith("backup_restore_execute_") | F.data.startswith("backup_restore_clear_")
     )
     
-    # Настройки
     dp.callback_query.register(
         show_backup_settings,
         F.data == "backup_settings"
@@ -697,7 +641,6 @@ def register_handlers(dp: Dispatcher):
         F.data.in_(["backup_toggle_auto", "backup_toggle_compression", "backup_toggle_logs"])
     )
     
-    # Загрузка файла
     dp.message.register(
         handle_backup_file_upload,
         BackupStates.waiting_backup_file
