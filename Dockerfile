@@ -1,19 +1,14 @@
 FROM python:3.11-slim AS builder
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
-
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-
 COPY requirements.txt .
-
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 FROM python:3.11-slim
-
 ARG VERSION="v2.2.6"
 ARG BUILD_DATE
 ARG VCS_REF
@@ -33,8 +28,9 @@ WORKDIR /app
 
 COPY --chown=app:app . .
 
-RUN mkdir -p logs data && \
-    chown -R app:app /app logs data
+RUN mkdir -p logs data data/backups data/referral_qr && \
+    chmod -R 777 data/backups && \
+    chown -R 1000:1000 logs data
 
 USER app
 
