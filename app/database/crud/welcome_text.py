@@ -64,7 +64,7 @@ def replace_placeholders(text: str, user) -> str:
         '{first_name}': user.first_name or "друг", 
         '{username}': f"@{user.username}" if user.username else user.first_name or "друг",
         '{username_clean}': user.username or user.first_name or "друг",
-        'User': user.first_name or user.username or "друг" 
+        'Egor': user.first_name or user.username or "Друг" 
     }
     
     result = text
@@ -78,6 +78,13 @@ async def get_welcome_text_for_user(db: AsyncSession, user) -> str:
     
     if not welcome_text:
         welcome_text = await get_current_welcome_text_or_default()
+    
+    if isinstance(user, str):
+        class SimpleUser:
+            def __init__(self, name):
+                self.first_name = name
+                self.username = None
+        user = SimpleUser(user)
     
     return replace_placeholders(welcome_text, user)
 
