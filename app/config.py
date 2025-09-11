@@ -136,7 +136,7 @@ class Settings(BaseSettings):
     CRYPTOBOT_ASSETS: str = "USDT,TON,BTC,ETH"
     CRYPTOBOT_INVOICE_EXPIRES_HOURS: int = 24
 
-    CONNECT_BUTTON_MODE: str = "link"
+    CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
     ENABLE_LOGO_MODE: bool = True
     LOGO_FILE: str = "vpn_logo.png"
