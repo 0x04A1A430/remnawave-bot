@@ -674,10 +674,11 @@ def get_welcome_text_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="🔍 Предварительный просмотр", callback_data="preview_welcome_text"),
-            InlineKeyboardButton(text="💡 Помощь с плейсхолдерами", callback_data="show_placeholders_help")
+            InlineKeyboardButton(text="💡 Плейсхолдеры", callback_data="show_placeholders_help")
         ],
         [
-            InlineKeyboardButton(text="🔄 Сбросить на стандартный", callback_data="reset_welcome_text")
+            InlineKeyboardButton(text="🏷️ HTML форматирование", callback_data="show_formatting_help"),
+            InlineKeyboardButton(text="🔄 Сбросить", callback_data="reset_welcome_text")
         ],
         [
             InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")
