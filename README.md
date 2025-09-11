@@ -70,7 +70,9 @@ cp .env.example .env
 nano .env  # Заполни токены и настройки
 
 # 3. Создай необходимые директории
-mkdir -p logs data
+mkdir -p ./logs ./data ./data/backups ./data/referral_qr
+chmod -R 755 ./logs ./data
+sudo chown -R 1000:1000 ./logs ./data
 
 # 4. Запусти всё разом
 docker compose up -d
