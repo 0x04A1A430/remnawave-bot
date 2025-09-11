@@ -88,6 +88,22 @@ async def show_placeholders_help(
 
 @admin_required
 @error_handler
+async def show_formatting_help(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    formatting_info = get_telegram_formatting_info()
+    
+    await callback.message.edit_text(
+        formatting_info,
+        reply_markup=get_welcome_text_keyboard(db_user.language),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@admin_required
+@error_handler
 async def start_edit_welcome_text(
     callback: types.CallbackQuery,
     state: FSMContext,
