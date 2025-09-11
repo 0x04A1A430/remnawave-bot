@@ -75,7 +75,7 @@ def replace_placeholders(text: str, user) -> str:
         '{first_name}': display_first_name, 
         '{username}': display_username,
         '{username_clean}': clean_username,
-        'Egor': user_name  
+        'Egor': user_name 
     }
     
     result = text
@@ -85,6 +85,7 @@ def replace_placeholders(text: str, user) -> str:
     return result
 
 async def get_welcome_text_for_user(db: AsyncSession, user) -> str:
+    """Получает приветственный текст с заменой плейсхолдеров для конкретного пользователя"""
     welcome_text = await get_active_welcome_text(db)
     
     if not welcome_text:
