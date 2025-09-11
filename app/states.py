@@ -69,6 +69,10 @@ class AdminStates(StatesGroup):
     creating_server_name = State()
     creating_server_price = State()
     creating_server_country = State()
+    
+    editing_welcome_text = State()
+
+    
 
 
 class SupportStates(StatesGroup):

@@ -53,6 +53,7 @@
 - 📈 **Масштабируемость** - от стартапа до крупного бизнеса
 - 🔧 **Мониторинг** - автоматическое управление режимом тех. работ
 - 🛡️ **Защита панели** - поддержка [remnawave-reverse-proxy](https://github.com/eGamesAPI/remnawave-reverse-proxy)
+- 🗄️ **Бекапы/Восстановление** - автобекапы и восстановление бд прямо в боте с уведомления в топики
 
 ---
 
@@ -70,7 +71,9 @@ cp .env.example .env
 nano .env  # Заполни токены и настройки
 
 # 3. Создай необходимые директории
-mkdir -p logs data
+mkdir -p ./logs ./data ./data/backups ./data/referral_qr
+chmod -R 755 ./logs ./data
+sudo chown -R 1000:1000 ./logs ./data
 
 # 4. Запусти всё разом
 docker compose up -d
@@ -218,25 +221,33 @@ SUPPORT_USERNAME=@support
 
 # Уведомления администраторов
 ADMIN_NOTIFICATIONS_ENABLED=true
-ADMIN_NOTIFICATIONS_CHAT_ID=-1001234567890  # Замени на ID твоего канала (-100) - ПРЕФИКС ЗАКРЫТОГО КАНАЛА! ВСТАВИТЬ СВОЙ ID СРАЗУ ПОСЛЕ (-100) БЕЗ ПРОБЕЛОВ!
+ADMIN_NOTIFICATIONS_CHAT_ID=-1001234567890   # Замени на ID твоего канала (-100) - ПРЕФИКС ЗАКРЫТОГО КАНАЛА! ВСТАВИТЬ СВОЙ ID СРАЗУ ПОСЛЕ (-100) БЕЗ ПРОБЕЛОВ!
 ADMIN_NOTIFICATIONS_TOPIC_ID=123             # Опционально: ID топика
 
-# ===== DATABASE =====
-# Для Docker используйте PostgreSQL:
-DATABASE_URL=postgresql+asyncpg://remnawave_user:secure_password_123@postgres:5432/remnawave_bot
-# Для локального запуска без Docker используйте SQLite: sqlite+aiosqlite:///./bot.db 
+# ===== DATABASE CONFIGURATION =====
+# Режим базы данных: "auto", "postgresql", "sqlite"
+DATABASE_MODE=auto
 
-REDIS_URL=redis://redis:6379/0
+# Основной URL (можно оставить пустым для автоматического выбора)
+DATABASE_URL=
 
-# Пароли для Docker (PostgreSQL/Redis)
+# PostgreSQL настройки (для Docker и кастомных установок)
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
 POSTGRES_DB=remnawave_bot
 POSTGRES_USER=remnawave_user
 POSTGRES_PASSWORD=secure_password_123
 
+# SQLite настройки (для локального запуска)
+SQLITE_PATH=./data/bot.db
+
+# Redis
+REDIS_URL=redis://redis:6379/0
+
 # ===== REMNAWAVE API =====
 REMNAWAVE_API_URL=https://panel.example.com
 REMNAWAVE_API_KEY=
-# Для панелей установленных скриптом eGames прописывать ключ в формате XXXXXXX:DDDDDDDD
+# Для панелей установленных скриптом eGames прописывать ключ в формате XXXXXXX:DDDDDDDD - https://panel.example.com/auth/login?XXXXXXX=DDDDDDDD
 REMNAWAVE_SECRET_KEY=your_secret_key_here
 
 # ========= ПОДПИСКИ =========
@@ -250,7 +261,7 @@ TRIAL_SQUAD_UUID=
 # Сколько устройств доступно по дефолту при покупке платной подписки
 DEFAULT_DEVICE_LIMIT=3
 
-# Максимум устройств доступных к покупке (0 = Нет лимита)
+# Максимум устройств достопных к покупке (0 = Нет лимита)
 MAX_DEVICES_LIMIT=15
 
 # Дефолт параметры для подписок выданных через админку
@@ -309,18 +320,6 @@ MIN_BALANCE_FOR_AUTOPAY_KOPEKS=10000
 
 # ===== ПЛАТЕЖНЫЕ СИСТЕМЫ =====
 
-# CRYPTOBOT
-CRYPTOBOT_ENABLED=true
-CRYPTOBOT_API_TOKEN=123456789:AAzQcZWQqQAbsfgPnOLr4FHC8Doa4L7KryC
-CRYPTOBOT_WEBHOOK_SECRET=your_webhook_secret_here
-CRYPTOBOT_BASE_URL=https://pay.crypt.bot
-CRYPTOBOT_TESTNET=false
-CRYPTOBOT_WEBHOOK_PATH=/cryptobot-webhook
-CRYPTOBOT_WEBHOOK_PORT=8083
-CRYPTOBOT_DEFAULT_ASSET=USDT
-CRYPTOBOT_ASSETS=USDT,TON,BTC,ETH,LTC,BNB,TRX,USDC
-CRYPTOBOT_INVOICE_EXPIRES_HOURS=24
-
 # Telegram Stars (работает автоматически)
 TELEGRAM_STARS_ENABLED=true
 TELEGRAM_STARS_RATE_RUB=1.3
@@ -341,8 +340,39 @@ YOOKASSA_DEFAULT_RECEIPT_EMAIL=receipts@yourdomain.com
 
 # Настройки чеков для налоговой
 YOOKASSA_VAT_CODE=1
+# Коды НДС:
+# 1 - НДС не облагается
+# 2 - НДС 0%
+# 3 - НДС 10%
+# 4 - НДС 20%
+# 5 - НДС 10/110
+# 6 - НДС 20/120
+
 YOOKASSA_PAYMENT_MODE=full_payment
+# Способы расчета:
+# full_payment - полная оплата
+# partial_payment - частичная оплата
+# advance - аванс
+# full_prepayment - полная предоплата
+# partial_prepayment - частичная предоплата
+# credit - передача в кредит
+# credit_payment - оплата кредита
+
 YOOKASSA_PAYMENT_SUBJECT=service
+# Предметы расчета:
+# commodity - товар
+# excise - подакцизный товар
+# job - работа
+# service - услуга
+# gambling_bet - ставка в азартной игре
+# gambling_prize - выигрыш в азартной игре
+# lottery - лотерейный билет
+# lottery_prize - выигрыш в лотерее
+# intellectual_activity - результат интеллектуальной деятельности
+# payment - платеж
+# agent_commission - агентское вознаграждение
+# composite - составной предмет расчета
+# another - другое
 
 # Webhook настройки
 YOOKASSA_WEBHOOK_PATH=/yookassa-webhook
@@ -350,11 +380,25 @@ YOOKASSA_WEBHOOK_PORT=8082
 YOOKASSA_WEBHOOK_SECRET=your_webhook_secret
 
 # ===== НАСТРОЙКИ ОПИСАНИЙ ПЛАТЕЖЕЙ =====
+# Эти настройки позволяют изменить описания платежей, 
+# чтобы избежать блокировок платежных систем
 PAYMENT_SERVICE_NAME=Интернет-сервис
 PAYMENT_BALANCE_DESCRIPTION=Пополнение баланса
 PAYMENT_SUBSCRIPTION_DESCRIPTION=Оплата подписки
 PAYMENT_BALANCE_TEMPLATE={service_name} - {description}
 PAYMENT_SUBSCRIPTION_TEMPLATE={service_name} - {description}
+
+# CRYPTOBOT
+CRYPTOBOT_ENABLED=true
+CRYPTOBOT_API_TOKEN=123456789:AAzQcZWQqQAbsfgPnOLr4FHC8Doa4L7KryC
+CRYPTOBOT_WEBHOOK_SECRET=your_webhook_secret_here
+CRYPTOBOT_BASE_URL=https://pay.crypt.bot
+CRYPTOBOT_TESTNET=false
+CRYPTOBOT_WEBHOOK_PATH=/cryptobot-webhook
+CRYPTOBOT_WEBHOOK_PORT=8083
+CRYPTOBOT_DEFAULT_ASSET=USDT
+CRYPTOBOT_ASSETS=USDT,TON,BTC,ETH,LTC,BNB,TRX,USDC
+CRYPTOBOT_INVOICE_EXPIRES_HOURS=24
 
 # ===== ИНТЕРФЕЙС И UX =====
 
@@ -389,6 +433,26 @@ MAINTENANCE_MESSAGE=Ведутся технические работы. Серв
 DEFAULT_LANGUAGE=ru
 AVAILABLE_LANGUAGES=ru,en
 
+# ===== ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ =====
+# Конфигурация приложений для гайда подключения
+APP_CONFIG_PATH=app-config.json
+ENABLE_DEEP_LINKS=true
+APP_CONFIG_CACHE_TTL=3600
+
+# ===== СИСТЕМА БЕКАПОВ =====
+BACKUP_AUTO_ENABLED=true
+BACKUP_INTERVAL_HOURS=24
+BACKUP_TIME=03:00
+BACKUP_MAX_KEEP=7
+BACKUP_COMPRESSION=true
+BACKUP_INCLUDE_LOGS=false
+BACKUP_LOCATION=/app/data/backups
+
+# ===== ПРОВЕРКА ОБНОВЛЕНИЙ БОТА =====
+VERSION_CHECK_ENABLED=true
+VERSION_CHECK_REPO=fr1ngg/remnawave-bedolaga-telegram-bot
+VERSION_CHECK_INTERVAL_HOURS=1
+
 # ===== ЛОГИРОВАНИЕ =====
 LOG_LEVEL=INFO
 LOG_FILE=logs/bot.log
@@ -397,16 +461,6 @@ LOG_FILE=logs/bot.log
 DEBUG=false
 WEBHOOK_URL=
 WEBHOOK_PATH=/webhook
-
-# ===== ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ =====
-# Конфигурация приложений для гайда подключения
-APP_CONFIG_PATH=app-config.json
-ENABLE_DEEP_LINKS=true
-APP_CONFIG_CACHE_TTL=3600
-
-VERSION_CHECK_ENABLED=true
-VERSION_CHECK_REPO=fr1ngg/remnawave-bedolaga-telegram-bot
-VERSION_CHECK_INTERVAL_HOURS=1
 ```
 
 </details>
@@ -436,6 +490,7 @@ VERSION_CHECK_INTERVAL_HOURS=1
 - ⭐ Telegram Stars 
 - 💳 Tribute 
 - 💳 YooKassa
+- 💰 CryptoBot
 - 🎁 Реферальные бонусы
 - Детальная история транзакций 
 
@@ -490,6 +545,7 @@ VERSION_CHECK_INTERVAL_HOURS=1
 - 🔔 Автоуведомления о продлении
 - 💬 Система поддержки с HTML разметкой
 - 📝 Настройка правил сервиса
+- Настраиваемое приветственное сообщение с предложением активации триала
 
 📨 **Уведомления в закрытый канал**
 - 🎯 Активация триала
@@ -497,6 +553,14 @@ VERSION_CHECK_INTERVAL_HOURS=1
 - 🔄 Конверсия из триала в платную
 - ⏰ Продление подписки
 - 💰 Пополнение баланса
+- ♻️ Выход обновлений бота
+- 🚧 Потеря соелинения с апи Remnawave
+- 🗄️ **Бекапы/Восстановление бд**
+
+🗄️ **Бекапы/Восстановление**
+- Ручной запуск бекапа
+- Восстановление бд
+- Включение/Отключение автобекапов 
 
 </td>
 </tr>
@@ -762,11 +826,13 @@ bedolaga_bot/
 │   │   ├── 💬 support.py         # Техподдержка
 │   │   └── 👑 admin/             # Админ панель
 │   │       ├── 📊 statistics.py  # Статистика
+│   │       ├── 🗄️ backup.py      # Бекапы
 │   │       ├── 👥 users.py       # Управление юзерами
 │   │       ├── 🎫 promocodes.py  # Управление промокодами
 │   │       ├── 🚧 maintenance.py # Тех работы
 │   │       ├── 📨 messages.py    # Рассылки
 │   │       ├── 📨 user_messages.py # Рандомные сообщения в меню
+│   │       ├── 📨 welcome_text.py  # Приветственное сообщение 
 │   │       ├── ⚙️ main.py        # Админское меню
 │   │       ├── 📖 rules.py       # Правила
 │   │       ├── 🙋 referrals.py   # Правила
@@ -786,7 +852,8 @@ bedolaga_bot/
 │   │       ├── 📜 rules.py           # Правила сервиса
 │   │       ├── 📜 subscription_conversion.py # Правила сервиса
 │   │       ├── 💳 yookassa.py        # YooKassa операции
-│   │       ├── 💳 cryptobot.py        # CryptoBot операции
+│   │       ├── 📨 welcome_text.py    # Приветственное сообщение 
+│   │       ├── 💳 cryptobot.py       # CryptoBot операции
 │   │       ├── 🌐 server_squad.py    # Серверы и сквады
 │   │       ├── 🎁 promocode.py       # Промокоды
 │   │       └── 👥 referral.py        # Рефералы
@@ -795,6 +862,7 @@ bedolaga_bot/
 │   │   ├── 👤 user_service.py         # Сервис пользователей
 │   │   ├── 📋 subscription_service.py # Сервис подписок
 │   │   ├── 💰 payment_service.py      # Платежи
+│   │   ├── 🗄️ backup_service.py       # Бекапы
 │   │   ├── 🎁 promocode_service.py    # Промокоды
 │   │   ├── 🚧 maintenance_service.py  # Промокоды
 │   │   ├── 👥 referral_service.py     # Рефералы
@@ -931,6 +999,10 @@ server {
 ```caddyfile
 your-domain.com {
     handle /tribute-webhook* {
+        reverse_proxy localhost:8081
+    }
+
+    handle /cryptobot-webhook* {
         reverse_proxy localhost:8081
     }
     
