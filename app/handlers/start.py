@@ -632,8 +632,7 @@ async def complete_registration(
 
     from app.database.crud.welcome_text import get_welcome_text_for_user
     
-    user_name = message.from_user.first_name or message.from_user.username or "друг"
-    offer_text = await get_welcome_text_for_user(db, user_name)
+    offer_text = await get_welcome_text_for_user(db, message.from_user)
 
     try:
         await message.answer(
