@@ -30,9 +30,11 @@ def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="📢 Сообщения в меню", callback_data="user_messages_panel"),
-            InlineKeyboardButton(text="🔄 Обновления", callback_data="admin_updates")
+            InlineKeyboardButton(text="👋 Приветственный текст", callback_data="welcome_text_panel")
+            
         ],
         [
+            InlineKeyboardButton(text="🔄 Обновления", callback_data="admin_updates"),
             InlineKeyboardButton(text="🗄️ Бекапы", callback_data="backup_panel")
         ],
         [
@@ -664,5 +666,17 @@ def get_sync_simplified_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-
+def get_welcome_text_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📝 Изменить текст", callback_data="edit_welcome_text"),
+            InlineKeyboardButton(text="👁️ Показать текущий", callback_data="show_welcome_text")
+        ],
+        [
+            InlineKeyboardButton(text="🔄 Сбросить на стандартный", callback_data="reset_welcome_text")
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")
+        ]
+    ])
 
