@@ -30,12 +30,12 @@ from app.keyboards.inline import (
     get_subscription_confirm_keyboard, get_autopay_keyboard,
     get_autopay_days_keyboard, get_back_keyboard,
     get_extend_subscription_keyboard, get_add_traffic_keyboard,
-    get_add_devices_keyboard, get_reset_traffic_confirm_keyboard,
+    get_change_devices_keyboard, get_reset_traffic_confirm_keyboard,
     get_manage_countries_keyboard,
     get_device_selection_keyboard, get_connection_guide_keyboard,
     get_app_selection_keyboard, get_specific_app_keyboard,
     get_subscription_settings_keyboard, get_insufficient_balance_keyboard,
-    get_extend_subscription_keyboard_with_prices,
+    get_extend_subscription_keyboard_with_prices, get_confirm_change_devices_keyboard
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
@@ -785,7 +785,7 @@ async def handle_add_traffic(
     await callback.answer()
     
 
-async def handle_add_devices(
+async def handle_change_devices(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession
@@ -794,18 +794,223 @@ async def handle_add_devices(
     subscription = db_user.subscription
     
     if not subscription or subscription.is_trial:
-        await callback.answer("⚠ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer("⚠️ Эта функция доступна только для платных подписок", show_alert=True)
         return
     
     current_devices = subscription.device_limit
     
     await callback.message.edit_text(
-        f"📱 <b>Добавить устройства к подписке</b>\n\n"
+        f"📱 <b>Изменение количества устройств</b>\n\n"
         f"Текущий лимит: {current_devices} устройств\n"
-        f"Выберите количество дополнительных устройств:",
-        reply_markup=get_add_devices_keyboard(current_devices, db_user.language, subscription.end_date),
+        f"Выберите новое количество устройств:\n\n"
+        f"💡 <b>Важно:</b>\n"
+        f"• При увеличении - доплата пропорционально оставшемуся времени\n"
+        f"• При уменьшении - возврат средств не производится",
+        reply_markup=get_change_devices_keyboard(current_devices, db_user.language, subscription.end_date),
         parse_mode="HTML"
     )
+    
+    await callback.answer()
+
+
+
+    new_devices_count = int(callback.data.split('_')[2])
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    
+    current_devices = subscription.device_limit
+    
+    if new_devices_count == current_devices:
+        await callback.answer("ℹ️ Количество устройств не изменилось", show_alert=True)
+        return
+    
+    if settings.MAX_DEVICES_LIMIT > 0 and new_devices_count > settings.MAX_DEVICES_LIMIT:
+        await callback.answer(
+            f"⚠️ Превышен максимальный лимит устройств ({settings.MAX_DEVICES_LIMIT})",
+            show_alert=True
+        )
+        return
+    
+    devices_difference = new_devices_count - current_devices
+    
+    if devices_difference > 0:  
+        additional_devices = devices_difference
+        
+        current_chargeable = max(0, current_devices - settings.DEFAULT_DEVICE_LIMIT)
+        new_chargeable = max(0, new_devices_count - settings.DEFAULT_DEVICE_LIMIT)
+        chargeable_devices = new_chargeable - current_chargeable
+        
+        devices_price_per_month = chargeable_devices * settings.PRICE_PER_DEVICE
+        price, charged_months = calculate_prorated_price(devices_price_per_month, subscription.end_date)
+        
+        if price > 0 and db_user.balance_kopeks < price:
+            await callback.answer(
+                f"⚠️ Недостаточно средств!\nТребуется: {texts.format_price(price)} (за {charged_months} мес)\nУ вас: {texts.format_price(db_user.balance_kopeks)}", 
+                show_alert=True
+            )
+            return
+        
+        action_text = f"увеличить до {new_devices_count}"
+        cost_text = f"Доплата: {texts.format_price(price)} (за {charged_months} мес)" if price > 0 else "Бесплатно"
+        
+    else: 
+        price = 0
+        action_text = f"уменьшить до {new_devices_count}"
+        cost_text = "Возврат средств не производится"
+    
+    confirm_text = f"📱 <b>Подтверждение изменения</b>\n\n"
+    confirm_text += f"Текущее количество: {current_devices} устройств\n"
+    confirm_text += f"Новое количество: {new_devices_count} устройств\n\n"
+    confirm_text += f"Действие: {action_text}\n"
+    confirm_text += f"💰 {cost_text}\n\n"
+    confirm_text += "Подтвердить изменение?"
+    
+    await callback.message.edit_text(
+        confirm_text,
+        reply_markup=get_confirm_change_devices_keyboard(new_devices_count, price, db_user.language),
+        parse_mode="HTML"
+    )
+    
+    await callback.answer()
+
+async def confirm_change_devices(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
+    
+    new_devices_count = int(callback.data.split('_')[2])
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    
+    current_devices = subscription.device_limit
+    
+    if new_devices_count == current_devices:
+        await callback.answer("ℹ️ Количество устройств не изменилось", show_alert=True)
+        return
+    
+    if settings.MAX_DEVICES_LIMIT > 0 and new_devices_count > settings.MAX_DEVICES_LIMIT:
+        await callback.answer(
+            f"⚠️ Превышен максимальный лимит устройств ({settings.MAX_DEVICES_LIMIT})",
+            show_alert=True
+        )
+        return
+    
+    devices_difference = new_devices_count - current_devices
+    
+    if devices_difference > 0:  
+        additional_devices = devices_difference
+        
+        if current_devices < settings.DEFAULT_DEVICE_LIMIT:
+            free_devices = settings.DEFAULT_DEVICE_LIMIT - current_devices
+            chargeable_devices = max(0, additional_devices - free_devices)
+        else:
+            chargeable_devices = additional_devices
+        
+        devices_price_per_month = chargeable_devices * settings.PRICE_PER_DEVICE
+        price, charged_months = calculate_prorated_price(devices_price_per_month, subscription.end_date)
+        
+        if price > 0 and db_user.balance_kopeks < price:
+            await callback.answer(
+                f"⚠️ Недостаточно средств!\nТребуется: {texts.format_price(price)} (за {charged_months} мес)\nУ вас: {texts.format_price(db_user.balance_kopeks)}", 
+                show_alert=True
+            )
+            return
+        
+        action_text = f"увеличить до {new_devices_count}"
+        cost_text = f"Доплата: {texts.format_price(price)} (за {charged_months} мес)" if price > 0 else "Бесплатно"
+        
+    else:  
+        price = 0
+        action_text = f"уменьшить до {new_devices_count}"
+        cost_text = "Возврат средств не производится"
+    
+    confirm_text = f"📱 <b>Подтверждение изменения</b>\n\n"
+    confirm_text += f"Текущее количество: {current_devices} устройств\n"
+    confirm_text += f"Новое количество: {new_devices_count} устройств\n\n"
+    confirm_text += f"Действие: {action_text}\n"
+    confirm_text += f"💰 {cost_text}\n\n"
+    confirm_text += "Подтвердить изменение?"
+    
+    await callback.message.edit_text(
+        confirm_text,
+        reply_markup=get_confirm_change_devices_keyboard(new_devices_count, price, db_user.language),
+        parse_mode="HTML"
+    )
+    
+    await callback.answer()
+
+
+async def execute_change_devices(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
+    
+    callback_parts = callback.data.split('_')
+    new_devices_count = int(callback_parts[3])
+    price = int(callback_parts[4])
+    
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    current_devices = subscription.device_limit
+    
+    try:
+        if price > 0:
+            success = await subtract_user_balance(
+                db, db_user, price,
+                f"Изменение количества устройств с {current_devices} до {new_devices_count}"
+            )
+            
+            if not success:
+                await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
+                return
+            
+            charged_months = get_remaining_months(subscription.end_date)
+            await create_transaction(
+                db=db,
+                user_id=db_user.id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                amount_kopeks=price,
+                description=f"Изменение устройств с {current_devices} до {new_devices_count} на {charged_months} мес"
+            )
+        
+        subscription.device_limit = new_devices_count
+        subscription.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+        
+        await db.refresh(db_user)
+        await db.refresh(subscription)
+        
+        if new_devices_count > current_devices:
+            success_text = f"✅ Количество устройств увеличено!\n\n"
+            success_text += f"📱 Было: {current_devices} → Стало: {new_devices_count}\n"
+            if price > 0:
+                success_text += f"💰 Списано: {texts.format_price(price)}"
+        else:
+            success_text = f"✅ Количество устройств уменьшено!\n\n"
+            success_text += f"📱 Было: {current_devices} → Стало: {new_devices_count}\n"
+            success_text += f"ℹ️ Возврат средств не производится"
+        
+        await callback.message.edit_text(
+            success_text,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+        
+        logger.info(f"✅ Пользователь {db_user.telegram_id} изменил количество устройств с {current_devices} на {new_devices_count}, доплата: {price/100}₽")
+        
+    except Exception as e:
+        logger.error(f"Ошибка изменения количества устройств: {e}")
+        await callback.message.edit_text(
+            texts.ERROR,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
     
     await callback.answer()
 
@@ -3083,8 +3288,18 @@ def register_handlers(dp: Dispatcher):
     )
     
     dp.callback_query.register(
-        handle_add_devices,
-        F.data == "subscription_add_devices"
+        handle_change_devices,
+        F.data == "subscription_change_devices"
+    )
+
+    dp.callback_query.register(
+        confirm_change_devices,
+        F.data.startswith("change_devices_")
+    )
+    
+    dp.callback_query.register(
+        execute_change_devices,
+        F.data.startswith("confirm_change_devices_")
     )
     
     dp.callback_query.register(
