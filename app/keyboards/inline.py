@@ -2,6 +2,8 @@ from typing import List, Optional
 from aiogram import types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
+from app.database.models import User
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
 from app.localization.texts import get_texts
@@ -1151,6 +1153,150 @@ def get_cryptobot_payment_keyboard(
             InlineKeyboardButton(
                 text="💰 Мой баланс",
                 callback_data="menu_balance"
+            )
+        ]
+    ])
+
+def get_devices_management_keyboard(
+    devices: List[dict], 
+    pagination,
+    language: str = "ru"
+) -> InlineKeyboardMarkup:
+    
+    keyboard = []
+    
+    for i, device in enumerate(devices):
+        platform = device.get('platform', 'Unknown')
+        device_model = device.get('deviceModel', 'Unknown')
+        device_info = f"{platform} - {device_model}"
+        
+        if len(device_info) > 25:
+            device_info = device_info[:22] + "..."
+        
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"🔄 {device_info}",
+                callback_data=f"reset_device_{i}_{pagination.page}"
+            )
+        ])
+    
+    if pagination.total_pages > 1:
+        nav_row = []
+        
+        if pagination.has_prev:
+            nav_row.append(
+                InlineKeyboardButton(
+                    text="⬅️",
+                    callback_data=f"devices_page_{pagination.prev_page}"
+                )
+            )
+        
+        nav_row.append(
+            InlineKeyboardButton(
+                text=f"{pagination.page}/{pagination.total_pages}",
+                callback_data="current_page"
+            )
+        )
+        
+        if pagination.has_next:
+            nav_row.append(
+                InlineKeyboardButton(
+                    text="➡️",
+                    callback_data=f"devices_page_{pagination.next_page}"
+                )
+            )
+        
+        keyboard.append(nav_row)
+    
+    keyboard.append([
+        InlineKeyboardButton(
+            text="🔄 Сбросить все устройства",
+            callback_data="reset_all_devices"
+        )
+    ])
+    
+    keyboard.append([
+        InlineKeyboardButton(
+            text="⬅️ Назад" if language == "ru" else "⬅️ Back",
+            callback_data="subscription_settings"
+        )
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_updated_subscription_settings_keyboard(language: str = "ru", show_countries_management: bool = True) -> InlineKeyboardMarkup:
+    from app.config import settings
+    
+    texts = get_texts(language)
+    keyboard = []
+    
+    if show_countries_management:
+        keyboard.append([
+            InlineKeyboardButton(text="🌐 Добавить страны", callback_data="subscription_add_countries")
+        ])
+    
+    keyboard.extend([
+        [
+            InlineKeyboardButton(text="📱 Изменить устройства", callback_data="subscription_change_devices") 
+        ],
+        [
+            InlineKeyboardButton(text="🔧 Управление устройствами", callback_data="subscription_manage_devices")
+        ]
+    ])
+    
+    if settings.is_traffic_selectable():
+        keyboard.insert(-2, [
+            InlineKeyboardButton(text="📈 Добавить трафик", callback_data="subscription_add_traffic")
+        ])
+        keyboard.insert(-2, [
+            InlineKeyboardButton(text="🔄 Сбросить трафик", callback_data="subscription_reset_traffic")
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_device_reset_confirm_keyboard(device_info: str, device_index: int, page: int, language: str = "ru") -> InlineKeyboardMarkup:
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ Да, сбросить это устройство", 
+                callback_data=f"confirm_reset_device_{device_index}_{page}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="❌ Отмена", 
+                callback_data=f"devices_page_{page}"
+            )
+        ]
+    ])
+
+
+def get_device_management_help_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="❓ Как подключить устройство заново?",
+                callback_data="device_connection_help"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🔧 Управление устройствами",
+                callback_data="subscription_manage_devices"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="⬅️ К подписке",
+                callback_data="menu_subscription"
             )
         ]
     ])
