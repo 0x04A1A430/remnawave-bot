@@ -14,6 +14,7 @@ async def get_active_welcome_text(db: AsyncSession) -> Optional[str]:
     result = await db.execute(
         select(WelcomeText)
         .where(WelcomeText.is_active == True)
+        .where(WelcomeText.is_enabled == True) 
         .order_by(WelcomeText.updated_at.desc())
     )
     welcome_text = result.scalar_one_or_none()
@@ -23,8 +24,72 @@ async def get_active_welcome_text(db: AsyncSession) -> Optional[str]:
     
     return None
 
+async def get_current_welcome_text_settings(db: AsyncSession) -> dict:
+    result = await db.execute(
+        select(WelcomeText)
+        .where(WelcomeText.is_active == True)
+        .order_by(WelcomeText.updated_at.desc())
+    )
+    welcome_text = result.scalar_one_or_none()
+    
+    if welcome_text:
+        return {
+            'text': welcome_text.text_content,
+            'is_enabled': welcome_text.is_enabled,
+            'id': welcome_text.id
+        }
+    
+    return {
+        'text': await get_current_welcome_text_or_default(),
+        'is_enabled': True,
+        'id': None
+    }
+
+async def toggle_welcome_text_status(db: AsyncSession, admin_id: int) -> bool:
+    try:
+        result = await db.execute(
+            select(WelcomeText)
+            .where(WelcomeText.is_active == True)
+            .order_by(WelcomeText.updated_at.desc())
+        )
+        welcome_text = result.scalar_one_or_none()
+        
+        if welcome_text:
+            welcome_text.is_enabled = not welcome_text.is_enabled
+            welcome_text.updated_at = datetime.utcnow()
+            
+            await db.commit()
+            await db.refresh(welcome_text)
+            
+            status = "включен" if welcome_text.is_enabled else "отключен"
+            logger.info(f"Приветственный текст {status} администратором {admin_id}")
+            return welcome_text.is_enabled
+        else:
+            default_text = await get_current_welcome_text_or_default()
+            new_welcome_text = WelcomeText(
+                text_content=default_text,
+                is_active=True,
+                is_enabled=True,
+                created_by=admin_id
+            )
+            
+            db.add(new_welcome_text)
+            await db.commit()
+            await db.refresh(new_welcome_text)
+            
+            logger.info(f"Создан и включен дефолтный приветственный текст администратором {admin_id}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Ошибка при переключении статуса приветственного текста: {e}")
+        await db.rollback()
+        return False
+
 async def set_welcome_text(db: AsyncSession, text_content: str, admin_id: int) -> bool:
     try:
+        current_settings = await get_current_welcome_text_settings(db)
+        current_enabled_status = current_settings.get('is_enabled', True)
+        
         await db.execute(
             update(WelcomeText).values(is_active=False)
         )
@@ -32,6 +97,7 @@ async def set_welcome_text(db: AsyncSession, text_content: str, admin_id: int) -
         new_welcome_text = WelcomeText(
             text_content=text_content,
             is_active=True,
+            is_enabled=current_enabled_status, 
             created_by=admin_id
         )
         
@@ -54,7 +120,7 @@ async def get_current_welcome_text_or_default() -> str:
         f"✅ До 1 Гбит/с скорость "
         f"✅ Умный VPN — можно не отключать для большинства российских сервисов "
         f"✅ Современные протоколы — максимум защиты и анонимности "
-        f"👉 Всего 99₽/мес за 1 устройство "
+        f"💉 Всего 99₽/мес за 1 устройство "
         f"👇 Жмите кнопку и подключайтесь!"
     )
 
@@ -85,11 +151,10 @@ def replace_placeholders(text: str, user) -> str:
     return result
 
 async def get_welcome_text_for_user(db: AsyncSession, user) -> str:
-    """Получает приветственный текст с заменой плейсхолдеров для конкретного пользователя"""
     welcome_text = await get_active_welcome_text(db)
     
     if not welcome_text:
-        welcome_text = await get_current_welcome_text_or_default()
+        return None
     
     if isinstance(user, str):
         class SimpleUser:
