@@ -34,8 +34,10 @@ from app.keyboards.inline import (
     get_manage_countries_keyboard,
     get_device_selection_keyboard, get_connection_guide_keyboard,
     get_app_selection_keyboard, get_specific_app_keyboard,
-    get_subscription_settings_keyboard, get_insufficient_balance_keyboard,
-    get_extend_subscription_keyboard_with_prices, get_confirm_change_devices_keyboard
+    get_updated_subscription_settings_keyboard, get_insufficient_balance_keyboard,
+    get_extend_subscription_keyboard_with_prices, get_confirm_change_devices_keyboard,
+    get_devices_management_keyboard, get_device_reset_confirm_keyboard,
+    get_device_management_help_keyboard
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
@@ -48,6 +50,7 @@ from app.utils.pricing_utils import (
     validate_pricing_calculation,
     format_period_description,
 )
+from app.utils.pagination import paginate_list
 
 logger = logging.getLogger(__name__)
 
@@ -812,67 +815,6 @@ async def handle_change_devices(
     
     await callback.answer()
 
-
-
-    new_devices_count = int(callback.data.split('_')[2])
-    texts = get_texts(db_user.language)
-    subscription = db_user.subscription
-    
-    current_devices = subscription.device_limit
-    
-    if new_devices_count == current_devices:
-        await callback.answer("ℹ️ Количество устройств не изменилось", show_alert=True)
-        return
-    
-    if settings.MAX_DEVICES_LIMIT > 0 and new_devices_count > settings.MAX_DEVICES_LIMIT:
-        await callback.answer(
-            f"⚠️ Превышен максимальный лимит устройств ({settings.MAX_DEVICES_LIMIT})",
-            show_alert=True
-        )
-        return
-    
-    devices_difference = new_devices_count - current_devices
-    
-    if devices_difference > 0:  
-        additional_devices = devices_difference
-        
-        current_chargeable = max(0, current_devices - settings.DEFAULT_DEVICE_LIMIT)
-        new_chargeable = max(0, new_devices_count - settings.DEFAULT_DEVICE_LIMIT)
-        chargeable_devices = new_chargeable - current_chargeable
-        
-        devices_price_per_month = chargeable_devices * settings.PRICE_PER_DEVICE
-        price, charged_months = calculate_prorated_price(devices_price_per_month, subscription.end_date)
-        
-        if price > 0 and db_user.balance_kopeks < price:
-            await callback.answer(
-                f"⚠️ Недостаточно средств!\nТребуется: {texts.format_price(price)} (за {charged_months} мес)\nУ вас: {texts.format_price(db_user.balance_kopeks)}", 
-                show_alert=True
-            )
-            return
-        
-        action_text = f"увеличить до {new_devices_count}"
-        cost_text = f"Доплата: {texts.format_price(price)} (за {charged_months} мес)" if price > 0 else "Бесплатно"
-        
-    else: 
-        price = 0
-        action_text = f"уменьшить до {new_devices_count}"
-        cost_text = "Возврат средств не производится"
-    
-    confirm_text = f"📱 <b>Подтверждение изменения</b>\n\n"
-    confirm_text += f"Текущее количество: {current_devices} устройств\n"
-    confirm_text += f"Новое количество: {new_devices_count} устройств\n\n"
-    confirm_text += f"Действие: {action_text}\n"
-    confirm_text += f"💰 {cost_text}\n\n"
-    confirm_text += "Подтвердить изменение?"
-    
-    await callback.message.edit_text(
-        confirm_text,
-        reply_markup=get_confirm_change_devices_keyboard(new_devices_count, price, db_user.language),
-        parse_mode="HTML"
-    )
-    
-    await callback.answer()
-
 async def confirm_change_devices(
     callback: types.CallbackQuery,
     db_user: User,
@@ -1007,6 +949,305 @@ async def execute_change_devices(
         
     except Exception as e:
         logger.error(f"Ошибка изменения количества устройств: {e}")
+        await callback.message.edit_text(
+            texts.ERROR,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+    
+    await callback.answer()
+
+async def handle_device_management(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    
+    if not subscription or subscription.is_trial:
+        await callback.answer("⚠️ Эта функция доступна только для платных подписок", show_alert=True)
+        return
+    
+    if not db_user.remnawave_uuid:
+        await callback.answer("❌ UUID пользователя не найден", show_alert=True)
+        return
+    
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+        service = RemnaWaveService()
+        
+        async with service.api as api:
+            response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+            
+            if response and 'response' in response:
+                devices_info = response['response']
+                total_devices = devices_info.get('total', 0)
+                devices_list = devices_info.get('devices', [])
+                
+                if total_devices == 0:
+                    await callback.message.edit_text(
+                        "ℹ️ У вас нет подключенных устройств",
+                        reply_markup=get_back_keyboard(db_user.language)
+                    )
+                    await callback.answer()
+                    return
+                
+                await show_devices_page(callback, db_user, devices_list, page=1)
+            else:
+                await callback.answer("❌ Ошибка получения информации об устройствах", show_alert=True)
+                
+    except Exception as e:
+        logger.error(f"Ошибка получения списка устройств: {e}")
+        await callback.answer("❌ Ошибка получения информации об устройствах", show_alert=True)
+    
+    await callback.answer()
+
+
+async def show_devices_page(
+    callback: types.CallbackQuery,
+    db_user: User,
+    devices_list: List[dict],
+    page: int = 1
+):
+    
+    from app.utils.pagination import paginate_list
+    
+    texts = get_texts(db_user.language)
+    devices_per_page = 5
+    
+    pagination = paginate_list(devices_list, page=page, per_page=devices_per_page)
+    
+    devices_text = f"🔄 <b>Управление устройствами</b>\n\n"
+    devices_text += f"📊 Всего подключено: {len(devices_list)} устройств\n"
+    devices_text += f"📄 Страница {pagination.page} из {pagination.total_pages}\n\n"
+    
+    if pagination.items:
+        devices_text += "<b>Подключенные устройства:</b>\n"
+        for i, device in enumerate(pagination.items, 1):
+            platform = device.get('platform', 'Unknown')
+            device_model = device.get('deviceModel', 'Unknown')
+            device_info = f"{platform} - {device_model}"
+            
+            if len(device_info) > 35:
+                device_info = device_info[:32] + "..."
+            
+            devices_text += f"• {device_info}\n"
+    
+    devices_text += "\n💡 <b>Действия:</b>\n"
+    devices_text += "• Выберите устройство для сброса\n"
+    devices_text += "• Или сбросьте все устройства сразу"
+    
+    await callback.message.edit_text(
+        devices_text,
+        reply_markup=get_devices_management_keyboard(
+            pagination.items, 
+            pagination, 
+            db_user.language
+        ),
+        parse_mode="HTML"
+    )
+
+
+async def handle_devices_page(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    
+    page = int(callback.data.split('_')[2])
+    
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+        service = RemnaWaveService()
+        
+        async with service.api as api:
+            response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+            
+            if response and 'response' in response:
+                devices_list = response['response'].get('devices', [])
+                await show_devices_page(callback, db_user, devices_list, page=page)
+            else:
+                await callback.answer("❌ Ошибка получения устройств", show_alert=True)
+                
+    except Exception as e:
+        logger.error(f"Ошибка перехода на страницу устройств: {e}")
+        await callback.answer("❌ Ошибка загрузки страницы", show_alert=True)
+
+
+async def handle_single_device_reset(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    
+    try:
+        callback_parts = callback.data.split('_')
+        if len(callback_parts) < 4:
+            logger.error(f"Некорректный формат callback_data: {callback.data}")
+            await callback.answer("❌ Ошибка: некорректный запрос", show_alert=True)
+            return
+            
+        device_index = int(callback_parts[2])
+        page = int(callback_parts[3])
+        
+        logger.info(f"🔧 Сброс устройства: index={device_index}, page={page}")
+        
+    except (ValueError, IndexError) as e:
+        logger.error(f"❌ Ошибка парсинга callback_data {callback.data}: {e}")
+        await callback.answer("❌ Ошибка обработки запроса", show_alert=True)
+        return
+    
+    texts = get_texts(db_user.language)
+    
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+        service = RemnaWaveService()
+        
+        async with service.api as api:
+            response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+            
+            if response and 'response' in response:
+                devices_list = response['response'].get('devices', [])
+                
+                from app.utils.pagination import paginate_list
+                devices_per_page = 5
+                pagination = paginate_list(devices_list, page=page, per_page=devices_per_page)
+                
+                if device_index < len(pagination.items):
+                    device = pagination.items[device_index]
+                    device_hwid = device.get('hwid')
+                    
+                    if device_hwid:
+                        delete_data = {
+                            "userUuid": db_user.remnawave_uuid,
+                            "hwid": device_hwid
+                        }
+                        
+                        await api._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
+                        
+                        platform = device.get('platform', 'Unknown')
+                        device_model = device.get('deviceModel', 'Unknown')
+                        device_info = f"{platform} - {device_model}"
+                        
+                        await callback.answer(f"✅ Устройство {device_info} успешно сброшено!", show_alert=True)
+                        
+                        updated_response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+                        if updated_response and 'response' in updated_response:
+                            updated_devices = updated_response['response'].get('devices', [])
+                            
+                            if updated_devices:
+                                updated_pagination = paginate_list(updated_devices, page=page, per_page=devices_per_page)
+                                if not updated_pagination.items and page > 1:
+                                    page = page - 1
+                                
+                                await show_devices_page(callback, db_user, updated_devices, page=page)
+                            else:
+                                await callback.message.edit_text(
+                                    "ℹ️ Все устройства сброшены",
+                                    reply_markup=get_back_keyboard(db_user.language)
+                                )
+                        
+                        logger.info(f"✅ Пользователь {db_user.telegram_id} сбросил устройство {device_info}")
+                    else:
+                        await callback.answer("❌ Не удалось получить ID устройства", show_alert=True)
+                else:
+                    await callback.answer("❌ Устройство не найдено", show_alert=True)
+            else:
+                await callback.answer("❌ Ошибка получения устройств", show_alert=True)
+                
+    except Exception as e:
+        logger.error(f"Ошибка сброса устройства: {e}")
+        await callback.answer("❌ Ошибка сброса устройства", show_alert=True)
+
+
+async def handle_all_devices_reset_from_management(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    
+    texts = get_texts(db_user.language)
+    
+    if not db_user.remnawave_uuid:
+        await callback.answer("❌ UUID пользователя не найден", show_alert=True)
+        return
+    
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+        service = RemnaWaveService()
+        
+        async with service.api as api:
+            devices_response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+            
+            if not devices_response or 'response' not in devices_response:
+                await callback.answer("❌ Ошибка получения списка устройств", show_alert=True)
+                return
+            
+            devices_list = devices_response['response'].get('devices', [])
+            
+            if not devices_list:
+                await callback.answer("ℹ️ У вас нет подключенных устройств", show_alert=True)
+                return
+            
+            logger.info(f"🔧 Найдено {len(devices_list)} устройств для сброса")
+            
+            success_count = 0
+            failed_count = 0
+            
+            for device in devices_list:
+                device_hwid = device.get('hwid')
+                if device_hwid:
+                    try:
+                        delete_data = {
+                            "userUuid": db_user.remnawave_uuid,
+                            "hwid": device_hwid
+                        }
+                        
+                        await api._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
+                        success_count += 1
+                        logger.info(f"✅ Устройство {device_hwid} удалено")
+                        
+                    except Exception as device_error:
+                        failed_count += 1
+                        logger.error(f"❌ Ошибка удаления устройства {device_hwid}: {device_error}")
+                else:
+                    failed_count += 1
+                    logger.warning(f"⚠️ У устройства нет HWID: {device}")
+            
+            if success_count > 0:
+                if failed_count == 0:
+                    await callback.message.edit_text(
+                        f"✅ <b>Все устройства успешно сброшены!</b>\n\n"
+                        f"🔄 Сброшено: {success_count} устройств\n"
+                        f"📱 Теперь вы можете заново подключить свои устройства\n\n"
+                        f"💡 Используйте ссылку из раздела 'Моя подписка' для повторного подключения",
+                        reply_markup=get_back_keyboard(db_user.language),
+                        parse_mode="HTML"
+                    )
+                    logger.info(f"✅ Пользователь {db_user.telegram_id} успешно сбросил {success_count} устройств")
+                else:
+                    await callback.message.edit_text(
+                        f"⚠️ <b>Частичный сброс устройств</b>\n\n"
+                        f"✅ Удалено: {success_count} устройств\n"
+                        f"❌ Не удалось удалить: {failed_count} устройств\n\n"
+                        f"Попробуйте еще раз или обратитесь в поддержку.",
+                        reply_markup=get_back_keyboard(db_user.language),
+                        parse_mode="HTML"
+                    )
+                    logger.warning(f"⚠️ Частичный сброс у пользователя {db_user.telegram_id}: {success_count}/{len(devices_list)}")
+            else:
+                await callback.message.edit_text(
+                    f"❌ <b>Не удалось сбросить устройства</b>\n\n"
+                    f"Попробуйте еще раз позже или обратитесь в техподдержку.\n\n"
+                    f"Всего устройств: {len(devices_list)}",
+                    reply_markup=get_back_keyboard(db_user.language),
+                    parse_mode="HTML"
+                )
+                logger.error(f"❌ Не удалось сбросить ни одного устройства у пользователя {db_user.telegram_id}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка сброса всех устройств: {e}")
         await callback.message.edit_text(
             texts.ERROR,
             reply_markup=get_back_keyboard(db_user.language)
@@ -2303,7 +2544,7 @@ async def handle_subscription_settings(
 ⚙️ <b>Настройки подписки</b>
 
 📊 <b>Текущие параметры:</b>
-🌍 Стран: {len(subscription.connected_squads)}
+🌐 Стран: {len(subscription.connected_squads)}
 📈 Трафик: {texts.format_traffic(subscription.traffic_used_gb)} / {texts.format_traffic(subscription.traffic_limit_gb)}
 📱 Устройства: {devices_used} / {subscription.device_limit}
 
@@ -2314,7 +2555,7 @@ async def handle_subscription_settings(
     
     await callback.message.edit_text(
         settings_text,
-        reply_markup=get_subscription_settings_keyboard(db_user.language, show_countries),
+        reply_markup=get_updated_subscription_settings_keyboard(db_user.language, show_countries),
         parse_mode="HTML"
     )
     await callback.answer()
@@ -2529,60 +2770,7 @@ async def handle_reset_devices(
     db: AsyncSession
 ):
     
-    texts = get_texts(db_user.language)
-    subscription = db_user.subscription
-    
-    if not subscription or subscription.is_trial:
-        await callback.answer("❌ Эта функция доступна только для платных подписок", show_alert=True)
-        return
-    
-    if not db_user.remnawave_uuid:
-        await callback.answer("❌ UUID пользователя не найден", show_alert=True)
-        return
-    
-    try:
-        from app.services.remnawave_service import RemnaWaveService
-        service = RemnaWaveService()
-        
-        async with service.api as api:
-            response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
-            
-            if response and 'response' in response:
-                devices_info = response['response']
-                total_devices = devices_info.get('total', 0)
-                devices_list = devices_info.get('devices', [])
-                
-                if total_devices == 0:
-                    await callback.answer("ℹ️ У вас нет подключенных устройств", show_alert=True)
-                    return
-                
-                devices_text = "\n".join([
-                    f"• {device.get('platform', 'Unknown')} - {device.get('deviceModel', 'Unknown')}"
-                    for device in devices_list[:5]
-                ])
-                
-                if len(devices_list) > 5:
-                    devices_text += f"\n... и еще {len(devices_list) - 5}"
-                
-                confirm_text = f"🔄 <b>Сброс устройств</b>\n\n"
-                confirm_text += f"📊 Всего подключено: {total_devices} устройств\n\n"
-                confirm_text += f"<b>Подключенные устройства:</b>\n{devices_text}\n\n"
-                confirm_text += "⚠️ <b>Внимание!</b> Все устройства будут отключены и вам потребуется заново настроить VPN на каждом устройстве.\n\n"
-                confirm_text += "Продолжить?"
-                
-                await callback.message.edit_text(
-                    confirm_text,
-                    reply_markup=get_reset_devices_confirm_keyboard(db_user.language),
-                    parse_mode="HTML"
-                )
-            else:
-                await callback.answer("❌ Ошибка получения информации об устройствах", show_alert=True)
-                
-    except Exception as e:
-        logger.error(f"Ошибка получения списка устройств: {e}")
-        await callback.answer("❌ Ошибка получения информации об устройствах", show_alert=True)
-    
-    await callback.answer()
+    await handle_device_management(callback, db_user, db)
 
 async def handle_add_country_to_subscription(
     callback: types.CallbackQuery,
@@ -2753,93 +2941,7 @@ async def confirm_reset_devices(
     db: AsyncSession
 ):
     
-    texts = get_texts(db_user.language)
-    
-    if not db_user.remnawave_uuid:
-        await callback.answer("❌ UUID пользователя не найден", show_alert=True)
-        return
-    
-    try:
-        from app.services.remnawave_service import RemnaWaveService
-        service = RemnaWaveService()
-        
-        async with service.api as api:
-            devices_response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
-            
-            if not devices_response or 'response' not in devices_response:
-                await callback.answer("❌ Ошибка получения списка устройств", show_alert=True)
-                return
-            
-            devices_list = devices_response['response'].get('devices', [])
-            
-            if not devices_list:
-                await callback.answer("ℹ️ У вас нет подключенных устройств", show_alert=True)
-                return
-            
-            logger.info(f"🔍 Найдено {len(devices_list)} устройств для сброса")
-            
-            success_count = 0
-            failed_count = 0
-            
-            for device in devices_list:
-                device_hwid = device.get('hwid')
-                if device_hwid:
-                    try:
-                        delete_data = {
-                            "userUuid": db_user.remnawave_uuid,
-                            "hwid": device_hwid
-                        }
-                        
-                        await api._make_request('POST', '/api/hwid/devices/delete', data=delete_data)
-                        success_count += 1
-                        logger.info(f"✅ Устройство {device_hwid} удалено")
-                        
-                    except Exception as device_error:
-                        failed_count += 1
-                        logger.error(f"❌ Ошибка удаления устройства {device_hwid}: {device_error}")
-                else:
-                    failed_count += 1
-                    logger.warning(f"⚠️ У устройства нет HWID: {device}")
-            
-            if success_count > 0:
-                if failed_count == 0:
-                    await callback.message.edit_text(
-                        f"✅ <b>Устройства успешно сброшены!</b>\n\n"
-                        f"🔄 Сброшено: {success_count} устройств\n"
-                        f"📱 Теперь вы можете заново подключить свои устройства\n\n"
-                        f"💡 Используйте ссылку из раздела 'Моя подписка' для повторного подключения",
-                        reply_markup=get_back_keyboard(db_user.language),
-                        parse_mode="HTML"
-                    )
-                    logger.info(f"✅ Пользователь {db_user.telegram_id} успешно сбросил {success_count} устройств")
-                else:
-                    await callback.message.edit_text(
-                        f"⚠️ <b>Частичный сброс устройств</b>\n\n"
-                        f"✅ Удалено: {success_count} устройств\n"
-                        f"❌ Не удалось удалить: {failed_count} устройств\n\n"
-                        f"Попробуйте еще раз или обратитесь в поддержку.",
-                        reply_markup=get_back_keyboard(db_user.language),
-                        parse_mode="HTML"
-                    )
-                    logger.warning(f"⚠️ Частичный сброс у пользователя {db_user.telegram_id}: {success_count}/{len(devices_list)}")
-            else:
-                await callback.message.edit_text(
-                    f"❌ <b>Не удалось сбросить устройства</b>\n\n"
-                    f"Попробуйте еще раз позже или обратитесь в техподдержку.\n\n"
-                    f"Всего устройств: {len(devices_list)}",
-                    reply_markup=get_back_keyboard(db_user.language),
-                    parse_mode="HTML"
-                )
-                logger.error(f"❌ Не удалось сбросить ни одного устройства у пользователя {db_user.telegram_id}")
-        
-    except Exception as e:
-        logger.error(f"Ошибка сброса устройств: {e}")
-        await callback.message.edit_text(
-            texts.ERROR,
-            reply_markup=get_back_keyboard(db_user.language)
-        )
-    
-    await callback.answer()
+    await handle_device_management(callback, db_user, db)
 
 async def handle_connect_subscription(
     callback: types.CallbackQuery,
@@ -3211,6 +3313,49 @@ async def send_trial_notification(callback: types.CallbackQuery, db: AsyncSessio
     except Exception as e:
         logger.error(f"Ошибка отправки уведомления о триале: {e}")
 
+async def show_device_connection_help(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Показывает справку по повторному подключению устройств"""
+    
+    subscription = db_user.subscription
+    
+    if not subscription or not subscription.subscription_url:
+        await callback.answer("❌ Ссылка подписки недоступна", show_alert=True)
+        return
+    
+    help_text = f"""
+📱 <b>Как подключить устройство заново</b>
+
+После сброса устройства вам нужно:
+
+<b>1. Получить ссылку подписки:</b>
+📋 Скопируйте ссылку ниже или найдите её в разделе "Моя подписка"
+
+<b>2. Настроить VPN приложение:</b>
+• Откройте ваше VPN приложение
+• Найдите функцию "Добавить подписку" или "Import"
+• Вставьте скопированную ссылку
+
+<b>3. Подключиться:</b>
+• Выберите сервер
+• Нажмите "Подключить"
+
+<b>🔗 Ваша ссылка подписки:</b>
+<code>{subscription.subscription_url}</code>
+
+💡 <b>Совет:</b> Сохраните эту ссылку - она понадобится для подключения новых устройств
+"""
+    
+    await callback.message.edit_text(
+        help_text,
+        reply_markup=get_device_management_help_keyboard(db_user.language),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
 async def send_purchase_notification(
     callback: types.CallbackQuery, 
     db: AsyncSession,
@@ -3457,4 +3602,29 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_no_traffic_packages,
         F.data == "no_traffic_packages"
+    )
+
+    dp.callback_query.register(
+        handle_device_management,
+        F.data == "subscription_manage_devices"
+    )
+    
+    dp.callback_query.register(
+        handle_devices_page,
+        F.data.startswith("devices_page_")
+    )
+    
+    dp.callback_query.register(
+        handle_single_device_reset,
+        F.data.regexp(r"^reset_device_\d+_\d+$") 
+    )
+    
+    dp.callback_query.register(
+        handle_all_devices_reset_from_management,
+        F.data == "reset_all_devices"
+    )
+
+    dp.callback_query.register(
+        show_device_connection_help,
+        F.data == "device_connection_help"
     )
