@@ -140,7 +140,9 @@ class Settings(BaseSettings):
     MINIAPP_CUSTOM_URL: str = ""
     ENABLE_LOGO_MODE: bool = True
     LOGO_FILE: str = "vpn_logo.png"
-    
+    SKIP_RULES_ACCEPT: bool = False
+    SKIP_REFERRAL_CODE: bool = False
+
     DEFAULT_LANGUAGE: str = "ru"
     AVAILABLE_LANGUAGES: str = "ru,en"
     
@@ -166,6 +168,9 @@ class Settings(BaseSettings):
     BACKUP_COMPRESSION: bool = True
     BACKUP_INCLUDE_LOGS: bool = False
     BACKUP_LOCATION: str = "/app/data/backups"
+    BACKUP_SEND_ENABLED: bool = False
+    BACKUP_SEND_CHAT_ID: Optional[str] = None
+    BACKUP_SEND_TOPIC_ID: Optional[int] = None
     
     @field_validator('LOG_FILE', mode='before')
     @classmethod
@@ -413,8 +418,21 @@ class Settings(BaseSettings):
             return None
     
     def is_admin_notifications_enabled(self) -> bool:
-        return (self.ADMIN_NOTIFICATIONS_ENABLED and 
+        return (self.ADMIN_NOTIFICATIONS_ENABLED and
                 self.get_admin_notifications_chat_id() is not None)
+
+    def get_backup_send_chat_id(self) -> Optional[int]:
+        if not self.BACKUP_SEND_CHAT_ID:
+            return None
+
+        try:
+            return int(self.BACKUP_SEND_CHAT_ID)
+        except (ValueError, TypeError):
+            return None
+
+    def is_backup_send_enabled(self) -> bool:
+        return (self.BACKUP_SEND_ENABLED and
+                self.get_backup_send_chat_id() is not None)
 
     def get_referral_settings(self) -> Dict:
         return {

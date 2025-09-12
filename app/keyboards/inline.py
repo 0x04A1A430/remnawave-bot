@@ -26,7 +26,7 @@ def get_post_registration_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="🚀 Подключиться бесплатно 🚀", callback_data="menu_trial"
+                text="🚀 Подключиться бесплатно 🚀", callback_data="trial_activate"
             )
         ],
         [InlineKeyboardButton(text="Пропустить ➡️", callback_data="back_to_menu")],
