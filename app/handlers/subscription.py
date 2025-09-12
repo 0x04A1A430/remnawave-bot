@@ -1367,88 +1367,6 @@ async def handle_reset_traffic(
     await callback.answer()
 
 
-
-async def confirm_add_traffic(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession
-):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
-    
-    traffic_gb = int(callback.data.split('_')[2])
-    texts = get_texts(db_user.language)
-    subscription = db_user.subscription
-    
-    months_to_pay = get_remaining_months(subscription.end_date)
-    
-    traffic_price_per_month = settings.get_traffic_price(traffic_gb)
-    price, charged_months = calculate_prorated_price(traffic_price_per_month, subscription.end_date)
-    
-    logger.info(f"Добавление трафика {traffic_gb}ГБ: {traffic_price_per_month/100}₽/мес × {charged_months} мес = {price/100}₽")
-    
-    if price == 0 and traffic_gb != 0:
-        await callback.answer("⚠️ Цена для этого пакета не настроена", show_alert=True)
-        return
-    
-    if db_user.balance_kopeks < price:
-        await callback.answer("⚠️ Недостаточно средств на балансе", show_alert=True)
-        return
-    
-    try:
-        success = await subtract_user_balance(
-            db, db_user, price,
-            f"Добавление {traffic_gb} ГБ трафика на {charged_months} мес"
-        )
-        
-        if not success:
-            await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
-            return
-        
-        if traffic_gb == 0: 
-            subscription.traffic_limit_gb = 0
-        else:
-            await add_subscription_traffic(db, subscription, traffic_gb)
-        
-        subscription_service = SubscriptionService()
-        await subscription_service.update_remnawave_user(db, subscription)
-        
-        await create_transaction(
-            db=db,
-            user_id=db_user.id,
-            type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=price,
-            description=f"Добавление {traffic_gb} ГБ трафика на {charged_months} мес"
-        )
-        
-        
-        await db.refresh(db_user)
-        await db.refresh(subscription)
-        
-        success_text = f"✅ Трафик успешно добавлен!\n\n"
-        if traffic_gb == 0:
-            success_text += "🎉 Теперь у вас безлимитный трафик!"
-        else:
-            success_text += f"📈 Добавлено: {traffic_gb} ГБ\n"
-            success_text += f"Новый лимит: {texts.format_traffic(subscription.traffic_limit_gb)}"
-        
-        success_text += f"\n💰 Списано: {texts.format_price(price)} (за {charged_months} мес)"
-        
-        await callback.message.edit_text(
-            success_text,
-            reply_markup=get_back_keyboard(db_user.language)
-        )
-        
-        logger.info(f"✅ Пользователь {db_user.telegram_id} добавил {traffic_gb} ГБ трафика за {price/100}₽")
-        
-    except Exception as e:
-        logger.error(f"Ошибка добавления трафика: {e}")
-        await callback.message.edit_text(
-            texts.ERROR,
-            reply_markup=get_back_keyboard(db_user.language)
-        )
-    
-    await callback.answer()
-
 def update_traffic_prices():
     from app.config import refresh_traffic_prices
     refresh_traffic_prices()
@@ -3398,6 +3316,262 @@ async def send_extension_notification(
     except Exception as e:
         logger.error(f"Ошибка отправки уведомления о продлении: {e}")
 
+async def handle_switch_traffic(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    from app.config import settings
+    
+    if settings.is_traffic_fixed():
+        await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
+        return
+    
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    
+    if not subscription or subscription.is_trial:
+        await callback.answer("⚠️ Эта функция доступна только для платных подписок", show_alert=True)
+        return
+    
+    current_traffic = subscription.traffic_limit_gb
+    
+    await callback.message.edit_text(
+        f"🔄 <b>Переключение лимита трафика</b>\n\n"
+        f"Текущий лимит: {texts.format_traffic(current_traffic)}\n"
+        f"Выберите новый лимит трафика:\n\n"
+        f"💡 <b>Важно:</b>\n"
+        f"• При увеличении - доплата за разницу\n"
+        f"• При уменьшении - возврат средств не производится",
+        reply_markup=get_traffic_switch_keyboard(current_traffic, db_user.language, subscription.end_date),
+        parse_mode="HTML"
+    )
+    
+    await callback.answer()
+
+
+async def confirm_switch_traffic(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
+    
+    new_traffic_gb = int(callback.data.split('_')[2])
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    
+    current_traffic = subscription.traffic_limit_gb
+    
+    if new_traffic_gb == current_traffic:
+        await callback.answer("ℹ️ Лимит трафика не изменился", show_alert=True)
+        return
+    
+    old_price_per_month = settings.get_traffic_price(current_traffic)
+    new_price_per_month = settings.get_traffic_price(new_traffic_gb)
+    
+    months_remaining = get_remaining_months(subscription.end_date)
+    price_difference_per_month = new_price_per_month - old_price_per_month
+    
+    if price_difference_per_month > 0:
+        total_price_difference = price_difference_per_month * months_remaining
+        
+        if db_user.balance_kopeks < total_price_difference:
+            await callback.answer(
+                f"⚠️ Недостаточно средств!\n"
+                f"Требуется: {texts.format_price(total_price_difference)} "
+                f"(за {months_remaining} мес)\n"
+                f"У вас: {texts.format_price(db_user.balance_kopeks)}", 
+                show_alert=True
+            )
+            return
+        
+        action_text = f"увеличить до {texts.format_traffic(new_traffic_gb)}"
+        cost_text = f"Доплата: {texts.format_price(total_price_difference)} (за {months_remaining} мес)"
+    else:
+        total_price_difference = 0
+        action_text = f"уменьшить до {texts.format_traffic(new_traffic_gb)}"
+        cost_text = "Возврат средств не производится"
+    
+    confirm_text = f"🔄 <b>Подтверждение переключения трафика</b>\n\n"
+    confirm_text += f"Текущий лимит: {texts.format_traffic(current_traffic)}\n"
+    confirm_text += f"Новый лимит: {texts.format_traffic(new_traffic_gb)}\n\n"
+    confirm_text += f"Действие: {action_text}\n"
+    confirm_text += f"💰 {cost_text}\n\n"
+    confirm_text += "Подтвердить переключение?"
+    
+    await callback.message.edit_text(
+        confirm_text,
+        reply_markup=get_confirm_switch_traffic_keyboard(new_traffic_gb, total_price_difference, db_user.language),
+        parse_mode="HTML"
+    )
+    
+    await callback.answer()
+
+
+async def execute_switch_traffic(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    from app.utils.pricing_utils import get_remaining_months
+    
+    callback_parts = callback.data.split('_')
+    new_traffic_gb = int(callback_parts[3])
+    price_difference = int(callback_parts[4])
+    
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    current_traffic = subscription.traffic_limit_gb
+    
+    try:
+        if price_difference > 0:
+            success = await subtract_user_balance(
+                db, db_user, price_difference,
+                f"Переключение трафика с {current_traffic}GB на {new_traffic_gb}GB"
+            )
+            
+            if not success:
+                await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
+                return
+            
+            months_remaining = get_remaining_months(subscription.end_date)
+            await create_transaction(
+                db=db,
+                user_id=db_user.id,
+                type=TransactionType.SUBSCRIPTION_PAYMENT,
+                amount_kopeks=price_difference,
+                description=f"Переключение трафика с {current_traffic}GB на {new_traffic_gb}GB на {months_remaining} мес"
+            )
+        
+        subscription.traffic_limit_gb = new_traffic_gb
+        subscription.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
+        subscription_service = SubscriptionService()
+        await subscription_service.update_remnawave_user(db, subscription)
+        
+        await db.refresh(db_user)
+        await db.refresh(subscription)
+        
+        if new_traffic_gb > current_traffic:
+            success_text = f"✅ Лимит трафика увеличен!\n\n"
+            success_text += f"📊 Было: {texts.format_traffic(current_traffic)} → "
+            success_text += f"Стало: {texts.format_traffic(new_traffic_gb)}\n"
+            if price_difference > 0:
+                success_text += f"💰 Списано: {texts.format_price(price_difference)}"
+        elif new_traffic_gb < current_traffic:
+            success_text = f"✅ Лимит трафика уменьшен!\n\n"
+            success_text += f"📊 Было: {texts.format_traffic(current_traffic)} → "
+            success_text += f"Стало: {texts.format_traffic(new_traffic_gb)}\n"
+            success_text += f"ℹ️ Возврат средств не производится"
+        
+        await callback.message.edit_text(
+            success_text,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+        
+        logger.info(f"✅ Пользователь {db_user.telegram_id} переключил трафик с {current_traffic}GB на {new_traffic_gb}GB, доплата: {price_difference/100}₽")
+        
+    except Exception as e:
+        logger.error(f"Ошибка переключения трафика: {e}")
+        await callback.message.edit_text(
+            texts.ERROR,
+            reply_markup=get_back_keyboard(db_user.language)
+        )
+    
+    await callback.answer()
+
+
+def get_traffic_switch_keyboard(
+    current_traffic_gb: int, 
+    language: str = "ru", 
+    subscription_end_date: datetime = None
+) -> InlineKeyboardMarkup:
+    from app.utils.pricing_utils import get_remaining_months
+    from app.config import settings
+    
+    months_multiplier = 1
+    period_text = ""
+    if subscription_end_date:
+        months_multiplier = get_remaining_months(subscription_end_date)
+        if months_multiplier > 1:
+            period_text = f" (за {months_multiplier} мес)"
+    
+    packages = settings.get_traffic_packages()
+    enabled_packages = [pkg for pkg in packages if pkg['enabled']]
+    
+    current_price_per_month = settings.get_traffic_price(current_traffic_gb)
+    
+    buttons = []
+    
+    for package in enabled_packages:
+        gb = package['gb']
+        price_per_month = package['price']
+        
+        price_diff_per_month = price_per_month - current_price_per_month
+        total_price_diff = price_diff_per_month * months_multiplier
+        
+        if gb == current_traffic_gb:
+            emoji = "✅"
+            action_text = " (текущий)"
+            price_text = ""
+        elif total_price_diff > 0:
+            emoji = "⬆️"
+            action_text = ""
+            price_text = f" (+{total_price_diff//100}₽{period_text})"
+        elif total_price_diff < 0:
+            emoji = "⬇️"
+            action_text = ""
+            price_text = " (без возврата)"
+        else:
+            emoji = "🔄"
+            action_text = ""
+            price_text = " (бесплатно)"
+        
+        if gb == 0:
+            traffic_text = "Безлимит"
+        else:
+            traffic_text = f"{gb} ГБ"
+        
+        button_text = f"{emoji} {traffic_text}{action_text}{price_text}"
+        
+        buttons.append([
+            InlineKeyboardButton(text=button_text, callback_data=f"switch_traffic_{gb}")
+        ])
+    
+    buttons.append([
+        InlineKeyboardButton(
+            text="⬅️ Назад" if language == "ru" else "⬅️ Back",
+            callback_data="subscription_settings"
+        )
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_confirm_switch_traffic_keyboard(
+    new_traffic_gb: int, 
+    price_difference: int, 
+    language: str = "ru"
+) -> InlineKeyboardMarkup:
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ Подтвердить переключение",
+                callback_data=f"confirm_switch_traffic_{new_traffic_gb}_{price_difference}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="❌ Отмена",
+                callback_data="subscription_settings"
+            )
+        ]
+    ])
+
 
 def register_handlers(dp: Dispatcher):
     update_traffic_prices()
@@ -3428,8 +3602,18 @@ def register_handlers(dp: Dispatcher):
     )
     
     dp.callback_query.register(
-        handle_add_traffic,
-        F.data == "subscription_add_traffic"
+        handle_switch_traffic,
+        F.data == "subscription_switch_traffic"
+    )
+
+    dp.callback_query.register(
+        confirm_switch_traffic,
+        F.data.startswith("switch_traffic_")
+    )
+    
+    dp.callback_query.register(
+        execute_switch_traffic,
+        F.data.startswith("confirm_switch_traffic_")
     )
     
     dp.callback_query.register(
@@ -3457,10 +3641,6 @@ def register_handlers(dp: Dispatcher):
         F.data == "subscription_reset_traffic"
     )
     
-    dp.callback_query.register(
-        confirm_add_traffic,
-        F.data.startswith("add_traffic_")
-    )
     
     dp.callback_query.register(
         confirm_add_devices,
