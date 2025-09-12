@@ -199,7 +199,7 @@ class BackupService:
                     "success", message, str(backup_path)
                 )
 
-                await self._send_backup_file_to_chat(str(backup_path), message)
+                await self._send_backup_file_to_chat(str(backup_path))
             
             return True, message, str(backup_path)
             
@@ -573,7 +573,7 @@ class BackupService:
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о бекапе: {e}")
 
-    async def _send_backup_file_to_chat(self, file_path: str, message: str):
+    async def _send_backup_file_to_chat(self, file_path: str):
         try:
             if not settings.is_backup_send_enabled():
                 return
@@ -582,15 +582,9 @@ class BackupService:
             if not chat_id:
                 return
 
-            caption = (f"📦 <b>Резервное копирование</b>\n\n"
-                       f"{message}\n\n"
-                       f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>")
-
             send_kwargs = {
                 'chat_id': chat_id,
-                'document': FSInputFile(file_path),
-                'caption': caption,
-                'parse_mode': 'HTML'
+                'document': FSInputFile(file_path)
             }
 
             if settings.BACKUP_SEND_TOPIC_ID:
