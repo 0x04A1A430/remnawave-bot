@@ -417,6 +417,8 @@ async def complete_registration_from_callback(
 ):
     logger.info(f"🎯 COMPLETE: Завершение регистрации для пользователя {callback.from_user.id}")
     
+    from sqlalchemy.orm import selectinload
+    
     existing_user = await get_user_by_telegram_id(db, callback.from_user.id)
     
     if existing_user and existing_user.status == UserStatus.ACTIVE.value:
@@ -426,6 +428,8 @@ async def complete_registration_from_callback(
         data = await state.get_data()
         if data.get('referral_code') and not existing_user.referred_by_id:
             await callback.message.answer("ℹ️ Вы уже зарегистрированы в системе. Реферальная ссылка не может быть применена.")
+        
+        await db.refresh(existing_user, ['subscription'])
         
         has_active_subscription = existing_user.subscription is not None
         subscription_is_active = False
@@ -482,7 +486,7 @@ async def complete_registration_from_callback(
         existing_user.last_activity = datetime.utcnow()
         
         await db.commit()
-        await db.refresh(existing_user)
+        await db.refresh(existing_user, ['subscription'])
         
         user = existing_user
         logger.info(f"✅ Пользователь {callback.from_user.id} восстановлен")
@@ -502,6 +506,7 @@ async def complete_registration_from_callback(
             referred_by_id=referrer_id,
             referral_code=referral_code 
         )
+        await db.refresh(user, ['subscription'])
     else:
         logger.info(f"🔄 Обновляем существующего пользователя {callback.from_user.id}")
         existing_user.status = UserStatus.ACTIVE.value
@@ -514,7 +519,7 @@ async def complete_registration_from_callback(
         existing_user.last_activity = datetime.utcnow()
         
         await db.commit()
-        await db.refresh(existing_user)
+        await db.refresh(existing_user, ['subscription'])
         user = existing_user
     
     if referrer_id:
@@ -527,19 +532,48 @@ async def complete_registration_from_callback(
     await state.clear()
 
     from app.database.crud.welcome_text import get_welcome_text_for_user
-    
-    user_name = callback.from_user.first_name or callback.from_user.username or "друг"
-    offer_text = await get_welcome_text_for_user(db, user_name)
+    offer_text = await get_welcome_text_for_user(db, callback.from_user)
 
-    try:
-        await callback.message.answer(
-            offer_text,
-            reply_markup=get_post_registration_keyboard(),
-        )
-    except Exception as e:
-        logger.error(f"Ошибка при отправке предложения триала: {e}")
+    if offer_text:
+        try:
+            await callback.message.answer(
+                offer_text,
+                reply_markup=get_post_registration_keyboard(),
+            )
+            logger.info(f"✅ Приветственное сообщение отправлено пользователю {user.telegram_id}")
+        except Exception as e:
+            logger.error(f"Ошибка при отправке приветственного сообщения: {e}")
+    else:
+        logger.info(f"ℹ️ Приветственные сообщения отключены, показываем главное меню для пользователя {user.telegram_id}")
+        
+        has_active_subscription = user.subscription is not None
+        subscription_is_active = False
+        
+        if user.subscription:
+            subscription_is_active = user.subscription.is_active
+        
+        menu_text = await get_main_menu_text(user, texts, db)
+        
+        try:
+            await callback.message.answer(
+                menu_text,
+                reply_markup=get_main_menu_keyboard(
+                    language=user.language,
+                    is_admin=settings.is_admin(user.telegram_id),
+                    has_had_paid_subscription=user.has_had_paid_subscription,
+                    has_active_subscription=has_active_subscription,
+                    subscription_is_active=subscription_is_active,
+                    balance_kopeks=user.balance_kopeks
+                ),
+                parse_mode="HTML"
+            )
+            logger.info(f"✅ Главное меню показано пользователю {user.telegram_id}")
+        except Exception as e:
+            logger.error(f"Ошибка при показе главного меню: {e}")
+            await callback.message.answer(f"Добро пожаловать, {user.full_name}!")
 
     logger.info(f"✅ Регистрация завершена для пользователя: {user.telegram_id}")
+
 
 async def complete_registration(
     message: types.Message, 
@@ -557,6 +591,8 @@ async def complete_registration(
         data = await state.get_data()
         if data.get('referral_code') and not existing_user.referred_by_id:
             await message.answer("ℹ️ Вы уже зарегистрированы в системе. Реферальная ссылка не может быть применена.")
+        
+        await db.refresh(existing_user, ['subscription'])
         
         has_active_subscription = existing_user.subscription is not None
         subscription_is_active = False
@@ -613,7 +649,7 @@ async def complete_registration(
         existing_user.last_activity = datetime.utcnow()
         
         await db.commit()
-        await db.refresh(existing_user)
+        await db.refresh(existing_user, ['subscription'])
         
         user = existing_user
         logger.info(f"✅ Пользователь {message.from_user.id} восстановлен")
@@ -633,6 +669,7 @@ async def complete_registration(
             referred_by_id=referrer_id,
             referral_code=referral_code
         )
+        await db.refresh(user, ['subscription'])
     else:
         logger.info(f"🔄 Обновляем существующего пользователя {message.from_user.id}")
         existing_user.status = UserStatus.ACTIVE.value
@@ -645,7 +682,7 @@ async def complete_registration(
         existing_user.last_activity = datetime.utcnow()
         
         await db.commit()
-        await db.refresh(existing_user)
+        await db.refresh(existing_user, ['subscription'])
         user = existing_user
     
     if referrer_id:
@@ -658,16 +695,45 @@ async def complete_registration(
     await state.clear()
 
     from app.database.crud.welcome_text import get_welcome_text_for_user
-    
     offer_text = await get_welcome_text_for_user(db, message.from_user)
 
-    try:
-        await message.answer(
-            offer_text,
-            reply_markup=get_post_registration_keyboard(),
-        )
-    except Exception as e:
-        logger.error(f"Ошибка при отправке предложения триала: {e}")
+    if offer_text:
+        try:
+            await message.answer(
+                offer_text,
+                reply_markup=get_post_registration_keyboard(),
+            )
+            logger.info(f"✅ Приветственное сообщение отправлено пользователю {user.telegram_id}")
+        except Exception as e:
+            logger.error(f"Ошибка при отправке приветственного сообщения: {e}")
+    else:
+        logger.info(f"ℹ️ Приветственные сообщения отключены, показываем главное меню для пользователя {user.telegram_id}")
+        
+        has_active_subscription = user.subscription is not None
+        subscription_is_active = False
+        
+        if user.subscription:
+            subscription_is_active = user.subscription.is_active
+        
+        menu_text = await get_main_menu_text(user, texts, db)
+        
+        try:
+            await message.answer(
+                menu_text,
+                reply_markup=get_main_menu_keyboard(
+                    language=user.language,
+                    is_admin=settings.is_admin(user.telegram_id),
+                    has_had_paid_subscription=user.has_had_paid_subscription,
+                    has_active_subscription=has_active_subscription,
+                    subscription_is_active=subscription_is_active,
+                    balance_kopeks=user.balance_kopeks
+                ),
+                parse_mode="HTML"
+            )
+            logger.info(f"✅ Главное меню показано пользователю {user.telegram_id}")
+        except Exception as e:
+            logger.error(f"Ошибка при показе главного меню: {e}")
+            await message.answer(f"Добро пожаловать, {user.full_name}!")
 
     logger.info(f"✅ Регистрация завершена для пользователя: {user.telegram_id}")
 

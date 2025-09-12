@@ -12,7 +12,9 @@ from app.database.crud.welcome_text import (
     get_active_welcome_text, 
     set_welcome_text, 
     get_current_welcome_text_or_default,
-    get_available_placeholders
+    get_available_placeholders,
+    get_current_welcome_text_settings,
+    toggle_welcome_text_status
 )
 
 logger = logging.getLogger(__name__)
@@ -42,11 +44,41 @@ async def show_welcome_text_panel(
     db_user: User,
     db: AsyncSession
 ):
+    settings = await get_current_welcome_text_settings(db)
+    status_emoji = "🟢" if settings['is_enabled'] else "🔴"
+    status_text = "включено" if settings['is_enabled'] else "отключено"
+    
     await callback.message.edit_text(
-        "👋 Управление приветственным текстом\n\n"
-        "Здесь вы можете изменить текст, который показывается новым пользователям после регистрации.\n\n"
-        "💡 Доступные плейсхолдеры для автозамены:",
-        reply_markup=get_welcome_text_keyboard(db_user.language)
+        f"👋 Управление приветственным текстом\n\n"
+        f"{status_emoji} <b>Статус:</b> {status_text}\n\n"
+        f"Здесь вы можете управлять текстом, который показывается новым пользователям после регистрации.\n\n"
+        f"💡 Доступные плейсхолдеры для автозамены:",
+        reply_markup=get_welcome_text_keyboard(db_user.language, settings['is_enabled']),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+@admin_required
+@error_handler
+async def toggle_welcome_text(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    new_status = await toggle_welcome_text_status(db, db_user.id)
+    
+    status_emoji = "🟢" if new_status else "🔴"
+    status_text = "включено" if new_status else "отключено"
+    action_text = "включены" if new_status else "отключены"
+    
+    await callback.message.edit_text(
+        f"👋 Управление приветственным текстом\n\n"
+        f"{status_emoji} <b>Статус:</b> {status_text}\n\n"
+        f"✅ Приветственные сообщения {action_text}!\n\n"
+        f"Здесь вы можете управлять текстом, который показывается новым пользователям после регистрации.\n\n"
+        f"💡 Доступные плейсхолдеры для автозамены:",
+        reply_markup=get_welcome_text_keyboard(db_user.language, new_status),
+        parse_mode="HTML"
     )
     await callback.answer()
 
@@ -57,22 +89,27 @@ async def show_current_welcome_text(
     db_user: User,
     db: AsyncSession
 ):
-    current_text = await get_active_welcome_text(db)
+    settings = await get_current_welcome_text_settings(db)
+    current_text = settings['text']
+    is_enabled = settings['is_enabled']
     
-    if not current_text:
-        current_text = await get_current_welcome_text_or_default()
+    if not settings['id']:
         status = "📝 Используется стандартный текст:"
     else:
         status = "📝 Текущий приветственный текст:"
+    
+    status_emoji = "🟢" if is_enabled else "🔴"
+    status_text = "включено" if is_enabled else "отключено"
     
     placeholders = get_available_placeholders()
     placeholders_text = "\n".join([f"• <code>{key}</code> - {desc}" for key, desc in placeholders.items()])
     
     await callback.message.edit_text(
+        f"{status_emoji} <b>Статус:</b> {status_text}\n\n"
         f"{status}\n\n"
         f"<code>{current_text}</code>\n\n"
         f"💡 Доступные плейсхолдеры:\n{placeholders_text}",
-        reply_markup=get_welcome_text_keyboard(db_user.language),
+        reply_markup=get_welcome_text_keyboard(db_user.language, is_enabled),
         parse_mode="HTML"
     )
     await callback.answer()
@@ -84,6 +121,7 @@ async def show_placeholders_help(
     db_user: User,
     db: AsyncSession
 ):
+    settings = await get_current_welcome_text_settings(db)
     placeholders = get_available_placeholders()
     placeholders_text = "\n".join([f"• <code>{key}</code>\n  {desc}" for key, desc in placeholders.items()])
     
@@ -99,7 +137,7 @@ async def show_placeholders_help(
     
     await callback.message.edit_text(
         help_text,
-        reply_markup=get_welcome_text_keyboard(db_user.language),
+        reply_markup=get_welcome_text_keyboard(db_user.language, settings['is_enabled']),
         parse_mode="HTML"
     )
     await callback.answer()
@@ -111,11 +149,12 @@ async def show_formatting_help(
     db_user: User,
     db: AsyncSession
 ):
+    settings = await get_current_welcome_text_settings(db)
     formatting_info = get_telegram_formatting_info()
     
     await callback.message.edit_text(
         formatting_info,
-        reply_markup=get_welcome_text_keyboard(db_user.language),
+        reply_markup=get_welcome_text_keyboard(db_user.language, settings['is_enabled']),
         parse_mode="HTML"
     )
     await callback.answer()
@@ -128,10 +167,8 @@ async def start_edit_welcome_text(
     db_user: User,
     db: AsyncSession
 ):
-    current_text = await get_active_welcome_text(db)
-    
-    if not current_text:
-        current_text = await get_current_welcome_text_or_default()
+    settings = await get_current_welcome_text_settings(db)
+    current_text = settings['text']
     
     placeholders = get_available_placeholders()
     placeholders_text = "\n".join([f"• <code>{key}</code> - {desc}" for key, desc in placeholders.items()])
@@ -169,21 +206,27 @@ async def process_welcome_text_edit(
     success = await set_welcome_text(db, new_text, db_user.id)
     
     if success:
+        settings = await get_current_welcome_text_settings(db)
+        status_emoji = "🟢" if settings['is_enabled'] else "🔴"
+        status_text = "включено" if settings['is_enabled'] else "отключено"
+        
         placeholders = get_available_placeholders()
         placeholders_text = "\n".join([f"• <code>{key}</code>" for key in placeholders.keys()])
         
         await message.answer(
             f"✅ Приветственный текст успешно обновлен!\n\n"
+            f"{status_emoji} <b>Статус:</b> {status_text}\n\n"
             f"Новый текст:\n"
             f"<code>{new_text}</code>\n\n"
             f"💡 Будут заменяться плейсхолдеры: {placeholders_text}",
-            reply_markup=get_welcome_text_keyboard(db_user.language),
+            reply_markup=get_welcome_text_keyboard(db_user.language, settings['is_enabled']),
             parse_mode="HTML"
         )
     else:
+        settings = await get_current_welcome_text_settings(db)
         await message.answer(
             "❌ Ошибка при сохранении текста. Попробуйте еще раз.",
-            reply_markup=get_welcome_text_keyboard(db_user.language)
+            reply_markup=get_welcome_text_keyboard(db_user.language, settings['is_enabled'])
         )
     
     await state.clear()
@@ -199,18 +242,24 @@ async def reset_welcome_text(
     success = await set_welcome_text(db, default_text, db_user.id)
     
     if success:
+        settings = await get_current_welcome_text_settings(db)
+        status_emoji = "🟢" if settings['is_enabled'] else "🔴"
+        status_text = "включено" if settings['is_enabled'] else "отключено"
+        
         await callback.message.edit_text(
             f"✅ Приветственный текст сброшен на стандартный!\n\n"
+            f"{status_emoji} <b>Статус:</b> {status_text}\n\n"
             f"Стандартный текст:\n"
             f"<code>{default_text}</code>\n\n"
             f"💡 Плейсхолдер <code>{{user_name}}</code> будет заменяться на имя пользователя",
-            reply_markup=get_welcome_text_keyboard(db_user.language),
+            reply_markup=get_welcome_text_keyboard(db_user.language, settings['is_enabled']),
             parse_mode="HTML"
         )
     else:
+        settings = await get_current_welcome_text_settings(db)
         await callback.message.edit_text(
             "❌ Ошибка при сбросе текста. Попробуйте еще раз.",
-            reply_markup=get_welcome_text_keyboard(db_user.language)
+            reply_markup=get_welcome_text_keyboard(db_user.language, settings['is_enabled'])
         )
     
     await callback.answer()
@@ -232,19 +281,36 @@ async def show_preview_welcome_text(
     test_user = TestUser()
     preview_text = await get_welcome_text_for_user(db, test_user)
     
-    await callback.message.edit_text(
-        f"👁️ Предварительный просмотр\n\n"
-        f"Как будет выглядеть текст для пользователя 'Иван' (@test_user):\n\n"
-        f"<code>{preview_text}</code>",
-        reply_markup=get_welcome_text_keyboard(db_user.language),
-        parse_mode="HTML"
-    )
+    settings = await get_current_welcome_text_settings(db)
+    
+    if preview_text:
+        await callback.message.edit_text(
+            f"👁️ Предварительный просмотр\n\n"
+            f"Как будет выглядеть текст для пользователя 'Иван' (@test_user):\n\n"
+            f"<code>{preview_text}</code>",
+            reply_markup=get_welcome_text_keyboard(db_user.language, settings['is_enabled']),
+            parse_mode="HTML"
+        )
+    else:
+        await callback.message.edit_text(
+            f"👁️ Предварительный просмотр\n\n"
+            f"🔴 Приветственные сообщения отключены.\n"
+            f"Новые пользователи не будут получать приветственный текст после регистрации.",
+            reply_markup=get_welcome_text_keyboard(db_user.language, settings['is_enabled']),
+            parse_mode="HTML"
+        )
+    
     await callback.answer()
 
 def register_welcome_text_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_welcome_text_panel,
         F.data == "welcome_text_panel"
+    )
+    
+    dp.callback_query.register(
+        toggle_welcome_text,
+        F.data == "toggle_welcome_text"
     )
     
     dp.callback_query.register(

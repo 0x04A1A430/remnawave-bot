@@ -666,19 +666,32 @@ def get_sync_simplified_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_welcome_text_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
+
+def get_welcome_text_keyboard(language: str = "ru", is_enabled: bool = True) -> InlineKeyboardMarkup:
+    
+    toggle_text = "🔴 Отключить" if is_enabled else "🟢 Включить"
+    toggle_callback = "toggle_welcome_text"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton(text=toggle_text, callback_data=toggle_callback)
+        ],
         [
             InlineKeyboardButton(text="📝 Изменить текст", callback_data="edit_welcome_text"),
             InlineKeyboardButton(text="👁️ Показать текущий", callback_data="show_welcome_text")
+        ],
+        [
+            InlineKeyboardButton(text="👁️ Предпросмотр", callback_data="preview_welcome_text"),
+            InlineKeyboardButton(text="🔄 Сбросить", callback_data="reset_welcome_text")
         ],
         [
             InlineKeyboardButton(text="🏷️ HTML форматирование", callback_data="show_formatting_help"),
             InlineKeyboardButton(text="💡 Плейсхолдеры", callback_data="show_placeholders_help")
         ],
         [
-            InlineKeyboardButton(text="🔄 Сбросить", callback_data="reset_welcome_text"),
             InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")
         ]
-    ])
+    ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
