@@ -1,0 +1,55 @@
+name: Deploy via SSH
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - ".md"
+      - "README*"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (meta only)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add known_hosts
+        if: secrets.KNOWN_HOSTS != ''
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Write SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Deploy (git pull && make up)
+        env:
+          HOSTS: ${{ secrets.DEPLOY_HOST }}
+          USER:  ${{ secrets.DEPLOY_USER }}
+          DIR:   ${{ secrets.DEPLOY_DIR }}
+        run: |
+          IFS=',' read -ra arr <<< "$HOSTS"
+          for host in "${arr[@]}"; do
+            echo "==> $host"
+            ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 "$USER@$host" "
+              set -euo pipefail
+              cd '$DIR'
+              git fetch --all --prune
+              git reset --hard origin/main
+              make pull || true      # если есть цель pull
+              make up
+              docker image prune -f || true
+            "
+          done
