@@ -208,7 +208,7 @@ def get_subscription_settings_keyboard(language: str = "ru", show_countries_mana
     
     keyboard.extend([
         [
-            InlineKeyboardButton(text="📱 Добавить устройства", callback_data="subscription_add_devices")
+            InlineKeyboardButton(text="📱 Изменить устройства", callback_data="subscription_change_devices") 
         ],
         [
             InlineKeyboardButton(text="🔄 Сбросить устройства", callback_data="subscription_reset_devices")
@@ -778,7 +778,7 @@ def get_add_traffic_keyboard(language: str = "ru", subscription_end_date: dateti
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
     
-def get_add_devices_keyboard(current_devices: int, language: str = "ru", subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
+def get_change_devices_keyboard(current_devices: int, language: str = "ru", subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
     from app.utils.pricing_utils import get_remaining_months
     from app.config import settings
     
@@ -793,31 +793,76 @@ def get_add_devices_keyboard(current_devices: int, language: str = "ru", subscri
     
     buttons = []
     
-    for count in [1, 2, 3, 4, 5]:
-        new_total = current_devices + count
-        if settings.MAX_DEVICES_LIMIT > 0 and new_total > settings.MAX_DEVICES_LIMIT:
-            continue
-        
-        price_per_month = count * device_price_per_month
-        total_price = price_per_month * months_multiplier
-        
-        if language == "ru":
-            text = f"📱 +{count} устройство(а) (итого: {new_total}) - {total_price//100} ₽{period_text}"
+    min_devices = 1 
+    max_devices = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 20
+    
+    start_range = max(1, min(current_devices - 3, max_devices - 6))
+    end_range = min(max_devices + 1, max(current_devices + 4, 7))
+    
+    for devices_count in range(start_range, end_range):
+        if devices_count == current_devices:
+            emoji = "✅"
+            action_text = " (текущее)"
+            price_text = ""
+        elif devices_count > current_devices:
+            emoji = "➕"
+            additional_devices = devices_count - current_devices
+            
+            current_chargeable = max(0, current_devices - settings.DEFAULT_DEVICE_LIMIT)
+            new_chargeable = max(0, devices_count - settings.DEFAULT_DEVICE_LIMIT)
+            chargeable_devices = new_chargeable - current_chargeable
+            
+            if chargeable_devices > 0:
+                price_per_month = chargeable_devices * device_price_per_month
+                total_price = price_per_month * months_multiplier
+                price_text = f" (+{total_price//100}₽{period_text})"
+                action_text = ""
+            else:
+                price_text = " (бесплатно)"
+                action_text = ""
         else:
-            text = f"📱 +{count} device(s) (total: {new_total}) - {total_price//100} ₽{period_text}"
+            emoji = "➖"
+            action_text = ""
+            price_text = " (без возврата)"
+        
+        button_text = f"{emoji} {devices_count} устр.{action_text}{price_text}"
         
         buttons.append([
-            InlineKeyboardButton(text=text, callback_data=f"add_devices_{count}")
+            InlineKeyboardButton(text=button_text, callback_data=f"change_devices_{devices_count}")
+        ])
+    
+    if current_devices < start_range or current_devices >= end_range:
+        current_button = f"✅ {current_devices} устр. (текущее)"
+        buttons.insert(0, [
+            InlineKeyboardButton(text=current_button, callback_data=f"change_devices_{current_devices}")
         ])
     
     buttons.append([
         InlineKeyboardButton(
-            text="⬅️ Назад" if language == "ru" else "⬅️ Back", 
-            callback_data="menu_subscription"
+            text="⬅️ Назад" if language == "ru" else "⬅️ Back",
+            callback_data="subscription_settings"
         )
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def get_confirm_change_devices_keyboard(new_devices_count: int, price: int, language: str = "ru") -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ Подтвердить изменение",
+                callback_data=f"confirm_change_devices_{new_devices_count}_{price}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="❌ Отмена",
+                callback_data="subscription_settings"
+            )
+        ]
+    ])
 
 
 def get_reset_traffic_confirm_keyboard(price_kopeks: int, language: str = "ru") -> InlineKeyboardMarkup:
