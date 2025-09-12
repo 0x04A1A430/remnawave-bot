@@ -140,7 +140,9 @@ class Settings(BaseSettings):
     MINIAPP_CUSTOM_URL: str = ""
     ENABLE_LOGO_MODE: bool = True
     LOGO_FILE: str = "vpn_logo.png"
-    
+    SKIP_RULES_ACCEPT: bool = False
+    SKIP_REFERRAL_CODE: bool = False
+
     DEFAULT_LANGUAGE: str = "ru"
     AVAILABLE_LANGUAGES: str = "ru,en"
     
