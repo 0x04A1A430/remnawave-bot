@@ -248,11 +248,49 @@ async def create_user_messages_table():
         logger.error(f"Ошибка создания таблицы user_messages: {e}")
         return False
 
+async def add_welcome_text_is_enabled_column():
+    column_exists = await check_column_exists('welcome_texts', 'is_enabled')
+    if column_exists:
+        logger.info("Колонка is_enabled уже существует в таблице welcome_texts")
+        return True
+    
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            
+            if db_type == 'sqlite':
+                alter_sql = "ALTER TABLE welcome_texts ADD COLUMN is_enabled BOOLEAN DEFAULT 1 NOT NULL"
+            elif db_type == 'postgresql':
+                alter_sql = "ALTER TABLE welcome_texts ADD COLUMN is_enabled BOOLEAN DEFAULT TRUE NOT NULL"
+            elif db_type == 'mysql':
+                alter_sql = "ALTER TABLE welcome_texts ADD COLUMN is_enabled BOOLEAN DEFAULT TRUE NOT NULL"
+            else:
+                logger.error(f"Неподдерживаемый тип БД для добавления колонки: {db_type}")
+                return False
+            
+            await conn.execute(text(alter_sql))
+            logger.info("✅ Поле is_enabled добавлено в таблицу welcome_texts")
+            
+            if db_type == 'sqlite':
+                update_sql = "UPDATE welcome_texts SET is_enabled = 1 WHERE is_enabled IS NULL"
+            else:
+                update_sql = "UPDATE welcome_texts SET is_enabled = TRUE WHERE is_enabled IS NULL"
+            
+            result = await conn.execute(text(update_sql))
+            updated_count = result.rowcount
+            logger.info(f"Обновлено {updated_count} существующих записей welcome_texts")
+            
+            return True
+            
+    except Exception as e:
+        logger.error(f"Ошибка при добавлении поля is_enabled: {e}")
+        return False
+
 async def create_welcome_texts_table():
     table_exists = await check_table_exists('welcome_texts')
     if table_exists:
         logger.info("Таблица welcome_texts уже существует")
-        return True
+        return await add_welcome_text_is_enabled_column()
     
     try:
         async with engine.begin() as conn:
@@ -264,6 +302,7 @@ async def create_welcome_texts_table():
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     text_content TEXT NOT NULL,
                     is_active BOOLEAN DEFAULT 1,
+                    is_enabled BOOLEAN DEFAULT 1 NOT NULL,
                     created_by INTEGER NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -271,6 +310,7 @@ async def create_welcome_texts_table():
                 );
                 
                 CREATE INDEX idx_welcome_texts_active ON welcome_texts(is_active);
+                CREATE INDEX idx_welcome_texts_enabled ON welcome_texts(is_enabled);
                 CREATE INDEX idx_welcome_texts_updated ON welcome_texts(updated_at);
                 """
                 
@@ -280,6 +320,7 @@ async def create_welcome_texts_table():
                     id SERIAL PRIMARY KEY,
                     text_content TEXT NOT NULL,
                     is_active BOOLEAN DEFAULT TRUE,
+                    is_enabled BOOLEAN DEFAULT TRUE NOT NULL,
                     created_by INTEGER NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -287,6 +328,7 @@ async def create_welcome_texts_table():
                 );
                 
                 CREATE INDEX idx_welcome_texts_active ON welcome_texts(is_active);
+                CREATE INDEX idx_welcome_texts_enabled ON welcome_texts(is_enabled);
                 CREATE INDEX idx_welcome_texts_updated ON welcome_texts(updated_at);
                 """
                 
@@ -296,6 +338,7 @@ async def create_welcome_texts_table():
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     text_content TEXT NOT NULL,
                     is_active BOOLEAN DEFAULT TRUE,
+                    is_enabled BOOLEAN DEFAULT TRUE NOT NULL,
                     created_by INT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -303,6 +346,7 @@ async def create_welcome_texts_table():
                 );
                 
                 CREATE INDEX idx_welcome_texts_active ON welcome_texts(is_active);
+                CREATE INDEX idx_welcome_texts_enabled ON welcome_texts(is_enabled);
                 CREATE INDEX idx_welcome_texts_updated ON welcome_texts(updated_at);
                 """
             else:
@@ -310,7 +354,7 @@ async def create_welcome_texts_table():
                 return False
             
             await conn.execute(text(create_sql))
-            logger.info("Таблица welcome_texts успешно создана")
+            logger.info("✅ Таблица welcome_texts успешно создана с полем is_enabled")
             return True
             
     except Exception as e:
@@ -588,10 +632,10 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей user_messages")
 
-        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ WELCOME_TEXTS ===")
+        logger.info("=== СОЗДАНИЕ/ОБНОВЛЕНИЕ ТАБЛИЦЫ WELCOME_TEXTS ===")
         welcome_texts_created = await create_welcome_texts_table()
         if welcome_texts_created:
-            logger.info("✅ Таблица welcome_texts готова")
+            logger.info("✅ Таблица welcome_texts готова с полем is_enabled")
         else:
             logger.warning("⚠️ Проблемы с таблицей welcome_texts")
         
@@ -644,6 +688,7 @@ async def run_universal_migration():
                 logger.info("✅ Реферальная система обновлена")
                 logger.info("✅ CryptoBot таблица готова")
                 logger.info("✅ Таблица конверсий подписок создана")
+                logger.info("✅ Таблица welcome_texts с полем is_enabled готова")
                 logger.info("✅ Дубликаты подписок исправлены")
                 return True
                 
@@ -660,6 +705,7 @@ async def check_migration_status():
             "cryptobot_table": False,
             "user_messages_table": False,
             "welcome_texts_table": False,
+            "welcome_texts_is_enabled_column": False,  
             "subscription_duplicates": False,
             "subscription_conversions_table": False
         }
@@ -667,12 +713,11 @@ async def check_migration_status():
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
         
         status["cryptobot_table"] = await check_table_exists('cryptobot_payments')
-        
         status["user_messages_table"] = await check_table_exists('user_messages')
-        
         status["welcome_texts_table"] = await check_table_exists('welcome_texts')
-        
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
+        
+        status["welcome_texts_is_enabled_column"] = await check_column_exists('welcome_texts', 'is_enabled')
         
         async with engine.begin() as conn:
             duplicates_check = await conn.execute(text("""
@@ -691,6 +736,7 @@ async def check_migration_status():
             "cryptobot_table": "Таблица CryptoBot payments",
             "user_messages_table": "Таблица пользовательских сообщений",
             "welcome_texts_table": "Таблица приветственных текстов",
+            "welcome_texts_is_enabled_column": "Поле is_enabled в welcome_texts",
             "subscription_conversions_table": "Таблица конверсий подписок",
             "subscription_duplicates": "Отсутствие дубликатов подписок"
         }
