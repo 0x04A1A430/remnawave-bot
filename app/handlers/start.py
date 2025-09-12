@@ -224,13 +224,36 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     data['language'] = language
     await state.set_data(data)
     logger.info(f"💾 Установлен русский язык по умолчанию")
-    
+    if settings.SKIP_RULES_ACCEPT:
+        logger.info("⚙️ SKIP_RULES_ACCEPT включен - пропускаем принятие правил")
+        if data.get('referral_code'):
+            referrer = await get_user_by_referral_code(db, data['referral_code'])
+            if referrer:
+                data['referrer_id'] = referrer.id
+                await state.set_data(data)
+                logger.info(f"✅ Реферер найден: {referrer.id}")
+
+        if settings.SKIP_REFERRAL_CODE or data.get('referral_code'):
+            await complete_registration(message, state, db)
+        else:
+            try:
+                await message.answer(
+                    "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                    reply_markup=get_referral_code_keyboard(language)
+                )
+                await state.set_state(RegistrationStates.waiting_for_referral_code)
+                logger.info("🔍 Ожидание ввода реферального кода")
+            except Exception as e:
+                logger.error(f"Ошибка при показе вопроса о реферальном коде: {e}")
+                await complete_registration(message, state, db)
+        return
+
     await message.answer(
         texts.RULES_TEXT,
         reply_markup=get_rules_keyboard(language)
     )
     logger.info(f"📋 Правила отправлены")
-    
+
     await state.set_state(RegistrationStates.waiting_for_rules_accept)
     current_state = await state.get_state()
     logger.info(f"📊 Установлено состояние: {current_state}")
@@ -274,25 +297,29 @@ async def process_rules_accept(
             
             if data.get('referral_code'):
                 logger.info(f"🎫 Найден реферальный код из deep link: {data['referral_code']}")
-                
+
                 referrer = await get_user_by_referral_code(db, data['referral_code'])
                 if referrer:
                     data['referrer_id'] = referrer.id
                     await state.set_data(data)
                     logger.info(f"✅ Реферер найден: {referrer.id}")
-                
+
                 await complete_registration_from_callback(callback, state, db)
             else:
-                try:
-                    await callback.message.answer(
-                        "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
-                        reply_markup=get_referral_code_keyboard(language)
-                    )
-                    await state.set_state(RegistrationStates.waiting_for_referral_code)
-                    logger.info(f"🔍 Ожидание ввода реферального кода")
-                except Exception as e:
-                    logger.error(f"Ошибка при показе вопроса о реферальном коде: {e}")
+                if settings.SKIP_REFERRAL_CODE:
+                    logger.info("⚙️ SKIP_REFERRAL_CODE включен - пропускаем запрос реферального кода")
                     await complete_registration_from_callback(callback, state, db)
+                else:
+                    try:
+                        await callback.message.answer(
+                            "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                            reply_markup=get_referral_code_keyboard(language)
+                        )
+                        await state.set_state(RegistrationStates.waiting_for_referral_code)
+                        logger.info(f"🔍 Ожидание ввода реферального кода")
+                    except Exception as e:
+                        logger.error(f"Ошибка при показе вопроса о реферальном коде: {e}")
+                        await complete_registration_from_callback(callback, state, db)
                     
         else:
             logger.info(f"❌ Правила отклонены пользователем {callback.from_user.id}")
