@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, asdict
 import aiofiles
+from aiogram.types import FSInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text, inspect
 from sqlalchemy.orm import selectinload
@@ -197,6 +198,8 @@ class BackupService:
                 await self._send_backup_notification(
                     "success", message, str(backup_path)
                 )
+
+                await self._send_backup_file_to_chat(str(backup_path), message)
             
             return True, message, str(backup_path)
             
@@ -536,9 +539,9 @@ class BackupService:
                 await asyncio.sleep(3600)
 
     async def _send_backup_notification(
-        self, 
-        event_type: str, 
-        message: str, 
+        self,
+        event_type: str,
+        message: str,
         file_path: str = None
     ):
         try:
@@ -569,6 +572,34 @@ class BackupService:
         
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о бекапе: {e}")
+
+    async def _send_backup_file_to_chat(self, file_path: str, message: str):
+        try:
+            if not settings.is_backup_send_enabled():
+                return
+
+            chat_id = settings.get_backup_send_chat_id()
+            if not chat_id:
+                return
+
+            caption = (f"📦 <b>Резервное копирование</b>\n\n"
+                       f"{message}\n\n"
+                       f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>")
+
+            send_kwargs = {
+                'chat_id': chat_id,
+                'document': FSInputFile(file_path),
+                'caption': caption,
+                'parse_mode': 'HTML'
+            }
+
+            if settings.BACKUP_SEND_TOPIC_ID:
+                send_kwargs['message_thread_id'] = settings.BACKUP_SEND_TOPIC_ID
+
+            await self.bot.send_document(**send_kwargs)
+            logger.info(f"Бекап отправлен в чат {chat_id}")
+        except Exception as e:
+            logger.error(f"Ошибка отправки бекапа в чат: {e}")
 
 
 backup_service = BackupService()
