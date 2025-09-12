@@ -667,6 +667,7 @@ class WelcomeText(Base):
     id = Column(Integer, primary_key=True, index=True)
     text_content = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
+    is_enabled = Column(Boolean, default=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
