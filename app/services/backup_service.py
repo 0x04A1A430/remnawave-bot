@@ -584,7 +584,12 @@ class BackupService:
 
             send_kwargs = {
                 'chat_id': chat_id,
-                'document': FSInputFile(file_path)
+                'document': FSInputFile(file_path),
+                'caption': (
+                    f"📦 <b>Резервная копия</b>\n\n"
+                    f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"
+                ),
+                'parse_mode': 'HTML'
             }
 
             if settings.BACKUP_SEND_TOPIC_ID:
