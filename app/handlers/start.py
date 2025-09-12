@@ -527,17 +527,19 @@ async def complete_registration_from_callback(
     await state.clear()
 
     from app.database.crud.welcome_text import get_welcome_text_for_user
-    
-    user_name = callback.from_user.first_name or callback.from_user.username or "друг"
-    offer_text = await get_welcome_text_for_user(db, user_name)
+    offer_text = await get_welcome_text_for_user(db, callback.from_user)
 
-    try:
-        await callback.message.answer(
-            offer_text,
-            reply_markup=get_post_registration_keyboard(),
-        )
-    except Exception as e:
-        logger.error(f"Ошибка при отправке предложения триала: {e}")
+    if offer_text:
+        try:
+            await callback.message.answer(
+                offer_text,
+                reply_markup=get_post_registration_keyboard(),
+            )
+            logger.info(f"✅ Приветственное сообщение отправлено пользователю {user.telegram_id}")
+        except Exception as e:
+            logger.error(f"Ошибка при отправке приветственного сообщения: {e}")
+    else:
+        logger.info(f"ℹ️ Приветственные сообщения отключены, пропускаем отправку для пользователя {user.telegram_id}")
 
     logger.info(f"✅ Регистрация завершена для пользователя: {user.telegram_id}")
 
@@ -658,16 +660,19 @@ async def complete_registration(
     await state.clear()
 
     from app.database.crud.welcome_text import get_welcome_text_for_user
-    
     offer_text = await get_welcome_text_for_user(db, message.from_user)
 
-    try:
-        await message.answer(
-            offer_text,
-            reply_markup=get_post_registration_keyboard(),
-        )
-    except Exception as e:
-        logger.error(f"Ошибка при отправке предложения триала: {e}")
+    if offer_text:
+        try:
+            await message.answer(
+                offer_text,
+                reply_markup=get_post_registration_keyboard(),
+            )
+            logger.info(f"✅ Приветственное сообщение отправлено пользователю {user.telegram_id}")
+        except Exception as e:
+            logger.error(f"Ошибка при отправке приветственного сообщения: {e}")
+    else:
+        logger.info(f"ℹ️ Приветственные сообщения отключены, пропускаем отправку для пользователя {user.telegram_id}")
 
     logger.info(f"✅ Регистрация завершена для пользователя: {user.telegram_id}")
 
