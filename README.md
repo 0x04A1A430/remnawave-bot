@@ -892,6 +892,7 @@ bedolaga_bot/
 │   │   ├── ✅ subscription_utils.py  # Проверка подписок
 │   │   ├── 📄 pagination.py          # Пагинация
 │   │   ├── 📄 pricing_utils.py       # Цены
+│   │   ├── ‼️ global_error.py        # Обработка ошибок
 │   │   ├── 👤 user_utils.py          # Утилиты для пользователей
 │   │   ├── 🫰 currency_converter.py  # Курсы для CryptoBota
 │   │   └── ⚡ cache.py                # Кеширование
