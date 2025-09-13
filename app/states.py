@@ -89,3 +89,10 @@ class SquadCreateStates(StatesGroup):
 
 class SquadRenameStates(StatesGroup):
     waiting_for_new_name = State()
+
+class AdminSubmenuStates(StatesGroup):
+    in_users_submenu = State()
+    in_promo_submenu = State()
+    in_communications_submenu = State()
+    in_settings_submenu = State()
+    in_system_submenu = State()
