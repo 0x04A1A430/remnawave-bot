@@ -406,9 +406,6 @@ CRYPTOBOT_INVOICE_EXPIRES_HOURS=24
 ENABLE_LOGO_MODE=true
 LOGO_FILE=vpn_logo.png
 
-# Скрыть блок с ссылкой подключения в разделе с информацией о подписке
-HIDE_SUBSCRIPTION_LINK=false
-
 # Режим работы кнопки "Подключиться"
 # guide - открывает гайд подключения (режим 1)
 # miniapp_subscription - открывает ссылку подписки в мини-приложении (режим 2)
@@ -418,6 +415,9 @@ CONNECT_BUTTON_MODE=guide
 
 # URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
 MINIAPP_CUSTOM_URL=
+
+# Скрыть блок с ссылкой подключения в разделе с информацией о подписке
+HIDE_SUBSCRIPTION_LINK=false
 
 # Пропустить принятие правил использования бота
 SKIP_RULES_ACCEPT=false
@@ -477,9 +477,8 @@ LOG_FILE=logs/bot.log
 
 # ===== РАЗРАБОТКА =====
 DEBUG=false
-WEBHOOK_URL=   # Ссылку на корневой домен с вебхуком 
+WEBHOOK_URL=
 WEBHOOK_PATH=/webhook
-
 ```
 
 </details>
