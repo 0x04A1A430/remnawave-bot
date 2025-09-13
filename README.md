@@ -257,9 +257,17 @@ REDIS_URL=redis://redis:6379/0
 
 # ===== REMNAWAVE API =====
 REMNAWAVE_API_URL=https://panel.example.com
-REMNAWAVE_API_KEY=
-# Для панелей установленных скриптом eGames прописывать ключ в формате XXXXXXX:DDDDDDDD - https://panel.example.com/auth/login?XXXXXXX=DDDDDDDD
-REMNAWAVE_SECRET_KEY=your_secret_key_here
+REMNAWAVE_API_KEY=your_api_key_here
+
+# Тип авторизации: "api_key", "basic_auth"
+REMNAWAVE_AUTH_TYPE=api_key
+
+# Для панелей с Basic Auth (опционально)
+REMNAWAVE_USERNAME=
+REMNAWAVE_PASSWORD=
+
+# Для панелей установленных скриптом eGames прописывать ключ в формате XXXXXXX:DDDDDDDD
+REMNAWAVE_SECRET_KEY=
 
 # ========= ПОДПИСКИ =========
 # ===== ТРИАЛ ПОДПИСКА =====
@@ -406,7 +414,7 @@ CRYPTOBOT_WEBHOOK_SECRET=your_webhook_secret_here
 CRYPTOBOT_BASE_URL=https://pay.crypt.bot
 CRYPTOBOT_TESTNET=false
 CRYPTOBOT_WEBHOOK_PATH=/cryptobot-webhook
-CRYPTOBOT_WEBHOOK_PORT=8083
+CRYPTOBOT_WEBHOOK_PORT=8081
 CRYPTOBOT_DEFAULT_ASSET=USDT
 CRYPTOBOT_ASSETS=USDT,TON,BTC,ETH,LTC,BNB,TRX,USDC
 CRYPTOBOT_INVOICE_EXPIRES_HOURS=24
@@ -417,6 +425,9 @@ CRYPTOBOT_INVOICE_EXPIRES_HOURS=24
 ENABLE_LOGO_MODE=true
 LOGO_FILE=vpn_logo.png
 
+# Скрыть блок с ссылкой подключения в разделе с информацией о подписке
+HIDE_SUBSCRIPTION_LINK=false
+
 # Режим работы кнопки "Подключиться"
 # guide - открывает гайд подключения (режим 1)
 # miniapp_subscription - открывает ссылку подписки в мини-приложении (режим 2)
@@ -426,9 +437,6 @@ CONNECT_BUTTON_MODE=guide
 
 # URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
 MINIAPP_CUSTOM_URL=
-
-# Скрыть блок с ссылкой подключения в разделе с информацией о подписке
-HIDE_SUBSCRIPTION_LINK=false
 
 # Пропустить принятие правил использования бота
 SKIP_RULES_ACCEPT=false
@@ -488,8 +496,9 @@ LOG_FILE=logs/bot.log
 
 # ===== РАЗРАБОТКА =====
 DEBUG=false
-WEBHOOK_URL=
+WEBHOOK_URL=  # Укажите домен вебхука
 WEBHOOK_PATH=/webhook
+
 ```
 
 </details>
