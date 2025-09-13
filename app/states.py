@@ -67,6 +67,7 @@ class AdminStates(StatesGroup):
     creating_server_country = State()
     
     editing_welcome_text = State()
+    waiting_for_message_buttons = "waiting_for_message_buttons"
 
 class SupportStates(StatesGroup):
     waiting_for_message = State()

@@ -756,3 +756,20 @@ def get_welcome_text_keyboard(language: str = "ru", is_enabled: bool = True) -> 
     ]
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_message_buttons_selector_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="btn_balance"),
+            InlineKeyboardButton(text="🤝 Рефералы", callback_data="btn_referrals")
+        ],
+        [
+            InlineKeyboardButton(text="🎫 Промокод", callback_data="btn_promocode")
+        ],
+        [
+            InlineKeyboardButton(text="✅ Продолжить", callback_data="buttons_confirm")
+        ],
+        [
+            InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")
+        ]
+    ])
