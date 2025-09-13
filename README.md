@@ -623,7 +623,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-remnawave_bot}
       POSTGRES_USER: ${POSTGRES_USER:-remnawave_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_123}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -639,7 +639,7 @@ services:
     image: redis:7-alpine
     container_name: remnawave_bot_redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     networks:
@@ -662,22 +662,46 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-remnawave_user}:${POSTGRES_PASSWORD:-secure_password_123}@postgres:5432/${POSTGRES_DB:-remnawave_bot}
-      REDIS_URL: redis://redis:6379/0
+      DOCKER_ENV: "true"
+      DATABASE_MODE: "auto"
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "${POSTGRES_DB:-remnawave_bot}"
+      POSTGRES_USER: "${POSTGRES_USER:-remnawave_user}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-secure_password_123}"
+      
+      REDIS_URL: "redis://redis:6379/0"
+      
+      TZ: "Europe/Moscow"
     volumes:
+      # Логи
       - ./logs:/app/logs:rw
+      # Данные приложения (для SQLite в случае переключения)
       - ./data:/app/data:rw
+      # Конфигурация приложения
+      # - ./app-config.json:/app/app-config.json:ro
+      # Timezone
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+      # Логотип для сообщений
+      - ./vpn_logo.png:/app/vpn_logo.png:ro
     ports:
       - "${TRIBUTE_WEBHOOK_PORT:-8081}:8081"
       - "${YOOKASSA_WEBHOOK_PORT:-8082}:8082"
     networks:
       - bot_network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import requests; requests.get(\"http://localhost:8081/health\", timeout=5)' || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
 
 networks:
   bot_network:
@@ -685,6 +709,7 @@ networks:
     ipam:
       config:
         - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
 ```
 
 ### 🚀 Команды управления
