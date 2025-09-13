@@ -1,10 +1,8 @@
 from aiogram.fsm.state import State, StatesGroup
 
-
 class RegistrationStates(StatesGroup):
     waiting_for_rules_accept = State()
     waiting_for_referral_code = State()
-
 
 class SubscriptionStates(StatesGroup):
     selecting_period = State()
@@ -19,7 +17,6 @@ class SubscriptionStates(StatesGroup):
     extending_subscription = State()
     confirming_traffic_reset = State()
 
-
 class BalanceStates(StatesGroup):
     waiting_for_amount = State()
     waiting_for_stars_payment = State()
@@ -29,7 +26,6 @@ class BalanceStates(StatesGroup):
 class PromoCodeStates(StatesGroup):
     waiting_for_code = State()
     waiting_for_referral_code = State()
-
 
 class AdminStates(StatesGroup):
     
@@ -72,12 +68,8 @@ class AdminStates(StatesGroup):
     
     editing_welcome_text = State()
 
-    
-
-
 class SupportStates(StatesGroup):
     waiting_for_message = State()
-
 
 class AutoPayStates(StatesGroup):
     setting_autopay_days = State()
@@ -89,3 +81,10 @@ class SquadCreateStates(StatesGroup):
 
 class SquadRenameStates(StatesGroup):
     waiting_for_new_name = State()
+
+class AdminSubmenuStates(StatesGroup):
+    in_users_submenu = State()
+    in_promo_submenu = State()
+    in_communications_submenu = State()
+    in_settings_submenu = State()
+    in_system_submenu = State()
