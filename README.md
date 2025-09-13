@@ -402,15 +402,27 @@ CRYPTOBOT_INVOICE_EXPIRES_HOURS=24
 
 # ===== ИНТЕРФЕЙС И UX =====
 
+# Включить логотип для всех сообщений (true - с изображением, false - только текст)
+ENABLE_LOGO_MODE=true
+LOGO_FILE=vpn_logo.png
+
+# Скрыть блок с ссылкой подключения в разделе с информацией о подписке
+HIDE_SUBSCRIPTION_LINK=false
+
 # Режим работы кнопки "Подключиться"
 # guide - открывает гайд подключения (режим 1)
 # miniapp_subscription - открывает ссылку подписки в мини-приложении (режим 2)
 # miniapp_custom - открывает заданную ссылку в мини-приложении (режим 3)
-# link - открывает ссылку подписки напрямую (режим 4)
+# link - Открывает ссылку напрямую в браузере (режим 4)
 CONNECT_BUTTON_MODE=guide
 
 # URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
 MINIAPP_CUSTOM_URL=
+
+# Пропустить принятие правил использования бота
+SKIP_RULES_ACCEPT=false
+# Пропустить запрос реферального кода
+SKIP_REFERRAL_CODE=false
 
 # ===== МОНИТОРИНГ И УВЕДОМЛЕНИЯ =====
 MONITORING_INTERVAL=60
@@ -448,6 +460,12 @@ BACKUP_COMPRESSION=true
 BACKUP_INCLUDE_LOGS=false
 BACKUP_LOCATION=/app/data/backups
 
+# Отправка бэкапов в телеграм
+BACKUP_SEND_ENABLED=true
+BACKUP_SEND_CHAT_ID=-100123456789   # Замени на ID твоего канала (-100) - ПРЕФИКС ЗАКРЫТОГО КАНАЛА!
+# ВСТАВИТЬ СВОЙ ID СРАЗУ ПОСЛЕ (-100) БЕЗ ПРОБЕЛОВ!
+BACKUP_SEND_TOPIC_ID=123             # Опционально: ID топика
+
 # ===== ПРОВЕРКА ОБНОВЛЕНИЙ БОТА =====
 VERSION_CHECK_ENABLED=true
 VERSION_CHECK_REPO=fr1ngg/remnawave-bedolaga-telegram-bot
@@ -459,8 +477,9 @@ LOG_FILE=logs/bot.log
 
 # ===== РАЗРАБОТКА =====
 DEBUG=false
-WEBHOOK_URL=
+WEBHOOK_URL=   # Ссылку на корневой домен с вебхуком 
 WEBHOOK_PATH=/webhook
+
 ```
 
 </details>
