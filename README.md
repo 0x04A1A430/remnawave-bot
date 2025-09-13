@@ -1108,6 +1108,13 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 </tr>
 
 <tr>
+<td>5</td>
+<td><strong>@Nav1_0</strong></td>
+<td>₽1,000</td>
+<td>За поддержку и доверие</td>
+</tr>
+
+<tr>
 <td>6</td>
 <td><strong>@kr33njee</strong></td>
 <td>₽800</td>
