@@ -21,6 +21,18 @@ async def show_admin_panel(
     texts = get_texts(db_user.language)
     
     admin_text = texts.ADMIN_PANEL
+    # Вставляем строку с текущим количеством онлайн-пользователей VPN
+    try:
+        from app.services.remnawave_service import RemnaWaveService
+        remnawave_service = RemnaWaveService()
+        stats = await remnawave_service.get_system_statistics()
+        users_online = stats.get("system", {}).get("users_online", 0)
+        admin_text = admin_text.replace(
+            "\n\nВыберите раздел для управления:",
+            f"\n\n- 🟢 Онлайн сейчас: {users_online}\n\nВыберите раздел для управления:"
+        )
+    except Exception as e:
+        logger.error(f"Не удалось получить статистику Remnawave для админ-панели: {e}")
     
     await callback.message.edit_text(
         admin_text,
