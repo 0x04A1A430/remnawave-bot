@@ -244,10 +244,23 @@ async def get_server_statistics(db: AsyncSession) -> dict:
     )
     available_servers = available_result.scalar()
     
-    with_connections_result = await db.execute(
-        select(func.count(func.distinct(SubscriptionServer.server_squad_id)))
-    )
-    servers_with_connections = with_connections_result.scalar()
+    servers_with_connections = 0
+    all_servers_result = await db.execute(select(ServerSquad.squad_uuid))
+    all_server_uuids = [row[0] for row in all_servers_result.fetchall()]
+    
+    for squad_uuid in all_server_uuids:
+        count_result = await db.execute(
+            text("""
+                SELECT COUNT(s.id) 
+                FROM subscriptions s 
+                WHERE s.status IN ('active', 'trial') 
+                AND s.connected_squads::text LIKE :uuid_pattern
+            """),
+            {"uuid_pattern": f'%"{squad_uuid}"%'}
+        )
+        user_count = count_result.scalar() or 0
+        if user_count > 0:
+            servers_with_connections += 1
     
     revenue_result = await db.execute(
         select(func.coalesce(func.sum(SubscriptionServer.paid_price_kopeks), 0))
