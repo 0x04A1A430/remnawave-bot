@@ -32,10 +32,18 @@ async def show_admin_panel(
         from app.services.remnawave_service import RemnaWaveService
         remnawave_service = RemnaWaveService()
         stats = await remnawave_service.get_system_statistics()
-        users_online = stats.get("system", {}).get("users_online", 0)
+        system_stats = stats.get("system", {})
+        users_online = system_stats.get("users_online", 0)
+        users_today = system_stats.get("users_last_day", 0)
+        users_week = system_stats.get("users_last_week", 0)
         admin_text = admin_text.replace(
             "\n\nВыберите раздел для управления:",
-            f"\n\n- 🟢 Онлайн сейчас: {users_online}\n\nВыберите раздел для управления:"
+            (
+                f"\n\n- 🟢 Онлайн сейчас: {users_online}"
+                f"\n- 📅 Онлайн сегодня: {users_today}"
+                f"\n- 🗓️ На этой неделе: {users_week}"
+                "\n\nВыберите раздел для управления:"
+            ),
         )
     except Exception as e:
         logger.error(f"Не удалось получить статистику Remnawave для админ-панели: {e}")
