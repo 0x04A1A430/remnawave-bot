@@ -354,7 +354,7 @@ class RemnaWaveService:
 
     async def update_squad_inbounds(self, squad_uuid: str, inbound_uuids: List[str]) -> bool:
         try:
-            async with RemnaWaveAPI(settings.REMNAWAVE_API_URL, settings.REMNAWAVE_API_KEY) as api:
+            async with self.api as api:
                 data = {
                     'uuid': squad_uuid,
                     'inbounds': inbound_uuids
@@ -876,7 +876,7 @@ class RemnaWaveService:
 
     async def get_squad_details(self, squad_uuid: str) -> Optional[Dict]:
         try:
-            async with RemnaWaveAPI(settings.REMNAWAVE_API_URL, settings.REMNAWAVE_API_KEY) as api:
+            async with self.api as api:
                 squad = await api.get_internal_squad_by_uuid(squad_uuid)
                 if squad:
                     return {
@@ -893,7 +893,7 @@ class RemnaWaveService:
 
     async def add_all_users_to_squad(self, squad_uuid: str) -> bool:
         try:
-            async with RemnaWaveAPI(settings.REMNAWAVE_API_URL, settings.REMNAWAVE_API_KEY) as api:
+            async with self.api as api:
                 response = await api._make_request('POST', f'/api/internal-squads/{squad_uuid}/bulk-actions/add-users')
                 return response.get('response', {}).get('eventSent', False)
         except Exception as e:
@@ -902,7 +902,7 @@ class RemnaWaveService:
 
     async def remove_all_users_from_squad(self, squad_uuid: str) -> bool:
         try:
-            async with RemnaWaveAPI(settings.REMNAWAVE_API_URL, settings.REMNAWAVE_API_KEY) as api:
+            async with self.api as api:
                 response = await api._make_request('DELETE', f'/api/internal-squads/{squad_uuid}/bulk-actions/remove-users')
                 return response.get('response', {}).get('eventSent', False)
         except Exception as e:
@@ -911,7 +911,7 @@ class RemnaWaveService:
 
     async def delete_squad(self, squad_uuid: str) -> bool:
         try:
-            async with RemnaWaveAPI(settings.REMNAWAVE_API_URL, settings.REMNAWAVE_API_KEY) as api:
+            async with self.api as api:
                 response = await api.delete_internal_squad(squad_uuid)
                 return response
         except Exception as e:
@@ -920,7 +920,7 @@ class RemnaWaveService:
 
     async def get_all_inbounds(self) -> List[Dict]:
         try:
-            async with RemnaWaveAPI(settings.REMNAWAVE_API_URL, settings.REMNAWAVE_API_KEY) as api:
+            async with self.api as api:
                 response = await api._make_request('GET', '/api/config-profiles/inbounds')
                 inbounds_data = response.get('response', {}).get('inbounds', [])
             
@@ -941,7 +941,7 @@ class RemnaWaveService:
 
     async def rename_squad(self, squad_uuid: str, new_name: str) -> bool:
         try:
-            async with RemnaWaveAPI(settings.REMNAWAVE_API_URL, settings.REMNAWAVE_API_KEY) as api:
+            async with self.api as api:
                 data = {
                     'uuid': squad_uuid,
                     'name': new_name
@@ -954,7 +954,7 @@ class RemnaWaveService:
 
     async def create_squad(self, name: str, inbound_uuids: List[str]) -> bool:
         try:
-            async with RemnaWaveAPI(settings.REMNAWAVE_API_URL, settings.REMNAWAVE_API_KEY) as api:
+            async with self.api as api:
                 squad = await api.create_internal_squad(name, inbound_uuids)
                 return squad is not None
         except Exception as e:
