@@ -773,3 +773,61 @@ def get_message_buttons_selector_keyboard(language: str = "ru") -> InlineKeyboar
             InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")
         ]
     ])
+
+def get_broadcast_media_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📷 Добавить фото", callback_data="add_media_photo"),
+            InlineKeyboardButton(text="🎥 Добавить видео", callback_data="add_media_video")
+        ],
+        [
+            InlineKeyboardButton(text="📄 Добавить документ", callback_data="add_media_document"),
+            InlineKeyboardButton(text="⏭️ Пропустить медиа", callback_data="skip_media")
+        ],
+        [
+            InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")
+        ]
+    ])
+
+def get_media_confirm_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Использовать это медиа", callback_data="confirm_media"),
+            InlineKeyboardButton(text="🔄 Заменить медиа", callback_data="replace_media")
+        ],
+        [
+            InlineKeyboardButton(text="⏭️ Без медиа", callback_data="skip_media"),
+            InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")
+        ]
+    ])
+
+def get_updated_message_buttons_selector_keyboard_with_media(selected_buttons: list, has_media: bool = False, language: str = "ru") -> InlineKeyboardMarkup:
+    balance_text = "✅ Пополнить баланс" if "balance" in selected_buttons else "💰 Пополнить баланс"
+    referrals_text = "✅ Рефералы" if "referrals" in selected_buttons else "🤝 Рефералы"
+    promocode_text = "✅ Промокод" if "promocode" in selected_buttons else "🎫 Промокод"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton(text=balance_text, callback_data="btn_balance"),
+            InlineKeyboardButton(text=referrals_text, callback_data="btn_referrals")
+        ],
+        [
+            InlineKeyboardButton(text=promocode_text, callback_data="btn_promocode")
+        ]
+    ]
+    
+    if has_media:
+        keyboard.append([
+            InlineKeyboardButton(text="🖼️ Изменить медиа", callback_data="change_media")
+        ])
+    
+    keyboard.extend([
+        [
+            InlineKeyboardButton(text="✅ Продолжить", callback_data="buttons_confirm")
+        ],
+        [
+            InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")
+        ]
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
