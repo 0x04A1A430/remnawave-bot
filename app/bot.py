@@ -5,6 +5,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 import redis.asyncio as redis
 
 from app.config import settings
+from app.middlewares.channel_checker import ChannelCheckerMiddleware
 from app.middlewares.global_error import GlobalErrorMiddleware 
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.logging import LoggingMiddleware
@@ -90,6 +91,8 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.callback_query.middleware(ThrottlingMiddleware())
     dp.message.middleware(SubscriptionStatusMiddleware())
     dp.callback_query.middleware(SubscriptionStatusMiddleware())
+    dp.callback_query.middleware(ChannelCheckerMiddleware())
+    dp.message.middleware(ChannelCheckerMiddleware())
     start.register_handlers(dp)
     menu.register_handlers(dp)
     subscription.register_handlers(dp)
