@@ -173,13 +173,16 @@ async def show_messages_history(
             
             message_preview = broadcast.message_text[:100] + "..." if len(broadcast.message_text) > 100 else broadcast.message_text
             
+            import html
+            message_preview = html.escape(message_preview) 
+            
             text += f"""
 {status_emoji} <b>{broadcast.created_at.strftime('%d.%m.%Y %H:%M')}</b>
 📊 Отправлено: {broadcast.sent_count}/{broadcast.total_count} ({success_rate}%)
 🎯 Аудитория: {get_target_name(broadcast.target_type)}
 👤 Админ: {broadcast.admin_name}
-📝 Сообщение: <i>{message_preview}</i>
-━━━━━━━━━━━━━━━━━━━━
+📝 Сообщение: {message_preview}
+━━━━━━━━━━━━━━━━━━━━━━━
 """
         
         keyboard = get_broadcast_history_keyboard(page, total_pages, db_user.language).inline_keyboard
@@ -187,7 +190,7 @@ async def show_messages_history(
     await callback.message.edit_text(
         text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-        parse_mode="HTML"  
+        parse_mode="HTML"
     )
     await callback.answer()
 
