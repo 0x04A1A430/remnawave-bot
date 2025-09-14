@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
@@ -738,9 +738,19 @@ class AdminNotificationService:
     📱 <b>Username:</b> @{user.username or 'отсутствует'}
 
     🔧 <b>Изменение:</b>
-    📋 Параметр: {param_name}
-    📉 Было: {self._format_value(old_value, update_type)}
-    📈 Стало: {self._format_value(new_value, update_type)}"""
+    📋 Параметр: {param_name}"""
+
+            if update_type == "servers":
+                old_servers_info = await self._format_servers_detailed(old_value)
+                new_servers_info = await self._format_servers_detailed(new_value)
+                
+                message += f"""
+    📉 Было: {old_servers_info}
+    📈 Стало: {new_servers_info}"""
+            else:
+                message += f"""
+    📉 Было: {self._format_update_value(old_value, update_type)}
+    📈 Стало: {self._format_update_value(new_value, update_type)}"""
 
             if price_paid > 0:
                 message += f"\n💰 Доплачено: {settings.format_price(price_paid)}"
@@ -761,7 +771,24 @@ class AdminNotificationService:
             logger.error(f"Ошибка отправки уведомления об изменении подписки: {e}")
             return False
 
-    def _format_value(self, value: Any, update_type: str) -> str:
+    async def _format_servers_detailed(self, server_uuids: List[str]) -> str:
+        if not server_uuids:
+            return "Нет серверов"
+        
+        try:
+            from app.handlers.subscription import get_servers_display_names
+            servers_names = await get_servers_display_names(server_uuids)
+            
+            if servers_names and servers_names != "Нет серверов":
+                return f"{len(server_uuids)} серверов ({servers_names})"
+            else:
+                return f"{len(server_uuids)} серверов"
+                
+        except Exception as e:
+            logger.warning(f"Ошибка получения названий серверов для уведомления: {e}")
+            return f"{len(server_uuids)} серверов"
+
+    def _format_update_value(self, value: Any, update_type: str) -> str:
         if update_type == "traffic":
             if value == 0:
                 return "♾ Безлимитный"
@@ -773,5 +800,4 @@ class AdminNotificationService:
                 return f"{len(value)} серверов"
             return str(value)
         return str(value)
-
 
