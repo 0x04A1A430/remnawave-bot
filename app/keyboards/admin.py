@@ -8,16 +8,12 @@ def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
     
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="👥 Юзеры/Подписки", callback_data="admin_submenu_users"),
-            InlineKeyboardButton(text="💰 Промокоды/Статистика", callback_data="admin_submenu_promo"),
-            InlineKeyboardButton(text="📨 Коммуникации", callback_data="admin_submenu_communications"),
-            InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin_submenu_settings"),
-            InlineKeyboardButton(text="🛠️ Система", callback_data="admin_submenu_system")
-        ],
-        [
-            InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
-        ]
+        [InlineKeyboardButton(text="👥 Юзеры/Подписки", callback_data="admin_submenu_users")],
+        [InlineKeyboardButton(text="💰 Промокоды/Статистика", callback_data="admin_submenu_promo")],
+        [InlineKeyboardButton(text="📨 Сообщения", callback_data="admin_submenu_communications")],
+        [InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin_submenu_settings")],
+        [InlineKeyboardButton(text="🛠️ Система", callback_data="admin_submenu_system")],
+        [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
     ])
 
 
