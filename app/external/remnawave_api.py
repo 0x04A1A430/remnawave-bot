@@ -331,6 +331,7 @@ class RemnaWaveAPI:
     async def update_user(
         self,
         uuid: str,
+        username: Optional[str] = None,
         status: Optional[UserStatus] = None,
         traffic_limit_bytes: Optional[int] = None,
         traffic_limit_strategy: Optional[TrafficLimitStrategy] = None,
@@ -343,7 +344,10 @@ class RemnaWaveAPI:
         active_internal_squads: Optional[List[str]] = None
     ) -> RemnaWaveUser:
         data = {'uuid': uuid}
-        
+
+        if username is not None:
+            data['username'] = username
+
         if status:
             data['status'] = status.value
         if traffic_limit_bytes is not None:
