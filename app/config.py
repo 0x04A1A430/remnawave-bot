@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     REMNAWAVE_USERNAME: Optional[str] = None
     REMNAWAVE_PASSWORD: Optional[str] = None
     REMNAWAVE_AUTH_TYPE: str = "api_key"
-    REMNAWAVE_USER_DESCRIPTION_TEMPLATE: str = "Bot user: {full_name} @{username}"
+    REMNAWAVE_USER_DESCRIPTION_TEMPLATE: str = "Bot user: {full_name} {username}"
     
     TRIAL_DURATION_DAYS: int = 3
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
@@ -263,16 +263,20 @@ class Settings(BaseSettings):
         username: Optional[str],
         telegram_id: int
     ) -> str:
-        template = self.REMNAWAVE_USER_DESCRIPTION_TEMPLATE or "Bot user: {full_name} @{username}"
+        template = self.REMNAWAVE_USER_DESCRIPTION_TEMPLATE or "Bot user: {full_name} {username}"
+        template_for_formatting = template.replace("@{username}", "{username}")
+
+        username_clean = (username or "").lstrip("@")
         values = defaultdict(str, {
             "full_name": full_name,
-            "username": username or "",
+            "username": f"@{username_clean}" if username_clean else "",
+            "username_clean": username_clean,
             "telegram_id": str(telegram_id)
         })
 
-        description = template.format_map(values)
+        description = template_for_formatting.format_map(values)
 
-        if not username:
+        if not username_clean:
             description = re.sub(r'@(?=\W|$)', '', description)
             description = re.sub(r'\(\s*\)', '', description)
 
