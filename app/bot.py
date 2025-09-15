@@ -76,7 +76,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         storage = MemoryStorage()
     
     dp = Dispatcher(storage=storage)
-    
+
     dp.message.middleware(GlobalErrorMiddleware())
     dp.callback_query.middleware(GlobalErrorMiddleware())
     dp.pre_checkout_query.middleware(GlobalErrorMiddleware())
@@ -91,8 +91,8 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.callback_query.middleware(ThrottlingMiddleware())
     dp.message.middleware(SubscriptionStatusMiddleware())
     dp.callback_query.middleware(SubscriptionStatusMiddleware())
-    dp.callback_query.middleware(ChannelCheckerMiddleware())
     dp.message.middleware(ChannelCheckerMiddleware())
+    dp.callback_query.middleware(ChannelCheckerMiddleware())
     start.register_handlers(dp)
     menu.register_handlers(dp)
     subscription.register_handlers(dp)

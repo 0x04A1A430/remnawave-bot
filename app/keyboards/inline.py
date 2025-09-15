@@ -31,7 +31,7 @@ def get_channel_sub_keyboard(channel_link: str) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="✅ Я подписался", callback_data="sub_complete"
+                    text="✅ Я подписался", callback_data="sub_channel_check"
                 )
             ]
         ]

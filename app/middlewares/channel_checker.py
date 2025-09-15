@@ -2,10 +2,12 @@ import logging
 from typing import Callable, Dict, Any, Awaitable
 from aiogram import BaseMiddleware, Bot
 from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
+from aiogram.fsm.context import FSMContext
 from aiogram.types import TelegramObject, Update, Message, CallbackQuery
 
 from app.config import settings
 from app.keyboards.inline import get_channel_sub_keyboard
+from app.utils.check_reg_process import is_registration_process
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,18 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 telegram_id = event.callback_query.from_user.id
 
         if telegram_id is None:
+            return await handler(event, data)
+
+        state: FSMContext = data.get('state')
+        current_state = None
+
+        if state:
+            current_state = await state.get_state()
+
+        is_reg_process = is_registration_process(event, current_state)
+
+        # Пропускаем пользователя на разрешенные ивенты
+        if is_reg_process:
             return await handler(event, data)
 
         bot: Bot = data["bot"]
@@ -57,7 +71,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         if isinstance(event, Message):
             return await event.answer(text, reply_markup=channel_sub_kb)
         elif isinstance(event, CallbackQuery):
-            return await event.message.answer(text, reply_markup=channel_sub_kb)
+            return await event.message.edit_text(text, reply_markup=channel_sub_kb)
         elif isinstance(event, Update) and event.message:
             return await bot.send_message(event.message.chat.id, text, reply_markup=channel_sub_kb)
 
