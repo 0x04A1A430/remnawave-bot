@@ -1,4 +1,6 @@
 import os
+import re
+from collections import defaultdict
 from typing import List, Optional, Union, Dict
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, Field
@@ -40,6 +42,7 @@ class Settings(BaseSettings):
     REMNAWAVE_USERNAME: Optional[str] = None
     REMNAWAVE_PASSWORD: Optional[str] = None
     REMNAWAVE_AUTH_TYPE: str = "api_key"
+    REMNAWAVE_USER_DESCRIPTION_TEMPLATE: str = "Bot user: {full_name} {username}"
     
     TRIAL_DURATION_DAYS: int = 3
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
@@ -256,6 +259,33 @@ class Settings(BaseSettings):
             "password": self.REMNAWAVE_PASSWORD,
             "auth_type": self.REMNAWAVE_AUTH_TYPE
         }
+
+    def format_remnawave_user_description(
+        self,
+        *,
+        full_name: str,
+        username: Optional[str],
+        telegram_id: int
+    ) -> str:
+        template = self.REMNAWAVE_USER_DESCRIPTION_TEMPLATE or "Bot user: {full_name} {username}"
+        template_for_formatting = template.replace("@{username}", "{username}")
+
+        username_clean = (username or "").lstrip("@")
+        values = defaultdict(str, {
+            "full_name": full_name,
+            "username": f"@{username_clean}" if username_clean else "",
+            "username_clean": username_clean,
+            "telegram_id": str(telegram_id)
+        })
+
+        description = template_for_formatting.format_map(values)
+
+        if not username_clean:
+            description = re.sub(r'@(?=\W|$)', '', description)
+            description = re.sub(r'\(\s*\)', '', description)
+
+        description = re.sub(r'\s+', ' ', description).strip()
+        return description
     
     def get_autopay_warning_days(self) -> List[int]:
         try:

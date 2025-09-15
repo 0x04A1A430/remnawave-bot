@@ -158,8 +158,13 @@ class MonitoringService:
                     status=UserStatus.ACTIVE if is_active else UserStatus.EXPIRED,
                     expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
-                    traffic_limit_strategy=TrafficLimitStrategy.MONTH, 
+                    traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                     hwid_device_limit=subscription.device_limit,
+                    description=settings.format_remnawave_user_description(
+                        full_name=user.full_name,
+                        username=user.username,
+                        telegram_id=user.telegram_id
+                    ),
                     active_internal_squads=subscription.connected_squads
                 )
                 
