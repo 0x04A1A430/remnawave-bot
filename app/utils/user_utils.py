@@ -1,7 +1,6 @@
 import logging
 import secrets
 import string
-import re
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from sqlalchemy import select, func, and_
@@ -297,54 +296,3 @@ async def get_referral_analytics(db: AsyncSession, user_id: int) -> Dict:
             },
             'top_referrals': []
         }
-
-
-def build_remnawave_username(user: User) -> str:
-    """
-    Формирует имя пользователя для панели RemnaWave.
-
-    Собирает "Имя Фамилия username" из доступных данных Telegram.
-    Затем очищает результат от символов, не разрешённых в поле
-    RemnaWave (допустимы только буквы, цифры, подчёркивания и дефисы).
-    Если нет ни имени, ни фамилии, ни username, возвращается
-    "user_{telegram_id}".
-    """
-    parts: List[str] = []
-    if user.first_name:
-        parts.append(user.first_name)
-    if user.last_name:
-        parts.append(user.last_name)
-    if user.username:
-        parts.append(user.username)
-
-    if parts:
-        raw = " ".join(parts)
-        transliterated = _transliterate_ru_to_latin(raw)
-        sanitized = re.sub(r"[^A-Za-z0-9_-]", "_", transliterated)
-        sanitized = re.sub(r"_+", "_", sanitized).strip("_")
-        return sanitized or f"user_{user.telegram_id}"
-    return f"user_{user.telegram_id}"
-
-
-CYRILLIC_TO_LATIN = {
-    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e",
-    "ё": "e", "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k",
-    "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r",
-    "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts",
-    "ч": "ch", "ш": "sh", "щ": "shch", "ъ": "", "ы": "y",
-    "ь": "", "э": "e", "ю": "yu", "я": "ya",
-}
-
-
-def _transliterate_ru_to_latin(text: str) -> str:
-    result = []
-    for ch in text:
-        lower = ch.lower()
-        if lower in CYRILLIC_TO_LATIN:
-            repl = CYRILLIC_TO_LATIN[lower]
-            if ch.isupper():
-                repl = repl.capitalize() if len(repl) > 1 else repl.upper()
-            result.append(repl)
-        else:
-            result.append(ch)
-    return "".join(result)

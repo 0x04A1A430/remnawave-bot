@@ -7,16 +7,15 @@ import re
 
 from app.config import settings
 from app.external.remnawave_api import (
-    RemnaWaveAPI, RemnaWaveUser, RemnaWaveInternalSquad,
+    RemnaWaveAPI, RemnaWaveUser, RemnaWaveInternalSquad, 
     RemnaWaveNode, UserStatus, TrafficLimitStrategy, RemnaWaveAPIError
 )
 from app.database.crud.user import get_users_list, get_user_by_telegram_id, update_user
 from app.database.crud.subscription import get_subscription_by_user_id, update_subscription_usage
 from app.database.models import (
-    User, SubscriptionServer, Transaction, ReferralEarning,
+    User, SubscriptionServer, Transaction, ReferralEarning, 
     PromoCodeUse, SubscriptionStatus
 )
-from app.utils.user_utils import build_remnawave_username
 
 logger = logging.getLogger(__name__)
 
@@ -768,15 +767,13 @@ class RemnaWaveService:
                 for user in users:
                     if not user.subscription:
                         continue
-
+                    
                     try:
                         subscription = user.subscription
-                        username_for_api = build_remnawave_username(user)
-
+                        
                         if user.remnawave_uuid:
                             await api.update_user(
                                 uuid=user.remnawave_uuid,
-                                username=username_for_api,
                                 status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
                                 expire_at=subscription.end_date,
                                 traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
@@ -786,8 +783,10 @@ class RemnaWaveService:
                             )
                             stats["updated"] += 1
                         else:
+                            username = f"user_{user.telegram_id}"
+                            
                             new_user = await api.create_user(
-                                username=username_for_api,
+                                username=username,
                                 expire_at=subscription.end_date,
                                 status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
                                 traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
@@ -797,11 +796,11 @@ class RemnaWaveService:
                                 description=f"Bot user: {user.full_name}",
                                 active_internal_squads=subscription.connected_squads
                             )
-
+                            
                             await update_user(db, user, remnawave_uuid=new_user.uuid)
                             subscription.remnawave_short_uuid = new_user.short_uuid
                             await db.commit()
-
+                            
                             stats["created"] += 1
                             
                     except Exception as e:

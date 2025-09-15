@@ -25,7 +25,6 @@ from app.database.models import MonitoringLog, SubscriptionStatus, Subscription,
 from app.services.subscription_service import SubscriptionService
 from app.services.payment_service import PaymentService
 from app.localization.texts import get_texts
-from app.utils.user_utils import build_remnawave_username
 
 from app.external.remnawave_api import (
     RemnaWaveUser, UserStatus, TrafficLimitStrategy, RemnaWaveAPIError
@@ -146,22 +145,20 @@ class MonitoringService:
             is_active = (subscription.status == SubscriptionStatus.ACTIVE.value and 
                         subscription.end_date > current_time)
             
-            if (subscription.status == SubscriptionStatus.ACTIVE.value and
+            if (subscription.status == SubscriptionStatus.ACTIVE.value and 
                 subscription.end_date <= current_time):
                 subscription.status = SubscriptionStatus.EXPIRED.value
                 await db.commit()
                 is_active = False
                 logger.info(f"📝 Статус подписки {subscription.id} обновлен на 'expired'")
-            username_for_api = build_remnawave_username(user)
-
+            
             async with self.api as api:
                 updated_user = await api.update_user(
                     uuid=user.remnawave_uuid,
-                    username=username_for_api,
                     status=UserStatus.ACTIVE if is_active else UserStatus.EXPIRED,
                     expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
-                    traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                    traffic_limit_strategy=TrafficLimitStrategy.MONTH, 
                     hwid_device_limit=subscription.device_limit,
                     active_internal_squads=subscription.connected_squads
                 )
