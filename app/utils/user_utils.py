@@ -302,10 +302,17 @@ def build_remnawave_username(user: User) -> str:
     """
     Формирует имя пользователя для панели RemnaWave.
 
-    Если доступны имя, фамилия и username, возвращает строку
-    "Имя Фамилия @username". В противном случае возвращает
-    "user_{telegram_id}".
+    Строит строку вида "Имя Фамилия @username", используя
+    доступные данные Telegram. Если нет ни имени, ни фамилии,
+    ни username, возвращает "user_{telegram_id}".
     """
-    if user.first_name and user.last_name and user.username:
-        return f"{user.first_name} {user.last_name} @{user.username}"
+    parts = []
+    if user.first_name:
+        parts.append(user.first_name)
+    if user.last_name:
+        parts.append(user.last_name)
+    if user.username:
+        parts.append(f"@{user.username}")
+    if parts:
+        return " ".join(parts)
     return f"user_{user.telegram_id}"
