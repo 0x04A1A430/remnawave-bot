@@ -1,6 +1,7 @@
 import logging
 import secrets
 import string
+import re
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from sqlalchemy import select, func, and_
@@ -302,17 +303,23 @@ def build_remnawave_username(user: User) -> str:
     """
     Формирует имя пользователя для панели RemnaWave.
 
-    Строит строку вида "Имя Фамилия @username", используя
-    доступные данные Telegram. Если нет ни имени, ни фамилии,
-    ни username, возвращает "user_{telegram_id}".
+    Собирает "Имя Фамилия username" из доступных данных Telegram.
+    Затем очищает результат от символов, не разрешённых в поле
+    RemnaWave (допустимы только буквы, цифры, подчёркивания и дефисы).
+    Если нет ни имени, ни фамилии, ни username, возвращается
+    "user_{telegram_id}".
     """
-    parts = []
+    parts: List[str] = []
     if user.first_name:
         parts.append(user.first_name)
     if user.last_name:
         parts.append(user.last_name)
     if user.username:
-        parts.append(f"@{user.username}")
+        parts.append(user.username)
+
     if parts:
-        return " ".join(parts)
+        raw = "_".join(parts)
+        sanitized = re.sub(r"[^\w-]", "_", raw)
+        sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+        return sanitized or f"user_{user.telegram_id}"
     return f"user_{user.telegram_id}"
