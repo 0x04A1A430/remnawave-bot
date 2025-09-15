@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import Subscription, User, SubscriptionStatus
 from app.external.remnawave_api import (
-    RemnaWaveAPI, RemnaWaveUser, UserStatus,
+    RemnaWaveAPI, RemnaWaveUser, UserStatus, 
     TrafficLimitStrategy, RemnaWaveAPIError
 )
 from app.database.crud.user import get_user_by_id
@@ -16,7 +16,6 @@ from app.utils.pricing_utils import (
     calculate_prorated_price,
     validate_pricing_calculation
 )
-from app.utils.user_utils import build_remnawave_username
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +48,7 @@ class SubscriptionService:
             if not validation_success:
                 logger.error(f"Ошибка валидации подписки для пользователя {user.telegram_id}")
                 return None
-            username_for_api = build_remnawave_username(user)
-
+            
             async with self.api as api:
                 existing_users = await api.get_user_by_telegram_id(user.telegram_id)
                 if existing_users:
@@ -65,7 +63,6 @@ class SubscriptionService:
                     
                     updated_user = await api.update_user(
                         uuid=remnawave_user.uuid,
-                        username=username_for_api,
                         status=UserStatus.ACTIVE,
                         expire_at=subscription.end_date,
                         traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
@@ -76,8 +73,9 @@ class SubscriptionService:
                     
                 else:
                     logger.info(f"🆕 Создаем нового пользователя в панели для {user.telegram_id}")
+                    username = f"user_{user.telegram_id}"
                     updated_user = await api.create_user(
-                        username=username_for_api,
+                        username=username,
                         expire_at=subscription.end_date,
                         status=UserStatus.ACTIVE,
                         traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
@@ -117,9 +115,9 @@ class SubscriptionService:
             if not user or not user.remnawave_uuid:
                 logger.error(f"RemnaWave UUID не найден для пользователя {subscription.user_id}")
                 return None
-
+            
             current_time = datetime.utcnow()
-            is_actually_active = (subscription.status == SubscriptionStatus.ACTIVE.value and
+            is_actually_active = (subscription.status == SubscriptionStatus.ACTIVE.value and 
                                  subscription.end_date > current_time)
             
             if (subscription.status == SubscriptionStatus.ACTIVE.value and 
@@ -131,16 +129,13 @@ class SubscriptionService:
                 is_actually_active = False
                 logger.info(f"🔔 Статус подписки {subscription.id} автоматически изменен на 'expired'")
             
-            username_for_api = build_remnawave_username(user)
-
             async with self.api as api:
                 updated_user = await api.update_user(
                     uuid=user.remnawave_uuid,
-                    username=username_for_api,
                     status=UserStatus.ACTIVE if is_actually_active else UserStatus.EXPIRED,
                     expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
-                    traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                    traffic_limit_strategy=TrafficLimitStrategy.MONTH, 
                     hwid_device_limit=subscription.device_limit,
                     active_internal_squads=subscription.connected_squads
                 )
