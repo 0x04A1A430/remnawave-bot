@@ -296,3 +296,16 @@ async def get_referral_analytics(db: AsyncSession, user_id: int) -> Dict:
             },
             'top_referrals': []
         }
+
+
+def build_remnawave_username(user: User) -> str:
+    """
+    Формирует имя пользователя для панели RemnaWave.
+
+    Если доступны имя, фамилия и username, возвращает строку
+    "Имя Фамилия @username". В противном случае возвращает
+    "user_{telegram_id}".
+    """
+    if user.first_name and user.last_name and user.username:
+        return f"{user.first_name} {user.last_name} @{user.username}"
+    return f"user_{user.telegram_id}"
