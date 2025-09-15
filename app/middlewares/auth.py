@@ -8,6 +8,7 @@ from aiogram.fsm.context import FSMContext
 from app.config import settings
 from app.database.database import get_db
 from app.database.crud.user import get_user_by_telegram_id, create_user
+from app.services.remnawave_service import RemnaWaveService
 from app.states import RegistrationStates
 
 logger = logging.getLogger(__name__)
@@ -151,11 +152,31 @@ class AuthMiddleware(BaseMiddleware):
                         profile_updated = True
                     
                     db_user.last_activity = datetime.utcnow()
-                    
+
                     if profile_updated:
                         db_user.updated_at = datetime.utcnow()
                         logger.info(f"💾 [Middleware] Профиль пользователя {user.id} обновлен в middleware")
-                    
+
+                        if db_user.remnawave_uuid:
+                            try:
+                                remnawave_service = RemnaWaveService()
+                                async with remnawave_service.api as api:
+                                    await api.update_user(
+                                        uuid=db_user.remnawave_uuid,
+                                        description=settings.format_remnawave_user_description(
+                                            full_name=db_user.full_name,
+                                            username=db_user.username,
+                                            telegram_id=db_user.telegram_id
+                                        )
+                                    )
+                                logger.info(
+                                    f"✅ [Middleware] Описание пользователя {user.id} обновлено в RemnaWave"
+                                )
+                            except Exception as remnawave_error:
+                                logger.error(
+                                    f"❌ [Middleware] Ошибка обновления RemnaWave для {user.id}: {remnawave_error}"
+                                )
+
                     await db.commit()
 
                 data['db'] = db
