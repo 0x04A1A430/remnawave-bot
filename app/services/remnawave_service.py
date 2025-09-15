@@ -779,6 +779,11 @@ class RemnaWaveService:
                                 traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
                                 traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                                 hwid_device_limit=subscription.device_limit,
+                                description=settings.format_remnawave_user_description(
+                                    full_name=user.full_name,
+                                    username=user.username,
+                                    telegram_id=user.telegram_id
+                                ),
                                 active_internal_squads=subscription.connected_squads
                             )
                             stats["updated"] += 1
@@ -793,7 +798,11 @@ class RemnaWaveService:
                                 traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                                 telegram_id=user.telegram_id,
                                 hwid_device_limit=subscription.device_limit,
-                                description=f"Bot user: {user.full_name}",
+                                description=settings.format_remnawave_user_description(
+                                    full_name=user.full_name,
+                                    username=user.username,
+                                    telegram_id=user.telegram_id
+                                ),
                                 active_internal_squads=subscription.connected_squads
                             )
                             

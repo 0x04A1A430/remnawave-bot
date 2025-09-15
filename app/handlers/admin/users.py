@@ -1644,7 +1644,12 @@ async def toggle_user_server(
                 async with remnawave_service.api as api:
                     await api.update_user(
                         uuid=user.remnawave_uuid,
-                        active_internal_squads=current_squads
+                        active_internal_squads=current_squads,
+                        description=settings.format_remnawave_user_description(
+                            full_name=user.full_name,
+                            username=user.username,
+                            telegram_id=user.telegram_id
+                        )
                     )
                 logger.info(f"✅ Обновлены серверы в RemnaWave для пользователя {user.telegram_id}")
             except Exception as rw_error:
@@ -2023,7 +2028,12 @@ async def _update_user_devices(db: AsyncSession, user_id: int, devices: int, adm
                 async with remnawave_service.api as api:
                     await api.update_user(
                         uuid=user.remnawave_uuid,
-                        hwid_device_limit=devices
+                        hwid_device_limit=devices,
+                        description=settings.format_remnawave_user_description(
+                            full_name=user.full_name,
+                            username=user.username,
+                            telegram_id=user.telegram_id
+                        )
                     )
                 logger.info(f"✅ Обновлен лимит устройств в RemnaWave для пользователя {user.telegram_id}")
             except Exception as rw_error:
@@ -2061,7 +2071,12 @@ async def _update_user_traffic(db: AsyncSession, user_id: int, traffic_gb: int, 
                     await api.update_user(
                         uuid=user.remnawave_uuid,
                         traffic_limit_bytes=traffic_gb * (1024**3) if traffic_gb > 0 else 0,
-                        traffic_limit_strategy=TrafficLimitStrategy.MONTH
+                        traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                        description=settings.format_remnawave_user_description(
+                            full_name=user.full_name,
+                            username=user.username,
+                            telegram_id=user.telegram_id
+                        )
                     )
                 logger.info(f"✅ Обновлен лимит трафика в RemnaWave для пользователя {user.telegram_id}")
             except Exception as rw_error:
