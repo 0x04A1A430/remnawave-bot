@@ -318,8 +318,33 @@ def build_remnawave_username(user: User) -> str:
         parts.append(user.username)
 
     if parts:
-        raw = "_".join(parts)
-        sanitized = re.sub(r"[^\w-]", "_", raw)
+        raw = " ".join(parts)
+        transliterated = _transliterate_ru_to_latin(raw)
+        sanitized = re.sub(r"[^A-Za-z0-9_-]", "_", transliterated)
         sanitized = re.sub(r"_+", "_", sanitized).strip("_")
         return sanitized or f"user_{user.telegram_id}"
     return f"user_{user.telegram_id}"
+
+
+CYRILLIC_TO_LATIN = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e",
+    "ё": "e", "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k",
+    "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r",
+    "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts",
+    "ч": "ch", "ш": "sh", "щ": "shch", "ъ": "", "ы": "y",
+    "ь": "", "э": "e", "ю": "yu", "я": "ya",
+}
+
+
+def _transliterate_ru_to_latin(text: str) -> str:
+    result = []
+    for ch in text:
+        lower = ch.lower()
+        if lower in CYRILLIC_TO_LATIN:
+            repl = CYRILLIC_TO_LATIN[lower]
+            if ch.isupper():
+                repl = repl.capitalize() if len(repl) > 1 else repl.upper()
+            result.append(repl)
+        else:
+            result.append(ch)
+    return "".join(result)
