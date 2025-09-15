@@ -9,6 +9,7 @@ from app.config import settings
 from app.database.database import get_db
 from app.database.crud.user import get_user_by_telegram_id, create_user
 from app.states import RegistrationStates
+from app.utils.check_reg_process import is_registration_process
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,8 @@ class AuthMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
+
+
         
         user: TgUser = None
         if isinstance(event, (Message, CallbackQuery)):
@@ -42,23 +45,10 @@ class AuthMiddleware(BaseMiddleware):
                     
                     if state:
                         current_state = await state.get_state()
-                    
-                    registration_states = [
-                        RegistrationStates.waiting_for_rules_accept.state,
-                        RegistrationStates.waiting_for_referral_code.state
-                    ]
 
-                    is_registration_process = (
-                        (isinstance(event, Message) and event.text and event.text.startswith('/start'))
-                        or (current_state in registration_states)
-                        or (
-                            isinstance(event, CallbackQuery)
-                            and event.data
-                            and (event.data in ['rules_accept', 'rules_decline', 'referral_skip'])
-                        )
-                    )
+                    is_reg_process = is_registration_process(event, current_state)
                     
-                    if is_registration_process:
+                    if is_reg_process:
                         logger.info(f"🔍 Пропускаем пользователя {user.id} в процессе регистрации")
                         data['db'] = db
                         data['db_user'] = None
