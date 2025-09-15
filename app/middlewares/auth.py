@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 from typing import Callable, Dict, Any, Awaitable
@@ -12,6 +13,24 @@ from app.services.remnawave_service import RemnaWaveService
 from app.states import RegistrationStates
 
 logger = logging.getLogger(__name__)
+
+
+async def _refresh_remnawave_description(
+    remnawave_uuid: str,
+    description: str,
+    telegram_id: int
+) -> None:
+    try:
+        remnawave_service = RemnaWaveService()
+        async with remnawave_service.api as api:
+            await api.update_user(uuid=remnawave_uuid, description=description)
+        logger.info(
+            f"✅ [Middleware] Описание пользователя {telegram_id} обновлено в RemnaWave"
+        )
+    except Exception as remnawave_error:
+        logger.error(
+            f"❌ [Middleware] Ошибка обновления RemnaWave для {telegram_id}: {remnawave_error}"
+        )
 
 
 class AuthMiddleware(BaseMiddleware):
@@ -158,24 +177,18 @@ class AuthMiddleware(BaseMiddleware):
                         logger.info(f"💾 [Middleware] Профиль пользователя {user.id} обновлен в middleware")
 
                         if db_user.remnawave_uuid:
-                            try:
-                                remnawave_service = RemnaWaveService()
-                                async with remnawave_service.api as api:
-                                    await api.update_user(
-                                        uuid=db_user.remnawave_uuid,
-                                        description=settings.format_remnawave_user_description(
-                                            full_name=db_user.full_name,
-                                            username=db_user.username,
-                                            telegram_id=db_user.telegram_id
-                                        )
-                                    )
-                                logger.info(
-                                    f"✅ [Middleware] Описание пользователя {user.id} обновлено в RemnaWave"
+                            description = settings.format_remnawave_user_description(
+                                full_name=db_user.full_name,
+                                username=db_user.username,
+                                telegram_id=db_user.telegram_id
+                            )
+                            asyncio.create_task(
+                                _refresh_remnawave_description(
+                                    remnawave_uuid=db_user.remnawave_uuid,
+                                    description=description,
+                                    telegram_id=db_user.telegram_id
                                 )
-                            except Exception as remnawave_error:
-                                logger.error(
-                                    f"❌ [Middleware] Ошибка обновления RemnaWave для {user.id}: {remnawave_error}"
-                                )
+                            )
 
                     await db.commit()
 
