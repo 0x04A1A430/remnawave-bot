@@ -21,6 +21,22 @@ def get_rules_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ]
     ])
 
+def get_channel_sub_keyboard(channel_link: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔗 Подписаться", url=channel_link
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✅ Я подписался", callback_data="sub_channel_check"
+                )
+            ]
+        ]
+    )
+
 
 def get_post_registration_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[

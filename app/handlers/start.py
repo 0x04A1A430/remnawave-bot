@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 from aiogram import Dispatcher, types, F, Bot
+from aiogram.enums import ChatMemberStatus
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -849,6 +850,25 @@ async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
     
     return base_text
 
+
+async def required_sub_channel_check(
+    query: types.CallbackQuery,
+    bot: Bot,
+    state: FSMContext,
+    db: AsyncSession,
+    db_user=None
+):
+    chat_member = await bot.get_chat_member(
+        chat_id=settings.CHANNEL_SUB_ID,
+        user_id=query.from_user.id
+    )
+    if chat_member.status not in [ChatMemberStatus.MEMBER]:
+        return await query.answer("❌ Вы не подписались на канал!", show_alert=True)
+    await query.answer("✅ Спасибо за подписку", show_alert=True)
+    await query.message.delete()
+    await cmd_start(query.message, state, db, db_user)
+
+
 def register_handlers(dp: Dispatcher):
     
     logger.info("🔧 === НАЧАЛО регистрации обработчиков start.py ===")
@@ -887,6 +907,12 @@ def register_handlers(dp: Dispatcher):
         )
     )
     logger.info("✅ Зарегистрирован handle_potential_referral_code")
+
+    dp.callback_query.register(
+        required_sub_channel_check,
+        F.data.in_(["sub_channel_check"])
+    )
+    logger.info("✅ Зарегистрирован required_sub_channel_check")
     
     logger.info("🔧 === КОНЕЦ регистрации обработчиков start.py ===")
  
