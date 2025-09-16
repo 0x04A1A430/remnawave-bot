@@ -238,7 +238,7 @@ ADMIN_NOTIFICATIONS_TOPIC_ID=123             # Опционально: ID топ
 
 # Обязательная подписка на канал
 CHANNEL_SUB_ID= # Опционально ID твоего канала (-100)
-CHANNEL_IS_SUB_REQUIRED=false # Обязательна ли подписка на канал
+CHANNEL_IS_REQUIRED_SUB=false # Обязательна ли подписка на канал
 CHANNEL_LINK= # Опционально ссылка на канал
 
 # ===== DATABASE CONFIGURATION =====
@@ -488,6 +488,8 @@ APP_CONFIG_CACHE_TTL=3600
 BACKUP_AUTO_ENABLED=true
 BACKUP_INTERVAL_HOURS=24
 BACKUP_TIME=03:00
+# Первый запуск автобекапа выполняется в ближайшее время BACKUP_TIME после старта бота,
+# далее копии создаются каждые BACKUP_INTERVAL_HOURS.
 BACKUP_MAX_KEEP=7
 BACKUP_COMPRESSION=true
 BACKUP_INCLUDE_LOGS=false
@@ -909,6 +911,8 @@ bedolaga_bot/
 │   │   ├── ✅ subscription_utils.py  # Проверка подписок
 │   │   ├── 📄 pagination.py          # Пагинация
 │   │   ├── 📄 pricing_utils.py       # Цены
+│   │   ├── 📄 message_patch.py
+│   │   ├── 📄 photo_message.py
 │   │   ├── ‼️ global_error.py        # Обработка ошибок
 │   │   ├── 👤 user_utils.py          # Утилиты для пользователей
 │   │   ├── 🫰 currency_converter.py  # Курсы для CryptoBota
@@ -919,6 +923,7 @@ bedolaga_bot/
 │   │   ├── 📋 logging.py              # Логирование
 │   │   ├── 🚧 maintenance.py          # тех работы
 │   │   ├── 🔐 subscription_checker.py # тех работы
+│   │   ├── 🔐 channel_checker.py
 │   │   └── ⏱️ throttling.py           # Ограничение запросов
 │   │
 │   ├── 🌐 localization/          # Локализация

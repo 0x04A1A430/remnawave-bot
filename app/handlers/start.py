@@ -19,6 +19,8 @@ from app.localization.texts import get_texts
 from app.services.referral_service import process_referral_registration
 from app.utils.user_utils import generate_unique_referral_code
 from app.database.crud.user_message import get_random_active_message
+from aiogram.enums import ChatMemberStatus
+from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 
 
 logger = logging.getLogger(__name__)
@@ -858,15 +860,134 @@ async def required_sub_channel_check(
     db: AsyncSession,
     db_user=None
 ):
-    chat_member = await bot.get_chat_member(
-        chat_id=settings.CHANNEL_SUB_ID,
-        user_id=query.from_user.id
-    )
-    if chat_member.status not in [ChatMemberStatus.MEMBER]:
-        return await query.answer("❌ Вы не подписались на канал!", show_alert=True)
-    await query.answer("✅ Спасибо за подписку", show_alert=True)
-    await query.message.delete()
-    await cmd_start(query.message, state, db, db_user)
+    try:
+        chat_member = await bot.get_chat_member(
+            chat_id=settings.CHANNEL_SUB_ID,
+            user_id=query.from_user.id
+        )
+        
+        if chat_member.status not in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]:
+            return await query.answer("❌ Вы не подписались на канал!", show_alert=True)
+        
+        await query.answer("✅ Спасибо за подписку", show_alert=True)
+        
+        try:
+            await query.message.delete()
+        except Exception as e:
+            logger.warning(f"Не удалось удалить сообщение: {e}")
+        
+        user = await get_user_by_telegram_id(db, query.from_user.id)
+        
+        if user and user.status != UserStatus.DELETED.value:
+            from app.localization.texts import get_texts
+            from app.handlers.start import get_main_menu_text
+            from app.keyboards.inline import get_main_menu_keyboard
+            
+            texts = get_texts(user.language)
+            
+            has_active_subscription = user.subscription is not None
+            subscription_is_active = False
+            
+            if user.subscription:
+                subscription_is_active = user.subscription.is_active
+            
+            menu_text = await get_main_menu_text(user, texts, db)
+            
+            from app.utils.message_patch import LOGO_PATH
+            from aiogram.types import FSInputFile
+            
+            if settings.ENABLE_LOGO_MODE:
+                await bot.send_photo(
+                    chat_id=query.from_user.id,
+                    photo=FSInputFile(LOGO_PATH),
+                    caption=menu_text,
+                    reply_markup=get_main_menu_keyboard(
+                        language=user.language,
+                        is_admin=settings.is_admin(user.telegram_id),
+                        has_had_paid_subscription=user.has_had_paid_subscription,
+                        has_active_subscription=has_active_subscription,
+                        subscription_is_active=subscription_is_active,
+                        balance_kopeks=user.balance_kopeks,
+                        subscription=user.subscription
+                    ),
+                    parse_mode="HTML"
+                )
+            else:
+                await bot.send_message(
+                    chat_id=query.from_user.id,
+                    text=menu_text,
+                    reply_markup=get_main_menu_keyboard(
+                        language=user.language,
+                        is_admin=settings.is_admin(user.telegram_id),
+                        has_had_paid_subscription=user.has_had_paid_subscription,
+                        has_active_subscription=has_active_subscription,
+                        subscription_is_active=subscription_is_active,
+                        balance_kopeks=user.balance_kopeks,
+                        subscription=user.subscription
+                    ),
+                    parse_mode="HTML"
+                )
+        else:
+            from app.localization.texts import get_texts
+            from app.keyboards.inline import get_rules_keyboard
+            
+            language = 'ru'
+            texts = get_texts(language)
+            
+            data = await state.get_data() or {}
+            data['language'] = language
+            await state.set_data(data)
+            
+            if settings.SKIP_RULES_ACCEPT:
+                if settings.SKIP_REFERRAL_CODE:
+                    from app.utils.user_utils import generate_unique_referral_code
+                    
+                    referral_code = await generate_unique_referral_code(db, query.from_user.id)
+                    
+                    user = await create_user(
+                        db=db,
+                        telegram_id=query.from_user.id,
+                        username=query.from_user.username,
+                        first_name=query.from_user.first_name,
+                        last_name=query.from_user.last_name,
+                        language=language,
+                        referral_code=referral_code
+                    )
+                    
+                    await bot.send_message(
+                        chat_id=query.from_user.id,
+                        text=f"Добро пожаловать, {user.full_name}!",
+                    )
+                else:
+                    await bot.send_message(
+                        chat_id=query.from_user.id,
+                        text="У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                        reply_markup=get_referral_code_keyboard(language)
+                    )
+                    await state.set_state(RegistrationStates.waiting_for_referral_code)
+            else:
+                from app.utils.message_patch import LOGO_PATH
+                from aiogram.types import FSInputFile
+                
+                if settings.ENABLE_LOGO_MODE:
+                    await bot.send_photo(
+                        chat_id=query.from_user.id,
+                        photo=FSInputFile(LOGO_PATH),
+                        caption=texts.RULES_TEXT,
+                        reply_markup=get_rules_keyboard(language)
+                    )
+                else:
+                    await bot.send_message(
+                        chat_id=query.from_user.id,
+                        text=texts.RULES_TEXT,
+                        reply_markup=get_rules_keyboard(language)
+                    )
+                await state.set_state(RegistrationStates.waiting_for_rules_accept)
+        
+    except Exception as e:
+        logger.error(f"Ошибка в required_sub_channel_check: {e}")
+        await query.answer("❌ Произошла ошибка!", show_alert=True)
+
 
 
 def register_handlers(dp: Dispatcher):
