@@ -421,17 +421,31 @@ async def show_media_preview(
 ):
     data = await state.get_data()
     media_type = data.get('media_type')
+    media_file_id = data.get('media_file_id')
     
     preview_text = f"🖼️ <b>Медиафайл добавлен</b>\n\n" \
                    f"📎 <b>Тип:</b> {media_type}\n" \
                    f"✅ Файл сохранен и готов к отправке\n\n" \
                    f"Что делать дальше?"
     
-    await message.answer(
-        preview_text,
-        reply_markup=get_media_confirm_keyboard(db_user.language),
-        parse_mode="HTML"
-    )
+    # Для предпросмотра рассылки используем оригинальный метод без патчинга логотипа
+    # чтобы показать именно загруженное фото
+    from app.utils.message_patch import _original_answer
+    
+    if media_type == "photo" and media_file_id:
+        # Показываем предпросмотр с загруженным фото
+        await message.bot.send_photo(
+            chat_id=message.chat.id,
+            photo=media_file_id,
+            caption=preview_text,
+            reply_markup=get_media_confirm_keyboard(db_user.language),
+            parse_mode="HTML"
+        )
+    else:
+        # Для других типов медиа или если нет фото, используем обычное сообщение
+        await _original_answer(message, preview_text, 
+                             reply_markup=get_media_confirm_keyboard(db_user.language), 
+                             parse_mode="HTML")
 
 @admin_required
 @error_handler
