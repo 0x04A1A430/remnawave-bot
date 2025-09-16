@@ -458,7 +458,16 @@ def get_balance_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
 def get_payment_methods_keyboard(amount_kopeks: int, language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
- 
+    
+    
+    if settings.TELEGRAM_STARS_ENABLED:
+        keyboard.append([
+            InlineKeyboardButton(
+                text="⭐ Telegram Stars", 
+                callback_data="topup_stars"
+            )
+        ])
+    
     if settings.is_yookassa_enabled():
         keyboard.append([
             InlineKeyboardButton(
@@ -483,20 +492,20 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = "ru") -> In
             )
         ])
 
-    if settings.TELEGRAM_STARS_ENABLED:
-        keyboard.append([
-            InlineKeyboardButton(
-                text="⭐ Telegram Stars", 
-                callback_data="topup_stars"
-            )
-        ])
-
     keyboard.append([
         InlineKeyboardButton(
             text="🛠️ Через поддержку", 
             callback_data="topup_support"
         )
     ])
+    
+    if len(keyboard) == 1:  
+        keyboard.insert(0, [
+            InlineKeyboardButton(
+                text="⚠️ Способы оплаты временно недоступны",
+                callback_data="payment_methods_unavailable"
+            )
+        ])
     
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="menu_balance")

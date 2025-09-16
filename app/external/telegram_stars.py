@@ -33,6 +33,7 @@ class TelegramStarsService:
         try:
             amount_rubles = amount_kopeks / 100
             stars_amount = self.calculate_stars_from_rubles(amount_rubles)
+            stars_rate = settings.get_stars_rate()
             
             invoice_link = await self.bot.create_invoice_link(
                 title=title,
@@ -46,7 +47,7 @@ class TelegramStarsService:
             
             logger.info(
                 f"Создан Stars invoice на {stars_amount} звезд (~{int(amount_rubles)}₽) "
-                f"для {chat_id}, курс: {int(settings.get_stars_rate())}₽/⭐"
+                f"для {chat_id}, курс: {stars_rate}₽/⭐"
             )
             return invoice_link
             
@@ -66,6 +67,7 @@ class TelegramStarsService:
         try:
             amount_rubles = amount_kopeks / 100
             stars_amount = self.calculate_stars_from_rubles(amount_rubles)
+            stars_rate = settings.get_stars_rate()
             
             message = await self.bot.send_invoice(
                 chat_id=chat_id,
@@ -80,7 +82,7 @@ class TelegramStarsService:
             
             logger.info(
                 f"Отправлен Stars invoice {message.message_id} на {stars_amount} звезд "
-                f"(~{int(amount_rubles)}₽), курс: {int(settings.get_stars_rate())}₽/⭐"
+                f"(~{int(amount_rubles)}₽), курс: {stars_rate}₽/⭐"
             )
             return {
                 "message_id": message.message_id,

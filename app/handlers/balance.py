@@ -149,19 +149,10 @@ async def show_payment_methods(
     db_user: User,
     state: FSMContext
 ):
-    texts = get_texts(db_user.language)
+    from app.utils.payment_utils import get_payment_methods_text
     
-    payment_text = """
-💳 <b>Способы пополнения баланса</b>
-
-Выберите удобный для вас способ оплаты:
-
-⭐ <b>Telegram Stars</b> - быстро и удобно
-💳 <b>Банковская карта</b> - через YooKassa/Tribute
-🛠️ <b>Через поддержку</b> - другие способы
-
-Выберите способ пополнения:
-"""
+    texts = get_texts(db_user.language)
+    payment_text = get_payment_methods_text()
     
     await callback.message.edit_text(
         payment_text,
@@ -169,6 +160,20 @@ async def show_payment_methods(
         parse_mode="HTML"
     )
     await callback.answer()
+
+
+@error_handler
+async def handle_payment_methods_unavailable(
+    callback: types.CallbackQuery,
+    db_user: User
+):
+    texts = get_texts(db_user.language)
+    
+    await callback.answer(
+        "⚠️ В данный момент автоматические способы оплаты временно недоступны. "
+        "Для пополнения баланса обратитесь в техподдержку.",
+        show_alert=True
+    )
 
 
 @error_handler
@@ -360,7 +365,7 @@ async def process_stars_payment_amount(
     texts = get_texts(db_user.language)
     
     if not settings.TELEGRAM_STARS_ENABLED:
-        await message.answer("⚠ Оплата Stars временно недоступна")
+        await message.answer("⚠️ Оплата Stars временно недоступна")
         return
     
     try:
@@ -368,6 +373,7 @@ async def process_stars_payment_amount(
         
         amount_rubles = amount_kopeks / 100
         stars_amount = TelegramStarsService.calculate_stars_from_rubles(amount_rubles)
+        stars_rate = settings.get_stars_rate() 
         
         payment_service = PaymentService(message.bot)
         invoice_link = await payment_service.create_stars_invoice(
@@ -385,7 +391,7 @@ async def process_stars_payment_amount(
             f"⭐ <b>Оплата через Telegram Stars</b>\n\n"
             f"💰 Сумма: {texts.format_price(amount_kopeks)}\n"
             f"⭐ К оплате: {stars_amount} звезд\n"
-            f"📊 Курс: {int(settings.get_stars_rate())}₽ за звезду\n\n"
+            f"📊 Курс: {stars_rate}₽ за звезду\n\n"
             f"Нажмите кнопку ниже для оплаты:",
             reply_markup=keyboard,
             parse_mode="HTML"
@@ -395,7 +401,8 @@ async def process_stars_payment_amount(
         
     except Exception as e:
         logger.error(f"Ошибка создания Stars invoice: {e}")
-        await message.answer("⚠ Ошибка создания платежа")
+        await message.answer("⚠️ Ошибка создания платежа")
+
 
 
 @error_handler
@@ -789,4 +796,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         check_cryptobot_payment_status,
         F.data.startswith("check_cryptobot_")
+    )
+
+    dp.callback_query.register(
+        handle_payment_methods_unavailable,
+        F.data == "payment_methods_unavailable"
     )

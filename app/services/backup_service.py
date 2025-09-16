@@ -21,7 +21,7 @@ from app.database.models import (
     ReferralEarning, Squad, ServiceRule, SystemSetting, MonitoringLog,
     SubscriptionConversion, SentNotification, BroadcastHistory,
     ServerSquad, SubscriptionServer, UserMessage, YooKassaPayment,
-    CryptoBotPayment, Base
+    CryptoBotPayment, WelcomeText, Base
 )
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BackupMetadata:
     timestamp: str
-    version: str = "1.0"
+    version: str = "1.1" 
     database_type: str = "postgresql"
     backup_type: str = "full"
     tables_count: int = 0
@@ -60,16 +60,32 @@ class BackupService:
         self._auto_backup_task = None
         self._settings = self._load_settings()
         
-        self.backup_models = [
-            User, Subscription, Transaction, PromoCode, PromoCodeUse,
-            ReferralEarning, ServiceRule, SystemSetting,
-            SubscriptionConversion, SentNotification, BroadcastHistory,
-            ServerSquad, SubscriptionServer, UserMessage,
-            YooKassaPayment, CryptoBotPayment
+        self.backup_models_ordered = [
+            ServiceRule, 
+            SystemSetting,
+            Squad,
+            PromoCode,
+            ServerSquad,
+            
+            User, 
+            
+            WelcomeText, 
+            Subscription,
+            Transaction,
+            YooKassaPayment,
+            CryptoBotPayment,
+            PromoCodeUse,
+            ReferralEarning,
+            SubscriptionConversion,
+            BroadcastHistory,
+            UserMessage,
+            
+            SentNotification, 
+            SubscriptionServer,  
         ]
         
         if self._settings.include_logs:
-            self.backup_models.append(MonitoringLog)
+            self.backup_models_ordered.append(MonitoringLog)
 
     def _load_settings(self) -> BackupSettings:
         return BackupSettings(
@@ -83,7 +99,6 @@ class BackupService:
         )
 
     def _parse_backup_time(self) -> Tuple[int, int]:
-        """Возвращает часы и минуты для запланированного времени бекапа."""
         time_str = (self._settings.backup_time or "").strip()
 
         try:
@@ -137,12 +152,12 @@ class BackupService:
         include_logs: bool = None
     ) -> Tuple[bool, str, Optional[str]]:
         try:
-            logger.info("🔄 Начинаем создание бекапа...")
+            logger.info("📄 Начинаем создание бекапа...")
             
             if include_logs is None:
                 include_logs = self._settings.include_logs
             
-            models_to_backup = self.backup_models.copy()
+            models_to_backup = self.backup_models_ordered.copy()
             if not include_logs and MonitoringLog in models_to_backup:
                 models_to_backup.remove(MonitoringLog)
             elif include_logs and MonitoringLog not in models_to_backup:
@@ -157,7 +172,16 @@ class BackupService:
                         table_name = model.__tablename__
                         logger.info(f"📊 Экспортируем таблицу: {table_name}")
                         
-                        result = await db.execute(select(model))
+                        query = select(model)
+                        
+                        if model == User:
+                            query = query.options(selectinload(User.subscription))
+                        elif model == Subscription:
+                            query = query.options(selectinload(Subscription.user))
+                        elif model == Transaction:
+                            query = query.options(selectinload(Transaction.user))
+                        
+                        result = await db.execute(query)
                         records = result.scalars().all()
                         
                         table_data = []
@@ -166,8 +190,12 @@ class BackupService:
                             for column in model.__table__.columns:
                                 value = getattr(record, column.name)
                                 
-                                if isinstance(value, datetime):
+                                if value is None:
+                                    record_dict[column.name] = None
+                                elif isinstance(value, datetime):
                                     record_dict[column.name] = value.isoformat()
+                                elif isinstance(value, (list, dict)):
+                                    record_dict[column.name] = json_lib.dumps(value) if value else None
                                 elif hasattr(value, '__dict__'):
                                     record_dict[column.name] = str(value)
                                 else:
@@ -266,7 +294,7 @@ class BackupService:
         clear_existing: bool = False
     ) -> Tuple[bool, str]:
         try:
-            logger.info(f"🔄 Начинаем восстановление из {backup_file_path}")
+            logger.info(f"📄 Начинаем восстановление из {backup_file_path}")
             
             backup_path = Path(backup_file_path)
             if not backup_path.exists():
@@ -300,21 +328,25 @@ class BackupService:
                         logger.warning("🗑️ Очищаем существующие данные...")
                         await self._clear_database_tables(db)
                     
-                    for table_name, records in backup_data.items():
+                    models_by_table = {model.__tablename__: model for model in self.backup_models_ordered}
+                    
+                    restore_order = []
+                    for model in self.backup_models_ordered:
+                        table_name = model.__tablename__
+                        if table_name in backup_data and backup_data[table_name]:
+                            restore_order.append(table_name)
+                    
+                    for table_name in restore_order:
+                        records = backup_data[table_name]
                         if not records:
                             continue
                         
-                        model = None
-                        for m in self.backup_models:
-                            if m.__tablename__ == table_name:
-                                model = m
-                                break
-                        
+                        model = models_by_table.get(table_name)
                         if not model:
                             logger.warning(f"⚠️ Модель для таблицы {table_name} не найдена, пропускаем")
                             continue
                         
-                        logger.info(f"📥 Восстанавливаем таблицу {table_name} ({len(records)} записей)")
+                        logger.info(f"🔥 Восстанавливаем таблицу {table_name} ({len(records)} записей)")
                         
                         for record_data in records:
                             try:
@@ -326,9 +358,11 @@ class BackupService:
                                     
                                     column = getattr(model.__table__.columns, key, None)
                                     if column is None:
+                                        logger.warning(f"Колонка {key} не найдена в модели {table_name}")
                                         continue
                                     
                                     column_type_str = str(column.type).upper()
+                                    
                                     if ('DATETIME' in column_type_str or 'TIMESTAMP' in column_type_str) and isinstance(value, str):
                                         try:
                                             if 'T' in value:
@@ -340,7 +374,7 @@ class BackupService:
                                             processed_data[key] = datetime.utcnow()
                                     elif ('BOOLEAN' in column_type_str or 'BOOL' in column_type_str) and isinstance(value, str):
                                         processed_data[key] = value.lower() in ('true', '1', 'yes', 'on')
-                                    elif ('INTEGER' in column_type_str or 'INT' in column_type_str) and isinstance(value, str):
+                                    elif ('INTEGER' in column_type_str or 'INT' in column_type_str or 'BIGINT' in column_type_str) and isinstance(value, str):
                                         try:
                                             processed_data[key] = int(value)
                                         except ValueError:
@@ -350,15 +384,19 @@ class BackupService:
                                             processed_data[key] = float(value)
                                         except ValueError:
                                             processed_data[key] = 0.0
-                                    elif 'JSON' in column_type_str and isinstance(value, str):
-                                        try:
-                                            processed_data[key] = json_lib.loads(value)
-                                        except (ValueError, TypeError):
+                                    elif 'JSON' in column_type_str:
+                                        if isinstance(value, str) and value.strip():
+                                            try:
+                                                processed_data[key] = json_lib.loads(value)
+                                            except (ValueError, TypeError):
+                                                processed_data[key] = value
+                                        elif isinstance(value, (list, dict)):
                                             processed_data[key] = value
+                                        else:
+                                            processed_data[key] = None
                                     else:
                                         processed_data[key] = value
                                 
-                                # Проверяем существует ли запись с таким ID
                                 primary_key_col = None
                                 for col in model.__table__.columns:
                                     if col.primary_key:
@@ -366,7 +404,6 @@ class BackupService:
                                         break
                                 
                                 if primary_key_col and primary_key_col in processed_data:
-                                    # Проверяем существование записи
                                     existing_record = await db.execute(
                                         select(model).where(
                                             getattr(model, primary_key_col) == processed_data[primary_key_col]
@@ -374,18 +411,15 @@ class BackupService:
                                     )
                                     existing = existing_record.scalar_one_or_none()
                                     
-                                    if existing:
-                                        # Обновляем существующую запись
+                                    if existing and not clear_existing:
                                         for key, value in processed_data.items():
-                                            if key != primary_key_col:  # Не обновляем primary key
+                                            if key != primary_key_col:  
                                                 setattr(existing, key, value)
                                         logger.debug(f"Обновлена существующая запись {primary_key_col}={processed_data[primary_key_col]} в {table_name}")
                                     else:
-                                        # Создаем новую запись
                                         instance = model(**processed_data)
                                         db.add(instance)
                                 else:
-                                    # Если нет primary key или он не в данных, просто добавляем
                                     instance = model(**processed_data)
                                     db.add(instance)
                                 
@@ -393,6 +427,7 @@ class BackupService:
                                 
                             except Exception as e:
                                 logger.error(f"Ошибка восстановления записи в {table_name}: {e}")
+                                logger.error(f"Проблемные данные: {record_data}")
                                 continue
                         
                         restored_tables += 1
@@ -432,11 +467,12 @@ class BackupService:
 
     async def _clear_database_tables(self, db: AsyncSession):
         tables_order = [
-            "subscription_servers", "sent_notifications", "broadcast_history",
-            "subscription_conversions", "referral_earnings", "promocode_uses",
-            "transactions", "yookassa_payments", "cryptobot_payments",
-            "subscriptions", "users", "promocodes", "server_squads",
-            "service_rules", "system_settings", "monitoring_logs", "user_messages"
+            "subscription_servers", "sent_notifications", 
+            "user_messages", "broadcast_history", "subscription_conversions", 
+            "referral_earnings", "promocode_uses", "transactions", 
+            "yookassa_payments", "cryptobot_payments", "welcome_texts",
+            "subscriptions", "users", "promocodes", "server_squads", 
+            "squads", "service_rules", "system_settings", "monitoring_logs"
         ]
         
         for table_name in tables_order:
@@ -472,7 +508,8 @@ class BackupService:
                         "file_size_bytes": file_stats.st_size,
                         "file_size_mb": round(file_stats.st_size / 1024 / 1024, 2),
                         "created_by": metadata.get("created_by"),
-                        "database_type": metadata.get("database_type", "unknown")
+                        "database_type": metadata.get("database_type", "unknown"),
+                        "version": metadata.get("version", "1.0")
                     }
                     
                     backups.append(backup_info)
@@ -491,6 +528,7 @@ class BackupService:
                         "file_size_mb": round(file_stats.st_size / 1024 / 1024, 2),
                         "created_by": None,
                         "database_type": "unknown",
+                        "version": "unknown",
                         "error": f"Ошибка чтения: {str(e)}"
                     })
         
@@ -563,7 +601,7 @@ class BackupService:
             interval = self._get_backup_interval()
             self._auto_backup_task = asyncio.create_task(self._auto_backup_loop(next_run))
             logger.info(
-                "🔄 Автобекапы включены, интервал: %.2fч, ближайший запуск: %s",
+                "📄 Автобекапы включены, интервал: %.2fч, ближайший запуск: %s",
                 interval.total_seconds() / 3600,
                 next_run.strftime("%d.%m.%Y %H:%M:%S")
             )
@@ -571,7 +609,7 @@ class BackupService:
     async def stop_auto_backup(self):
         if self._auto_backup_task and not self._auto_backup_task.done():
             self._auto_backup_task.cancel()
-            logger.info("⏹️ Автобекапы остановлены")
+            logger.info("ℹ️ Автобекапы остановлены")
 
     async def _auto_backup_loop(self, next_run: Optional[datetime] = None):
         next_run = next_run or self._calculate_next_backup_datetime()
@@ -595,7 +633,7 @@ class BackupService:
                         next_run.strftime("%d.%m.%Y %H:%M:%S")
                     )
 
-                logger.info("🔄 Запуск автоматического бекапа...")
+                logger.info("📄 Запуск автоматического бекапа...")
                 success, message, _ = await self.create_backup()
 
                 if success:
@@ -624,7 +662,7 @@ class BackupService:
             icons = {
                 "success": "✅",
                 "error": "❌", 
-                "restore_success": "📥",
+                "restore_success": "🔥",
                 "restore_error": "❌"
             }
             
