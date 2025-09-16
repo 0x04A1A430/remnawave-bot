@@ -656,11 +656,34 @@ async def confirm_button_selection(
         types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")
     ])
     
-    await callback.message.edit_text(
-        preview_text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-        parse_mode="HTML"
-    )
+    # Если есть медиа, показываем его с загруженным фото, иначе обычное текстовое сообщение
+    if has_media and media_type == "photo":
+        media_file_id = data.get('media_file_id')
+        if media_file_id:
+            # Удаляем текущее сообщение и отправляем новое с фото
+            await callback.message.delete()
+            await callback.bot.send_photo(
+                chat_id=callback.message.chat.id,
+                photo=media_file_id,
+                caption=preview_text,
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+                parse_mode="HTML"
+            )
+        else:
+            # Если нет file_id, используем обычное редактирование
+            await callback.message.edit_text(
+                preview_text,
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+                parse_mode="HTML"
+            )
+    else:
+        # Для текстовых сообщений или других типов медиа используем обычное редактирование
+        await callback.message.edit_text(
+            preview_text,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode="HTML"
+        )
+    
     await callback.answer()
 
 
