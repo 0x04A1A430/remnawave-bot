@@ -238,7 +238,7 @@ ADMIN_NOTIFICATIONS_TOPIC_ID=123             # Опционально: ID топ
 
 # Обязательная подписка на канал
 CHANNEL_SUB_ID= # Опционально ID твоего канала (-100)
-CHANNEL_IS_SUB_REQUIRED=false # Обязательна ли подписка на канал
+CHANNEL_IS_REQUIRED_SUB=false # Обязательна ли подписка на канал
 CHANNEL_LINK= # Опционально ссылка на канал
 
 # ===== DATABASE CONFIGURATION =====
