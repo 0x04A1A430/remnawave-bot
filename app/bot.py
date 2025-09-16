@@ -5,7 +5,6 @@ from aiogram.fsm.storage.memory import MemoryStorage
 import redis.asyncio as redis
 
 from app.config import settings
-from app.middlewares.channel_checker import ChannelCheckerMiddleware
 from app.middlewares.global_error import GlobalErrorMiddleware 
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.logging import LoggingMiddleware
@@ -87,8 +86,16 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     dp.callback_query.middleware(MaintenanceMiddleware())
     dp.message.middleware(ThrottlingMiddleware())
     dp.callback_query.middleware(ThrottlingMiddleware())
-    dp.message.middleware(ChannelCheckerMiddleware())
-    dp.callback_query.middleware(ChannelCheckerMiddleware())
+
+    if settings.CHANNEL_IS_REQUIRED_SUB:
+        from app.middlewares.channel_checker import ChannelCheckerMiddleware
+
+        channel_checker_middleware = ChannelCheckerMiddleware()
+        dp.message.middleware(channel_checker_middleware)
+        dp.callback_query.middleware(channel_checker_middleware)
+        logger.info("🔒 Обязательная подписка включена - ChannelCheckerMiddleware активирован")
+    else:
+        logger.info("🔓 Обязательная подписка отключена - ChannelCheckerMiddleware не зарегистрирован")
     dp.message.middleware(AuthMiddleware())
     dp.callback_query.middleware(AuthMiddleware())
     dp.pre_checkout_query.middleware(AuthMiddleware())
