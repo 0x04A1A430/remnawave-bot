@@ -22,9 +22,14 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
 
 async def _edit_with_photo(self: Message, text: str, **kwargs):
     if self.photo:
-        media = self.photo[-1].file_id
-        if is_qr_message(self) and LOGO_PATH.exists():
+        # Всегда используем логотип если включен режим логотипа,
+        # кроме специальных случаев (QR сообщения)
+        if settings.ENABLE_LOGO_MODE and LOGO_PATH.exists() and not is_qr_message(self):
             media = FSInputFile(LOGO_PATH)
+        elif is_qr_message(self) and LOGO_PATH.exists():
+            media = FSInputFile(LOGO_PATH)
+        else:
+            media = self.photo[-1].file_id
         media_kwargs = {"media": media, "caption": text}
         if "parse_mode" in kwargs:
             media_kwargs["parse_mode"] = kwargs.pop("parse_mode")
