@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select, update
-
 from app.database.crud.user import (
     get_user_by_id, get_user_by_telegram_id, get_users_list,
     get_users_count, get_users_statistics, get_inactive_users,
@@ -12,8 +11,10 @@ from app.database.crud.user import (
 from app.database.crud.transaction import get_user_transactions_count
 from app.database.crud.subscription import get_subscription_by_user_id
 from app.database.models import (
-    User, UserStatus, Subscription, Transaction, PromoCodeUse, 
-    ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory, CryptoBotPayment
+    User, UserStatus, Subscription, Transaction, PromoCode, PromoCodeUse, 
+    ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory, 
+    CryptoBotPayment, SubscriptionConversion, UserMessage, WelcomeText, 
+    SentNotification
 )
 from app.config import settings
 
@@ -246,55 +247,103 @@ class UserService:
                 except Exception as e:
                     logger.warning(f"⚠️ Ошибка деактивации RemnaWave: {e}")
             
+            
             try:
-                from app.database.models import UserMessage
-                from sqlalchemy import update
-                
-                result = await db.execute(
-                    update(UserMessage)
-                    .where(UserMessage.created_by == user_id)
-                    .values(created_by=None)
+                sent_notifications_result = await db.execute(
+                    select(SentNotification).where(SentNotification.user_id == user_id)
                 )
-                if result.rowcount > 0:
-                    logger.info(f"🔄 Обновлено {result.rowcount} пользовательских сообщений")
-                await db.flush()
-            except Exception as e:
-                logger.error(f"❌ Ошибка обновления пользовательских сообщений: {e}")
-
-            try:
-                from app.database.models import PromoCode
-                from sqlalchemy import update
+                sent_notifications = sent_notifications_result.scalars().all()
                 
-                result = await db.execute(
-                    update(PromoCode)
-                    .where(PromoCode.created_by == user_id)
-                    .values(created_by=None)
-                )
-                if result.rowcount > 0:
-                    logger.info(f"🔄 Обновлено {result.rowcount} промокодов")
-                await db.flush()
+                if sent_notifications:
+                    logger.info(f"🔄 Удаляем {len(sent_notifications)} уведомлений")
+                    await db.execute(
+                        delete(SentNotification).where(SentNotification.user_id == user_id)
+                    )
+                    await db.flush()
             except Exception as e:
-                logger.error(f"❌ Ошибка обновления промокодов: {e}")
+                logger.error(f"❌ Ошибка удаления уведомлений: {e}")
 
             try:
-                from app.database.models import WelcomeText
-                from sqlalchemy import update
-
-                result = await db.execute(
-                    update(WelcomeText)
-                    .where(WelcomeText.created_by == user_id)
-                    .values(created_by=None)
-                )
-                if result.rowcount > 0:
-                    logger.info(f"🔄 Обновлено {result.rowcount} приветственных текстов")
-                await db.flush()
+                if user.subscription:
+                    subscription_servers_result = await db.execute(
+                        select(SubscriptionServer).where(
+                            SubscriptionServer.subscription_id == user.subscription.id
+                        )
+                    )
+                    subscription_servers = subscription_servers_result.scalars().all()
+                    
+                    if subscription_servers:
+                        logger.info(f"🔄 Удаляем {len(subscription_servers)} связей подписка-сервер")
+                        await db.execute(
+                            delete(SubscriptionServer).where(
+                                SubscriptionServer.subscription_id == user.subscription.id
+                            )
+                        )
+                        await db.flush()
             except Exception as e:
-                logger.error(f"❌ Ошибка обновления приветственных текстов: {e}")
+                logger.error(f"❌ Ошибка удаления связей подписка-сервер: {e}")
 
             try:
-                from app.database.models import YooKassaPayment
-                from sqlalchemy import select
+                conversions_result = await db.execute(
+                    select(SubscriptionConversion).where(SubscriptionConversion.user_id == user_id)
+                )
+                conversions = conversions_result.scalars().all()
                 
+                if conversions:
+                    logger.info(f"🔄 Удаляем {len(conversions)} записей конверсий")
+                    await db.execute(
+                        delete(SubscriptionConversion).where(SubscriptionConversion.user_id == user_id)
+                    )
+                    await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления записей конверсий: {e}")
+
+            try:
+                referral_earnings_result = await db.execute(
+                    select(ReferralEarning).where(ReferralEarning.user_id == user_id)
+                )
+                referral_earnings = referral_earnings_result.scalars().all()
+                
+                if referral_earnings:
+                    logger.info(f"🔄 Удаляем {len(referral_earnings)} реферальных доходов")
+                    await db.execute(
+                        delete(ReferralEarning).where(ReferralEarning.user_id == user_id)
+                    )
+                    await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления реферальных доходов: {e}")
+
+            try:
+                referral_records_result = await db.execute(
+                    select(ReferralEarning).where(ReferralEarning.referral_id == user_id)
+                )
+                referral_records = referral_records_result.scalars().all()
+                
+                if referral_records:
+                    logger.info(f"🔄 Удаляем {len(referral_records)} записей о рефералах")
+                    await db.execute(
+                        delete(ReferralEarning).where(ReferralEarning.referral_id == user_id)
+                    )
+                    await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления записей о рефералах: {e}")
+
+            try:
+                promocode_uses_result = await db.execute(
+                    select(PromoCodeUse).where(PromoCodeUse.user_id == user_id)
+                )
+                promocode_uses = promocode_uses_result.scalars().all()
+                
+                if promocode_uses:
+                    logger.info(f"🔄 Удаляем {len(promocode_uses)} использований промокодов")
+                    await db.execute(
+                        delete(PromoCodeUse).where(PromoCodeUse.user_id == user_id)
+                    )
+                    await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления использований промокодов: {e}")
+
+            try:
                 yookassa_result = await db.execute(
                     select(YooKassaPayment).where(YooKassaPayment.user_id == user_id)
                 )
@@ -306,14 +355,10 @@ class UserService:
                         delete(YooKassaPayment).where(YooKassaPayment.user_id == user_id)
                     )
                     await db.flush()
-                    logger.info(f"✅ YooKassa платежи удалены")
             except Exception as e:
                 logger.error(f"❌ Ошибка удаления YooKassa платежей: {e}")
 
             try:
-                from app.database.models import CryptoBotPayment
-                from sqlalchemy import select, delete
-                
                 cryptobot_result = await db.execute(
                     select(CryptoBotPayment).where(CryptoBotPayment.user_id == user_id)
                 )
@@ -325,10 +370,9 @@ class UserService:
                         delete(CryptoBotPayment).where(CryptoBotPayment.user_id == user_id)
                     )
                     await db.flush()
-                    logger.info(f"✅ CryptoBot платежи удалены")
             except Exception as e:
                 logger.error(f"❌ Ошибка удаления CryptoBot платежей: {e}")
-            
+
             try:
                 transactions_result = await db.execute(
                     select(Transaction).where(Transaction.user_id == user_id)
@@ -341,89 +385,72 @@ class UserService:
                         delete(Transaction).where(Transaction.user_id == user_id)
                     )
                     await db.flush()
-                    logger.info(f"✅ Транзакции удалены")
             except Exception as e:
                 logger.error(f"❌ Ошибка удаления транзакций: {e}")
-            
+
             try:
-                await db.execute(
-                    delete(PromoCodeUse).where(PromoCodeUse.user_id == user_id)
-                )
-                await db.flush()
-                logger.info(f"🗑️ Удалены использования промокодов пользователя {user_id}")
-            except Exception as e:
-                logger.error(f"❌ Ошибка удаления использований промокодов: {e}")
-            
-            try:
-                await db.execute(
-                    delete(ReferralEarning).where(ReferralEarning.user_id == user_id)
-                )
-                await db.flush()
-                logger.info(f"🗑️ Удалены реферальные доходы пользователя {user_id}")
-            except Exception as e:
-                logger.error(f"❌ Ошибка удаления реферальных доходов: {e}")
-            
-            try:
-                await db.execute(
-                    delete(ReferralEarning).where(ReferralEarning.referral_id == user_id)
-                )
-                await db.flush()
-                logger.info(f"🗑️ Удалены реферальные записи о пользователе {user_id}")
-            except Exception as e:
-                logger.error(f"❌ Ошибка удаления реферальных записей: {e}")
-            
-            try:
-                from app.database.models import BroadcastHistory
-                await db.execute(
-                    delete(BroadcastHistory).where(BroadcastHistory.admin_id == user_id)
-                )
-                await db.flush()
-                logger.info(f"🗑️ Удалена история рассылок админа {user_id}")
-            except Exception as e:
-                logger.error(f"❌ Ошибка удаления истории рассылок: {e}")
-            
-            try:
-                from app.database.models import SubscriptionConversion
-                conversions_result = await db.execute(
-                    select(SubscriptionConversion).where(SubscriptionConversion.user_id == user_id)
-                )
-                conversions = conversions_result.scalars().all()
-                
-                if conversions:
-                    logger.info(f"🔄 Удаляем {len(conversions)} записей конверсий")
-                    await db.execute(
-                        delete(SubscriptionConversion).where(SubscriptionConversion.user_id == user_id)
-                    )
-                    await db.flush()
-                    logger.info(f"✅ Записи конверсий удалены")
-            except Exception as e:
-                logger.error(f"❌ Ошибка удаления записей конверсий: {e}")
-            
-            if user.subscription:
-                try:
-                    await db.execute(
-                        delete(SubscriptionServer).where(
-                            SubscriptionServer.subscription_id == user.subscription.id
-                        )
-                    )
-                    await db.flush()
-                    logger.info(f"🗑️ Удалены записи SubscriptionServer для подписки {user.subscription.id}")
-                except Exception as e:
-                    logger.error(f"❌ Ошибка удаления SubscriptionServer: {e}")
-            
-            if user.subscription:
-                try:
-                    from app.database.models import Subscription
+                if user.subscription:
+                    logger.info(f"🔄 Удаляем подписку {user.subscription.id}")
                     await db.execute(
                         delete(Subscription).where(Subscription.user_id == user_id)
                     )
                     await db.flush()
-                    logger.info(f"🗑️ Удалена подписка пользователя {user_id}")
-                except Exception as e:
-                    logger.error(f"❌ Ошибка удаления подписки: {e}")
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления подписки: {e}")
+
             
             try:
-                from sqlalchemy import update
+                user_messages_result = await db.execute(
+                    update(UserMessage)
+                    .where(UserMessage.created_by == user_id)
+                    .values(created_by=None)
+                )
+                if user_messages_result.rowcount > 0:
+                    logger.info(f"🔄 Обновлено {user_messages_result.rowcount} пользовательских сообщений")
+                await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка обновления пользовательских сообщений: {e}")
+
+            try:
+                promocodes_result = await db.execute(
+                    update(PromoCode)
+                    .where(PromoCode.created_by == user_id)
+                    .values(created_by=None)
+                )
+                if promocodes_result.rowcount > 0:
+                    logger.info(f"🔄 Обновлено {promocodes_result.rowcount} промокодов")
+                await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка обновления промокодов: {e}")
+
+            try:
+                welcome_texts_result = await db.execute(
+                    update(WelcomeText)
+                    .where(WelcomeText.created_by == user_id)
+                    .values(created_by=None)
+                )
+                if welcome_texts_result.rowcount > 0:
+                    logger.info(f"🔄 Обновлено {welcome_texts_result.rowcount} приветственных текстов")
+                await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка обновления приветственных текстов: {e}")
+
+            try:
+                broadcast_history_result = await db.execute(
+                    select(BroadcastHistory).where(BroadcastHistory.admin_id == user_id)
+                )
+                broadcast_history = broadcast_history_result.scalars().all()
+                
+                if broadcast_history:
+                    logger.info(f"🔄 Удаляем {len(broadcast_history)} записей истории рассылок")
+                    await db.execute(
+                        delete(BroadcastHistory).where(BroadcastHistory.admin_id == user_id)
+                    )
+                    await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления истории рассылок: {e}")
+
+            try:
                 referrals_result = await db.execute(
                     update(User)
                     .where(User.referred_by_id == user_id)
@@ -434,7 +461,7 @@ class UserService:
                 await db.flush()
             except Exception as e:
                 logger.error(f"❌ Ошибка очистки реферальных ссылок: {e}")
-            
+
             try:
                 await db.execute(
                     delete(User).where(User.id == user_id)
