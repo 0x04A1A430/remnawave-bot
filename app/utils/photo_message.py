@@ -7,7 +7,12 @@ from .message_patch import LOGO_PATH, is_qr_message
 
 
 def _resolve_media(message: types.Message):
-    if message.photo and not is_qr_message(message):
+    # Всегда используем логотип если включен режим логотипа,
+    # кроме специальных случаев (QR сообщения)
+    if settings.ENABLE_LOGO_MODE and not is_qr_message(message):
+        return FSInputFile(LOGO_PATH)
+    # Только если режим логотипа выключен, используем фото из сообщения
+    elif message.photo:
         return message.photo[-1].file_id
     return FSInputFile(LOGO_PATH)
 

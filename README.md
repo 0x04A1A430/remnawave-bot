@@ -54,6 +54,7 @@
 - 🔧 **Мониторинг** - автоматическое управление режимом тех. работ
 - 🛡️ **Защита панели** - поддержка [remnawave-reverse-proxy](https://github.com/eGamesAPI/remnawave-reverse-proxy)
 - 🗄️ **Бекапы/Восстановление** - автобекапы и восстановление бд прямо в боте с уведомления в топики
+- ✍️ **Проверка на подписку** - проверяет подписку на канал 
 
 ### 📚 Поддерживаемые методы авторизации
 
@@ -235,6 +236,11 @@ ADMIN_NOTIFICATIONS_ENABLED=true
 ADMIN_NOTIFICATIONS_CHAT_ID=-1001234567890   # Замени на ID твоего канала (-100) - ПРЕФИКС ЗАКРЫТОГО КАНАЛА! ВСТАВИТЬ СВОЙ ID СРАЗУ ПОСЛЕ (-100) БЕЗ ПРОБЕЛОВ!
 ADMIN_NOTIFICATIONS_TOPIC_ID=123             # Опционально: ID топика
 
+# Обязательная подписка на канал
+CHANNEL_SUB_ID= # Опционально ID твоего канала (-100)
+CHANNEL_IS_REQUIRED_SUB=false # Обязательна ли подписка на канал
+CHANNEL_LINK= # Опционально ссылка на канал
+
 # ===== DATABASE CONFIGURATION =====
 # Режим базы данных: "auto", "postgresql", "sqlite"
 DATABASE_MODE=auto
@@ -268,6 +274,14 @@ REMNAWAVE_PASSWORD=
 
 # Для панелей установленных скриптом eGames прописывать ключ в формате XXXXXXX:DDDDDDDD
 REMNAWAVE_SECRET_KEY=
+
+# Шаблон описания пользователя в панели Remnawave
+# Доступные плейсхолдеры:
+#   {full_name}         — Имя, Фамилия из Telegram
+#   {username}          — @логин из Telegram (c @)
+#   {username_clean}    — логин из Telegram (без @)
+#   {telegram_id}       — ID Telegram
+REMNAWAVE_USER_DESCRIPTION_TEMPLATE="Bot user: {full_name} {username}"
 
 # ========= ПОДПИСКИ =========
 # ===== ТРИАЛ ПОДПИСКА =====
@@ -498,8 +512,9 @@ LOG_FILE=logs/bot.log
 
 # ===== РАЗРАБОТКА =====
 DEBUG=false
-WEBHOOK_URL=  # Укажите домен вебхука
+WEBHOOK_URL=
 WEBHOOK_PATH=/webhook
+
 
 ```
 
@@ -599,11 +614,13 @@ WEBHOOK_PATH=/webhook
 - 🚧 Потеря соелинения с апи Remnawave
 - 🗄️ **Бекапы/Восстановление бд**
 - 🗄️ Отправка бд файлов в отдельный чат/топики
+- ⚙️ Изменение параметров подписки юзером (Уменьшение/Увеличение трафика/серверов/устройств на подписке)
 
 🗄️ **Бекапы/Восстановление**
 - Ручной запуск бекапа
 - Восстановление бд
-- Включение/Отключение автобекапов 
+- Включение/Отключение автобекапов
+- Отправка копии бд файла в отдеьный чат/топик
 
 </td>
 </tr>
@@ -894,6 +911,8 @@ bedolaga_bot/
 │   │   ├── ✅ subscription_utils.py  # Проверка подписок
 │   │   ├── 📄 pagination.py          # Пагинация
 │   │   ├── 📄 pricing_utils.py       # Цены
+│   │   ├── 📄 message_patch.py
+│   │   ├── 📄 photo_message.py
 │   │   ├── ‼️ global_error.py        # Обработка ошибок
 │   │   ├── 👤 user_utils.py          # Утилиты для пользователей
 │   │   ├── 🫰 currency_converter.py  # Курсы для CryptoBota
@@ -904,6 +923,7 @@ bedolaga_bot/
 │   │   ├── 📋 logging.py              # Логирование
 │   │   ├── 🚧 maintenance.py          # тех работы
 │   │   ├── 🔐 subscription_checker.py # тех работы
+│   │   ├── 🔐 channel_checker.py
 │   │   └── ⏱️ throttling.py           # Ограничение запросов
 │   │
 │   ├── 🌐 localization/          # Локализация

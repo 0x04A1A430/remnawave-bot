@@ -5,6 +5,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 import redis.asyncio as redis
 
 from app.config import settings
+from app.middlewares.channel_checker import ChannelCheckerMiddleware
 from app.middlewares.global_error import GlobalErrorMiddleware 
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.logging import LoggingMiddleware
@@ -74,20 +75,23 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
         logger.info("Используется MemoryStorage для FSM")
         storage = MemoryStorage()
     
-    dp = Dispatcher(storage=storage)
     
+    dp = Dispatcher(storage=storage)
+
     dp.message.middleware(GlobalErrorMiddleware())
     dp.callback_query.middleware(GlobalErrorMiddleware())
     dp.pre_checkout_query.middleware(GlobalErrorMiddleware())
     dp.message.middleware(LoggingMiddleware())
     dp.callback_query.middleware(LoggingMiddleware())
-    dp.message.middleware(AuthMiddleware())
-    dp.callback_query.middleware(AuthMiddleware())
-    dp.pre_checkout_query.middleware(AuthMiddleware())
     dp.message.middleware(MaintenanceMiddleware())
     dp.callback_query.middleware(MaintenanceMiddleware())
     dp.message.middleware(ThrottlingMiddleware())
     dp.callback_query.middleware(ThrottlingMiddleware())
+    dp.message.middleware(ChannelCheckerMiddleware())
+    dp.callback_query.middleware(ChannelCheckerMiddleware())
+    dp.message.middleware(AuthMiddleware())
+    dp.callback_query.middleware(AuthMiddleware())
+    dp.pre_checkout_query.middleware(AuthMiddleware())
     dp.message.middleware(SubscriptionStatusMiddleware())
     dp.callback_query.middleware(SubscriptionStatusMiddleware())
     start.register_handlers(dp)

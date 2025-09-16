@@ -11,6 +11,7 @@ from app.database.database import get_db
 from app.database.crud.user import get_user_by_telegram_id, create_user
 from app.services.remnawave_service import RemnaWaveService
 from app.states import RegistrationStates
+from app.utils.check_reg_process import is_registration_process
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ class AuthMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
-        
+
         user: TgUser = None
         if isinstance(event, (Message, CallbackQuery)):
             user = event.from_user
@@ -62,24 +63,23 @@ class AuthMiddleware(BaseMiddleware):
                     
                     if state:
                         current_state = await state.get_state()
-                    
-                    registration_states = [
-                        RegistrationStates.waiting_for_rules_accept.state,
-                        RegistrationStates.waiting_for_referral_code.state
-                    ]
 
-                    is_registration_process = (
-                        (isinstance(event, Message) and event.text and event.text.startswith('/start'))
-                        or (current_state in registration_states)
-                        or (
-                            isinstance(event, CallbackQuery)
-                            and event.data
-                            and (event.data in ['rules_accept', 'rules_decline', 'referral_skip'])
-                        )
-                    )
+                    is_reg_process = is_registration_process(event, current_state)
                     
-                    if is_registration_process:
-                        logger.info(f"🔍 Пропускаем пользователя {user.id} в процессе регистрации")
+                    is_channel_check = (isinstance(event, CallbackQuery) 
+                                       and event.data == "sub_channel_check")
+                    
+                    is_start_command = (isinstance(event, Message) 
+                                       and event.text 
+                                       and event.text.startswith('/start'))
+                    
+                    if is_reg_process or is_channel_check or is_start_command:
+                        if is_start_command:
+                            logger.info(f"🚀 Пропускаем команду /start от пользователя {user.id}")
+                        elif is_channel_check:
+                            logger.info(f"🔍 Пропускаем незарегистрированного пользователя {user.id} для проверки канала")
+                        else:
+                            logger.info(f"🔍 Пропускаем пользователя {user.id} в процессе регистрации")
                         data['db'] = db
                         data['db_user'] = None
                         data['is_admin'] = False
@@ -155,19 +155,19 @@ class AuthMiddleware(BaseMiddleware):
                     if db_user.username != user.username:
                         old_username = db_user.username
                         db_user.username = user.username
-                        logger.info(f"📝 [Middleware] Username обновлен для {user.id}: '{old_username}' → '{db_user.username}'")
+                        logger.info(f"🔄 [Middleware] Username обновлен для {user.id}: '{old_username}' → '{db_user.username}'")
                         profile_updated = True
                     
                     if db_user.first_name != user.first_name:
                         old_first_name = db_user.first_name
                         db_user.first_name = user.first_name
-                        logger.info(f"📝 [Middleware] Имя обновлено для {user.id}: '{old_first_name}' → '{db_user.first_name}'")
+                        logger.info(f"🔄 [Middleware] Имя обновлено для {user.id}: '{old_first_name}' → '{db_user.first_name}'")
                         profile_updated = True
                     
                     if db_user.last_name != user.last_name:
                         old_last_name = db_user.last_name
                         db_user.last_name = user.last_name
-                        logger.info(f"📝 [Middleware] Фамилия обновлена для {user.id}: '{old_last_name}' → '{db_user.last_name}'")
+                        logger.info(f"🔄 [Middleware] Фамилия обновлена для {user.id}: '{old_last_name}' → '{db_user.last_name}'")
                         profile_updated = True
                     
                     db_user.last_activity = datetime.utcnow()

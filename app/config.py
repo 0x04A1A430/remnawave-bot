@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
     ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
     ADMIN_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
+
+    CHANNEL_SUB_ID: Optional[str] = None
+    CHANNEL_LINK: Optional[str] = None
+    CHANNEL_IS_REQUIRED_SUB: bool = False
     
     DATABASE_URL: str = ""
     
