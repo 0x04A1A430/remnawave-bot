@@ -229,23 +229,36 @@ async def get_current_devices_detailed(db_user: User) -> dict:
         return {"count": 0, "devices": []}
 
 async def get_servers_display_names(squad_uuids: List[str]) -> str:
-    """
-    Получает отображаемые названия серверов по их UUID
-    """
     if not squad_uuids:
         return "Нет серверов"
     
     try:
-        countries = await _get_available_countries()
+        from app.database.database import AsyncSessionLocal
+        from app.database.crud.server_squad import get_server_squad_by_uuid
         
         server_names = []
-        for uuid in squad_uuids:
-            for country in countries:
-                if country['uuid'] == uuid:
-                    server_names.append(country['name'])
-                    break
+        
+        async with AsyncSessionLocal() as db:
+            for uuid in squad_uuids:
+                server = await get_server_squad_by_uuid(db, uuid)
+                if server:
+                    server_names.append(server.display_name)
+                    logger.debug(f"Найден сервер в БД: {uuid} -> {server.display_name}")
+                else:
+                    logger.warning(f"Сервер с UUID {uuid} не найден в БД")
         
         if not server_names:
+            countries = await _get_available_countries()
+            for uuid in squad_uuids:
+                for country in countries:
+                    if country['uuid'] == uuid:
+                        server_names.append(country['name'])
+                        logger.debug(f"Найден сервер в кэше: {uuid} -> {country['name']}")
+                        break
+        
+        if not server_names:
+            if len(squad_uuids) == 1:
+                return "🎯 Тестовый сервер"
             return f"{len(squad_uuids)} стран"
         
         if len(server_names) > 6:
@@ -257,6 +270,8 @@ async def get_servers_display_names(squad_uuids: List[str]) -> str:
             
     except Exception as e:
         logger.error(f"Ошибка получения названий серверов: {e}")
+        if len(squad_uuids) == 1:
+            return "🎯 Тестовый сервер"
         return f"{len(squad_uuids)} стран"
 
 async def get_current_devices_count(db_user: User) -> str:
@@ -326,7 +341,6 @@ async def show_trial_offer(
     db_user: User,
     db: AsyncSession
 ):
-    
     texts = get_texts(db_user.language)
     
     if db_user.subscription or db_user.has_had_paid_subscription:
@@ -337,10 +351,27 @@ async def show_trial_offer(
         await callback.answer()
         return
     
+    trial_server_name = "🎯 Тестовый сервер"  
+    try:
+        from app.database.crud.server_squad import get_server_squad_by_uuid
+        
+        if settings.TRIAL_SQUAD_UUID:
+            trial_server = await get_server_squad_by_uuid(db, settings.TRIAL_SQUAD_UUID)
+            if trial_server:
+                trial_server_name = trial_server.display_name
+            else:
+                logger.warning(f"Триальный сервер с UUID {settings.TRIAL_SQUAD_UUID} не найден в БД")
+        else:
+            logger.warning("TRIAL_SQUAD_UUID не настроен в конфигурации")
+            
+    except Exception as e:
+        logger.error(f"Ошибка получения триального сервера: {e}")
+    
     trial_text = texts.TRIAL_AVAILABLE.format(
         days=settings.TRIAL_DURATION_DAYS,
         traffic=settings.TRIAL_TRAFFIC_LIMIT_GB,
-        devices=settings.TRIAL_DEVICE_LIMIT
+        devices=settings.TRIAL_DEVICE_LIMIT,
+        server_name=trial_server_name
     )
     
     await callback.message.edit_text(
@@ -3286,7 +3317,6 @@ async def show_device_connection_help(
     db_user: User,
     db: AsyncSession
 ):
-    """Показывает справку по повторному подключению устройств"""
     
     subscription = db_user.subscription
     
