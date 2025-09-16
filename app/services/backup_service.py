@@ -82,6 +82,54 @@ class BackupService:
             backup_location=os.getenv("BACKUP_LOCATION", "/app/data/backups")
         )
 
+    def _parse_backup_time(self) -> Tuple[int, int]:
+        """Возвращает часы и минуты для запланированного времени бекапа."""
+        time_str = (self._settings.backup_time or "").strip()
+
+        try:
+            parts = time_str.split(":")
+            if len(parts) != 2:
+                raise ValueError("Invalid time format")
+
+            hours, minutes = map(int, parts)
+
+            if not (0 <= hours < 24 and 0 <= minutes < 60):
+                raise ValueError("Hours or minutes out of range")
+
+            return hours, minutes
+
+        except ValueError:
+            default_hours, default_minutes = 3, 0
+            logger.warning(
+                "Некорректное значение BACKUP_TIME='%s'. Используется значение по умолчанию 03:00.",
+                self._settings.backup_time
+            )
+            self._settings.backup_time = "03:00"
+            return default_hours, default_minutes
+
+    def _calculate_next_backup_datetime(self, reference: Optional[datetime] = None) -> datetime:
+        reference = reference or datetime.now()
+        hours, minutes = self._parse_backup_time()
+
+        next_run = reference.replace(hour=hours, minute=minutes, second=0, microsecond=0)
+        if next_run <= reference:
+            next_run += timedelta(days=1)
+
+        return next_run
+
+    def _get_backup_interval(self) -> timedelta:
+        hours = self._settings.backup_interval_hours
+
+        if hours <= 0:
+            logger.warning(
+                "Некорректное значение BACKUP_INTERVAL_HOURS=%s. Используется значение по умолчанию 24.",
+                hours
+            )
+            hours = 24
+            self._settings.backup_interval_hours = hours
+
+        return timedelta(hours=hours)
+
     async def create_backup(
         self, 
         created_by: Optional[int] = None,
@@ -509,34 +557,59 @@ class BackupService:
     async def start_auto_backup(self):
         if self._auto_backup_task and not self._auto_backup_task.done():
             self._auto_backup_task.cancel()
-        
+
         if self._settings.auto_backup_enabled:
-            self._auto_backup_task = asyncio.create_task(self._auto_backup_loop())
-            logger.info(f"🔄 Автобекапы включены, интервал: {self._settings.backup_interval_hours}ч")
+            next_run = self._calculate_next_backup_datetime()
+            interval = self._get_backup_interval()
+            self._auto_backup_task = asyncio.create_task(self._auto_backup_loop(next_run))
+            logger.info(
+                "🔄 Автобекапы включены, интервал: %.2fч, ближайший запуск: %s",
+                interval.total_seconds() / 3600,
+                next_run.strftime("%d.%m.%Y %H:%M:%S")
+            )
 
     async def stop_auto_backup(self):
         if self._auto_backup_task and not self._auto_backup_task.done():
             self._auto_backup_task.cancel()
             logger.info("⏹️ Автобекапы остановлены")
 
-    async def _auto_backup_loop(self):
+    async def _auto_backup_loop(self, next_run: Optional[datetime] = None):
+        next_run = next_run or self._calculate_next_backup_datetime()
+        interval = self._get_backup_interval()
+
         while True:
             try:
-                await asyncio.sleep(self._settings.backup_interval_hours * 3600)
-                
+                now = datetime.now()
+                delay = (next_run - now).total_seconds()
+
+                if delay > 0:
+                    logger.info(
+                        "⏰ Следующий автоматический бекап запланирован на %s (через %.2f ч)",
+                        next_run.strftime("%d.%m.%Y %H:%M:%S"),
+                        delay / 3600
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.info(
+                        "⏰ Время автоматического бекапа %s уже наступило, запускаем немедленно",
+                        next_run.strftime("%d.%m.%Y %H:%M:%S")
+                    )
+
                 logger.info("🔄 Запуск автоматического бекапа...")
                 success, message, _ = await self.create_backup()
-                
+
                 if success:
                     logger.info(f"✅ Автобекап завершен: {message}")
                 else:
                     logger.error(f"❌ Ошибка автобекапа: {message}")
-                    
+
+                next_run = next_run + interval
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Ошибка в цикле автобекапов: {e}")
-                await asyncio.sleep(3600)
+                next_run = datetime.now() + interval
 
     async def _send_backup_notification(
         self,

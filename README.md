@@ -488,6 +488,8 @@ APP_CONFIG_CACHE_TTL=3600
 BACKUP_AUTO_ENABLED=true
 BACKUP_INTERVAL_HOURS=24
 BACKUP_TIME=03:00
+# Первый запуск автобекапа выполняется в ближайшее время BACKUP_TIME после старта бота,
+# далее копии создаются каждые BACKUP_INTERVAL_HOURS.
 BACKUP_MAX_KEEP=7
 BACKUP_COMPRESSION=true
 BACKUP_INCLUDE_LOGS=false
