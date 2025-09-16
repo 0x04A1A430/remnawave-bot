@@ -1418,7 +1418,12 @@ async def confirm_add_devices(
     logger.info(f"Добавление {devices_count} устройств: {devices_price_per_month/100}₽/мес × {charged_months} мес = {price/100}₽")
     
     if db_user.balance_kopeks < price:
-        await callback.answer("⚠️ Недостаточно средств на балансе", show_alert=True)
+        missing_kopeks = price - db_user.balance_kopeks
+        await callback.message.edit_text(
+            texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
+            reply_markup=get_insufficient_balance_keyboard(db_user.language),
+        )
+        await callback.answer()
         return
     
     try:
@@ -1529,7 +1534,12 @@ async def confirm_extend_subscription(
         return
     
     if db_user.balance_kopeks < price:
-        await callback.answer("⚠ Недостаточно средств на балансе", show_alert=True)
+        missing_kopeks = price - db_user.balance_kopeks
+        await callback.message.edit_text(
+            texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
+            reply_markup=get_insufficient_balance_keyboard(db_user.language),
+        )
+        await callback.answer()
         return
     
     try:
@@ -1629,7 +1639,12 @@ async def confirm_reset_traffic(
     reset_price = PERIOD_PRICES[30] 
     
     if db_user.balance_kopeks < reset_price:
-        await callback.answer("⌛ Недостаточно средств на балансе", show_alert=True)
+        missing_kopeks = reset_price - db_user.balance_kopeks
+        await callback.message.edit_text(
+            texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
+            reply_markup=get_insufficient_balance_keyboard(db_user.language),
+        )
+        await callback.answer()
         return
     
     try:
@@ -2364,7 +2379,12 @@ async def add_traffic(
         return
     
     if db_user.balance_kopeks < price:
-        await callback.answer("⚠️ Недостаточно средств на балансе", show_alert=True)
+        missing_kopeks = price - db_user.balance_kopeks
+        await callback.message.edit_text(
+            texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
+            reply_markup=get_insufficient_balance_keyboard(db_user.language),
+        )
+        await callback.answer()
         return
     
     try:
@@ -2802,11 +2822,10 @@ async def confirm_add_countries_to_subscription(
             removed_countries_names.append(country['name'])
     
     if new_countries and db_user.balance_kopeks < total_price:
+        missing_kopeks = total_price - db_user.balance_kopeks
         await callback.message.edit_text(
-            f"❌ Недостаточно средств на балансе!\n\n"
-            f"💰 Требуется: {texts.format_price(total_price)}\n"
-            f"💳 У вас: {texts.format_price(db_user.balance_kopeks)}",
-            reply_markup=get_back_keyboard(db_user.language)
+            texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
+            reply_markup=get_insufficient_balance_keyboard(db_user.language),
         )
         await state.clear()
         await callback.answer()
@@ -3395,13 +3414,12 @@ async def confirm_switch_traffic(
         total_price_difference = price_difference_per_month * months_remaining
         
         if db_user.balance_kopeks < total_price_difference:
-            await callback.answer(
-                f"⚠️ Недостаточно средств!\n"
-                f"Требуется: {texts.format_price(total_price_difference)} "
-                f"(за {months_remaining} мес)\n"
-                f"У вас: {texts.format_price(db_user.balance_kopeks)}", 
-                show_alert=True
+            missing_kopeks = total_price_difference - db_user.balance_kopeks
+            await callback.message.edit_text(
+                texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
+                reply_markup=get_insufficient_balance_keyboard(db_user.language),
             )
+            await callback.answer()
             return
         
         action_text = f"увеличить до {texts.format_traffic(new_traffic_gb)}"
