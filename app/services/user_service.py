@@ -260,7 +260,7 @@ class UserService:
                 await db.flush()
             except Exception as e:
                 logger.error(f"❌ Ошибка обновления пользовательских сообщений: {e}")
-            
+
             try:
                 from app.database.models import PromoCode
                 from sqlalchemy import update
@@ -275,7 +275,22 @@ class UserService:
                 await db.flush()
             except Exception as e:
                 logger.error(f"❌ Ошибка обновления промокодов: {e}")
-            
+
+            try:
+                from app.database.models import WelcomeText
+                from sqlalchemy import update
+
+                result = await db.execute(
+                    update(WelcomeText)
+                    .where(WelcomeText.created_by == user_id)
+                    .values(created_by=None)
+                )
+                if result.rowcount > 0:
+                    logger.info(f"🔄 Обновлено {result.rowcount} приветственных текстов")
+                await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка обновления приветственных текстов: {e}")
+
             try:
                 from app.database.models import YooKassaPayment
                 from sqlalchemy import select

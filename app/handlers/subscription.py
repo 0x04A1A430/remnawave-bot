@@ -2620,15 +2620,28 @@ async def handle_subscription_config_back(
             await state.set_state(SubscriptionStates.selecting_period)
         
     elif current_state == SubscriptionStates.selecting_devices.state:
-        countries = await _get_available_countries()
-        data = await state.get_data()
-        selected_countries = data.get('countries', [])
-        
-        await callback.message.edit_text(
-            texts.SELECT_COUNTRIES,
-            reply_markup=get_countries_keyboard(countries, selected_countries, db_user.language)
-        )
-        await state.set_state(SubscriptionStates.selecting_countries)
+        if await _should_show_countries_management():
+            countries = await _get_available_countries()
+            data = await state.get_data()
+            selected_countries = data.get('countries', [])
+
+            await callback.message.edit_text(
+                texts.SELECT_COUNTRIES,
+                reply_markup=get_countries_keyboard(countries, selected_countries, db_user.language)
+            )
+            await state.set_state(SubscriptionStates.selecting_countries)
+        elif settings.is_traffic_selectable():
+            await callback.message.edit_text(
+                texts.SELECT_TRAFFIC,
+                reply_markup=get_traffic_packages_keyboard(db_user.language)
+            )
+            await state.set_state(SubscriptionStates.selecting_traffic)
+        else:
+            await callback.message.edit_text(
+                texts.BUY_SUBSCRIPTION_START,
+                reply_markup=get_subscription_period_keyboard(db_user.language)
+            )
+            await state.set_state(SubscriptionStates.selecting_period)
         
     else:
         from app.handlers.menu import show_main_menu
