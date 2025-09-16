@@ -43,10 +43,9 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 telegram_id = event.callback_query.from_user.id
 
         if telegram_id is None:
-            logger.info("❌ telegram_id не найден, пропускаем")
+            logger.debug("❌ telegram_id не найден, пропускаем")
             return await handler(event, data)
 
-        logger.info(f"👤 Пользователь: {telegram_id}")
 
         state: FSMContext = data.get('state')
         current_state = None
@@ -54,33 +53,28 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         if state:
             current_state = await state.get_state()
 
-        logger.info(f"📊 Текущее состояние: {current_state}")
 
         is_reg_process = is_registration_process(event, current_state)
-        logger.info(f"📝 Процесс регистрации: {is_reg_process}")
 
         if is_reg_process:
-            logger.info("✅ Событие разрешено (процесс регистрации), пропускаем проверку")
+            logger.debug("✅ Событие разрешено (процесс регистрации), пропускаем проверку")
             return await handler(event, data)
 
         bot: Bot = data["bot"]
 
         channel_id = settings.CHANNEL_SUB_ID
-        logger.info(f"📺 CHANNEL_SUB_ID: {channel_id}")
         
         if not channel_id:
-            logger.info("⚠️ CHANNEL_SUB_ID не установлен, пропускаем проверку")
+            logger.warning("⚠️ CHANNEL_SUB_ID не установлен, пропускаем проверку")
             return await handler(event, data)
 
         is_required = settings.CHANNEL_IS_REQUIRED_SUB
-        logger.info(f"🔒 CHANNEL_IS_REQUIRED_SUB: {is_required}")
         
         if not is_required:
-            logger.info("⚠️ Обязательная подписка отключена, пропускаем проверку")
+            logger.debug("⚠️ Обязательная подписка отключена, пропускаем проверку")
             return await handler(event, data)
 
         channel_link = settings.CHANNEL_LINK
-        logger.info(f"🔗 CHANNEL_LINK: {channel_link}")
         
         try:
             member = await bot.get_chat_member(chat_id=channel_id, user_id=telegram_id)
@@ -116,7 +110,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
 
     @staticmethod
     async def _deny_message(event: TelegramObject, bot: Bot, channel_link: str):
-        logger.info("🚫 Отправляем сообщение о необходимости подписки")
+        logger.debug("🚫 Отправляем сообщение о необходимости подписки")
         channel_sub_kb = get_channel_sub_keyboard(channel_link)
         text = f"""🔒 Для использования бота подпишитесь на новостной канал, чтобы получать уведомления о новых возможностях и обновлениях бота. Спасибо!"""
         
