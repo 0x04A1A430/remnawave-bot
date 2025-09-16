@@ -421,17 +421,31 @@ async def show_media_preview(
 ):
     data = await state.get_data()
     media_type = data.get('media_type')
+    media_file_id = data.get('media_file_id')
     
     preview_text = f"🖼️ <b>Медиафайл добавлен</b>\n\n" \
                    f"📎 <b>Тип:</b> {media_type}\n" \
                    f"✅ Файл сохранен и готов к отправке\n\n" \
                    f"Что делать дальше?"
     
-    await message.answer(
-        preview_text,
-        reply_markup=get_media_confirm_keyboard(db_user.language),
-        parse_mode="HTML"
-    )
+    # Для предпросмотра рассылки используем оригинальный метод без патчинга логотипа
+    # чтобы показать именно загруженное фото
+    from app.utils.message_patch import _original_answer
+    
+    if media_type == "photo" and media_file_id:
+        # Показываем предпросмотр с загруженным фото
+        await message.bot.send_photo(
+            chat_id=message.chat.id,
+            photo=media_file_id,
+            caption=preview_text,
+            reply_markup=get_media_confirm_keyboard(db_user.language),
+            parse_mode="HTML"
+        )
+    else:
+        # Для других типов медиа или если нет фото, используем обычное сообщение
+        await _original_answer(message, preview_text, 
+                             reply_markup=get_media_confirm_keyboard(db_user.language), 
+                             parse_mode="HTML")
 
 @admin_required
 @error_handler
@@ -642,11 +656,34 @@ async def confirm_button_selection(
         types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin_messages")
     ])
     
-    await callback.message.edit_text(
-        preview_text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-        parse_mode="HTML"
-    )
+    # Если есть медиа, показываем его с загруженным фото, иначе обычное текстовое сообщение
+    if has_media and media_type == "photo":
+        media_file_id = data.get('media_file_id')
+        if media_file_id:
+            # Удаляем текущее сообщение и отправляем новое с фото
+            await callback.message.delete()
+            await callback.bot.send_photo(
+                chat_id=callback.message.chat.id,
+                photo=media_file_id,
+                caption=preview_text,
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+                parse_mode="HTML"
+            )
+        else:
+            # Если нет file_id, используем обычное редактирование
+            await callback.message.edit_text(
+                preview_text,
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+                parse_mode="HTML"
+            )
+    else:
+        # Для текстовых сообщений или других типов медиа используем обычное редактирование
+        await callback.message.edit_text(
+            preview_text,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+            parse_mode="HTML"
+        )
+    
     await callback.answer()
 
 
