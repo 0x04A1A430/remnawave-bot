@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - DEV   # деплой только при пуше в DEV
+  workflow_dispatch:   # ручной запуск из вкладки Actions
 
 jobs:
   deploy:
