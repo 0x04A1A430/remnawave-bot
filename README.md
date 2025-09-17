@@ -890,7 +890,7 @@ bedolaga_bot/
 │   │       ├── 💳 cryptobot.py       # CryptoBot операции
 │   │       ├── 🌐 server_squad.py    # Серверы и сквады
 │   │       ├── 🎁 promocode.py       # Промокоды
-│   │       └── 👥 referral.py        # Рефералы
+│   │       └── 👥 referral.py        # Партнерка
 │   │
 │   ├── 🔧 services/                   # Бизнес-логика
 │   │   ├── 👤 user_service.py         # Сервис пользователей
@@ -899,7 +899,7 @@ bedolaga_bot/
 │   │   ├── 🗄️ backup_service.py       # Бекапы
 │   │   ├── 🎁 promocode_service.py    # Промокоды
 │   │   ├── 🚧 maintenance_service.py  # Промокоды
-│   │   ├── 👥 referral_service.py     # Рефералы
+│   │   ├── 👥 referral_service.py     # Партнерка
 │   │   ├── 💬 admin_notification_service.py     # Уведомления для администраторов в чаты
 │   │   ├── 🔍 monitoring_service.py   # Мониторинг
 │   │   ├── ♻️ version_service.py      # Проверка версий бота
@@ -1063,7 +1063,7 @@ your-domain.com {
 3. **💰 Баланс** → "💰 Баланс" → пополни через Stars/Tribute/YooKassa
 4. **🛒 Подписка** → "🛒 Купить подписку" → выбор тарифа → оплата
 5. **📱 Управление** → "📋 Мои подписки" → конфигурация → получение ссылки
-6. **👥 Рефералы** → "👥 Рефералы" → поделись ссылкой
+6. **👥 Партнерка** → "👥 Партнерка" → поделись ссылкой
 
 ### ⚙️ **Для администраторов**
 

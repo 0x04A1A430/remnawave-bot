@@ -225,7 +225,7 @@ def get_admin_statistics_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="💰 Доходы", callback_data="admin_stats_revenue"),
-            InlineKeyboardButton(text="🤝 Рефералы", callback_data="admin_stats_referrals")
+            InlineKeyboardButton(text="🤝 Партнерка", callback_data="admin_stats_referrals")
         ],
         [
             InlineKeyboardButton(text="📊 Общая сводка", callback_data="admin_stats_summary")
@@ -917,7 +917,7 @@ DEFAULT_BROADCAST_BUTTONS = ("home",)
 
 BROADCAST_BUTTONS = {
     "balance": {"text": "💰 Пополнить баланс", "callback": "balance_topup"},
-    "referrals": {"text": "🤝 Рефералы", "callback": "menu_referrals"},
+    "referrals": {"text": "🤝 Партнерка", "callback": "menu_referrals"},
     "promocode": {"text": "🎫 Промокод", "callback": "menu_promocode"},
     "connect": {"text": "🔗 Подключиться", "callback": "subscription_connect"},
     "subscription": {"text": "📱 Подписка", "callback": "menu_subscription"},
