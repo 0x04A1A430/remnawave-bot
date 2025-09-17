@@ -125,12 +125,15 @@ class Settings(BaseSettings):
     YOOKASSA_SECRET_KEY: Optional[str] = None
     YOOKASSA_RETURN_URL: Optional[str] = None
     YOOKASSA_DEFAULT_RECEIPT_EMAIL: Optional[str] = None
-    YOOKASSA_VAT_CODE: int = 1 
+    YOOKASSA_VAT_CODE: int = 1
+    YOOKASSA_SBP_ENABLED: bool = False 
     YOOKASSA_PAYMENT_MODE: str = "full_payment" 
     YOOKASSA_PAYMENT_SUBJECT: str = "service"
     YOOKASSA_WEBHOOK_PATH: str = "/yookassa-webhook"
     YOOKASSA_WEBHOOK_PORT: int = 8082
     YOOKASSA_WEBHOOK_SECRET: Optional[str] = None
+    YOOKASSA_MIN_AMOUNT_KOPEKS: int = 5000
+    YOOKASSA_MAX_AMOUNT_KOPEKS: int = 1000000
     PAYMENT_BALANCE_DESCRIPTION: str = "Пополнение баланса"
     PAYMENT_SUBSCRIPTION_DESCRIPTION: str = "Оплата подписки"
     PAYMENT_SERVICE_NAME: str = "Интернет-сервис"

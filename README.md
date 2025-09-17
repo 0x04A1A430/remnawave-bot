@@ -371,6 +371,9 @@ YOOKASSA_SECRET_KEY=
 YOOKASSA_RETURN_URL=
 YOOKASSA_DEFAULT_RECEIPT_EMAIL=receipts@yourdomain.com
 
+# Включить оплату через СБП (Систему быстрых платежей)
+YOOKASSA_SBP_ENABLED=false
+
 # Настройки чеков для налоговой
 YOOKASSA_VAT_CODE=1
 # Коды НДС:
