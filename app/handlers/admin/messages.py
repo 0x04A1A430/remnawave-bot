@@ -14,7 +14,9 @@ from app.keyboards.admin import (
     get_admin_messages_keyboard, get_broadcast_target_keyboard,
     get_custom_criteria_keyboard, get_broadcast_history_keyboard,
     get_admin_pagination_keyboard, get_broadcast_media_keyboard,
-    get_media_confirm_keyboard, get_updated_message_buttons_selector_keyboard_with_media
+    get_media_confirm_keyboard, get_updated_message_buttons_selector_keyboard_with_media,
+    BROADCAST_BUTTONS, BROADCAST_BUTTON_ROWS, DEFAULT_BROADCAST_BUTTONS,
+    BROADCAST_BUTTON_LABELS
 )
 from app.localization.texts import get_texts
 from app.database.crud.user import get_users_list
@@ -23,13 +25,10 @@ from app.utils.decorators import admin_required, error_handler
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SELECTED_BUTTONS = ("home",)
-BUTTON_LABELS = {
-    "balance": "💰 Пополнить баланс",
-    "referrals": "🤝 Рефералы",
-    "promocode": "🎫 Промокод",
-    "home": "🏠 На главную",
-}
+BUTTON_CONFIG = BROADCAST_BUTTONS
+BUTTON_ROWS = BROADCAST_BUTTON_ROWS
+DEFAULT_SELECTED_BUTTONS = DEFAULT_BROADCAST_BUTTONS
+BUTTON_LABELS = BROADCAST_BUTTON_LABELS
 
 
 def get_message_buttons_selector_keyboard(language: str = "ru") -> types.InlineKeyboardMarkup:
@@ -44,23 +43,20 @@ def create_broadcast_keyboard(selected_buttons: list) -> Optional[types.InlineKe
     selected_buttons = selected_buttons or []
     keyboard: list[list[types.InlineKeyboardButton]] = []
 
-    first_row: list[types.InlineKeyboardButton] = []
-    if "balance" in selected_buttons:
-        first_row.append(types.InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="balance_topup"))
-    if "referrals" in selected_buttons:
-        first_row.append(types.InlineKeyboardButton(text="🤝 Рефералы", callback_data="menu_referrals"))
-    if first_row:
-        keyboard.append(first_row)
-
-    if "promocode" in selected_buttons:
-        keyboard.append([
-            types.InlineKeyboardButton(text="🎫 Промокод", callback_data="menu_promocode")
-        ])
-
-    if "home" in selected_buttons:
-        keyboard.append([
-            types.InlineKeyboardButton(text="🏠 На главную", callback_data="back_to_menu")
-        ])
+    for row in BUTTON_ROWS:
+        row_buttons: list[types.InlineKeyboardButton] = []
+        for button_key in row:
+            if button_key not in selected_buttons:
+                continue
+            button_config = BUTTON_CONFIG[button_key]
+            row_buttons.append(
+                types.InlineKeyboardButton(
+                    text=button_config["text"],
+                    callback_data=button_config["callback"]
+                )
+            )
+        if row_buttons:
+            keyboard.append(row_buttons)
 
     if not keyboard:
         return None
@@ -490,9 +486,12 @@ async def show_button_selector_callback(
 
 Выберите кнопки, которые будут добавлены к сообщению рассылки:
 
-💰 <b>Пополнить баланс</b> - откроет методы пополнения
-🤝 <b>Рефералы</b> - откроет реферальную программу
-🎫 <b>Промокод</b> - откроет форму ввода промокода
+💰 <b>Пополнить баланс</b> — откроет методы пополнения
+🤝 <b>Рефералы</b> — откроет реферальную программу
+🎫 <b>Промокод</b> — откроет форму ввода промокода
+🔗 <b>Подключиться</b> — поможет подключить приложение
+📱 <b>Подписка</b> — покажет состояние подписки
+🛠️ <b>Техподдержка</b> — свяжет с поддержкой
 
 🏠 <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.{media_info}
 
@@ -531,9 +530,12 @@ async def show_button_selector(
 
 Выберите кнопки, которые будут добавлены к сообщению рассылки:
 
-💰 <b>Пополнить баланс</b> - откроет методы пополнения
-🤝 <b>Рефералы</b> - откроет реферальную программу
-🎫 <b>Промокод</b> - откроет форму ввода промокода
+💰 <b>Пополнить баланс</b> — откроет методы пополнения
+🤝 <b>Рефералы</b> — откроет реферальную программу
+🎫 <b>Промокод</b> — откроет форму ввода промокода
+🔗 <b>Подключиться</b> — поможет подключить приложение
+📱 <b>Подписка</b> — покажет состояние подписки
+🛠️ <b>Техподдержка</b> — свяжет с поддержкой
 
 🏠 <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.
 
@@ -612,7 +614,7 @@ async def confirm_button_selection(
         }
         media_info = f"\n🖼️ <b>Медиафайл:</b> {media_type_names.get(media_type, media_type)}"
     
-    ordered_keys = ["balance", "referrals", "promocode", "home"]
+    ordered_keys = [button_key for row in BUTTON_ROWS for button_key in row]
     selected_names = [BUTTON_LABELS[key] for key in ordered_keys if key in selected_buttons]
     if selected_names:
         buttons_info = f"\n📘 <b>Кнопки:</b> {', '.join(selected_names)}"
