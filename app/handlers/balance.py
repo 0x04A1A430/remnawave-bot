@@ -210,7 +210,6 @@ async def start_yookassa_payment(
         await callback.answer("❌ Оплата картой через YooKassa временно недоступна", show_alert=True)
         return
     
-    # Получаем лимиты из настроек
     min_amount_rub = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
     max_amount_rub = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
     
@@ -234,12 +233,10 @@ async def start_yookassa_sbp_payment(
 ):
     texts = get_texts(db_user.language)
     
-    # Проверяем, включена ли оплата через СБП
     if not settings.is_yookassa_enabled() or not settings.YOOKASSA_SBP_ENABLED:
         await callback.answer("❌ Оплата через СБП временно недоступна", show_alert=True)
         return
     
-    # Получаем лимиты из настроек
     min_amount_rub = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
     max_amount_rub = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
     
@@ -357,7 +354,6 @@ async def process_topup_amount(
     try:
         amount_rubles = float(message.text.replace(',', '.'))
         
-        # Проверяем общие лимиты
         if amount_rubles < 1:
             await message.answer("Минимальная сумма пополнения: 1 ₽")
             return
@@ -370,7 +366,6 @@ async def process_topup_amount(
         data = await state.get_data()
         payment_method = data.get("payment_method", "stars")
         
-        # Проверяем лимиты для YooKassa (если выбран этот метод)
         if payment_method in ["yookassa", "yookassa_sbp"]:
             if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
                 min_rubles = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
@@ -388,7 +383,7 @@ async def process_topup_amount(
             from app.database.database import AsyncSessionLocal
             async with AsyncSessionLocal() as db:
                 await process_yookassa_payment_amount(message, db_user, db, amount_kopeks, state)
-        elif payment_method == "yookassa_sbp":  # Обработка оплаты через СБП
+        elif payment_method == "yookassa_sbp": 
             from app.database.database import AsyncSessionLocal
             async with AsyncSessionLocal() as db:
                 await process_yookassa_sbp_payment_amount(message, db_user, db, amount_kopeks, state)
@@ -469,7 +464,6 @@ async def process_yookassa_payment_amount(
         await message.answer("❌ Оплата через YooKassa временно недоступна")
         return
     
-    # Проверяем лимиты из настроек
     if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
         min_rubles = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
         await message.answer(f"❌ Минимальная сумма для оплаты картой: {min_rubles:.0f} ₽")
@@ -549,17 +543,12 @@ async def process_yookassa_sbp_payment_amount(
     amount_kopeks: int,
     state: FSMContext
 ):
-    """
-    Обработчик оплаты через СБП (Систему быстрых платежей) с использованием YooKassa
-    """
     texts = get_texts(db_user.language)
     
-    # Проверяем, включена ли оплата через СБП
     if not settings.is_yookassa_enabled() or not settings.YOOKASSA_SBP_ENABLED:
         await message.answer("❌ Оплата через СБП временно недоступна")
         return
     
-    # Проверяем лимиты из настроек
     if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
         min_rubles = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
         await message.answer(f"❌ Минимальная сумма для оплаты через СБП: {min_rubles:.0f} ₽")
@@ -571,10 +560,8 @@ async def process_yookassa_sbp_payment_amount(
         return
     
     try:
-        # Создаем платеж через PaymentService
         payment_service = PaymentService(message.bot)
         
-        # Создаем платеж с указанием метода оплаты СБП
         payment_result = await payment_service.create_yookassa_sbp_payment(
             db=db,
             user_id=db_user.id,
@@ -589,27 +576,23 @@ async def process_yookassa_sbp_payment_amount(
             }
         )
         
-        # Проверяем результат создания платежа
         if not payment_result:
             await message.answer("❌ Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.")
             await state.clear()
             return
         
-        # Получаем URL для подтверждения платежа
         confirmation_url = payment_result.get("confirmation_url")
         if not confirmation_url:
             await message.answer("❌ Ошибка получения ссылки для оплаты через СБП. Обратитесь в поддержку.")
             await state.clear()
             return
         
-        # Создаем клавиатуру с кнопками
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="🏦 Оплатить через СБП", url=confirmation_url)],
             [types.InlineKeyboardButton(text="📊 Проверить статус", callback_data=f"check_yookassa_{payment_result['local_payment_id']}")],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")]
         ])
         
-        # Отправляем сообщение с инструкцией по оплате
         await message.answer(
             f"🏦 <b>Оплата через СБП</b>\n\n"
             f"💰 Сумма: {settings.format_price(amount_kopeks)}\n"
@@ -626,10 +609,8 @@ async def process_yookassa_sbp_payment_amount(
             parse_mode="HTML"
         )
         
-        # Очищаем состояние
         await state.clear()
         
-        # Логируем успешное создание платежа
         logger.info(f"Создан платеж YooKassa СБП для пользователя {db_user.telegram_id}: "
                    f"{amount_kopeks//100}₽, ID: {payment_result['yookassa_payment_id']}")
         
@@ -748,7 +729,6 @@ async def process_cryptobot_payment_amount(
     
     amount_rubles = amount_kopeks / 100
     
-    # Проверяем лимиты для CryptoBot (оставляем как есть, т.к. это отдельный метод)
     if amount_rubles < 100:
         await message.answer("Минимальная сумма пополнения: 100 ₽")
         return
@@ -758,7 +738,6 @@ async def process_cryptobot_payment_amount(
         return
     
     try:
-        # Получаем курс из состояния или запрашиваем заново
         data = await state.get_data()
         current_rate = data.get('current_rate')
         
@@ -766,10 +745,8 @@ async def process_cryptobot_payment_amount(
             from app.utils.currency_converter import currency_converter
             current_rate = await currency_converter.get_usd_to_rub_rate()
         
-        # Конвертируем рубли в доллары
         amount_usd = amount_rubles / current_rate
         
-        # Округляем до 2 знаков после запятой
         amount_usd = round(amount_usd, 2)
         
         if amount_usd < 1:
@@ -897,14 +874,9 @@ async def handle_sbp_payment(
     callback: types.CallbackQuery,
     db: AsyncSession
 ):
-    """
-    Обработчик для embedded платежей через СБП
-    """
     try:
-        # Получаем ID платежа из callback данных
         local_payment_id = int(callback.data.split('_')[-1])
         
-        # Получаем информацию о платеже из базы данных
         from app.database.crud.yookassa import get_yookassa_payment_by_local_id
         payment = await get_yookassa_payment_by_local_id(db, local_payment_id)
         
@@ -912,7 +884,6 @@ async def handle_sbp_payment(
             await callback.answer("❌ Платеж не найден", show_alert=True)
             return
         
-        # Получаем confirmation_token из метаданных платежа
         import json
         metadata = json.loads(payment.metadata_json) if payment.metadata_json else {}
         confirmation_token = metadata.get("confirmation_token")
@@ -921,7 +892,6 @@ async def handle_sbp_payment(
             await callback.answer("❌ Токен подтверждения не найден", show_alert=True)
             return
         
-        # Отправляем пользователю сообщение с инструкцией по оплате
         await callback.message.answer(
             f"Для оплаты через СБП откройте приложение вашего банка и подтвердите платеж.\\n\\n"
             f"Если у вас не открылось банковское приложение автоматически, вы можете:\\n"
@@ -972,7 +942,6 @@ def register_handlers(dp: Dispatcher):
         F.data == "topup_yookassa"
     )
     
-    # Регистрируем обработчик для кнопки оплаты через СБП
     dp.callback_query.register(
         start_yookassa_sbp_payment,
         F.data == "topup_yookassa_sbp"
