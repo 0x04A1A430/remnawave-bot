@@ -119,7 +119,7 @@ class RussianTexts(Texts):
     MENU_BUY_SUBSCRIPTION = "💎 Купить подписку"
     MENU_EXTEND_SUBSCRIPTION = "⏰ Продлить подписку"
     MENU_PROMOCODE = "🎫 Промокод"
-    MENU_REFERRALS = "🤝 Рефералы"
+    MENU_REFERRALS = "🤝 Партнерка"
     MENU_SUPPORT = "🛠️ Техподдержка"
     MENU_RULES = "📋 Правила сервиса"
     MENU_LANGUAGE = "🌐 Язык"
@@ -421,7 +421,7 @@ class RussianTexts(Texts):
     ADMIN_PROMOCODES = "🎫 Промокоды"
     ADMIN_MESSAGES = "📨 Рассылки"
     ADMIN_MONITORING = "🔍 Мониторинг"
-    ADMIN_REFERRALS = "🤝 Рефералы"
+    ADMIN_REFERRALS = "🤝 Партнерка"
     ADMIN_RULES = "📋 Правила"
     ADMIN_REMNAWAVE = "🖥️ Remnawave"
     ADMIN_STATISTICS = "📊 Статистика"
