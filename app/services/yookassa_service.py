@@ -11,7 +11,6 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-
 class YooKassaService:
     
     def __init__(self,
