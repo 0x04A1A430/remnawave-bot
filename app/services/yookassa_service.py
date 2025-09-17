@@ -156,27 +156,11 @@ class YooKassaService:
             metadata: Dict[str, Any],
             receipt_email: Optional[str] = None,
             receipt_phone: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """
-        Создает платеж через СБП (Систему быстрых платежей) в YooKassa
         
-        Args:
-            amount: Сумма платежа
-            currency: Валюта платежа
-            description: Описание платежа
-            metadata: Метаданные платежа
-            receipt_email: Email для чека (опционально)
-            receipt_phone: Телефон для чека (опционально)
-            
-        Returns:
-            Словарь с информацией о платеже или None в случае ошибки
-        """
-        
-        # Проверяем, сконфигурирован ли YooKassa
         if not self.configured:
             logger.error("YooKassa не сконфигурирован. Невозможно создать платеж через СБП.")
             return None
 
-        # Подготавливаем контактные данные для чека
         customer_contact_for_receipt = {}
         if receipt_email:
             customer_contact_for_receipt["email"] = receipt_email
@@ -193,36 +177,28 @@ class YooKassaService:
             }
 
         try:
-            # Создаем билдер для запроса платежа
             builder = PaymentRequestBuilder()
             
-            # Устанавливаем сумму платежа
             builder.set_amount({
                 "value": str(round(amount, 2)),
                 "currency": currency.upper()
             })
             
-            # Устанавливаем автоматическое подтверждение платежа
             builder.set_capture(True)
             
-            # Устанавливаем тип подтверждения - для СБП используем redirect с deeplink
             builder.set_confirmation({
                 "type": "redirect",
                 "return_url": self.return_url
             })
             
-            # Устанавливаем описание платежа
             builder.set_description(description)
             
-            # Устанавливаем метаданные
             builder.set_metadata(metadata)
             
-            # Устанавливаем способ оплаты - СБП
             builder.set_payment_method_data({
                 "type": "sbp"
             })
 
-            # Создаем элемент чека
             receipt_items_list: List[Dict[str, Any]] = [{
                 "description": description[:128],
                 "quantity": "1.00",
@@ -235,36 +211,28 @@ class YooKassaService:
                 "payment_subject": getattr(settings, 'YOOKASSA_PAYMENT_SUBJECT', 'service')
             }]
 
-            # Подготавливаем данные чека
             receipt_data_dict: Dict[str, Any] = {
                 "customer": customer_contact_for_receipt,
                 "items": receipt_items_list
             }
 
-            # Устанавливаем чек
             builder.set_receipt(receipt_data_dict)
 
-            # Генерируем уникальный ключ идемпотентности
             idempotence_key = str(uuid.uuid4())
             
-            # Собираем запрос на платеж
             payment_request = builder.build()
 
-            # Логируем создание платежа
             logger.info(
                 f"Создание платежа YooKassa СБП (Idempotence-Key: {idempotence_key}). "
                 f"Сумма: {amount} {currency}. Метаданные: {metadata}. Чек: {receipt_data_dict}")
 
-            # Выполняем запрос к API YooKassa
             loop = asyncio.get_running_loop()
             response = await loop.run_in_executor(
                 None, lambda: YooKassaPayment.create(payment_request, idempotence_key))
 
-            # Логируем ответ от API
             logger.info(
                 f"Ответ YooKassa Payment.create (СБП): ID={response.id}, Status={response.status}, Paid={response.paid}")
 
-            # Возвращаем информацию о платеже
             return {
                 "id": response.id,
                 "confirmation_url": response.confirmation.confirmation_url if response.confirmation else None,
