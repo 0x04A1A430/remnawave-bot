@@ -210,9 +210,13 @@ async def start_yookassa_payment(
         await callback.answer("❌ Оплата картой через YooKassa временно недоступна", show_alert=True)
         return
     
+    # Получаем лимиты из настроек
+    min_amount_rub = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
+    max_amount_rub = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
+    
     await callback.message.edit_text(
-        "💳 <b>Оплата банковской картой</b>\n\n"
-        "Введите сумму для пополнения от 100 до 50,000 рублей:",
+        f"💳 <b>Оплата банковской картой</b>\n\n"
+        f"Введите сумму для пополнения от {min_amount_rub:.0f} до {max_amount_rub:,.0f} рублей:",
         reply_markup=get_back_keyboard(db_user.language),
         parse_mode="HTML"
     )
@@ -235,9 +239,13 @@ async def start_yookassa_sbp_payment(
         await callback.answer("❌ Оплата через СБП временно недоступна", show_alert=True)
         return
     
+    # Получаем лимиты из настроек
+    min_amount_rub = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
+    max_amount_rub = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
+    
     await callback.message.edit_text(
-        "🏦 <b>Оплата через СБП</b>\n\n"
-        "Введите сумму для пополнения от 100 до 50,000 рублей:",
+        f"🏦 <b>Оплата через СБП</b>\n\n"
+        f"Введите сумму для пополнения от {min_amount_rub:.0f} до {max_amount_rub:,.0f} рублей:",
         reply_markup=get_back_keyboard(db_user.language),
         parse_mode="HTML"
     )
@@ -349,6 +357,7 @@ async def process_topup_amount(
     try:
         amount_rubles = float(message.text.replace(',', '.'))
         
+        # Проверяем общие лимиты
         if amount_rubles < 1:
             await message.answer("Минимальная сумма пополнения: 1 ₽")
             return
@@ -360,6 +369,18 @@ async def process_topup_amount(
         amount_kopeks = int(amount_rubles * 100)
         data = await state.get_data()
         payment_method = data.get("payment_method", "stars")
+        
+        # Проверяем лимиты для YooKassa (если выбран этот метод)
+        if payment_method in ["yookassa", "yookassa_sbp"]:
+            if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
+                min_rubles = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
+                await message.answer(f"❌ Минимальная сумма для оплаты через YooKassa: {min_rubles:.0f} ₽")
+                return
+            
+            if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
+                max_rubles = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
+                await message.answer(f"❌ Максимальная сумма для оплаты через YooKassa: {max_rubles:,.0f} ₽".replace(',', ' '))
+                return
         
         if payment_method == "stars":
             await process_stars_payment_amount(message, db_user, amount_kopeks, state)
@@ -448,8 +469,15 @@ async def process_yookassa_payment_amount(
         await message.answer("❌ Оплата через YooKassa временно недоступна")
         return
     
-    if amount_kopeks < 10000:
-        await message.answer("❌ Минимальная сумма для оплаты картой: 100 ₽")
+    # Проверяем лимиты из настроек
+    if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
+        min_rubles = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
+        await message.answer(f"❌ Минимальная сумма для оплаты картой: {min_rubles:.0f} ₽")
+        return
+    
+    if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
+        max_rubles = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
+        await message.answer(f"❌ Максимальная сумма для оплаты картой: {max_rubles:,.0f} ₽".replace(',', ' '))
         return
     
     try:
@@ -531,9 +559,15 @@ async def process_yookassa_sbp_payment_amount(
         await message.answer("❌ Оплата через СБП временно недоступна")
         return
     
-    # Проверяем минимальную сумму оплаты
-    if amount_kopeks < 10000:  # 100 рублей
-        await message.answer("❌ Минимальная сумма для оплаты через СБП: 100 ₽")
+    # Проверяем лимиты из настроек
+    if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
+        min_rubles = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
+        await message.answer(f"❌ Минимальная сумма для оплаты через СБП: {min_rubles:.0f} ₽")
+        return
+    
+    if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
+        max_rubles = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
+        await message.answer(f"❌ Максимальная сумма для оплаты через СБП: {max_rubles:,.0f} ₽".replace(',', ' '))
         return
     
     try:
@@ -714,6 +748,7 @@ async def process_cryptobot_payment_amount(
     
     amount_rubles = amount_kopeks / 100
     
+    # Проверяем лимиты для CryptoBot (оставляем как есть, т.к. это отдельный метод)
     if amount_rubles < 100:
         await message.answer("Минимальная сумма пополнения: 100 ₽")
         return

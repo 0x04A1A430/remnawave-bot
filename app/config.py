@@ -131,6 +131,8 @@ class Settings(BaseSettings):
     YOOKASSA_WEBHOOK_PATH: str = "/yookassa-webhook"
     YOOKASSA_WEBHOOK_PORT: int = 8082
     YOOKASSA_WEBHOOK_SECRET: Optional[str] = None
+    YOOKASSA_MIN_AMOUNT_KOPEKS: int = 5000
+    YOOKASSA_MAX_AMOUNT_KOPEKS: int = 1000000
     PAYMENT_BALANCE_DESCRIPTION: str = "Пополнение баланса"
     PAYMENT_SUBSCRIPTION_DESCRIPTION: str = "Оплата подписки"
     PAYMENT_SERVICE_NAME: str = "Интернет-сервис"
