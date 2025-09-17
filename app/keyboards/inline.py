@@ -476,7 +476,6 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = "ru") -> In
             )
         ])
         
-        # Добавляем кнопку для оплаты через СБП, если она включена
         if settings.YOOKASSA_SBP_ENABLED:
             keyboard.append([
                 InlineKeyboardButton(
