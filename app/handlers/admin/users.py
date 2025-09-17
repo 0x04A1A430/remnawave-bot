@@ -685,7 +685,8 @@ async def process_balance_edit(
             description = f"Списание администратором: {int(amount_rubles)} ₽"
         
         success = await user_service.update_user_balance(
-            db, user_id, amount_kopeks, description, db_user.id
+            db, user_id, amount_kopeks, description, db_user.id,
+            bot=message.bot, admin_name=db_user.full_name
         )
         
         if success:
