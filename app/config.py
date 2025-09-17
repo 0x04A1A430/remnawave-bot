@@ -124,7 +124,8 @@ class Settings(BaseSettings):
     YOOKASSA_SECRET_KEY: Optional[str] = None
     YOOKASSA_RETURN_URL: Optional[str] = None
     YOOKASSA_DEFAULT_RECEIPT_EMAIL: Optional[str] = None
-    YOOKASSA_VAT_CODE: int = 1 
+    YOOKASSA_VAT_CODE: int = 1
+    YOOKASSA_SBP_ENABLED: bool = False 
     YOOKASSA_PAYMENT_MODE: str = "full_payment" 
     YOOKASSA_PAYMENT_SUBJECT: str = "service"
     YOOKASSA_WEBHOOK_PATH: str = "/yookassa-webhook"

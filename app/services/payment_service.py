@@ -261,6 +261,120 @@ class PaymentService:
         except Exception as e:
             logger.error(f"Ошибка создания платежа YooKassa: {e}")
             return None
+
+    async def create_yookassa_sbp_payment(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        amount_kopeks: int,
+        description: str,
+        receipt_email: Optional[str] = None,
+        receipt_phone: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Создает платеж через СБП (Систему быстрых платежей) с использованием YooKassa
+        
+        Args:
+            db: Сессия базы данных
+            user_id: ID пользователя
+            amount_kopeks: Сумма в копейках
+            description: Описание платежа
+            receipt_email: Email для чека (опционально)
+            receipt_phone: Телефон для чека (опционально)
+            metadata: Метаданные платежа (опционально)
+            
+        Returns:
+            Словарь с информацией о платеже или None в случае ошибки
+        """
+        
+        # Проверяем, инициализирован ли YooKassa сервис
+        if not self.yookassa_service:
+            logger.error("YooKassa сервис не инициализирован")
+            return None
+        
+        try:
+            # Конвертируем копейки в рубли
+            amount_rubles = amount_kopeks / 100
+            
+            # Подготавливаем метаданные платежа
+            payment_metadata = metadata or {}
+            payment_metadata.update({
+                "user_id": str(user_id),
+                "amount_kopeks": str(amount_kopeks),
+                "type": "balance_topup_sbp"  # Тип платежа - через СБП
+            })
+            
+            # Создаем платеж через YooKassa сервис с указанием метода оплаты СБП
+            yookassa_response = await self.yookassa_service.create_sbp_payment(
+                amount=amount_rubles,
+                currency="RUB",
+                description=description,
+                metadata=payment_metadata,
+                receipt_email=receipt_email,
+                receipt_phone=receipt_phone
+            )
+            
+            # Проверяем, успешно ли создан платеж
+            if not yookassa_response or yookassa_response.get("error"):
+                logger.error(f"Ошибка создания платежа YooKassa СБП: {yookassa_response}")
+                return None
+            
+            # Парсим дату создания платежа
+            yookassa_created_at = None
+            if yookassa_response.get("created_at"):
+                try:
+                    dt_with_tz = datetime.fromisoformat(
+                        yookassa_response["created_at"].replace('Z', '+00:00')
+                    )
+                    yookassa_created_at = dt_with_tz.replace(tzinfo=None)
+                except Exception as e:
+                    logger.warning(f"Не удалось парсить created_at: {e}")
+                    yookassa_created_at = None
+            
+            # Получаем confirmation_token для embedded платежей
+            confirmation_token = None
+            if yookassa_response.get("confirmation"):
+                confirmation_token = yookassa_response["confirmation"].get("confirmation_token")
+            
+            # Обновляем метаданные с confirmation_token если он есть
+            if confirmation_token:
+                payment_metadata["confirmation_token"] = confirmation_token
+            
+            # Сохраняем информацию о платеже в локальной базе данных
+            local_payment = await create_yookassa_payment(
+                db=db,
+                user_id=user_id,
+                yookassa_payment_id=yookassa_response["id"],
+                amount_kopeks=amount_kopeks,
+                currency="RUB",
+                description=description,
+                status=yookassa_response["status"],
+                confirmation_url=yookassa_response.get("confirmation_url"),
+                metadata_json=payment_metadata,
+                payment_method_type="bank_card",  # Для СБП указываем тип bank_card
+                yookassa_created_at=yookassa_created_at, 
+                test_mode=yookassa_response.get("test_mode", False)
+            )
+            
+            # Логируем успешное создание платежа
+            logger.info(f"Создан платеж YooKassa СБП {yookassa_response['id']} на {amount_rubles}₽ для пользователя {user_id}")
+            
+            # Возвращаем информацию о платеже
+            return {
+                "local_payment_id": local_payment.id,
+                "yookassa_payment_id": yookassa_response["id"],
+                "confirmation_url": yookassa_response.get("confirmation_url"),
+                "confirmation_token": confirmation_token,
+                "amount_kopeks": amount_kopeks,
+                "amount_rubles": amount_rubles,
+                "status": yookassa_response["status"],
+                "created_at": local_payment.created_at
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка создания платежа YooKassa СБП: {e}")
+            return None
     
     async def process_yookassa_webhook(self, db: AsyncSession, webhook_data: dict) -> bool:
         try:
