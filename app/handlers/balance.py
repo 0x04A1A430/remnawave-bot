@@ -36,7 +36,7 @@ def get_quick_amount_buttons(language: str) -> list:
     buttons = []
     periods = settings.get_available_subscription_periods()
     
-    # Ограничиваем до 6 кнопок (2 ряда по 3 кнопки)
+    # Ограничиваем до 6 кнопок (3 ряда по 2 кнопки)
     periods = periods[:6]
     
     for period in periods:
@@ -57,10 +57,10 @@ def get_quick_amount_buttons(language: str) -> list:
                 )
             )
     
-    # Разбиваем кнопки на ряды (по 3 в ряд)
+    # Разбиваем кнопки на ряды (по 2 в ряд)
     keyboard_rows = []
-    for i in range(0, len(buttons), 3):
-        keyboard_rows.append(buttons[i:i + 3])
+    for i in range(0, len(buttons), 2):
+        keyboard_rows.append(buttons[i:i + 2])
     
     return keyboard_rows
 
