@@ -25,6 +25,49 @@ logger = logging.getLogger(__name__)
 TRANSACTIONS_PER_PAGE = 10
 
 
+def get_quick_amount_buttons(language: str) -> list:
+    """
+    Генерирует кнопки быстрого выбора суммы пополнения на основе 
+    AVAILABLE_SUBSCRIPTION_PERIODS и PRICE_*_DAYS
+    """
+    if not settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+        return []
+    
+    buttons = []
+    periods = settings.get_available_subscription_periods()
+    
+    # Ограничиваем до 6 кнопок (2 ряда по 3 кнопки)
+    periods = periods[:6]
+    
+    for period in periods:
+        # Получаем цену из настроек
+        price_attr = f"PRICE_{period}_DAYS"
+        if hasattr(settings, price_attr):
+            price_kopeks = getattr(settings, price_attr)
+            price_rubles = price_kopeks // 100
+            
+            # Создаем callback_data для каждой кнопки
+            callback_data = f"quick_amount_{price_kopeks}"
+            
+            # Добавляем кнопку
+            buttons.append(
+                types.InlineKeyboardButton(
+                    text=f"{price_rubles} ₽ ({period} дней)",
+                    callback_data=callback_data
+                )
+            )
+    
+    # Разбиваем кнопки на ряды (по 3 в ряд)
+    keyboard_rows = []
+    for i in range(0, len(buttons), 3):
+        keyboard_rows.append(buttons[i:i + 3])
+    
+    return keyboard_rows
+
+
+@error_handler
+
+
 @error_handler
 async def show_balance_menu(
     callback: types.CallbackQuery,
@@ -214,10 +257,32 @@ async def start_yookassa_payment(
     min_amount_rub = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
     max_amount_rub = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
     
+    # Формируем текст сообщения в зависимости от настройки
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+        message_text = (
+            f"💳 <b>Оплата банковской картой</b>\n\n"
+            f"Выберите сумму пополнения или введите вручную сумму "
+            f"от {min_amount_rub:.0f} до {max_amount_rub:,.0f} рублей:"
+        )
+    else:
+        message_text = (
+            f"💳 <b>Оплата банковской картой</b>\n\n"
+            f"Введите сумму для пополнения от {min_amount_rub:.0f} до {max_amount_rub:,.0f} рублей:"
+        )
+    
+    # Создаем клавиатуру
+    keyboard = get_back_keyboard(db_user.language)
+    
+    # Если включен быстрый выбор суммы, добавляем кнопки
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+        quick_amount_buttons = get_quick_amount_buttons(db_user.language)
+        if quick_amount_buttons:
+            # Вставляем кнопки быстрого выбора перед кнопкой "Назад"
+            keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
+    
     await callback.message.edit_text(
-        f"💳 <b>Оплата банковской картой</b>\n\n"
-        f"Введите сумму для пополнения от {min_amount_rub:.0f} до {max_amount_rub:,.0f} рублей:",
-        reply_markup=get_back_keyboard(db_user.language),
+        message_text,
+        reply_markup=keyboard,
         parse_mode="HTML"
     )
     
@@ -243,10 +308,32 @@ async def start_yookassa_sbp_payment(
     min_amount_rub = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
     max_amount_rub = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
     
+    # Формируем текст сообщения в зависимости от настройки
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+        message_text = (
+            f"🏦 <b>Оплата через СБП</b>\n\n"
+            f"Выберите сумму пополнения или введите вручную сумму "
+            f"от {min_amount_rub:.0f} до {max_amount_rub:,.0f} рублей:"
+        )
+    else:
+        message_text = (
+            f"🏦 <b>Оплата через СБП</b>\n\n"
+            f"Введите сумму для пополнения от {min_amount_rub:.0f} до {max_amount_rub:,.0f} рублей:"
+        )
+    
+    # Создаем клавиатуру
+    keyboard = get_back_keyboard(db_user.language)
+    
+    # Если включен быстрый выбор суммы, добавляем кнопки
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+        quick_amount_buttons = get_quick_amount_buttons(db_user.language)
+        if quick_amount_buttons:
+            # Вставляем кнопки быстрого выбора перед кнопкой "Назад"
+            keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
+    
     await callback.message.edit_text(
-        f"🏦 <b>Оплата через СБП</b>\n\n"
-        f"Введите сумму для пополнения от {min_amount_rub:.0f} до {max_amount_rub:,.0f} рублей:",
-        reply_markup=get_back_keyboard(db_user.language),
+        message_text,
+        reply_markup=keyboard,
         parse_mode="HTML"
     )
     
@@ -940,6 +1027,48 @@ async def handle_sbp_payment(
 
 
 
+@error_handler
+async def handle_quick_amount_selection(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext
+):
+    """
+    Обработчик выбора суммы через кнопки быстрого выбора
+    """
+    # Извлекаем сумму из callback_data
+    try:
+        amount_kopeks = int(callback.data.split('_')[-1])
+        amount_rubles = amount_kopeks / 100
+        
+        # Получаем метод оплаты из состояния
+        data = await state.get_data()
+        payment_method = data.get("payment_method", "yookassa")
+        
+        # Проверяем, какой метод оплаты был выбран и вызываем соответствующий обработчик
+        if payment_method == "yookassa":
+            from app.database.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
+                await process_yookassa_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif payment_method == "yookassa_sbp":
+            from app.database.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
+                await process_yookassa_sbp_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        else:
+            await callback.answer("❌ Неизвестный способ оплаты", show_alert=True)
+            return
+            
+    except ValueError:
+        await callback.answer("❌ Ошибка обработки суммы", show_alert=True)
+    except Exception as e:
+        logger.error(f"Ошибка обработки быстрого выбора суммы: {e}")
+        await callback.answer("❌ Ошибка обработки запроса", show_alert=True)
+
+
 def register_handlers(dp: Dispatcher):
     
     dp.callback_query.register(
@@ -1016,4 +1145,10 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_payment_methods_unavailable,
         F.data == "payment_methods_unavailable"
+    )
+    
+    # Регистрируем обработчик для кнопок быстрого выбора суммы
+    dp.callback_query.register(
+        handle_quick_amount_selection,
+        F.data.startswith("quick_amount_")
     )
