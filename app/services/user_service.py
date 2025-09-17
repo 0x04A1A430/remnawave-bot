@@ -239,13 +239,39 @@ class UserService:
             logger.info(f"🗑️ Начинаем полное удаление пользователя {user_id} (Telegram ID: {user.telegram_id})")
             
             if user.remnawave_uuid:
+                from app.config import settings
+                delete_mode = settings.get_remnawave_user_delete_mode()
+                
                 try:
-                    from app.services.subscription_service import SubscriptionService
-                    subscription_service = SubscriptionService()
-                    await subscription_service.disable_remnawave_user(user.remnawave_uuid)
-                    logger.info(f"✅ RemnaWave пользователь {user.remnawave_uuid} деактивирован")
+                    from app.services.remnawave_service import RemnaWaveService
+                    remnawave_service = RemnaWaveService()
+                    
+                    if delete_mode == "delete":
+                        # Удаляем пользователя из панели Remnawave
+                        async with remnawave_service.api as api:
+                            delete_success = await api.delete_user(user.remnawave_uuid)
+                            if delete_success:
+                                logger.info(f"✅ RemnaWave пользователь {user.remnawave_uuid} удален из панели")
+                            else:
+                                logger.warning(f"⚠️ Не удалось удалить пользователя {user.remnawave_uuid} из панели Remnawave")
+                    else:
+                        # Деактивируем пользователя в панели Remnawave
+                        from app.services.subscription_service import SubscriptionService
+                        subscription_service = SubscriptionService()
+                        await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+                        logger.info(f"✅ RemnaWave пользователь {user.remnawave_uuid} деактивирован (режим: {delete_mode})")
+                    
                 except Exception as e:
-                    logger.warning(f"⚠️ Ошибка деактивации RemnaWave: {e}")
+                    logger.warning(f"⚠️ Ошибка обработки пользователя в Remnawave (режим: {delete_mode}): {e}")
+                    # Если основное действие не удалось, попытаемся хотя бы деактивировать
+                    if delete_mode == "delete":
+                        try:
+                            from app.services.subscription_service import SubscriptionService
+                            subscription_service = SubscriptionService()
+                            await subscription_service.disable_remnawave_user(user.remnawave_uuid)
+                            logger.info(f"✅ RemnaWave пользователь {user.remnawave_uuid} деактивирован как fallback")
+                        except Exception as fallback_e:
+                            logger.error(f"❌ Ошибка деактивации RemnaWave как fallback: {fallback_e}")
             
             try:
                 sent_notifications_result = await db.execute(
