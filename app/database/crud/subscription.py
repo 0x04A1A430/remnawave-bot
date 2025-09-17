@@ -533,9 +533,12 @@ async def calculate_subscription_total_cost(
     
     logger.info(f"📊 Расчет стоимости подписки на {period_days} дней ({months_in_period} мес):")
     logger.info(f"   Базовый период: {base_price/100}₽")
-    logger.info(f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
-    logger.info(f"   Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_price/100}₽")
-    logger.info(f"   Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
+    if total_traffic_price > 0:
+        logger.info(f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
+    if total_servers_price > 0:
+        logger.info(f"   Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_price/100}₽")
+    if total_devices_price > 0:
+        logger.info(f"   Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
     logger.info(f"   ИТОГО: {total_cost/100}₽")
     
     return total_cost, details
@@ -646,9 +649,12 @@ async def get_subscription_renewal_cost(
         
         logger.info(f"💰 Расчет продления подписки {subscription_id} на {period_days} дней ({months_in_period} мес):")
         logger.info(f"   📅 Период: {base_price/100}₽")
-        logger.info(f"   🌍 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_cost/100}₽")
-        logger.info(f"   📊 Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_cost/100}₽")
-        logger.info(f"   📱 Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_cost/100}₽")
+        if total_servers_cost > 0:
+            logger.info(f"   🌍 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_cost/100}₽")
+        if total_traffic_cost > 0:
+            logger.info(f"   📊 Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_cost/100}₽")
+        if total_devices_cost > 0:
+            logger.info(f"   📱 Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_cost/100}₽")
         logger.info(f"   💎 ИТОГО: {total_cost/100}₽")
         
         return total_cost

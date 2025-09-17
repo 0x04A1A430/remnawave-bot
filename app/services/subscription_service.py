@@ -283,9 +283,12 @@ class SubscriptionService:
         
         logger.info(f"Расчет стоимости новой подписки:")
         logger.info(f"   Период {period_days} дней: {base_price/100}₽")
-        logger.info(f"   Трафик {traffic_gb} ГБ: {traffic_price/100}₽")
-        logger.info(f"   Серверы ({len(server_squad_ids)}): {total_servers_price/100}₽")
-        logger.info(f"   Устройства ({devices}): {devices_price/100}₽")
+        if traffic_price > 0:
+            logger.info(f"   Трафик {traffic_gb} ГБ: {traffic_price/100}₽")
+        if total_servers_price > 0:
+            logger.info(f"   Серверы ({len(server_squad_ids)}): {total_servers_price/100}₽")
+        if devices_price > 0:
+            logger.info(f"   Устройства ({devices}): {devices_price/100}₽")
         logger.info(f"   ИТОГО: {total_price/100}₽")
         
         return total_price, server_prices
@@ -313,9 +316,12 @@ class SubscriptionService:
             
             logger.info(f"💰 Расчет стоимости продления для подписки {subscription.id} (по текущим ценам):")
             logger.info(f"   📅 Период {period_days} дней: {base_price/100}₽")
-            logger.info(f"   🌍 Серверы ({len(subscription.connected_squads)}) по текущим ценам: {servers_price/100}₽")
-            logger.info(f"   📱 Устройства ({subscription.device_limit}): {devices_price/100}₽")
-            logger.info(f"   📊 Трафик ({subscription.traffic_limit_gb} ГБ): {traffic_price/100}₽")
+            if servers_price > 0:
+                logger.info(f"   🌍 Серверы ({len(subscription.connected_squads)}) по текущим ценам: {servers_price/100}₽")
+            if devices_price > 0:
+                logger.info(f"   📱 Устройства ({subscription.device_limit}): {devices_price/100}₽")
+            if traffic_price > 0:
+                logger.info(f"   📊 Трафик ({subscription.traffic_limit_gb} ГБ): {traffic_price/100}₽")
             logger.info(f"   💎 ИТОГО: {total_price/100}₽")
             
             return total_price
@@ -458,9 +464,16 @@ class SubscriptionService:
         
         logger.info(f"Расчет стоимости новой подписки на {period_days} дней ({months_in_period} мес):")
         logger.info(f"   Период {period_days} дней: {base_price/100}₽")
-        logger.info(f"   Трафик {traffic_gb} ГБ: {traffic_price_per_month/100}₽/мес x {months_in_period} = {total_traffic_price/100}₽")
-        logger.info(f"   Серверы ({len(server_squad_ids)}): {total_servers_price/100}₽")
-        logger.info(f"   Устройства ({additional_devices}): {devices_price_per_month/100}₽/мес x {months_in_period} = {total_devices_price/100}₽")
+        if total_traffic_price > 0:
+            logger.info(
+                f"   Трафик {traffic_gb} ГБ: {traffic_price_per_month/100}₽/мес x {months_in_period} = {total_traffic_price/100}₽"
+            )
+        if total_servers_price > 0:
+            logger.info(f"   Серверы ({len(server_squad_ids)}): {total_servers_price/100}₽")
+        if total_devices_price > 0:
+            logger.info(
+                f"   Устройства ({additional_devices}): {devices_price_per_month/100}₽/мес x {months_in_period} = {total_devices_price/100}₽"
+            )
         logger.info(f"   ИТОГО: {total_price/100}₽")
         
         return total_price, server_prices
@@ -494,9 +507,18 @@ class SubscriptionService:
             
             logger.info(f"💰 Расчет стоимости продления подписки {subscription.id} на {period_days} дней ({months_in_period} мес):")
             logger.info(f"   📅 Период {period_days} дней: {base_price/100}₽")
-            logger.info(f"   🌍 Серверы: {servers_price_per_month/100}₽/мес x {months_in_period} = {total_servers_price/100}₽")
-            logger.info(f"   📱 Устройства: {devices_price_per_month/100}₽/мес x {months_in_period} = {total_devices_price/100}₽")
-            logger.info(f"   📊 Трафик: {traffic_price_per_month/100}₽/мес x {months_in_period} = {total_traffic_price/100}₽")
+            if total_servers_price > 0:
+                logger.info(
+                    f"   🌍 Серверы: {servers_price_per_month/100}₽/мес x {months_in_period} = {total_servers_price/100}₽"
+                )
+            if total_devices_price > 0:
+                logger.info(
+                    f"   📱 Устройства: {devices_price_per_month/100}₽/мес x {months_in_period} = {total_devices_price/100}₽"
+                )
+            if total_traffic_price > 0:
+                logger.info(
+                    f"   📊 Трафик: {traffic_price_per_month/100}₽/мес x {months_in_period} = {total_traffic_price/100}₽"
+                )
             logger.info(f"   💎 ИТОГО: {total_price/100}₽")
             
             return total_price
