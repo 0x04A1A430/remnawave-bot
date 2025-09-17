@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     REMNAWAVE_PASSWORD: Optional[str] = None
     REMNAWAVE_AUTH_TYPE: str = "api_key"
     REMNAWAVE_USER_DESCRIPTION_TEMPLATE: str = "Bot user: {full_name} {username}"
+    REMNAWAVE_USER_DELETE_MODE: str = "delete"  # "delete" или "disable"
     
     TRIAL_DURATION_DAYS: int = 3
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
@@ -259,6 +260,11 @@ class Settings(BaseSettings):
             "password": self.REMNAWAVE_PASSWORD,
             "auth_type": self.REMNAWAVE_AUTH_TYPE
         }
+    
+    def get_remnawave_user_delete_mode(self) -> str:
+        """Возвращает режим удаления пользователей: 'delete' или 'disable'"""
+        mode = self.REMNAWAVE_USER_DELETE_MODE.lower().strip()
+        return mode if mode in ["delete", "disable"] else "delete"
 
     def format_remnawave_user_description(
         self,
