@@ -61,16 +61,16 @@ async def mark_user_as_had_paid_subscription(
 
 
 async def show_service_rules(
-    callback: types.CallbackQuery,
-    db_user: User,
+    callback: types.CallbackQuery, 
+    db_user: User, 
     db: AsyncSession
 ):
     from app.database.crud.rules import get_current_rules_content
-    
+
+    texts = get_texts(db_user.language)
     rules_text = await get_current_rules_content(db, db_user.language)
-    
+
     if not rules_text:
-        texts = get_texts(db_user.language)
         rules_text = get_rules_sync(db_user.language)
 
     await callback.message.edit_text(

@@ -543,7 +543,7 @@ async def complete_registration_from_callback(
         try:
             await callback.message.answer(
                 offer_text,
-                reply_markup=get_post_registration_keyboard(),
+                reply_markup=get_post_registration_keyboard(user.language),
             )
             logger.info(f"✅ Приветственное сообщение отправлено пользователю {user.telegram_id}")
         except Exception as e:
@@ -708,7 +708,7 @@ async def complete_registration(
         try:
             await message.answer(
                 offer_text,
-                reply_markup=get_post_registration_keyboard(),
+                reply_markup=get_post_registration_keyboard(user.language),
             )
             logger.info(f"✅ Приветственное сообщение отправлено пользователю {user.telegram_id}")
         except Exception as e:

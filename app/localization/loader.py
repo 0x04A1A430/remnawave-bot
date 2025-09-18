@@ -24,6 +24,35 @@ def _resolve_user_locales_dir() -> Path:
     return path
 
 
+def _normalize_key(raw_key: Any) -> str:
+    key = str(raw_key).strip().replace(" ", "_")
+    return key.upper()
+
+
+def _flatten_locale_dict(data: Dict[str, Any], parent_key: str = "") -> Dict[str, Any]:
+    flattened: Dict[str, Any] = {}
+    for key, value in (data or {}).items():
+        composite_key = _normalize_key(key)
+        if parent_key:
+            composite_key = f"{parent_key}_{composite_key}"
+
+        if isinstance(value, dict):
+            flattened.update(_flatten_locale_dict(value, composite_key))
+        else:
+            flattened[composite_key] = value
+    return flattened
+
+
+def _normalize_locale_dict(data: Dict[str, Any]) -> Dict[str, Any]:
+    normalized: Dict[str, Any] = {}
+    for key, value in (data or {}).items():
+        if isinstance(value, dict):
+            normalized.update(_flatten_locale_dict(value, _normalize_key(key)))
+        else:
+            normalized[_normalize_key(key)] = value
+    return normalized
+
+
 def ensure_locale_templates() -> None:
     destination = _resolve_user_locales_dir()
     try:
@@ -58,7 +87,7 @@ def _load_default_locale(language: str) -> Dict[str, Any]:
     default_path = _DEFAULT_LOCALES_DIR / f"{language}.json"
     if not default_path.exists():
         return {}
-    return _load_locale_file(default_path)
+    return _normalize_locale_dict(_load_locale_file(default_path))
 
 
 def _load_user_locale(language: str) -> Dict[str, Any]:
@@ -66,7 +95,7 @@ def _load_user_locale(language: str) -> Dict[str, Any]:
     for extension in (".json", ".yml", ".yaml"):
         candidate = user_dir / f"{language}{extension}"
         if candidate.exists():
-            return _load_locale_file(candidate)
+            return _normalize_locale_dict(_load_locale_file(candidate))
     return {}
 
 
