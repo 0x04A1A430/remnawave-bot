@@ -324,9 +324,12 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
         
         logger.info(f"📊 Месячная стоимость конфигурации подписки {subscription.id}:")
         logger.info(f"   📅 Базовый тариф (30 дней): {base_cost/100}₽")
-        logger.info(f"   🌍 Серверы: {servers_cost/100}₽")
-        logger.info(f"   📊 Трафик: {traffic_cost/100}₽")
-        logger.info(f"   📱 Устройства: {devices_cost/100}₽")
+        if servers_cost > 0:
+            logger.info(f"   🌍 Серверы: {servers_cost/100}₽")
+        if traffic_cost > 0:
+            logger.info(f"   📊 Трафик: {traffic_cost/100}₽")
+        if devices_cost > 0:
+            logger.info(f"   📱 Устройства: {devices_cost/100}₽")
         logger.info(f"   💎 ИТОГО: {total_cost/100}₽")
         
         return total_cost
@@ -1554,9 +1557,12 @@ async def confirm_extend_subscription(
         
         logger.info(f"💰 Расчет продления подписки {subscription.id} на {days} дней ({months_in_period} мес):")
         logger.info(f"   📅 Период {days} дней: {base_price/100}₽")
-        logger.info(f"   🌐 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_price/100}₽")
-        logger.info(f"   📱 Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
-        logger.info(f"   📊 Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
+        if total_servers_price > 0:
+            logger.info(f"   🌐 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_price/100}₽")
+        if total_devices_price > 0:
+            logger.info(f"   📱 Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
+        if total_traffic_price > 0:
+            logger.info(f"   📊 Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
         logger.info(f"   💎 ИТОГО: {price/100}₽")
         
     except Exception as e:
@@ -2109,24 +2115,33 @@ async def devices_continue(
         else:
             traffic_display = f"{data['traffic_gb']} ГБ"
     
-    summary_text = f"""
-📋 <b>Сводка заказа</b>
+    details_lines = [f"- Базовый период: {texts.format_price(base_price)}"]
+    if total_traffic_price > 0:
+        details_lines.append(
+            f"- Трафик: {texts.format_price(traffic_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_traffic_price)}"
+        )
+    if total_countries_price > 0:
+        details_lines.append(
+            f"- Серверы: {texts.format_price(countries_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_countries_price)}"
+        )
+    if total_devices_price > 0:
+        details_lines.append(
+            f"- Доп. устройства: {texts.format_price(devices_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_devices_price)}"
+        )
 
-📅 <b>Период:</b> {period_display}
-📊 <b>Трафик:</b> {traffic_display}
-🌍 <b>Страны:</b> {", ".join(selected_countries_names)}
-📱 <b>Устройства:</b> {data['devices']}
+    details_text = "\n".join(details_lines)
 
-💰 <b>Детализация стоимости:</b>
-- Базовый период: {texts.format_price(base_price)}
-- Трафик: {texts.format_price(traffic_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_traffic_price)}
-- Серверы: {texts.format_price(countries_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_countries_price)}
-- Доп. устройства: {texts.format_price(devices_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_devices_price)}
-
-💎 <b>Общая стоимость:</b> {texts.format_price(total_price)}
-
-Подтверждаете покупку?
-"""
+    summary_text = (
+        "📋 <b>Сводка заказа</b>\n\n"
+        f"📅 <b>Период:</b> {period_display}\n"
+        f"📊 <b>Трафик:</b> {traffic_display}\n"
+        f"🌍 <b>Страны:</b> {', '.join(selected_countries_names)}\n"
+        f"📱 <b>Устройства:</b> {data['devices']}\n\n"
+        "💰 <b>Детализация стоимости:</b>\n"
+        f"{details_text}\n\n"
+        f"💎 <b>Общая стоимость:</b> {texts.format_price(total_price)}\n\n"
+        "Подтверждаете покупку?"
+    )
     
     await callback.message.edit_text(
         summary_text,
@@ -2192,9 +2207,12 @@ async def confirm_purchase(
     
     logger.info(f"Расчет покупки подписки на {data['period_days']} дней ({months_in_period} мес):")
     logger.info(f"   Период: {base_price/100}₽")
-    logger.info(f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
-    logger.info(f"   Серверы: {countries_price_per_month/100}₽/мес × {months_in_period} = {total_countries_price/100}₽")
-    logger.info(f"   Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
+    if total_traffic_price > 0:
+        logger.info(f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
+    if total_countries_price > 0:
+        logger.info(f"   Серверы: {countries_price_per_month/100}₽/мес × {months_in_period} = {total_countries_price/100}₽")
+    if total_devices_price > 0:
+        logger.info(f"   Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
     logger.info(f"   ИТОГО: {final_price/100}₽")
     
     if db_user.balance_kopeks < final_price:
