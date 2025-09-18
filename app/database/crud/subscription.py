@@ -442,6 +442,8 @@ async def add_subscription_servers(
     server_squad_ids: List[int],
     paid_prices: List[int] = None
 ) -> Subscription:
+    await db.refresh(subscription)
+    
     if paid_prices is None:
         months_remaining = get_remaining_months(subscription.end_date)
         paid_prices = []
@@ -458,7 +460,7 @@ async def add_subscription_servers(
     
     for i, server_id in enumerate(server_squad_ids):
         subscription_server = SubscriptionServer(
-            subscription_id=subscription.id,
+            subscription_id=subscription.id,  
             server_squad_id=server_id,
             paid_price_kopeks=paid_prices[i] if i < len(paid_prices) else 0
         )
@@ -467,7 +469,7 @@ async def add_subscription_servers(
     await db.commit()
     await db.refresh(subscription)
     
-    logger.info(f"🌍 К подписке {subscription.id} добавлено {len(server_squad_ids)} серверов с ценами: {paid_prices}")
+    logger.info(f"🌐 К подписке {subscription.id} добавлено {len(server_squad_ids)} серверов с ценами: {paid_prices}")
     return subscription
 
 async def get_server_monthly_price(
