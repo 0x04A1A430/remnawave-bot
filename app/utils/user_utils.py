@@ -28,23 +28,15 @@ async def generate_unique_referral_code(db: AsyncSession, telegram_id: int) -> s
     return f"ref{timestamp}"
 
 
-async def mark_user_as_had_paid_subscription(db: AsyncSession, user_id: int) -> bool:
+async def mark_user_as_had_paid_subscription(db: AsyncSession, user: User) -> bool:
     try:
-        from app.database.crud.user import get_user_by_id
-        from sqlalchemy import update
-        
-        user = await get_user_by_id(db, user_id)
-        if not user:
-            logger.error(f"Пользователь {user_id} не найден")
-            return False
-        
         if user.has_had_paid_subscription:
-            logger.debug(f"Пользователь {user_id} уже отмечен как имевший платную подписку")
+            logger.debug(f"Пользователь {user.id} уже отмечен как имевший платную подписку")
             return True
         
         await db.execute(
             update(User)
-            .where(User.id == user_id)
+            .where(User.id == user.id)
             .values(
                 has_had_paid_subscription=True,
                 updated_at=datetime.utcnow()
@@ -52,11 +44,11 @@ async def mark_user_as_had_paid_subscription(db: AsyncSession, user_id: int) -> 
         )
         
         await db.commit()
-        logger.info(f"✅ Пользователь {user_id} отмечен как имевший платную подписку")
+        logger.info(f"✅ Пользователь {user.id} отмечен как имевший платную подписку")
         return True
         
     except Exception as e:
-        logger.error(f"Ошибка отметки пользователя {user_id} как имевшего платную подписку: {e}")
+        logger.error(f"Ошибка отметки пользователя {user.id} как имевшего платную подписку: {e}")
         try:
             await db.rollback()
         except Exception as rollback_error:
