@@ -6,6 +6,7 @@ from app.database.models import User
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
+from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.pricing_utils import format_period_description
 import logging
@@ -21,31 +22,39 @@ def get_rules_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ]
     ])
 
-def get_channel_sub_keyboard(channel_link: str) -> InlineKeyboardMarkup:
+def get_channel_sub_keyboard(
+    channel_link: str,
+    language: str = DEFAULT_LANGUAGE,
+) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🔗 Подписаться", url=channel_link
+                    text=texts.t("CHANNEL_SUBSCRIBE_BUTTON", "🔗 Подписаться"),
+                    url=channel_link,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="✅ Я подписался", callback_data="sub_channel_check"
+                    text=texts.t("CHANNEL_CHECK_BUTTON", "✅ Я подписался"),
+                    callback_data="sub_channel_check",
                 )
-            ]
+            ],
         ]
     )
 
 
-def get_post_registration_keyboard() -> InlineKeyboardMarkup:
+def get_post_registration_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="🚀 Подключиться бесплатно 🚀", callback_data="trial_activate"
+                text=texts.t("POST_REGISTRATION_TRIAL_BUTTON", "🚀 Подключиться бесплатно 🚀"),
+                callback_data="trial_activate"
             )
         ],
-        [InlineKeyboardButton(text="Пропустить ➡️", callback_data="back_to_menu")],
+        [InlineKeyboardButton(text=texts.t("SKIP_BUTTON", "Пропустить ➡️"), callback_data="back_to_menu")],
     ])
 
 
@@ -66,7 +75,10 @@ def get_main_menu_keyboard(
     if hasattr(texts, 'BALANCE_BUTTON') and balance_kopeks > 0:
         balance_button_text = texts.BALANCE_BUTTON.format(balance=texts.format_price(balance_kopeks))
     else:
-        balance_button_text = f"💰 Баланс: {texts.format_price(balance_kopeks)}"
+        balance_button_text = texts.t(
+            "BALANCE_BUTTON_DEFAULT",
+            "💰 Баланс: {balance}",
+        ).format(balance=texts.format_price(balance_kopeks))
     
     keyboard = []
 
@@ -75,28 +87,28 @@ def get_main_menu_keyboard(
         if connect_mode == "miniapp_subscription":
             keyboard.append([
                 InlineKeyboardButton(
-                    text="🔗 Подключиться",
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                     web_app=types.WebAppInfo(url=subscription.subscription_url)
                 )
             ])
         elif connect_mode == "miniapp_custom":
             keyboard.append([
                 InlineKeyboardButton(
-                    text="🔗 Подключиться",
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                     web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL)
                 )
             ])
         elif connect_mode == "link":
             keyboard.append([
                 InlineKeyboardButton(
-                    text="🔗 Подключиться",
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                     url=subscription.subscription_url
                 )
             ])
         else:
             keyboard.append([
                 InlineKeyboardButton(
-                    text="🔗 Подключиться",
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                     callback_data="subscription_connect"
                 )
             ])
@@ -197,7 +209,7 @@ def get_subscription_keyboard(
             if connect_mode == "miniapp_subscription":
                 keyboard.append([
                     InlineKeyboardButton(
-                        text="🔗 Подключиться",
+                        text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                         web_app=types.WebAppInfo(url=subscription.subscription_url)
                     )
                 ])
@@ -205,21 +217,21 @@ def get_subscription_keyboard(
                 if settings.MINIAPP_CUSTOM_URL:
                     keyboard.append([
                         InlineKeyboardButton(
-                            text="🔗 Подключиться",
+                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                             web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL)
                         )
                     ])
                 else:
                     keyboard.append([
-                        InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
+                        InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), callback_data="subscription_connect")
                     ])
             elif connect_mode == "link":
                 keyboard.append([
-                    InlineKeyboardButton(text="🔗 Подключиться", url=subscription.subscription_url)
+                    InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription.subscription_url)
                 ])
             else:
                 keyboard.append([
-                    InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
+                    InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), callback_data="subscription_connect")
                 ])
 
         if not is_trial:

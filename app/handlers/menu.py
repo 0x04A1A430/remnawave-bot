@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id, update_user
 from app.keyboards.inline import get_main_menu_keyboard
-from app.localization.texts import get_texts
+from app.localization.texts import get_texts, get_rules_sync
 from app.database.models import User
 from app.utils.user_utils import mark_user_as_had_paid_subscription
 from app.database.crud.user_message import get_random_active_message
@@ -71,24 +71,12 @@ async def show_service_rules(
     
     if not rules_text:
         texts = get_texts(db_user.language)
-        rules_text = texts._get_default_rules(db_user.language) if hasattr(texts, '_get_default_rules') else """
-📋 <b>Правила использования сервиса</b>
+        rules_text = get_rules_sync(db_user.language)
 
-1. Запрещается использование сервиса для незаконной деятельности
-2. Запрещается нарушение авторских прав
-3. Запрещается спам и рассылка вредоносного ПО
-4. Запрещается использование сервиса для DDoS атак
-5. Один аккаунт - один пользователь
-6. Возврат средств производится только в исключительных случаях
-7. Администрация оставляет за собой право заблокировать аккаунт при нарушении правил
-
-<b>Принимая правила, вы соглашаетесь соблюдать их.</b>
-"""
-    
     await callback.message.edit_text(
-        f"📋 <b>Правила сервиса</b>\n\n{rules_text}",
+        f"{texts.t('RULES_HEADER', '📋 <b>Правила сервиса</b>')}\n\n{rules_text}",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-            [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_menu")]
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
         ])
     )
     await callback.answer()
@@ -130,33 +118,63 @@ async def handle_back_to_menu(
 
 def _get_subscription_status(user: User, texts) -> str:
     if not user.subscription:
-        return "❌ Отсутствует"
+        return texts.t("SUB_STATUS_NONE", "❌ Отсутствует")
     
     subscription = user.subscription
     current_time = datetime.utcnow()
     
     if subscription.end_date <= current_time:
-        return f"🔴 Истекла\n📅 {subscription.end_date.strftime('%d.%m.%Y')}"
+        return texts.t(
+            "SUB_STATUS_EXPIRED",
+            "🔴 Истекла\n📅 {end_date}",
+        ).format(end_date=subscription.end_date.strftime('%d.%m.%Y'))
     
     days_left = (subscription.end_date - current_time).days
     
     if subscription.is_trial:
         if days_left > 1:
-            return f"🎁 Тестовая подписка\n📅 до {subscription.end_date.strftime('%d.%m.%Y')} ({days_left} дн.)"
+            return texts.t(
+                "SUB_STATUS_TRIAL_ACTIVE",
+                "🎁 Тестовая подписка\n📅 до {end_date} ({days} дн.)",
+            ).format(
+                end_date=subscription.end_date.strftime('%d.%m.%Y'),
+                days=days_left,
+            )
         elif days_left == 1:
-            return f"🎁 Тестовая подписка\n⚠️ истекает завтра!"
+            return texts.t(
+                "SUB_STATUS_TRIAL_TOMORROW",
+                "🎁 Тестовая подписка\n⚠️ истекает завтра!",
+            )
         else:
-            return f"🎁 Тестовая подписка\n⚠️ истекает сегодня!"
-    
+            return texts.t(
+                "SUB_STATUS_TRIAL_TODAY",
+                "🎁 Тестовая подписка\n⚠️ истекает сегодня!",
+            )
+
     else: 
         if days_left > 7:
-            return f"💎 Активна\n📅 до {subscription.end_date.strftime('%d.%m.%Y')} ({days_left} дн.)"
+            return texts.t(
+                "SUB_STATUS_ACTIVE_LONG",
+                "💎 Активна\n📅 до {end_date} ({days} дн.)",
+            ).format(
+                end_date=subscription.end_date.strftime('%d.%m.%Y'),
+                days=days_left,
+            )
         elif days_left > 1:
-            return f"💎 Активна\n⚠️ истекает через {days_left} дн."
+            return texts.t(
+                "SUB_STATUS_ACTIVE_FEW_DAYS",
+                "💎 Активна\n⚠️ истекает через {days} дн.",
+            ).format(days=days_left)
         elif days_left == 1:
-            return f"💎 Активна\n⚠️ истекает завтра!"
+            return texts.t(
+                "SUB_STATUS_ACTIVE_TOMORROW",
+                "💎 Активна\n⚠️ истекает завтра!",
+            )
         else:
-            return f"💎 Активна\n⚠️ истекает сегодня!"
+            return texts.t(
+                "SUB_STATUS_ACTIVE_TODAY",
+                "💎 Активна\n⚠️ истекает сегодня!",
+            )
 
 async def get_main_menu_text(user, texts, db: AsyncSession):
     

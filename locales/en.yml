@@ -1,0 +1,16 @@
+# Sample localization for English language.
+# Update values to customize bot messages.
+WELCOME: |
+  Welcome to Remnawave Bedolaga Bot!
+  Adjust this text to match your tone of voice.
+
+MENU:
+  BALANCE: "Balance"
+  SUBSCRIPTION: "Subscription"
+
+RULES_TEXT: |
+  Remnawave service rules:
+    1. Follow applicable laws.
+    2. Avoid sharing spam or malicious content.
+    3. Treat other users with respect.
+
