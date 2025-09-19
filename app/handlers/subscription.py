@@ -465,9 +465,14 @@ async def activate_trial(
             logger.error(f"Ошибка отправки уведомления о триале: {e}")
         
         if remnawave_user and hasattr(subscription, 'subscription_url') and subscription.subscription_url:
+            subscription_import_link = texts.t(
+                "SUBSCRIPTION_IMPORT_LINK_SECTION",
+                "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>",
+            ).format(subscription_url=subscription.subscription_url)
+
             trial_success_text = (
                 f"{texts.TRIAL_ACTIVATED}\n\n"
-                f"{texts.t('SUBSCRIPTION_IMPORT_LINK_SECTION', '🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>').format(subscription_url=subscription.subscription_url)}\n\n"
+                f"{subscription_import_link}\n\n"
                 f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
             )
 
