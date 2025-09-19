@@ -2801,14 +2801,15 @@ async def handle_subscription_cancel(
     db_user: User,
     db: AsyncSession
 ):
-    
+
     texts = get_texts(db_user.language)
-    
+
     await state.clear()
-    
+    await clear_subscription_checkout_draft(db_user.id)
+
     from app.handlers.menu import show_main_menu
     await show_main_menu(callback, db_user, db)
-    
+
     await callback.answer("❌ Покупка отменена")
 
 async def _get_available_countries():
