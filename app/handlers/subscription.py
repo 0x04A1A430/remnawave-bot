@@ -2396,9 +2396,14 @@ async def confirm_purchase(
         await db.refresh(subscription)
         
         if remnawave_user and hasattr(subscription, 'subscription_url') and subscription.subscription_url:
+            import_link_section = texts.t(
+                "SUBSCRIPTION_IMPORT_LINK_SECTION",
+                "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>",
+            ).format(subscription_url=subscription.subscription_url)
+
             success_text = (
                 f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
-                f"{texts.t('SUBSCRIPTION_IMPORT_LINK_SECTION', '🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>').format(subscription_url=subscription.subscription_url)}\n\n"
+                f"{import_link_section}\n\n"
                 f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
             )
 
