@@ -657,7 +657,10 @@ def get_support_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text=texts.CONTACT_SUPPORT, url=f"https://t.me/{settings.SUPPORT_USERNAME.lstrip('@')}")
+            InlineKeyboardButton(
+                text=texts.CONTACT_SUPPORT,
+                url=settings.get_support_contact_url() or "https://t.me/"
+            )
         ],
         [
             InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
