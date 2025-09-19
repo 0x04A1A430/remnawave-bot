@@ -50,6 +50,14 @@ class AdminStates(StatesGroup):
     creating_campaign_subscription_traffic = State()
     creating_campaign_subscription_devices = State()
     creating_campaign_subscription_servers = State()
+
+    editing_campaign_name = State()
+    editing_campaign_start = State()
+    editing_campaign_balance = State()
+    editing_campaign_subscription_days = State()
+    editing_campaign_subscription_traffic = State()
+    editing_campaign_subscription_devices = State()
+    editing_campaign_subscription_servers = State()
     
     waiting_for_broadcast_message = State()
     waiting_for_broadcast_media = State()
