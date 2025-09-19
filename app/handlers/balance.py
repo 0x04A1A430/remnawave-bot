@@ -399,7 +399,7 @@ async def request_support_topup(
 🛠️ <b>Пополнение через поддержку</b>
 
 Для пополнения баланса обратитесь в техподдержку:
-{settings.SUPPORT_USERNAME}
+{settings.get_support_contact_display_html()}
 
 Укажите:
 • ID: {db_user.telegram_id}
@@ -416,8 +416,8 @@ async def request_support_topup(
     
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
         [types.InlineKeyboardButton(
-            text="💬 Написать в поддержку", 
-            url=f"https://t.me/{settings.SUPPORT_USERNAME.lstrip('@')}"
+            text="💬 Написать в поддержку",
+            url=settings.get_support_contact_url() or "https://t.me/"
         )],
         [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")]
     ])
@@ -606,7 +606,7 @@ async def process_yookassa_payment_amount(
             f"4. Деньги поступят на баланс автоматически\n\n"
             f"🔒 Оплата происходит через защищенную систему YooKassa\n"
             f"✅ Принимаем карты: Visa, MasterCard, МИР\n\n"
-            f"❓ Если возникнут проблемы, обратитесь в {settings.SUPPORT_USERNAME}",
+            f"❓ Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}",
             reply_markup=keyboard,
             parse_mode="HTML"
         )
@@ -691,7 +691,7 @@ async def process_yookassa_sbp_payment_amount(
             f"4. Деньги поступят на баланс автоматически\n\n"
             f"🔒 Оплата происходит через защищенную систему YooKassa\n"
             f"✅ Принимаем СБП от всех банков-участников\n\n"
-            f"❓ Если возникнут проблемы, обратитесь в {settings.SUPPORT_USERNAME}",
+            f"❓ Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}",
             reply_markup=keyboard,
             parse_mode="HTML"
         )
@@ -752,7 +752,9 @@ async def check_yookassa_payment_status(
         elif payment.is_pending:
             message_text += "\n⏳ Платеж ожидает оплаты. Нажмите кнопку 'Оплатить' выше."
         elif payment.is_failed:
-            message_text += f"\n❌ Платеж не прошел. Обратитесь в {settings.SUPPORT_USERNAME}"
+            message_text += (
+                f"\n❌ Платеж не прошел. Обратитесь в {settings.get_support_contact_display()}"
+            )
         
         await callback.answer(message_text, show_alert=True)
         
@@ -890,7 +892,7 @@ async def process_cryptobot_payment_amount(
             f"4. Деньги поступят на баланс автоматически\n\n"
             f"🔒 Оплата проходит через защищенную систему CryptoBot\n"
             f"⚡ Поддерживаемые активы: USDT, TON, BTC, ETH\n\n"
-            f"❓ Если возникнут проблемы, обратитесь в {settings.SUPPORT_USERNAME}",
+            f"❓ Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}",
             reply_markup=keyboard,
             parse_mode="HTML"
         )
@@ -946,7 +948,9 @@ async def check_cryptobot_payment_status(
         elif payment.is_pending:
             message_text += "\n⏳ Платеж ожидает оплаты. Нажмите кнопку 'Оплатить' выше."
         elif payment.is_expired:
-            message_text += f"\n❌ Платеж истек. Обратитесь в {settings.SUPPORT_USERNAME}"
+            message_text += (
+                f"\n❌ Платеж истек. Обратитесь в {settings.get_support_contact_display()}"
+            )
         
         await callback.answer(message_text, show_alert=True)
         

@@ -1,5 +1,6 @@
 import os
 import re
+import html
 from collections import defaultdict
 from typing import List, Optional, Union, Dict
 from pydantic_settings import BaseSettings
@@ -604,10 +605,68 @@ class Settings(BaseSettings):
     
     def get_traffic_price(self, gb: int) -> int:
         packages = self.get_traffic_packages()
-        
+
         for package in packages:
             if package["gb"] == gb and package["enabled"]:
                 return package["price"]
+
+    def _clean_support_contact(self) -> str:
+        return (self.SUPPORT_USERNAME or "").strip()
+
+    def get_support_contact_url(self) -> Optional[str]:
+        contact = self._clean_support_contact()
+
+        if not contact:
+            return None
+
+        if contact.startswith(("http://", "https://", "tg://")):
+            return contact
+
+        contact_without_prefix = contact.lstrip("@")
+
+        if contact_without_prefix.startswith(("t.me/", "telegram.me/", "telegram.dog/")):
+            return f"https://{contact_without_prefix}"
+
+        if contact.startswith(("t.me/", "telegram.me/", "telegram.dog/")):
+            return f"https://{contact}"
+
+        if "." in contact_without_prefix:
+            return f"https://{contact_without_prefix}"
+
+        if contact_without_prefix:
+            return f"https://t.me/{contact_without_prefix}"
+
+        return None
+
+    def get_support_contact_display(self) -> str:
+        contact = self._clean_support_contact()
+
+        if not contact:
+            return ""
+
+        if contact.startswith("@"):
+            return contact
+
+        if contact.startswith(("http://", "https://", "tg://")):
+            return contact
+
+        if contact.startswith(("t.me/", "telegram.me/", "telegram.dog/")):
+            url = self.get_support_contact_url()
+            return url if url else contact
+
+        contact_without_prefix = contact.lstrip("@")
+
+        if "." in contact_without_prefix:
+            url = self.get_support_contact_url()
+            return url if url else contact
+
+        if re.fullmatch(r"[A-Za-z0-9_]{3,}", contact_without_prefix):
+            return f"@{contact_without_prefix}"
+
+        return contact
+
+    def get_support_contact_display_html(self) -> str:
+        return html.escape(self.get_support_contact_display())
         
         
         enabled_packages = [pkg for pkg in packages if pkg["enabled"]]
