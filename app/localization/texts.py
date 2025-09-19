@@ -253,6 +253,8 @@ class RussianTexts(Texts):
     <b>Пополните баланс на {amount} и попробуйте снова.</b>
     """
     GO_TO_BALANCE_TOP_UP = "💳 Перейти к пополнению баланса"
+    RETURN_TO_SUBSCRIPTION_CHECKOUT = "↩️ Вернуться к оформлению"
+    NO_SAVED_SUBSCRIPTION_ORDER = "❌ Сохраненный заказ не найден. Соберите подписку заново."
     SUBSCRIPTION_PURCHASED = "🎉 Подписка успешно приобретена!"
     
     BALANCE_INFO = """
@@ -541,6 +543,8 @@ To get started, select interface language:
     
     Top up {amount} and try again."""
     GO_TO_BALANCE_TOP_UP = "💳 Go to balance top up"
+    RETURN_TO_SUBSCRIPTION_CHECKOUT = "↩️ Back to checkout"
+    NO_SAVED_SUBSCRIPTION_ORDER = "❌ Saved subscription order not found. Please configure it again."
     
 
 LANGUAGES = {
