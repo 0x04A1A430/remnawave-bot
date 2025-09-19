@@ -25,3 +25,8 @@ RULES_TEXT: |
     1. Follow applicable laws.
     2. Avoid sharing spam or malicious content.
     3. Treat other users with respect.
+
+CAMPAIGN_EXISTING_USER: "ℹ️ This promo link is available only to new users."
+CAMPAIGN_BONUS_BALANCE: "🎉 You received {amount} for registering via the \"{name}\" campaign!"
+CAMPAIGN_BONUS_SUBSCRIPTION: "🎉 You’ve been granted a {days}-day subscription (traffic: {traffic}, devices: {devices}) from the \"{name}\" campaign!"
+ADMIN_CAMPAIGNS: "📣 Promotional campaigns"
