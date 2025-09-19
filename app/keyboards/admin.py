@@ -108,7 +108,21 @@ def get_admin_users_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="🗑️ Неактивные", callback_data="admin_users_inactive")
         ],
         [
+            InlineKeyboardButton(text="⚙️ Фильтры", callback_data="admin_users_filters")
+        ],
+        [
             InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_submenu_users")
+        ]
+    ])
+
+
+def get_admin_users_filters_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="💰 По балансу", callback_data="admin_users_balance_filter")
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_users")
         ]
     ])
 
@@ -236,7 +250,7 @@ def get_admin_statistics_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     ])
 
 
-def get_user_management_keyboard(user_id: int, user_status: str, language: str = "ru") -> InlineKeyboardMarkup:
+def get_user_management_keyboard(user_id: int, user_status: str, language: str = "ru", back_callback: str = "admin_users_list") -> InlineKeyboardMarkup:
     keyboard = [
         [
             InlineKeyboardButton(text="💰 Баланс", callback_data=f"admin_user_balance_{user_id}"),
@@ -267,7 +281,7 @@ def get_user_management_keyboard(user_id: int, user_status: str, language: str =
         ])
     
     keyboard.append([
-        InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_users_list")
+        InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)

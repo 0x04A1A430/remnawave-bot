@@ -70,6 +70,9 @@ class AdminStates(StatesGroup):
     
     editing_welcome_text = State()
     waiting_for_message_buttons = "waiting_for_message_buttons"
+    
+    # Состояния для отслеживания источника перехода
+    viewing_user_from_balance_list = State()
 
 class SupportStates(StatesGroup):
     waiting_for_message = State()
