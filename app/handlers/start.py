@@ -605,6 +605,24 @@ async def complete_registration_from_callback(
 
     campaign_message = await _apply_campaign_bonus_if_needed(db, user, data, texts)
 
+    try:
+        await db.refresh(user)
+    except Exception as refresh_error:
+        logger.error(
+            "Ошибка обновления данных пользователя %s после бонуса кампании: %s",
+            user.telegram_id,
+            refresh_error,
+        )
+
+    try:
+        await db.refresh(user, ["subscription"])
+    except Exception as refresh_subscription_error:
+        logger.error(
+            "Ошибка обновления подписки пользователя %s после бонуса кампании: %s",
+            user.telegram_id,
+            refresh_subscription_error,
+        )
+
     await state.clear()
 
     if campaign_message:
@@ -628,10 +646,10 @@ async def complete_registration_from_callback(
     else:
         logger.info(f"ℹ️ Приветственные сообщения отключены, показываем главное меню для пользователя {user.telegram_id}")
         
-        has_active_subscription = user.subscription is not None
+        has_active_subscription = bool(getattr(user, "subscription", None))
         subscription_is_active = False
-        
-        if user.subscription:
+
+        if getattr(user, "subscription", None):
             subscription_is_active = user.subscription.is_active
         
         menu_text = await get_main_menu_text(user, texts, db)
@@ -778,6 +796,24 @@ async def complete_registration(
 
     campaign_message = await _apply_campaign_bonus_if_needed(db, user, data, texts)
 
+    try:
+        await db.refresh(user)
+    except Exception as refresh_error:
+        logger.error(
+            "Ошибка обновления данных пользователя %s после бонуса кампании: %s",
+            user.telegram_id,
+            refresh_error,
+        )
+
+    try:
+        await db.refresh(user, ["subscription"])
+    except Exception as refresh_subscription_error:
+        logger.error(
+            "Ошибка обновления подписки пользователя %s после бонуса кампании: %s",
+            user.telegram_id,
+            refresh_subscription_error,
+        )
+
     await state.clear()
 
     if campaign_message:
@@ -801,10 +837,10 @@ async def complete_registration(
     else:
         logger.info(f"ℹ️ Приветственные сообщения отключены, показываем главное меню для пользователя {user.telegram_id}")
         
-        has_active_subscription = user.subscription is not None
+        has_active_subscription = bool(getattr(user, "subscription", None))
         subscription_is_active = False
-        
-        if user.subscription:
+
+        if getattr(user, "subscription", None):
             subscription_is_active = user.subscription.is_active
         
         menu_text = await get_main_menu_text(user, texts, db)
