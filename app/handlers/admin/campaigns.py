@@ -124,6 +124,7 @@ async def _render_campaign_edit_menu(
     *,
     original_message: Optional[types.Message] = None,
 ) -> int:
+):
     texts = get_texts(language)
     text = (
         "✏️ <b>Редактирование кампании</b>\n\n"
@@ -177,6 +178,18 @@ async def _render_campaign_edit_menu(
                 logger.debug("Failed to delete original message during fallback")
 
         return new_message.message_id
+
+    await bot.edit_message_text(
+        text=text,
+        chat_id=chat_id,
+        message_id=message_id,
+        reply_markup=get_campaign_edit_keyboard(
+            campaign.id,
+            is_balance_bonus=campaign.is_balance_bonus,
+            language=language,
+        ),
+        parse_mode="HTML",
+    )
 
 
 @admin_required
