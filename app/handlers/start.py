@@ -15,6 +15,7 @@ from app.database.models import UserStatus
 from app.keyboards.inline import (
     get_rules_keyboard, get_main_menu_keyboard, get_post_registration_keyboard
 )
+from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.referral_service import process_referral_registration
 from app.utils.user_utils import generate_unique_referral_code
@@ -49,7 +50,7 @@ async def handle_potential_referral_code(
     language = (
         data.get("language")
         or (getattr(user, "language", None) if user else None)
-        or "ru"
+        or DEFAULT_LANGUAGE
     )
     texts = get_texts(language)
 
@@ -75,7 +76,7 @@ async def handle_potential_referral_code(
     logger.info(f"✅ Реферальный код {potential_code} применен для пользователя {message.from_user.id}")
     
     if current_state != RegistrationStates.waiting_for_referral_code.state:
-        language = data.get('language', 'ru')
+        language = data.get('language', DEFAULT_LANGUAGE)
         texts = get_texts(language)
         
         await message.answer(
@@ -234,13 +235,13 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     else:
         logger.info(f"🆕 Новый пользователь, начинаем регистрацию")
     
-    language = 'ru'
+    language = DEFAULT_LANGUAGE
     texts = get_texts(language)
     
     data = await state.get_data() or {}
     data['language'] = language
     await state.set_data(data)
-    logger.info(f"💾 Установлен русский язык по умолчанию")
+    logger.info(f"💾 Установлен язык по умолчанию: {language}")
     if settings.SKIP_RULES_ACCEPT:
         logger.info("⚙️ SKIP_RULES_ACCEPT включен - пропускаем принятие правил")
         if data.get('referral_code'):
@@ -292,7 +293,7 @@ async def process_rules_accept(
     current_state = await state.get_state()
     logger.info(f"📊 Текущее состояние: {current_state}")
     
-    language = "ru"
+    language = DEFAULT_LANGUAGE
     texts = get_texts(language)
 
     try:
@@ -404,7 +405,7 @@ async def process_referral_code_input(
     logger.info(f"🎫 REFERRAL: Обработка реферального кода: {message.text}")
     
     data = await state.get_data() or {}
-    language = data.get('language', 'ru')
+    language = data.get('language', DEFAULT_LANGUAGE)
     texts = get_texts(language)
 
     referral_code = message.text.strip()
@@ -433,7 +434,7 @@ async def process_referral_code_skip(
     await callback.answer()
 
     data = await state.get_data() or {}
-    language = data.get('language', 'ru')
+    language = data.get('language', DEFAULT_LANGUAGE)
     texts = get_texts(language)
 
     try:
@@ -514,7 +515,7 @@ async def complete_registration_from_callback(
         return
     
     data = await state.get_data() or {}
-    language = data.get('language', 'ru')
+    language = data.get('language', DEFAULT_LANGUAGE)
     texts = get_texts(language)
     
     referrer_id = data.get('referrer_id')
@@ -694,7 +695,7 @@ async def complete_registration(
         return
     
     data = await state.get_data() or {}
-    language = data.get('language', 'ru')
+    language = data.get('language', DEFAULT_LANGUAGE)
     texts = get_texts(language)
     
     referrer_id = data.get('referrer_id')
@@ -950,7 +951,7 @@ async def required_sub_channel_check(
     db: AsyncSession,
     db_user=None
 ):
-    language = "ru"
+    language = DEFAULT_LANGUAGE
     texts = get_texts(language)
 
     try:
