@@ -26,30 +26,22 @@ TRANSACTIONS_PER_PAGE = 10
 
 
 def get_quick_amount_buttons(language: str) -> list:
-    """
-    Генерирует кнопки быстрого выбора суммы пополнения на основе 
-    AVAILABLE_SUBSCRIPTION_PERIODS и PRICE_*_DAYS
-    """
     if not settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
         return []
     
     buttons = []
     periods = settings.get_available_subscription_periods()
     
-    # Ограничиваем до 6 кнопок (3 ряда по 2 кнопки)
     periods = periods[:6]
     
     for period in periods:
-        # Получаем цену из настроек
         price_attr = f"PRICE_{period}_DAYS"
         if hasattr(settings, price_attr):
             price_kopeks = getattr(settings, price_attr)
             price_rubles = price_kopeks // 100
             
-            # Создаем callback_data для каждой кнопки
             callback_data = f"quick_amount_{price_kopeks}"
             
-            # Добавляем кнопку
             buttons.append(
                 types.InlineKeyboardButton(
                     text=f"{price_rubles} ₽ ({period} дней)",
@@ -57,7 +49,6 @@ def get_quick_amount_buttons(language: str) -> list:
                 )
             )
     
-    # Разбиваем кнопки на ряды (по 2 в ряд)
     keyboard_rows = []
     for i in range(0, len(buttons), 2):
         keyboard_rows.append(buttons[i:i + 2])
@@ -386,7 +377,67 @@ async def start_tribute_payment(
         await callback.answer("❌ Ошибка создания платежа", show_alert=True)
     
     await callback.answer()
-
+    
+async def handle_successful_topup_with_cart(
+    user_id: int,
+    amount_kopeks: int,
+    bot,
+    db: AsyncSession
+):
+    from app.database.crud.user import get_user_by_id
+    from aiogram.fsm.context import FSMContext
+    from aiogram.fsm.storage.base import StorageKey
+    from app.bot import dp
+    
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        return
+    
+    storage = dp.storage
+    key = StorageKey(bot_id=bot.id, chat_id=user.telegram_id, user_id=user.telegram_id)
+    
+    try:
+        state_data = await storage.get_data(key)
+        current_state = await storage.get_state(key)
+        
+        if (current_state == "SubscriptionStates:cart_saved_for_topup" and 
+            state_data.get('saved_cart')):
+            
+            texts = get_texts(user.language)
+            total_price = state_data.get('total_price', 0)
+            
+            keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                [types.InlineKeyboardButton(
+                    text="🛒 Вернуться к оформлению подписки", 
+                    callback_data="return_to_saved_cart"
+                )],
+                [types.InlineKeyboardButton(
+                    text="💰 Мой баланс", 
+                    callback_data="menu_balance"
+                )],
+                [types.InlineKeyboardButton(
+                    text="🏠 Главное меню", 
+                    callback_data="back_to_menu"
+                )]
+            ])
+            
+            success_text = (
+                f"✅ Баланс пополнен на {texts.format_price(amount_kopeks)}!\n\n"
+                f"💰 Текущий баланс: {texts.format_price(user.balance_kopeks)}\n\n"
+                f"🛒 У вас есть сохраненная корзина подписки\n"
+                f"Стоимость: {texts.format_price(total_price)}\n\n"
+                f"Хотите продолжить оформление?"
+            )
+            
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=success_text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+            
+    except Exception as e:
+        logger.error(f"Ошибка обработки успешного пополнения с корзиной: {e}")
 
 @error_handler
 async def request_support_topup(

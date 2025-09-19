@@ -37,7 +37,10 @@ from app.keyboards.inline import (
     get_updated_subscription_settings_keyboard, get_insufficient_balance_keyboard,
     get_extend_subscription_keyboard_with_prices, get_confirm_change_devices_keyboard,
     get_devices_management_keyboard, get_device_reset_confirm_keyboard,
-    get_device_management_help_keyboard
+    get_device_management_help_keyboard,
+    get_payment_methods_keyboard_with_cart,
+    get_subscription_confirm_keyboard_with_cart,
+    get_insufficient_balance_keyboard_with_cart
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
@@ -626,7 +629,97 @@ async def start_subscription_purchase(
     await state.set_state(SubscriptionStates.selecting_period)
     await callback.answer()
 
+async def save_cart_and_redirect_to_topup(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+    missing_amount: int
+):
+    from app.handlers.balance import show_payment_methods
+    
+    texts = get_texts(db_user.language)
+    data = await state.get_data()
+    
+    await state.set_state(SubscriptionStates.cart_saved_for_topup)
+    await state.update_data({
+        **data,
+        'saved_cart': True,
+        'missing_amount': missing_amount,
+        'return_to_cart': True
+    })
+    
+    await callback.message.edit_text(
+        f"💰 Недостаточно средств для оформления подписки\n\n"
+        f"Требуется: {texts.format_price(missing_amount)}\n"
+        f"У вас: {texts.format_price(db_user.balance_kopeks)}\n\n"
+        f"🛒 Ваша корзина сохранена!\n"
+        f"После пополнения баланса вы сможете вернуться к оформлению подписки.\n\n"
+        f"Выберите способ пополнения:",
+        reply_markup=get_payment_methods_keyboard_with_cart(db_user.language),
+        parse_mode="HTML"
+    )
 
+async def return_to_saved_cart(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+    db: AsyncSession
+):
+    data = await state.get_data()
+    texts = get_texts(db_user.language)
+    
+    if not data.get('saved_cart'):
+        await callback.answer("❌ Сохраненная корзина не найдена", show_alert=True)
+        return
+    
+    total_price = data.get('total_price', 0)
+    
+    if db_user.balance_kopeks < total_price:
+        missing_amount = total_price - db_user.balance_kopeks
+        await callback.message.edit_text(
+            f"❌ Все еще недостаточно средств\n\n"
+            f"Требуется: {texts.format_price(total_price)}\n"
+            f"У вас: {texts.format_price(db_user.balance_kopeks)}\n"
+            f"Не хватает: {texts.format_price(missing_amount)}",
+            reply_markup=get_insufficient_balance_keyboard_with_cart(db_user.language)
+        )
+        return
+    
+    from app.utils.pricing_utils import calculate_months_from_days, format_period_description
+    
+    countries = await _get_available_countries()
+    selected_countries_names = []
+    
+    months_in_period = calculate_months_from_days(data['period_days'])
+    period_display = format_period_description(data['period_days'], db_user.language)
+    
+    for country in countries:
+        if country['uuid'] in data['countries']:
+            selected_countries_names.append(country['name'])
+    
+    if settings.is_traffic_fixed():
+        traffic_display = "Безлимитный" if data['traffic_gb'] == 0 else f"{data['traffic_gb']} ГБ"
+    else:
+        traffic_display = "Безлимитный" if data['traffic_gb'] == 0 else f"{data['traffic_gb']} ГБ"
+    
+    summary_text = (
+        "🛒 Восстановленная корзина\n\n"
+        f"📅 Период: {period_display}\n"
+        f"📊 Трафик: {traffic_display}\n"
+        f"🌍 Страны: {', '.join(selected_countries_names)}\n"
+        f"📱 Устройства: {data['devices']}\n\n"
+        f"💎 Общая стоимость: {texts.format_price(total_price)}\n\n"
+        "Подтверждаете покупку?"
+    )
+    
+    await callback.message.edit_text(
+        summary_text,
+        reply_markup=get_subscription_confirm_keyboard_with_cart(db_user.language),
+        parse_mode="HTML"
+    )
+    
+    await state.set_state(SubscriptionStates.confirming_purchase)
+    await callback.answer("✅ Корзина восстановлена!")
 
 async def handle_add_countries(
     callback: types.CallbackQuery,
@@ -3602,6 +3695,19 @@ async def confirm_switch_traffic(
     
     await callback.answer()
 
+async def clear_saved_cart(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+    db: AsyncSession
+):
+    await state.clear()
+    
+    from app.handlers.menu import show_main_menu
+    await show_main_menu(callback, db_user, db)
+    
+    await callback.answer("🗑️ Корзина очищена")
+
 
 async def execute_switch_traffic(
     callback: types.CallbackQuery,
@@ -3898,11 +4004,6 @@ def register_handlers(dp: Dispatcher):
         confirm_purchase,
         F.data == "subscription_confirm",
         SubscriptionStates.confirming_purchase
-    )
-
-    dp.callback_query.register(
-        resume_subscription_checkout,
-        F.data == "subscription_resume_checkout",
     )
     
     dp.callback_query.register(
