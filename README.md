@@ -229,6 +229,7 @@ MAINTENANCE_MESSAGE=Ведутся технические работы. Серв
 # ===== TELEGRAM BOT =====
 BOT_TOKEN=
 ADMIN_IDS=
+# Ссылка на поддержку: Telegram username (например, @support) или полный URL
 SUPPORT_USERNAME=@support
 
 # Уведомления администраторов

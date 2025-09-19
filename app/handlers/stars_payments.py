@@ -1,6 +1,5 @@
 import logging
 from aiogram import Dispatcher, types, F
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
@@ -114,41 +113,7 @@ async def handle_successful_payment(
         if success:
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(payment.total_amount)
 
-            has_active_subscription = (
-                user
-                and user.subscription
-                and not user.subscription.is_trial
-                and user.subscription.is_active
-            )
-
-            first_button = InlineKeyboardButton(
-                text=(
-                    texts.MENU_EXTEND_SUBSCRIPTION
-                    if has_active_subscription
-                    else texts.MENU_BUY_SUBSCRIPTION
-                ),
-                callback_data=(
-                    "subscription_extend" if has_active_subscription else "menu_buy"
-                ),
-            )
-
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [first_button],
-                    [
-                        InlineKeyboardButton(
-                            text=texts.MY_BALANCE_BUTTON,
-                            callback_data="menu_balance",
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text=texts.t("MAIN_MENU_BUTTON", "🏠 Главное меню"),
-                            callback_data="back_to_menu",
-                        )
-                    ],
-                ]
-            )
+            keyboard = await payment_service.build_topup_success_keyboard(user)
 
             transaction_id_short = payment.telegram_payment_charge_id[:8]
 

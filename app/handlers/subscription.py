@@ -37,12 +37,21 @@ from app.keyboards.inline import (
     get_updated_subscription_settings_keyboard, get_insufficient_balance_keyboard,
     get_extend_subscription_keyboard_with_prices, get_confirm_change_devices_keyboard,
     get_devices_management_keyboard, get_device_reset_confirm_keyboard,
-    get_device_management_help_keyboard
+    get_device_management_help_keyboard,
+    get_payment_methods_keyboard_with_cart,
+    get_subscription_confirm_keyboard_with_cart,
+    get_insufficient_balance_keyboard_with_cart
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_service import SubscriptionService
+from app.services.subscription_checkout_service import (
+    clear_subscription_checkout_draft,
+    get_subscription_checkout_draft,
+    save_subscription_checkout_draft,
+    should_offer_checkout_resume,
+)
 from app.utils.pricing_utils import (
     calculate_months_from_days,
     get_remaining_months,
@@ -55,6 +64,109 @@ from app.utils.pagination import paginate_list
 logger = logging.getLogger(__name__)
 
 TRAFFIC_PRICES = get_traffic_prices()
+
+
+async def _prepare_subscription_summary(
+    db_user: User,
+    data: Dict[str, Any],
+    texts,
+) -> Tuple[str, Dict[str, Any]]:
+    from app.utils.pricing_utils import (
+        calculate_months_from_days,
+        format_period_description,
+        validate_pricing_calculation,
+    )
+
+    summary_data = dict(data)
+    countries = await _get_available_countries()
+
+    months_in_period = calculate_months_from_days(summary_data['period_days'])
+    period_display = format_period_description(summary_data['period_days'], db_user.language)
+
+    base_price = PERIOD_PRICES[summary_data['period_days']]
+
+    if settings.is_traffic_fixed():
+        traffic_limit = settings.get_fixed_traffic_limit()
+        traffic_price_per_month = settings.get_traffic_price(traffic_limit)
+        final_traffic_gb = traffic_limit
+    else:
+        traffic_gb = summary_data.get('traffic_gb', 0)
+        traffic_price_per_month = settings.get_traffic_price(traffic_gb)
+        final_traffic_gb = traffic_gb
+
+    total_traffic_price = traffic_price_per_month * months_in_period
+
+    countries_price_per_month = 0
+    selected_countries_names: List[str] = []
+    selected_server_prices: List[int] = []
+
+    selected_country_ids = set(summary_data.get('countries', []))
+    for country in countries:
+        if country['uuid'] in selected_country_ids:
+            server_price_per_month = country['price_kopeks']
+            countries_price_per_month += server_price_per_month
+            selected_countries_names.append(country['name'])
+            selected_server_prices.append(server_price_per_month * months_in_period)
+
+    total_countries_price = countries_price_per_month * months_in_period
+
+    devices_selected = summary_data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+    additional_devices = max(0, devices_selected - settings.DEFAULT_DEVICE_LIMIT)
+    devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
+    total_devices_price = devices_price_per_month * months_in_period
+
+    total_price = base_price + total_traffic_price + total_countries_price + total_devices_price
+
+    monthly_additions = countries_price_per_month + devices_price_per_month + traffic_price_per_month
+    is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, total_price)
+
+    if not is_valid:
+        raise ValueError("Subscription price calculation validation failed")
+
+    summary_data['total_price'] = total_price
+    summary_data['server_prices_for_period'] = selected_server_prices
+
+    if settings.is_traffic_fixed():
+        if final_traffic_gb == 0:
+            traffic_display = "Безлимитный"
+        else:
+            traffic_display = f"{final_traffic_gb} ГБ"
+    else:
+        if summary_data.get('traffic_gb', 0) == 0:
+            traffic_display = "Безлимитный"
+        else:
+            traffic_display = f"{summary_data.get('traffic_gb', 0)} ГБ"
+
+    details_lines = [f"- Базовый период: {texts.format_price(base_price)}"]
+
+    if total_traffic_price > 0:
+        details_lines.append(
+            f"- Трафик: {texts.format_price(traffic_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_traffic_price)}"
+        )
+    if total_countries_price > 0:
+        details_lines.append(
+            f"- Серверы: {texts.format_price(countries_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_countries_price)}"
+        )
+    if total_devices_price > 0:
+        details_lines.append(
+            f"- Доп. устройства: {texts.format_price(devices_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_devices_price)}"
+        )
+
+    details_text = "\n".join(details_lines)
+
+    summary_text = (
+        "📋 <b>Сводка заказа</b>\n\n"
+        f"📅 <b>Период:</b> {period_display}\n"
+        f"📊 <b>Трафик:</b> {traffic_display}\n"
+        f"🌍 <b>Страны:</b> {', '.join(selected_countries_names)}\n"
+        f"📱 <b>Устройства:</b> {devices_selected}\n\n"
+        "💰 <b>Детализация стоимости:</b>\n"
+        f"{details_text}\n\n"
+        f"💎 <b>Общая стоимость:</b> {texts.format_price(total_price)}\n\n"
+        "Подтверждаете покупку?"
+    )
+
+    return summary_text, summary_data
 
 async def show_subscription_info(
     callback: types.CallbackQuery,
@@ -574,7 +686,97 @@ async def start_subscription_purchase(
     await state.set_state(SubscriptionStates.selecting_period)
     await callback.answer()
 
+async def save_cart_and_redirect_to_topup(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+    missing_amount: int
+):
+    from app.handlers.balance import show_payment_methods
+    
+    texts = get_texts(db_user.language)
+    data = await state.get_data()
+    
+    await state.set_state(SubscriptionStates.cart_saved_for_topup)
+    await state.update_data({
+        **data,
+        'saved_cart': True,
+        'missing_amount': missing_amount,
+        'return_to_cart': True
+    })
+    
+    await callback.message.edit_text(
+        f"💰 Недостаточно средств для оформления подписки\n\n"
+        f"Требуется: {texts.format_price(missing_amount)}\n"
+        f"У вас: {texts.format_price(db_user.balance_kopeks)}\n\n"
+        f"🛒 Ваша корзина сохранена!\n"
+        f"После пополнения баланса вы сможете вернуться к оформлению подписки.\n\n"
+        f"Выберите способ пополнения:",
+        reply_markup=get_payment_methods_keyboard_with_cart(db_user.language),
+        parse_mode="HTML"
+    )
 
+async def return_to_saved_cart(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+    db: AsyncSession
+):
+    data = await state.get_data()
+    texts = get_texts(db_user.language)
+    
+    if not data.get('saved_cart'):
+        await callback.answer("❌ Сохраненная корзина не найдена", show_alert=True)
+        return
+    
+    total_price = data.get('total_price', 0)
+    
+    if db_user.balance_kopeks < total_price:
+        missing_amount = total_price - db_user.balance_kopeks
+        await callback.message.edit_text(
+            f"❌ Все еще недостаточно средств\n\n"
+            f"Требуется: {texts.format_price(total_price)}\n"
+            f"У вас: {texts.format_price(db_user.balance_kopeks)}\n"
+            f"Не хватает: {texts.format_price(missing_amount)}",
+            reply_markup=get_insufficient_balance_keyboard_with_cart(db_user.language)
+        )
+        return
+    
+    from app.utils.pricing_utils import calculate_months_from_days, format_period_description
+    
+    countries = await _get_available_countries()
+    selected_countries_names = []
+    
+    months_in_period = calculate_months_from_days(data['period_days'])
+    period_display = format_period_description(data['period_days'], db_user.language)
+    
+    for country in countries:
+        if country['uuid'] in data['countries']:
+            selected_countries_names.append(country['name'])
+    
+    if settings.is_traffic_fixed():
+        traffic_display = "Безлимитный" if data['traffic_gb'] == 0 else f"{data['traffic_gb']} ГБ"
+    else:
+        traffic_display = "Безлимитный" if data['traffic_gb'] == 0 else f"{data['traffic_gb']} ГБ"
+    
+    summary_text = (
+        "🛒 Восстановленная корзина\n\n"
+        f"📅 Период: {period_display}\n"
+        f"📊 Трафик: {traffic_display}\n"
+        f"🌍 Страны: {', '.join(selected_countries_names)}\n"
+        f"📱 Устройства: {data['devices']}\n\n"
+        f"💎 Общая стоимость: {texts.format_price(total_price)}\n\n"
+        "Подтверждаете покупку?"
+    )
+    
+    await callback.message.edit_text(
+        summary_text,
+        reply_markup=get_subscription_confirm_keyboard_with_cart(db_user.language),
+        parse_mode="HTML"
+    )
+    
+    await state.set_state(SubscriptionStates.confirming_purchase)
+    await callback.answer("✅ Корзина восстановлена!")
 
 async def handle_add_countries(
     callback: types.CallbackQuery,
@@ -721,6 +923,13 @@ async def apply_countries_changes(
     
     data = await state.get_data()
     texts = get_texts(db_user.language)
+
+    await save_subscription_checkout_draft(db_user.id, dict(data))
+    resume_callback = (
+        "subscription_resume_checkout"
+        if should_offer_checkout_resume(db_user, True)
+        else None
+    )
     subscription = db_user.subscription
     
     selected_countries = data.get('countries', [])
@@ -1512,7 +1721,10 @@ async def confirm_add_devices(
         missing_kopeks = price - db_user.balance_kopeks
         await callback.message.edit_text(
             texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
-            reply_markup=get_insufficient_balance_keyboard(db_user.language),
+            reply_markup=get_insufficient_balance_keyboard(
+                db_user.language,
+                resume_callback=resume_callback,
+            ),
         )
         await callback.answer()
         return
@@ -2105,107 +2317,29 @@ async def devices_continue(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import calculate_months_from_days, format_period_description, validate_pricing_calculation
-    
     if not callback.data == "devices_continue":
         await callback.answer("⚠️ Некорректный запрос", show_alert=True)
         return
-    
+
     data = await state.get_data()
     texts = get_texts(db_user.language)
-    
-    countries = await _get_available_countries()
-    selected_countries_names = []
-    
-    months_in_period = calculate_months_from_days(data['period_days'])
-    period_display = format_period_description(data['period_days'], db_user.language)
-    
-    base_price = PERIOD_PRICES[data['period_days']]
-    
-    if settings.is_traffic_fixed():
-        traffic_price_per_month = settings.get_traffic_price(settings.get_fixed_traffic_limit())
-        final_traffic_gb = settings.get_fixed_traffic_limit()
-    else:
-        traffic_price_per_month = settings.get_traffic_price(data['traffic_gb'])
-        final_traffic_gb = data['traffic_gb']
-    
-    total_traffic_price = traffic_price_per_month * months_in_period
-    
-    countries_price_per_month = 0
-    selected_server_prices = []
-    
-    for country in countries:
-        if country['uuid'] in data['countries']:
-            server_price_per_month = country['price_kopeks']
-            countries_price_per_month += server_price_per_month
-            selected_countries_names.append(country['name'])
-            selected_server_prices.append(server_price_per_month * months_in_period)
-    
-    total_countries_price = countries_price_per_month * months_in_period
-    
-    additional_devices = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT)
-    devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-    total_devices_price = devices_price_per_month * months_in_period
-    
-    total_price = base_price + total_traffic_price + total_countries_price + total_devices_price
-    
-    monthly_additions = countries_price_per_month + devices_price_per_month + traffic_price_per_month
-    is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, total_price)
-    
-    if not is_valid:
+
+    try:
+        summary_text, prepared_data = await _prepare_subscription_summary(db_user, data, texts)
+    except ValueError:
         logger.error(f"Ошибка в расчете цены подписки для пользователя {db_user.telegram_id}")
         await callback.answer("Ошибка расчета цены. Обратитесь в поддержку.", show_alert=True)
         return
-    
-    data['total_price'] = total_price
-    data['server_prices_for_period'] = selected_server_prices
-    await state.set_data(data)
-    
-    if settings.is_traffic_fixed():
-        if final_traffic_gb == 0:
-            traffic_display = "Безлимитный"
-        else:
-            traffic_display = f"{final_traffic_gb} ГБ"
-    else:
-        if data['traffic_gb'] == 0:
-            traffic_display = "Безлимитный"
-        else:
-            traffic_display = f"{data['traffic_gb']} ГБ"
-    
-    details_lines = [f"- Базовый период: {texts.format_price(base_price)}"]
-    if total_traffic_price > 0:
-        details_lines.append(
-            f"- Трафик: {texts.format_price(traffic_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_traffic_price)}"
-        )
-    if total_countries_price > 0:
-        details_lines.append(
-            f"- Серверы: {texts.format_price(countries_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_countries_price)}"
-        )
-    if total_devices_price > 0:
-        details_lines.append(
-            f"- Доп. устройства: {texts.format_price(devices_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_devices_price)}"
-        )
 
-    details_text = "\n".join(details_lines)
+    await state.set_data(prepared_data)
+    await save_subscription_checkout_draft(db_user.id, prepared_data)
 
-    summary_text = (
-        "📋 <b>Сводка заказа</b>\n\n"
-        f"📅 <b>Период:</b> {period_display}\n"
-        f"📊 <b>Трафик:</b> {traffic_display}\n"
-        f"🌍 <b>Страны:</b> {', '.join(selected_countries_names)}\n"
-        f"📱 <b>Устройства:</b> {data['devices']}\n\n"
-        "💰 <b>Детализация стоимости:</b>\n"
-        f"{details_text}\n\n"
-        f"💎 <b>Общая стоимость:</b> {texts.format_price(total_price)}\n\n"
-        "Подтверждаете покупку?"
-    )
-    
     await callback.message.edit_text(
         summary_text,
         reply_markup=get_subscription_confirm_keyboard(db_user.language),
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
-    
+
     await state.set_state(SubscriptionStates.confirming_purchase)
     await callback.answer()
 
@@ -2221,7 +2355,14 @@ async def confirm_purchase(
     
     data = await state.get_data()
     texts = get_texts(db_user.language)
-    
+
+    await save_subscription_checkout_draft(db_user.id, dict(data))
+    resume_callback = (
+        "subscription_resume_checkout"
+        if should_offer_checkout_resume(db_user, True)
+        else None
+    )
+
     countries = await _get_available_countries()
     
     months_in_period = calculate_months_from_days(data['period_days'])
@@ -2276,11 +2417,16 @@ async def confirm_purchase(
         missing_kopeks = final_price - db_user.balance_kopeks
         await callback.message.edit_text(
             texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
-            reply_markup=get_insufficient_balance_keyboard(db_user.language),
+            reply_markup=get_insufficient_balance_keyboard(
+                db_user.language,
+                resume_callback=resume_callback,
+            ),
         )
         await callback.answer()
         return
     
+    purchase_completed = False
+
     try:
         success = await subtract_user_balance(
             db, db_user, final_price,
@@ -2291,7 +2437,10 @@ async def confirm_purchase(
             missing_kopeks = final_price - db_user.balance_kopeks
             await callback.message.edit_text(
                 texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
-                reply_markup=get_insufficient_balance_keyboard(db_user.language),
+                reply_markup=get_insufficient_balance_keyboard(
+                    db_user.language,
+                    resume_callback=resume_callback,
+                ),
             )
             await callback.answer()
             return
@@ -2468,6 +2617,7 @@ async def confirm_purchase(
                 reply_markup=get_back_keyboard(db_user.language)
             )
         
+        purchase_completed = True
         logger.info(f"Пользователь {db_user.telegram_id} купил подписку на {data['period_days']} дней за {final_price/100}₽")
         
     except Exception as e:
@@ -2477,9 +2627,48 @@ async def confirm_purchase(
             reply_markup=get_back_keyboard(db_user.language)
         )
     
+    if purchase_completed:
+        await clear_subscription_checkout_draft(db_user.id)
+
     await state.clear()
     await callback.answer()
 
+
+
+async def resume_subscription_checkout(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+):
+    texts = get_texts(db_user.language)
+
+    draft = await get_subscription_checkout_draft(db_user.id)
+
+    if not draft:
+        await callback.answer(texts.NO_SAVED_SUBSCRIPTION_ORDER, show_alert=True)
+        return
+
+    try:
+        summary_text, prepared_data = await _prepare_subscription_summary(db_user, draft, texts)
+    except ValueError as exc:
+        logger.error(
+            f"Ошибка восстановления заказа подписки для пользователя {db_user.telegram_id}: {exc}"
+        )
+        await clear_subscription_checkout_draft(db_user.id)
+        await callback.answer(texts.NO_SAVED_SUBSCRIPTION_ORDER, show_alert=True)
+        return
+
+    await state.set_data(prepared_data)
+    await state.set_state(SubscriptionStates.confirming_purchase)
+    await save_subscription_checkout_draft(db_user.id, prepared_data)
+
+    await callback.message.edit_text(
+        summary_text,
+        reply_markup=get_subscription_confirm_keyboard(db_user.language),
+        parse_mode="HTML",
+    )
+
+    await callback.answer()
 async def add_traffic(
     callback: types.CallbackQuery,
     db_user: User,
@@ -2777,14 +2966,15 @@ async def handle_subscription_cancel(
     db_user: User,
     db: AsyncSession
 ):
-    
+
     texts = get_texts(db_user.language)
-    
+
     await state.clear()
-    
+    await clear_subscription_checkout_draft(db_user.id)
+
     from app.handlers.menu import show_main_menu
     await show_main_menu(callback, db_user, db)
-    
+
     await callback.answer("❌ Покупка отменена")
 
 async def _get_available_countries():
@@ -3651,6 +3841,19 @@ async def confirm_switch_traffic(
     )
     
     await callback.answer()
+
+async def clear_saved_cart(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db_user: User,
+    db: AsyncSession
+):
+    await state.clear()
+    
+    from app.handlers.menu import show_main_menu
+    await show_main_menu(callback, db_user, db)
+    
+    await callback.answer("🗑️ Корзина очищена")
 
 
 async def execute_switch_traffic(

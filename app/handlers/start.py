@@ -9,7 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.states import RegistrationStates
 from app.database.crud.user import (
-    get_user_by_telegram_id, create_user, get_user_by_referral_code
+    get_user_by_telegram_id,
+    create_user,
+    get_user_by_referral_code,
+)
+from app.database.crud.campaign import (
+    get_campaign_by_start_parameter,
+    get_campaign_by_id,
 )
 from app.database.models import UserStatus
 from app.keyboards.inline import (
@@ -18,13 +24,50 @@ from app.keyboards.inline import (
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.referral_service import process_referral_registration
+from app.services.campaign_service import AdvertisingCampaignService
 from app.utils.user_utils import generate_unique_referral_code
 from app.database.crud.user_message import get_random_active_message
-from aiogram.enums import ChatMemberStatus
-from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 
 
 logger = logging.getLogger(__name__)
+
+
+async def _apply_campaign_bonus_if_needed(
+    db: AsyncSession,
+    user,
+    state_data: dict,
+    texts,
+):
+    campaign_id = state_data.get("campaign_id") if state_data else None
+    if not campaign_id:
+        return None
+
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign or not campaign.is_active:
+        return None
+
+    service = AdvertisingCampaignService()
+    result = await service.apply_campaign_bonus(db, user, campaign)
+    if not result.success:
+        return None
+
+    if result.bonus_type == "balance":
+        amount_text = texts.format_price(result.balance_kopeks)
+        return texts.CAMPAIGN_BONUS_BALANCE.format(
+            amount=amount_text,
+            name=campaign.name,
+        )
+
+    if result.bonus_type == "subscription":
+        traffic_text = texts.format_traffic(result.subscription_traffic_gb or 0)
+        return texts.CAMPAIGN_BONUS_SUBSCRIPTION.format(
+            name=campaign.name,
+            days=result.subscription_days,
+            traffic=traffic_text,
+            devices=result.subscription_device_limit,
+        )
+
+    return None
 
 
 async def handle_potential_referral_code(
@@ -95,13 +138,29 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     logger.info(f"🚀 START: Обработка /start от {message.from_user.id}")
     
     referral_code = None
-    if len(message.text.split()) > 1:
-        potential_code = message.text.split()[1]
-        referral_code = potential_code
-        logger.info(f"🔎 Найден реферальный код: {referral_code}")
-    
+    campaign = None
+    start_args = message.text.split()
+    if len(start_args) > 1:
+        start_parameter = start_args[1]
+        campaign = await get_campaign_by_start_parameter(
+            db,
+            start_parameter,
+            only_active=True,
+        )
+
+        if campaign:
+            logger.info(
+                "📣 Найдена рекламная кампания %s (start=%s)",
+                campaign.id,
+                campaign.start_parameter,
+            )
+            await state.update_data(campaign_id=campaign.id)
+        else:
+            referral_code = start_parameter
+            logger.info(f"🔎 Найден реферальный код: {referral_code}")
+
     if referral_code:
-        await state.set_data({'referral_code': referral_code})
+        await state.update_data(referral_code=referral_code)
     
     user = db_user if db_user else await get_user_by_telegram_id(db, message.from_user.id)
     
@@ -139,7 +198,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             await db.commit()
         
         texts = get_texts(user.language)
-        
+
         if referral_code and not user.referred_by_id:
             await message.answer(
                 texts.t(
@@ -147,6 +206,19 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                     "ℹ️ Вы уже зарегистрированы в системе. Реферальная ссылка не может быть применена.",
                 )
             )
+
+        if campaign:
+            try:
+                await message.answer(
+                    texts.t(
+                        "CAMPAIGN_EXISTING_USERL",
+                        "ℹ️ Эта рекламная ссылка доступна только новым пользователям.",
+                    )
+                )
+            except Exception as e:
+                logger.error(
+                    f"Ошибка отправки уведомления о рекламной кампании: {e}"
+                )
         
         has_active_subscription = user.subscription is not None
         subscription_is_active = False
@@ -583,8 +655,34 @@ async def complete_registration_from_callback(
             logger.info(f"✅ Реферальная регистрация обработана для {user.id}")
         except Exception as e:
             logger.error(f"Ошибка при обработке реферальной регистрации: {e}")
-    
+
+    campaign_message = await _apply_campaign_bonus_if_needed(db, user, data, texts)
+
+    try:
+        await db.refresh(user)
+    except Exception as refresh_error:
+        logger.error(
+            "Ошибка обновления данных пользователя %s после бонуса кампании: %s",
+            user.telegram_id,
+            refresh_error,
+        )
+
+    try:
+        await db.refresh(user, ["subscription"])
+    except Exception as refresh_subscription_error:
+        logger.error(
+            "Ошибка обновления подписки пользователя %s после бонуса кампании: %s",
+            user.telegram_id,
+            refresh_subscription_error,
+        )
+
     await state.clear()
+
+    if campaign_message:
+        try:
+            await callback.message.answer(campaign_message)
+        except Exception as e:
+            logger.error(f"Ошибка отправки сообщения о бонусе кампании: {e}")
 
     from app.database.crud.welcome_text import get_welcome_text_for_user
     offer_text = await get_welcome_text_for_user(db, callback.from_user)
@@ -601,10 +699,10 @@ async def complete_registration_from_callback(
     else:
         logger.info(f"ℹ️ Приветственные сообщения отключены, показываем главное меню для пользователя {user.telegram_id}")
         
-        has_active_subscription = user.subscription is not None
+        has_active_subscription = bool(getattr(user, "subscription", None))
         subscription_is_active = False
-        
-        if user.subscription:
+
+        if getattr(user, "subscription", None):
             subscription_is_active = user.subscription.is_active
         
         menu_text = await get_main_menu_text(user, texts, db)
@@ -763,8 +861,34 @@ async def complete_registration(
             logger.info(f"✅ Реферальная регистрация обработана для {user.id}")
         except Exception as e:
             logger.error(f"Ошибка при обработке реферальной регистрации: {e}")
-    
+
+    campaign_message = await _apply_campaign_bonus_if_needed(db, user, data, texts)
+
+    try:
+        await db.refresh(user)
+    except Exception as refresh_error:
+        logger.error(
+            "Ошибка обновления данных пользователя %s после бонуса кампании: %s",
+            user.telegram_id,
+            refresh_error,
+        )
+
+    try:
+        await db.refresh(user, ["subscription"])
+    except Exception as refresh_subscription_error:
+        logger.error(
+            "Ошибка обновления подписки пользователя %s после бонуса кампании: %s",
+            user.telegram_id,
+            refresh_subscription_error,
+        )
+
     await state.clear()
+
+    if campaign_message:
+        try:
+            await message.answer(campaign_message)
+        except Exception as e:
+            logger.error(f"Ошибка отправки сообщения о бонусе кампании: {e}")
 
     from app.database.crud.welcome_text import get_welcome_text_for_user
     offer_text = await get_welcome_text_for_user(db, message.from_user)
@@ -781,10 +905,10 @@ async def complete_registration(
     else:
         logger.info(f"ℹ️ Приветственные сообщения отключены, показываем главное меню для пользователя {user.telegram_id}")
         
-        has_active_subscription = user.subscription is not None
+        has_active_subscription = bool(getattr(user, "subscription", None))
         subscription_is_active = False
-        
-        if user.subscription:
+
+        if getattr(user, "subscription", None):
             subscription_is_active = user.subscription.is_active
         
         menu_text = await get_main_menu_text(user, texts, db)
