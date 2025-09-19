@@ -37,7 +37,10 @@ from app.keyboards.inline import (
     get_updated_subscription_settings_keyboard, get_insufficient_balance_keyboard,
     get_extend_subscription_keyboard_with_prices, get_confirm_change_devices_keyboard,
     get_devices_management_keyboard, get_device_reset_confirm_keyboard,
-    get_device_management_help_keyboard
+    get_device_management_help_keyboard,
+    get_payment_methods_keyboard_with_cart,
+    get_subscription_confirm_keyboard_with_cart,
+    get_insufficient_balance_keyboard_with_cart
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
