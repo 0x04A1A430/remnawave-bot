@@ -186,7 +186,7 @@ async def show_payment_methods(
     from app.utils.payment_utils import get_payment_methods_text
     
     texts = get_texts(db_user.language)
-    payment_text = get_payment_methods_text()
+    payment_text = get_payment_methods_text(db_user.language)
     
     await callback.message.edit_text(
         payment_text,
@@ -204,8 +204,10 @@ async def handle_payment_methods_unavailable(
     texts = get_texts(db_user.language)
     
     await callback.answer(
-        "⚠️ В данный момент автоматические способы оплаты временно недоступны. "
-        "Для пополнения баланса обратитесь в техподдержку.",
+        texts.t(
+            "PAYMENT_METHODS_UNAVAILABLE_ALERT",
+            "⚠️ В данный момент автоматические способы оплаты временно недоступны. Для пополнения баланса обратитесь в техподдержку.",
+        ),
         show_alert=True
     )
 
