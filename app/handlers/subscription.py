@@ -4152,6 +4152,21 @@ def register_handlers(dp: Dispatcher):
         F.data == "subscription_confirm",
         SubscriptionStates.confirming_purchase
     )
+
+    dp.callback_query.register(
+        resume_subscription_checkout,
+        F.data == "subscription_resume_checkout",
+    )
+
+    dp.callback_query.register(
+        return_to_saved_cart,
+        F.data == "return_to_saved_cart",
+    )
+
+    dp.callback_query.register(
+        clear_saved_cart,
+        F.data == "clear_saved_cart",
+    )
     
     dp.callback_query.register(
         handle_autopay_menu,
