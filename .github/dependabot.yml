@@ -9,9 +9,9 @@ updates:
       timezone: "Europe/Moscow"
     open-pull-requests-limit: 10
     reviewers:
-      - "fr1ngg"
+      - "Fr1ngg"
     assignees:
-      - "fr1ngg"
+      - "Fr1ngg"
     commit-message:
       prefix: "deps"
       include: "scope"
@@ -37,9 +37,9 @@ updates:
       timezone: "Europe/Moscow"
     open-pull-requests-limit: 5
     reviewers:
-      - "fr1ngg"
+      - "Fr1ngg"
     assignees:
-      - "fr1ngg"
+      - "Fr1ngg"
     commit-message:
       prefix: "ci"
       include: "scope"
@@ -60,9 +60,9 @@ updates:
       timezone: "Europe/Moscow"
     open-pull-requests-limit: 3
     reviewers:
-      - "fr1ngg"
+      - "Fr1ngg"
     assignees:
-      - "fr1ngg"
+      - "Fr1ngg"
     commit-message:
       prefix: "docker"
       include: "scope"
