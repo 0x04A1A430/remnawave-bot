@@ -176,25 +176,34 @@ def _get_subscription_status(user: User, texts) -> str:
                 "💎 Активна\n⚠️ истекает сегодня!",
             )
 
+
+def _insert_random_message(base_text: str, random_message: str, action_prompt: str) -> str:
+    if not random_message:
+        return base_text
+
+    prompt = action_prompt or ""
+    if prompt and prompt in base_text:
+        parts = base_text.split(prompt, 1)
+        if len(parts) == 2:
+            return f"{parts[0]}\n{random_message}\n\n{prompt}{parts[1]}"
+        return base_text.replace(prompt, f"\n{random_message}\n\n{prompt}", 1)
+
+    return f"{base_text}\n\n{random_message}"
+
+
 async def get_main_menu_text(user, texts, db: AsyncSession):
-    
+
     base_text = texts.MAIN_MENU.format(
         user_name=user.full_name,
         subscription_status=_get_subscription_status(user, texts)
     )
     
+    action_prompt = texts.t("MAIN_MENU_ACTION_PROMPT", "Выберите действие:")
+
     try:
         random_message = await get_random_active_message(db)
         if random_message:
-            if "Выберите действие:" in base_text:
-                parts = base_text.split("Выберите действие:")
-                if len(parts) == 2:
-                    return f"{parts[0]}\n{random_message}\n\nВыберите действие:{parts[1]}"
-            
-            if "Выберите действие:" in base_text:
-                return base_text.replace("Выберите действие:", f"\n{random_message}\n\nВыберите действие:")
-            else:
-                return f"{base_text}\n\n{random_message}"
+            return _insert_random_message(base_text, random_message, action_prompt)
                 
     except Exception as e:
         logger.error(f"Ошибка получения случайного сообщения: {e}")
