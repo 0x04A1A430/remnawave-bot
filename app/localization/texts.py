@@ -16,6 +16,15 @@ _logger = logging.getLogger(__name__)
 _cached_rules: Dict[str, str] = {}
 
 
+def _get_cached_rules_value(language: str) -> str:
+    if language in _cached_rules:
+        return _cached_rules[language]
+
+    default = _get_default_rules(language)
+    _cached_rules[language] = default
+    return default
+
+
 def _build_dynamic_values(language: str) -> Dict[str, Any]:
     language_code = (language or DEFAULT_LANGUAGE).split("-")[0].lower()
 
@@ -122,7 +131,7 @@ class Texts:
 
     def _get_value(self, item: str) -> Any:
         if item == "RULES_TEXT":
-            return get_rules_sync(self.language)
+            return _get_cached_rules_value(self.language)
 
         if item in self._values:
             return self._values[item]
@@ -188,13 +197,19 @@ def get_rules_sync(language: str = DEFAULT_LANGUAGE) -> str:
         return _cached_rules[language]
 
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        rules = loop.run_until_complete(get_rules_from_db(language))
-        return rules
-    finally:
-        asyncio.set_event_loop(None)
-        loop.close()
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(get_rules(language))
+
+    loop.create_task(get_rules(language))
+    return _get_cached_rules_value(language)
+
+
+async def get_rules(language: str = DEFAULT_LANGUAGE) -> str:
+    if language in _cached_rules:
+        return _cached_rules[language]
+
+    return await get_rules_from_db(language)
 
 
 async def refresh_rules_cache(language: str = DEFAULT_LANGUAGE) -> None:
