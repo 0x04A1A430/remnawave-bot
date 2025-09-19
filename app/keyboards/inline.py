@@ -1015,14 +1015,16 @@ def get_reset_traffic_confirm_keyboard(price_kopeks: int, language: str = DEFAUL
     ])
 
 def get_manage_countries_keyboard(
-    countries: List[dict], 
-    selected: List[str], 
+    countries: List[dict],
+    selected: List[str],
     current_subscription_countries: List[str],
     language: str = DEFAULT_LANGUAGE,
     subscription_end_date: datetime = None
 ) -> InlineKeyboardMarkup:
     from app.utils.pricing_utils import get_remaining_months
-    
+
+    texts = get_texts(language)
+
     months_multiplier = 1
     if subscription_end_date:
         months_multiplier = get_remaining_months(subscription_end_date)
