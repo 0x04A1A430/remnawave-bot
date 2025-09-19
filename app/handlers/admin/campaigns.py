@@ -1,10 +1,9 @@
 import logging
 import re
-from typing import List, Optional
+from typing import List
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
-from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -121,9 +120,6 @@ async def _render_campaign_edit_menu(
     message_id: int,
     campaign,
     language: str,
-    *,
-    original_message: Optional[types.Message] = None,
-) -> int:
 ):
     texts = get_texts(language)
     text = (
@@ -131,53 +127,6 @@ async def _render_campaign_edit_menu(
         f"{_format_campaign_summary(campaign, texts)}\n"
         "Выберите, что изменить:"
     )
-    reply_markup = get_campaign_edit_keyboard(
-        campaign.id,
-        is_balance_bonus=campaign.is_balance_bonus,
-        language=language,
-    )
-
-    try:
-        await bot.edit_message_text(
-            text=text,
-            chat_id=chat_id,
-            message_id=message_id,
-            reply_markup=reply_markup,
-            parse_mode="HTML",
-        )
-        return message_id
-    except TelegramBadRequest as exc:
-        if original_message and original_message.caption:
-            try:
-                await bot.edit_message_caption(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    caption=text,
-                    reply_markup=reply_markup,
-                    parse_mode="HTML",
-                )
-                return message_id
-            except TelegramBadRequest:
-                pass
-
-        logger.debug(
-            "Falling back to sending new campaign edit menu message: %s", exc
-        )
-
-        new_message = await bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=reply_markup,
-            parse_mode="HTML",
-        )
-
-        if original_message:
-            try:
-                await original_message.delete()
-            except TelegramBadRequest:
-                logger.debug("Failed to delete original message during fallback")
-
-        return new_message.message_id
 
     await bot.edit_message_text(
         text=text,
@@ -410,7 +359,6 @@ async def show_campaign_edit_menu(
         callback.message.message_id,
         campaign,
         db_user.language,
-        original_message=callback.message,
     )
     await callback.answer()
 
@@ -1138,7 +1086,6 @@ async def save_edit_campaign_subscription_servers(
         callback.message.message_id,
         campaign,
         db_user.language,
-        original_message=callback.message,
     )
     await callback.answer("✅ Сохранено")
 
