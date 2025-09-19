@@ -120,6 +120,8 @@ async def _render_campaign_edit_menu(
     message_id: int,
     campaign,
     language: str,
+    *,
+    use_caption: bool = False,
 ):
     texts = get_texts(language)
     text = (
@@ -128,8 +130,7 @@ async def _render_campaign_edit_menu(
         "Выберите, что изменить:"
     )
 
-    await bot.edit_message_text(
-        text=text,
+    edit_kwargs = dict(
         chat_id=chat_id,
         message_id=message_id,
         reply_markup=get_campaign_edit_keyboard(
@@ -139,6 +140,17 @@ async def _render_campaign_edit_menu(
         ),
         parse_mode="HTML",
     )
+
+    if use_caption:
+        await bot.edit_message_caption(
+            caption=text,
+            **edit_kwargs,
+        )
+    else:
+        await bot.edit_message_text(
+            text=text,
+            **edit_kwargs,
+        )
 
 
 @admin_required
@@ -353,12 +365,15 @@ async def show_campaign_edit_menu(
 
     await state.clear()
 
+    use_caption = bool(callback.message.caption) and not bool(callback.message.text)
+
     await _render_campaign_edit_menu(
         callback.bot,
         callback.message.chat.id,
         callback.message.message_id,
         campaign,
         db_user.language,
+        use_caption=use_caption,
     )
     await callback.answer()
 
@@ -379,9 +394,11 @@ async def start_edit_campaign_name(
 
     await state.clear()
     await state.set_state(AdminStates.editing_campaign_name)
+    is_caption = bool(callback.message.caption) and not bool(callback.message.text)
     await state.update_data(
         editing_campaign_id=campaign_id,
         campaign_edit_message_id=callback.message.message_id,
+        campaign_edit_message_is_caption=is_caption,
     )
 
     await callback.message.edit_text(
@@ -438,6 +455,7 @@ async def process_edit_campaign_name(
     await message.answer("✅ Название обновлено.")
 
     edit_message_id = data.get("campaign_edit_message_id")
+    edit_message_is_caption = data.get("campaign_edit_message_is_caption", False)
     if edit_message_id:
         await _render_campaign_edit_menu(
             message.bot,
@@ -445,6 +463,7 @@ async def process_edit_campaign_name(
             edit_message_id,
             campaign,
             db_user.language,
+            use_caption=edit_message_is_caption,
         )
 
 
@@ -464,9 +483,11 @@ async def start_edit_campaign_start_parameter(
 
     await state.clear()
     await state.set_state(AdminStates.editing_campaign_start)
+    is_caption = bool(callback.message.caption) and not bool(callback.message.text)
     await state.update_data(
         editing_campaign_id=campaign_id,
         campaign_edit_message_id=callback.message.message_id,
+        campaign_edit_message_is_caption=is_caption,
     )
 
     await callback.message.edit_text(
@@ -528,6 +549,7 @@ async def process_edit_campaign_start_parameter(
     await message.answer("✅ Стартовый параметр обновлен.")
 
     edit_message_id = data.get("campaign_edit_message_id")
+    edit_message_is_caption = data.get("campaign_edit_message_is_caption", False)
     if edit_message_id:
         await _render_campaign_edit_menu(
             message.bot,
@@ -535,6 +557,7 @@ async def process_edit_campaign_start_parameter(
             edit_message_id,
             campaign,
             db_user.language,
+            use_caption=edit_message_is_caption,
         )
 
 
@@ -558,9 +581,11 @@ async def start_edit_campaign_balance_bonus(
 
     await state.clear()
     await state.set_state(AdminStates.editing_campaign_balance)
+    is_caption = bool(callback.message.caption) and not bool(callback.message.text)
     await state.update_data(
         editing_campaign_id=campaign_id,
         campaign_edit_message_id=callback.message.message_id,
+        campaign_edit_message_is_caption=is_caption,
     )
 
     await callback.message.edit_text(
@@ -627,6 +652,7 @@ async def process_edit_campaign_balance_bonus(
     await message.answer("✅ Бонус обновлен.")
 
     edit_message_id = data.get("campaign_edit_message_id")
+    edit_message_is_caption = data.get("campaign_edit_message_is_caption", False)
     if edit_message_id:
         await _render_campaign_edit_menu(
             message.bot,
@@ -634,6 +660,7 @@ async def process_edit_campaign_balance_bonus(
             edit_message_id,
             campaign,
             db_user.language,
+            use_caption=edit_message_is_caption,
         )
 
 
@@ -671,9 +698,11 @@ async def start_edit_campaign_subscription_days(
 
     await state.clear()
     await state.set_state(AdminStates.editing_campaign_subscription_days)
+    is_caption = bool(callback.message.caption) and not bool(callback.message.text)
     await state.update_data(
         editing_campaign_id=campaign_id,
         campaign_edit_message_id=callback.message.message_id,
+        campaign_edit_message_is_caption=is_caption,
     )
 
     await callback.message.edit_text(
@@ -737,6 +766,7 @@ async def process_edit_campaign_subscription_days(
     await message.answer("✅ Длительность подписки обновлена.")
 
     edit_message_id = data.get("campaign_edit_message_id")
+    edit_message_is_caption = data.get("campaign_edit_message_is_caption", False)
     if edit_message_id:
         await _render_campaign_edit_menu(
             message.bot,
@@ -744,6 +774,7 @@ async def process_edit_campaign_subscription_days(
             edit_message_id,
             campaign,
             db_user.language,
+            use_caption=edit_message_is_caption,
         )
 
 
@@ -766,9 +797,11 @@ async def start_edit_campaign_subscription_traffic(
 
     await state.clear()
     await state.set_state(AdminStates.editing_campaign_subscription_traffic)
+    is_caption = bool(callback.message.caption) and not bool(callback.message.text)
     await state.update_data(
         editing_campaign_id=campaign_id,
         campaign_edit_message_id=callback.message.message_id,
+        campaign_edit_message_is_caption=is_caption,
     )
 
     current_traffic = campaign.subscription_traffic_gb or 0
@@ -835,6 +868,7 @@ async def process_edit_campaign_subscription_traffic(
     await message.answer("✅ Лимит трафика обновлен.")
 
     edit_message_id = data.get("campaign_edit_message_id")
+    edit_message_is_caption = data.get("campaign_edit_message_is_caption", False)
     if edit_message_id:
         await _render_campaign_edit_menu(
             message.bot,
@@ -842,6 +876,7 @@ async def process_edit_campaign_subscription_traffic(
             edit_message_id,
             campaign,
             db_user.language,
+            use_caption=edit_message_is_caption,
         )
 
 
@@ -864,9 +899,11 @@ async def start_edit_campaign_subscription_devices(
 
     await state.clear()
     await state.set_state(AdminStates.editing_campaign_subscription_devices)
+    is_caption = bool(callback.message.caption) and not bool(callback.message.text)
     await state.update_data(
         editing_campaign_id=campaign_id,
         campaign_edit_message_id=callback.message.message_id,
+        campaign_edit_message_is_caption=is_caption,
     )
 
     current_devices = campaign.subscription_device_limit or settings.DEFAULT_DEVICE_LIMIT
@@ -934,6 +971,7 @@ async def process_edit_campaign_subscription_devices(
     await message.answer("✅ Лимит устройств обновлен.")
 
     edit_message_id = data.get("campaign_edit_message_id")
+    edit_message_is_caption = data.get("campaign_edit_message_is_caption", False)
     if edit_message_id:
         await _render_campaign_edit_menu(
             message.bot,
@@ -941,6 +979,7 @@ async def process_edit_campaign_subscription_devices(
             edit_message_id,
             campaign,
             db_user.language,
+            use_caption=edit_message_is_caption,
         )
 
 
@@ -973,10 +1012,12 @@ async def start_edit_campaign_subscription_servers(
 
     await state.clear()
     await state.set_state(AdminStates.editing_campaign_subscription_servers)
+    is_caption = bool(callback.message.caption) and not bool(callback.message.text)
     await state.update_data(
         editing_campaign_id=campaign_id,
         campaign_edit_message_id=callback.message.message_id,
         campaign_subscription_squads=selected,
+        campaign_edit_message_is_caption=is_caption,
     )
 
     keyboard = _build_campaign_servers_keyboard(
@@ -1080,12 +1121,15 @@ async def save_edit_campaign_subscription_servers(
     await update_campaign(db, campaign, subscription_squads=selected)
     await state.clear()
 
+    use_caption = bool(callback.message.caption) and not bool(callback.message.text)
+
     await _render_campaign_edit_menu(
         callback.bot,
         callback.message.chat.id,
         callback.message.message_id,
         campaign,
         db_user.language,
+        use_caption=use_caption,
     )
     await callback.answer("✅ Сохранено")
 
