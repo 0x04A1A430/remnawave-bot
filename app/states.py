@@ -16,6 +16,7 @@ class SubscriptionStates(StatesGroup):
     adding_devices = State()
     extending_subscription = State()
     confirming_traffic_reset = State()
+    cart_saved_for_topup = State()
 
 class BalanceStates(StatesGroup):
     waiting_for_amount = State()
@@ -86,6 +87,9 @@ class AdminStates(StatesGroup):
     
     editing_welcome_text = State()
     waiting_for_message_buttons = "waiting_for_message_buttons"
+    
+    # Состояния для отслеживания источника перехода
+    viewing_user_from_balance_list = State()
 
 class SupportStates(StatesGroup):
     waiting_for_message = State()

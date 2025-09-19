@@ -269,6 +269,51 @@ def get_subscription_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
+def get_payment_methods_keyboard_with_cart(language: str = "ru") -> InlineKeyboardMarkup:
+    keyboard = get_payment_methods_keyboard(0, language)
+    
+    # Добавляем кнопку "Очистить корзину"
+    keyboard.inline_keyboard.append([
+        InlineKeyboardButton(
+            text="🗑️ Очистить корзину и вернуться",
+            callback_data="clear_saved_cart"
+        )
+    ])
+    
+    return keyboard
+
+def get_subscription_confirm_keyboard_with_cart(language: str = "ru") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="✅ Подтвердить покупку",
+            callback_data="subscription_confirm"
+        )],
+        [InlineKeyboardButton(
+            text="🗑️ Очистить корзину",
+            callback_data="clear_saved_cart"
+        )],
+        [InlineKeyboardButton(
+            text="🔙 Назад",
+            callback_data="back_to_menu"
+        )]
+    ])
+
+def get_insufficient_balance_keyboard_with_cart(language: str = "ru") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="💰 Пополнить баланс",
+            callback_data="balance_topup"
+        )],
+        [InlineKeyboardButton(
+            text="🗑️ Очистить корзину",
+            callback_data="clear_saved_cart"
+        )],
+        [InlineKeyboardButton(
+            text="🔙 Назад",
+            callback_data="back_to_menu"
+        )]
+    ])
+
 def get_trial_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
