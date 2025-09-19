@@ -9,12 +9,20 @@ from typing import Any, Dict
 
 from app.config import settings
 
-DEFAULT_LANGUAGE = "ru"
-
 _logger = logging.getLogger(__name__)
+
+_FALLBACK_LANGUAGE = "ru"
 
 _BASE_DIR = Path(__file__).resolve().parent
 _DEFAULT_LOCALES_DIR = _BASE_DIR / "locales"
+
+
+def _normalize_language_code(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip().lower()
+    if value is None:
+        return ""
+    return str(value).strip().lower()
 
 
 def _resolve_user_locales_dir() -> Path:
@@ -22,6 +30,106 @@ def _resolve_user_locales_dir() -> Path:
     if not path.is_absolute():
         path = Path.cwd() / path
     return path
+
+
+def _locale_file_exists(language: str) -> bool:
+    code = _normalize_language_code(language)
+    if not code:
+        return False
+
+    default_candidate = _DEFAULT_LOCALES_DIR / f"{code}.json"
+    if default_candidate.exists():
+        return True
+
+    user_dir = _resolve_user_locales_dir()
+    for extension in (".json", ".yml", ".yaml"):
+        if (user_dir / f"{code}{extension}").exists():
+            return True
+    return False
+
+
+def _select_fallback_language(available_map: Dict[str, str]) -> str:
+    candidates = []
+    if _FALLBACK_LANGUAGE:
+        candidates.append(_FALLBACK_LANGUAGE)
+    candidates.extend(available_map.values())
+
+    seen = set()
+    for candidate in candidates:
+        normalized = _normalize_language_code(candidate)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+
+        if normalized in available_map:
+            return available_map[normalized]
+
+        if _locale_file_exists(normalized):
+            return normalized
+
+    if _FALLBACK_LANGUAGE and _locale_file_exists(_FALLBACK_LANGUAGE):
+        return _FALLBACK_LANGUAGE
+
+    return _FALLBACK_LANGUAGE or "ru"
+
+
+def _determine_default_language() -> str:
+    try:
+        raw_default = settings.DEFAULT_LANGUAGE
+    except AttributeError:
+        raw_default = None
+
+    configured = raw_default.strip() if isinstance(raw_default, str) else ""
+
+    try:
+        available_languages = settings.get_available_languages()
+    except Exception as error:  # pragma: no cover - defensive logging
+        _logger.warning("Failed to load available languages from settings: %s", error)
+        available_languages = []
+
+    available_map = {
+        _normalize_language_code(lang): lang.strip()
+        for lang in available_languages
+        if isinstance(lang, str) and lang.strip()
+    }
+
+    if configured:
+        normalized_configured = _normalize_language_code(configured)
+
+        if normalized_configured in available_map:
+            return available_map[normalized_configured]
+
+        if not available_map and _locale_file_exists(normalized_configured):
+            return normalized_configured
+
+        if _locale_file_exists(normalized_configured):
+            _logger.warning(
+                "Configured default language '%s' is not listed in AVAILABLE_LANGUAGES. Falling back to '%s'.",
+                configured,
+                _FALLBACK_LANGUAGE,
+            )
+        else:
+            _logger.warning(
+                "Configured default language '%s' is not available. Falling back to '%s'.",
+                configured,
+                _FALLBACK_LANGUAGE,
+            )
+    else:
+        _logger.debug("DEFAULT_LANGUAGE is not set. Falling back to '%s'.", _FALLBACK_LANGUAGE)
+
+    fallback_language = _select_fallback_language(available_map)
+
+    if _normalize_language_code(fallback_language) != _normalize_language_code(_FALLBACK_LANGUAGE):
+        _logger.warning(
+            "Fallback language '%s' is not available. Using '%s' instead.",
+            _FALLBACK_LANGUAGE,
+            fallback_language,
+        )
+
+    return fallback_language or _FALLBACK_LANGUAGE
+
+
+DEFAULT_LANGUAGE = _determine_default_language()
 
 
 def _normalize_key(raw_key: Any) -> str:

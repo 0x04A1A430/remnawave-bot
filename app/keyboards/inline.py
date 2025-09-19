@@ -13,7 +13,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def get_rules_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_rules_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -59,7 +59,7 @@ def get_post_registration_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKe
 
 
 def get_main_menu_keyboard(
-    language: str = "ru",
+    language: str = DEFAULT_LANGUAGE,
     is_admin: bool = False,
     has_had_paid_subscription: bool = False,
     has_active_subscription: bool = False,
@@ -171,14 +171,14 @@ def get_main_menu_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_back_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_back_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
     ])
 
 
-def get_insufficient_balance_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_insufficient_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -192,7 +192,7 @@ def get_insufficient_balance_keyboard(language: str = "ru") -> InlineKeyboardMar
 
 
 def get_subscription_keyboard(
-    language: str = "ru", 
+    language: str = DEFAULT_LANGUAGE, 
     has_subscription: bool = False, 
     is_trial: bool = False,
     subscription=None
@@ -264,7 +264,7 @@ def get_subscription_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_trial_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_trial_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -274,7 +274,7 @@ def get_trial_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     ])
 
 
-def get_subscription_period_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_subscription_period_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
     
@@ -305,7 +305,7 @@ def get_subscription_period_keyboard(language: str = "ru") -> InlineKeyboardMark
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_traffic_packages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_traffic_packages_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     import logging
     logger = logging.getLogger(__name__)
     
@@ -364,7 +364,7 @@ def get_traffic_packages_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_countries_keyboard(countries: List[dict], selected: List[str], language: str = "ru") -> InlineKeyboardMarkup:
+def get_countries_keyboard(countries: List[dict], selected: List[str], language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
     
@@ -402,7 +402,7 @@ def get_countries_keyboard(countries: List[dict], selected: List[str], language:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_devices_keyboard(current: int, language: str = "ru") -> InlineKeyboardMarkup:
+def get_devices_keyboard(current: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
     
@@ -447,7 +447,7 @@ def _get_device_declension(count: int) -> str:
     else:
         return "устройств"
 
-def get_subscription_confirm_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_subscription_confirm_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -457,7 +457,7 @@ def get_subscription_confirm_keyboard(language: str = "ru") -> InlineKeyboardMar
     ])
 
 
-def get_balance_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     
     keyboard = [
@@ -473,7 +473,7 @@ def get_balance_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_payment_methods_keyboard(amount_kopeks: int, language: str = "ru") -> InlineKeyboardMarkup:
+def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
     
@@ -543,7 +543,7 @@ def get_yookassa_payment_keyboard(
     payment_id: str, 
     amount_kopeks: int, 
     confirmation_url: str,
-    language: str = "ru"
+    language: str = DEFAULT_LANGUAGE
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -567,7 +567,7 @@ def get_yookassa_payment_keyboard(
         ]
     ])
 
-def get_autopay_notification_keyboard(subscription_id: int, language: str = "ru") -> InlineKeyboardMarkup:
+def get_autopay_notification_keyboard(subscription_id: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -585,7 +585,7 @@ def get_autopay_notification_keyboard(subscription_id: int, language: str = "ru"
         ]
     ])
 
-def get_subscription_expiring_keyboard(subscription_id: int, language: str = "ru") -> InlineKeyboardMarkup:
+def get_subscription_expiring_keyboard(subscription_id: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -609,7 +609,7 @@ def get_subscription_expiring_keyboard(subscription_id: int, language: str = "ru
         ]
     ])
 
-def get_referral_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_referral_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     
     keyboard = [
@@ -648,7 +648,7 @@ def get_referral_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_support_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -664,7 +664,7 @@ def get_pagination_keyboard(
     current_page: int,
     total_pages: int,
     callback_prefix: str,
-    language: str = "ru"
+    language: str = DEFAULT_LANGUAGE
 ) -> List[List[InlineKeyboardButton]]:
     texts = get_texts(language)
     keyboard = []
@@ -696,7 +696,7 @@ def get_pagination_keyboard(
 def get_confirmation_keyboard(
     confirm_data: str,
     cancel_data: str = "cancel",
-    language: str = "ru"
+    language: str = DEFAULT_LANGUAGE
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -707,7 +707,7 @@ def get_confirmation_keyboard(
     ])
 
 
-def get_autopay_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_autopay_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -723,7 +723,7 @@ def get_autopay_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     ])
 
 
-def get_autopay_days_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_autopay_days_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
     
@@ -752,7 +752,7 @@ def _get_days_suffix(days: int) -> str:
 
 
 
-def get_extend_subscription_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_extend_subscription_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
     
@@ -775,7 +775,7 @@ def get_extend_subscription_keyboard(language: str = "ru") -> InlineKeyboardMark
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_add_traffic_keyboard(language: str = "ru", subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
+def get_add_traffic_keyboard(language: str = DEFAULT_LANGUAGE, subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
     from app.utils.pricing_utils import get_remaining_months
     from app.config import settings
     texts = get_texts(language)
@@ -833,7 +833,7 @@ def get_add_traffic_keyboard(language: str = "ru", subscription_end_date: dateti
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
     
-def get_change_devices_keyboard(current_devices: int, language: str = "ru", subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
+def get_change_devices_keyboard(current_devices: int, language: str = DEFAULT_LANGUAGE, subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
     from app.utils.pricing_utils import get_remaining_months
     from app.config import settings
     texts = get_texts(language)
@@ -902,7 +902,7 @@ def get_change_devices_keyboard(current_devices: int, language: str = "ru", subs
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-def get_confirm_change_devices_keyboard(new_devices_count: int, price: int, language: str = "ru") -> InlineKeyboardMarkup:
+def get_confirm_change_devices_keyboard(new_devices_count: int, price: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -921,7 +921,7 @@ def get_confirm_change_devices_keyboard(new_devices_count: int, price: int, lang
     ])
 
 
-def get_reset_traffic_confirm_keyboard(price_kopeks: int, language: str = "ru") -> InlineKeyboardMarkup:
+def get_reset_traffic_confirm_keyboard(price_kopeks: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     from app.config import settings
     
     if settings.is_traffic_fixed():
@@ -947,7 +947,7 @@ def get_manage_countries_keyboard(
     countries: List[dict], 
     selected: List[str], 
     current_subscription_countries: List[str],
-    language: str = "ru",
+    language: str = DEFAULT_LANGUAGE,
     subscription_end_date: datetime = None
 ) -> InlineKeyboardMarkup:
     from app.utils.pricing_utils import get_remaining_months
@@ -1014,7 +1014,7 @@ def get_manage_countries_keyboard(
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-def get_device_selection_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_device_selection_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     from app.config import settings
     texts = get_texts(language)
     
@@ -1047,7 +1047,7 @@ def get_device_selection_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
 def get_connection_guide_keyboard(
     subscription_url: str, 
     app: dict, 
-    language: str = "ru"
+    language: str = DEFAULT_LANGUAGE
 ) -> InlineKeyboardMarkup:
     from app.handlers.subscription import create_deep_link
     texts = get_texts(language)
@@ -1087,7 +1087,7 @@ def get_connection_guide_keyboard(
 def get_app_selection_keyboard(
     device_type: str, 
     apps: list, 
-    language: str = "ru"
+    language: str = DEFAULT_LANGUAGE
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
@@ -1120,7 +1120,7 @@ def get_specific_app_keyboard(
     subscription_url: str,
     app: dict,
     device_type: str,
-    language: str = "ru"
+    language: str = DEFAULT_LANGUAGE
 ) -> InlineKeyboardMarkup:
     from app.handlers.subscription import create_deep_link
     texts = get_texts(language)
@@ -1194,7 +1194,7 @@ def get_cryptobot_payment_keyboard(
     amount_usd: float,
     asset: str,
     bot_invoice_url: str,
-    language: str = "ru"
+    language: str = DEFAULT_LANGUAGE
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -1221,7 +1221,7 @@ def get_cryptobot_payment_keyboard(
 def get_devices_management_keyboard(
     devices: List[dict], 
     pagination,
-    language: str = "ru"
+    language: str = DEFAULT_LANGUAGE
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     
@@ -1287,7 +1287,7 @@ def get_devices_management_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_updated_subscription_settings_keyboard(language: str = "ru", show_countries_management: bool = True) -> InlineKeyboardMarkup:
+def get_updated_subscription_settings_keyboard(language: str = DEFAULT_LANGUAGE, show_countries_management: bool = True) -> InlineKeyboardMarkup:
     from app.config import settings
     
     texts = get_texts(language)
@@ -1322,7 +1322,7 @@ def get_updated_subscription_settings_keyboard(language: str = "ru", show_countr
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_device_reset_confirm_keyboard(device_info: str, device_index: int, page: int, language: str = "ru") -> InlineKeyboardMarkup:
+def get_device_reset_confirm_keyboard(device_info: str, device_index: int, page: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -1341,7 +1341,7 @@ def get_device_reset_confirm_keyboard(device_info: str, device_index: int, page:
     ])
 
 
-def get_device_management_help_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+def get_device_management_help_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
     return InlineKeyboardMarkup(inline_keyboard=[

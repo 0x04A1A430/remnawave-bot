@@ -17,7 +17,9 @@ _cached_rules: Dict[str, str] = {}
 
 
 def _build_dynamic_values(language: str) -> Dict[str, Any]:
-    if language == "ru":
+    language_code = (language or DEFAULT_LANGUAGE).split("-")[0].lower()
+
+    if language_code == "ru":
         return {
             "PERIOD_14_DAYS": f"📅 14 дней - {settings.format_price(settings.PRICE_14_DAYS)}",
             "PERIOD_30_DAYS": f"📅 30 дней - {settings.format_price(settings.PRICE_30_DAYS)}",
@@ -44,6 +46,35 @@ def _build_dynamic_values(language: str) -> Dict[str, Any]:
                 "⏰ Время ответа: обычно в течение 1-2 часов\n"
             ),
         }
+
+    if language_code == "en":
+        return {
+            "PERIOD_14_DAYS": f"📅 14 days - {settings.format_price(settings.PRICE_14_DAYS)}",
+            "PERIOD_30_DAYS": f"📅 30 days - {settings.format_price(settings.PRICE_30_DAYS)}",
+            "PERIOD_60_DAYS": f"📅 60 days - {settings.format_price(settings.PRICE_60_DAYS)}",
+            "PERIOD_90_DAYS": f"📅 90 days - {settings.format_price(settings.PRICE_90_DAYS)}",
+            "PERIOD_180_DAYS": f"📅 180 days - {settings.format_price(settings.PRICE_180_DAYS)}",
+            "PERIOD_360_DAYS": f"📅 360 days - {settings.format_price(settings.PRICE_360_DAYS)}",
+            "TRAFFIC_5GB": f"📊 5 GB - {settings.format_price(settings.PRICE_TRAFFIC_5GB)}",
+            "TRAFFIC_10GB": f"📊 10 GB - {settings.format_price(settings.PRICE_TRAFFIC_10GB)}",
+            "TRAFFIC_25GB": f"📊 25 GB - {settings.format_price(settings.PRICE_TRAFFIC_25GB)}",
+            "TRAFFIC_50GB": f"📊 50 GB - {settings.format_price(settings.PRICE_TRAFFIC_50GB)}",
+            "TRAFFIC_100GB": f"📊 100 GB - {settings.format_price(settings.PRICE_TRAFFIC_100GB)}",
+            "TRAFFIC_250GB": f"📊 250 GB - {settings.format_price(settings.PRICE_TRAFFIC_250GB)}",
+            "TRAFFIC_UNLIMITED": f"📊 Unlimited - {settings.format_price(settings.PRICE_TRAFFIC_UNLIMITED)}",
+            "SUPPORT_INFO": (
+                "\n🛠️ <b>Technical support</b>\n\n"
+                "For any questions contact our support:\n\n"
+                f"👤 {settings.SUPPORT_USERNAME}\n\n"
+                "We can help with:\n"
+                "• Connection setup\n"
+                "• Troubleshooting issues\n"
+                "• Payment questions\n"
+                "• Other requests\n\n"
+                "⏰ Response time: usually within 1-2 hours\n"
+            ),
+        }
+
     return {}
 
 
