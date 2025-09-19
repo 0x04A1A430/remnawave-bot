@@ -167,21 +167,109 @@ def get_admin_campaigns_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     ])
 
 
-def get_campaign_management_keyboard(campaign_id: int, is_active: bool, language: str = "ru") -> InlineKeyboardMarkup:
+def get_campaign_management_keyboard(
+    campaign_id: int, is_active: bool, language: str = "ru"
+) -> InlineKeyboardMarkup:
     status_text = "🔴 Выключить" if is_active else "🟢 Включить"
 
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="📊 Статистика", callback_data=f"admin_campaign_stats_{campaign_id}"),
-            InlineKeyboardButton(text=status_text, callback_data=f"admin_campaign_toggle_{campaign_id}")
-        ],
-        [
-            InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"admin_campaign_delete_{campaign_id}")
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ К списку", callback_data="admin_campaigns_list")
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📊 Статистика",
+                    callback_data=f"admin_campaign_stats_{campaign_id}",
+                ),
+                InlineKeyboardButton(
+                    text=status_text,
+                    callback_data=f"admin_campaign_toggle_{campaign_id}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✏️ Редактировать",
+                    callback_data=f"admin_campaign_edit_{campaign_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🗑️ Удалить",
+                    callback_data=f"admin_campaign_delete_{campaign_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ К списку", callback_data="admin_campaigns_list"
+                )
+            ],
         ]
-    ])
+    )
+
+
+def get_campaign_edit_keyboard(
+    campaign_id: int,
+    *,
+    is_balance_bonus: bool,
+    language: str = "ru",
+) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+
+    keyboard: List[List[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text="✏️ Название",
+                callback_data=f"admin_campaign_edit_name_{campaign_id}",
+            ),
+            InlineKeyboardButton(
+                text="🔗 Параметр",
+                callback_data=f"admin_campaign_edit_start_{campaign_id}",
+            ),
+        ]
+    ]
+
+    if is_balance_bonus:
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text="💰 Бонус на баланс",
+                    callback_data=f"admin_campaign_edit_balance_{campaign_id}",
+                )
+            ]
+        )
+    else:
+        keyboard.extend(
+            [
+                [
+                    InlineKeyboardButton(
+                        text="📅 Длительность",
+                        callback_data=f"admin_campaign_edit_sub_days_{campaign_id}",
+                    ),
+                    InlineKeyboardButton(
+                        text="🌐 Трафик",
+                        callback_data=f"admin_campaign_edit_sub_traffic_{campaign_id}",
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="📱 Устройства",
+                        callback_data=f"admin_campaign_edit_sub_devices_{campaign_id}",
+                    ),
+                    InlineKeyboardButton(
+                        text="🌍 Серверы",
+                        callback_data=f"admin_campaign_edit_sub_servers_{campaign_id}",
+                    ),
+                ],
+            ]
+        )
+
+    keyboard.append(
+        [
+            InlineKeyboardButton(
+                text=texts.BACK, callback_data=f"admin_campaign_manage_{campaign_id}"
+            )
+        ]
+    )
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_campaign_bonus_type_keyboard(language: str = "ru") -> InlineKeyboardMarkup:

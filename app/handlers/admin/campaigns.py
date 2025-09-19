@@ -1,9 +1,10 @@
 import logging
 import re
-from typing import List
+from typing import List, Optional
 
-from aiogram import Dispatcher, types, F
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
+from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -24,6 +25,7 @@ from app.keyboards.admin import (
     get_admin_campaigns_keyboard,
     get_admin_pagination_keyboard,
     get_campaign_bonus_type_keyboard,
+    get_campaign_edit_keyboard,
     get_campaign_management_keyboard,
     get_confirmation_keyboard,
 )
@@ -78,7 +80,12 @@ async def _get_bot_deep_link_from_message(
 
 
 def _build_campaign_servers_keyboard(
-    servers, selected_uuids: List[str]
+    servers,
+    selected_uuids: List[str],
+    *,
+    toggle_prefix: str = "campaign_toggle_server_",
+    save_callback: str = "campaign_servers_save",
+    back_callback: str = "admin_campaigns",
 ) -> types.InlineKeyboardMarkup:
     keyboard: List[List[types.InlineKeyboardButton]] = []
 
@@ -89,7 +96,7 @@ def _build_campaign_servers_keyboard(
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=text, callback_data=f"campaign_toggle_server_{server.id}"
+                    text=text, callback_data=f"{toggle_prefix}{server.id}"
                 )
             ]
         )
@@ -97,13 +104,79 @@ def _build_campaign_servers_keyboard(
     keyboard.append(
         [
             types.InlineKeyboardButton(
-                text="✅ Сохранить", callback_data="campaign_servers_save"
+                text="✅ Сохранить", callback_data=save_callback
             ),
-            types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_campaigns"),
+            types.InlineKeyboardButton(
+                text="⬅️ Назад", callback_data=back_callback
+            ),
         ]
     )
 
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+async def _render_campaign_edit_menu(
+    bot: Bot,
+    chat_id: int,
+    message_id: int,
+    campaign,
+    language: str,
+    *,
+    original_message: Optional[types.Message] = None,
+) -> int:
+    texts = get_texts(language)
+    text = (
+        "✏️ <b>Редактирование кампании</b>\n\n"
+        f"{_format_campaign_summary(campaign, texts)}\n"
+        "Выберите, что изменить:"
+    )
+    reply_markup = get_campaign_edit_keyboard(
+        campaign.id,
+        is_balance_bonus=campaign.is_balance_bonus,
+        language=language,
+    )
+
+    try:
+        await bot.edit_message_text(
+            text=text,
+            chat_id=chat_id,
+            message_id=message_id,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
+        )
+        return message_id
+    except TelegramBadRequest as exc:
+        if original_message and original_message.caption:
+            try:
+                await bot.edit_message_caption(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    caption=text,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML",
+                )
+                return message_id
+            except TelegramBadRequest:
+                pass
+
+        logger.debug(
+            "Falling back to sending new campaign edit menu message: %s", exc
+        )
+
+        new_message = await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
+        )
+
+        if original_message:
+            try:
+                await original_message.delete()
+            except TelegramBadRequest:
+                logger.debug("Failed to delete original message during fallback")
+
+        return new_message.message_id
 
 
 @admin_required
@@ -302,6 +375,763 @@ async def show_campaign_detail(
 
 @admin_required
 @error_handler
+async def show_campaign_edit_menu(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    campaign_id = int(callback.data.split("_")[-1])
+    campaign = await get_campaign_by_id(db, campaign_id)
+
+    if not campaign:
+        await state.clear()
+        await callback.answer("❌ Кампания не найдена", show_alert=True)
+        return
+
+    await state.clear()
+
+    await _render_campaign_edit_menu(
+        callback.bot,
+        callback.message.chat.id,
+        callback.message.message_id,
+        campaign,
+        db_user.language,
+        original_message=callback.message,
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def start_edit_campaign_name(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    campaign_id = int(callback.data.split("_")[-1])
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await callback.answer("❌ Кампания не найдена", show_alert=True)
+        return
+
+    await state.clear()
+    await state.set_state(AdminStates.editing_campaign_name)
+    await state.update_data(
+        editing_campaign_id=campaign_id,
+        campaign_edit_message_id=callback.message.message_id,
+    )
+
+    await callback.message.edit_text(
+        (
+            "✏️ <b>Изменение названия кампании</b>\n\n"
+            f"Текущее название: <b>{campaign.name}</b>\n"
+            "Введите новое название (3-100 символов):"
+        ),
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="❌ Отмена",
+                        callback_data=f"admin_campaign_edit_{campaign_id}",
+                    )
+                ]
+            ]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_campaign_name(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    campaign_id = data.get("editing_campaign_id")
+    if not campaign_id:
+        await message.answer("❌ Сессия редактирования устарела. Попробуйте снова.")
+        await state.clear()
+        return
+
+    new_name = message.text.strip()
+    if len(new_name) < 3 or len(new_name) > 100:
+        await message.answer(
+            "❌ Название должно содержать от 3 до 100 символов. Попробуйте снова."
+        )
+        return
+
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await message.answer("❌ Кампания не найдена")
+        await state.clear()
+        return
+
+    await update_campaign(db, campaign, name=new_name)
+    await state.clear()
+
+    await message.answer("✅ Название обновлено.")
+
+    edit_message_id = data.get("campaign_edit_message_id")
+    if edit_message_id:
+        await _render_campaign_edit_menu(
+            message.bot,
+            message.chat.id,
+            edit_message_id,
+            campaign,
+            db_user.language,
+        )
+
+
+@admin_required
+@error_handler
+async def start_edit_campaign_start_parameter(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    campaign_id = int(callback.data.split("_")[-1])
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await callback.answer("❌ Кампания не найдена", show_alert=True)
+        return
+
+    await state.clear()
+    await state.set_state(AdminStates.editing_campaign_start)
+    await state.update_data(
+        editing_campaign_id=campaign_id,
+        campaign_edit_message_id=callback.message.message_id,
+    )
+
+    await callback.message.edit_text(
+        (
+            "🔗 <b>Изменение стартового параметра</b>\n\n"
+            f"Текущий параметр: <code>{campaign.start_parameter}</code>\n"
+            "Введите новый параметр (латинские буквы, цифры, - или _, 3-32 символа):"
+        ),
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="❌ Отмена",
+                        callback_data=f"admin_campaign_edit_{campaign_id}",
+                    )
+                ]
+            ]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_campaign_start_parameter(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    campaign_id = data.get("editing_campaign_id")
+    if not campaign_id:
+        await message.answer("❌ Сессия редактирования устарела. Попробуйте снова.")
+        await state.clear()
+        return
+
+    new_param = message.text.strip()
+    if not _CAMPAIGN_PARAM_REGEX.match(new_param):
+        await message.answer(
+            "❌ Разрешены только латинские буквы, цифры, символы - и _. Длина 3-32 символа."
+        )
+        return
+
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await message.answer("❌ Кампания не найдена")
+        await state.clear()
+        return
+
+    existing = await get_campaign_by_start_parameter(db, new_param)
+    if existing and existing.id != campaign_id:
+        await message.answer("❌ Такой параметр уже используется. Введите другой вариант.")
+        return
+
+    await update_campaign(db, campaign, start_parameter=new_param)
+    await state.clear()
+
+    await message.answer("✅ Стартовый параметр обновлен.")
+
+    edit_message_id = data.get("campaign_edit_message_id")
+    if edit_message_id:
+        await _render_campaign_edit_menu(
+            message.bot,
+            message.chat.id,
+            edit_message_id,
+            campaign,
+            db_user.language,
+        )
+
+
+@admin_required
+@error_handler
+async def start_edit_campaign_balance_bonus(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    campaign_id = int(callback.data.split("_")[-1])
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await callback.answer("❌ Кампания не найдена", show_alert=True)
+        return
+
+    if not campaign.is_balance_bonus:
+        await callback.answer("❌ У кампании другой тип бонуса", show_alert=True)
+        return
+
+    await state.clear()
+    await state.set_state(AdminStates.editing_campaign_balance)
+    await state.update_data(
+        editing_campaign_id=campaign_id,
+        campaign_edit_message_id=callback.message.message_id,
+    )
+
+    await callback.message.edit_text(
+        (
+            "💰 <b>Изменение бонуса на баланс</b>\n\n"
+            f"Текущий бонус: <b>{get_texts(db_user.language).format_price(campaign.balance_bonus_kopeks)}</b>\n"
+            "Введите новую сумму в рублях (например, 100 или 99.5):"
+        ),
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="❌ Отмена",
+                        callback_data=f"admin_campaign_edit_{campaign_id}",
+                    )
+                ]
+            ]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_campaign_balance_bonus(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    campaign_id = data.get("editing_campaign_id")
+    if not campaign_id:
+        await message.answer("❌ Сессия редактирования устарела. Попробуйте снова.")
+        await state.clear()
+        return
+
+    try:
+        amount_rubles = float(message.text.replace(",", "."))
+    except ValueError:
+        await message.answer("❌ Введите корректную сумму (например, 100 или 99.5)")
+        return
+
+    if amount_rubles <= 0:
+        await message.answer("❌ Сумма должна быть больше нуля")
+        return
+
+    amount_kopeks = int(round(amount_rubles * 100))
+
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await message.answer("❌ Кампания не найдена")
+        await state.clear()
+        return
+
+    if not campaign.is_balance_bonus:
+        await message.answer("❌ У кампании другой тип бонуса")
+        await state.clear()
+        return
+
+    await update_campaign(db, campaign, balance_bonus_kopeks=amount_kopeks)
+    await state.clear()
+
+    await message.answer("✅ Бонус обновлен.")
+
+    edit_message_id = data.get("campaign_edit_message_id")
+    if edit_message_id:
+        await _render_campaign_edit_menu(
+            message.bot,
+            message.chat.id,
+            edit_message_id,
+            campaign,
+            db_user.language,
+        )
+
+
+async def _ensure_subscription_campaign(message_or_callback, campaign) -> bool:
+    if campaign.is_balance_bonus:
+        if isinstance(message_or_callback, types.CallbackQuery):
+            await message_or_callback.answer(
+                "❌ Для этой кампании доступен только бонус на баланс",
+                show_alert=True,
+            )
+        else:
+            await message_or_callback.answer(
+                "❌ Для этой кампании нельзя изменить параметры подписки"
+            )
+        return False
+    return True
+
+
+@admin_required
+@error_handler
+async def start_edit_campaign_subscription_days(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    campaign_id = int(callback.data.split("_")[-1])
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await callback.answer("❌ Кампания не найдена", show_alert=True)
+        return
+
+    if not await _ensure_subscription_campaign(callback, campaign):
+        return
+
+    await state.clear()
+    await state.set_state(AdminStates.editing_campaign_subscription_days)
+    await state.update_data(
+        editing_campaign_id=campaign_id,
+        campaign_edit_message_id=callback.message.message_id,
+    )
+
+    await callback.message.edit_text(
+        (
+            "📅 <b>Изменение длительности подписки</b>\n\n"
+            f"Текущее значение: <b>{campaign.subscription_duration_days or 0} д.</b>\n"
+            "Введите новое количество дней (1-730):"
+        ),
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="❌ Отмена",
+                        callback_data=f"admin_campaign_edit_{campaign_id}",
+                    )
+                ]
+            ]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_campaign_subscription_days(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    campaign_id = data.get("editing_campaign_id")
+    if not campaign_id:
+        await message.answer("❌ Сессия редактирования устарела. Попробуйте снова.")
+        await state.clear()
+        return
+
+    try:
+        days = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Введите число дней (1-730)")
+        return
+
+    if days <= 0 or days > 730:
+        await message.answer("❌ Длительность должна быть от 1 до 730 дней")
+        return
+
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await message.answer("❌ Кампания не найдена")
+        await state.clear()
+        return
+
+    if not await _ensure_subscription_campaign(message, campaign):
+        await state.clear()
+        return
+
+    await update_campaign(db, campaign, subscription_duration_days=days)
+    await state.clear()
+
+    await message.answer("✅ Длительность подписки обновлена.")
+
+    edit_message_id = data.get("campaign_edit_message_id")
+    if edit_message_id:
+        await _render_campaign_edit_menu(
+            message.bot,
+            message.chat.id,
+            edit_message_id,
+            campaign,
+            db_user.language,
+        )
+
+
+@admin_required
+@error_handler
+async def start_edit_campaign_subscription_traffic(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    campaign_id = int(callback.data.split("_")[-1])
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await callback.answer("❌ Кампания не найдена", show_alert=True)
+        return
+
+    if not await _ensure_subscription_campaign(callback, campaign):
+        return
+
+    await state.clear()
+    await state.set_state(AdminStates.editing_campaign_subscription_traffic)
+    await state.update_data(
+        editing_campaign_id=campaign_id,
+        campaign_edit_message_id=callback.message.message_id,
+    )
+
+    current_traffic = campaign.subscription_traffic_gb or 0
+    traffic_text = "безлимит" if current_traffic == 0 else f"{current_traffic} ГБ"
+
+    await callback.message.edit_text(
+        (
+            "🌐 <b>Изменение лимита трафика</b>\n\n"
+            f"Текущее значение: <b>{traffic_text}</b>\n"
+            "Введите новый лимит в ГБ (0 = безлимит, максимум 10000):"
+        ),
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="❌ Отмена",
+                        callback_data=f"admin_campaign_edit_{campaign_id}",
+                    )
+                ]
+            ]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_campaign_subscription_traffic(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    campaign_id = data.get("editing_campaign_id")
+    if not campaign_id:
+        await message.answer("❌ Сессия редактирования устарела. Попробуйте снова.")
+        await state.clear()
+        return
+
+    try:
+        traffic = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Введите целое число (0 или больше)")
+        return
+
+    if traffic < 0 or traffic > 10000:
+        await message.answer("❌ Лимит трафика должен быть от 0 до 10000 ГБ")
+        return
+
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await message.answer("❌ Кампания не найдена")
+        await state.clear()
+        return
+
+    if not await _ensure_subscription_campaign(message, campaign):
+        await state.clear()
+        return
+
+    await update_campaign(db, campaign, subscription_traffic_gb=traffic)
+    await state.clear()
+
+    await message.answer("✅ Лимит трафика обновлен.")
+
+    edit_message_id = data.get("campaign_edit_message_id")
+    if edit_message_id:
+        await _render_campaign_edit_menu(
+            message.bot,
+            message.chat.id,
+            edit_message_id,
+            campaign,
+            db_user.language,
+        )
+
+
+@admin_required
+@error_handler
+async def start_edit_campaign_subscription_devices(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    campaign_id = int(callback.data.split("_")[-1])
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await callback.answer("❌ Кампания не найдена", show_alert=True)
+        return
+
+    if not await _ensure_subscription_campaign(callback, campaign):
+        return
+
+    await state.clear()
+    await state.set_state(AdminStates.editing_campaign_subscription_devices)
+    await state.update_data(
+        editing_campaign_id=campaign_id,
+        campaign_edit_message_id=callback.message.message_id,
+    )
+
+    current_devices = campaign.subscription_device_limit or settings.DEFAULT_DEVICE_LIMIT
+
+    await callback.message.edit_text(
+        (
+            "📱 <b>Изменение лимита устройств</b>\n\n"
+            f"Текущее значение: <b>{current_devices}</b>\n"
+            f"Введите новое количество (1-{settings.MAX_DEVICES_LIMIT}):"
+        ),
+        reply_markup=types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="❌ Отмена",
+                        callback_data=f"admin_campaign_edit_{campaign_id}",
+                    )
+                ]
+            ]
+        ),
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_campaign_subscription_devices(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    campaign_id = data.get("editing_campaign_id")
+    if not campaign_id:
+        await message.answer("❌ Сессия редактирования устарела. Попробуйте снова.")
+        await state.clear()
+        return
+
+    try:
+        devices = int(message.text.strip())
+    except ValueError:
+        await message.answer("❌ Введите целое число устройств")
+        return
+
+    if devices < 1 or devices > settings.MAX_DEVICES_LIMIT:
+        await message.answer(
+            f"❌ Количество устройств должно быть от 1 до {settings.MAX_DEVICES_LIMIT}"
+        )
+        return
+
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await message.answer("❌ Кампания не найдена")
+        await state.clear()
+        return
+
+    if not await _ensure_subscription_campaign(message, campaign):
+        await state.clear()
+        return
+
+    await update_campaign(db, campaign, subscription_device_limit=devices)
+    await state.clear()
+
+    await message.answer("✅ Лимит устройств обновлен.")
+
+    edit_message_id = data.get("campaign_edit_message_id")
+    if edit_message_id:
+        await _render_campaign_edit_menu(
+            message.bot,
+            message.chat.id,
+            edit_message_id,
+            campaign,
+            db_user.language,
+        )
+
+
+@admin_required
+@error_handler
+async def start_edit_campaign_subscription_servers(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    campaign_id = int(callback.data.split("_")[-1])
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await callback.answer("❌ Кампания не найдена", show_alert=True)
+        return
+
+    if not await _ensure_subscription_campaign(callback, campaign):
+        return
+
+    servers, _ = await get_all_server_squads(db, available_only=False)
+    if not servers:
+        await callback.answer(
+            "❌ Не найдены доступные серверы. Добавьте серверы перед изменением.",
+            show_alert=True,
+        )
+        return
+
+    selected = list(campaign.subscription_squads or [])
+
+    await state.clear()
+    await state.set_state(AdminStates.editing_campaign_subscription_servers)
+    await state.update_data(
+        editing_campaign_id=campaign_id,
+        campaign_edit_message_id=callback.message.message_id,
+        campaign_subscription_squads=selected,
+    )
+
+    keyboard = _build_campaign_servers_keyboard(
+        servers,
+        selected,
+        toggle_prefix=f"campaign_edit_toggle_{campaign_id}_",
+        save_callback=f"campaign_edit_servers_save_{campaign_id}",
+        back_callback=f"admin_campaign_edit_{campaign_id}",
+    )
+
+    await callback.message.edit_text(
+        (
+            "🌍 <b>Редактирование доступных серверов</b>\n\n"
+            "Нажмите на сервер, чтобы добавить или убрать его из кампании.\n"
+            "После выбора нажмите \"✅ Сохранить\"."
+        ),
+        reply_markup=keyboard,
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def toggle_edit_campaign_server(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    parts = callback.data.split("_")
+    try:
+        server_id = int(parts[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Не удалось определить сервер", show_alert=True)
+        return
+
+    data = await state.get_data()
+    campaign_id = data.get("editing_campaign_id")
+    if not campaign_id:
+        await callback.answer("❌ Сессия редактирования устарела", show_alert=True)
+        await state.clear()
+        return
+
+    server = await get_server_squad_by_id(db, server_id)
+    if not server:
+        await callback.answer("❌ Сервер не найден", show_alert=True)
+        return
+
+    selected = list(data.get("campaign_subscription_squads", []))
+
+    if server.squad_uuid in selected:
+        selected.remove(server.squad_uuid)
+    else:
+        selected.append(server.squad_uuid)
+
+    await state.update_data(campaign_subscription_squads=selected)
+
+    servers, _ = await get_all_server_squads(db, available_only=False)
+    keyboard = _build_campaign_servers_keyboard(
+        servers,
+        selected,
+        toggle_prefix=f"campaign_edit_toggle_{campaign_id}_",
+        save_callback=f"campaign_edit_servers_save_{campaign_id}",
+        back_callback=f"admin_campaign_edit_{campaign_id}",
+    )
+
+    await callback.message.edit_reply_markup(reply_markup=keyboard)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def save_edit_campaign_subscription_servers(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    campaign_id = data.get("editing_campaign_id")
+    if not campaign_id:
+        await callback.answer("❌ Сессия редактирования устарела", show_alert=True)
+        await state.clear()
+        return
+
+    selected = list(data.get("campaign_subscription_squads", []))
+    if not selected:
+        await callback.answer("❗ Выберите хотя бы один сервер", show_alert=True)
+        return
+
+    campaign = await get_campaign_by_id(db, campaign_id)
+    if not campaign:
+        await state.clear()
+        await callback.answer("❌ Кампания не найдена", show_alert=True)
+        return
+
+    if not await _ensure_subscription_campaign(callback, campaign):
+        await state.clear()
+        return
+
+    await update_campaign(db, campaign, subscription_squads=selected)
+    await state.clear()
+
+    await _render_campaign_edit_menu(
+        callback.bot,
+        callback.message.chat.id,
+        callback.message.message_id,
+        campaign,
+        db_user.language,
+        original_message=callback.message,
+    )
+    await callback.answer("✅ Сохранено")
+
+
+@admin_required
+@error_handler
 async def toggle_campaign_status(
     callback: types.CallbackQuery,
     db_user: User,
@@ -386,8 +1216,8 @@ async def confirm_delete_campaign(
     await callback.message.edit_text(
         text,
         reply_markup=get_confirmation_keyboard(
-            confirm_callback=f"admin_campaign_delete_confirm_{campaign_id}",
-            cancel_callback=f"admin_campaign_manage_{campaign_id}",
+            confirm_action=f"admin_campaign_delete_confirm_{campaign_id}",
+            cancel_action=f"admin_campaign_manage_{campaign_id}",
         ),
     )
     await callback.answer()
@@ -766,6 +1596,43 @@ def register_handlers(dp: Dispatcher):
         show_campaign_detail, F.data.startswith("admin_campaign_manage_")
     )
     dp.callback_query.register(
+        start_edit_campaign_name, F.data.startswith("admin_campaign_edit_name_")
+    )
+    dp.callback_query.register(
+        start_edit_campaign_start_parameter,
+        F.data.startswith("admin_campaign_edit_start_"),
+    )
+    dp.callback_query.register(
+        start_edit_campaign_balance_bonus,
+        F.data.startswith("admin_campaign_edit_balance_"),
+    )
+    dp.callback_query.register(
+        start_edit_campaign_subscription_days,
+        F.data.startswith("admin_campaign_edit_sub_days_"),
+    )
+    dp.callback_query.register(
+        start_edit_campaign_subscription_traffic,
+        F.data.startswith("admin_campaign_edit_sub_traffic_"),
+    )
+    dp.callback_query.register(
+        start_edit_campaign_subscription_devices,
+        F.data.startswith("admin_campaign_edit_sub_devices_"),
+    )
+    dp.callback_query.register(
+        start_edit_campaign_subscription_servers,
+        F.data.startswith("admin_campaign_edit_sub_servers_"),
+    )
+    dp.callback_query.register(
+        save_edit_campaign_subscription_servers,
+        F.data.startswith("campaign_edit_servers_save_"),
+    )
+    dp.callback_query.register(
+        toggle_edit_campaign_server, F.data.startswith("campaign_edit_toggle_")
+    )
+    dp.callback_query.register(
+        show_campaign_edit_menu, F.data.startswith("admin_campaign_edit_")
+    )
+    dp.callback_query.register(
         delete_campaign_confirmed, F.data.startswith("admin_campaign_delete_confirm_")
     )
     dp.callback_query.register(
@@ -802,4 +1669,27 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(
         process_campaign_subscription_devices,
         AdminStates.creating_campaign_subscription_devices,
+    )
+    dp.message.register(
+        process_edit_campaign_name, AdminStates.editing_campaign_name
+    )
+    dp.message.register(
+        process_edit_campaign_start_parameter,
+        AdminStates.editing_campaign_start,
+    )
+    dp.message.register(
+        process_edit_campaign_balance_bonus,
+        AdminStates.editing_campaign_balance,
+    )
+    dp.message.register(
+        process_edit_campaign_subscription_days,
+        AdminStates.editing_campaign_subscription_days,
+    )
+    dp.message.register(
+        process_edit_campaign_subscription_traffic,
+        AdminStates.editing_campaign_subscription_traffic,
+    )
+    dp.message.register(
+        process_edit_campaign_subscription_devices,
+        AdminStates.editing_campaign_subscription_devices,
     )
