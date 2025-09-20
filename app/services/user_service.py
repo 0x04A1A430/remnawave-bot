@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select, update
 from aiogram import Bot
@@ -10,13 +10,14 @@ from app.database.crud.user import (
     get_users_count, get_users_statistics, get_inactive_users,
     add_user_balance, subtract_user_balance, update_user, delete_user
 )
+from app.database.crud.promo_group import get_promo_group_by_id
 from app.database.crud.transaction import get_user_transactions_count
 from app.database.crud.subscription import get_subscription_by_user_id
 from app.database.models import (
-    User, UserStatus, Subscription, Transaction, PromoCode, PromoCodeUse, 
-    ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory, 
-    CryptoBotPayment, SubscriptionConversion, UserMessage, WelcomeText, 
-    SentNotification
+    User, UserStatus, Subscription, Transaction, PromoCode, PromoCodeUse,
+    ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory,
+    CryptoBotPayment, SubscriptionConversion, UserMessage, WelcomeText,
+    SentNotification, PromoGroup
 )
 from app.config import settings
 
@@ -192,10 +193,10 @@ class UserService:
             user = await get_user_by_id(db, user_id)
             if not user:
                 return False
-            
+
             # Сохраняем старый баланс для уведомления
             old_balance = user.balance_kopeks
-            
+
             if amount_kopeks > 0:
                 await add_user_balance(db, user, amount_kopeks, description=description)
                 logger.info(f"Админ {admin_id} пополнил баланс пользователя {user_id} на {amount_kopeks/100}₽")
@@ -204,26 +205,61 @@ class UserService:
                 success = await subtract_user_balance(db, user, abs(amount_kopeks), description)
                 if success:
                     logger.info(f"Админ {admin_id} списал с баланса пользователя {user_id} {abs(amount_kopeks)/100}₽")
-            
+
             # Отправляем уведомление пользователю, если операция прошла успешно
             if success and bot:
                 # Обновляем пользователя для получения нового баланса
                 await db.refresh(user)
-                
+
                 # Получаем имя администратора
                 if not admin_name:
                     admin_user = await get_user_by_id(db, admin_id)
                     admin_name = admin_user.full_name if admin_user else f"Админ #{admin_id}"
-                
+
                 # Отправляем уведомление (не блокируем операцию если не удалось отправить)
                 await self._send_balance_notification(bot, user, amount_kopeks, admin_name)
-            
+
             return success
-            
+
         except Exception as e:
             logger.error(f"Ошибка изменения баланса пользователя: {e}")
             return False
-    
+
+    async def update_user_promo_group(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        promo_group_id: int
+    ) -> Tuple[bool, Optional[User], Optional[PromoGroup]]:
+        try:
+            user = await get_user_by_id(db, user_id)
+            if not user:
+                return False, None, None
+
+            promo_group = await get_promo_group_by_id(db, promo_group_id)
+            if not promo_group:
+                return False, None, None
+
+            user.promo_group_id = promo_group.id
+            user.promo_group = promo_group
+            user.updated_at = datetime.utcnow()
+
+            await db.commit()
+            await db.refresh(user)
+
+            logger.info(
+                "👥 Промогруппа пользователя %s обновлена на '%s'",
+                user.telegram_id,
+                promo_group.name,
+            )
+
+            return True, user, promo_group
+
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Ошибка обновления промогруппы пользователя {user_id}: {e}")
+            return False, None, None
+
     async def block_user(
         self,
         db: AsyncSession,
