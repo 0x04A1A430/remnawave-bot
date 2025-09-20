@@ -502,15 +502,17 @@ def _get_discount_percent(
     user: Optional[User],
     promo_group: Optional[PromoGroup],
     category: str,
+    *,
+    period_days: Optional[int] = None,
 ) -> int:
     if user is not None:
         try:
-            return user.get_promo_discount(category)
+            return user.get_promo_discount(category, period_days)
         except AttributeError:
             pass
 
     if promo_group is not None:
-        return promo_group.get_discount_percent(category)
+        return promo_group.get_discount_percent(category, period_days)
 
     return 0
 
@@ -534,7 +536,12 @@ async def calculate_subscription_total_cost(
     promo_group = promo_group or (user.promo_group if user else None)
 
     traffic_price_per_month = settings.get_traffic_price(traffic_gb)
-    traffic_discount_percent = _get_discount_percent(user, promo_group, "traffic")
+    traffic_discount_percent = _get_discount_percent(
+        user,
+        promo_group,
+        "traffic",
+        period_days=period_days,
+    )
     traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
     discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
     total_traffic_price = discounted_traffic_per_month * months_in_period
@@ -542,7 +549,12 @@ async def calculate_subscription_total_cost(
 
     servers_prices = await get_servers_monthly_prices(db, server_squad_ids)
     servers_price_per_month = sum(servers_prices)
-    servers_discount_percent = _get_discount_percent(user, promo_group, "servers")
+    servers_discount_percent = _get_discount_percent(
+        user,
+        promo_group,
+        "servers",
+        period_days=period_days,
+    )
     servers_discount_per_month = servers_price_per_month * servers_discount_percent // 100
     discounted_servers_per_month = servers_price_per_month - servers_discount_per_month
     total_servers_price = discounted_servers_per_month * months_in_period
@@ -550,7 +562,12 @@ async def calculate_subscription_total_cost(
 
     additional_devices = max(0, devices - settings.DEFAULT_DEVICE_LIMIT)
     devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-    devices_discount_percent = _get_discount_percent(user, promo_group, "devices")
+    devices_discount_percent = _get_discount_percent(
+        user,
+        promo_group,
+        "devices",
+        period_days=period_days,
+    )
     devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
     discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
     total_devices_price = discounted_devices_per_month * months_in_period
@@ -719,14 +736,24 @@ async def get_subscription_renewal_cost(
             current_server_price = result.scalar() or 0
             servers_price_per_month += current_server_price
 
-        servers_discount_percent = _get_discount_percent(user, promo_group, "servers")
+        servers_discount_percent = _get_discount_percent(
+            user,
+            promo_group,
+            "servers",
+            period_days=period_days,
+        )
         servers_discount_per_month = servers_price_per_month * servers_discount_percent // 100
         discounted_servers_per_month = servers_price_per_month - servers_discount_per_month
         total_servers_cost = discounted_servers_per_month * months_in_period
         total_servers_discount = servers_discount_per_month * months_in_period
 
         traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
-        traffic_discount_percent = _get_discount_percent(user, promo_group, "traffic")
+        traffic_discount_percent = _get_discount_percent(
+            user,
+            promo_group,
+            "traffic",
+            period_days=period_days,
+        )
         traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
         discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
         total_traffic_cost = discounted_traffic_per_month * months_in_period
@@ -734,7 +761,12 @@ async def get_subscription_renewal_cost(
 
         additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-        devices_discount_percent = _get_discount_percent(user, promo_group, "devices")
+        devices_discount_percent = _get_discount_percent(
+            user,
+            promo_group,
+            "devices",
+            period_days=period_days,
+        )
         devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
         discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
         total_devices_cost = discounted_devices_per_month * months_in_period
@@ -794,6 +826,7 @@ async def calculate_addon_cost_for_remaining_period(
         additional_server_ids = []
 
     months_to_pay = get_remaining_months(subscription.end_date)
+    period_hint_days = months_to_pay * 30 if months_to_pay > 0 else None
 
     total_cost = 0
 
@@ -803,7 +836,12 @@ async def calculate_addon_cost_for_remaining_period(
 
     if additional_traffic_gb > 0:
         traffic_price_per_month = settings.get_traffic_price(additional_traffic_gb)
-        traffic_discount_percent = _get_discount_percent(user, promo_group, "traffic")
+        traffic_discount_percent = _get_discount_percent(
+            user,
+            promo_group,
+            "traffic",
+            period_days=period_hint_days,
+        )
         traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
         discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
         traffic_total_cost = discounted_traffic_per_month * months_to_pay
@@ -819,7 +857,12 @@ async def calculate_addon_cost_for_remaining_period(
 
     if additional_devices > 0:
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-        devices_discount_percent = _get_discount_percent(user, promo_group, "devices")
+        devices_discount_percent = _get_discount_percent(
+            user,
+            promo_group,
+            "devices",
+            period_days=period_hint_days,
+        )
         devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
         discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
         devices_total_cost = discounted_devices_per_month * months_to_pay
@@ -843,7 +886,12 @@ async def calculate_addon_cost_for_remaining_period(
             server_data = result.first()
             if server_data:
                 server_price_per_month, server_name = server_data
-                servers_discount_percent = _get_discount_percent(user, promo_group, "servers")
+                servers_discount_percent = _get_discount_percent(
+                    user,
+                    promo_group,
+                    "servers",
+                    period_days=period_hint_days,
+                )
                 server_discount_per_month = server_price_per_month * servers_discount_percent // 100
                 discounted_server_per_month = server_price_per_month - server_discount_per_month
                 server_total_cost = discounted_server_per_month * months_to_pay

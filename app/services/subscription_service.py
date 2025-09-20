@@ -24,15 +24,17 @@ def _resolve_discount_percent(
     user: Optional[User],
     promo_group: Optional[PromoGroup],
     category: str,
+    *,
+    period_days: Optional[int] = None,
 ) -> int:
     if user is not None:
         try:
-            return user.get_promo_discount(category)
+            return user.get_promo_discount(category, period_days)
         except AttributeError:
             pass
 
     if promo_group is not None:
-        return promo_group.get_discount_percent(category)
+        return promo_group.get_discount_percent(category, period_days)
 
     return 0
 
@@ -302,13 +304,23 @@ class SubscriptionService:
         promo_group = promo_group or (user.promo_group if user else None)
 
         traffic_price = settings.get_traffic_price(traffic_gb)
-        traffic_discount_percent = _resolve_discount_percent(user, promo_group, "traffic")
+        traffic_discount_percent = _resolve_discount_percent(
+            user,
+            promo_group,
+            "traffic",
+            period_days=period_days,
+        )
         traffic_discount = traffic_price * traffic_discount_percent // 100
         discounted_traffic_price = traffic_price - traffic_discount
 
         server_prices = []
         total_servers_price = 0
-        servers_discount_percent = _resolve_discount_percent(user, promo_group, "servers")
+        servers_discount_percent = _resolve_discount_percent(
+            user,
+            promo_group,
+            "servers",
+            period_days=period_days,
+        )
 
         for server_id in server_squad_ids:
             server = await get_server_squad_by_id(db, server_id)
@@ -329,7 +341,12 @@ class SubscriptionService:
                 logger.warning(f"Сервер ID {server_id} недоступен")
 
         devices_price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
-        devices_discount_percent = _resolve_discount_percent(user, promo_group, "devices")
+        devices_discount_percent = _resolve_discount_percent(
+            user,
+            promo_group,
+            "devices",
+            period_days=period_days,
+        )
         devices_discount = devices_price * devices_discount_percent // 100
         discounted_devices_price = devices_price - devices_discount
 
@@ -384,17 +401,32 @@ class SubscriptionService:
                 subscription.connected_squads, db
             )
 
-            servers_discount_percent = _resolve_discount_percent(user, promo_group, "servers")
+            servers_discount_percent = _resolve_discount_percent(
+                user,
+                promo_group,
+                "servers",
+                period_days=period_days,
+            )
             servers_discount = servers_price * servers_discount_percent // 100
             discounted_servers_price = servers_price - servers_discount
 
             devices_price = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
-            devices_discount_percent = _resolve_discount_percent(user, promo_group, "devices")
+            devices_discount_percent = _resolve_discount_percent(
+                user,
+                promo_group,
+                "devices",
+                period_days=period_days,
+            )
             devices_discount = devices_price * devices_discount_percent // 100
             discounted_devices_price = devices_price - devices_discount
 
             traffic_price = settings.get_traffic_price(subscription.traffic_limit_gb)
-            traffic_discount_percent = _resolve_discount_percent(user, promo_group, "traffic")
+            traffic_discount_percent = _resolve_discount_percent(
+                user,
+                promo_group,
+                "traffic",
+                period_days=period_days,
+            )
             traffic_discount = traffic_price * traffic_discount_percent // 100
             discounted_traffic_price = traffic_price - traffic_discount
 
@@ -550,14 +582,24 @@ class SubscriptionService:
         promo_group = promo_group or (user.promo_group if user else None)
 
         traffic_price_per_month = settings.get_traffic_price(traffic_gb)
-        traffic_discount_percent = _resolve_discount_percent(user, promo_group, "traffic")
+        traffic_discount_percent = _resolve_discount_percent(
+            user,
+            promo_group,
+            "traffic",
+            period_days=period_days,
+        )
         traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
         discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
         total_traffic_price = discounted_traffic_per_month * months_in_period
 
         server_prices = []
         total_servers_price = 0
-        servers_discount_percent = _resolve_discount_percent(user, promo_group, "servers")
+        servers_discount_percent = _resolve_discount_percent(
+            user,
+            promo_group,
+            "servers",
+            period_days=period_days,
+        )
 
         for server_id in server_squad_ids:
             server = await get_server_squad_by_id(db, server_id)
@@ -582,7 +624,12 @@ class SubscriptionService:
 
         additional_devices = max(0, devices - settings.DEFAULT_DEVICE_LIMIT)
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-        devices_discount_percent = _resolve_discount_percent(user, promo_group, "devices")
+        devices_discount_percent = _resolve_discount_percent(
+            user,
+            promo_group,
+            "devices",
+            period_days=period_days,
+        )
         devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
         discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
         total_devices_price = discounted_devices_per_month * months_in_period
@@ -643,20 +690,35 @@ class SubscriptionService:
             servers_price_per_month, _ = await self.get_countries_price_by_uuids(
                 subscription.connected_squads, db
             )
-            servers_discount_percent = _resolve_discount_percent(user, promo_group, "servers")
+            servers_discount_percent = _resolve_discount_percent(
+                user,
+                promo_group,
+                "servers",
+                period_days=period_days,
+            )
             servers_discount_per_month = servers_price_per_month * servers_discount_percent // 100
             discounted_servers_per_month = servers_price_per_month - servers_discount_per_month
             total_servers_price = discounted_servers_per_month * months_in_period
 
             additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-            devices_discount_percent = _resolve_discount_percent(user, promo_group, "devices")
+            devices_discount_percent = _resolve_discount_percent(
+                user,
+                promo_group,
+                "devices",
+                period_days=period_days,
+            )
             devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
             discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
             total_devices_price = discounted_devices_per_month * months_in_period
 
             traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
-            traffic_discount_percent = _resolve_discount_percent(user, promo_group, "traffic")
+            traffic_discount_percent = _resolve_discount_percent(
+                user,
+                promo_group,
+                "traffic",
+                period_days=period_days,
+            )
             traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
             discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
             total_traffic_price = discounted_traffic_per_month * months_in_period
@@ -712,32 +774,92 @@ class SubscriptionService:
         
         if additional_server_ids is None:
             additional_server_ids = []
-        
-        current_time = datetime.utcnow()
+
         months_to_pay = get_remaining_months(subscription.end_date)
-        
+        period_hint_days = months_to_pay * 30 if months_to_pay > 0 else None
+
+        user = getattr(subscription, "user", None)
+        promo_group = user.promo_group if user else None
+
         total_price = 0
-        
+
         if additional_traffic_gb > 0:
             traffic_price_per_month = settings.get_traffic_price(additional_traffic_gb)
-            total_price += traffic_price_per_month * months_to_pay
-            logger.info(f"Трафик +{additional_traffic_gb}ГБ: {traffic_price_per_month/100}₽/мес x {months_to_pay} = {traffic_price_per_month * months_to_pay/100}₽")
-        
+            traffic_discount_percent = _resolve_discount_percent(
+                user,
+                promo_group,
+                "traffic",
+                period_days=period_hint_days,
+            )
+            traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
+            discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
+            traffic_total_price = discounted_traffic_per_month * months_to_pay
+            total_price += traffic_total_price
+            message = (
+                f"Трафик +{additional_traffic_gb}ГБ: {traffic_price_per_month/100}₽/мес x {months_to_pay}"
+                f" = {traffic_total_price/100}₽"
+            )
+            if traffic_discount_per_month > 0:
+                message += (
+                    f" (скидка {traffic_discount_percent}%:"
+                    f" -{traffic_discount_per_month * months_to_pay/100}₽)"
+                )
+            logger.info(message)
+
         if additional_devices > 0:
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-            total_price += devices_price_per_month * months_to_pay
-            logger.info(f"Устройства +{additional_devices}: {devices_price_per_month/100}₽/мес x {months_to_pay} = {devices_price_per_month * months_to_pay/100}₽")
-        
+            devices_discount_percent = _resolve_discount_percent(
+                user,
+                promo_group,
+                "devices",
+                period_days=period_hint_days,
+            )
+            devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
+            discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
+            devices_total_price = discounted_devices_per_month * months_to_pay
+            total_price += devices_total_price
+            message = (
+                f"Устройства +{additional_devices}: {devices_price_per_month/100}₽/мес x {months_to_pay}"
+                f" = {devices_total_price/100}₽"
+            )
+            if devices_discount_per_month > 0:
+                message += (
+                    f" (скидка {devices_discount_percent}%:"
+                    f" -{devices_discount_per_month * months_to_pay/100}₽)"
+                )
+            logger.info(message)
+
         if additional_server_ids and db:
             for server_id in additional_server_ids:
                 from app.database.crud.server_squad import get_server_squad_by_id
                 server = await get_server_squad_by_id(db, server_id)
                 if server and server.is_available:
                     server_price_per_month = server.price_kopeks
-                    server_total_price = server_price_per_month * months_to_pay
+                    servers_discount_percent = _resolve_discount_percent(
+                        user,
+                        promo_group,
+                        "servers",
+                        period_days=period_hint_days,
+                    )
+                    server_discount_per_month = (
+                        server_price_per_month * servers_discount_percent // 100
+                    )
+                    discounted_server_per_month = (
+                        server_price_per_month - server_discount_per_month
+                    )
+                    server_total_price = discounted_server_per_month * months_to_pay
                     total_price += server_total_price
-                    logger.info(f"Сервер {server.display_name}: {server_price_per_month/100}₽/мес x {months_to_pay} = {server_total_price/100}₽")
-        
+                    message = (
+                        f"Сервер {server.display_name}: {server_price_per_month/100}₽/мес x {months_to_pay}"
+                        f" = {server_total_price/100}₽"
+                    )
+                    if server_discount_per_month > 0:
+                        message += (
+                            f" (скидка {servers_discount_percent}%:"
+                            f" -{server_discount_per_month * months_to_pay/100}₽)"
+                        )
+                    logger.info(message)
+
         logger.info(f"Итого доплата за {months_to_pay} мес: {total_price/100}₽")
         return total_price
     

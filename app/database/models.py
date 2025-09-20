@@ -169,13 +169,26 @@ class PromoGroup(Base):
 
     users = relationship("User", back_populates="promo_group")
 
-    def get_discount_percent(self, category: str) -> int:
+    def get_discount_percent(self, category: str, period_days: Optional[int] = None) -> int:
         mapping = {
             "servers": self.server_discount_percent,
             "traffic": self.traffic_discount_percent,
             "devices": self.device_discount_percent,
         }
-        return max(0, min(100, mapping.get(category, 0)))
+        percent = mapping.get(category, 0)
+
+        if self.is_default and period_days is not None:
+            try:
+                from app.config import settings
+
+                discounts = settings.get_base_promo_group_period_discounts()
+                if period_days in discounts:
+                    period_discount = discounts[period_days]
+                    percent = period_discount
+            except Exception:
+                pass
+
+        return max(0, min(100, percent))
 
 
 class User(Base):
@@ -220,10 +233,10 @@ class User(Base):
         parts = [self.first_name, self.last_name]
         return " ".join(filter(None, parts)) or self.username or f"ID{self.telegram_id}"
 
-    def get_promo_discount(self, category: str) -> int:
+    def get_promo_discount(self, category: str, period_days: Optional[int] = None) -> int:
         if not self.promo_group:
             return 0
-        return self.promo_group.get_discount_percent(category)
+        return self.promo_group.get_discount_percent(category, period_days)
     
     def add_balance(self, kopeks: int) -> None:
         self.balance_kopeks += kopeks
