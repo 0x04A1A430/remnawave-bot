@@ -550,12 +550,22 @@ async def delete_promo_group_confirmed(
 
     texts = get_texts(db_user.language)
 
-    success = await delete_promo_group(db, group)
+    success, error_code = await delete_promo_group(db, group)
     if not success:
-        await callback.answer(
-            texts.t("ADMIN_PROMO_GROUP_DELETE_FORBIDDEN", "Базовую промогруппу нельзя удалить."),
-            show_alert=True,
-        )
+        if error_code == "default":
+            message = texts.t(
+                "ADMIN_PROMO_GROUP_DELETE_FORBIDDEN",
+                "Базовую промогруппу нельзя удалить.",
+            )
+        elif error_code == "no_default_with_members":
+            message = texts.t(
+                "ADMIN_PROMO_GROUP_DELETE_NO_DEFAULT",
+                "Невозможно удалить промогруппу: базовая группа не настроена.",
+            )
+        else:
+            message = texts.ERROR
+
+        await callback.answer(message, show_alert=True)
         return
 
     await callback.message.edit_text(
