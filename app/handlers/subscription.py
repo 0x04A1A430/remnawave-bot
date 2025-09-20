@@ -66,6 +66,25 @@ logger = logging.getLogger(__name__)
 TRAFFIC_PRICES = get_traffic_prices()
 
 
+def _apply_discount_to_monthly_component(
+    amount_per_month: int,
+    percent: int,
+    months: int,
+) -> Dict[str, int]:
+    from app.utils.pricing_utils import apply_percentage_discount
+
+    discounted_per_month, discount_per_month = apply_percentage_discount(amount_per_month, percent)
+
+    return {
+        "original_per_month": amount_per_month,
+        "discounted_per_month": discounted_per_month,
+        "discount_percent": max(0, min(100, percent)),
+        "discount_per_month": discount_per_month,
+        "total": discounted_per_month * months,
+        "discount_total": discount_per_month * months,
+    }
+
+
 async def _prepare_subscription_summary(
     db_user: User,
     data: Dict[str, Any],
@@ -75,6 +94,7 @@ async def _prepare_subscription_summary(
         calculate_months_from_days,
         format_period_description,
         validate_pricing_calculation,
+        apply_percentage_discount,
     )
 
     summary_data = dict(data)
@@ -94,11 +114,18 @@ async def _prepare_subscription_summary(
         traffic_price_per_month = settings.get_traffic_price(traffic_gb)
         final_traffic_gb = traffic_gb
 
-    total_traffic_price = traffic_price_per_month * months_in_period
+    traffic_discount_percent = db_user.get_promo_discount("traffic")
+    traffic_component = _apply_discount_to_monthly_component(
+        traffic_price_per_month,
+        traffic_discount_percent,
+        months_in_period,
+    )
+    total_traffic_price = traffic_component["total"]
 
     countries_price_per_month = 0
     selected_countries_names: List[str] = []
     selected_server_prices: List[int] = []
+    server_monthly_prices: List[int] = []
 
     selected_country_ids = set(summary_data.get('countries', []))
     for country in countries:
@@ -106,25 +133,78 @@ async def _prepare_subscription_summary(
             server_price_per_month = country['price_kopeks']
             countries_price_per_month += server_price_per_month
             selected_countries_names.append(country['name'])
-            selected_server_prices.append(server_price_per_month * months_in_period)
+            server_monthly_prices.append(server_price_per_month)
 
-    total_countries_price = countries_price_per_month * months_in_period
+    servers_discount_percent = db_user.get_promo_discount("servers")
+    total_countries_price = 0
+    total_servers_discount = 0
+    discounted_servers_price_per_month = 0
+
+    for server_price_per_month in server_monthly_prices:
+        discounted_per_month, discount_per_month = apply_percentage_discount(
+            server_price_per_month,
+            servers_discount_percent,
+        )
+        total_price_for_server = discounted_per_month * months_in_period
+        total_discount_for_server = discount_per_month * months_in_period
+
+        discounted_servers_price_per_month += discounted_per_month
+        total_countries_price += total_price_for_server
+        total_servers_discount += total_discount_for_server
+        selected_server_prices.append(total_price_for_server)
 
     devices_selected = summary_data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
     additional_devices = max(0, devices_selected - settings.DEFAULT_DEVICE_LIMIT)
     devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-    total_devices_price = devices_price_per_month * months_in_period
+    devices_discount_percent = db_user.get_promo_discount("devices")
+    devices_component = _apply_discount_to_monthly_component(
+        devices_price_per_month,
+        devices_discount_percent,
+        months_in_period,
+    )
+    total_devices_price = devices_component["total"]
 
     total_price = base_price + total_traffic_price + total_countries_price + total_devices_price
 
-    monthly_additions = countries_price_per_month + devices_price_per_month + traffic_price_per_month
-    is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, total_price)
+    discounted_monthly_additions = (
+        traffic_component["discounted_per_month"]
+        + discounted_servers_price_per_month
+        + devices_component["discounted_per_month"]
+    )
+
+    is_valid = validate_pricing_calculation(
+        base_price,
+        discounted_monthly_additions,
+        months_in_period,
+        total_price,
+    )
 
     if not is_valid:
         raise ValueError("Subscription price calculation validation failed")
 
     summary_data['total_price'] = total_price
     summary_data['server_prices_for_period'] = selected_server_prices
+    summary_data['months_in_period'] = months_in_period
+    summary_data['base_price'] = base_price
+    summary_data['final_traffic_gb'] = final_traffic_gb
+    summary_data['traffic_price_per_month'] = traffic_price_per_month
+    summary_data['traffic_discount_percent'] = traffic_component["discount_percent"]
+    summary_data['traffic_discount_total'] = traffic_component["discount_total"]
+    summary_data['traffic_discounted_price_per_month'] = traffic_component["discounted_per_month"]
+    summary_data['total_traffic_price'] = total_traffic_price
+    summary_data['servers_price_per_month'] = countries_price_per_month
+    summary_data['countries_price_per_month'] = countries_price_per_month
+    summary_data['servers_discount_percent'] = servers_discount_percent
+    summary_data['servers_discount_total'] = total_servers_discount
+    summary_data['servers_discounted_price_per_month'] = discounted_servers_price_per_month
+    summary_data['total_servers_price'] = total_countries_price
+    summary_data['total_countries_price'] = total_countries_price
+    summary_data['devices_price_per_month'] = devices_price_per_month
+    summary_data['devices_discount_percent'] = devices_component["discount_percent"]
+    summary_data['devices_discount_total'] = devices_component["discount_total"]
+    summary_data['devices_discounted_price_per_month'] = devices_component["discounted_per_month"]
+    summary_data['total_devices_price'] = total_devices_price
+    summary_data['discounted_monthly_additions'] = discounted_monthly_additions
 
     if settings.is_traffic_fixed():
         if final_traffic_gb == 0:
@@ -140,17 +220,38 @@ async def _prepare_subscription_summary(
     details_lines = [f"- Базовый период: {texts.format_price(base_price)}"]
 
     if total_traffic_price > 0:
-        details_lines.append(
-            f"- Трафик: {texts.format_price(traffic_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_traffic_price)}"
+        traffic_line = (
+            f"- Трафик: {texts.format_price(traffic_price_per_month)}/мес × {months_in_period}"
+            f" = {texts.format_price(total_traffic_price)}"
         )
+        if traffic_component["discount_total"] > 0:
+            traffic_line += (
+                f" (скидка {traffic_component['discount_percent']}%:"
+                f" -{texts.format_price(traffic_component['discount_total'])})"
+            )
+        details_lines.append(traffic_line)
     if total_countries_price > 0:
-        details_lines.append(
-            f"- Серверы: {texts.format_price(countries_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_countries_price)}"
+        servers_line = (
+            f"- Серверы: {texts.format_price(countries_price_per_month)}/мес × {months_in_period}"
+            f" = {texts.format_price(total_countries_price)}"
         )
+        if total_servers_discount > 0:
+            servers_line += (
+                f" (скидка {servers_discount_percent}%:"
+                f" -{texts.format_price(total_servers_discount)})"
+            )
+        details_lines.append(servers_line)
     if total_devices_price > 0:
-        details_lines.append(
-            f"- Доп. устройства: {texts.format_price(devices_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_devices_price)}"
+        devices_line = (
+            f"- Доп. устройства: {texts.format_price(devices_price_per_month)}/мес × {months_in_period}"
+            f" = {texts.format_price(total_devices_price)}"
         )
+        if devices_component["discount_total"] > 0:
+            devices_line += (
+                f" (скидка {devices_component['discount_percent']}%:"
+                f" -{texts.format_price(devices_component['discount_total'])})"
+            )
+        details_lines.append(devices_line)
 
     details_text = "\n".join(details_lines)
 
@@ -1601,15 +1702,21 @@ async def handle_extend_subscription(
             servers_price_per_month, _ = await subscription_service.get_countries_price_by_uuids(
                 subscription.connected_squads, db
             )
-            total_servers_price = servers_price_per_month * months_in_period
-            
+            servers_discount_percent = db_user.get_promo_discount("servers")
+            servers_discount_per_month = servers_price_per_month * servers_discount_percent // 100
+            total_servers_price = (servers_price_per_month - servers_discount_per_month) * months_in_period
+
             additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-            total_devices_price = devices_price_per_month * months_in_period
-            
+            devices_discount_percent = db_user.get_promo_discount("devices")
+            devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
+            total_devices_price = (devices_price_per_month - devices_discount_per_month) * months_in_period
+
             traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
-            total_traffic_price = traffic_price_per_month * months_in_period
-            
+            traffic_discount_percent = db_user.get_promo_discount("traffic")
+            traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
+            total_traffic_price = (traffic_price_per_month - traffic_discount_per_month) * months_in_period
+
             price = base_price + total_servers_price + total_devices_price + total_traffic_price
             renewal_prices[days] = price
             
@@ -1783,62 +1890,112 @@ async def confirm_extend_subscription(
 ):
     from app.utils.pricing_utils import calculate_months_from_days, validate_pricing_calculation
     from app.services.admin_notification_service import AdminNotificationService
-    
+
     days = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
-    
+
     if not subscription:
         await callback.answer("⚠ У вас нет активной подписки", show_alert=True)
         return
-    
+
     months_in_period = calculate_months_from_days(days)
-    
     old_end_date = subscription.end_date
-    
+    server_uuid_prices: Dict[str, int] = {}
+
     try:
         from app.config import PERIOD_PRICES
-        
+
         base_price = PERIOD_PRICES.get(days, 0)
-        
+
         subscription_service = SubscriptionService()
-        servers_price_per_month, _ = await subscription_service.get_countries_price_by_uuids(
+        servers_price_per_month, per_server_monthly_prices = await subscription_service.get_countries_price_by_uuids(
             subscription.connected_squads, db
         )
-        total_servers_price = servers_price_per_month * months_in_period
-        
+        servers_discount_percent = db_user.get_promo_discount("servers")
+        total_servers_price = 0
+        total_servers_discount = 0
+
+        for squad_uuid, server_monthly_price in zip(subscription.connected_squads, per_server_monthly_prices):
+            discount_per_month = server_monthly_price * servers_discount_percent // 100
+            discounted_per_month = server_monthly_price - discount_per_month
+            total_servers_price += discounted_per_month * months_in_period
+            total_servers_discount += discount_per_month * months_in_period
+            server_uuid_prices[squad_uuid] = discounted_per_month * months_in_period
+
+        discounted_servers_price_per_month = servers_price_per_month - (
+            servers_price_per_month * servers_discount_percent // 100
+        )
+
         additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-        total_devices_price = devices_price_per_month * months_in_period
-        
+        devices_discount_percent = db_user.get_promo_discount("devices")
+        devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
+        discounted_devices_price_per_month = devices_price_per_month - devices_discount_per_month
+        total_devices_price = discounted_devices_price_per_month * months_in_period
+
         traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
-        total_traffic_price = traffic_price_per_month * months_in_period
-        
+        traffic_discount_percent = db_user.get_promo_discount("traffic")
+        traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
+        discounted_traffic_price_per_month = traffic_price_per_month - traffic_discount_per_month
+        total_traffic_price = discounted_traffic_price_per_month * months_in_period
+
         price = base_price + total_servers_price + total_devices_price + total_traffic_price
-        
-        monthly_additions = servers_price_per_month + devices_price_per_month + traffic_price_per_month
+
+        monthly_additions = (
+            discounted_servers_price_per_month
+            + discounted_devices_price_per_month
+            + discounted_traffic_price_per_month
+        )
         is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, price)
-        
+
         if not is_valid:
             logger.error(f"Ошибка в расчете цены продления для пользователя {db_user.telegram_id}")
             await callback.answer("Ошибка расчета цены. Обратитесь в поддержку.", show_alert=True)
             return
-        
+
         logger.info(f"💰 Расчет продления подписки {subscription.id} на {days} дней ({months_in_period} мес):")
         logger.info(f"   📅 Период {days} дней: {base_price/100}₽")
         if total_servers_price > 0:
-            logger.info(f"   🌐 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_price/100}₽")
+            logger.info(
+                f"   🌐 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period}"
+                f" = {total_servers_price/100}₽"
+                + (
+                    f" (скидка {servers_discount_percent}%:"
+                    f" -{total_servers_discount/100}₽)"
+                    if total_servers_discount > 0
+                    else ""
+                )
+            )
         if total_devices_price > 0:
-            logger.info(f"   📱 Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
+            logger.info(
+                f"   📱 Устройства: {devices_price_per_month/100}₽/мес × {months_in_period}"
+                f" = {total_devices_price/100}₽"
+                + (
+                    f" (скидка {devices_discount_percent}%:"
+                    f" -{devices_discount_per_month * months_in_period/100}₽)"
+                    if devices_discount_percent > 0 and devices_discount_per_month > 0
+                    else ""
+                )
+            )
         if total_traffic_price > 0:
-            logger.info(f"   📊 Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
+            logger.info(
+                f"   📊 Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period}"
+                f" = {total_traffic_price/100}₽"
+                + (
+                    f" (скидка {traffic_discount_percent}%:"
+                    f" -{traffic_discount_per_month * months_in_period/100}₽)"
+                    if traffic_discount_percent > 0 and traffic_discount_per_month > 0
+                    else ""
+                )
+            )
         logger.info(f"   💎 ИТОГО: {price/100}₽")
-        
+
     except Exception as e:
         logger.error(f"⚠ ОШИБКА РАСЧЕТА ЦЕНЫ: {e}")
         await callback.answer("⚠ Ошибка расчета стоимости", show_alert=True)
         return
-    
+
     if db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
         await callback.message.edit_text(
@@ -1847,48 +2004,59 @@ async def confirm_extend_subscription(
         )
         await callback.answer()
         return
-    
+
     try:
         success = await subtract_user_balance(
             db, db_user, price,
             f"Продление подписки на {days} дней"
         )
-        
+
         if not success:
             await callback.answer("⚠ Ошибка списания средств", show_alert=True)
             return
-        
+
         current_time = datetime.utcnow()
-        
+
         if subscription.end_date > current_time:
             subscription.end_date = subscription.end_date + timedelta(days=days)
         else:
             subscription.end_date = current_time + timedelta(days=days)
-        
+
         subscription.status = SubscriptionStatus.ACTIVE.value
         subscription.updated_at = current_time
-        
+
         await db.commit()
         await db.refresh(subscription)
         await db.refresh(db_user)
-        
+
         from app.database.crud.server_squad import get_server_ids_by_uuids
         from app.database.crud.subscription import add_subscription_servers
-        
+
         server_ids = await get_server_ids_by_uuids(db, subscription.connected_squads)
         if server_ids:
-            server_prices_for_period = [total_servers_price // len(server_ids)] * len(server_ids)
+            from sqlalchemy import select
+            from app.database.models import ServerSquad
+
+            result = await db.execute(
+                select(ServerSquad.id, ServerSquad.squad_uuid).where(ServerSquad.id.in_(server_ids))
+            )
+            id_to_uuid = {row.id: row.squad_uuid for row in result}
+            default_price = total_servers_price // len(server_ids) if server_ids else 0
+            server_prices_for_period = [
+                server_uuid_prices.get(id_to_uuid.get(server_id, ""), default_price)
+                for server_id in server_ids
+            ]
             await add_subscription_servers(db, subscription, server_ids, server_prices_for_period)
-        
+
         try:
             remnawave_result = await subscription_service.update_remnawave_user(db, subscription)
             if remnawave_result:
-                logger.info(f"✅ RemnaWave обновлен успешно")
+                logger.info("✅ RemnaWave обновлен успешно")
             else:
-                logger.error(f"⚠ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE")
+                logger.error("⚠ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE")
         except Exception as e:
             logger.error(f"⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE: {e}")
-        
+
         transaction = await create_transaction(
             db=db,
             user_id=db_user.id,
@@ -1896,7 +2064,7 @@ async def confirm_extend_subscription(
             amount_kopeks=price,
             description=f"Продление подписки на {days} дней ({months_in_period} мес)"
         )
-        
+
         try:
             notification_service = AdminNotificationService(callback.bot)
             await notification_service.send_subscription_extension_notification(
@@ -1904,27 +2072,27 @@ async def confirm_extend_subscription(
             )
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о продлении: {e}")
-        
+
         await callback.message.edit_text(
-            f"✅ Подписка успешно продлена!\n\n"
-            f"⏰ Добавлено: {days} дней\n"
-            f"Действует до: {subscription.end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"✅ Подписка успешно продлена!\n\n",
+            f"⏰ Добавлено: {days} дней\n",
+            f"Действует до: {subscription.end_date.strftime('%d.%m.%Y %H:%M')}\n\n",
             f"💰 Списано: {texts.format_price(price)}",
             reply_markup=get_back_keyboard(db_user.language)
         )
-        
+
         logger.info(f"✅ Пользователь {db_user.telegram_id} продлил подписку на {days} дней за {price/100}₽")
-        
+
     except Exception as e:
         logger.error(f"⚠ КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ: {e}")
         import traceback
         logger.error(f"TRACEBACK: {traceback.format_exc()}")
-        
+
         await callback.message.edit_text(
             "⚠ Произошла ошибка при продлении подписки. Обратитесь в поддержку.",
             reply_markup=get_back_keyboard(db_user.language)
         )
-    
+
     await callback.answer()
 
 
@@ -2365,38 +2533,123 @@ async def confirm_purchase(
 
     countries = await _get_available_countries()
     
-    months_in_period = calculate_months_from_days(data['period_days'])
-    
-    base_price = PERIOD_PRICES[data['period_days']]
-    
-    countries_price_per_month = 0
-    server_prices = []
-    for country in countries:
-        if country['uuid'] in data['countries']:
-            server_price_per_month = country['price_kopeks']
-            server_price_total = server_price_per_month * months_in_period
-            countries_price_per_month += server_price_per_month
-            server_prices.append(server_price_total)
-    
-    total_countries_price = countries_price_per_month * months_in_period
-    
-    additional_devices = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT)
-    devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-    total_devices_price = devices_price_per_month * months_in_period
-    
-    if settings.is_traffic_fixed():
-        traffic_price_per_month = settings.get_traffic_price(settings.get_fixed_traffic_limit())
-        final_traffic_gb = settings.get_fixed_traffic_limit()
+    months_in_period = data.get(
+        'months_in_period', calculate_months_from_days(data['period_days'])
+    )
+
+    base_price = data.get('base_price', PERIOD_PRICES[data['period_days']])
+    server_prices = data.get('server_prices_for_period', [])
+
+    if not server_prices:
+        countries_price_per_month = 0
+        per_month_prices: List[int] = []
+        for country in countries:
+            if country['uuid'] in data['countries']:
+                server_price_per_month = country['price_kopeks']
+                countries_price_per_month += server_price_per_month
+                per_month_prices.append(server_price_per_month)
+
+        servers_discount_percent = db_user.get_promo_discount("servers")
+        total_servers_price = 0
+        total_servers_discount = 0
+        discounted_servers_price_per_month = 0
+        server_prices = []
+
+        from app.utils.pricing_utils import apply_percentage_discount
+
+        for server_price_per_month in per_month_prices:
+            discounted_per_month, discount_per_month = apply_percentage_discount(
+                server_price_per_month,
+                servers_discount_percent,
+            )
+            total_price_for_server = discounted_per_month * months_in_period
+            total_discount_for_server = discount_per_month * months_in_period
+
+            discounted_servers_price_per_month += discounted_per_month
+            total_servers_price += total_price_for_server
+            total_servers_discount += total_discount_for_server
+            server_prices.append(total_price_for_server)
+
+        total_countries_price = total_servers_price
     else:
-        traffic_price_per_month = settings.get_traffic_price(data['traffic_gb'])
-        final_traffic_gb = data['traffic_gb']
-    
-    total_traffic_price = traffic_price_per_month * months_in_period
-    
-    final_price = base_price + total_traffic_price + total_countries_price + total_devices_price
-    
-    monthly_additions = countries_price_per_month + devices_price_per_month + traffic_price_per_month
-    is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, final_price)
+        total_countries_price = data.get('total_servers_price', sum(server_prices))
+        countries_price_per_month = data.get('servers_price_per_month', 0)
+        discounted_servers_price_per_month = data.get('servers_discounted_price_per_month', countries_price_per_month)
+        total_servers_discount = data.get('servers_discount_total', 0)
+        servers_discount_percent = data.get('servers_discount_percent', 0)
+
+    additional_devices = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT)
+    devices_price_per_month = data.get(
+        'devices_price_per_month', additional_devices * settings.PRICE_PER_DEVICE
+    )
+    if 'devices_discount_percent' in data:
+        devices_discount_percent = data.get('devices_discount_percent', 0)
+        discounted_devices_price_per_month = data.get(
+            'devices_discounted_price_per_month', devices_price_per_month
+        )
+        devices_discount_total = data.get('devices_discount_total', 0)
+        total_devices_price = data.get(
+            'total_devices_price', discounted_devices_price_per_month * months_in_period
+        )
+    else:
+        devices_discount_percent = db_user.get_promo_discount("devices")
+        from app.utils.pricing_utils import apply_percentage_discount
+
+        discounted_devices_price_per_month, discount_per_month = apply_percentage_discount(
+            devices_price_per_month,
+            devices_discount_percent,
+        )
+        devices_discount_total = discount_per_month * months_in_period
+        total_devices_price = discounted_devices_price_per_month * months_in_period
+
+    if settings.is_traffic_fixed():
+        final_traffic_gb = settings.get_fixed_traffic_limit()
+        traffic_price_per_month = data.get(
+            'traffic_price_per_month', settings.get_traffic_price(final_traffic_gb)
+        )
+    else:
+        final_traffic_gb = data.get('final_traffic_gb', data.get('traffic_gb'))
+        traffic_price_per_month = data.get(
+            'traffic_price_per_month', settings.get_traffic_price(data['traffic_gb'])
+        )
+
+    if 'traffic_discount_percent' in data:
+        traffic_discount_percent = data.get('traffic_discount_percent', 0)
+        discounted_traffic_price_per_month = data.get(
+            'traffic_discounted_price_per_month', traffic_price_per_month
+        )
+        traffic_discount_total = data.get('traffic_discount_total', 0)
+        total_traffic_price = data.get(
+            'total_traffic_price', discounted_traffic_price_per_month * months_in_period
+        )
+    else:
+        traffic_discount_percent = db_user.get_promo_discount("traffic")
+        from app.utils.pricing_utils import apply_percentage_discount
+
+        discounted_traffic_price_per_month, discount_per_month = apply_percentage_discount(
+            traffic_price_per_month,
+            traffic_discount_percent,
+        )
+        traffic_discount_total = discount_per_month * months_in_period
+        total_traffic_price = discounted_traffic_price_per_month * months_in_period
+
+    total_servers_price = data.get('total_servers_price', total_countries_price)
+
+    final_price = data['total_price']
+
+    discounted_monthly_additions = data.get(
+        'discounted_monthly_additions',
+        discounted_traffic_price_per_month
+        + discounted_servers_price_per_month
+        + discounted_devices_price_per_month,
+    )
+
+    is_valid = validate_pricing_calculation(
+        base_price,
+        discounted_monthly_additions,
+        months_in_period,
+        final_price,
+    )
     
     if not is_valid:
         logger.error(f"Ошибка в расчете цены подписки для пользователя {db_user.telegram_id}")
@@ -2406,11 +2659,38 @@ async def confirm_purchase(
     logger.info(f"Расчет покупки подписки на {data['period_days']} дней ({months_in_period} мес):")
     logger.info(f"   Период: {base_price/100}₽")
     if total_traffic_price > 0:
-        logger.info(f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
-    if total_countries_price > 0:
-        logger.info(f"   Серверы: {countries_price_per_month/100}₽/мес × {months_in_period} = {total_countries_price/100}₽")
+        message = (
+            f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period}"
+            f" = {total_traffic_price/100}₽"
+        )
+        if traffic_discount_total > 0:
+            message += (
+                f" (скидка {traffic_discount_percent}%:"
+                f" -{traffic_discount_total/100}₽)"
+            )
+        logger.info(message)
+    if total_servers_price > 0:
+        message = (
+            f"   Серверы: {countries_price_per_month/100}₽/мес × {months_in_period}"
+            f" = {total_servers_price/100}₽"
+        )
+        if total_servers_discount > 0:
+            message += (
+                f" (скидка {servers_discount_percent}%:"
+                f" -{total_servers_discount/100}₽)"
+            )
+        logger.info(message)
     if total_devices_price > 0:
-        logger.info(f"   Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
+        message = (
+            f"   Устройства: {devices_price_per_month/100}₽/мес × {months_in_period}"
+            f" = {total_devices_price/100}₽"
+        )
+        if devices_discount_total > 0:
+            message += (
+                f" (скидка {devices_discount_percent}%:"
+                f" -{devices_discount_total/100}₽)"
+            )
+        logger.info(message)
     logger.info(f"   ИТОГО: {final_price/100}₽")
     
     if db_user.balance_kopeks < final_price:

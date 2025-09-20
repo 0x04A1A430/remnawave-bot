@@ -155,6 +155,29 @@ class CryptoBotPayment(Base):
         return f"<CryptoBotPayment(id={self.id}, invoice_id={self.invoice_id}, amount={self.amount} {self.asset}, status={self.status})>"
 
 
+class PromoGroup(Base):
+    __tablename__ = "promo_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, nullable=False)
+    server_discount_percent = Column(Integer, nullable=False, default=0)
+    traffic_discount_percent = Column(Integer, nullable=False, default=0)
+    device_discount_percent = Column(Integer, nullable=False, default=0)
+    is_default = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    users = relationship("User", back_populates="promo_group")
+
+    def get_discount_percent(self, category: str) -> int:
+        mapping = {
+            "servers": self.server_discount_percent,
+            "traffic": self.traffic_discount_percent,
+            "devices": self.device_discount_percent,
+        }
+        return max(0, min(100, mapping.get(category, 0)))
+
+
 class User(Base):
     __tablename__ = "users"
     
@@ -185,6 +208,8 @@ class User(Base):
     vless_uuid = Column(String(255), nullable=True)
     ss_password = Column(String(255), nullable=True)
     has_made_first_topup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="RESTRICT"), nullable=False, index=True)
+    promo_group = relationship("PromoGroup", back_populates="users")
     
     @property
     def balance_rubles(self) -> float:
@@ -194,6 +219,11 @@ class User(Base):
     def full_name(self) -> str:
         parts = [self.first_name, self.last_name]
         return " ".join(filter(None, parts)) or self.username or f"ID{self.telegram_id}"
+
+    def get_promo_discount(self, category: str) -> int:
+        if not self.promo_group:
+            return 0
+        return self.promo_group.get_discount_percent(category)
     
     def add_balance(self, kopeks: int) -> None:
         self.balance_kopeks += kopeks

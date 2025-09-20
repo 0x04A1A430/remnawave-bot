@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Tuple
 import logging
 
@@ -28,8 +29,8 @@ def calculate_period_multiplier(period_days: int) -> Tuple[int, float]:
 
 
 def calculate_prorated_price(
-    monthly_price: int, 
-    end_date: datetime, 
+    monthly_price: int,
+    end_date: datetime,
     min_charge_months: int = 1
 ) -> Tuple[int, int]:
     months_remaining = get_remaining_months(end_date)
@@ -40,6 +41,25 @@ def calculate_prorated_price(
     logger.debug(f"Расчет пропорциональной цены: {monthly_price/100}₽/мес × {months_to_charge} мес = {total_price/100}₽")
     
     return total_price, months_to_charge
+
+
+def apply_percentage_discount(amount: int, percent: int) -> Tuple[int, int]:
+    if amount <= 0 or percent <= 0:
+        return amount, 0
+
+    clamped_percent = max(0, min(100, percent))
+    discount_value = amount * clamped_percent // 100
+    discounted_amount = amount - discount_value
+
+    logger.debug(
+        "Применена скидка %s%%: %s → %s (скидка %s)",
+        clamped_percent,
+        amount,
+        discounted_amount,
+        discount_value,
+    )
+
+    return discounted_amount, discount_value
 
 
 def format_period_description(days: int, language: str = "ru") -> str:
