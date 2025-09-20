@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     PRICE_90_DAYS: int = 269000
     PRICE_180_DAYS: int = 499000
     PRICE_360_DAYS: int = 899000
-    
+
     PRICE_TRAFFIC_5GB: int = 2000
     PRICE_TRAFFIC_10GB: int = 3500
     PRICE_TRAFFIC_25GB: int = 7000
@@ -84,9 +84,12 @@ class Settings(BaseSettings):
     PRICE_TRAFFIC_UNLIMITED: int = 20000
     
     TRAFFIC_PACKAGES_CONFIG: str = ""
-    
+
     PRICE_PER_DEVICE: int = 5000
-    
+
+    BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED: bool = False
+    BASE_PROMO_GROUP_PERIOD_DISCOUNTS: str = ""
+
     TRAFFIC_SELECTION_MODE: str = "selectable" 
     FIXED_TRAFFIC_LIMIT_GB: int = 100 
     
@@ -399,7 +402,46 @@ class Settings(BaseSettings):
     
     def get_maintenance_check_interval(self) -> int:
         return self.MAINTENANCE_CHECK_INTERVAL
-    
+
+    def is_base_promo_group_period_discount_enabled(self) -> bool:
+        return self.BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED
+
+    def get_base_promo_group_period_discounts(self) -> Dict[int, int]:
+        try:
+            config_str = (self.BASE_PROMO_GROUP_PERIOD_DISCOUNTS or "").strip()
+            if not config_str:
+                return {}
+
+            discounts: Dict[int, int] = {}
+            for part in config_str.split(','):
+                part = part.strip()
+                if not part:
+                    continue
+
+                period_and_discount = part.split(':')
+                if len(period_and_discount) != 2:
+                    continue
+
+                period_str, discount_str = period_and_discount
+                try:
+                    period_days = int(period_str.strip())
+                    discount_percent = int(discount_str.strip())
+                except ValueError:
+                    continue
+
+                discounts[period_days] = max(0, min(100, discount_percent))
+
+            return discounts
+        except Exception:
+            return {}
+
+    def get_base_promo_group_period_discount(self, period_days: Optional[int]) -> int:
+        if not period_days or not self.is_base_promo_group_period_discount_enabled():
+            return 0
+
+        discounts = self.get_base_promo_group_period_discounts()
+        return discounts.get(period_days, 0)
+
     def is_maintenance_auto_enable(self) -> bool:
         return self.MAINTENANCE_AUTO_ENABLE
 
