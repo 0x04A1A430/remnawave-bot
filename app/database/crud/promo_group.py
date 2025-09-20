@@ -93,39 +93,15 @@ async def update_promo_group(
     return group
 
 
-async def delete_promo_group(
-    db: AsyncSession, group: PromoGroup
-) -> Tuple[bool, Optional[str]]:
+async def delete_promo_group(db: AsyncSession, group: PromoGroup) -> bool:
     if group.is_default:
         logger.warning("Попытка удалить базовую промогруппу запрещена")
-        return False, "default"
+        return False
 
     default_group = await get_default_promo_group(db)
-
     if not default_group:
-        members_result = await db.execute(
-            select(func.count(User.id)).where(User.promo_group_id == group.id)
-        )
-        members_count = members_result.scalar_one()
-
-        if members_count > 0:
-            logger.error(
-                "Не найдена базовая промогруппа для reassignment, в группе '%s' (id=%s) осталось %s пользователей",
-                group.name,
-                group.id,
-                members_count,
-            )
-            return False, "no_default_with_members"
-
-        await db.delete(group)
-        await db.commit()
-
-        logger.info(
-            "Промогруппа '%s' (id=%s) удалена без reassignment — базовая группа отсутствует",
-            group.name,
-            group.id,
-        )
-        return True, None
+        logger.error("Не найдена базовая промогруппа для reassignment")
+        return False
 
     await db.execute(
         update(User)
@@ -141,7 +117,7 @@ async def delete_promo_group(
         group.id,
         default_group.name,
     )
-    return True, None
+    return True
 
 
 async def get_promo_group_members(

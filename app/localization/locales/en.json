@@ -162,7 +162,6 @@
   "ADMIN_PROMO_GROUP_MEMBERS_TITLE": "👥 Members of {name}",
   "ADMIN_PROMO_GROUP_MEMBERS_EMPTY": "This group has no members yet.",
   "ADMIN_PROMO_GROUP_DELETE_FORBIDDEN": "The default promo group cannot be deleted.",
-  "ADMIN_PROMO_GROUP_DELETE_NO_DEFAULT": "Cannot delete the promo group: the default group is not configured.",
   "ADMIN_PROMO_GROUP_DELETE_CONFIRM": "Delete promo group “{name}”? All users will be moved to the default group.",
   "ADMIN_PROMO_GROUP_DELETED": "Promo group “{name}” deleted.",
   "ADMIN_SUBSCRIPTIONS": "📱 Subscriptions",
