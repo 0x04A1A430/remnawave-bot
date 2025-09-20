@@ -12,10 +12,11 @@ from app.database.crud.user import get_user_by_id
 from app.keyboards.admin import (
     get_admin_users_keyboard, get_user_management_keyboard,
     get_admin_pagination_keyboard, get_confirmation_keyboard,
-    get_admin_users_filters_keyboard
+    get_admin_users_filters_keyboard, get_user_promo_group_keyboard
 )
 from app.localization.texts import get_texts
 from app.services.user_service import UserService
+from app.database.crud.promo_group import get_promo_groups_with_counts
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
 from app.services.remnawave_service import RemnaWaveService
@@ -820,7 +821,20 @@ async def show_user_management(
 """
     else:
         text += "\n<b>Подписка:</b> Отсутствует"
-    
+
+    if user.promo_group:
+        promo_group = user.promo_group
+        text += f"""
+
+<b>Промогруппа:</b>
+• Название: {promo_group.name}
+• Скидка на сервера: {promo_group.server_discount_percent}%
+• Скидка на трафик: {promo_group.traffic_discount_percent}%
+• Скидка на устройства: {promo_group.device_discount_percent}%
+"""
+    else:
+        text += "\n<b>Промогруппа:</b> Не назначена"
+
     # Проверяем состояние, чтобы определить, откуда пришел пользователь
     current_state = await state.get_state()
     if current_state == AdminStates.viewing_user_from_balance_list:
@@ -831,6 +845,115 @@ async def show_user_management(
         reply_markup=get_user_management_keyboard(user.id, user.status, db_user.language, back_callback)
     )
     await callback.answer()
+
+
+async def _render_user_promo_group(
+    message: types.Message,
+    language: str,
+    user: User,
+    promo_groups: list
+) -> None:
+    texts = get_texts(language)
+
+    current_group = user.promo_group
+
+    if current_group:
+        current_line = texts.ADMIN_USER_PROMO_GROUP_CURRENT.format(name=current_group.name)
+        discount_line = texts.ADMIN_USER_PROMO_GROUP_DISCOUNTS.format(
+            servers=current_group.server_discount_percent,
+            traffic=current_group.traffic_discount_percent,
+            devices=current_group.device_discount_percent,
+        )
+        current_group_id = current_group.id
+    else:
+        current_line = texts.ADMIN_USER_PROMO_GROUP_CURRENT_NONE
+        discount_line = texts.ADMIN_USER_PROMO_GROUP_DISCOUNTS_NONE
+        current_group_id = None
+
+    text = (
+        f"{texts.ADMIN_USER_PROMO_GROUP_TITLE}\n\n"
+        f"{current_line}\n"
+        f"{discount_line}\n\n"
+        f"{texts.ADMIN_USER_PROMO_GROUP_SELECT}"
+    )
+
+    await message.edit_text(
+        text,
+        reply_markup=get_user_promo_group_keyboard(
+            promo_groups,
+            user.id,
+            current_group_id,
+            language
+        )
+    )
+
+
+@admin_required
+@error_handler
+async def show_user_promo_group(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+
+    user_id = int(callback.data.split('_')[-1])
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    promo_groups = await get_promo_groups_with_counts(db)
+    if not promo_groups:
+        texts = get_texts(db_user.language)
+        await callback.answer(texts.ADMIN_PROMO_GROUPS_EMPTY, show_alert=True)
+        return
+
+    await _render_user_promo_group(callback.message, db_user.language, user, promo_groups)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def set_user_promo_group(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+
+    parts = callback.data.split('_')
+    user_id = int(parts[-2])
+    group_id = int(parts[-1])
+
+    texts = get_texts(db_user.language)
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    if user.promo_group_id == group_id:
+        await callback.answer(texts.ADMIN_USER_PROMO_GROUP_ALREADY, show_alert=True)
+        return
+
+    user_service = UserService()
+    success, updated_user, new_group = await user_service.update_user_promo_group(
+        db,
+        user_id,
+        group_id
+    )
+
+    if not success or not updated_user or not new_group:
+        await callback.answer(texts.ADMIN_USER_PROMO_GROUP_ERROR, show_alert=True)
+        return
+
+    promo_groups = await get_promo_groups_with_counts(db)
+
+    await _render_user_promo_group(callback.message, db_user.language, updated_user, promo_groups)
+    await callback.answer(
+        texts.ADMIN_USER_PROMO_GROUP_UPDATED.format(name=new_group.name),
+        show_alert=True
+    )
 
 
 
@@ -2922,7 +3045,17 @@ def register_handlers(dp: Dispatcher):
         show_user_management,
         F.data.startswith("admin_user_manage_")
     )
-    
+
+    dp.callback_query.register(
+        show_user_promo_group,
+        F.data.startswith("admin_user_promo_group_") & ~F.data.contains("_set_")
+    )
+
+    dp.callback_query.register(
+        set_user_promo_group,
+        F.data.startswith("admin_user_promo_group_set_")
+    )
+
     dp.callback_query.register(
         start_balance_edit,
         F.data.startswith("admin_user_balance_")

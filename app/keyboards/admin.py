@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple, Any
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from app.localization.texts import get_texts
@@ -393,10 +393,18 @@ def get_admin_statistics_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
 
 
 def get_user_management_keyboard(user_id: int, user_status: str, language: str = "ru", back_callback: str = "admin_users_list") -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+
     keyboard = [
         [
             InlineKeyboardButton(text="💰 Баланс", callback_data=f"admin_user_balance_{user_id}"),
             InlineKeyboardButton(text="📱 Подписка и настройки", callback_data=f"admin_user_subscription_{user_id}")
+        ],
+        [
+            InlineKeyboardButton(
+                text=texts.ADMIN_USER_PROMO_GROUP_BUTTON,
+                callback_data=f"admin_user_promo_group_{user_id}"
+            )
         ],
         [
             InlineKeyboardButton(text="📊 Статистика", callback_data=f"admin_user_statistics_{user_id}")
@@ -424,7 +432,37 @@ def get_user_management_keyboard(user_id: int, user_status: str, language: str =
     keyboard.append([
         InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)
     ])
-    
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_user_promo_group_keyboard(
+    promo_groups: List[Tuple[Any, int]],
+    user_id: int,
+    current_group_id: Optional[int],
+    language: str = "ru"
+) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+
+    keyboard: List[List[InlineKeyboardButton]] = []
+
+    for group, members_count in promo_groups:
+        prefix = "✅" if current_group_id is not None and group.id == current_group_id else "👥"
+        count_text = f" ({members_count})" if members_count else ""
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"{prefix} {group.name}{count_text}",
+                callback_data=f"admin_user_promo_group_set_{user_id}_{group.id}"
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(
+            text=texts.ADMIN_USER_PROMO_GROUP_BACK,
+            callback_data=f"admin_user_manage_{user_id}"
+        )
+    ])
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
