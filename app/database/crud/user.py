@@ -7,8 +7,9 @@ from sqlalchemy import select, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import User, UserStatus, Subscription, Transaction
+from app.database.models import User, UserStatus, Subscription, Transaction, PromoGroup
 from app.config import settings
+from app.database.crud.promo_group import get_default_promo_group
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,10 @@ def generate_referral_code() -> str:
 async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
     result = await db.execute(
         select(User)
-        .options(selectinload(User.subscription)) 
+        .options(
+            selectinload(User.subscription),
+            selectinload(User.promo_group),
+        )
         .where(User.id == user_id)
     )
     user = result.scalar_one_or_none()
@@ -36,7 +40,10 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
 async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optional[User]:
     result = await db.execute(
         select(User)
-        .options(selectinload(User.subscription)) 
+        .options(
+            selectinload(User.subscription),
+            selectinload(User.promo_group),
+        )
         .where(User.telegram_id == telegram_id)
     )
     user = result.scalar_one_or_none()
@@ -49,7 +56,9 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optiona
 
 async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> Optional[User]:
     result = await db.execute(
-        select(User).where(User.referral_code == referral_code)
+        select(User)
+        .options(selectinload(User.promo_group))
+        .where(User.referral_code == referral_code)
     )
     return result.scalar_one_or_none()
 
@@ -82,6 +91,20 @@ async def create_user(
         from app.utils.user_utils import generate_unique_referral_code
         referral_code = await generate_unique_referral_code(db, telegram_id)
     
+    default_group = await get_default_promo_group(db)
+    if not default_group:
+        default_group = PromoGroup(
+            name="Базовый юзер",
+            server_discount_percent=0,
+            traffic_discount_percent=0,
+            device_discount_percent=0,
+            is_default=True,
+        )
+        db.add(default_group)
+        await db.flush()
+
+    promo_group_id = default_group.id
+
     user = User(
         telegram_id=telegram_id,
         username=username,
@@ -92,15 +115,19 @@ async def create_user(
         referral_code=referral_code,
         balance_kopeks=0,
         has_had_paid_subscription=False,
-        has_made_first_topup=False 
+        has_made_first_topup=False,
+        promo_group_id=promo_group_id,
     )
     
     db.add(user)
     await db.commit()
     await db.refresh(user)
     
+    if default_group:
+        user.promo_group = default_group
+
     logger.info(f"✅ Создан пользователь {telegram_id} с реферальным кодом {referral_code}")
-    
+
     return user
 
 
@@ -281,7 +308,10 @@ async def get_users_count(
 async def get_referrals(db: AsyncSession, user_id: int) -> List[User]:
     result = await db.execute(
         select(User)
-        .options(selectinload(User.subscription))
+        .options(
+            selectinload(User.subscription),
+            selectinload(User.promo_group),
+        )
         .where(User.referred_by_id == user_id)
         .order_by(User.created_at.desc())
     )
@@ -293,7 +323,10 @@ async def get_inactive_users(db: AsyncSession, months: int = 3) -> List[User]:
     
     result = await db.execute(
         select(User)
-        .options(selectinload(User.subscription))
+        .options(
+            selectinload(User.subscription),
+            selectinload(User.promo_group),
+        )
         .where(
             and_(
                 User.last_activity < threshold_date,

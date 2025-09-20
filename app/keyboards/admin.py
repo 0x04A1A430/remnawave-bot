@@ -46,6 +46,9 @@ def get_admin_promo_submenu_keyboard(language: str = "ru") -> InlineKeyboardMark
             InlineKeyboardButton(text=texts.ADMIN_CAMPAIGNS, callback_data="admin_campaigns")
         ],
         [
+            InlineKeyboardButton(text=texts.ADMIN_PROMO_GROUPS, callback_data="admin_promo_groups")
+        ],
+        [
             InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")
         ]
     ])
