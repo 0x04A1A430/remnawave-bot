@@ -66,6 +66,25 @@ logger = logging.getLogger(__name__)
 TRAFFIC_PRICES = get_traffic_prices()
 
 
+def _apply_discount_to_monthly_component(
+    amount_per_month: int,
+    percent: int,
+    months: int,
+) -> Dict[str, int]:
+    from app.utils.pricing_utils import apply_percentage_discount
+
+    discounted_per_month, discount_per_month = apply_percentage_discount(amount_per_month, percent)
+
+    return {
+        "original_per_month": amount_per_month,
+        "discounted_per_month": discounted_per_month,
+        "discount_percent": max(0, min(100, percent)),
+        "discount_per_month": discount_per_month,
+        "total": discounted_per_month * months,
+        "discount_total": discount_per_month * months,
+    }
+
+
 async def _prepare_subscription_summary(
     db_user: User,
     data: Dict[str, Any],
@@ -75,6 +94,7 @@ async def _prepare_subscription_summary(
         calculate_months_from_days,
         format_period_description,
         validate_pricing_calculation,
+        apply_percentage_discount,
     )
 
     summary_data = dict(data)
@@ -94,11 +114,21 @@ async def _prepare_subscription_summary(
         traffic_price_per_month = settings.get_traffic_price(traffic_gb)
         final_traffic_gb = traffic_gb
 
-    total_traffic_price = traffic_price_per_month * months_in_period
+    traffic_discount_percent = db_user.get_promo_discount(
+        "traffic",
+        summary_data['period_days'],
+    )
+    traffic_component = _apply_discount_to_monthly_component(
+        traffic_price_per_month,
+        traffic_discount_percent,
+        months_in_period,
+    )
+    total_traffic_price = traffic_component["total"]
 
     countries_price_per_month = 0
     selected_countries_names: List[str] = []
     selected_server_prices: List[int] = []
+    server_monthly_prices: List[int] = []
 
     selected_country_ids = set(summary_data.get('countries', []))
     for country in countries:
@@ -106,25 +136,84 @@ async def _prepare_subscription_summary(
             server_price_per_month = country['price_kopeks']
             countries_price_per_month += server_price_per_month
             selected_countries_names.append(country['name'])
-            selected_server_prices.append(server_price_per_month * months_in_period)
+            server_monthly_prices.append(server_price_per_month)
 
-    total_countries_price = countries_price_per_month * months_in_period
+    servers_discount_percent = db_user.get_promo_discount(
+        "servers",
+        summary_data['period_days'],
+    )
+    total_countries_price = 0
+    total_servers_discount = 0
+    discounted_servers_price_per_month = 0
+
+    for server_price_per_month in server_monthly_prices:
+        discounted_per_month, discount_per_month = apply_percentage_discount(
+            server_price_per_month,
+            servers_discount_percent,
+        )
+        total_price_for_server = discounted_per_month * months_in_period
+        total_discount_for_server = discount_per_month * months_in_period
+
+        discounted_servers_price_per_month += discounted_per_month
+        total_countries_price += total_price_for_server
+        total_servers_discount += total_discount_for_server
+        selected_server_prices.append(total_price_for_server)
 
     devices_selected = summary_data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
     additional_devices = max(0, devices_selected - settings.DEFAULT_DEVICE_LIMIT)
     devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-    total_devices_price = devices_price_per_month * months_in_period
+    devices_discount_percent = db_user.get_promo_discount(
+        "devices",
+        summary_data['period_days'],
+    )
+    devices_component = _apply_discount_to_monthly_component(
+        devices_price_per_month,
+        devices_discount_percent,
+        months_in_period,
+    )
+    total_devices_price = devices_component["total"]
 
     total_price = base_price + total_traffic_price + total_countries_price + total_devices_price
 
-    monthly_additions = countries_price_per_month + devices_price_per_month + traffic_price_per_month
-    is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, total_price)
+    discounted_monthly_additions = (
+        traffic_component["discounted_per_month"]
+        + discounted_servers_price_per_month
+        + devices_component["discounted_per_month"]
+    )
+
+    is_valid = validate_pricing_calculation(
+        base_price,
+        discounted_monthly_additions,
+        months_in_period,
+        total_price,
+    )
 
     if not is_valid:
         raise ValueError("Subscription price calculation validation failed")
 
     summary_data['total_price'] = total_price
     summary_data['server_prices_for_period'] = selected_server_prices
+    summary_data['months_in_period'] = months_in_period
+    summary_data['base_price'] = base_price
+    summary_data['final_traffic_gb'] = final_traffic_gb
+    summary_data['traffic_price_per_month'] = traffic_price_per_month
+    summary_data['traffic_discount_percent'] = traffic_component["discount_percent"]
+    summary_data['traffic_discount_total'] = traffic_component["discount_total"]
+    summary_data['traffic_discounted_price_per_month'] = traffic_component["discounted_per_month"]
+    summary_data['total_traffic_price'] = total_traffic_price
+    summary_data['servers_price_per_month'] = countries_price_per_month
+    summary_data['countries_price_per_month'] = countries_price_per_month
+    summary_data['servers_discount_percent'] = servers_discount_percent
+    summary_data['servers_discount_total'] = total_servers_discount
+    summary_data['servers_discounted_price_per_month'] = discounted_servers_price_per_month
+    summary_data['total_servers_price'] = total_countries_price
+    summary_data['total_countries_price'] = total_countries_price
+    summary_data['devices_price_per_month'] = devices_price_per_month
+    summary_data['devices_discount_percent'] = devices_component["discount_percent"]
+    summary_data['devices_discount_total'] = devices_component["discount_total"]
+    summary_data['devices_discounted_price_per_month'] = devices_component["discounted_per_month"]
+    summary_data['total_devices_price'] = total_devices_price
+    summary_data['discounted_monthly_additions'] = discounted_monthly_additions
 
     if settings.is_traffic_fixed():
         if final_traffic_gb == 0:
@@ -140,17 +229,38 @@ async def _prepare_subscription_summary(
     details_lines = [f"- Базовый период: {texts.format_price(base_price)}"]
 
     if total_traffic_price > 0:
-        details_lines.append(
-            f"- Трафик: {texts.format_price(traffic_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_traffic_price)}"
+        traffic_line = (
+            f"- Трафик: {texts.format_price(traffic_price_per_month)}/мес × {months_in_period}"
+            f" = {texts.format_price(total_traffic_price)}"
         )
+        if traffic_component["discount_total"] > 0:
+            traffic_line += (
+                f" (скидка {traffic_component['discount_percent']}%:"
+                f" -{texts.format_price(traffic_component['discount_total'])})"
+            )
+        details_lines.append(traffic_line)
     if total_countries_price > 0:
-        details_lines.append(
-            f"- Серверы: {texts.format_price(countries_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_countries_price)}"
+        servers_line = (
+            f"- Серверы: {texts.format_price(countries_price_per_month)}/мес × {months_in_period}"
+            f" = {texts.format_price(total_countries_price)}"
         )
+        if total_servers_discount > 0:
+            servers_line += (
+                f" (скидка {servers_discount_percent}%:"
+                f" -{texts.format_price(total_servers_discount)})"
+            )
+        details_lines.append(servers_line)
     if total_devices_price > 0:
-        details_lines.append(
-            f"- Доп. устройства: {texts.format_price(devices_price_per_month)}/мес × {months_in_period} = {texts.format_price(total_devices_price)}"
+        devices_line = (
+            f"- Доп. устройства: {texts.format_price(devices_price_per_month)}/мес × {months_in_period}"
+            f" = {texts.format_price(total_devices_price)}"
         )
+        if devices_component["discount_total"] > 0:
+            devices_line += (
+                f" (скидка {devices_component['discount_percent']}%:"
+                f" -{texts.format_price(devices_component['discount_total'])})"
+            )
+        details_lines.append(devices_line)
 
     details_text = "\n".join(details_lines)
 
@@ -198,51 +308,67 @@ async def show_subscription_info(
     
     if subscription.status == "expired" or subscription.end_date <= current_time:
         actual_status = "expired"
-        status_display = "Истекла"
+        status_display = texts.t("SUBSCRIPTION_STATUS_EXPIRED", "Истекла")
         status_emoji = "🔴"
     elif subscription.status == "active" and subscription.end_date > current_time:
         if subscription.is_trial:
             actual_status = "trial_active"
-            status_display = "Тестовая"
+            status_display = texts.t("SUBSCRIPTION_STATUS_TRIAL", "Тестовая")
             status_emoji = "🎯"
         else:
             actual_status = "paid_active"
-            status_display = "Активна"
+            status_display = texts.t("SUBSCRIPTION_STATUS_ACTIVE", "Активна")
             status_emoji = "💎"
     else:
         actual_status = "unknown"
-        status_display = "Неизвестно"
+        status_display = texts.t("SUBSCRIPTION_STATUS_UNKNOWN", "Неизвестно")
         status_emoji = "❓"
-    
+
     if subscription.end_date <= current_time:
         days_left = 0
-        time_left_text = "истёк"
-        warning_text = "" 
+        time_left_text = texts.t("SUBSCRIPTION_TIME_LEFT_EXPIRED", "истёк")
+        warning_text = ""
     else:
         delta = subscription.end_date - current_time
         days_left = delta.days
         hours_left = delta.seconds // 3600
-        
+
         if days_left > 1:
-            time_left_text = f"{days_left} дн."
+            time_left_text = texts.t("SUBSCRIPTION_TIME_LEFT_DAYS", "{days} дн.").format(days=days_left)
             warning_text = ""
         elif days_left == 1:
-            time_left_text = f"{days_left} дн."
-            warning_text = "\n⚠️ истекает завтра!"
+            time_left_text = texts.t("SUBSCRIPTION_TIME_LEFT_DAYS", "{days} дн.").format(days=days_left)
+            warning_text = texts.t("SUBSCRIPTION_WARNING_TOMORROW", "\n⚠️ истекает завтра!")
         elif hours_left > 0:
-            time_left_text = f"{hours_left} ч."
-            warning_text = "\n⚠️ истекает сегодня!"
+            time_left_text = texts.t("SUBSCRIPTION_TIME_LEFT_HOURS", "{hours} ч.").format(hours=hours_left)
+            warning_text = texts.t("SUBSCRIPTION_WARNING_TODAY", "\n⚠️ истекает сегодня!")
         else:
             minutes_left = (delta.seconds % 3600) // 60
-            time_left_text = f"{minutes_left} мин."
-            warning_text = "\n🔴 истекает через несколько минут!"
-    
-    subscription_type = "Триал" if subscription.is_trial else "Платная"
-    
+            time_left_text = texts.t("SUBSCRIPTION_TIME_LEFT_MINUTES", "{minutes} мин.").format(
+                minutes=minutes_left
+            )
+            warning_text = texts.t(
+                "SUBSCRIPTION_WARNING_MINUTES",
+                "\n🔴 истекает через несколько минут!",
+            )
+
+    subscription_type = (
+        texts.t("SUBSCRIPTION_TYPE_TRIAL", "Триал")
+        if subscription.is_trial
+        else texts.t("SUBSCRIPTION_TYPE_PAID", "Платная")
+    )
+
+    used_traffic = f"{subscription.traffic_used_gb:.1f}"
     if subscription.traffic_limit_gb == 0:
-        traffic_used_display = f"∞ (безлимит) | Использовано: {subscription.traffic_used_gb:.1f} ГБ"
+        traffic_used_display = texts.t(
+            "SUBSCRIPTION_TRAFFIC_UNLIMITED",
+            "∞ (безлимит) | Использовано: {used} ГБ",
+        ).format(used=used_traffic)
     else:
-        traffic_used_display = f"{subscription.traffic_used_gb:.1f} / {subscription.traffic_limit_gb} ГБ"
+        traffic_used_display = texts.t(
+            "SUBSCRIPTION_TRAFFIC_LIMITED",
+            "{used} / {limit} ГБ",
+        ).format(used=used_traffic, limit=subscription.traffic_limit_gb)
     
     devices_used_str = "—"
     devices_list = []
@@ -270,36 +396,65 @@ async def show_subscription_info(
         devices_used_str = await get_current_devices_count(db_user)
 
     servers_names = await get_servers_display_names(subscription.connected_squads)
-    servers_display = servers_names if servers_names else "Нет серверов"
+    servers_display = (
+        servers_names
+        if servers_names
+        else texts.t("SUBSCRIPTION_NO_SERVERS", "Нет серверов")
+    )
 
-    message = f"""👤 {db_user.full_name}
-💰 Баланс: {settings.format_price(db_user.balance_kopeks)}
-📱 Подписка: {status_emoji} {status_display}{warning_text}
+    message = texts.t(
+        "SUBSCRIPTION_OVERVIEW_TEMPLATE",
+        """👤 {full_name}
+💰 Баланс: {balance}
+📱 Подписка: {status_emoji} {status_display}{warning}
 
 📱 Информация о подписке
 🎭 Тип: {subscription_type}
-📅 Действует до: {subscription.end_date.strftime("%d.%m.%Y %H:%M")}
-⏰ Осталось: {time_left_text}
-📈 Трафик: {traffic_used_display}
-🌍 Серверы: {servers_display}
-📱 Устройства: {devices_used_str} / {subscription.device_limit}"""
+📅 Действует до: {end_date}
+⏰ Осталось: {time_left}
+📈 Трафик: {traffic}
+🌍 Серверы: {servers}
+📱 Устройства: {devices_used} / {device_limit}""",
+    ).format(
+        full_name=db_user.full_name,
+        balance=settings.format_price(db_user.balance_kopeks),
+        status_emoji=status_emoji,
+        status_display=status_display,
+        warning=warning_text,
+        subscription_type=subscription_type,
+        end_date=subscription.end_date.strftime("%d.%m.%Y %H:%M"),
+        time_left=time_left_text,
+        traffic=traffic_used_display,
+        servers=servers_display,
+        devices_used=devices_used_str,
+        device_limit=subscription.device_limit,
+    )
 
     if devices_list and len(devices_list) > 0:
-        message += f"\n\n<blockquote>📱 <b>Подключенные устройства:</b>\n"
-        for device in devices_list[:5]: 
+        message += "\n\n" + texts.t(
+            "SUBSCRIPTION_CONNECTED_DEVICES_TITLE",
+            "<blockquote>📱 <b>Подключенные устройства:</b>\n",
+        )
+        for device in devices_list[:5]:
             platform = device.get('platform', 'Unknown')
             device_model = device.get('deviceModel', 'Unknown')
             device_info = f"{platform} - {device_model}"
-            
+
             if len(device_info) > 35:
                 device_info = device_info[:32] + "..."
             message += f"• {device_info}\n"
-        message += "</blockquote>"
+        message += texts.t("SUBSCRIPTION_CONNECTED_DEVICES_FOOTER", "</blockquote>")
     
     if hasattr(subscription, 'subscription_url') and subscription.subscription_url:
         if actual_status in ['trial_active', 'paid_active'] and not settings.HIDE_SUBSCRIPTION_LINK:
-            message += f"\n\n🔗 <b>Ссылка для подключения:</b>\n<code>{subscription.subscription_url}</code>"
-            message += f"\n\n📱 Скопируйте ссылку и добавьте в ваше VPN приложение"
+            message += "\n\n" + texts.t(
+                "SUBSCRIPTION_CONNECT_LINK_SECTION",
+                "🔗 <b>Ссылка для подключения:</b>\n<code>{subscription_url}</code>",
+            ).format(subscription_url=subscription.subscription_url)
+            message += "\n\n" + texts.t(
+                "SUBSCRIPTION_CONNECT_LINK_PROMPT",
+                "📱 Скопируйте ссылку и добавьте в ваше VPN приложение",
+            )
     
     await callback.message.edit_text(
         message,
@@ -532,10 +687,16 @@ async def activate_trial(
             logger.error(f"Ошибка отправки уведомления о триале: {e}")
         
         if remnawave_user and hasattr(subscription, 'subscription_url') and subscription.subscription_url:
-            trial_success_text = f"{texts.TRIAL_ACTIVATED}\n\n"
-            trial_success_text += f"🔗 <b>Ваша ссылка для импорта в VPN приложениe:</b>\n"
-            trial_success_text += f"<code>{subscription.subscription_url}</code>\n\n"
-            trial_success_text += f"📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве"
+            subscription_import_link = texts.t(
+                "SUBSCRIPTION_IMPORT_LINK_SECTION",
+                "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>",
+            ).format(subscription_url=subscription.subscription_url)
+
+            trial_success_text = (
+                f"{texts.TRIAL_ACTIVATED}\n\n"
+                f"{subscription_import_link}\n\n"
+                f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
+            )
 
             connect_mode = settings.CONNECT_BUTTON_MODE
 
@@ -543,39 +704,45 @@ async def activate_trial(
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="🔗 Подключиться",
+                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                             web_app=types.WebAppInfo(url=subscription.subscription_url),
                         )
                     ],
-                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
             elif connect_mode == "miniapp_custom":
                 if not settings.MINIAPP_CUSTOM_URL:
-                    await callback.answer("⚠ Кастомная ссылка для мини-приложения не настроена", show_alert=True)
+                    await callback.answer(
+                        texts.t(
+                            "CUSTOM_MINIAPP_URL_NOT_SET",
+                            "⚠ Кастомная ссылка для мини-приложения не настроена",
+                        ),
+                        show_alert=True,
+                    )
                     return
 
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="🔗 Подключиться",
+                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                             web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                         )
                     ],
-                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
             elif connect_mode == "link":
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔗 Подключиться", url=subscription.subscription_url)],
-                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription.subscription_url)],
+                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
             else:
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")],
-                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), callback_data="subscription_connect")],
+                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
     
             await callback.message.edit_text(
@@ -1544,15 +1711,30 @@ async def handle_extend_subscription(
             servers_price_per_month, _ = await subscription_service.get_countries_price_by_uuids(
                 subscription.connected_squads, db
             )
-            total_servers_price = servers_price_per_month * months_in_period
-            
+            servers_discount_percent = db_user.get_promo_discount(
+                "servers",
+                days,
+            )
+            servers_discount_per_month = servers_price_per_month * servers_discount_percent // 100
+            total_servers_price = (servers_price_per_month - servers_discount_per_month) * months_in_period
+
             additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-            total_devices_price = devices_price_per_month * months_in_period
-            
+            devices_discount_percent = db_user.get_promo_discount(
+                "devices",
+                days,
+            )
+            devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
+            total_devices_price = (devices_price_per_month - devices_discount_per_month) * months_in_period
+
             traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
-            total_traffic_price = traffic_price_per_month * months_in_period
-            
+            traffic_discount_percent = db_user.get_promo_discount(
+                "traffic",
+                days,
+            )
+            traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
+            total_traffic_price = (traffic_price_per_month - traffic_discount_per_month) * months_in_period
+
             price = base_price + total_servers_price + total_devices_price + total_traffic_price
             renewal_prices[days] = price
             
@@ -1726,62 +1908,121 @@ async def confirm_extend_subscription(
 ):
     from app.utils.pricing_utils import calculate_months_from_days, validate_pricing_calculation
     from app.services.admin_notification_service import AdminNotificationService
-    
+
     days = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
-    
+
     if not subscription:
         await callback.answer("⚠ У вас нет активной подписки", show_alert=True)
         return
-    
+
     months_in_period = calculate_months_from_days(days)
-    
     old_end_date = subscription.end_date
-    
+    server_uuid_prices: Dict[str, int] = {}
+
     try:
         from app.config import PERIOD_PRICES
-        
+
         base_price = PERIOD_PRICES.get(days, 0)
-        
+
         subscription_service = SubscriptionService()
-        servers_price_per_month, _ = await subscription_service.get_countries_price_by_uuids(
+        servers_price_per_month, per_server_monthly_prices = await subscription_service.get_countries_price_by_uuids(
             subscription.connected_squads, db
         )
-        total_servers_price = servers_price_per_month * months_in_period
-        
+        servers_discount_percent = db_user.get_promo_discount(
+            "servers",
+            days,
+        )
+        total_servers_price = 0
+        total_servers_discount = 0
+
+        for squad_uuid, server_monthly_price in zip(subscription.connected_squads, per_server_monthly_prices):
+            discount_per_month = server_monthly_price * servers_discount_percent // 100
+            discounted_per_month = server_monthly_price - discount_per_month
+            total_servers_price += discounted_per_month * months_in_period
+            total_servers_discount += discount_per_month * months_in_period
+            server_uuid_prices[squad_uuid] = discounted_per_month * months_in_period
+
+        discounted_servers_price_per_month = servers_price_per_month - (
+            servers_price_per_month * servers_discount_percent // 100
+        )
+
         additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-        total_devices_price = devices_price_per_month * months_in_period
-        
+        devices_discount_percent = db_user.get_promo_discount(
+            "devices",
+            days,
+        )
+        devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
+        discounted_devices_price_per_month = devices_price_per_month - devices_discount_per_month
+        total_devices_price = discounted_devices_price_per_month * months_in_period
+
         traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
-        total_traffic_price = traffic_price_per_month * months_in_period
-        
+        traffic_discount_percent = db_user.get_promo_discount(
+            "traffic",
+            days,
+        )
+        traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
+        discounted_traffic_price_per_month = traffic_price_per_month - traffic_discount_per_month
+        total_traffic_price = discounted_traffic_price_per_month * months_in_period
+
         price = base_price + total_servers_price + total_devices_price + total_traffic_price
-        
-        monthly_additions = servers_price_per_month + devices_price_per_month + traffic_price_per_month
+
+        monthly_additions = (
+            discounted_servers_price_per_month
+            + discounted_devices_price_per_month
+            + discounted_traffic_price_per_month
+        )
         is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, price)
-        
+
         if not is_valid:
             logger.error(f"Ошибка в расчете цены продления для пользователя {db_user.telegram_id}")
             await callback.answer("Ошибка расчета цены. Обратитесь в поддержку.", show_alert=True)
             return
-        
+
         logger.info(f"💰 Расчет продления подписки {subscription.id} на {days} дней ({months_in_period} мес):")
         logger.info(f"   📅 Период {days} дней: {base_price/100}₽")
         if total_servers_price > 0:
-            logger.info(f"   🌐 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_price/100}₽")
+            logger.info(
+                f"   🌐 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period}"
+                f" = {total_servers_price/100}₽"
+                + (
+                    f" (скидка {servers_discount_percent}%:"
+                    f" -{total_servers_discount/100}₽)"
+                    if total_servers_discount > 0
+                    else ""
+                )
+            )
         if total_devices_price > 0:
-            logger.info(f"   📱 Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
+            logger.info(
+                f"   📱 Устройства: {devices_price_per_month/100}₽/мес × {months_in_period}"
+                f" = {total_devices_price/100}₽"
+                + (
+                    f" (скидка {devices_discount_percent}%:"
+                    f" -{devices_discount_per_month * months_in_period/100}₽)"
+                    if devices_discount_percent > 0 and devices_discount_per_month > 0
+                    else ""
+                )
+            )
         if total_traffic_price > 0:
-            logger.info(f"   📊 Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
+            logger.info(
+                f"   📊 Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period}"
+                f" = {total_traffic_price/100}₽"
+                + (
+                    f" (скидка {traffic_discount_percent}%:"
+                    f" -{traffic_discount_per_month * months_in_period/100}₽)"
+                    if traffic_discount_percent > 0 and traffic_discount_per_month > 0
+                    else ""
+                )
+            )
         logger.info(f"   💎 ИТОГО: {price/100}₽")
-        
+
     except Exception as e:
         logger.error(f"⚠ ОШИБКА РАСЧЕТА ЦЕНЫ: {e}")
         await callback.answer("⚠ Ошибка расчета стоимости", show_alert=True)
         return
-    
+
     if db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
         await callback.message.edit_text(
@@ -1790,48 +2031,59 @@ async def confirm_extend_subscription(
         )
         await callback.answer()
         return
-    
+
     try:
         success = await subtract_user_balance(
             db, db_user, price,
             f"Продление подписки на {days} дней"
         )
-        
+
         if not success:
             await callback.answer("⚠ Ошибка списания средств", show_alert=True)
             return
-        
+
         current_time = datetime.utcnow()
-        
+
         if subscription.end_date > current_time:
             subscription.end_date = subscription.end_date + timedelta(days=days)
         else:
             subscription.end_date = current_time + timedelta(days=days)
-        
+
         subscription.status = SubscriptionStatus.ACTIVE.value
         subscription.updated_at = current_time
-        
+
         await db.commit()
         await db.refresh(subscription)
         await db.refresh(db_user)
-        
+
         from app.database.crud.server_squad import get_server_ids_by_uuids
         from app.database.crud.subscription import add_subscription_servers
-        
+
         server_ids = await get_server_ids_by_uuids(db, subscription.connected_squads)
         if server_ids:
-            server_prices_for_period = [total_servers_price // len(server_ids)] * len(server_ids)
+            from sqlalchemy import select
+            from app.database.models import ServerSquad
+
+            result = await db.execute(
+                select(ServerSquad.id, ServerSquad.squad_uuid).where(ServerSquad.id.in_(server_ids))
+            )
+            id_to_uuid = {row.id: row.squad_uuid for row in result}
+            default_price = total_servers_price // len(server_ids) if server_ids else 0
+            server_prices_for_period = [
+                server_uuid_prices.get(id_to_uuid.get(server_id, ""), default_price)
+                for server_id in server_ids
+            ]
             await add_subscription_servers(db, subscription, server_ids, server_prices_for_period)
-        
+
         try:
             remnawave_result = await subscription_service.update_remnawave_user(db, subscription)
             if remnawave_result:
-                logger.info(f"✅ RemnaWave обновлен успешно")
+                logger.info("✅ RemnaWave обновлен успешно")
             else:
-                logger.error(f"⚠ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE")
+                logger.error("⚠ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE")
         except Exception as e:
             logger.error(f"⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE: {e}")
-        
+
         transaction = await create_transaction(
             db=db,
             user_id=db_user.id,
@@ -1839,7 +2091,7 @@ async def confirm_extend_subscription(
             amount_kopeks=price,
             description=f"Продление подписки на {days} дней ({months_in_period} мес)"
         )
-        
+
         try:
             notification_service = AdminNotificationService(callback.bot)
             await notification_service.send_subscription_extension_notification(
@@ -1847,27 +2099,27 @@ async def confirm_extend_subscription(
             )
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о продлении: {e}")
-        
+
         await callback.message.edit_text(
-            f"✅ Подписка успешно продлена!\n\n"
-            f"⏰ Добавлено: {days} дней\n"
-            f"Действует до: {subscription.end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"✅ Подписка успешно продлена!\n\n",
+            f"⏰ Добавлено: {days} дней\n",
+            f"Действует до: {subscription.end_date.strftime('%d.%m.%Y %H:%M')}\n\n",
             f"💰 Списано: {texts.format_price(price)}",
             reply_markup=get_back_keyboard(db_user.language)
         )
-        
+
         logger.info(f"✅ Пользователь {db_user.telegram_id} продлил подписку на {days} дней за {price/100}₽")
-        
+
     except Exception as e:
         logger.error(f"⚠ КРИТИЧЕСКАЯ ОШИБКА ПРОДЛЕНИЯ: {e}")
         import traceback
         logger.error(f"TRACEBACK: {traceback.format_exc()}")
-        
+
         await callback.message.edit_text(
             "⚠ Произошла ошибка при продлении подписки. Обратитесь в поддержку.",
             reply_markup=get_back_keyboard(db_user.language)
         )
-    
+
     await callback.answer()
 
 
@@ -2308,38 +2560,132 @@ async def confirm_purchase(
 
     countries = await _get_available_countries()
     
-    months_in_period = calculate_months_from_days(data['period_days'])
-    
-    base_price = PERIOD_PRICES[data['period_days']]
-    
-    countries_price_per_month = 0
-    server_prices = []
-    for country in countries:
-        if country['uuid'] in data['countries']:
-            server_price_per_month = country['price_kopeks']
-            server_price_total = server_price_per_month * months_in_period
-            countries_price_per_month += server_price_per_month
-            server_prices.append(server_price_total)
-    
-    total_countries_price = countries_price_per_month * months_in_period
-    
-    additional_devices = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT)
-    devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-    total_devices_price = devices_price_per_month * months_in_period
-    
-    if settings.is_traffic_fixed():
-        traffic_price_per_month = settings.get_traffic_price(settings.get_fixed_traffic_limit())
-        final_traffic_gb = settings.get_fixed_traffic_limit()
+    months_in_period = data.get(
+        'months_in_period', calculate_months_from_days(data['period_days'])
+    )
+
+    base_price = data.get('base_price', PERIOD_PRICES[data['period_days']])
+    server_prices = data.get('server_prices_for_period', [])
+
+    if not server_prices:
+        countries_price_per_month = 0
+        per_month_prices: List[int] = []
+        for country in countries:
+            if country['uuid'] in data['countries']:
+                server_price_per_month = country['price_kopeks']
+                countries_price_per_month += server_price_per_month
+                per_month_prices.append(server_price_per_month)
+
+        servers_discount_percent = db_user.get_promo_discount(
+            "servers",
+            data['period_days'],
+        )
+        total_servers_price = 0
+        total_servers_discount = 0
+        discounted_servers_price_per_month = 0
+        server_prices = []
+
+        from app.utils.pricing_utils import apply_percentage_discount
+
+        for server_price_per_month in per_month_prices:
+            discounted_per_month, discount_per_month = apply_percentage_discount(
+                server_price_per_month,
+                servers_discount_percent,
+            )
+            total_price_for_server = discounted_per_month * months_in_period
+            total_discount_for_server = discount_per_month * months_in_period
+
+            discounted_servers_price_per_month += discounted_per_month
+            total_servers_price += total_price_for_server
+            total_servers_discount += total_discount_for_server
+            server_prices.append(total_price_for_server)
+
+        total_countries_price = total_servers_price
     else:
-        traffic_price_per_month = settings.get_traffic_price(data['traffic_gb'])
-        final_traffic_gb = data['traffic_gb']
-    
-    total_traffic_price = traffic_price_per_month * months_in_period
-    
-    final_price = base_price + total_traffic_price + total_countries_price + total_devices_price
-    
-    monthly_additions = countries_price_per_month + devices_price_per_month + traffic_price_per_month
-    is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, final_price)
+        total_countries_price = data.get('total_servers_price', sum(server_prices))
+        countries_price_per_month = data.get('servers_price_per_month', 0)
+        discounted_servers_price_per_month = data.get('servers_discounted_price_per_month', countries_price_per_month)
+        total_servers_discount = data.get('servers_discount_total', 0)
+        servers_discount_percent = data.get('servers_discount_percent', 0)
+
+    additional_devices = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT)
+    devices_price_per_month = data.get(
+        'devices_price_per_month', additional_devices * settings.PRICE_PER_DEVICE
+    )
+    if 'devices_discount_percent' in data:
+        devices_discount_percent = data.get('devices_discount_percent', 0)
+        discounted_devices_price_per_month = data.get(
+            'devices_discounted_price_per_month', devices_price_per_month
+        )
+        devices_discount_total = data.get('devices_discount_total', 0)
+        total_devices_price = data.get(
+            'total_devices_price', discounted_devices_price_per_month * months_in_period
+        )
+    else:
+        devices_discount_percent = db_user.get_promo_discount(
+            "devices",
+            data['period_days'],
+        )
+        from app.utils.pricing_utils import apply_percentage_discount
+
+        discounted_devices_price_per_month, discount_per_month = apply_percentage_discount(
+            devices_price_per_month,
+            devices_discount_percent,
+        )
+        devices_discount_total = discount_per_month * months_in_period
+        total_devices_price = discounted_devices_price_per_month * months_in_period
+
+    if settings.is_traffic_fixed():
+        final_traffic_gb = settings.get_fixed_traffic_limit()
+        traffic_price_per_month = data.get(
+            'traffic_price_per_month', settings.get_traffic_price(final_traffic_gb)
+        )
+    else:
+        final_traffic_gb = data.get('final_traffic_gb', data.get('traffic_gb'))
+        traffic_price_per_month = data.get(
+            'traffic_price_per_month', settings.get_traffic_price(data['traffic_gb'])
+        )
+
+    if 'traffic_discount_percent' in data:
+        traffic_discount_percent = data.get('traffic_discount_percent', 0)
+        discounted_traffic_price_per_month = data.get(
+            'traffic_discounted_price_per_month', traffic_price_per_month
+        )
+        traffic_discount_total = data.get('traffic_discount_total', 0)
+        total_traffic_price = data.get(
+            'total_traffic_price', discounted_traffic_price_per_month * months_in_period
+        )
+    else:
+        traffic_discount_percent = db_user.get_promo_discount(
+            "traffic",
+            data['period_days'],
+        )
+        from app.utils.pricing_utils import apply_percentage_discount
+
+        discounted_traffic_price_per_month, discount_per_month = apply_percentage_discount(
+            traffic_price_per_month,
+            traffic_discount_percent,
+        )
+        traffic_discount_total = discount_per_month * months_in_period
+        total_traffic_price = discounted_traffic_price_per_month * months_in_period
+
+    total_servers_price = data.get('total_servers_price', total_countries_price)
+
+    final_price = data['total_price']
+
+    discounted_monthly_additions = data.get(
+        'discounted_monthly_additions',
+        discounted_traffic_price_per_month
+        + discounted_servers_price_per_month
+        + discounted_devices_price_per_month,
+    )
+
+    is_valid = validate_pricing_calculation(
+        base_price,
+        discounted_monthly_additions,
+        months_in_period,
+        final_price,
+    )
     
     if not is_valid:
         logger.error(f"Ошибка в расчете цены подписки для пользователя {db_user.telegram_id}")
@@ -2349,11 +2695,38 @@ async def confirm_purchase(
     logger.info(f"Расчет покупки подписки на {data['period_days']} дней ({months_in_period} мес):")
     logger.info(f"   Период: {base_price/100}₽")
     if total_traffic_price > 0:
-        logger.info(f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽")
-    if total_countries_price > 0:
-        logger.info(f"   Серверы: {countries_price_per_month/100}₽/мес × {months_in_period} = {total_countries_price/100}₽")
+        message = (
+            f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period}"
+            f" = {total_traffic_price/100}₽"
+        )
+        if traffic_discount_total > 0:
+            message += (
+                f" (скидка {traffic_discount_percent}%:"
+                f" -{traffic_discount_total/100}₽)"
+            )
+        logger.info(message)
+    if total_servers_price > 0:
+        message = (
+            f"   Серверы: {countries_price_per_month/100}₽/мес × {months_in_period}"
+            f" = {total_servers_price/100}₽"
+        )
+        if total_servers_discount > 0:
+            message += (
+                f" (скидка {servers_discount_percent}%:"
+                f" -{total_servers_discount/100}₽)"
+            )
+        logger.info(message)
     if total_devices_price > 0:
-        logger.info(f"   Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽")
+        message = (
+            f"   Устройства: {devices_price_per_month/100}₽/мес × {months_in_period}"
+            f" = {total_devices_price/100}₽"
+        )
+        if devices_discount_total > 0:
+            message += (
+                f" (скидка {devices_discount_percent}%:"
+                f" -{devices_discount_total/100}₽)"
+            )
+        logger.info(message)
     logger.info(f"   ИТОГО: {final_price/100}₽")
     
     if db_user.balance_kopeks < final_price:
@@ -2488,10 +2861,16 @@ async def confirm_purchase(
         await db.refresh(subscription)
         
         if remnawave_user and hasattr(subscription, 'subscription_url') and subscription.subscription_url:
-            success_text = f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
-            success_text += f"🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n"
-            success_text += f"<code>{subscription.subscription_url}</code>\n\n"
-            success_text += f"📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве"
+            import_link_section = texts.t(
+                "SUBSCRIPTION_IMPORT_LINK_SECTION",
+                "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>",
+            ).format(subscription_url=subscription.subscription_url)
+
+            success_text = (
+                f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
+                f"{import_link_section}\n\n"
+                f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
+            )
 
             connect_mode = settings.CONNECT_BUTTON_MODE
 
@@ -2499,39 +2878,45 @@ async def confirm_purchase(
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="🔗 Подключиться",
+                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                             web_app=types.WebAppInfo(url=subscription.subscription_url),
                         )
                     ],
-                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
             elif connect_mode == "miniapp_custom":
                 if not settings.MINIAPP_CUSTOM_URL:
-                    await callback.answer("Кастомная ссылка для мини-приложения не настроена", show_alert=True)
+                    await callback.answer(
+                        texts.t(
+                            "CUSTOM_MINIAPP_URL_NOT_SET",
+                            "⚠ Кастомная ссылка для мини-приложения не настроена",
+                        ),
+                        show_alert=True,
+                    )
                     return
 
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="🔗 Подключиться",
+                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                             web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                         )
                     ],
-                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
             elif connect_mode == "link":
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔗 Подключиться", url=subscription.subscription_url)],
-                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription.subscription_url)],
+                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
             else:
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")],
-                    [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")],
+                    [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), callback_data="subscription_connect")],
+                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
     
             await callback.message.edit_text(
@@ -2541,7 +2926,10 @@ async def confirm_purchase(
             )
         else:
             await callback.message.edit_text(
-                f"{texts.SUBSCRIPTION_PURCHASED}\n\nСсылка генерируется, перейдите в раздел 'Моя подписка' через несколько секунд.",
+                texts.t(
+                    "SUBSCRIPTION_LINK_GENERATING_NOTICE",
+                    "{purchase_text}\n\nСсылка генерируется, перейдите в раздел 'Моя подписка' через несколько секунд.",
+                ).format(purchase_text=texts.SUBSCRIPTION_PURCHASED),
                 reply_markup=get_back_keyboard(db_user.language)
             )
         
@@ -3159,57 +3547,71 @@ async def handle_connect_subscription(
     subscription = db_user.subscription
     
     if not subscription or not subscription.subscription_url:
-        await callback.answer("⚠ У вас нет активной подписки или ссылка еще генерируется", show_alert=True)
+        await callback.answer(
+            texts.t(
+                "SUBSCRIPTION_NO_ACTIVE_LINK",
+                "⚠ У вас нет активной подписки или ссылка еще генерируется",
+            ),
+            show_alert=True,
+        )
         return
-    
+
     connect_mode = settings.CONNECT_BUTTON_MODE
-    
+
     if connect_mode == "miniapp_subscription":
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🔗 Подключиться", 
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                     web_app=types.WebAppInfo(url=subscription.subscription_url)
                 )
             ],
             [
-                InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+                InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
             ]
         ])
-        
-        await callback.message.edit_text(
-            f"""
-📱 <b>Подключить подписку</b>
 
-🚀 Нажмите кнопку ниже, чтобы открыть подписку в мини-приложении Telegram:
-            """,
+        await callback.message.edit_text(
+            texts.t(
+                "SUBSCRIPTION_CONNECT_MINIAPP_MESSAGE",
+                """📱 <b>Подключить подписку</b>
+
+🚀 Нажмите кнопку ниже, чтобы открыть подписку в мини-приложении Telegram:""",
+            ),
             reply_markup=keyboard,
             parse_mode="HTML"
         )
-        
+
     elif connect_mode == "miniapp_custom":
         if not settings.MINIAPP_CUSTOM_URL:
-            await callback.answer("⚠ Кастомная ссылка для мини-приложения не настроена", show_alert=True)
+            await callback.answer(
+                texts.t(
+                    "CUSTOM_MINIAPP_URL_NOT_SET",
+                    "⚠ Кастомная ссылка для мини-приложения не настроена",
+                ),
+                show_alert=True,
+            )
             return
-            
+
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🔗 Подключиться", 
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                     web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL)
                 )
             ],
             [
-                InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+                InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
             ]
         ])
-        
-        await callback.message.edit_text(
-            f"""
-🚀 <b>Подключить подписку</b>
 
-📱 Нажмите кнопку ниже, чтобы открыть приложение:
-            """,
+        await callback.message.edit_text(
+            texts.t(
+                "SUBSCRIPTION_CONNECT_CUSTOM_MESSAGE",
+                """🚀 <b>Подключить подписку</b>
+
+📱 Нажмите кнопку ниже, чтобы открыть приложение:""",
+            ),
             reply_markup=keyboard,
             parse_mode="HTML"
         )
@@ -3218,35 +3620,37 @@ async def handle_connect_subscription(
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🔗 Подключиться",
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                     url=subscription.subscription_url
                 )
             ],
             [
-                InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+                InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
             ]
         ])
 
         await callback.message.edit_text(
-            f"""
-🚀 <b>Подключить подписку</b>
+            texts.t(
+                "SUBSCRIPTION_CONNECT_LINK_MESSAGE",
+                """🚀 <b>Подключить подписку</b>
 
-🔗 Нажмите кнопку ниже, чтобы открыть ссылку подписки:
-            """,
+🔗 Нажмите кнопку ниже, чтобы открыть ссылку подписки:""",
+            ),
             reply_markup=keyboard,
             parse_mode="HTML"
         )
 
     else:
-        device_text = f"""
-📱 <b>Подключить подписку</b>
+        device_text = texts.t(
+            "SUBSCRIPTION_CONNECT_DEVICE_MESSAGE",
+            """📱 <b>Подключить подписку</b>
 
 🔗 <b>Ссылка подписки:</b>
-<code>{subscription.subscription_url}</code>
+<code>{subscription_url}</code>
 
-💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:
-        """
-        
+💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
+        ).format(subscription_url=subscription.subscription_url)
+
         await callback.message.edit_text(
             device_text,
             reply_markup=get_device_selection_keyboard(db_user.language),
@@ -3266,40 +3670,65 @@ async def handle_device_guide(
     subscription = db_user.subscription
     
     if not subscription or not subscription.subscription_url:
-        await callback.answer("❌ Ссылка подписки недоступна", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_LINK_UNAVAILABLE", "❌ Ссылка подписки недоступна"),
+            show_alert=True,
+        )
         return
-    
+
     apps = get_apps_for_device(device_type, db_user.language)
-    
+
     if not apps:
-        await callback.answer("❌ Приложения для этого устройства не найдены", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_DEVICE_APPS_NOT_FOUND", "❌ Приложения для этого устройства не найдены"),
+            show_alert=True,
+        )
         return
-    
+
     featured_app = next((app for app in apps if app.get('isFeatured', False)), apps[0])
-    
-    guide_text = f"""
-📱 <b>Настройка для {get_device_name(device_type, db_user.language)}</b>
 
-🔗 <b>Ссылка подписки:</b>
-<code>{subscription.subscription_url}</code>
-
-📋 <b>Рекомендуемое приложение:</b> {featured_app['name']}
-
-<b>Шаг 1 - Установка:</b>
-{featured_app['installationStep']['description'][db_user.language]}
-
-<b>Шаг 2 - Добавление подписки:</b>
-{featured_app['addSubscriptionStep']['description'][db_user.language]}
-
-<b>Шаг 3 - Подключение:</b>
-{featured_app['connectAndUseStep']['description'][db_user.language]}
-
-💡 <b>Как подключить:</b>
-1. Установите приложение по ссылке выше
-2. Скопируйте ссылку подписки (нажмите на неё)
-3. Откройте приложение и вставьте ссылку
-4. Подключитесь к серверу
-"""
+    guide_text = (
+        texts.t(
+            "SUBSCRIPTION_DEVICE_GUIDE_TITLE",
+            "📱 <b>Настройка для {device_name}</b>",
+        ).format(device_name=get_device_name(device_type, db_user.language))
+        + "\n\n"
+        + texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
+        + f"\n<code>{subscription.subscription_url}</code>\n\n"
+        + texts.t(
+            "SUBSCRIPTION_DEVICE_FEATURED_APP",
+            "📋 <b>Рекомендуемое приложение:</b> {app_name}",
+        ).format(app_name=featured_app['name'])
+        + "\n\n"
+        + texts.t("SUBSCRIPTION_DEVICE_STEP_INSTALL_TITLE", "<b>Шаг 1 - Установка:</b>")
+        + f"\n{featured_app['installationStep']['description'][db_user.language]}\n\n"
+        + texts.t("SUBSCRIPTION_DEVICE_STEP_ADD_TITLE", "<b>Шаг 2 - Добавление подписки:</b>")
+        + f"\n{featured_app['addSubscriptionStep']['description'][db_user.language]}\n\n"
+        + texts.t("SUBSCRIPTION_DEVICE_STEP_CONNECT_TITLE", "<b>Шаг 3 - Подключение:</b>")
+        + f"\n{featured_app['connectAndUseStep']['description'][db_user.language]}\n\n"
+        + texts.t("SUBSCRIPTION_DEVICE_HOW_TO_TITLE", "💡 <b>Как подключить:</b>")
+        + "\n"
+        + "\n".join(
+            [
+                texts.t(
+                    "SUBSCRIPTION_DEVICE_HOW_TO_STEP1",
+                    "1. Установите приложение по ссылке выше",
+                ),
+                texts.t(
+                    "SUBSCRIPTION_DEVICE_HOW_TO_STEP2",
+                    "2. Скопируйте ссылку подписки (нажмите на неё)",
+                ),
+                texts.t(
+                    "SUBSCRIPTION_DEVICE_HOW_TO_STEP3",
+                    "3. Откройте приложение и вставьте ссылку",
+                ),
+                texts.t(
+                    "SUBSCRIPTION_DEVICE_HOW_TO_STEP4",
+                    "4. Подключитесь к серверу",
+                ),
+            ]
+        )
+    )
     
     await callback.message.edit_text(
         guide_text,
@@ -3325,14 +3754,20 @@ async def handle_app_selection(
     apps = get_apps_for_device(device_type, db_user.language)
     
     if not apps:
-        await callback.answer("❌ Приложения для этого устройства не найдены", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_DEVICE_APPS_NOT_FOUND", "❌ Приложения для этого устройства не найдены"),
+            show_alert=True,
+        )
         return
-    
-    app_text = f"""
-📱 <b>Приложения для {get_device_name(device_type, db_user.language)}</b>
 
-Выберите приложение для подключения:
-"""
+    app_text = (
+        texts.t(
+            "SUBSCRIPTION_APPS_TITLE",
+            "📱 <b>Приложения для {device_name}</b>",
+        ).format(device_name=get_device_name(device_type, db_user.language))
+        + "\n\n"
+        + texts.t("SUBSCRIPTION_APPS_PROMPT", "Выберите приложение для подключения:")
+    )
     
     await callback.message.edit_text(
         app_text,
@@ -3355,32 +3790,38 @@ async def handle_specific_app_guide(
     app = next((a for a in apps if a['id'] == app_id), None)
     
     if not app:
-        await callback.answer("❌ Приложение не найдено", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_APP_NOT_FOUND", "❌ Приложение не найдено"),
+            show_alert=True,
+        )
         return
-    
-    guide_text = f"""
-📱 <b>{app['name']} - {get_device_name(device_type, db_user.language)}</b>
 
-🔗 <b>Ссылка подписки:</b>
-<code>{subscription.subscription_url}</code>
+    guide_text = (
+        texts.t(
+            "SUBSCRIPTION_SPECIFIC_APP_TITLE",
+            "📱 <b>{app_name} - {device_name}</b>",
+        ).format(app_name=app['name'], device_name=get_device_name(device_type, db_user.language))
+        + "\n\n"
+        + texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
+        + f"\n<code>{subscription.subscription_url}</code>\n\n"
+        + texts.t("SUBSCRIPTION_DEVICE_STEP_INSTALL_TITLE", "<b>Шаг 1 - Установка:</b>")
+        + f"\n{app['installationStep']['description'][db_user.language]}\n\n"
+        + texts.t("SUBSCRIPTION_DEVICE_STEP_ADD_TITLE", "<b>Шаг 2 - Добавление подписки:</b>")
+        + f"\n{app['addSubscriptionStep']['description'][db_user.language]}\n\n"
+        + texts.t("SUBSCRIPTION_DEVICE_STEP_CONNECT_TITLE", "<b>Шаг 3 - Подключение:</b>")
+        + f"\n{app['connectAndUseStep']['description'][db_user.language]}"
+    )
 
-<b>Шаг 1 - Установка:</b>
-{app['installationStep']['description'][db_user.language]}
-
-<b>Шаг 2 - Добавление подписки:</b>
-{app['addSubscriptionStep']['description'][db_user.language]}
-
-<b>Шаг 3 - Подключение:</b>
-{app['connectAndUseStep']['description'][db_user.language]}
-"""
-    
     if 'additionalAfterAddSubscriptionStep' in app:
         additional = app['additionalAfterAddSubscriptionStep']
-        guide_text += f"""
-
-<b>{additional['title'][db_user.language]}:</b>
-{additional['description'][db_user.language]}
-"""
+        guide_text += (
+            "\n\n"
+            + texts.t(
+                "SUBSCRIPTION_ADDITIONAL_STEP_TITLE",
+                "<b>{title}:</b>",
+            ).format(title=additional['title'][db_user.language])
+            + f"\n{additional['description'][db_user.language]}"
+        )
     
     await callback.message.edit_text(
         guide_text,
@@ -3413,31 +3854,53 @@ async def handle_open_subscription_link(
     subscription = db_user.subscription
     
     if not subscription or not subscription.subscription_url:
-        await callback.answer("❌ Ссылка подписки недоступна", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_LINK_UNAVAILABLE", "❌ Ссылка подписки недоступна"),
+            show_alert=True,
+        )
         return
-    
-    link_text = f"""
-🔗 <b>Ссылка подписки:</b>
 
-<code>{subscription.subscription_url}</code>
+    link_text = (
+        texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
+        + "\n\n"
+        + f"<code>{subscription.subscription_url}</code>\n\n"
+        + texts.t("SUBSCRIPTION_LINK_USAGE_TITLE", "📱 <b>Как использовать:</b>")
+        + "\n"
+        + "\n".join(
+            [
+                texts.t(
+                    "SUBSCRIPTION_LINK_STEP1",
+                    "1. Нажмите на ссылку выше чтобы её скопировать",
+                ),
+                texts.t(
+                    "SUBSCRIPTION_LINK_STEP2",
+                    "2. Откройте ваше VPN приложение",
+                ),
+                texts.t(
+                    "SUBSCRIPTION_LINK_STEP3",
+                    "3. Найдите функцию \"Добавить подписку\" или \"Import\"",
+                ),
+                texts.t(
+                    "SUBSCRIPTION_LINK_STEP4",
+                    "4. Вставьте скопированную ссылку",
+                ),
+            ]
+        )
+        + "\n\n"
+        + texts.t(
+            "SUBSCRIPTION_LINK_HINT",
+            "💡 Если ссылка не скопировалась, выделите её вручную и скопируйте.",
+        )
+    )
 
-📱 <b>Как использовать:</b>
-1. Нажмите на ссылку выше чтобы её скопировать
-2. Откройте ваше VPN приложение
-3. Найдите функцию "Добавить подписку" или "Import"
-4. Вставьте скопированную ссылку
-
-💡 Если ссылка не скопировалась, выделите её вручную и скопируйте.
-"""
-    
     await callback.message.edit_text(
         link_text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="🔗 Подключиться", callback_data="subscription_connect")
+                InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), callback_data="subscription_connect")
             ],
             [
-                InlineKeyboardButton(text="⬅️ Назад", callback_data="menu_subscription")
+                InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
             ]
         ]),
         parse_mode="HTML"
@@ -4004,6 +4467,21 @@ def register_handlers(dp: Dispatcher):
         confirm_purchase,
         F.data == "subscription_confirm",
         SubscriptionStates.confirming_purchase
+    )
+
+    dp.callback_query.register(
+        resume_subscription_checkout,
+        F.data == "subscription_resume_checkout",
+    )
+
+    dp.callback_query.register(
+        return_to_saved_cart,
+        F.data == "return_to_saved_cart",
+    )
+
+    dp.callback_query.register(
+        clear_saved_cart,
+        F.data == "clear_saved_cart",
     )
     
     dp.callback_query.register(

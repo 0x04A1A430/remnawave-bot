@@ -59,10 +59,20 @@ class AdminStates(StatesGroup):
     editing_campaign_subscription_traffic = State()
     editing_campaign_subscription_devices = State()
     editing_campaign_subscription_servers = State()
-    
+
     waiting_for_broadcast_message = State()
     waiting_for_broadcast_media = State()
     confirming_broadcast = State()
+
+    creating_promo_group_name = State()
+    creating_promo_group_traffic_discount = State()
+    creating_promo_group_server_discount = State()
+    creating_promo_group_device_discount = State()
+
+    editing_promo_group_name = State()
+    editing_promo_group_traffic_discount = State()
+    editing_promo_group_server_discount = State()
+    editing_promo_group_device_discount = State()
     
     editing_squad_price = State()
     editing_traffic_price = State()

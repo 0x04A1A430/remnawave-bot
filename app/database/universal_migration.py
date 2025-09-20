@@ -74,6 +74,104 @@ async def check_column_exists(table_name: str, column_name: str) -> bool:
         logger.error(f"Ошибка проверки существования колонки {column_name}: {e}")
         return False
 
+
+async def check_constraint_exists(table_name: str, constraint_name: str) -> bool:
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "postgresql":
+                result = await conn.execute(
+                    text(
+                        """
+                    SELECT 1
+                    FROM information_schema.table_constraints
+                    WHERE table_schema = 'public'
+                      AND table_name = :table_name
+                      AND constraint_name = :constraint_name
+                """
+                    ),
+                    {"table_name": table_name, "constraint_name": constraint_name},
+                )
+                return result.fetchone() is not None
+
+            if db_type == "mysql":
+                result = await conn.execute(
+                    text(
+                        """
+                    SELECT 1
+                    FROM information_schema.table_constraints
+                    WHERE table_schema = DATABASE()
+                      AND table_name = :table_name
+                      AND constraint_name = :constraint_name
+                """
+                    ),
+                    {"table_name": table_name, "constraint_name": constraint_name},
+                )
+                return result.fetchone() is not None
+
+            if db_type == "sqlite":
+                result = await conn.execute(text(f"PRAGMA foreign_key_list({table_name})"))
+                rows = result.fetchall()
+                return any(row[5] == constraint_name for row in rows)
+
+            return False
+
+    except Exception as e:
+        logger.error(
+            f"Ошибка проверки существования ограничения {constraint_name} для {table_name}: {e}"
+        )
+        return False
+
+
+async def check_index_exists(table_name: str, index_name: str) -> bool:
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "postgresql":
+                result = await conn.execute(
+                    text(
+                        """
+                    SELECT 1
+                    FROM pg_indexes
+                    WHERE schemaname = 'public'
+                      AND tablename = :table_name
+                      AND indexname = :index_name
+                """
+                    ),
+                    {"table_name": table_name, "index_name": index_name},
+                )
+                return result.fetchone() is not None
+
+            if db_type == "mysql":
+                result = await conn.execute(
+                    text(
+                        """
+                    SELECT 1
+                    FROM information_schema.statistics
+                    WHERE table_schema = DATABASE()
+                      AND table_name = :table_name
+                      AND index_name = :index_name
+                """
+                    ),
+                    {"table_name": table_name, "index_name": index_name},
+                )
+                return result.fetchone() is not None
+
+            if db_type == "sqlite":
+                result = await conn.execute(text(f"PRAGMA index_list({table_name})"))
+                rows = result.fetchall()
+                return any(row[1] == index_name for row in rows)
+
+            return False
+
+    except Exception as e:
+        logger.error(
+            f"Ошибка проверки существования индекса {index_name} для {table_name}: {e}"
+        )
+        return False
+
 async def create_cryptobot_payments_table():
     table_exists = await check_table_exists('cryptobot_payments')
     if table_exists:
@@ -246,6 +344,276 @@ async def create_user_messages_table():
             
     except Exception as e:
         logger.error(f"Ошибка создания таблицы user_messages: {e}")
+        return False
+
+
+async def ensure_promo_groups_setup():
+    logger.info("=== НАСТРОЙКА ПРОМО ГРУПП ===")
+
+    try:
+        promo_table_exists = await check_table_exists("promo_groups")
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not promo_table_exists:
+                if db_type == "sqlite":
+                    await conn.execute(
+                        text(
+                            """
+                            CREATE TABLE IF NOT EXISTS promo_groups (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                name VARCHAR(255) NOT NULL,
+                                server_discount_percent INTEGER NOT NULL DEFAULT 0,
+                                traffic_discount_percent INTEGER NOT NULL DEFAULT 0,
+                                device_discount_percent INTEGER NOT NULL DEFAULT 0,
+                                is_default BOOLEAN NOT NULL DEFAULT 0,
+                                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                            )
+                        """
+                        )
+                    )
+                    await conn.execute(
+                        text(
+                            "CREATE UNIQUE INDEX IF NOT EXISTS uq_promo_groups_name ON promo_groups(name)"
+                        )
+                    )
+                elif db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            """
+                            CREATE TABLE IF NOT EXISTS promo_groups (
+                                id SERIAL PRIMARY KEY,
+                                name VARCHAR(255) NOT NULL,
+                                server_discount_percent INTEGER NOT NULL DEFAULT 0,
+                                traffic_discount_percent INTEGER NOT NULL DEFAULT 0,
+                                device_discount_percent INTEGER NOT NULL DEFAULT 0,
+                                is_default BOOLEAN NOT NULL DEFAULT FALSE,
+                                created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                                updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                                CONSTRAINT uq_promo_groups_name UNIQUE (name)
+                            )
+                        """
+                        )
+                    )
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text(
+                            """
+                            CREATE TABLE IF NOT EXISTS promo_groups (
+                                id INT AUTO_INCREMENT PRIMARY KEY,
+                                name VARCHAR(255) NOT NULL,
+                                server_discount_percent INT NOT NULL DEFAULT 0,
+                                traffic_discount_percent INT NOT NULL DEFAULT 0,
+                                device_discount_percent INT NOT NULL DEFAULT 0,
+                                is_default TINYINT(1) NOT NULL DEFAULT 0,
+                                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                                UNIQUE KEY uq_promo_groups_name (name)
+                            ) ENGINE=InnoDB
+                        """
+                        )
+                    )
+                else:
+                    logger.error(f"Неподдерживаемый тип БД для promo_groups: {db_type}")
+                    return False
+
+                logger.info("Создана таблица promo_groups")
+
+            if db_type == "postgresql" and not await check_constraint_exists(
+                "promo_groups", "uq_promo_groups_name"
+            ):
+                try:
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD CONSTRAINT uq_promo_groups_name UNIQUE (name)"
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Не удалось добавить уникальное ограничение uq_promo_groups_name: {e}"
+                    )
+
+            column_exists = await check_column_exists("users", "promo_group_id")
+
+            if not column_exists:
+                if db_type == "sqlite":
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN promo_group_id INTEGER"))
+                elif db_type == "postgresql":
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN promo_group_id INTEGER"))
+                elif db_type == "mysql":
+                    await conn.execute(text("ALTER TABLE users ADD COLUMN promo_group_id INT"))
+                else:
+                    logger.error(f"Неподдерживаемый тип БД для promo_group_id: {db_type}")
+                    return False
+
+                logger.info("Добавлена колонка users.promo_group_id")
+
+            index_exists = await check_index_exists("users", "ix_users_promo_group_id")
+
+            if not index_exists:
+                try:
+                    if db_type == "sqlite":
+                        await conn.execute(
+                            text("CREATE INDEX IF NOT EXISTS ix_users_promo_group_id ON users(promo_group_id)")
+                        )
+                    elif db_type == "postgresql":
+                        await conn.execute(
+                            text("CREATE INDEX IF NOT EXISTS ix_users_promo_group_id ON users(promo_group_id)")
+                        )
+                    elif db_type == "mysql":
+                        await conn.execute(
+                            text("CREATE INDEX ix_users_promo_group_id ON users(promo_group_id)")
+                        )
+                    logger.info("Создан индекс ix_users_promo_group_id")
+                except Exception as e:
+                    logger.warning(f"Не удалось создать индекс ix_users_promo_group_id: {e}")
+
+            default_group_name = "Базовый юзер"
+            default_group_id = None
+
+            result = await conn.execute(
+                text(
+                    "SELECT id, is_default FROM promo_groups WHERE name = :name LIMIT 1"
+                ),
+                {"name": default_group_name},
+            )
+            row = result.fetchone()
+
+            if row:
+                default_group_id = row[0]
+                if not row[1]:
+                    await conn.execute(
+                        text(
+                            "UPDATE promo_groups SET is_default = :is_default WHERE id = :group_id"
+                        ),
+                        {"is_default": True, "group_id": default_group_id},
+                    )
+            else:
+                result = await conn.execute(
+                    text(
+                        "SELECT id FROM promo_groups WHERE is_default = :is_default LIMIT 1"
+                    ),
+                    {"is_default": True},
+                )
+                existing_default = result.fetchone()
+
+                if existing_default:
+                    default_group_id = existing_default[0]
+                else:
+                    await conn.execute(
+                        text(
+                            """
+                            INSERT INTO promo_groups (
+                                name,
+                                server_discount_percent,
+                                traffic_discount_percent,
+                                device_discount_percent,
+                                is_default
+                            ) VALUES (:name, 0, 0, 0, :is_default)
+                        """
+                        ),
+                        {"name": default_group_name, "is_default": True},
+                    )
+
+                    result = await conn.execute(
+                        text(
+                            "SELECT id FROM promo_groups WHERE name = :name LIMIT 1"
+                        ),
+                        {"name": default_group_name},
+                    )
+                    row = result.fetchone()
+                    default_group_id = row[0] if row else None
+
+            if default_group_id is None:
+                logger.error("Не удалось определить идентификатор базовой промо-группы")
+                return False
+
+            await conn.execute(
+                text(
+                    """
+                    UPDATE users
+                    SET promo_group_id = :group_id
+                    WHERE promo_group_id IS NULL
+                """
+                ),
+                {"group_id": default_group_id},
+            )
+
+            if db_type == "postgresql":
+                constraint_exists = await check_constraint_exists(
+                    "users", "fk_users_promo_group_id_promo_groups"
+                )
+                if not constraint_exists:
+                    try:
+                        await conn.execute(
+                            text(
+                                """
+                                ALTER TABLE users
+                                ADD CONSTRAINT fk_users_promo_group_id_promo_groups
+                                FOREIGN KEY (promo_group_id)
+                                REFERENCES promo_groups(id)
+                                ON DELETE RESTRICT
+                            """
+                            )
+                        )
+                        logger.info("Добавлен внешний ключ users -> promo_groups")
+                    except Exception as e:
+                        logger.warning(
+                            f"Не удалось добавить внешний ключ users.promo_group_id: {e}"
+                        )
+
+                try:
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ALTER COLUMN promo_group_id SET NOT NULL"
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Не удалось сделать users.promo_group_id NOT NULL: {e}"
+                    )
+
+            elif db_type == "mysql":
+                constraint_exists = await check_constraint_exists(
+                    "users", "fk_users_promo_group_id_promo_groups"
+                )
+                if not constraint_exists:
+                    try:
+                        await conn.execute(
+                            text(
+                                """
+                                ALTER TABLE users
+                                ADD CONSTRAINT fk_users_promo_group_id_promo_groups
+                                FOREIGN KEY (promo_group_id)
+                                REFERENCES promo_groups(id)
+                                ON DELETE RESTRICT
+                            """
+                            )
+                        )
+                        logger.info("Добавлен внешний ключ users -> promo_groups")
+                    except Exception as e:
+                        logger.warning(
+                            f"Не удалось добавить внешний ключ users.promo_group_id: {e}"
+                        )
+
+                try:
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users MODIFY promo_group_id INT NOT NULL"
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Не удалось сделать users.promo_group_id NOT NULL: {e}"
+                    )
+
+            logger.info("✅ Промо группы настроены")
+            return True
+
+    except Exception as e:
+        logger.error(f"Ошибка настройки промо групп: {e}")
         return False
 
 async def add_welcome_text_is_enabled_column():
@@ -688,7 +1056,14 @@ async def run_universal_migration():
             logger.info("✅ Медиа поля в broadcast_history готовы")
         else:
             logger.warning("⚠️ Проблемы с добавлением медиа полей")
-        
+
+        logger.info("=== НАСТРОЙКА ПРОМО ГРУПП ===")
+        promo_groups_ready = await ensure_promo_groups_setup()
+        if promo_groups_ready:
+            logger.info("✅ Промо группы готовы")
+        else:
+            logger.warning("⚠️ Проблемы с настройкой промо групп")
+
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()
         if fk_updated:
@@ -756,10 +1131,12 @@ async def check_migration_status():
             "cryptobot_table": False,
             "user_messages_table": False,
             "welcome_texts_table": False,
-            "welcome_texts_is_enabled_column": False,  
-            "broadcast_history_media_fields": False, 
+            "welcome_texts_is_enabled_column": False,
+            "broadcast_history_media_fields": False,
             "subscription_duplicates": False,
-            "subscription_conversions_table": False
+            "subscription_conversions_table": False,
+            "promo_groups_table": False,
+            "users_promo_group_column": False
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -768,8 +1145,10 @@ async def check_migration_status():
         status["user_messages_table"] = await check_table_exists('user_messages')
         status["welcome_texts_table"] = await check_table_exists('welcome_texts')
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
-        
+        status["promo_groups_table"] = await check_table_exists('promo_groups')
+
         status["welcome_texts_is_enabled_column"] = await check_column_exists('welcome_texts', 'is_enabled')
+        status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
         
         media_fields_exist = (
             await check_column_exists('broadcast_history', 'has_media') and
@@ -797,9 +1176,11 @@ async def check_migration_status():
             "user_messages_table": "Таблица пользовательских сообщений",
             "welcome_texts_table": "Таблица приветственных текстов",
             "welcome_texts_is_enabled_column": "Поле is_enabled в welcome_texts",
-            "broadcast_history_media_fields": "Медиа поля в broadcast_history", 
+            "broadcast_history_media_fields": "Медиа поля в broadcast_history",
             "subscription_conversions_table": "Таблица конверсий подписок",
-            "subscription_duplicates": "Отсутствие дубликатов подписок"
+            "subscription_duplicates": "Отсутствие дубликатов подписок",
+            "promo_groups_table": "Таблица промо-групп",
+            "users_promo_group_column": "Колонка promo_group_id у пользователей"
         }
         
         for check_key, check_status in status.items():
