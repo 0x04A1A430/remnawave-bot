@@ -114,7 +114,10 @@ async def _prepare_subscription_summary(
         traffic_price_per_month = settings.get_traffic_price(traffic_gb)
         final_traffic_gb = traffic_gb
 
-    traffic_discount_percent = db_user.get_promo_discount("traffic")
+    traffic_discount_percent = db_user.get_promo_discount(
+        "traffic",
+        summary_data['period_days'],
+    )
     traffic_component = _apply_discount_to_monthly_component(
         traffic_price_per_month,
         traffic_discount_percent,
@@ -135,7 +138,10 @@ async def _prepare_subscription_summary(
             selected_countries_names.append(country['name'])
             server_monthly_prices.append(server_price_per_month)
 
-    servers_discount_percent = db_user.get_promo_discount("servers")
+    servers_discount_percent = db_user.get_promo_discount(
+        "servers",
+        summary_data['period_days'],
+    )
     total_countries_price = 0
     total_servers_discount = 0
     discounted_servers_price_per_month = 0
@@ -156,7 +162,10 @@ async def _prepare_subscription_summary(
     devices_selected = summary_data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
     additional_devices = max(0, devices_selected - settings.DEFAULT_DEVICE_LIMIT)
     devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-    devices_discount_percent = db_user.get_promo_discount("devices")
+    devices_discount_percent = db_user.get_promo_discount(
+        "devices",
+        summary_data['period_days'],
+    )
     devices_component = _apply_discount_to_monthly_component(
         devices_price_per_month,
         devices_discount_percent,
@@ -1702,18 +1711,27 @@ async def handle_extend_subscription(
             servers_price_per_month, _ = await subscription_service.get_countries_price_by_uuids(
                 subscription.connected_squads, db
             )
-            servers_discount_percent = db_user.get_promo_discount("servers")
+            servers_discount_percent = db_user.get_promo_discount(
+                "servers",
+                days,
+            )
             servers_discount_per_month = servers_price_per_month * servers_discount_percent // 100
             total_servers_price = (servers_price_per_month - servers_discount_per_month) * months_in_period
 
             additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-            devices_discount_percent = db_user.get_promo_discount("devices")
+            devices_discount_percent = db_user.get_promo_discount(
+                "devices",
+                days,
+            )
             devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
             total_devices_price = (devices_price_per_month - devices_discount_per_month) * months_in_period
 
             traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
-            traffic_discount_percent = db_user.get_promo_discount("traffic")
+            traffic_discount_percent = db_user.get_promo_discount(
+                "traffic",
+                days,
+            )
             traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
             total_traffic_price = (traffic_price_per_month - traffic_discount_per_month) * months_in_period
 
@@ -1912,7 +1930,10 @@ async def confirm_extend_subscription(
         servers_price_per_month, per_server_monthly_prices = await subscription_service.get_countries_price_by_uuids(
             subscription.connected_squads, db
         )
-        servers_discount_percent = db_user.get_promo_discount("servers")
+        servers_discount_percent = db_user.get_promo_discount(
+            "servers",
+            days,
+        )
         total_servers_price = 0
         total_servers_discount = 0
 
@@ -1929,13 +1950,19 @@ async def confirm_extend_subscription(
 
         additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-        devices_discount_percent = db_user.get_promo_discount("devices")
+        devices_discount_percent = db_user.get_promo_discount(
+            "devices",
+            days,
+        )
         devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
         discounted_devices_price_per_month = devices_price_per_month - devices_discount_per_month
         total_devices_price = discounted_devices_price_per_month * months_in_period
 
         traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
-        traffic_discount_percent = db_user.get_promo_discount("traffic")
+        traffic_discount_percent = db_user.get_promo_discount(
+            "traffic",
+            days,
+        )
         traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
         discounted_traffic_price_per_month = traffic_price_per_month - traffic_discount_per_month
         total_traffic_price = discounted_traffic_price_per_month * months_in_period
@@ -2549,7 +2576,10 @@ async def confirm_purchase(
                 countries_price_per_month += server_price_per_month
                 per_month_prices.append(server_price_per_month)
 
-        servers_discount_percent = db_user.get_promo_discount("servers")
+        servers_discount_percent = db_user.get_promo_discount(
+            "servers",
+            data['period_days'],
+        )
         total_servers_price = 0
         total_servers_discount = 0
         discounted_servers_price_per_month = 0
@@ -2592,7 +2622,10 @@ async def confirm_purchase(
             'total_devices_price', discounted_devices_price_per_month * months_in_period
         )
     else:
-        devices_discount_percent = db_user.get_promo_discount("devices")
+        devices_discount_percent = db_user.get_promo_discount(
+            "devices",
+            data['period_days'],
+        )
         from app.utils.pricing_utils import apply_percentage_discount
 
         discounted_devices_price_per_month, discount_per_month = apply_percentage_discount(
@@ -2623,7 +2656,10 @@ async def confirm_purchase(
             'total_traffic_price', discounted_traffic_price_per_month * months_in_period
         )
     else:
-        traffic_discount_percent = db_user.get_promo_discount("traffic")
+        traffic_discount_percent = db_user.get_promo_discount(
+            "traffic",
+            data['period_days'],
+        )
         from app.utils.pricing_utils import apply_percentage_discount
 
         discounted_traffic_price_per_month, discount_per_month = apply_percentage_discount(
