@@ -574,7 +574,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_promo_group_details, F.data.startswith("promo_group_manage_"))
     dp.callback_query.register(start_create_promo_group, F.data == "admin_promo_group_create")
     dp.callback_query.register(start_edit_promo_group, F.data.startswith("promo_group_edit_"))
-    dp.callback_query.register(request_delete_promo_group, F.data.startswith("promo_group_delete_"))
+    dp.callback_query.register(
+        request_delete_promo_group,
+        F.data.startswith("promo_group_delete_")
+        & ~F.data.startswith("promo_group_delete_confirm_"),
+    )
     dp.callback_query.register(
         delete_promo_group_confirmed,
         F.data.startswith("promo_group_delete_confirm_"),
