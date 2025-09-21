@@ -154,6 +154,7 @@
   "ADMIN_PROMO_GROUP_CREATE_DEVICES_PROMPT": "Enter device discount (0-100):",
   "ADMIN_PROMO_GROUP_INVALID_PERCENT": "Enter a number from 0 to 100.",
   "ADMIN_PROMO_GROUP_CREATED": "Promo group “{name}” created.",
+  "ADMIN_PROMO_GROUP_CREATED_BACK_BUTTON": "↩️ Back to promo groups",
   "ADMIN_PROMO_GROUP_EDIT_NAME_PROMPT": "Enter a new name (current: {name}):",
   "ADMIN_PROMO_GROUP_EDIT_TRAFFIC_PROMPT": "Enter new traffic discount (0-100):",
   "ADMIN_PROMO_GROUP_EDIT_SERVERS_PROMPT": "Enter new server discount (0-100):",
