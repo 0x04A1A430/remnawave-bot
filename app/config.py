@@ -646,12 +646,42 @@ class Settings(BaseSettings):
             {"gb": 0, "price": self.PRICE_TRAFFIC_UNLIMITED, "enabled": True}, 
         ]
     
-    def get_traffic_price(self, gb: int) -> int:
+    def get_traffic_price(self, gb: Optional[int]) -> int:
         packages = self.get_traffic_packages()
+        enabled_packages = [pkg for pkg in packages if pkg["enabled"]]
 
-        for package in packages:
-            if package["gb"] == gb and package["enabled"]:
+        if not enabled_packages:
+            return 0
+
+        if gb is None:
+            gb = 0
+
+        for package in enabled_packages:
+            if package["gb"] == gb:
                 return package["price"]
+
+        unlimited_package = next((pkg for pkg in enabled_packages if pkg["gb"] == 0), None)
+
+        if gb <= 0:
+            return unlimited_package["price"] if unlimited_package else 0
+
+        finite_packages = [pkg for pkg in enabled_packages if pkg["gb"] > 0]
+
+        if not finite_packages:
+            return unlimited_package["price"] if unlimited_package else 0
+
+        max_package = max(finite_packages, key=lambda x: x["gb"])
+
+        if gb >= max_package["gb"]:
+            return unlimited_package["price"] if unlimited_package else max_package["price"]
+
+        suitable_packages = [pkg for pkg in finite_packages if pkg["gb"] >= gb]
+
+        if suitable_packages:
+            nearest_package = min(suitable_packages, key=lambda x: x["gb"])
+            return nearest_package["price"]
+
+        return unlimited_package["price"] if unlimited_package else 0
 
     def _clean_support_contact(self) -> str:
         return (self.SUPPORT_USERNAME or "").strip()
