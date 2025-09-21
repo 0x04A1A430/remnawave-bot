@@ -2100,11 +2100,15 @@ async def confirm_extend_subscription(
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о продлении: {e}")
 
+        success_message = (
+            "✅ Подписка успешно продлена!\n\n"
+            f"⏰ Добавлено: {days} дней\n"
+            f"Действует до: {subscription.end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"💰 Списано: {texts.format_price(price)}"
+        )
+
         await callback.message.edit_text(
-            f"✅ Подписка успешно продлена!\n\n",
-            f"⏰ Добавлено: {days} дней\n",
-            f"Действует до: {subscription.end_date.strftime('%d.%m.%Y %H:%M')}\n\n",
-            f"💰 Списано: {texts.format_price(price)}",
+            success_message,
             reply_markup=get_back_keyboard(db_user.language)
         )
 
