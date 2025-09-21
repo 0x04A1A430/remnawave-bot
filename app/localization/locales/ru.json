@@ -42,6 +42,7 @@
   "ADMIN_PROMO_GROUP_CREATE_DEVICES_PROMPT": "Введите скидку на устройства (0-100):",
   "ADMIN_PROMO_GROUP_INVALID_PERCENT": "Введите число от 0 до 100.",
   "ADMIN_PROMO_GROUP_CREATED": "Промогруппа «{name}» создана.",
+  "ADMIN_PROMO_GROUP_CREATED_BACK_BUTTON": "↩️ К промогруппам",
   "ADMIN_PROMO_GROUP_EDIT_NAME_PROMPT": "Введите новое название промогруппы (текущее: {name}):",
   "ADMIN_PROMO_GROUP_EDIT_TRAFFIC_PROMPT": "Введите новую скидку на трафик (0-100):",
   "ADMIN_PROMO_GROUP_EDIT_SERVERS_PROMPT": "Введите новую скидку на серверы (0-100):",
