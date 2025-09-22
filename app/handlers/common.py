@@ -28,6 +28,26 @@ async def handle_unknown_callback(
     logger.warning(f"Неизвестный callback: {callback.data} от пользователя {callback.from_user.id}")
 
 
+async def handle_noop(
+    callback: types.CallbackQuery,
+    db_user: User
+):
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
+
+async def handle_current_page(
+    callback: types.CallbackQuery,
+    db_user: User
+):
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+
+
 async def handle_cancel(
     callback: types.CallbackQuery,
     state: FSMContext,
@@ -83,9 +103,22 @@ def register_handlers(dp: Dispatcher):
         show_rules,
         F.data == "menu_rules"
     )
+
+    # No-op utility handlers used in many keyboards
+    dp.callback_query.register(
+        handle_noop,
+        F.data == "noop"
+    )
+    dp.callback_query.register(
+        handle_current_page,
+        F.data == "current_page"
+    )
     
     dp.callback_query.register(
         handle_cancel,
         F.data.in_(["cancel", "subscription_cancel"])
     )
+
+    # Самый последний: ловим любые неизвестные текстовые сообщения
+    dp.message.register(handle_unknown_message)
     

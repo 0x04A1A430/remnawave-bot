@@ -104,6 +104,18 @@ class AdminStates(StatesGroup):
 class SupportStates(StatesGroup):
     waiting_for_message = State()
 
+class TicketStates(StatesGroup):
+    waiting_for_title = State()
+    waiting_for_message = State()
+    waiting_for_reply = State()
+
+class AdminTicketStates(StatesGroup):
+    waiting_for_reply = State()
+    waiting_for_block_duration = State()
+
+class SupportSettingsStates(StatesGroup):
+    waiting_for_desc = State()
+
 class AutoPayStates(StatesGroup):
     setting_autopay_days = State()
     confirming_autopay_toggle = State()
