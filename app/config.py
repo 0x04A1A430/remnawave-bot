@@ -13,10 +13,14 @@ class Settings(BaseSettings):
     BOT_TOKEN: str
     ADMIN_IDS: str = ""
     SUPPORT_USERNAME: str = "@support"
+    SUPPORT_MENU_ENABLED: bool = True
+    SUPPORT_SYSTEM_MODE: str = "both"  # one of: tickets, contact, both
+    SUPPORT_MENU_ENABLED: bool = True
 
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
     ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
     ADMIN_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
+    ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID: Optional[int] = None
 
     CHANNEL_SUB_ID: Optional[str] = None
     CHANNEL_LINK: Optional[str] = None
@@ -740,6 +744,16 @@ class Settings(BaseSettings):
 
     def get_support_contact_display_html(self) -> str:
         return html.escape(self.get_support_contact_display())
+    
+    def get_support_system_mode(self) -> str:
+        mode = (self.SUPPORT_SYSTEM_MODE or "both").strip().lower()
+        return mode if mode in {"tickets", "contact", "both"} else "both"
+    
+    def is_support_tickets_enabled(self) -> bool:
+        return self.get_support_system_mode() in {"tickets", "both"}
+    
+    def is_support_contact_enabled(self) -> bool:
+        return self.get_support_system_mode() in {"contact", "both"}
         
         
         enabled_packages = [pkg for pkg in packages if pkg["enabled"]]

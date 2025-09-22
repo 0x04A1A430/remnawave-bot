@@ -772,6 +772,49 @@ async def add_media_fields_to_broadcast_history():
         logger.error(f"Ошибка при добавлении полей медиа в broadcast_history: {e}")
         return False
 
+
+async def add_ticket_reply_block_columns():
+    try:
+        col_perm_exists = await check_column_exists('tickets', 'user_reply_block_permanent')
+        col_until_exists = await check_column_exists('tickets', 'user_reply_block_until')
+
+        if col_perm_exists and col_until_exists:
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not col_perm_exists:
+                if db_type == 'sqlite':
+                    alter_sql = "ALTER TABLE tickets ADD COLUMN user_reply_block_permanent BOOLEAN DEFAULT 0 NOT NULL"
+                elif db_type == 'postgresql':
+                    alter_sql = "ALTER TABLE tickets ADD COLUMN user_reply_block_permanent BOOLEAN DEFAULT FALSE NOT NULL"
+                elif db_type == 'mysql':
+                    alter_sql = "ALTER TABLE tickets ADD COLUMN user_reply_block_permanent BOOLEAN DEFAULT FALSE NOT NULL"
+                else:
+                    logger.error(f"Неподдерживаемый тип БД для добавления user_reply_block_permanent: {db_type}")
+                    return False
+                await conn.execute(text(alter_sql))
+                logger.info("✅ Добавлена колонка tickets.user_reply_block_permanent")
+
+            if not col_until_exists:
+                if db_type == 'sqlite':
+                    alter_sql = "ALTER TABLE tickets ADD COLUMN user_reply_block_until DATETIME NULL"
+                elif db_type == 'postgresql':
+                    alter_sql = "ALTER TABLE tickets ADD COLUMN user_reply_block_until TIMESTAMP NULL"
+                elif db_type == 'mysql':
+                    alter_sql = "ALTER TABLE tickets ADD COLUMN user_reply_block_until DATETIME NULL"
+                else:
+                    logger.error(f"Неподдерживаемый тип БД для добавления user_reply_block_until: {db_type}")
+                    return False
+                await conn.execute(text(alter_sql))
+                logger.info("✅ Добавлена колонка tickets.user_reply_block_until")
+
+            return True
+    except Exception as e:
+        logger.error(f"Ошибка добавления колонок блокировок в tickets: {e}")
+        return False
+
 async def fix_foreign_keys_for_user_deletion():
     try:
         async with engine.begin() as conn:
@@ -1056,6 +1099,13 @@ async def run_universal_migration():
             logger.info("✅ Медиа поля в broadcast_history готовы")
         else:
             logger.warning("⚠️ Проблемы с добавлением медиа полей")
+
+        logger.info("=== ДОБАВЛЕНИЕ ПОЛЕЙ БЛОКИРОВКИ В TICKETS ===")
+        tickets_block_cols_added = await add_ticket_reply_block_columns()
+        if tickets_block_cols_added:
+            logger.info("✅ Поля блокировок в tickets готовы")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением полей блокировок в tickets")
 
         logger.info("=== НАСТРОЙКА ПРОМО ГРУПП ===")
         promo_groups_ready = await ensure_promo_groups_setup()

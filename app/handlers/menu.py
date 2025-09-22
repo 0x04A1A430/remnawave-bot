@@ -15,6 +15,7 @@ from app.services.subscription_checkout_service import (
     has_subscription_checkout_draft,
     should_offer_checkout_resume,
 )
+from app.utils.photo_message import edit_or_answer_photo
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +42,10 @@ async def show_main_menu(
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
 
-    await callback.message.edit_text(
-        menu_text,
-        reply_markup=get_main_menu_keyboard(
+    await edit_or_answer_photo(
+        callback=callback,
+        caption=menu_text,
+        keyboard=get_main_menu_keyboard(
             language=db_user.language,
             is_admin=settings.is_admin(db_user.telegram_id),
             has_had_paid_subscription=db_user.has_had_paid_subscription,
@@ -53,7 +55,7 @@ async def show_main_menu(
             subscription=db_user.subscription,
             show_resume_checkout=show_resume_checkout,
         ),
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -112,9 +114,10 @@ async def handle_back_to_menu(
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
 
-    await callback.message.edit_text(
-        menu_text,
-        reply_markup=get_main_menu_keyboard(
+    await edit_or_answer_photo(
+        callback=callback,
+        caption=menu_text,
+        keyboard=get_main_menu_keyboard(
             language=db_user.language,
             is_admin=settings.is_admin(db_user.telegram_id),
             has_had_paid_subscription=db_user.has_had_paid_subscription,
@@ -124,7 +127,7 @@ async def handle_back_to_menu(
             subscription=db_user.subscription,
             show_resume_checkout=show_resume_checkout,
         ),
-        parse_mode="HTML"
+        parse_mode="HTML",
     )
     await callback.answer()
 
