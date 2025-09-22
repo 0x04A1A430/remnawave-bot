@@ -66,6 +66,8 @@ def format_period_description(days: int, language: str = "ru") -> str:
     months = calculate_months_from_days(days)
     
     if language == "ru":
+        if days == 14:
+            return "14 дней"
         if days == 30:
             return "1 месяц"
         elif days == 60:
@@ -79,7 +81,9 @@ def format_period_description(days: int, language: str = "ru") -> str:
         else:
             month_word = "месяц" if months == 1 else ("месяца" if 2 <= months <= 4 else "месяцев")
             return f"{days} дней ({months} {month_word})"
-    else: 
+    else:
+        if days == 14:
+            return "14 days"
         month_word = "month" if months == 1 else "months"
         return f"{days} days ({months} {month_word})"
 
