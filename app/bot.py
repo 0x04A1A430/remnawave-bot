@@ -15,8 +15,8 @@ from app.services.maintenance_service import maintenance_service
 from app.utils.cache import cache 
 
 from app.handlers import (
-    start, menu, subscription, balance, promocode, 
-    referral, support, common, tickets
+    start, menu, subscription, balance, promocode,
+    referral, support, server_status, common, tickets
 )
 from app.handlers.admin import (
     main as admin_main,
@@ -118,6 +118,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     promocode.register_handlers(dp)
     referral.register_handlers(dp)
     support.register_handlers(dp)
+    server_status.register_handlers(dp)
     tickets.register_handlers(dp)
     admin_main.register_handlers(dp)
     admin_users.register_handlers(dp)

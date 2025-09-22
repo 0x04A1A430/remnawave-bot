@@ -872,11 +872,17 @@ async def start_subscription_purchase(
         _build_subscription_period_prompt(db_user, texts),
         reply_markup=get_subscription_period_keyboard(db_user.language)
     )
-    
+
+    subscription = getattr(db_user, 'subscription', None)
+    initial_devices = settings.DEFAULT_DEVICE_LIMIT
+
+    if subscription and getattr(subscription, 'device_limit', None):
+        initial_devices = max(settings.DEFAULT_DEVICE_LIMIT, subscription.device_limit)
+
     initial_data = {
         'period_days': None,
         'countries': [],
-        'devices': settings.DEFAULT_DEVICE_LIMIT, 
+        'devices': initial_devices,
         'total_price': 0
     }
     
@@ -2357,9 +2363,11 @@ async def select_period(
             data['countries'] = [available_countries[0]['uuid']] if available_countries else []
             await state.set_data(data)
             
+            selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+
             await callback.message.edit_text(
                 texts.SELECT_DEVICES,
-                reply_markup=get_devices_keyboard(1, db_user.language)
+                reply_markup=get_devices_keyboard(selected_devices, db_user.language)
             )
             await state.set_state(SubscriptionStates.selecting_devices)
     
@@ -2511,9 +2519,11 @@ async def select_traffic(
         data['countries'] = [available_countries[0]['uuid']] if available_countries else []
         await state.set_data(data)
         
+        selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+
         await callback.message.edit_text(
             texts.SELECT_DEVICES,
-            reply_markup=get_devices_keyboard(1, db_user.language)
+            reply_markup=get_devices_keyboard(selected_devices, db_user.language)
         )
         await state.set_state(SubscriptionStates.selecting_devices)
     
@@ -2569,9 +2579,11 @@ async def countries_continue(
         await callback.answer("⚠️ Выберите хотя бы одну страну!", show_alert=True)
         return
     
+    selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+
     await callback.message.edit_text(
         texts.SELECT_DEVICES,
-        reply_markup=get_devices_keyboard(1, db_user.language)
+        reply_markup=get_devices_keyboard(selected_devices, db_user.language)
     )
     
     await state.set_state(SubscriptionStates.selecting_devices)
