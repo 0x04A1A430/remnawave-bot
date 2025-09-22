@@ -21,8 +21,10 @@ SERVER_STATUS:
   PAGINATION: "Page {current} of {total}"
   PREV_PAGE: "⬅️ Back"
   NEXT_PAGE: "Next ➡️"
+  REFRESH: "🔄 Refresh"
   ERROR_SHORT: "Failed to fetch data"
   NOT_CONFIGURED: "Feature is not available."
+  UPDATED_AT: "⏱ Updated at: {time}"
 
 RULES_TEXT: |
   Remnawave service rules:
