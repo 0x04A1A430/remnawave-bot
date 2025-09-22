@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import User, ReferralEarning, Transaction, TransactionType
-from app.database.crud.campaign import get_campaign_registrations_for_users
 
 logger = logging.getLogger(__name__)
 
@@ -165,9 +164,6 @@ async def get_detailed_referral_list(db: AsyncSession, user_id: int, limit: int 
             .limit(limit)
         )
         referrals = referrals_result.scalars().all()
-
-        referral_ids = [referral.id for referral in referrals]
-        campaign_registrations = await get_campaign_registrations_for_users(db, referral_ids)
         
         total_count_result = await db.execute(
             select(func.count(User.id)).where(User.referred_by_id == user_id)
@@ -205,11 +201,6 @@ async def get_detailed_referral_list(db: AsyncSession, user_id: int, limit: int 
             if referral.last_activity:
                 days_since_activity = (datetime.utcnow() - referral.last_activity).days
             
-            registration = campaign_registrations.get(referral.id)
-            campaign_name = None
-            if registration and registration.campaign:
-                campaign_name = registration.campaign.name
-
             detailed_referrals.append({
                 'id': referral.id,
                 'telegram_id': referral.telegram_id,
@@ -223,9 +214,7 @@ async def get_detailed_referral_list(db: AsyncSession, user_id: int, limit: int 
                 'topups_count': topups_count,
                 'days_since_registration': days_since_registration,
                 'days_since_activity': days_since_activity,
-                'status': 'active' if days_since_activity is not None and days_since_activity <= 30 else 'inactive',
-                'campaign_name': campaign_name,
-                'registration_source': 'campaign' if campaign_name else 'referral'
+                'status': 'active' if days_since_activity is not None and days_since_activity <= 30 else 'inactive'
             })
         
         return {

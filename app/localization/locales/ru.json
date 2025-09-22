@@ -368,7 +368,6 @@
   "REFERRAL_LIST_ITEM_REGISTERED": "   📅 Регистрация: {days} дн. назад",
   "REFERRAL_LIST_ITEM_ACTIVITY": "   🕐 Активность: {days} дн. назад",
   "REFERRAL_LIST_ITEM_ACTIVITY_LONG_AGO": "   🕐 Активность: давно",
-  "REFERRAL_LIST_ITEM_SOURCE_CAMPAIGN": "   📣 Источник: рекламная кампания «{name}» (не прямой реферал)",
   "REFERRAL_LIST_PREV_PAGE": "⬅️ Назад",
   "REFERRAL_LIST_NEXT_PAGE": "Вперед ➡️",
   "REFERRAL_ANALYTICS_TITLE": "📊 <b>Аналитика рефералов</b>",
