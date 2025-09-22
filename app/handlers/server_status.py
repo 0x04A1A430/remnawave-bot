@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import List, Tuple
 
 from aiogram import Dispatcher, F, types
@@ -105,7 +106,16 @@ def _build_status_message(
         offline=len(offline_servers),
     )
 
-    lines.extend(["", summary, ""])
+    updated_at = datetime.now().strftime("%H:%M:%S")
+
+    lines.extend(
+        [
+            "",
+            summary,
+            texts.t("SERVER_STATUS_UPDATED_AT", "⏱ Обновлено: {time}").format(time=updated_at),
+            "",
+        ]
+    )
 
     if current_online:
         lines.append(texts.t("SERVER_STATUS_AVAILABLE", "✅ <b>Доступны</b>"))
@@ -183,7 +193,8 @@ def _format_server_lines(
 
         name = server.display_name or server.name
         flag_prefix = f"{server.flag} " if server.flag else ""
-        lines.append(f"> {flag_prefix}{name} — {latency_text}")
+        server_line = f"{flag_prefix}{name} — {latency_text}"
+        lines.append(f"<blockquote>{server_line}</blockquote>")
 
     return lines
 
