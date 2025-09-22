@@ -9,6 +9,12 @@ from sqlalchemy.orm import selectinload
 from app.database.models import (
     AdvertisingCampaign,
     AdvertisingCampaignRegistration,
+    Subscription,
+    SubscriptionConversion,
+    SubscriptionStatus,
+    Transaction,
+    TransactionType,
+    User,
 )
 
 logger = logging.getLogger(__name__)
@@ -157,6 +163,19 @@ async def delete_campaign(db: AsyncSession, campaign: AdvertisingCampaign) -> bo
     return True
 
 
+async def get_campaign_registration_by_user(
+    db: AsyncSession,
+    user_id: int,
+) -> Optional[AdvertisingCampaignRegistration]:
+    result = await db.execute(
+        select(AdvertisingCampaignRegistration)
+        .options(selectinload(AdvertisingCampaignRegistration.campaign))
+        .where(AdvertisingCampaignRegistration.user_id == user_id)
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def record_campaign_registration(
     db: AsyncSession,
     *,
@@ -197,6 +216,11 @@ async def get_campaign_statistics(
     db: AsyncSession,
     campaign_id: int,
 ) -> Dict[str, Optional[int]]:
+    registrations_query = select(AdvertisingCampaignRegistration.user_id).where(
+        AdvertisingCampaignRegistration.campaign_id == campaign_id
+    )
+    registrations_subquery = registrations_query.subquery()
+
     result = await db.execute(
         select(
             func.count(AdvertisingCampaignRegistration.id),
@@ -217,11 +241,80 @@ async def get_campaign_statistics(
         )
     )
 
+    deposits_result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+            Transaction.user_id.in_(select(registrations_subquery.c.user_id)),
+            Transaction.type == TransactionType.DEPOSIT.value,
+            Transaction.is_completed.is_(True),
+        )
+    )
+    total_revenue = deposits_result.scalar() or 0
+
+    trials_result = await db.execute(
+        select(func.count(func.distinct(Subscription.user_id))).where(
+            Subscription.user_id.in_(select(registrations_subquery.c.user_id)),
+            Subscription.is_trial.is_(True),
+        )
+    )
+    trial_users_count = trials_result.scalar() or 0
+
+    active_trials_result = await db.execute(
+        select(func.count(func.distinct(Subscription.user_id))).where(
+            Subscription.user_id.in_(select(registrations_subquery.c.user_id)),
+            Subscription.is_trial.is_(True),
+            Subscription.status == SubscriptionStatus.ACTIVE.value,
+        )
+    )
+    active_trials_count = active_trials_result.scalar() or 0
+
+    conversions_result = await db.execute(
+        select(func.count(func.distinct(SubscriptionConversion.user_id))).where(
+            SubscriptionConversion.user_id.in_(select(registrations_subquery.c.user_id))
+        )
+    )
+    conversion_count = conversions_result.scalar() or 0
+
+    paid_users_result = await db.execute(
+        select(func.count(User.id)).where(
+            User.id.in_(select(registrations_subquery.c.user_id)),
+            User.has_had_paid_subscription.is_(True),
+        )
+    )
+    paid_users_count = paid_users_result.scalar() or 0
+
+    avg_first_payment_result = await db.execute(
+        select(func.coalesce(func.avg(SubscriptionConversion.first_payment_amount_kopeks), 0)).where(
+            SubscriptionConversion.user_id.in_(select(registrations_subquery.c.user_id))
+        )
+    )
+    avg_first_payment = int(avg_first_payment_result.scalar() or 0)
+
+    conversion_rate = 0.0
+    if count:
+        conversion_rate = round((paid_users_count / count) * 100, 1)
+
+    trial_conversion_rate = 0.0
+    if trial_users_count:
+        trial_conversion_rate = round((conversion_count / trial_users_count) * 100, 1)
+
+    avg_revenue_per_user = 0
+    if count:
+        avg_revenue_per_user = int(total_revenue / count)
+
     return {
         "registrations": count or 0,
         "balance_issued": total_balance or 0,
         "subscription_issued": subscription_count_result.scalar() or 0,
         "last_registration": last_registration,
+        "total_revenue_kopeks": total_revenue,
+        "trial_users_count": trial_users_count,
+        "active_trials_count": active_trials_count,
+        "conversion_count": conversion_count,
+        "paid_users_count": paid_users_count,
+        "conversion_rate": conversion_rate,
+        "trial_conversion_rate": trial_conversion_rate,
+        "avg_revenue_per_user_kopeks": avg_revenue_per_user,
+        "avg_first_payment_kopeks": avg_first_payment,
     }
 
 
