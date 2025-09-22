@@ -10,6 +10,7 @@ from app.database.crud.user import (
     get_users_count, get_users_statistics, get_inactive_users,
     add_user_balance, subtract_user_balance, update_user, delete_user
 )
+from app.database.crud.campaign import get_campaign_registration_by_user
 from app.database.crud.promo_group import get_promo_group_by_id
 from app.database.crud.transaction import get_user_transactions_count
 from app.database.crud.subscription import get_subscription_by_user_id
@@ -91,13 +92,15 @@ class UserService:
             
             subscription = await get_subscription_by_user_id(db, user_id)
             transactions_count = await get_user_transactions_count(db, user_id)
-            
+            campaign_registration = await get_campaign_registration_by_user(db, user_id)
+
             return {
                 "user": user,
                 "subscription": subscription,
                 "transactions_count": transactions_count,
                 "is_admin": settings.is_admin(user.telegram_id),
-                "registration_days": (datetime.utcnow() - user.created_at).days
+                "registration_days": (datetime.utcnow() - user.created_at).days,
+                "campaign_registration": campaign_registration,
             }
             
         except Exception as e:

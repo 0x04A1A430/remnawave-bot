@@ -368,6 +368,7 @@
   "REFERRAL_LIST_ITEM_REGISTERED": "   📅 Registered: {days} days ago",
   "REFERRAL_LIST_ITEM_ACTIVITY": "   🕐 Activity: {days} days ago",
   "REFERRAL_LIST_ITEM_ACTIVITY_LONG_AGO": "   🕐 Activity: long ago",
+  "REFERRAL_LIST_ITEM_SOURCE_CAMPAIGN": "   📣 Source: advertising campaign “{name}” (not a direct referral)",
   "REFERRAL_LIST_PREV_PAGE": "⬅️ Back",
   "REFERRAL_LIST_NEXT_PAGE": "Next ➡️",
   "REFERRAL_ANALYTICS_TITLE": "📊 <b>Referral analytics</b>",

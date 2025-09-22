@@ -333,6 +333,24 @@ async def show_campaign_detail(
         f"• Выдано баланса: <b>{texts.format_price(stats['balance_issued'])}</b>"
     )
     text.append(f"• Выдано подписок: <b>{stats['subscription_issued']}</b>")
+    text.append(f"• Транзакций: <b>{stats['transactions_count']}</b>")
+    text.append(
+        f"• Доход кампании: <b>{texts.format_price(stats['revenue_kopeks'])}</b>"
+    )
+    text.append(
+        f"• Платящих пользователей: <b>{stats['paying_users']}</b>"
+    )
+    text.append(f"• Взяли триал: <b>{stats['trial_users']}</b>")
+    text.append(f"• Конверсия в оплату: <b>{stats['conversion_rate']}%</b>")
+    text.append(
+        f"• Конверсия триала: <b>{stats['trial_conversion_rate']}%</b>"
+    )
+    text.append(
+        f"• Средний доход на регистрацию: <b>{texts.format_price(stats['avg_revenue_per_user'])}</b>"
+    )
+    text.append(
+        f"• Средний доход на платящего: <b>{texts.format_price(stats['avg_revenue_per_paying_user'])}</b>"
+    )
     if stats["last_registration"]:
         text.append(
             f"• Последняя: {stats['last_registration'].strftime('%d.%m.%Y %H:%M')}"
@@ -1176,6 +1194,18 @@ async def show_campaign_stats(
     text.append(f"Регистраций: <b>{stats['registrations']}</b>")
     text.append(f"Выдано баланса: <b>{texts.format_price(stats['balance_issued'])}</b>")
     text.append(f"Выдано подписок: <b>{stats['subscription_issued']}</b>")
+    text.append(f"Транзакций: <b>{stats['transactions_count']}</b>")
+    text.append(f"Доход кампании: <b>{texts.format_price(stats['revenue_kopeks'])}</b>")
+    text.append(f"Платящих пользователей: <b>{stats['paying_users']}</b>")
+    text.append(f"Взяли триал: <b>{stats['trial_users']}</b>")
+    text.append(f"Конверсия в оплату: <b>{stats['conversion_rate']}%</b>")
+    text.append(f"Конверсия триала: <b>{stats['trial_conversion_rate']}%</b>")
+    text.append(
+        f"Средний доход на регистрацию: <b>{texts.format_price(stats['avg_revenue_per_user'])}</b>"
+    )
+    text.append(
+        f"Средний доход на платящего: <b>{texts.format_price(stats['avg_revenue_per_paying_user'])}</b>"
+    )
     if stats["last_registration"]:
         text.append(
             f"Последняя регистрация: {stats['last_registration'].strftime('%d.%m.%Y %H:%M')}"

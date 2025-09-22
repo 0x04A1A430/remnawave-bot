@@ -17,6 +17,7 @@ from app.keyboards.admin import (
 from app.localization.texts import get_texts
 from app.services.user_service import UserService
 from app.database.crud.promo_group import get_promo_groups_with_counts
+from app.database.crud.campaign import get_campaign_registrations_for_users
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
 from app.services.remnawave_service import RemnaWaveService
@@ -427,6 +428,7 @@ async def _render_user_subscription_overview(
 
     user = profile["user"]
     subscription = profile["subscription"]
+    campaign_registration = profile.get("campaign_registration")
 
     text = "📱 <b>Подписка и настройки пользователя</b>\n\n"
     text += f"👤 {user.full_name} (ID: <code>{user.telegram_id}</code>)\n\n"
@@ -1236,16 +1238,49 @@ async def show_user_statistics(
         text += f"• Отсутствует\n"
     
     text += f"\n<b>Реферальная программа:</b>\n"
-    
+
+    registration_lines = []
+
     if user.referred_by_id:
         referrer = await get_user_by_id(db, user.referred_by_id)
         if referrer:
-            text += f"• Пришел по реферальной ссылке от <b>{referrer.full_name}</b>\n"
+            registration_lines.append(
+                f"• Пришел по реферальной ссылке от <b>{referrer.full_name}</b>"
+            )
         else:
-            text += f"• Пришел по реферальной ссылке (реферер не найден)\n"
-    else:
-        text += f"• Прямая регистрация\n"
-    
+            registration_lines.append(
+                "• Пришел по реферальной ссылке (реферер не найден)"
+            )
+
+    if campaign_registration and campaign_registration.campaign:
+        campaign = campaign_registration.campaign
+        registration_lines.append(
+            f"• Пришел через рекламную кампанию <b>{campaign.name}</b> (не прямая регистрация)"
+        )
+        registration_lines.append(
+            f"• Участие в кампании: {format_datetime(campaign_registration.created_at)}"
+        )
+
+        if campaign_registration.bonus_type == "balance":
+            registration_lines.append(
+                f"• Бонус кампании: {settings.format_price(campaign_registration.balance_bonus_kopeks)} на баланс"
+            )
+        elif campaign_registration.bonus_type == "subscription":
+            bonus_parts = []
+            if campaign_registration.subscription_duration_days:
+                bonus_parts.append(
+                    f"{campaign_registration.subscription_duration_days} дн."
+                )
+            registration_lines.append(
+                "• Бонус кампании: Подписка"
+                + (f" ({', '.join(bonus_parts)})" if bonus_parts else "")
+            )
+
+    if not registration_lines:
+        registration_lines.append("• Прямая регистрация")
+
+    text += "\n".join(registration_lines) + "\n"
+
     text += f"• Реферальный код: <code>{user.referral_code}</code>\n\n"
     
     if referral_stats['invited_count'] > 0:
@@ -1257,11 +1292,15 @@ async def show_user_statistics(
         
         if referral_stats['referrals_detail']:
             text += f"\n<b>Детали по рефералам:</b>\n"
-            for detail in referral_stats['referrals_detail'][:5]: 
+            for detail in referral_stats['referrals_detail'][:5]:
                 referral_name = detail['referral_name']
                 earned = settings.format_price(detail['total_earned_kopeks'])
                 status = "🟢" if detail['is_active'] else "🔴"
                 text += f"• {status} {referral_name}: {earned}\n"
+                if detail.get('campaign_name'):
+                    text += (
+                        f"   📣 Кампания: {detail['campaign_name']} (не прямая регистрация)\n"
+                    )
             
             if len(referral_stats['referrals_detail']) > 5:
                 text += f"• ... и еще {len(referral_stats['referrals_detail']) - 5} рефералов\n"
@@ -1292,6 +1331,9 @@ async def get_detailed_referral_stats(db: AsyncSession, user_id: int) -> dict:
     
     referrals_result = await db.execute(referrals_query)
     referrals = referrals_result.scalars().all()
+
+    referral_ids = [referral.id for referral in referrals]
+    campaign_registrations = await get_campaign_registrations_for_users(db, referral_ids)
     
     earnings_by_referral = {}
     all_earnings = await get_referral_earnings_by_user(db, user_id)
@@ -1316,6 +1358,11 @@ async def get_detailed_referral_stats(db: AsyncSession, user_id: int) -> dict:
                 referral.subscription.end_date > current_time
             )
         
+        registration = campaign_registrations.get(referral.id)
+        campaign_name = None
+        if registration and registration.campaign:
+            campaign_name = registration.campaign.name
+
         referrals_detail.append({
             'referral_id': referral.id,
             'referral_name': referral.full_name,
@@ -1323,7 +1370,9 @@ async def get_detailed_referral_stats(db: AsyncSession, user_id: int) -> dict:
             'total_earned_kopeks': earned,
             'is_active': is_active,
             'registration_date': referral.created_at,
-            'has_subscription': bool(referral.subscription)
+            'has_subscription': bool(referral.subscription),
+            'campaign_name': campaign_name,
+            'registration_source': 'campaign' if campaign_name else 'referral'
         })
     
     referrals_detail.sort(key=lambda x: x['total_earned_kopeks'], reverse=True)
