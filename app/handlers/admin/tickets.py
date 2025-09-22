@@ -346,7 +346,8 @@ async def handle_admin_ticket_reply(
 async def mark_ticket_as_answered(
     callback: types.CallbackQuery,
     db_user: User,
-    db: AsyncSession
+    db: AsyncSession,
+    state: FSMContext
 ):
     """Отметить тикет как отвеченный"""
     ticket_id = int(callback.data.replace("admin_mark_answered_", ""))
@@ -364,7 +365,7 @@ async def mark_ticket_as_answered(
             )
             
             # Обновляем сообщение
-            await view_admin_ticket(callback, db_user, db)
+            await view_admin_ticket(callback, db_user, db, state)
         else:
             texts = get_texts(db_user.language)
             await callback.answer(
@@ -527,13 +528,14 @@ async def handle_admin_block_duration_input(
 async def unblock_user_in_ticket(
     callback: types.CallbackQuery,
     db_user: User,
-    db: AsyncSession
+    db: AsyncSession,
+    state: FSMContext
 ):
     ticket_id = int(callback.data.replace("admin_unblock_user_ticket_", ""))
     ok = await TicketCRUD.set_user_reply_block(db, ticket_id, permanent=False, until=None)
     if ok:
         await callback.answer("✅ Блок снят")
-        await view_admin_ticket(callback, db_user, db, FSMContext(callback.bot, callback.from_user.id))
+        await view_admin_ticket(callback, db_user, db, state)
     else:
         await callback.answer("❌ Ошибка", show_alert=True)
 
@@ -541,13 +543,14 @@ async def unblock_user_in_ticket(
 async def block_user_permanently(
     callback: types.CallbackQuery,
     db_user: User,
-    db: AsyncSession
+    db: AsyncSession,
+    state: FSMContext
 ):
     ticket_id = int(callback.data.replace("admin_block_user_perm_ticket_", ""))
     ok = await TicketCRUD.set_user_reply_block(db, ticket_id, permanent=True, until=None)
     if ok:
         await callback.answer("✅ Пользователь заблокирован навсегда")
-        await view_admin_ticket(callback, db_user, db, FSMContext(callback.bot, callback.from_user.id))
+        await view_admin_ticket(callback, db_user, db, state)
     else:
         await callback.answer("❌ Ошибка", show_alert=True)
 
