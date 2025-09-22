@@ -23,6 +23,7 @@ async def edit_or_answer_photo(
     keyboard: types.InlineKeyboardMarkup,
     parse_mode: str | None = "HTML",
 ) -> None:
+    # Если режим логотипа выключен — работаем текстом
     if not settings.ENABLE_LOGO_MODE:
         try:
             if callback.message.photo:
@@ -47,17 +48,44 @@ async def edit_or_answer_photo(
             )
         return
 
+    # Если текст слишком длинный для caption — отправим как текст
+    if caption and len(caption) > 1000:
+        try:
+            if callback.message.photo:
+                await callback.message.delete()
+            await callback.message.answer(
+                caption,
+                reply_markup=keyboard,
+                parse_mode=parse_mode,
+            )
+        except TelegramBadRequest:
+            pass
+        return
+
     media = _resolve_media(callback.message)
     try:
         await callback.message.edit_media(
-            InputMediaPhoto(media=media, caption=caption, parse_mode=parse_mode),
+            InputMediaPhoto(media=media, caption=caption, parse_mode=(parse_mode or "HTML")),
             reply_markup=keyboard,
         )
     except TelegramBadRequest:
-        await callback.message.delete()
-        await callback.message.answer_photo(
-            FSInputFile(LOGO_PATH),
-            caption=caption,
-            reply_markup=keyboard,
-            parse_mode=parse_mode,
-        )
+        # Фоллбек: если не удалось обновить фото — отправим текст, чтобы не упасть на лимите caption
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        try:
+            # Отправим как фото с логотипом
+            await callback.message.answer_photo(
+                photo=media if isinstance(media, FSInputFile) else FSInputFile(LOGO_PATH),
+                caption=caption,
+                reply_markup=keyboard,
+                parse_mode=(parse_mode or "HTML"),
+            )
+        except Exception:
+            # Последний фоллбек — обычный текст
+            await callback.message.answer(
+                caption,
+                reply_markup=keyboard,
+                parse_mode=(parse_mode or "HTML"),
+            )

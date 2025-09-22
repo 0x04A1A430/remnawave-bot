@@ -1,7 +1,7 @@
 import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from aiogram import Bot
+from aiogram import Bot, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ class AdminNotificationService:
         self.bot = bot
         self.chat_id = getattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None)
         self.topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
+        self.ticket_topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID', None)
         self.enabled = getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     
     async def _get_referrer_info(self, db: AsyncSession, referred_by_id: Optional[int]) -> str:
@@ -294,7 +295,7 @@ class AdminNotificationService:
             logger.error(f"Ошибка отправки уведомления о продлении: {e}")
             return False
     
-    async def _send_message(self, text: str) -> bool:
+    async def _send_message(self, text: str, reply_markup: types.InlineKeyboardMarkup | None = None, *, ticket_event: bool = False) -> bool:
         if not self.chat_id:
             logger.warning("ADMIN_NOTIFICATIONS_CHAT_ID не настроен")
             return False
@@ -307,8 +308,16 @@ class AdminNotificationService:
                 'disable_web_page_preview': True
             }
             
-            if self.topic_id:
-                message_kwargs['message_thread_id'] = self.topic_id
+            # route to ticket-specific topic if provided
+            thread_id = None
+            if ticket_event and self.ticket_topic_id:
+                thread_id = self.ticket_topic_id
+            elif self.topic_id:
+                thread_id = self.topic_id
+            if thread_id:
+                message_kwargs['message_thread_id'] = thread_id
+            if reply_markup is not None:
+                message_kwargs['reply_markup'] = reply_markup
             
             await self.bot.send_message(**message_kwargs)
             logger.info(f"Уведомление отправлено в чат {self.chat_id}")
@@ -800,4 +809,16 @@ class AdminNotificationService:
                 return f"{len(value)} серверов"
             return str(value)
         return str(value)
+
+    async def send_ticket_event_notification(
+        self,
+        text: str,
+        keyboard: types.InlineKeyboardMarkup | None = None
+    ) -> bool:
+        """Публичный метод для отправки уведомлений по тикетам в админ-топик.
+        Учитывает настройки включенности в settings.
+        """
+        if not self._is_enabled():
+            return False
+        return await self._send_message(text, reply_markup=keyboard, ticket_event=True)
 

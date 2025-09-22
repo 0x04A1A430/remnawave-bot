@@ -14,6 +14,7 @@ from app.keyboards.admin import (
     get_admin_system_submenu_keyboard
 )
 from app.localization.texts import get_texts
+from app.handlers.admin import support_settings as support_settings_handlers
 from app.utils.decorators import admin_required, error_handler
 from app.database.crud.rules import clear_all_rules, get_rules_statistics
 from app.localization.texts import clear_rules_cache
@@ -293,6 +294,8 @@ def register_handlers(dp: Dispatcher):
         show_system_submenu,
         F.data == "admin_submenu_system"
     )
+    # Support settings module
+    support_settings_handlers.register_handlers(dp)
     
     dp.message.register(
         clear_rules_command,
