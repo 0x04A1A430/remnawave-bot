@@ -44,15 +44,12 @@ def _build_dynamic_values(language: str) -> Dict[str, Any]:
             "TRAFFIC_250GB": f"📊 250 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_250GB)}",
             "TRAFFIC_UNLIMITED": f"📊 Безлимит - {settings.format_price(settings.PRICE_TRAFFIC_UNLIMITED)}",
             "SUPPORT_INFO": (
-                "\n🛠️ <b>Техническая поддержка</b>\n\n"
-                "По всем вопросам обращайтесь к нашей поддержке:\n\n"
-                f"👤 {settings.SUPPORT_USERNAME}\n\n"
-                "Мы поможем с:\n"
-                "• Настройкой подключения\n"
-                "• Решением технических проблем  \n"
-                "• Вопросами по оплате\n"
-                "• Другими вопросами\n\n"
-                "⏰ Время ответа: обычно в течение 1-2 часов\n"
+                "\n🛟 <b>Поддержка RemnaWave</b>\n\n"
+                "Это центр тикетов: создавайте обращения, просматривайте ответы и историю.\n\n"
+                "• 🎫 Создать тикет — опишите проблему или вопрос\n"
+                "• 📋 Мои тикеты — статус и переписка\n"
+                "• 💬 Связаться — написать напрямую (если нужно)\n\n"
+                "Старайтесь использовать тикеты — так мы быстрее поможем и ничего не потеряется.\n"
             ),
         }
 
@@ -72,15 +69,12 @@ def _build_dynamic_values(language: str) -> Dict[str, Any]:
             "TRAFFIC_250GB": f"📊 250 GB - {settings.format_price(settings.PRICE_TRAFFIC_250GB)}",
             "TRAFFIC_UNLIMITED": f"📊 Unlimited - {settings.format_price(settings.PRICE_TRAFFIC_UNLIMITED)}",
             "SUPPORT_INFO": (
-                "\n🛠️ <b>Technical support</b>\n\n"
-                "For any questions contact our support:\n\n"
-                f"👤 {settings.SUPPORT_USERNAME}\n\n"
-                "We can help with:\n"
-                "• Connection setup\n"
-                "• Troubleshooting issues\n"
-                "• Payment questions\n"
-                "• Other requests\n\n"
-                "⏰ Response time: usually within 1-2 hours\n"
+                "\n🛟 <b>RemnaWave Support</b>\n\n"
+                "This is the ticket center: create requests, view replies and history.\n\n"
+                "• 🎫 Create ticket — describe your issue or question\n"
+                "• 📋 My tickets — status and conversation\n"
+                "• 💬 Contact — message directly if needed\n\n"
+                "Prefer tickets — it helps us respond faster and keep context.\n"
             ),
         }
 

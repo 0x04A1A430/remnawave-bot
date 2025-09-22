@@ -62,6 +62,12 @@ def get_admin_communications_submenu_keyboard(language: str = "ru") -> InlineKey
             InlineKeyboardButton(text=texts.ADMIN_MESSAGES, callback_data="admin_messages")
         ],
         [
+            InlineKeyboardButton(text="🎫 Тикеты поддержки", callback_data="admin_tickets")
+        ],
+        [
+            InlineKeyboardButton(text="🛟 Настройки поддержки", callback_data="admin_support_settings")
+        ],
+        [
             InlineKeyboardButton(text="👋 Приветственный текст", callback_data="welcome_text_panel"),
             InlineKeyboardButton(text="📢 Сообщения в меню", callback_data="user_messages_panel")
         ],
