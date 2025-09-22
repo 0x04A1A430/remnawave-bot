@@ -297,16 +297,7 @@ async def show_detailed_referral_list(
                 "REFERRAL_LIST_ITEM_ACTIVITY_LONG_AGO",
                 "   🕐 Активность: давно",
             ) + "\n"
-
-        if (
-            referral.get('registration_source') == 'campaign'
-            and referral.get('campaign_name')
-        ):
-            text += texts.t(
-                "REFERRAL_LIST_ITEM_SOURCE_CAMPAIGN",
-                "   📣 Источник: рекламная кампания «{name}» (не прямой реферал)",
-            ).format(name=referral['campaign_name']) + "\n"
-
+        
         text += "\n"
     
     keyboard = []
