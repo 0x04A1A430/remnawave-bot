@@ -60,8 +60,17 @@ class Settings(BaseSettings):
     ENABLE_NOTIFICATIONS: bool = True 
     NOTIFICATION_RETRY_ATTEMPTS: int = 3 
     
-    MONITORING_LOGS_RETENTION_DAYS: int = 30 
-    NOTIFICATION_CACHE_HOURS: int = 24  
+    MONITORING_LOGS_RETENTION_DAYS: int = 30
+    NOTIFICATION_CACHE_HOURS: int = 24
+
+    SERVER_STATUS_MODE: str = "disabled"
+    SERVER_STATUS_EXTERNAL_URL: Optional[str] = None
+    SERVER_STATUS_METRICS_URL: Optional[str] = None
+    SERVER_STATUS_METRICS_USERNAME: Optional[str] = None
+    SERVER_STATUS_METRICS_PASSWORD: Optional[str] = None
+    SERVER_STATUS_METRICS_VERIFY_SSL: bool = True
+    SERVER_STATUS_REQUEST_TIMEOUT: int = 10
+    SERVER_STATUS_ITEMS_PER_PAGE: int = 10
     
     BASE_SUBSCRIPTION_PRICE: int = 50000
     AVAILABLE_SUBSCRIPTION_PERIODS: str = "14,30,60,90,180,360"
@@ -192,6 +201,54 @@ class Settings(BaseSettings):
     BACKUP_SEND_ENABLED: bool = False
     BACKUP_SEND_CHAT_ID: Optional[str] = None
     BACKUP_SEND_TOPIC_ID: Optional[int] = None
+
+    @field_validator('SERVER_STATUS_MODE', mode='before')
+    @classmethod
+    def normalize_server_status_mode(cls, value: Optional[str]) -> str:
+        if not value:
+            return "disabled"
+
+        normalized = str(value).strip().lower()
+        aliases = {
+            "off": "disabled",
+            "none": "disabled",
+            "disabled": "disabled",
+            "external": "external_link",
+            "link": "external_link",
+            "url": "external_link",
+            "external_link": "external_link",
+            "xray": "xray",
+            "xraychecker": "xray",
+            "xray_metrics": "xray",
+            "metrics": "xray",
+        }
+
+        mode = aliases.get(normalized, normalized)
+        if mode not in {"disabled", "external_link", "xray"}:
+            raise ValueError("SERVER_STATUS_MODE must be one of: disabled, external_link, xray")
+        return mode
+
+    @field_validator('SERVER_STATUS_ITEMS_PER_PAGE', mode='before')
+    @classmethod
+    def ensure_positive_server_status_page_size(cls, value: Optional[int]) -> int:
+        try:
+            if value is None:
+                return 10
+            value_int = int(value)
+            return max(1, value_int)
+        except (TypeError, ValueError):
+            return 10
+
+    @field_validator('SERVER_STATUS_REQUEST_TIMEOUT', mode='before')
+    @classmethod
+    def ensure_positive_server_status_timeout(cls, value: Optional[int]) -> int:
+        try:
+            if value is None:
+                return 10
+            value_int = int(value)
+            return max(1, value_int)
+        except (TypeError, ValueError):
+            return 10
     
     @field_validator('LOG_FILE', mode='before')
     @classmethod
@@ -740,7 +797,37 @@ class Settings(BaseSettings):
 
     def get_support_contact_display_html(self) -> str:
         return html.escape(self.get_support_contact_display())
-        
+
+    def get_server_status_mode(self) -> str:
+        return self.SERVER_STATUS_MODE
+
+    def is_server_status_enabled(self) -> bool:
+        return self.get_server_status_mode() != "disabled"
+
+    def get_server_status_external_url(self) -> Optional[str]:
+        url = (self.SERVER_STATUS_EXTERNAL_URL or "").strip()
+        return url or None
+
+    def get_server_status_metrics_url(self) -> Optional[str]:
+        url = (self.SERVER_STATUS_METRICS_URL or "").strip()
+        return url or None
+
+    def get_server_status_metrics_auth(self) -> Optional[tuple[str, str]]:
+        username = (self.SERVER_STATUS_METRICS_USERNAME or "").strip()
+        password_raw = self.SERVER_STATUS_METRICS_PASSWORD
+
+        if not username:
+            return None
+
+        password = "" if password_raw is None else str(password_raw)
+        return username, password
+
+    def get_server_status_items_per_page(self) -> int:
+        return max(1, self.SERVER_STATUS_ITEMS_PER_PAGE)
+
+    def get_server_status_request_timeout(self) -> int:
+        return max(1, self.SERVER_STATUS_REQUEST_TIMEOUT)
+
         
         enabled_packages = [pkg for pkg in packages if pkg["enabled"]]
         if not enabled_packages:
