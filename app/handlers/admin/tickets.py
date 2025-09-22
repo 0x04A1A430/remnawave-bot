@@ -107,6 +107,9 @@ async def view_admin_ticket(
             )
             return
 
+    if state is None:
+        state = FSMContext(callback.bot, callback.from_user.id)
+    
     ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True, load_user=True)
     
     if not ticket:
