@@ -181,10 +181,11 @@ class PromoGroup(Base):
             try:
                 from app.config import settings
 
-                discounts = settings.get_base_promo_group_period_discounts()
-                if period_days in discounts:
-                    period_discount = discounts[period_days]
-                    percent = period_discount
+                if settings.is_base_promo_group_period_discount_enabled():
+                    discounts = settings.get_base_promo_group_period_discounts()
+                    if period_days in discounts:
+                        period_discount = discounts[period_days]
+                        percent = period_discount
             except Exception:
                 pass
 
@@ -784,3 +785,117 @@ class AdvertisingCampaignRegistration(Base):
     @property
     def balance_bonus_rubles(self) -> float:
         return (self.balance_bonus_kopeks or 0) / 100
+
+
+class TicketStatus(Enum):
+    OPEN = "open"
+    ANSWERED = "answered"
+    CLOSED = "closed"
+    PENDING = "pending"
+
+
+class Ticket(Base):
+    __tablename__ = "tickets"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    
+    title = Column(String(255), nullable=False)
+    status = Column(String(20), default=TicketStatus.OPEN.value, nullable=False)
+    priority = Column(String(20), default="normal", nullable=False)  # low, normal, high, urgent
+    # Блокировка ответов пользователя в этом тикете
+    user_reply_block_permanent = Column(Boolean, default=False, nullable=False)
+    user_reply_block_until = Column(DateTime, nullable=True)
+    
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    closed_at = Column(DateTime, nullable=True)
+    
+    # Связи
+    user = relationship("User", backref="tickets")
+    messages = relationship("TicketMessage", back_populates="ticket", cascade="all, delete-orphan")
+    
+    @property
+    def is_open(self) -> bool:
+        return self.status == TicketStatus.OPEN.value
+    
+    @property
+    def is_answered(self) -> bool:
+        return self.status == TicketStatus.ANSWERED.value
+    
+    @property
+    def is_closed(self) -> bool:
+        return self.status == TicketStatus.CLOSED.value
+    
+    @property
+    def is_pending(self) -> bool:
+        return self.status == TicketStatus.PENDING.value
+
+    @property
+    def is_user_reply_blocked(self) -> bool:
+        if self.user_reply_block_permanent:
+            return True
+        if self.user_reply_block_until:
+            try:
+                from datetime import datetime
+                return self.user_reply_block_until > datetime.utcnow()
+            except Exception:
+                return True
+        return False
+    
+    @property
+    def status_emoji(self) -> str:
+        status_emojis = {
+            TicketStatus.OPEN.value: "🔴",
+            TicketStatus.ANSWERED.value: "🟡", 
+            TicketStatus.CLOSED.value: "🟢",
+            TicketStatus.PENDING.value: "⏳"
+        }
+        return status_emojis.get(self.status, "❓")
+    
+    @property
+    def priority_emoji(self) -> str:
+        priority_emojis = {
+            "low": "🟢",
+            "normal": "🟡", 
+            "high": "🟠",
+            "urgent": "🔴"
+        }
+        return priority_emojis.get(self.priority, "🟡")
+    
+    def __repr__(self):
+        return f"<Ticket(id={self.id}, user_id={self.user_id}, status={self.status}, title='{self.title[:30]}...')>"
+
+
+class TicketMessage(Base):
+    __tablename__ = "ticket_messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    
+    message_text = Column(Text, nullable=False)
+    is_from_admin = Column(Boolean, default=False, nullable=False)
+    
+    # Для медиа файлов
+    has_media = Column(Boolean, default=False)
+    media_type = Column(String(20), nullable=True)  # photo, video, document, voice, etc.
+    media_file_id = Column(String(255), nullable=True)
+    media_caption = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=func.now())
+    
+    # Связи
+    ticket = relationship("Ticket", back_populates="messages")
+    user = relationship("User")
+    
+    @property
+    def is_user_message(self) -> bool:
+        return not self.is_from_admin
+    
+    @property
+    def is_admin_message(self) -> bool:
+        return self.is_from_admin
+    
+    def __repr__(self):
+        return f"<TicketMessage(id={self.id}, ticket_id={self.ticket_id}, is_admin={self.is_from_admin}, text='{self.message_text[:30]}...')>"

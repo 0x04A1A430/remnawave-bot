@@ -157,16 +157,38 @@ def get_main_menu_keyboard(
         [
             InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data="menu_promocode"),
             InlineKeyboardButton(text=texts.MENU_REFERRALS, callback_data="menu_referrals")
-        ],
-        [
-            InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data="menu_support"),
-            InlineKeyboardButton(text=texts.MENU_RULES, callback_data="menu_rules")
         ]
     ])
-    
+
+    # Server status button
+    server_status_mode = settings.get_server_status_mode()
+    server_status_text = texts.t("MENU_SERVER_STATUS", "📊 Статус серверов")
+
+    if server_status_mode == "external_link":
+        status_url = settings.get_server_status_external_url()
+        if status_url:
+            keyboard.append([
+                InlineKeyboardButton(text=server_status_text, url=status_url)
+            ])
+    elif server_status_mode == "xray":
+        keyboard.append([
+            InlineKeyboardButton(text=server_status_text, callback_data="menu_server_status")
+        ])
+
+    # Support button is configurable (runtime via service)
+    try:
+        from app.services.support_settings_service import SupportSettingsService
+        support_enabled = SupportSettingsService.is_support_menu_enabled()
+    except Exception:
+        support_enabled = settings.SUPPORT_MENU_ENABLED
+    support_row = []
+    if support_enabled:
+        support_row.append(InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data="menu_support"))
+    support_row.append(InlineKeyboardButton(text=texts.MENU_RULES, callback_data="menu_rules"))
+    keyboard.append(support_row)
     if settings.DEBUG:
         print(f"DEBUG KEYBOARD: is_admin={is_admin}, добавляем админ кнопку: {is_admin}")
-    
+
     if is_admin:
         if settings.DEBUG:
             print("DEBUG KEYBOARD: Админ кнопка ДОБАВЛЕНА!")
@@ -185,6 +207,48 @@ def get_back_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
     ])
+
+
+def get_server_status_keyboard(
+    language: str,
+    current_page: int,
+    total_pages: int,
+) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    keyboard: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=texts.t("SERVER_STATUS_REFRESH", "🔄 Обновить"),
+                callback_data=f"server_status_page:{current_page}",
+            )
+        ]
+    ]
+
+    if total_pages > 1:
+        nav_row: list[InlineKeyboardButton] = []
+
+        if current_page > 1:
+            nav_row.append(
+                InlineKeyboardButton(
+                    text=texts.t("SERVER_STATUS_PREV_PAGE", "⬅️ Назад"),
+                    callback_data=f"server_status_page:{current_page - 1}",
+                )
+            )
+
+        if current_page < total_pages:
+            nav_row.append(
+                InlineKeyboardButton(
+                    text=texts.t("SERVER_STATUS_NEXT_PAGE", "Вперед ➡️"),
+                    callback_data=f"server_status_page:{current_page + 1}",
+                )
+            )
+
+        if nav_row:
+            keyboard.append(nav_row)
+
+    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")])
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_insufficient_balance_keyboard(
@@ -718,17 +782,38 @@ def get_referral_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMar
 
 def get_support_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
+    try:
+        from app.services.support_settings_service import SupportSettingsService
+        tickets_enabled = SupportSettingsService.is_tickets_enabled()
+        contact_enabled = SupportSettingsService.is_contact_enabled()
+    except Exception:
+        tickets_enabled = True
+        contact_enabled = True
+    rows: list[list[InlineKeyboardButton]] = []
+    # Tickets
+    if tickets_enabled:
+        rows.append([
             InlineKeyboardButton(
-                text=texts.CONTACT_SUPPORT,
+                text=texts.t("CREATE_TICKET_BUTTON", "🎫 Создать тикет"),
+                callback_data="create_ticket"
+            )
+        ])
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.t("MY_TICKETS_BUTTON", "📋 Мои тикеты"),
+                callback_data="my_tickets"
+            )
+        ])
+    # Direct contact
+    if contact_enabled and settings.get_support_contact_url():
+        rows.append([
+            InlineKeyboardButton(
+                text=texts.t("CONTACT_SUPPORT_BUTTON", "💬 Связаться с поддержкой"),
                 url=settings.get_support_contact_url() or "https://t.me/"
             )
-        ],
-        [
-            InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
-        ]
-    ])
+        ])
+    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_pagination_keyboard(
@@ -1434,6 +1519,253 @@ def get_device_management_help_keyboard(language: str = DEFAULT_LANGUAGE) -> Inl
             InlineKeyboardButton(
                 text=texts.t("BACK_TO_SUBSCRIPTION", "⬅️ К подписке"),
                 callback_data="menu_subscription"
+            )
+        ]
+    ])
+
+
+# ==================== TICKET KEYBOARDS ====================
+
+def get_ticket_cancel_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=texts.t("CANCEL_TICKET_CREATION", "❌ Отменить создание тикета"),
+                callback_data="cancel_ticket_creation"
+            )
+        ]
+    ])
+
+
+def get_my_tickets_keyboard(
+    tickets: List[dict],
+    current_page: int = 1,
+    total_pages: int = 1,
+    language: str = DEFAULT_LANGUAGE
+) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    keyboard = []
+    
+    for ticket in tickets:
+        status_emoji = ticket.get('status_emoji', '❓')
+        # Override status emoji for closed tickets in admin list
+        if ticket.get('is_closed', False):
+            status_emoji = '✅'
+        title = ticket.get('title', 'Без названия')[:25]
+        button_text = f"{status_emoji} #{ticket['id']} {title}"
+        
+        keyboard.append([
+            InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"view_ticket_{ticket['id']}"
+            )
+        ])
+    
+    # Пагинация
+    if total_pages > 1:
+        nav_row = []
+        
+        if current_page > 1:
+            nav_row.append(
+                InlineKeyboardButton(
+                    text=texts.t("PAGINATION_PREV", "⬅️"),
+                    callback_data=f"my_tickets_page_{current_page - 1}"
+                )
+            )
+        
+        nav_row.append(
+            InlineKeyboardButton(
+                text=f"{current_page}/{total_pages}",
+                callback_data="current_page"
+            )
+        )
+        
+        if current_page < total_pages:
+            nav_row.append(
+                InlineKeyboardButton(
+                    text=texts.t("PAGINATION_NEXT", "➡️"),
+                    callback_data=f"my_tickets_page_{current_page + 1}"
+                )
+            )
+        
+        keyboard.append(nav_row)
+    
+    keyboard.append([
+        InlineKeyboardButton(text=texts.BACK, callback_data="menu_support")
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_ticket_view_keyboard(
+    ticket_id: int,
+    is_closed: bool = False,
+    language: str = DEFAULT_LANGUAGE
+) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    keyboard = []
+    
+    if not is_closed:
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("REPLY_TO_TICKET", "💬 Ответить"),
+                callback_data=f"reply_ticket_{ticket_id}"
+            )
+        ])
+    
+    if not is_closed:
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("CLOSE_TICKET", "🔒 Закрыть тикет"),
+                callback_data=f"close_ticket_{ticket_id}"
+            )
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton(text=texts.BACK, callback_data="my_tickets")
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_ticket_reply_cancel_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=texts.t("CANCEL_REPLY", "❌ Отменить ответ"),
+                callback_data="cancel_ticket_reply"
+            )
+        ]
+    ])
+
+
+# ==================== ADMIN TICKET KEYBOARDS ====================
+
+def get_admin_tickets_keyboard(
+    tickets: List[dict],
+    current_page: int = 1,
+    total_pages: int = 1,
+    language: str = DEFAULT_LANGUAGE,
+    scope: str = "all"
+) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    keyboard = []
+    
+    # Разделяем открытые/закрытые
+    open_rows = []
+    closed_rows = []
+    for ticket in tickets:
+        status_emoji = ticket.get('status_emoji', '❓')
+        if ticket.get('is_closed', False):
+            status_emoji = '✅'
+        user_name = ticket.get('user_name', 'Unknown')[:15]
+        title = ticket.get('title', 'Без названия')[:20]
+        locked_emoji = ticket.get('locked_emoji', '')
+        button_text = f"{status_emoji} #{ticket['id']} {locked_emoji} {user_name}: {title}".replace("  ", " ")
+        row = [InlineKeyboardButton(text=button_text, callback_data=f"admin_view_ticket_{ticket['id']}")]
+        if ticket.get('is_closed', False):
+            closed_rows.append(row)
+        else:
+            open_rows.append(row)
+
+    # Scope switcher
+    switch_row = []
+    switch_row.append(InlineKeyboardButton(text=texts.t("OPEN_TICKETS", "🔴 Открытые"), callback_data="admin_tickets_scope_open"))
+    switch_row.append(InlineKeyboardButton(text=texts.t("CLOSED_TICKETS", "🟢 Закрытые"), callback_data="admin_tickets_scope_closed"))
+    keyboard.append(switch_row)
+
+    if open_rows and scope in ("all", "open"):
+        keyboard.append([InlineKeyboardButton(text=texts.t("OPEN_TICKETS_HEADER", "Открытые тикеты"), callback_data="noop")])
+        keyboard.extend(open_rows)
+    if closed_rows and scope in ("all", "closed"):
+        keyboard.append([InlineKeyboardButton(text=texts.t("CLOSED_TICKETS_HEADER", "Закрытые тикеты"), callback_data="noop")])
+        keyboard.extend(closed_rows)
+    
+    # Пагинация
+    if total_pages > 1:
+        nav_row = []
+        
+        if current_page > 1:
+            nav_row.append(
+                InlineKeyboardButton(
+                    text=texts.t("PAGINATION_PREV", "⬅️"),
+                    callback_data=f"admin_tickets_page_{scope}_{current_page - 1}"
+                )
+            )
+        
+        nav_row.append(
+            InlineKeyboardButton(
+                text=f"{current_page}/{total_pages}",
+                callback_data="current_page"
+            )
+        )
+        
+        if current_page < total_pages:
+            nav_row.append(
+                InlineKeyboardButton(
+                    text=texts.t("PAGINATION_NEXT", "➡️"),
+                    callback_data=f"admin_tickets_page_{scope}_{current_page + 1}"
+                )
+            )
+        
+        keyboard.append(nav_row)
+    
+    keyboard.append([
+        InlineKeyboardButton(text=texts.BACK, callback_data="admin_submenu_communications")
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_admin_ticket_view_keyboard(
+    ticket_id: int,
+    is_closed: bool = False,
+    language: str = DEFAULT_LANGUAGE
+) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    keyboard = []
+    
+    if not is_closed:
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("REPLY_TO_TICKET", "💬 Ответить"),
+                callback_data=f"admin_reply_ticket_{ticket_id}"
+            )
+        ])
+    
+    if not is_closed:
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("CLOSE_TICKET", "🔒 Закрыть тикет"),
+                callback_data=f"admin_close_ticket_{ticket_id}"
+            )
+        ])
+    
+    # Block controls: first row Unblock + Block forever, second row Block by time
+    keyboard.append([
+        InlineKeyboardButton(text=texts.t("UNBLOCK", "✅ Разблокировать"), callback_data=f"admin_unblock_user_ticket_{ticket_id}"),
+        InlineKeyboardButton(text=texts.t("BLOCK_FOREVER", "🚫 Блок навсегда"), callback_data=f"admin_block_user_perm_ticket_{ticket_id}")
+    ])
+    keyboard.append([
+        InlineKeyboardButton(text=texts.t("BLOCK_BY_TIME", "⏳ Блокировка по времени"), callback_data=f"admin_block_user_ticket_{ticket_id}")
+    ])
+    
+    keyboard.append([
+        InlineKeyboardButton(text=texts.BACK, callback_data="admin_tickets")
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_admin_ticket_reply_cancel_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=texts.t("CANCEL_REPLY", "❌ Отменить ответ"),
+                callback_data="cancel_admin_ticket_reply"
             )
         ]
     ])

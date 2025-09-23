@@ -15,8 +15,8 @@ from app.services.maintenance_service import maintenance_service
 from app.utils.cache import cache 
 
 from app.handlers import (
-    start, menu, subscription, balance, promocode, 
-    referral, support, common
+    start, menu, subscription, balance, promocode,
+    referral, support, server_status, common, tickets
 )
 from app.handlers.admin import (
     main as admin_main,
@@ -37,6 +37,7 @@ from app.handlers.admin import (
     updates as admin_updates,
     backup as admin_backup,
     welcome_text as admin_welcome_text,
+    tickets as admin_tickets,
 )
 from app.handlers.stars_payments import register_stars_handlers
 
@@ -117,6 +118,8 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     promocode.register_handlers(dp)
     referral.register_handlers(dp)
     support.register_handlers(dp)
+    server_status.register_handlers(dp)
+    tickets.register_handlers(dp)
     admin_main.register_handlers(dp)
     admin_users.register_handlers(dp)
     admin_subscriptions.register_handlers(dp)
@@ -135,6 +138,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_updates.register_handlers(dp)
     admin_backup.register_handlers(dp)
     admin_welcome_text.register_welcome_text_handlers(dp)
+    admin_tickets.register_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
     logger.info("⭐ Зарегистрированы обработчики Telegram Stars платежей")
