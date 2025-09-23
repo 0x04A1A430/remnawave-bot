@@ -12,6 +12,8 @@
 # Разрешаем папку app/ и все её содержимое рекурсивно
 !app/
 !app/**
+!migrations/
+!migrations/**
 !locales/
 !locales/**
 
