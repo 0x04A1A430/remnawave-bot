@@ -224,8 +224,18 @@ class User(Base):
     vless_uuid = Column(String(255), nullable=True)
     ss_password = Column(String(255), nullable=True)
     has_made_first_topup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    auto_assigned_promo_group_id = Column(
+        Integer,
+        ForeignKey("promo_groups.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="RESTRICT"), nullable=False, index=True)
     promo_group = relationship("PromoGroup", back_populates="users")
+    auto_assigned_promo_group = relationship(
+        "PromoGroup",
+        foreign_keys=[auto_assigned_promo_group_id],
+        viewonly=True,
+    )
     
     @property
     def balance_rubles(self) -> float:
