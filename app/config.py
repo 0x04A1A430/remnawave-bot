@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     SUPPORT_MENU_ENABLED: bool = True
     SUPPORT_SYSTEM_MODE: str = "both"  # one of: tickets, contact, both
     SUPPORT_MENU_ENABLED: bool = True
+    # SLA for support tickets
+    SUPPORT_TICKET_SLA_ENABLED: bool = True
+    SUPPORT_TICKET_SLA_MINUTES: int = 5
+    SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS: int = 60
+    SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES: int = 15
 
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
     ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None

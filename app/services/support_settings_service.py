@@ -110,3 +110,112 @@ class SupportSettingsService:
         return cls._save()
 
 
+    # Notifications & SLA
+    @classmethod
+    def get_admin_ticket_notifications_enabled(cls) -> bool:
+        cls._load()
+        if "admin_ticket_notifications_enabled" in cls._data:
+            return bool(cls._data["admin_ticket_notifications_enabled"])
+        # fallback to global admin notifications setting
+        return bool(settings.is_admin_notifications_enabled())
+
+    @classmethod
+    def set_admin_ticket_notifications_enabled(cls, enabled: bool) -> bool:
+        cls._load()
+        cls._data["admin_ticket_notifications_enabled"] = bool(enabled)
+        return cls._save()
+
+    @classmethod
+    def get_user_ticket_notifications_enabled(cls) -> bool:
+        cls._load()
+        if "user_ticket_notifications_enabled" in cls._data:
+            return bool(cls._data["user_ticket_notifications_enabled"])
+        # fallback to global enable notifications
+        return bool(getattr(settings, "ENABLE_NOTIFICATIONS", True))
+
+    @classmethod
+    def set_user_ticket_notifications_enabled(cls, enabled: bool) -> bool:
+        cls._load()
+        cls._data["user_ticket_notifications_enabled"] = bool(enabled)
+        return cls._save()
+
+    @classmethod
+    def get_sla_enabled(cls) -> bool:
+        cls._load()
+        if "ticket_sla_enabled" in cls._data:
+            return bool(cls._data["ticket_sla_enabled"])
+        return bool(getattr(settings, "SUPPORT_TICKET_SLA_ENABLED", True))
+
+    @classmethod
+    def set_sla_enabled(cls, enabled: bool) -> bool:
+        cls._load()
+        cls._data["ticket_sla_enabled"] = bool(enabled)
+        return cls._save()
+
+    @classmethod
+    def get_sla_minutes(cls) -> int:
+        cls._load()
+        minutes = cls._data.get("ticket_sla_minutes")
+        if isinstance(minutes, int) and minutes > 0:
+            return minutes
+        return int(getattr(settings, "SUPPORT_TICKET_SLA_MINUTES", 5))
+
+    @classmethod
+    def set_sla_minutes(cls, minutes: int) -> bool:
+        try:
+            minutes_int = int(minutes)
+        except Exception:
+            return False
+        if minutes_int <= 0:
+            return False
+        cls._load()
+        cls._data["ticket_sla_minutes"] = minutes_int
+        return cls._save()
+
+    # Moderators management
+    @classmethod
+    def get_moderators(cls) -> list[int]:
+        cls._load()
+        raw = cls._data.get("moderators") or []
+        moderators: list[int] = []
+        for item in raw:
+            try:
+                moderators.append(int(item))
+            except Exception:
+                continue
+        return moderators
+
+    @classmethod
+    def is_moderator(cls, telegram_id: int) -> bool:
+        try:
+            tid = int(telegram_id)
+        except Exception:
+            return False
+        return tid in cls.get_moderators()
+
+    @classmethod
+    def add_moderator(cls, telegram_id: int) -> bool:
+        try:
+            tid = int(telegram_id)
+        except Exception:
+            return False
+        cls._load()
+        moderators = set(cls.get_moderators())
+        moderators.add(tid)
+        cls._data["moderators"] = sorted(moderators)
+        return cls._save()
+
+    @classmethod
+    def remove_moderator(cls, telegram_id: int) -> bool:
+        try:
+            tid = int(telegram_id)
+        except Exception:
+            return False
+        cls._load()
+        moderators = set(cls.get_moderators())
+        if tid in moderators:
+            moderators.remove(tid)
+            cls._data["moderators"] = sorted(moderators)
+            return cls._save()
+        return True
+
