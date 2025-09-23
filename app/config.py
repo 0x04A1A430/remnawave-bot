@@ -174,6 +174,18 @@ class Settings(BaseSettings):
     CRYPTOBOT_ASSETS: str = "USDT,TON,BTC,ETH"
     CRYPTOBOT_INVOICE_EXPIRES_HOURS: int = 24
 
+    MULENPAY_ENABLED: bool = False
+    MULENPAY_API_KEY: Optional[str] = None
+    MULENPAY_SECRET_KEY: Optional[str] = None
+    MULENPAY_SHOP_ID: Optional[int] = None
+    MULENPAY_BASE_URL: str = "https://mulenpay.ru/api"
+    MULENPAY_WEBHOOK_PATH: str = "/mulenpay-webhook"
+    MULENPAY_DESCRIPTION: str = "Пополнение баланса"
+    MULENPAY_LANGUAGE: str = "ru"
+    MULENPAY_VAT_CODE: int = 0
+    MULENPAY_PAYMENT_SUBJECT: int = 4
+    MULENPAY_PAYMENT_MODE: int = 4
+
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
     HIDE_SUBSCRIPTION_LINK: bool = False
@@ -440,9 +452,17 @@ class Settings(BaseSettings):
         return "https://t.me/"
 
     def is_cryptobot_enabled(self) -> bool:
-        return (self.CRYPTOBOT_ENABLED and 
+        return (self.CRYPTOBOT_ENABLED and
                 self.CRYPTOBOT_API_TOKEN is not None)
-    
+
+    def is_mulenpay_enabled(self) -> bool:
+        return (
+            self.MULENPAY_ENABLED
+            and self.MULENPAY_API_KEY is not None
+            and self.MULENPAY_SECRET_KEY is not None
+            and self.MULENPAY_SHOP_ID is not None
+        )
+
     def get_cryptobot_base_url(self) -> str:
         if self.CRYPTOBOT_TESTNET:
             return "https://testnet-pay.crypt.bot"

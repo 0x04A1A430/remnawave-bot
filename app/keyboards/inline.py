@@ -644,15 +644,23 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
     if settings.TRIBUTE_ENABLED:
         keyboard.append([
             InlineKeyboardButton(
-                text=texts.t("PAYMENT_CARD_TRIBUTE", "💳 Банковская карта (Tribute)"), 
+                text=texts.t("PAYMENT_CARD_TRIBUTE", "💳 Банковская карта (Tribute)"),
                 callback_data="topup_tribute"
+            )
+        ])
+
+    if settings.is_mulenpay_enabled():
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("PAYMENT_CARD_MULENPAY", "💳 Банковская карта (Mulen Pay)"),
+                callback_data="topup_mulenpay"
             )
         ])
 
     if settings.is_cryptobot_enabled():
         keyboard.append([
             InlineKeyboardButton(
-                text=texts.t("PAYMENT_CRYPTOBOT", "🪙 Криптовалюта (CryptoBot)"), 
+                text=texts.t("PAYMENT_CRYPTOBOT", "🪙 Криптовалюта (CryptoBot)"),
                 callback_data="topup_cryptobot"
             )
         ])

@@ -35,7 +35,7 @@
 
 ### ⚡ **Полная автоматизация VPN бизнеса**
 - 🎯 **Готовое решение** - разверни за 5 минут, начни продавать сегодня
-- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + ЮKassa + P2P
+- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + ЮKassa + MulenPay + P2P
 - 🔄 **Автоматизация 99%** - от регистрации до продления подписок
 - 📊 **Детальная аналитика** - полная картина вашего бизнеса
 - 💬 **Уведомления в топики** об: Активация триала 💎 Покупка подписки 🔄 Конверсия из триала в платную ⏰ Продление подписки 💰 Пополнение баланса 🚧 Включении тех работ ♻️ Появлении новой версии бота
@@ -248,11 +248,12 @@ ADMIN_IDS=
 # Ссылка на поддержку: Telegram username (например, @support) или полный URL
 SUPPORT_USERNAME=@support
 
+
 # Уведомления администраторов
 ADMIN_NOTIFICATIONS_ENABLED=true
 ADMIN_NOTIFICATIONS_CHAT_ID=-1001234567890   # Замени на ID твоего канала (-100) - ПРЕФИКС ЗАКРЫТОГО КАНАЛА! ВСТАВИТЬ СВОЙ ID СРАЗУ ПОСЛЕ (-100) БЕЗ ПРОБЕЛОВ!
 ADMIN_NOTIFICATIONS_TOPIC_ID=123             # Опционально: ID топика
-
+ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID=126      # Опционально: ID топика для тикетов
 # Обязательная подписка на канал
 CHANNEL_SUB_ID= # Опционально ID твоего канала (-100)
 CHANNEL_IS_REQUIRED_SUB=false # Обязательна ли подписка на канал
@@ -274,6 +275,7 @@ POSTGRES_PASSWORD=secure_password_123
 
 # SQLite настройки (для локального запуска)
 SQLITE_PATH=./data/bot.db
+LOCALES_PATH=./locales
 
 # Redis
 REDIS_URL=redis://redis:6379/0
@@ -299,6 +301,11 @@ REMNAWAVE_SECRET_KEY=
 #   {username_clean}    — логин из Telegram (без @)
 #   {telegram_id}       — ID Telegram
 REMNAWAVE_USER_DESCRIPTION_TEMPLATE="Bot user: {full_name} {username}"
+
+# Режим удаления пользователей из панели RemnaWave
+# delete - полностью удалить пользователя из панели
+# disable - только деактивировать пользователя
+REMNAWAVE_USER_DELETE_MODE=delete
 
 # ========= ПОДПИСКИ =========
 # ===== ТРИАЛ ПОДПИСКА =====
@@ -437,6 +444,13 @@ YOOKASSA_WEBHOOK_PATH=/yookassa-webhook
 YOOKASSA_WEBHOOK_PORT=8082
 YOOKASSA_WEBHOOK_SECRET=your_webhook_secret
 
+# Лимиты сумм пополнения через YooKassa (в копейках)
+YOOKASSA_MIN_AMOUNT_KOPEKS=5000
+YOOKASSA_MAX_AMOUNT_KOPEKS=1000000
+
+# Быстрый выбор суммы пополнения через YooKassa
+YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED=true
+
 # ===== НАСТРОЙКИ ОПИСАНИЙ ПЛАТЕЖЕЙ =====
 # Эти настройки позволяют изменить описания платежей, 
 # чтобы избежать блокировок платежных систем
@@ -447,7 +461,7 @@ PAYMENT_BALANCE_TEMPLATE={service_name} - {description}
 PAYMENT_SUBSCRIPTION_TEMPLATE={service_name} - {description}
 
 # CRYPTOBOT
-CRYPTOBOT_ENABLED=true
+CRYPTOBOT_ENABLED=false
 CRYPTOBOT_API_TOKEN=123456789:AAzQcZWQqQAbsfgPnOLr4FHC8Doa4L7KryC
 CRYPTOBOT_WEBHOOK_SECRET=your_webhook_secret_here
 CRYPTOBOT_BASE_URL=https://pay.crypt.bot
@@ -457,6 +471,20 @@ CRYPTOBOT_WEBHOOK_PORT=8081
 CRYPTOBOT_DEFAULT_ASSET=USDT
 CRYPTOBOT_ASSETS=USDT,TON,BTC,ETH,LTC,BNB,TRX,USDC
 CRYPTOBOT_INVOICE_EXPIRES_HOURS=24
+
+# MULENPAY
+MULENPAY_ENABLED=false
+MULENPAY_API_KEY=
+MULENPAY_SECRET_KEY=
+MULENPAY_SHOP_ID=<ID магазина>
+# необязательно, есть дефолтные значения
+MULENPAY_BASE_URL=https://mulenpay.ru/api
+MULENPAY_WEBHOOK_PATH=/mulenpay-webhook
+MULENPAY_DESCRIPTION="Пополнение баланса"
+MULENPAY_LANGUAGE=ru
+MULENPAY_VAT_CODE=0
+MULENPAY_PAYMENT_SUBJECT=4
+MULENPAY_PAYMENT_MODE=4
 
 # ===== ИНТЕРФЕЙС И UX =====
 
@@ -492,6 +520,23 @@ ENABLE_NOTIFICATIONS=true
 NOTIFICATION_RETRY_ATTEMPTS=3
 MONITORING_LOGS_RETENTION_DAYS=30
 NOTIFICATION_CACHE_HOURS=24
+
+# ===== СТАТУС СЕРВЕРОВ =====
+# Режимы: disabled, external_link, xray
+SERVER_STATUS_MODE=disabled
+# Ссылка на внешний мониторинг (для режима external_link)
+SERVER_STATUS_EXTERNAL_URL=
+# URL метрик XrayChecker (для режима xray)
+SERVER_STATUS_METRICS_URL=
+# Данные Basic Auth (опционально)
+SERVER_STATUS_METRICS_USERNAME=
+SERVER_STATUS_METRICS_PASSWORD=
+# Проверять SSL сертификат при запросе метрик
+SERVER_STATUS_METRICS_VERIFY_SSL=true
+# Таймаут запроса к метрикам (в секундах)
+SERVER_STATUS_REQUEST_TIMEOUT=10
+# Количество серверов на странице в режиме интеграции
+SERVER_STATUS_ITEMS_PER_PAGE=10
 
 # ===== РЕЖИМ ТЕХНИЧЕСКИХ РАБОТ =====
 MAINTENANCE_MODE=false
@@ -540,8 +585,6 @@ LOG_FILE=logs/bot.log
 DEBUG=false
 WEBHOOK_URL=
 WEBHOOK_PATH=/webhook
-
-
 ```
 
 </details>
@@ -573,6 +616,7 @@ WEBHOOK_PATH=/webhook
 - ⭐ Telegram Stars
 - 💳 Tribute
 - 💳 YooKassa (включая СБП и онлайн-чек)
+- 💳 MulenPay
 - 💰 CryptoBot (мультивалюта и срок жизни инвойсов)
 - 🎁 Реферальные и промо-бонусы
 - Детальная история транзакций и чеков
@@ -1124,13 +1168,23 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
-
+    
     # CryptoBot webhook endpoint
-    handle /cryptobot-webhook* {
-        reverse_proxy localhost:8081 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-        }
+    location /cryptobot-webhook {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # MulenPay webhook endpoint
+    location /mulenpay-webhook {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
     
     # Для YooKassa
@@ -1138,6 +1192,8 @@ server {
         proxy_pass http://127.0.0.1:8082;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
     
     # Health check
@@ -1153,8 +1209,12 @@ your-domain.com {
     handle /tribute-webhook* {
         reverse_proxy localhost:8081
     }
-
+    
     handle /cryptobot-webhook* {
+        reverse_proxy localhost:8081
+    }
+    
+    handle /mulenpay-webhook* {
         reverse_proxy localhost:8081
     }
     
