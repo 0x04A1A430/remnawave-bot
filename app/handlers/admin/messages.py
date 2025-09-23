@@ -827,6 +827,8 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
 
 async def get_target_users(db: AsyncSession, target: str) -> list:
     users = await get_users_list(db, offset=0, limit=10000, status=UserStatus.ACTIVE)
+    now = datetime.utcnow()
+    zero_threshold = 0.01
 
     if target == "all":
         return users
@@ -884,6 +886,9 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
             for user in users
             if user.subscription
             and not user.subscription.is_trial
+            and user.subscription.status == SubscriptionStatus.ACTIVE.value
+            and user.subscription.end_date > now
+            and (user.subscription.traffic_used_gb or 0) <= zero_threshold
             and user.subscription.is_active
             and (user.subscription.traffic_used_gb or 0) <= 0
         ]
@@ -894,6 +899,9 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
             for user in users
             if user.subscription
             and user.subscription.is_trial
+            and user.subscription.status == SubscriptionStatus.TRIAL.value
+            and user.subscription.end_date > now
+            and (user.subscription.traffic_used_gb or 0) <= zero_threshold
             and user.subscription.is_active
             and (user.subscription.traffic_used_gb or 0) <= 0
         ]
