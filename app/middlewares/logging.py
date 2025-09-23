@@ -20,9 +20,6 @@ class LoggingMiddleware(BaseMiddleware):
         
         try:
             if isinstance(event, Message):
-                if getattr(event, "is_topic_message", False):
-                    # Игнорируем сообщения из топиков, чтобы бот не реагировал и не логировал их
-                    return None
                 user_info = f"@{event.from_user.username}" if event.from_user.username else f"ID:{event.from_user.id}"
                 text = event.text or event.caption or "[медиа]"
                 logger.info(f"📩 Сообщение от {user_info}: {text}")
