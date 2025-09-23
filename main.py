@@ -112,12 +112,18 @@ async def main():
         
         payment_service = PaymentService(bot)
         
-        webhook_needed = settings.TRIBUTE_ENABLED or settings.is_cryptobot_enabled()
+        webhook_needed = (
+            settings.TRIBUTE_ENABLED
+            or settings.is_cryptobot_enabled()
+            or settings.is_mulenpay_enabled()
+        )
         
         if webhook_needed:
             enabled_services = []
             if settings.TRIBUTE_ENABLED:
                 enabled_services.append("Tribute")
+            if settings.is_mulenpay_enabled():
+                enabled_services.append("Mulen Pay")
             if settings.is_cryptobot_enabled():
                 enabled_services.append("CryptoBot")
             
@@ -160,6 +166,8 @@ async def main():
         if webhook_needed:
             if settings.TRIBUTE_ENABLED:
                 logger.info(f"   Tribute: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.TRIBUTE_WEBHOOK_PATH}")
+            if settings.is_mulenpay_enabled():
+                logger.info(f"   Mulen Pay: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.MULENPAY_WEBHOOK_PATH}")
             if settings.is_cryptobot_enabled():
                 logger.info(f"   CryptoBot: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.CRYPTOBOT_WEBHOOK_PATH}")
         if settings.is_yookassa_enabled():
