@@ -861,6 +861,7 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
         return [sub.user for sub in expiring_subs if sub.user]
 
     if target == "expired":
+        now = datetime.utcnow()
         expired_statuses = {
             SubscriptionStatus.EXPIRED.value,
             SubscriptionStatus.DISABLED.value,
@@ -888,6 +889,8 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
             and user.subscription.status == SubscriptionStatus.ACTIVE.value
             and user.subscription.end_date > now
             and (user.subscription.traffic_used_gb or 0) <= zero_threshold
+            and user.subscription.is_active
+            and (user.subscription.traffic_used_gb or 0) <= 0
         ]
 
     if target == "trial_zero":
@@ -899,6 +902,8 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
             and user.subscription.status == SubscriptionStatus.TRIAL.value
             and user.subscription.end_date > now
             and (user.subscription.traffic_used_gb or 0) <= zero_threshold
+            and user.subscription.is_active
+            and (user.subscription.traffic_used_gb or 0) <= 0
         ]
 
     return []
