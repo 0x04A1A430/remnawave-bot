@@ -35,18 +35,11 @@ async def auto_assign_promo_group_by_spent(
     if not target_group or user.promo_group_id == target_group.id:
         return None
 
-    if (
-        getattr(user, "auto_assigned_promo_group_id", None) is not None
-        and user.auto_assigned_promo_group_id == target_group.id
-    ):
-        return None
-
     previous_group_id = user.promo_group_id
 
     user.promo_group_id = target_group.id
     user.promo_group = target_group
     user.updated_at = datetime.utcnow()
-    user.auto_assigned_promo_group_id = target_group.id
 
     await db.commit()
     await db.refresh(user)

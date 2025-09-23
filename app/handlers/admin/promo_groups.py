@@ -349,20 +349,8 @@ async def process_create_group_devices(
     await message.answer(
         texts.t(
             "ADMIN_PROMO_GROUP_CREATE_AUTO_ASSIGN_PROMPT",
-            "Включить автоматическое назначение по сумме трат?",
-        ),
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.YES, callback_data="promo_group_auto_assign_yes"
-                    ),
-                    types.InlineKeyboardButton(
-                        text=texts.NO, callback_data="promo_group_auto_assign_no"
-                    ),
-                ]
-            ]
-        ),
+            "Включить автоматическое назначение по сумме трат? (да/нет)",
+        )
     )
 
 
@@ -418,7 +406,7 @@ async def _finalize_create_group(
 @admin_required
 @error_handler
 async def process_create_group_auto_assign_enabled(
-    callback: types.CallbackQuery,
+    message: types.Message,
     state: FSMContext,
     db_user,
     db: AsyncSession,
@@ -426,38 +414,32 @@ async def process_create_group_auto_assign_enabled(
     data = await state.get_data()
     texts = get_texts(data.get("language", db_user.language))
 
-    if callback.data not in {
-        "promo_group_auto_assign_yes",
-        "promo_group_auto_assign_no",
-    }:
-        await callback.answer(texts.t("ADMIN_ACTION_INVALID", "Недопустимое действие"), show_alert=True)
+    try:
+        auto_enabled = _parse_bool_response(message.text)
+    except ValueError:
+        await message.answer(texts.t("ADMIN_PROMO_GROUP_INVALID_BOOL", "Введите «да» или «нет»."))
         return
 
-    auto_enabled = callback.data == "promo_group_auto_assign_yes"
     await state.update_data(new_group_auto_assign_enabled=auto_enabled)
 
     if auto_enabled:
         await state.set_state(AdminStates.creating_promo_group_auto_assign_threshold)
-        await callback.message.edit_text(
+        await message.answer(
             texts.t(
                 "ADMIN_PROMO_GROUP_CREATE_AUTO_ASSIGN_THRESHOLD_PROMPT",
                 "Введите сумму трат в рублях для автоматического назначения:",
             )
         )
-        await callback.answer()
         return
 
-    await callback.message.edit_reply_markup()
-
     await _finalize_create_group(
-        callback.message,
+        message,
         state,
         db_user,
         db,
         auto_assign_enabled=False,
         spent_threshold_kopeks=0,
     )
-    await callback.answer()
 
 
 @admin_required
@@ -872,10 +854,9 @@ def register_handlers(dp: Dispatcher):
         process_create_group_devices,
         AdminStates.creating_promo_group_device_discount,
     )
-    dp.callback_query.register(
+    dp.message.register(
         process_create_group_auto_assign_enabled,
         AdminStates.creating_promo_group_auto_assign_enabled,
-        F.data.in_({"promo_group_auto_assign_yes", "promo_group_auto_assign_no"}),
     )
     dp.message.register(
         process_create_group_auto_assign_threshold,
