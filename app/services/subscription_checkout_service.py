@@ -49,4 +49,10 @@ def should_offer_checkout_resume(user: User, has_draft: bool) -> bool:
     if subscription is None:
         return True
 
-    return bool(getattr(subscription, "is_trial", False))
+    if getattr(subscription, "is_trial", False):
+        return True
+
+    if getattr(subscription, "actual_status", None) == "expired":
+        return True
+
+    return False
