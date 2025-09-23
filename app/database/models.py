@@ -226,7 +226,6 @@ class User(Base):
     has_made_first_topup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="RESTRICT"), nullable=False, index=True)
     promo_group = relationship("PromoGroup", back_populates="users")
-    last_auto_assigned_promo_group_id = Column(Integer, nullable=True)
     
     @property
     def balance_rubles(self) -> float:

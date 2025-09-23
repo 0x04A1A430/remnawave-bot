@@ -35,24 +35,11 @@ async def auto_assign_promo_group_by_spent(
     if not target_group or user.promo_group_id == target_group.id:
         return None
 
-    last_auto_assigned_id = getattr(user, "last_auto_assigned_promo_group_id", None)
-    if (
-        last_auto_assigned_id == target_group.id
-        and user.promo_group_id != target_group.id
-    ):
-        logger.debug(
-            "👥 Пропущено автоназначение пользователя %s в промогруппу '%s' — уже было выполнено ранее",
-            user.telegram_id,
-            target_group.name,
-        )
-        return None
-
     previous_group_id = user.promo_group_id
 
     user.promo_group_id = target_group.id
     user.promo_group = target_group
     user.updated_at = datetime.utcnow()
-    user.last_auto_assigned_promo_group_id = target_group.id
 
     await db.commit()
     await db.refresh(user)
