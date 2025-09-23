@@ -88,8 +88,7 @@ async def create_user(
 ) -> User:
     
     if not referral_code:
-        from app.utils.user_utils import generate_unique_referral_code
-        referral_code = await generate_unique_referral_code(db, telegram_id)
+        referral_code = await create_unique_referral_code(db)
     
     default_group = await get_default_promo_group(db)
     if not default_group:

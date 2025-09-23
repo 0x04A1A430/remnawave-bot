@@ -67,6 +67,8 @@ def get_main_menu_keyboard(
     balance_kopeks: int = 0,
     subscription=None,
     show_resume_checkout: bool = False,
+    *,
+    is_moderator: bool = False,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     
@@ -198,6 +200,11 @@ def get_main_menu_keyboard(
     else:
         if settings.DEBUG:
             print("DEBUG KEYBOARD: Админ кнопка НЕ добавлена")
+    # Moderator access (limited support panel)
+    if (not is_admin) and is_moderator:
+        keyboard.append([
+            InlineKeyboardButton(text="🧑‍⚖️ Модерация", callback_data="moderator_panel")
+        ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -1542,7 +1549,8 @@ def get_my_tickets_keyboard(
     tickets: List[dict],
     current_page: int = 1,
     total_pages: int = 1,
-    language: str = DEFAULT_LANGUAGE
+    language: str = DEFAULT_LANGUAGE,
+    page_prefix: str = "my_tickets_page_"
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
@@ -1570,7 +1578,7 @@ def get_my_tickets_keyboard(
             nav_row.append(
                 InlineKeyboardButton(
                     text=texts.t("PAGINATION_PREV", "⬅️"),
-                    callback_data=f"my_tickets_page_{current_page - 1}"
+                    callback_data=f"{page_prefix}{current_page - 1}"
                 )
             )
         
@@ -1585,7 +1593,7 @@ def get_my_tickets_keyboard(
             nav_row.append(
                 InlineKeyboardButton(
                     text=texts.t("PAGINATION_NEXT", "➡️"),
-                    callback_data=f"my_tickets_page_{current_page + 1}"
+                    callback_data=f"{page_prefix}{current_page + 1}"
                 )
             )
         
@@ -1648,7 +1656,9 @@ def get_admin_tickets_keyboard(
     current_page: int = 1,
     total_pages: int = 1,
     language: str = DEFAULT_LANGUAGE,
-    scope: str = "all"
+    scope: str = "all",
+    *,
+    back_callback: str = "admin_submenu_support"
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
@@ -1713,7 +1723,7 @@ def get_admin_tickets_keyboard(
         keyboard.append(nav_row)
     
     keyboard.append([
-        InlineKeyboardButton(text=texts.BACK, callback_data="admin_submenu_communications")
+        InlineKeyboardButton(text=texts.BACK, callback_data=back_callback)
     ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -1722,7 +1732,9 @@ def get_admin_tickets_keyboard(
 def get_admin_ticket_view_keyboard(
     ticket_id: int,
     is_closed: bool = False,
-    language: str = DEFAULT_LANGUAGE
+    language: str = DEFAULT_LANGUAGE,
+    *,
+    is_user_blocked: bool = False
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
@@ -1743,14 +1755,16 @@ def get_admin_ticket_view_keyboard(
             )
         ])
     
-    # Block controls: first row Unblock + Block forever, second row Block by time
-    keyboard.append([
-        InlineKeyboardButton(text=texts.t("UNBLOCK", "✅ Разблокировать"), callback_data=f"admin_unblock_user_ticket_{ticket_id}"),
-        InlineKeyboardButton(text=texts.t("BLOCK_FOREVER", "🚫 Блок навсегда"), callback_data=f"admin_block_user_perm_ticket_{ticket_id}")
-    ])
-    keyboard.append([
-        InlineKeyboardButton(text=texts.t("BLOCK_BY_TIME", "⏳ Блокировка по времени"), callback_data=f"admin_block_user_ticket_{ticket_id}")
-    ])
+    # Блок-контролы: когда не заблокирован — показать два варианта, когда заблокирован — только "Разблокировать"
+    if is_user_blocked:
+        keyboard.append([
+            InlineKeyboardButton(text=texts.t("UNBLOCK", "✅ Разблокировать"), callback_data=f"admin_unblock_user_ticket_{ticket_id}")
+        ])
+    else:
+        keyboard.append([
+            InlineKeyboardButton(text=texts.t("BLOCK_FOREVER", "🚫 Заблокировать"), callback_data=f"admin_block_user_perm_ticket_{ticket_id}"),
+            InlineKeyboardButton(text=texts.t("BLOCK_BY_TIME", "⏳ Блок по времени"), callback_data=f"admin_block_user_ticket_{ticket_id}")
+        ])
     
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="admin_tickets")

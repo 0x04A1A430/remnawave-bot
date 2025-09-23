@@ -120,5 +120,10 @@ def register_handlers(dp: Dispatcher):
     )
 
     # Самый последний: ловим любые неизвестные текстовые сообщения
-    dp.message.register(handle_unknown_message)
+    # Исключаем специальные сервисные события (например, успешные платежи),
+    # чтобы их обработка не прерывалась общим хендлером неизвестных сообщений
+    dp.message.register(
+        handle_unknown_message,
+        F.successful_payment.is_(None)
+    )
     

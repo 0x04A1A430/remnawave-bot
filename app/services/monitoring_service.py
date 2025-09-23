@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Set
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
@@ -21,7 +21,7 @@ from app.database.crud.notification import (
     notification_sent,
     record_notification,
 )
-from app.database.models import MonitoringLog, SubscriptionStatus, Subscription, User
+from app.database.models import MonitoringLog, SubscriptionStatus, Subscription, User, Ticket, TicketStatus
 from app.services.subscription_service import SubscriptionService
 from app.services.payment_service import PaymentService
 from app.localization.texts import get_texts
@@ -42,6 +42,7 @@ class MonitoringService:
         self.bot = bot
         self._notified_users: Set[str] = set() 
         self._last_cleanup = datetime.utcnow()
+        self._sla_task = None
     
     async def start_monitoring(self):
         if self.is_running:
@@ -50,6 +51,12 @@ class MonitoringService:
         
         self.is_running = True
         logger.info("🔄 Запуск службы мониторинга")
+        # Start dedicated SLA loop with its own interval for timely 5-min checks
+        try:
+            if not self._sla_task or self._sla_task.done():
+                self._sla_task = asyncio.create_task(self._sla_loop())
+        except Exception as e:
+            logger.error(f"Не удалось запустить SLA-мониторинг: {e}")
         
         while self.is_running:
             try:
@@ -63,6 +70,11 @@ class MonitoringService:
     def stop_monitoring(self):
         self.is_running = False
         logger.info("ℹ️ Мониторинг остановлен")
+        try:
+            if self._sla_task and not self._sla_task.done():
+                self._sla_task.cancel()
+        except Exception:
+            pass
     
     async def _monitoring_cycle(self):
         async for db in get_db():
@@ -576,6 +588,107 @@ class MonitoringService:
                 is_success=False
             )
     
+    async def _check_ticket_sla(self, db: AsyncSession):
+        try:
+            # Quick guards
+            # Allow runtime toggle from SupportSettingsService
+            try:
+                from app.services.support_settings_service import SupportSettingsService
+                sla_enabled_runtime = SupportSettingsService.get_sla_enabled()
+            except Exception:
+                sla_enabled_runtime = getattr(settings, 'SUPPORT_TICKET_SLA_ENABLED', True)
+            if not sla_enabled_runtime:
+                return
+            if not self.bot:
+                return
+            if not settings.is_admin_notifications_enabled():
+                return
+
+            from datetime import datetime, timedelta
+            try:
+                from app.services.support_settings_service import SupportSettingsService
+                sla_minutes = max(1, int(SupportSettingsService.get_sla_minutes()))
+            except Exception:
+                sla_minutes = max(1, int(getattr(settings, 'SUPPORT_TICKET_SLA_MINUTES', 5)))
+            cooldown_minutes = max(1, int(getattr(settings, 'SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES', 15)))
+            now = datetime.utcnow()
+            stale_before = now - timedelta(minutes=sla_minutes)
+            cooldown_before = now - timedelta(minutes=cooldown_minutes)
+
+            # Tickets to remind: open, no admin reply yet after user's last message (status OPEN), stale by SLA,
+            # and either never reminded or cooldown passed
+            result = await db.execute(
+                select(Ticket)
+                .options(selectinload(Ticket.user))
+                .where(
+                    and_(
+                        Ticket.status == TicketStatus.OPEN.value,
+                        Ticket.updated_at <= stale_before,
+                        or_(Ticket.last_sla_reminder_at.is_(None), Ticket.last_sla_reminder_at <= cooldown_before),
+                    )
+                )
+            )
+            tickets = result.scalars().all()
+            if not tickets:
+                return
+
+            from app.services.admin_notification_service import AdminNotificationService
+
+            reminders_sent = 0
+            service = AdminNotificationService(self.bot)
+
+            for ticket in tickets:
+                try:
+                    waited_minutes = max(0, int((now - ticket.updated_at).total_seconds() // 60))
+                    title = (ticket.title or '').strip()
+                    if len(title) > 60:
+                        title = title[:57] + '...'
+
+                    text = (
+                        f"⏰ <b>Ожидание ответа на тикет превышено</b>\n\n"
+                        f"🆔 <b>ID:</b> <code>{ticket.id}</code>\n"
+                        f"👤 <b>User ID:</b> <code>{ticket.user_id}</code>\n"
+                        f"📝 <b>Заголовок:</b> {title or '—'}\n"
+                        f"⏱️ <b>Ожидает ответа:</b> {waited_minutes} мин\n"
+                    )
+
+                    sent = await service.send_ticket_event_notification(text)
+                    if sent:
+                        ticket.last_sla_reminder_at = now
+                        reminders_sent += 1
+                        # commit after each to persist timestamp and avoid duplicate reminders on crash
+                        await db.commit()
+                except Exception as notify_error:
+                    logger.error(f"Ошибка отправки SLA-уведомления по тикету {ticket.id}: {notify_error}")
+
+            if reminders_sent > 0:
+                await self._log_monitoring_event(
+                    db,
+                    "ticket_sla_reminders_sent",
+                    f"Отправлено {reminders_sent} SLA-напоминаний по тикетам",
+                    {"count": reminders_sent},
+                )
+        except Exception as e:
+            logger.error(f"Ошибка проверки SLA тикетов: {e}")
+
+    async def _sla_loop(self):
+        try:
+            interval_seconds = max(10, int(getattr(settings, 'SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS', 60)))
+        except Exception:
+            interval_seconds = 60
+        while self.is_running:
+            try:
+                async for db in get_db():
+                    try:
+                        await self._check_ticket_sla(db)
+                    finally:
+                        break
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Ошибка в SLA-цикле: {e}")
+            await asyncio.sleep(interval_seconds)
+
     async def _log_monitoring_event(
         self,
         db: AsyncSession,
