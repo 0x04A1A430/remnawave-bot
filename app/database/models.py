@@ -163,6 +163,8 @@ class PromoGroup(Base):
     server_discount_percent = Column(Integer, nullable=False, default=0)
     traffic_discount_percent = Column(Integer, nullable=False, default=0)
     device_discount_percent = Column(Integer, nullable=False, default=0)
+    auto_assign_enabled = Column(Boolean, nullable=False, default=False)
+    spent_threshold_kopeks = Column(Integer, nullable=False, default=0)
     is_default = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

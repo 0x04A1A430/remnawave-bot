@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Optional
 
 from aiogram import Dispatcher, types, F
@@ -37,6 +38,48 @@ def _format_discount_line(texts, group) -> str:
     )
 
 
+def _format_auto_assign_line(texts, group) -> str:
+    if getattr(group, "auto_assign_enabled", False):
+        amount = texts.format_price(getattr(group, "spent_threshold_kopeks", 0))
+        return texts.t(
+            "ADMIN_PROMO_GROUP_AUTO_ASSIGN_ENABLED",
+            "🤖 Автоназначение: при тратах от {amount}",
+        ).format(amount=amount)
+    return texts.t(
+        "ADMIN_PROMO_GROUP_AUTO_ASSIGN_DISABLED",
+        "🤖 Автоназначение: выключено",
+    )
+
+
+def _parse_bool_response(value: str) -> bool:
+    normalized = value.strip().lower()
+    truthy = {"да", "д", "yes", "y", "true", "1", "on"}
+    falsy = {"нет", "н", "no", "n", "false", "0", "off"}
+
+    if normalized in truthy:
+        return True
+    if normalized in falsy:
+        return False
+    raise ValueError
+
+
+def _parse_amount_to_kopeks(value: str) -> int:
+    normalized = value.replace(" ", "").replace(",", ".").strip()
+    if not normalized:
+        raise ValueError
+
+    try:
+        amount = Decimal(normalized)
+    except (InvalidOperation, ValueError):
+        raise ValueError from None
+
+    if amount < 0:
+        raise ValueError
+
+    kopeks = (amount * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return int(kopeks)
+
+
 @admin_required
 @error_handler
 async def show_promo_groups_menu(
@@ -68,6 +111,7 @@ async def show_promo_groups_menu(
                 [
                     f"{'⭐' if group.is_default else '🎯'} <b>{group.name}</b>{default_suffix}",
                     _format_discount_line(texts, group),
+                    _format_auto_assign_line(texts, group),
                     texts.t(
                         "ADMIN_PROMO_GROUPS_MEMBERS_COUNT",
                         "Участников: {count}",
@@ -139,6 +183,7 @@ async def show_promo_group_details(
                 "💳 <b>Промогруппа:</b> {name}",
             ).format(name=group.name),
             _format_discount_line(texts, group),
+            _format_auto_assign_line(texts, group),
             texts.t(
                 "ADMIN_PROMO_GROUP_DETAILS_MEMBERS",
                 "Участников: {count}",
@@ -299,13 +344,37 @@ async def process_create_group_devices(
         await message.answer(texts.t("ADMIN_PROMO_GROUP_INVALID_PERCENT", "Введите число от 0 до 100."))
         return
 
+    await state.update_data(new_group_devices=devices_discount)
+    await state.set_state(AdminStates.creating_promo_group_auto_assign_enabled)
+    await message.answer(
+        texts.t(
+            "ADMIN_PROMO_GROUP_CREATE_AUTO_ASSIGN_PROMPT",
+            "Включить автоматическое назначение по сумме трат? (да/нет)",
+        )
+    )
+
+
+async def _finalize_create_group(
+    message: types.Message,
+    state: FSMContext,
+    db_user,
+    db: AsyncSession,
+    *,
+    auto_assign_enabled: bool,
+    spent_threshold_kopeks: int,
+):
+    data = await state.get_data()
+    texts = get_texts(data.get("language", db_user.language))
+
     try:
         group = await create_promo_group(
             db,
             data["new_group_name"],
             traffic_discount_percent=data["new_group_traffic"],
             server_discount_percent=data["new_group_servers"],
-            device_discount_percent=devices_discount,
+            device_discount_percent=data["new_group_devices"],
+            auto_assign_enabled=auto_assign_enabled,
+            spent_threshold_kopeks=spent_threshold_kopeks,
         )
     except Exception as e:
         logger.error(f"Не удалось создать промогруппу: {e}")
@@ -331,6 +400,72 @@ async def process_create_group_devices(
                 ]
             ]
         ),
+    )
+
+
+@admin_required
+@error_handler
+async def process_create_group_auto_assign_enabled(
+    message: types.Message,
+    state: FSMContext,
+    db_user,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    texts = get_texts(data.get("language", db_user.language))
+
+    try:
+        auto_enabled = _parse_bool_response(message.text)
+    except ValueError:
+        await message.answer(texts.t("ADMIN_PROMO_GROUP_INVALID_BOOL", "Введите «да» или «нет»."))
+        return
+
+    await state.update_data(new_group_auto_assign_enabled=auto_enabled)
+
+    if auto_enabled:
+        await state.set_state(AdminStates.creating_promo_group_auto_assign_threshold)
+        await message.answer(
+            texts.t(
+                "ADMIN_PROMO_GROUP_CREATE_AUTO_ASSIGN_THRESHOLD_PROMPT",
+                "Введите сумму трат в рублях для автоматического назначения:",
+            )
+        )
+        return
+
+    await _finalize_create_group(
+        message,
+        state,
+        db_user,
+        db,
+        auto_assign_enabled=False,
+        spent_threshold_kopeks=0,
+    )
+
+
+@admin_required
+@error_handler
+async def process_create_group_auto_assign_threshold(
+    message: types.Message,
+    state: FSMContext,
+    db_user,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    texts = get_texts(data.get("language", db_user.language))
+
+    try:
+        threshold_kopeks = _parse_amount_to_kopeks(message.text)
+    except ValueError:
+        await message.answer(texts.t("ADMIN_PROMO_GROUP_INVALID_AMOUNT", "Введите неотрицательное число."))
+        return
+
+    await _finalize_create_group(
+        message,
+        state,
+        db_user,
+        db,
+        auto_assign_enabled=data.get("new_group_auto_assign_enabled", False),
+        spent_threshold_kopeks=threshold_kopeks,
     )
 
 
@@ -440,18 +575,121 @@ async def process_edit_group_devices(
         await state.clear()
         return
 
+    await state.update_data(
+        edit_group_devices=devices_discount,
+        current_group_auto_assign_enabled=group.auto_assign_enabled,
+        current_group_spent_threshold=group.spent_threshold_kopeks,
+    )
+
+    await state.set_state(AdminStates.editing_promo_group_auto_assign_enabled)
+    status_text = _format_auto_assign_line(texts, group)
+    await message.answer(
+        texts.t(
+            "ADMIN_PROMO_GROUP_EDIT_AUTO_ASSIGN_PROMPT",
+            "Автоназначение сейчас: {status}. Включить автоматическое назначение? (да/нет)",
+        ).format(status=status_text)
+    )
+
+
+async def _finalize_edit_group(
+    message: types.Message,
+    state: FSMContext,
+    db_user,
+    db: AsyncSession,
+    *,
+    auto_assign_enabled: bool,
+    spent_threshold_kopeks: int,
+):
+    data = await state.get_data()
+    texts = get_texts(data.get("language", db_user.language))
+
+    group = await get_promo_group_by_id(db, data["edit_group_id"])
+    if not group:
+        await message.answer("❌ Промогруппа не найдена")
+        await state.clear()
+        return
+
     await update_promo_group(
         db,
         group,
         name=data["edit_group_name"],
         traffic_discount_percent=data["edit_group_traffic"],
         server_discount_percent=data["edit_group_servers"],
-        device_discount_percent=devices_discount,
+        device_discount_percent=data["edit_group_devices"],
+        auto_assign_enabled=auto_assign_enabled,
+        spent_threshold_kopeks=spent_threshold_kopeks,
     )
 
     await state.clear()
     await message.answer(
         texts.t("ADMIN_PROMO_GROUP_UPDATED", "Промогруппа «{name}» обновлена.").format(name=group.name)
+    )
+
+
+@admin_required
+@error_handler
+async def process_edit_group_auto_assign_enabled(
+    message: types.Message,
+    state: FSMContext,
+    db_user,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    texts = get_texts(data.get("language", db_user.language))
+
+    try:
+        auto_enabled = _parse_bool_response(message.text)
+    except ValueError:
+        await message.answer(texts.t("ADMIN_PROMO_GROUP_INVALID_BOOL", "Введите «да» или «нет»."))
+        return
+
+    await state.update_data(edit_group_auto_assign_enabled=auto_enabled)
+
+    if auto_enabled:
+        await state.set_state(AdminStates.editing_promo_group_auto_assign_threshold)
+        current_amount = data.get("current_group_spent_threshold", 0)
+        await message.answer(
+            texts.t(
+                "ADMIN_PROMO_GROUP_EDIT_AUTO_ASSIGN_THRESHOLD_PROMPT",
+                "Введите новую сумму трат в рублях (текущее значение: {amount}):",
+            ).format(amount=texts.format_price(current_amount))
+        )
+        return
+
+    await _finalize_edit_group(
+        message,
+        state,
+        db_user,
+        db,
+        auto_assign_enabled=False,
+        spent_threshold_kopeks=0,
+    )
+
+
+@admin_required
+@error_handler
+async def process_edit_group_auto_assign_threshold(
+    message: types.Message,
+    state: FSMContext,
+    db_user,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    texts = get_texts(data.get("language", db_user.language))
+
+    try:
+        threshold_kopeks = _parse_amount_to_kopeks(message.text)
+    except ValueError:
+        await message.answer(texts.t("ADMIN_PROMO_GROUP_INVALID_AMOUNT", "Введите неотрицательное число."))
+        return
+
+    await _finalize_edit_group(
+        message,
+        state,
+        db_user,
+        db,
+        auto_assign_enabled=data.get("edit_group_auto_assign_enabled", False),
+        spent_threshold_kopeks=threshold_kopeks,
     )
 
 
@@ -616,6 +854,14 @@ def register_handlers(dp: Dispatcher):
         process_create_group_devices,
         AdminStates.creating_promo_group_device_discount,
     )
+    dp.message.register(
+        process_create_group_auto_assign_enabled,
+        AdminStates.creating_promo_group_auto_assign_enabled,
+    )
+    dp.message.register(
+        process_create_group_auto_assign_threshold,
+        AdminStates.creating_promo_group_auto_assign_threshold,
+    )
 
     dp.message.register(process_edit_group_name, AdminStates.editing_promo_group_name)
     dp.message.register(
@@ -629,4 +875,12 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(
         process_edit_group_devices,
         AdminStates.editing_promo_group_device_discount,
+    )
+    dp.message.register(
+        process_edit_group_auto_assign_enabled,
+        AdminStates.editing_promo_group_auto_assign_enabled,
+    )
+    dp.message.register(
+        process_edit_group_auto_assign_threshold,
+        AdminStates.editing_promo_group_auto_assign_threshold,
     )
