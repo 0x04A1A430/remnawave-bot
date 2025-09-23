@@ -353,6 +353,7 @@ class AdminNotificationService:
             'yookassa': '💳 YooKassa (карта)',
             'tribute': '💎 Tribute (карта)',
             'mulenpay': '💳 Mulen Pay (карта)',
+            'pal24': '💳 PayPalych (карта)',
             'manual': '🛠️ Вручную (админ)',
             'balance': '💰 С баланса'
         }
