@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import logging
 import json
 from typing import Optional
@@ -102,7 +104,7 @@ class WebhookServer:
             headers={
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, trbt-signature, Crypto-Pay-API-Signature',
+                'Access-Control-Allow-Headers': 'Content-Type, trbt-signature, Crypto-Pay-API-Signature, X-MulenPay-Signature, Authorization',
             }
         )
 
@@ -114,6 +116,9 @@ class WebhookServer:
             if not raw_body:
                 logger.warning("Пустой Mulen Pay webhook")
                 return web.json_response({"status": "error", "reason": "empty_body"}, status=400)
+
+            if not self._verify_mulenpay_signature(request, raw_body):
+                return web.json_response({"status": "error", "reason": "invalid_signature"}, status=401)
 
             try:
                 payload = json.loads(raw_body.decode('utf-8'))
@@ -138,6 +143,39 @@ class WebhookServer:
         except Exception as error:
             logger.error(f"Критическая ошибка Mulen Pay webhook: {error}", exc_info=True)
             return web.json_response({"status": "error", "reason": "internal_error", "message": str(error)}, status=500)
+
+    @staticmethod
+    def _verify_mulenpay_signature(request: web.Request, raw_body: bytes) -> bool:
+        secret_key = settings.MULENPAY_SECRET_KEY
+        if not secret_key:
+            logger.error("Mulen Pay secret key is not configured")
+            return False
+
+        signature = request.headers.get('X-MulenPay-Signature')
+        if signature:
+            expected_signature = hmac.new(
+                secret_key.encode('utf-8'),
+                raw_body,
+                hashlib.sha256,
+            ).hexdigest()
+
+            if hmac.compare_digest(signature.strip().lower(), expected_signature.lower()):
+                return True
+
+            logger.error("Неверная подпись Mulen Pay webhook")
+            return False
+
+        authorization_header = request.headers.get('Authorization')
+        if authorization_header and authorization_header.startswith('Bearer '):
+            token = authorization_header.split(' ', 1)[1].strip()
+            if hmac.compare_digest(token, secret_key):
+                return True
+
+            logger.error("Неверный Bearer токен Mulen Pay webhook")
+            return False
+
+        logger.error("Отсутствует подпись Mulen Pay webhook")
+        return False
 
     async def _tribute_webhook_handler(self, request: web.Request) -> web.Response:
 
