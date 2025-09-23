@@ -111,7 +111,7 @@ async def complete_transaction(db: AsyncSession, transaction: Transaction) -> Tr
 
 
 async def get_pending_transactions(db: AsyncSession) -> List[Transaction]:
-
+    
     result = await db.execute(
         select(Transaction)
         .options(selectinload(Transaction.user))
@@ -119,21 +119,6 @@ async def get_pending_transactions(db: AsyncSession) -> List[Transaction]:
         .order_by(Transaction.created_at)
     )
     return result.scalars().all()
-
-
-async def get_user_total_spent(db: AsyncSession, user_id: int) -> int:
-    result = await db.execute(
-        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
-        .where(
-            and_(
-                Transaction.user_id == user_id,
-                Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                Transaction.is_completed == True,
-            )
-        )
-    )
-    total = result.scalar()
-    return total or 0
 
 
 async def get_transactions_statistics(

@@ -20,10 +20,9 @@ from app.database.crud.subscription import (
 from app.database.crud.user import subtract_user_balance
 from app.database.crud.transaction import create_transaction, get_user_transactions
 from app.database.models import (
-    User, TransactionType, SubscriptionStatus,
-    SubscriptionServer, Subscription
+    User, TransactionType, SubscriptionStatus, 
+    SubscriptionServer, Subscription 
 )
-from app.services.promo_group_service import auto_assign_promo_group_by_spent
 from app.keyboards.inline import (
     get_subscription_keyboard, get_trial_keyboard,
     get_subscription_period_keyboard, get_traffic_packages_keyboard,
@@ -1192,13 +1191,13 @@ async def apply_countries_changes(
     try:
         if added and total_cost > 0:
             success = await subtract_user_balance(
-                db, db_user, total_cost,
+                db, db_user, total_cost, 
                 f"Добавление стран: {', '.join(added_names)} на {charged_months} мес"
             )
             if not success:
                 await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
                 return
-
+            
             await create_transaction(
                 db=db,
                 user_id=db_user.id,
@@ -1206,7 +1205,6 @@ async def apply_countries_changes(
                 amount_kopeks=total_cost,
                 description=f"Добавление стран к подписке: {', '.join(added_names)} на {charged_months} мес"
             )
-            await auto_assign_promo_group_by_spent(db, db_user)
         
         if added:
             from app.database.crud.server_squad import get_server_ids_by_uuids, add_user_to_servers
@@ -1425,11 +1423,11 @@ async def execute_change_devices(
                 db, db_user, price,
                 f"Изменение количества устройств с {current_devices} до {new_devices_count}"
             )
-
+            
             if not success:
                 await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
                 return
-
+            
             charged_months = get_remaining_months(subscription.end_date)
             await create_transaction(
                 db=db,
@@ -1438,7 +1436,6 @@ async def execute_change_devices(
                 amount_kopeks=price,
                 description=f"Изменение устройств с {current_devices} до {new_devices_count} на {charged_months} мес"
             )
-            await auto_assign_promo_group_by_spent(db, db_user)
         
         subscription.device_limit = new_devices_count
         subscription.updated_at = datetime.utcnow()
@@ -1992,7 +1989,6 @@ async def confirm_add_devices(
             amount_kopeks=price,
             description=f"Добавление {devices_count} устройств на {charged_months} мес"
         )
-        await auto_assign_promo_group_by_spent(db, db_user)
         
         
         await db.refresh(db_user)
@@ -2208,7 +2204,6 @@ async def confirm_extend_subscription(
             amount_kopeks=price,
             description=f"Продление подписки на {days} дней ({months_in_period} мес)"
         )
-        await auto_assign_promo_group_by_spent(db, db_user)
 
         try:
             notification_service = AdminNotificationService(callback.bot)
@@ -2299,7 +2294,6 @@ async def confirm_reset_traffic(
             amount_kopeks=reset_price,
             description="Сброс трафика"
         )
-        await auto_assign_promo_group_by_spent(db, db_user)
         
         await db.refresh(db_user)
         await db.refresh(subscription)
@@ -2977,7 +2971,6 @@ async def confirm_purchase(
             amount_kopeks=final_price,
             description=f"Подписка на {data['period_days']} дней ({months_in_period} мес)"
         )
-        await auto_assign_promo_group_by_spent(db, db_user)
         
         try:
             notification_service = AdminNotificationService(callback.bot)
@@ -3168,7 +3161,6 @@ async def add_traffic(
             amount_kopeks=price,
             description=f"Добавление {traffic_gb} ГБ трафика"
         )
-        await auto_assign_promo_group_by_spent(db, db_user)
         
         
         await db.refresh(db_user)
@@ -3608,11 +3600,11 @@ async def confirm_add_countries_to_subscription(
                 db, db_user, total_price,
                 f"Добавление стран к подписке: {', '.join(new_countries_names)}"
             )
-
+            
             if not success:
                 await callback.answer("❌ Ошибка списания средств", show_alert=True)
                 return
-
+            
             await create_transaction(
                 db=db,
                 user_id=db_user.id,
@@ -3620,7 +3612,6 @@ async def confirm_add_countries_to_subscription(
                 amount_kopeks=total_price,
                 description=f"Добавление стран к подписке: {', '.join(new_countries_names)}"
             )
-            await auto_assign_promo_group_by_spent(db, db_user)
         
         subscription.connected_squads = selected_countries
         subscription.updated_at = datetime.utcnow()
@@ -4325,11 +4316,11 @@ async def execute_switch_traffic(
                 db, db_user, price_difference,
                 f"Переключение трафика с {current_traffic}GB на {new_traffic_gb}GB"
             )
-
+            
             if not success:
                 await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
                 return
-
+            
             months_remaining = get_remaining_months(subscription.end_date)
             await create_transaction(
                 db=db,
@@ -4338,7 +4329,6 @@ async def execute_switch_traffic(
                 amount_kopeks=price_difference,
                 description=f"Переключение трафика с {current_traffic}GB на {new_traffic_gb}GB на {months_remaining} мес"
             )
-            await auto_assign_promo_group_by_spent(db, db_user)
         
         subscription.traffic_limit_gb = new_traffic_gb
         subscription.updated_at = datetime.utcnow()
