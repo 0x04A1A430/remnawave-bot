@@ -30,17 +30,26 @@ def get_available_payment_methods() -> List[Dict[str, str]]:
     if settings.TRIBUTE_ENABLED:
         methods.append({
             "id": "tribute",
-            "name": "Банковская карта", 
+            "name": "Банковская карта",
             "icon": "💳",
             "description": "через Tribute",
             "callback": "topup_tribute"
         })
-        
+
+    if settings.is_mulenpay_enabled():
+        methods.append({
+            "id": "mulenpay",
+            "name": "Банковская карта",
+            "icon": "💳",
+            "description": "через Mulen Pay",
+            "callback": "topup_mulenpay"
+        })
+
     if settings.is_cryptobot_enabled():
         methods.append({
             "id": "cryptobot",
             "name": "Криптовалюта",
-            "icon": "🪙", 
+            "icon": "🪙",
             "description": "через CryptoBot",
             "callback": "topup_cryptobot"
         })
@@ -112,6 +121,8 @@ def is_payment_method_available(method_id: str) -> bool:
         return settings.is_yookassa_enabled()
     elif method_id == "tribute":
         return settings.TRIBUTE_ENABLED
+    elif method_id == "mulenpay":
+        return settings.is_mulenpay_enabled()
     elif method_id == "cryptobot":
         return settings.is_cryptobot_enabled()
     elif method_id == "support":
@@ -127,6 +138,7 @@ def get_payment_method_status() -> Dict[str, bool]:
         "stars": settings.TELEGRAM_STARS_ENABLED,
         "yookassa": settings.is_yookassa_enabled(),
         "tribute": settings.TRIBUTE_ENABLED,
+        "mulenpay": settings.is_mulenpay_enabled(),
         "cryptobot": settings.is_cryptobot_enabled(),
         "support": True
     }
@@ -139,8 +151,10 @@ def get_enabled_payment_methods_count() -> int:
     if settings.TELEGRAM_STARS_ENABLED:
         count += 1
     if settings.is_yookassa_enabled():
-        count += 1 
+        count += 1
     if settings.TRIBUTE_ENABLED:
+        count += 1
+    if settings.is_mulenpay_enabled():
         count += 1
     if settings.is_cryptobot_enabled():
         count += 1

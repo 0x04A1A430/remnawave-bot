@@ -352,6 +352,7 @@ class AdminNotificationService:
             'telegram_stars': '⭐ Telegram Stars',
             'yookassa': '💳 YooKassa (карта)',
             'tribute': '💎 Tribute (карта)',
+            'mulenpay': '💳 Mulen Pay (карта)',
             'manual': '🛠️ Вручную (админ)',
             'balance': '💰 С баланса'
         }

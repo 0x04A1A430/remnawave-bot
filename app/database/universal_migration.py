@@ -274,6 +274,108 @@ async def create_cryptobot_payments_table():
         logger.error(f"Ошибка создания таблицы cryptobot_payments: {e}")
         return False
 
+
+async def create_mulenpay_payments_table():
+    table_exists = await check_table_exists('mulenpay_payments')
+    if table_exists:
+        logger.info("Таблица mulenpay_payments уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE mulenpay_payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    mulen_payment_id INTEGER NULL,
+                    uuid VARCHAR(255) NOT NULL UNIQUE,
+                    amount_kopeks INTEGER NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    status VARCHAR(50) NOT NULL DEFAULT 'created',
+                    is_paid BOOLEAN DEFAULT 0,
+                    paid_at DATETIME NULL,
+                    payment_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    transaction_id INTEGER NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_mulenpay_uuid ON mulenpay_payments(uuid);
+                CREATE INDEX idx_mulenpay_payment_id ON mulenpay_payments(mulen_payment_id);
+                """
+
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE mulenpay_payments (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    mulen_payment_id INTEGER NULL,
+                    uuid VARCHAR(255) NOT NULL UNIQUE,
+                    amount_kopeks INTEGER NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    status VARCHAR(50) NOT NULL DEFAULT 'created',
+                    is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+                    paid_at TIMESTAMP NULL,
+                    payment_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    transaction_id INTEGER NULL REFERENCES transactions(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX idx_mulenpay_uuid ON mulenpay_payments(uuid);
+                CREATE INDEX idx_mulenpay_payment_id ON mulenpay_payments(mulen_payment_id);
+                """
+
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE mulenpay_payments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    mulen_payment_id INT NULL,
+                    uuid VARCHAR(255) NOT NULL UNIQUE,
+                    amount_kopeks INT NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    status VARCHAR(50) NOT NULL DEFAULT 'created',
+                    is_paid BOOLEAN NOT NULL DEFAULT 0,
+                    paid_at DATETIME NULL,
+                    payment_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    transaction_id INT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_mulenpay_uuid ON mulenpay_payments(uuid);
+                CREATE INDEX idx_mulenpay_payment_id ON mulenpay_payments(mulen_payment_id);
+                """
+
+            else:
+                logger.error(f"Неподдерживаемый тип БД для таблицы mulenpay_payments: {db_type}")
+                return False
+
+            await conn.execute(text(create_sql))
+            logger.info("Таблица mulenpay_payments успешно создана")
+            return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы mulenpay_payments: {e}")
+        return False
+
 async def create_user_messages_table():
     table_exists = await check_table_exists('user_messages')
     if table_exists:
@@ -1102,6 +1204,13 @@ async def run_universal_migration():
             logger.info("✅ Таблица CryptoBot payments готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей CryptoBot payments")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ MULEN PAY ===")
+        mulenpay_created = await create_mulenpay_payments_table()
+        if mulenpay_created:
+            logger.info("✅ Таблица Mulen Pay payments готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей Mulen Pay payments")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_MESSAGES ===")
         user_messages_created = await create_user_messages_table()
