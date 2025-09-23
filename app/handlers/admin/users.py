@@ -26,6 +26,7 @@ from app.utils.formatters import format_datetime, format_time_ago
 from app.services.remnawave_service import RemnaWaveService
 from app.external.remnawave_api import TrafficLimitStrategy
 from app.database.crud.server_squad import get_all_server_squads, get_server_squad_by_uuid, get_server_squad_by_id
+from app.services.promo_group_service import auto_assign_promo_group_by_spent
 
 logger = logging.getLogger(__name__)
 
@@ -2866,6 +2867,7 @@ async def admin_buy_subscription_execute(
                 amount_kopeks=price_kopeks,
                 description=f"Продление подписки на {period_days} дней (администратор)"
             )
+            await auto_assign_promo_group_by_spent(db, target_user)
             
             try:
                 from app.services.remnawave_service import RemnaWaveService

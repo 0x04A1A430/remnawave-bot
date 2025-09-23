@@ -40,12 +40,16 @@ async def create_promo_group(
     server_discount_percent: int,
     traffic_discount_percent: int,
     device_discount_percent: int,
+    auto_assign_enabled: bool = False,
+    spent_threshold_kopeks: int = 0,
 ) -> PromoGroup:
     promo_group = PromoGroup(
         name=name.strip(),
         server_discount_percent=max(0, min(100, server_discount_percent)),
         traffic_discount_percent=max(0, min(100, traffic_discount_percent)),
         device_discount_percent=max(0, min(100, device_discount_percent)),
+        auto_assign_enabled=auto_assign_enabled,
+        spent_threshold_kopeks=max(0, spent_threshold_kopeks),
         is_default=False,
     )
 
@@ -54,11 +58,13 @@ async def create_promo_group(
     await db.refresh(promo_group)
 
     logger.info(
-        "Создана промогруппа '%s' с скидками (servers=%s%%, traffic=%s%%, devices=%s%%)",
+        "Создана промогруппа '%s' с скидками (servers=%s%%, traffic=%s%%, devices=%s%%), авто=%s, порог=%s",
         promo_group.name,
         promo_group.server_discount_percent,
         promo_group.traffic_discount_percent,
         promo_group.device_discount_percent,
+        promo_group.auto_assign_enabled,
+        promo_group.spent_threshold_kopeks,
     )
 
     return promo_group
@@ -72,6 +78,8 @@ async def update_promo_group(
     server_discount_percent: Optional[int] = None,
     traffic_discount_percent: Optional[int] = None,
     device_discount_percent: Optional[int] = None,
+    auto_assign_enabled: Optional[bool] = None,
+    spent_threshold_kopeks: Optional[int] = None,
 ) -> PromoGroup:
     if name is not None:
         group.name = name.strip()
@@ -81,6 +89,10 @@ async def update_promo_group(
         group.traffic_discount_percent = max(0, min(100, traffic_discount_percent))
     if device_discount_percent is not None:
         group.device_discount_percent = max(0, min(100, device_discount_percent))
+    if auto_assign_enabled is not None:
+        group.auto_assign_enabled = bool(auto_assign_enabled)
+    if spent_threshold_kopeks is not None:
+        group.spent_threshold_kopeks = max(0, spent_threshold_kopeks)
 
     await db.commit()
     await db.refresh(group)
@@ -91,6 +103,15 @@ async def update_promo_group(
         group.id,
     )
     return group
+
+
+async def get_auto_assign_promo_groups(db: AsyncSession) -> List[PromoGroup]:
+    result = await db.execute(
+        select(PromoGroup)
+        .where(PromoGroup.auto_assign_enabled.is_(True))
+        .order_by(PromoGroup.spent_threshold_kopeks.desc(), PromoGroup.id)
+    )
+    return result.scalars().all()
 
 
 async def delete_promo_group(db: AsyncSession, group: PromoGroup) -> bool:

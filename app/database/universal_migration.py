@@ -435,6 +435,68 @@ async def ensure_promo_groups_setup():
                         f"Не удалось добавить уникальное ограничение uq_promo_groups_name: {e}"
                     )
 
+            auto_assign_exists = await check_column_exists(
+                "promo_groups", "auto_assign_enabled"
+            )
+
+            if not auto_assign_exists:
+                if db_type == "sqlite":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN auto_assign_enabled BOOLEAN NOT NULL DEFAULT 0"
+                        )
+                    )
+                elif db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN auto_assign_enabled BOOLEAN NOT NULL DEFAULT FALSE"
+                        )
+                    )
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN auto_assign_enabled TINYINT(1) NOT NULL DEFAULT 0"
+                        )
+                    )
+                else:
+                    logger.error(
+                        f"Неподдерживаемый тип БД для promo_groups.auto_assign_enabled: {db_type}"
+                    )
+                    return False
+
+                logger.info("Добавлена колонка promo_groups.auto_assign_enabled")
+
+            threshold_exists = await check_column_exists(
+                "promo_groups", "spent_threshold_kopeks"
+            )
+
+            if not threshold_exists:
+                if db_type == "sqlite":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN spent_threshold_kopeks INTEGER NOT NULL DEFAULT 0"
+                        )
+                    )
+                elif db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN spent_threshold_kopeks INTEGER NOT NULL DEFAULT 0"
+                        )
+                    )
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN spent_threshold_kopeks INT NOT NULL DEFAULT 0"
+                        )
+                    )
+                else:
+                    logger.error(
+                        f"Неподдерживаемый тип БД для promo_groups.spent_threshold_kopeks: {db_type}"
+                    )
+                    return False
+
+                logger.info("Добавлена колонка promo_groups.spent_threshold_kopeks")
+
             column_exists = await check_column_exists("users", "promo_group_id")
 
             if not column_exists:
@@ -1186,6 +1248,8 @@ async def check_migration_status():
             "subscription_duplicates": False,
             "subscription_conversions_table": False,
             "promo_groups_table": False,
+            "promo_groups_auto_assign_column": False,
+            "promo_groups_spent_threshold_column": False,
             "users_promo_group_column": False
         }
         
@@ -1196,6 +1260,12 @@ async def check_migration_status():
         status["welcome_texts_table"] = await check_table_exists('welcome_texts')
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
         status["promo_groups_table"] = await check_table_exists('promo_groups')
+        status["promo_groups_auto_assign_column"] = await check_column_exists(
+            'promo_groups', 'auto_assign_enabled'
+        )
+        status["promo_groups_spent_threshold_column"] = await check_column_exists(
+            'promo_groups', 'spent_threshold_kopeks'
+        )
 
         status["welcome_texts_is_enabled_column"] = await check_column_exists('welcome_texts', 'is_enabled')
         status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
@@ -1230,6 +1300,8 @@ async def check_migration_status():
             "subscription_conversions_table": "Таблица конверсий подписок",
             "subscription_duplicates": "Отсутствие дубликатов подписок",
             "promo_groups_table": "Таблица промо-групп",
+            "promo_groups_auto_assign_column": "Колонка auto_assign_enabled у промогрупп",
+            "promo_groups_spent_threshold_column": "Колонка spent_threshold_kopeks у промогрупп",
             "users_promo_group_column": "Колонка promo_group_id у пользователей"
         }
         
