@@ -9,7 +9,13 @@ from sqlalchemy import select, func, and_, or_
 
 from app.config import settings
 from app.states import AdminStates
-from app.database.models import User, UserStatus, Subscription, BroadcastHistory
+from app.database.models import (
+    User,
+    UserStatus,
+    Subscription,
+    SubscriptionStatus,
+    BroadcastHistory,
+)
 from app.keyboards.admin import (
     get_admin_messages_keyboard, get_broadcast_target_keyboard,
     get_custom_criteria_keyboard, get_broadcast_history_keyboard,
@@ -260,14 +266,21 @@ async def select_broadcast_target(
     state: FSMContext,
     db: AsyncSession
 ):
-    target = callback.data.split('_')[-1]
-    
+    raw_target = callback.data[len("broadcast_"):]
+    target_aliases = {
+        "no_sub": "no",
+    }
+    target = target_aliases.get(raw_target, raw_target)
+
     target_names = {
         "all": "Всем пользователям",
         "active": "С активной подпиской",
-        "trial": "С триальной подпиской", 
+        "trial": "С триальной подпиской",
         "no": "Без подписки",
-        "expiring": "С истекающей подпиской"
+        "expiring": "С истекающей подпиской",
+        "expired": "С истекшей подпиской",
+        "active_zero": "Активная подписка, трафик 0 ГБ",
+        "trial_zero": "Триальная подписка, трафик 0 ГБ",
     }
     
     user_count = await get_target_users_count(db, target)
@@ -817,22 +830,88 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
 
 
 async def get_target_users(db: AsyncSession, target: str) -> list:
-   if target == "all":
-       return await get_users_list(db, offset=0, limit=10000, status=UserStatus.ACTIVE)
-   elif target == "active":
-       users = await get_users_list(db, offset=0, limit=10000, status=UserStatus.ACTIVE)
-       return [user for user in users if user.subscription and user.subscription.is_active and not user.subscription.is_trial]
-   elif target == "trial":
-       users = await get_users_list(db, offset=0, limit=10000, status=UserStatus.ACTIVE)
-       return [user for user in users if user.subscription and user.subscription.is_trial]
-   elif target == "no":
-       users = await get_users_list(db, offset=0, limit=10000, status=UserStatus.ACTIVE)
-       return [user for user in users if not user.subscription or not user.subscription.is_active]
-   elif target == "expiring":
-       expiring_subs = await get_expiring_subscriptions(db, 3)
-       return [sub.user for sub in expiring_subs if sub.user]
-   else:
-       return []
+    users = await get_users_list(db, offset=0, limit=10000, status=UserStatus.ACTIVE)
+
+    if target == "all":
+        return users
+
+    if target == "active":
+        return [
+            user
+            for user in users
+            if user.subscription
+            and user.subscription.is_active
+            and not user.subscription.is_trial
+        ]
+
+    if target == "trial":
+        return [
+            user
+            for user in users
+            if user.subscription and user.subscription.is_trial
+        ]
+
+    if target == "no":
+        return [
+            user
+            for user in users
+            if not user.subscription or not user.subscription.is_active
+        ]
+
+    if target == "expiring":
+        expiring_subs = await get_expiring_subscriptions(db, 3)
+        return [sub.user for sub in expiring_subs if sub.user]
+
+    if target == "expired":
+        now = datetime.utcnow()
+        expired_statuses = {
+            SubscriptionStatus.EXPIRED.value,
+            SubscriptionStatus.DISABLED.value,
+        }
+        expired_users = []
+        for user in users:
+            subscription = user.subscription
+            if subscription:
+                if subscription.status in expired_statuses:
+                    expired_users.append(user)
+                    continue
+                if subscription.end_date <= now and not subscription.is_active:
+                    expired_users.append(user)
+                    continue
+            elif user.has_had_paid_subscription:
+                expired_users.append(user)
+        return expired_users
+
+    if target == "active_zero":
+        return [
+            user
+            for user in users
+            if user.subscription
+            and not user.subscription.is_trial
+            and user.subscription.is_active
+            and (user.subscription.traffic_used_gb or 0) <= 0
+        ]
+
+    if target == "trial_zero":
+        return [
+            user
+            for user in users
+            if user.subscription
+            and user.subscription.is_trial
+            and user.subscription.is_active
+            and (user.subscription.traffic_used_gb or 0) <= 0
+        ]
+
+    if target == "zero":
+        return [
+            user
+            for user in users
+            if user.subscription
+            and user.subscription.is_active
+            and (user.subscription.traffic_used_gb or 0) <= 0
+        ]
+
+    return []
 
 
 async def get_custom_users_count(db: AsyncSession, criteria: str) -> int:
@@ -956,7 +1035,12 @@ def get_target_name(target_type: str) -> str:
         "active": "С активной подпиской",
         "trial": "С триальной подпиской",
         "no": "Без подписки",
+        "sub": "Без подписки",
         "expiring": "С истекающей подпиской",
+        "expired": "С истекшей подпиской",
+        "active_zero": "Активная подписка, трафик 0 ГБ",
+        "trial_zero": "Триальная подписка, трафик 0 ГБ",
+        "zero": "Подписка, трафик 0 ГБ",
         "custom_today": "Зарегистрированные сегодня",
         "custom_week": "Зарегистрированные за неделю",
         "custom_month": "Зарегистрированные за месяц",

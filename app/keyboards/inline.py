@@ -222,7 +222,14 @@ def get_server_status_keyboard(
     total_pages: int,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    keyboard: list[list[InlineKeyboardButton]] = []
+    keyboard: list[list[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=texts.t("SERVER_STATUS_REFRESH", "🔄 Обновить"),
+                callback_data=f"server_status_page:{current_page}",
+            )
+        ]
+    ]
 
     if total_pages > 1:
         nav_row: list[InlineKeyboardButton] = []

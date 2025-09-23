@@ -568,7 +568,12 @@ def get_broadcast_target_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="❌ Без подписки", callback_data="broadcast_no_sub")
         ],
         [
-            InlineKeyboardButton(text="⏰ Истекающие", callback_data="broadcast_expiring")
+            InlineKeyboardButton(text="⏰ Истекающие", callback_data="broadcast_expiring"),
+            InlineKeyboardButton(text="🔚 Истекшие", callback_data="broadcast_expired")
+        ],
+        [
+            InlineKeyboardButton(text="🧊 Активна 0 ГБ", callback_data="broadcast_active_zero"),
+            InlineKeyboardButton(text="🥶 Триал 0 ГБ", callback_data="broadcast_trial_zero")
         ],
         [
             InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_messages")

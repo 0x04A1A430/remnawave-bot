@@ -125,29 +125,28 @@ async def view_admin_ticket(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
-    state: Optional[FSMContext] = None
+    state: Optional[FSMContext] = None,
+    ticket_id: Optional[int] = None
 ):
     """Показать детали тикета для админа"""
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
         texts = get_texts(db_user.language)
         await callback.answer(texts.ACCESS_DENIED, show_alert=True)
         return
-    data_str = callback.data or ""
-    ticket_id = None
-    try:
-        if data_str.startswith("admin_view_ticket_"):
-            ticket_id = int(data_str.replace("admin_view_ticket_", ""))
-        else:
-            ticket_id = int(data_str.split("_")[-1])
-    except Exception:
-        ticket_id = None
+    
     if ticket_id is None:
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("TICKET_NOT_FOUND", "Тикет не найден."),
-            show_alert=True
-        )
-        return
+        try:
+            ticket_id = int((callback.data or "").split("_")[-1])
+        except (ValueError, AttributeError):
+            texts = get_texts(db_user.language)
+            await callback.answer(
+                texts.t("TICKET_NOT_FOUND", "Тикет не найден."),
+                show_alert=True
+            )
+            return
+
+    if state is None:
+        state = FSMContext(callback.bot, callback.from_user.id)
     
     ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True, load_user=True)
     
@@ -391,7 +390,8 @@ async def handle_admin_ticket_reply(
 async def mark_ticket_as_answered(
     callback: types.CallbackQuery,
     db_user: User,
-    db: AsyncSession
+    db: AsyncSession,
+    state: FSMContext
 ):
     """Отметить тикет как отвеченный"""
     ticket_id = int(callback.data.replace("admin_mark_answered_", ""))
@@ -409,7 +409,7 @@ async def mark_ticket_as_answered(
             )
             
             # Обновляем сообщение
-            await view_admin_ticket(callback, db_user, db)
+            await view_admin_ticket(callback, db_user, db, state)
         else:
             texts = get_texts(db_user.language)
             await callback.answer(
@@ -673,13 +673,11 @@ async def handle_admin_block_duration_input(
 
  
 
-
- 
-
 async def unblock_user_in_ticket(
     callback: types.CallbackQuery,
     db_user: User,
-    db: AsyncSession
+    db: AsyncSession,
+    state: FSMContext
 ):
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
         texts = get_texts(db_user.language)
@@ -713,7 +711,7 @@ async def unblock_user_in_ticket(
             )
         except Exception:
             pass
-        await view_admin_ticket(callback, db_user, db)
+        await view_admin_ticket(callback, db_user, db, state)
     else:
         await callback.answer("❌ Ошибка", show_alert=True)
 
@@ -721,7 +719,8 @@ async def unblock_user_in_ticket(
 async def block_user_permanently(
     callback: types.CallbackQuery,
     db_user: User,
-    db: AsyncSession
+    db: AsyncSession,
+    state: FSMContext
 ):
     if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
         texts = get_texts(db_user.language)
@@ -754,7 +753,7 @@ async def block_user_permanently(
             )
         except Exception:
             pass
-        await view_admin_ticket(callback, db_user, db)
+        await view_admin_ticket(callback, db_user, db, state)
     else:
         await callback.answer("❌ Ошибка", show_alert=True)
 
