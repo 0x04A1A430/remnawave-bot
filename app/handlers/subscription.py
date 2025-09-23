@@ -801,7 +801,6 @@ async def activate_trial(
                             web_app=types.WebAppInfo(url=subscription.subscription_url),
                         )
                     ],
-                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
             elif connect_mode == "miniapp_custom":
@@ -822,19 +821,16 @@ async def activate_trial(
                             web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                         )
                     ],
-                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
             elif connect_mode == "link":
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription.subscription_url)],
-                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
             else:
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), callback_data="subscription_connect")],
-                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
     
@@ -3005,7 +3001,6 @@ async def confirm_purchase(
                             web_app=types.WebAppInfo(url=subscription.subscription_url),
                         )
                     ],
-                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
             elif connect_mode == "miniapp_custom":
@@ -3026,19 +3021,16 @@ async def confirm_purchase(
                             web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                         )
                     ],
-                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
             elif connect_mode == "link":
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription.subscription_url)],
-                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
             else:
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), callback_data="subscription_connect")],
-                    [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
     
