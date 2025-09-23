@@ -1250,7 +1250,8 @@ async def check_migration_status():
             "promo_groups_table": False,
             "promo_groups_auto_assign_column": False,
             "promo_groups_spent_threshold_column": False,
-            "users_promo_group_column": False
+            "users_promo_group_column": False,
+            "users_last_auto_assign_column": False,
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -1269,6 +1270,9 @@ async def check_migration_status():
 
         status["welcome_texts_is_enabled_column"] = await check_column_exists('welcome_texts', 'is_enabled')
         status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
+        status["users_last_auto_assign_column"] = await check_column_exists(
+            'users', 'last_auto_assigned_promo_group_id'
+        )
         
         media_fields_exist = (
             await check_column_exists('broadcast_history', 'has_media') and
@@ -1302,7 +1306,8 @@ async def check_migration_status():
             "promo_groups_table": "Таблица промо-групп",
             "promo_groups_auto_assign_column": "Колонка auto_assign_enabled у промогрупп",
             "promo_groups_spent_threshold_column": "Колонка spent_threshold_kopeks у промогрупп",
-            "users_promo_group_column": "Колонка promo_group_id у пользователей"
+            "users_promo_group_column": "Колонка promo_group_id у пользователей",
+            "users_last_auto_assign_column": "Колонка last_auto_assigned_promo_group_id у пользователей",
         }
         
         for check_key, check_status in status.items():
