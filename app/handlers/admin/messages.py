@@ -266,8 +266,12 @@ async def select_broadcast_target(
     state: FSMContext,
     db: AsyncSession
 ):
-    target = callback.data.split('_')[-1]
-    
+    raw_target = callback.data[len("broadcast_"):]
+    target_aliases = {
+        "no_sub": "no",
+    }
+    target = target_aliases.get(raw_target, raw_target)
+
     target_names = {
         "all": "Всем пользователям",
         "active": "С активной подпиской",
@@ -898,6 +902,15 @@ async def get_target_users(db: AsyncSession, target: str) -> list:
             and (user.subscription.traffic_used_gb or 0) <= 0
         ]
 
+    if target == "zero":
+        return [
+            user
+            for user in users
+            if user.subscription
+            and user.subscription.is_active
+            and (user.subscription.traffic_used_gb or 0) <= 0
+        ]
+
     return []
 
 
@@ -1022,10 +1035,12 @@ def get_target_name(target_type: str) -> str:
         "active": "С активной подпиской",
         "trial": "С триальной подпиской",
         "no": "Без подписки",
+        "sub": "Без подписки",
         "expiring": "С истекающей подпиской",
         "expired": "С истекшей подпиской",
         "active_zero": "Активная подписка, трафик 0 ГБ",
         "trial_zero": "Триальная подписка, трафик 0 ГБ",
+        "zero": "Подписка, трафик 0 ГБ",
         "custom_today": "Зарегистрированные сегодня",
         "custom_week": "Зарегистрированные за неделю",
         "custom_month": "Зарегистрированные за месяц",
