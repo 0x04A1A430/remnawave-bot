@@ -56,6 +56,7 @@ class PaymentMethod(Enum):
     YOOKASSA = "yookassa"
     CRYPTOBOT = "cryptobot"
     MULENPAY = "mulenpay"
+    PAL24 = "pal24"
     MANUAL = "manual"
 
 class YooKassaPayment(Base):
@@ -193,6 +194,68 @@ class MulenPayPayment(Base):
             "<MulenPayPayment(id={0}, mulen_id={1}, amount={2}₽, status={3})>".format(
                 self.id,
                 self.mulen_payment_id,
+                self.amount_rubles,
+                self.status,
+            )
+        )
+
+
+class Pal24Payment(Base):
+    __tablename__ = "pal24_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    bill_id = Column(String(255), unique=True, nullable=False, index=True)
+    order_id = Column(String(255), nullable=True, index=True)
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(10), nullable=False, default="RUB")
+    description = Column(Text, nullable=True)
+    type = Column(String(20), nullable=False, default="normal")
+
+    status = Column(String(50), nullable=False, default="NEW")
+    is_active = Column(Boolean, default=True)
+    is_paid = Column(Boolean, default=False)
+    paid_at = Column(DateTime, nullable=True)
+    last_status = Column(String(50), nullable=True)
+    last_status_checked_at = Column(DateTime, nullable=True)
+
+    link_url = Column(Text, nullable=True)
+    link_page_url = Column(Text, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    callback_payload = Column(JSON, nullable=True)
+
+    payment_id = Column(String(255), nullable=True, index=True)
+    payment_status = Column(String(50), nullable=True)
+    payment_method = Column(String(50), nullable=True)
+    balance_amount = Column(String(50), nullable=True)
+    balance_currency = Column(String(10), nullable=True)
+    payer_account = Column(String(255), nullable=True)
+
+    ttl = Column(Integer, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    user = relationship("User", backref="pal24_payments")
+    transaction = relationship("Transaction", backref="pal24_payment")
+
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status in {"NEW", "PROCESS"}
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return (
+            "<Pal24Payment(id={0}, bill_id={1}, amount={2}₽, status={3})>".format(
+                self.id,
+                self.bill_id,
                 self.amount_rubles,
                 self.status,
             )

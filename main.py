@@ -16,6 +16,7 @@ from app.services.payment_service import PaymentService
 from app.services.version_service import version_service
 from app.external.webhook_server import WebhookServer
 from app.external.yookassa_webhook import start_yookassa_webhook_server
+from app.external.pal24_webhook import start_pal24_webhook_server, Pal24WebhookServer
 from app.database.universal_migration import run_universal_migration
 from app.services.backup_service import backup_service
 from app.localization.loader import ensure_locale_templates
@@ -55,6 +56,7 @@ async def main():
     
     webhook_server = None
     yookassa_server_task = None
+    pal24_server: Pal24WebhookServer | None = None
     monitoring_task = None
     maintenance_task = None
     version_check_task = None
@@ -140,7 +142,13 @@ async def main():
             )
         else:
             logger.info("ℹ️ YooKassa отключена, webhook сервер не запускается")
-        
+
+        if settings.is_pal24_enabled():
+            logger.info("💳 Запуск PayPalych webhook сервера...")
+            pal24_server = await start_pal24_webhook_server(payment_service)
+        else:
+            logger.info("ℹ️ PayPalych отключен, webhook сервер не запускается")
+
         logger.info("📊 Запуск службы мониторинга...")
         monitoring_task = asyncio.create_task(monitoring_service.start_monitoring())
         
@@ -172,6 +180,10 @@ async def main():
                 logger.info(f"   CryptoBot: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.CRYPTOBOT_WEBHOOK_PATH}")
         if settings.is_yookassa_enabled():
             logger.info(f"   YooKassa: {settings.WEBHOOK_URL}:{settings.YOOKASSA_WEBHOOK_PORT}{settings.YOOKASSA_WEBHOOK_PATH}")
+        if settings.is_pal24_enabled():
+            logger.info(
+                f"   PayPalych: {settings.WEBHOOK_URL}:{settings.PAL24_WEBHOOK_PORT}{settings.PAL24_WEBHOOK_PATH}"
+            )
         logger.info("📄 Активные фоновые сервисы:")
         logger.info(f"   Мониторинг: {'Включен' if monitoring_task else 'Отключен'}")
         logger.info(f"   Техработы: {'Включен' if maintenance_task else 'Отключен'}")
@@ -243,6 +255,10 @@ async def main():
                 await monitoring_task
             except asyncio.CancelledError:
                 pass
+
+        if pal24_server:
+            logger.info("ℹ️ Остановка PayPalych webhook сервера...")
+            await asyncio.get_running_loop().run_in_executor(None, pal24_server.stop)
         
         if maintenance_task and not maintenance_task.done():
             logger.info("ℹ️ Остановка службы техработ...")
