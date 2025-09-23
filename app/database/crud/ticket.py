@@ -4,7 +4,7 @@ from sqlalchemy import select, desc, and_, or_, update, func
 from sqlalchemy.orm import selectinload
 from datetime import datetime
 
-from app.database.models import Ticket, TicketMessage, TicketStatus, User
+from app.database.models import Ticket, TicketMessage, TicketStatus, User, SupportAuditLog
 
 
 class TicketCRUD:
@@ -84,6 +84,40 @@ class TicketCRUD:
         
         query = query.order_by(desc(Ticket.updated_at)).offset(offset).limit(limit)
         
+        result = await db.execute(query)
+        return result.scalars().all()
+
+    @staticmethod
+    async def count_user_tickets_by_statuses(
+        db: AsyncSession,
+        user_id: int,
+        statuses: List[str]
+    ) -> int:
+        """Подсчитать количество тикетов пользователя по списку статусов"""
+        query = select(func.count()).select_from(Ticket).where(Ticket.user_id == user_id)
+        if statuses:
+            query = query.where(Ticket.status.in_(statuses))
+        result = await db.execute(query)
+        return int(result.scalar() or 0)
+
+    @staticmethod
+    async def get_user_tickets_by_statuses(
+        db: AsyncSession,
+        user_id: int,
+        statuses: List[str],
+        limit: int = 20,
+        offset: int = 0
+    ) -> List[Ticket]:
+        """Получить тикеты пользователя по списку статусов с пагинацией"""
+        query = (
+            select(Ticket)
+            .where(Ticket.user_id == user_id)
+            .order_by(desc(Ticket.updated_at))
+            .offset(offset)
+            .limit(limit)
+        )
+        if statuses:
+            query = query.where(Ticket.status.in_(statuses))
         result = await db.execute(query)
         return result.scalars().all()
 
@@ -239,6 +273,54 @@ class TicketCRUD:
         return await TicketCRUD.update_ticket_status(
             db, ticket_id, TicketStatus.CLOSED.value, datetime.utcnow()
         )
+
+    @staticmethod
+    async def add_support_audit(
+        db: AsyncSession,
+        *,
+        actor_user_id: Optional[int],
+        actor_telegram_id: int,
+        is_moderator: bool,
+        action: str,
+        ticket_id: Optional[int] = None,
+        target_user_id: Optional[int] = None,
+        details: Optional[dict] = None,
+    ) -> None:
+        try:
+            log = SupportAuditLog(
+                actor_user_id=actor_user_id,
+                actor_telegram_id=actor_telegram_id,
+                is_moderator=bool(is_moderator),
+                action=action,
+                ticket_id=ticket_id,
+                target_user_id=target_user_id,
+                details=details or {},
+            )
+            db.add(log)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            # не мешаем основной логике
+            pass
+
+    @staticmethod
+    async def list_support_audit(
+        db: AsyncSession,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[SupportAuditLog]:
+        from sqlalchemy import select, desc
+        result = await db.execute(
+            select(SupportAuditLog).order_by(desc(SupportAuditLog.created_at)).offset(offset).limit(limit)
+        )
+        return result.scalars().all()
+
+    @staticmethod
+    async def count_support_audit(db: AsyncSession) -> int:
+        from sqlalchemy import select, func
+        result = await db.execute(select(func.count()).select_from(SupportAuditLog))
+        return int(result.scalar() or 0)
     
     @staticmethod
     async def get_open_tickets_count(db: AsyncSession) -> int:
@@ -291,6 +373,14 @@ class TicketMessageCRUD:
             else:
                 # Пользователь ответил - тикет открыт
                 ticket.status = TicketStatus.OPEN.value
+                # Сбросить отметку последнего SLA-напоминания, чтобы снова напоминать от времени нового сообщения
+                try:
+                    from sqlalchemy import inspect as sa_inspect
+                    # если колонка существует в модели
+                    if hasattr(ticket, 'last_sla_reminder_at'):
+                        ticket.last_sla_reminder_at = None
+                except Exception:
+                    pass
             
             ticket.updated_at = datetime.utcnow()
         

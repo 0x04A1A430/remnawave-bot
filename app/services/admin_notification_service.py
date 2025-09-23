@@ -818,7 +818,13 @@ class AdminNotificationService:
         """Публичный метод для отправки уведомлений по тикетам в админ-топик.
         Учитывает настройки включенности в settings.
         """
-        if not self._is_enabled():
+        # Respect runtime toggle for admin ticket notifications
+        try:
+            from app.services.support_settings_service import SupportSettingsService
+            runtime_enabled = SupportSettingsService.get_admin_ticket_notifications_enabled()
+        except Exception:
+            runtime_enabled = True
+        if not (self._is_enabled() and runtime_enabled):
             return False
         return await self._send_message(text, reply_markup=keyboard, ticket_event=True)
 

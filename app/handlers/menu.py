@@ -16,6 +16,7 @@ from app.services.subscription_checkout_service import (
     should_offer_checkout_resume,
 )
 from app.utils.photo_message import edit_or_answer_photo
+from app.services.support_settings_service import SupportSettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ async def show_main_menu(
         keyboard=get_main_menu_keyboard(
             language=db_user.language,
             is_admin=settings.is_admin(db_user.telegram_id),
+                is_moderator=(not settings.is_admin(db_user.telegram_id) and SupportSettingsService.is_moderator(db_user.telegram_id)),
             has_had_paid_subscription=db_user.has_had_paid_subscription,
             has_active_subscription=has_active_subscription,
             subscription_is_active=subscription_is_active,
@@ -120,6 +122,7 @@ async def handle_back_to_menu(
         keyboard=get_main_menu_keyboard(
             language=db_user.language,
             is_admin=settings.is_admin(db_user.telegram_id),
+                is_moderator=(not settings.is_admin(db_user.telegram_id) and SupportSettingsService.is_moderator(db_user.telegram_id)),
             has_had_paid_subscription=db_user.has_had_paid_subscription,
             has_active_subscription=has_active_subscription,
             subscription_is_active=subscription_is_active,

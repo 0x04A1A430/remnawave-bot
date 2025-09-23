@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     SUPPORT_MENU_ENABLED: bool = True
     SUPPORT_SYSTEM_MODE: str = "both"  # one of: tickets, contact, both
     SUPPORT_MENU_ENABLED: bool = True
+    # SLA for support tickets
+    SUPPORT_TICKET_SLA_ENABLED: bool = True
+    SUPPORT_TICKET_SLA_MINUTES: int = 5
+    SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS: int = 60
+    SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES: int = 15
 
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
     ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
@@ -841,32 +846,6 @@ class Settings(BaseSettings):
     
     def is_support_contact_enabled(self) -> bool:
         return self.get_support_system_mode() in {"contact", "both"}
-        
-        enabled_packages = [pkg for pkg in packages if pkg["enabled"]]
-        if not enabled_packages:
-            return 0
-        
-        unlimited_package = next((pkg for pkg in enabled_packages if pkg["gb"] == 0), None)
-        
-        finite_packages = [pkg for pkg in enabled_packages if pkg["gb"] > 0]
-        if finite_packages:
-            max_package = max(finite_packages, key=lambda x: x["gb"])
-            
-            if gb > max_package["gb"]:
-                if unlimited_package:
-                    return unlimited_package["price"]
-                else:
-                    return max_package["price"]
-            
-            suitable_packages = [pkg for pkg in finite_packages if pkg["gb"] >= gb]
-            if suitable_packages:
-                nearest_package = min(suitable_packages, key=lambda x: x["gb"])
-                return nearest_package["price"]
-        
-        if unlimited_package:
-            return unlimited_package["price"]
-        
-        return 0
     
     model_config = {
         "env_file": ".env",

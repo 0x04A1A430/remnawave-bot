@@ -815,6 +815,30 @@ async def add_ticket_reply_block_columns():
         logger.error(f"Ошибка добавления колонок блокировок в tickets: {e}")
         return False
 
+
+async def add_ticket_sla_columns():
+    try:
+        col_exists = await check_column_exists('tickets', 'last_sla_reminder_at')
+        if col_exists:
+            return True
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            if db_type == 'sqlite':
+                alter_sql = "ALTER TABLE tickets ADD COLUMN last_sla_reminder_at DATETIME NULL"
+            elif db_type == 'postgresql':
+                alter_sql = "ALTER TABLE tickets ADD COLUMN last_sla_reminder_at TIMESTAMP NULL"
+            elif db_type == 'mysql':
+                alter_sql = "ALTER TABLE tickets ADD COLUMN last_sla_reminder_at DATETIME NULL"
+            else:
+                logger.error(f"Неподдерживаемый тип БД для добавления last_sla_reminder_at: {db_type}")
+                return False
+            await conn.execute(text(alter_sql))
+            logger.info("✅ Добавлена колонка tickets.last_sla_reminder_at")
+            return True
+    except Exception as e:
+        logger.error(f"Ошибка добавления SLA колонки в tickets: {e}")
+        return False
+
 async def fix_foreign_keys_for_user_deletion():
     try:
         async with engine.begin() as conn:
@@ -1106,6 +1130,79 @@ async def run_universal_migration():
             logger.info("✅ Поля блокировок в tickets готовы")
         else:
             logger.warning("⚠️ Проблемы с добавлением полей блокировок в tickets")
+
+        logger.info("=== ДОБАВЛЕНИЕ ПОЛЕЙ SLA В TICKETS ===")
+        sla_cols_added = await add_ticket_sla_columns()
+        if sla_cols_added:
+            logger.info("✅ Поля SLA в tickets готовы")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением полей SLA в tickets")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ АУДИТА ПОДДЕРЖКИ ===")
+        try:
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+                if not await check_table_exists('support_audit_logs'):
+                    if db_type == 'sqlite':
+                        create_sql = """
+                        CREATE TABLE support_audit_logs (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            actor_user_id INTEGER NULL,
+                            actor_telegram_id BIGINT NOT NULL,
+                            is_moderator BOOLEAN NOT NULL DEFAULT 0,
+                            action VARCHAR(50) NOT NULL,
+                            ticket_id INTEGER NULL,
+                            target_user_id INTEGER NULL,
+                            details JSON NULL,
+                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (actor_user_id) REFERENCES users(id),
+                            FOREIGN KEY (ticket_id) REFERENCES tickets(id),
+                            FOREIGN KEY (target_user_id) REFERENCES users(id)
+                        );
+                        CREATE INDEX idx_support_audit_logs_ticket ON support_audit_logs(ticket_id);
+                        CREATE INDEX idx_support_audit_logs_actor ON support_audit_logs(actor_telegram_id);
+                        CREATE INDEX idx_support_audit_logs_action ON support_audit_logs(action);
+                        """
+                    elif db_type == 'postgresql':
+                        create_sql = """
+                        CREATE TABLE support_audit_logs (
+                            id SERIAL PRIMARY KEY,
+                            actor_user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+                            actor_telegram_id BIGINT NOT NULL,
+                            is_moderator BOOLEAN NOT NULL DEFAULT FALSE,
+                            action VARCHAR(50) NOT NULL,
+                            ticket_id INTEGER NULL REFERENCES tickets(id) ON DELETE SET NULL,
+                            target_user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+                            details JSON NULL,
+                            created_at TIMESTAMP DEFAULT NOW()
+                        );
+                        CREATE INDEX idx_support_audit_logs_ticket ON support_audit_logs(ticket_id);
+                        CREATE INDEX idx_support_audit_logs_actor ON support_audit_logs(actor_telegram_id);
+                        CREATE INDEX idx_support_audit_logs_action ON support_audit_logs(action);
+                        """
+                    else:
+                        create_sql = """
+                        CREATE TABLE support_audit_logs (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            actor_user_id INT NULL,
+                            actor_telegram_id BIGINT NOT NULL,
+                            is_moderator BOOLEAN NOT NULL DEFAULT 0,
+                            action VARCHAR(50) NOT NULL,
+                            ticket_id INT NULL,
+                            target_user_id INT NULL,
+                            details JSON NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE INDEX idx_support_audit_logs_ticket ON support_audit_logs(ticket_id);
+                        CREATE INDEX idx_support_audit_logs_actor ON support_audit_logs(actor_telegram_id);
+                        CREATE INDEX idx_support_audit_logs_action ON support_audit_logs(action);
+                        """
+                    await conn.execute(text(create_sql))
+                    logger.info("✅ Таблица support_audit_logs создана")
+                else:
+                    logger.info("ℹ️ Таблица support_audit_logs уже существует")
+        except Exception as e:
+            logger.warning(f"⚠️ Проблемы с созданием таблицы support_audit_logs: {e}")
 
         logger.info("=== НАСТРОЙКА ПРОМО ГРУПП ===")
         promo_groups_ready = await ensure_promo_groups_setup()

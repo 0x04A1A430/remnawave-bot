@@ -10,6 +10,7 @@ def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👥 Юзеры/Подписки", callback_data="admin_submenu_users")],
         [InlineKeyboardButton(text="💰 Промокоды/Статистика", callback_data="admin_submenu_promo")],
+        [InlineKeyboardButton(text="🛟 Поддержка", callback_data="admin_submenu_support")],
         [InlineKeyboardButton(text="📨 Сообщения", callback_data="admin_submenu_communications")],
         [InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin_submenu_settings")],
         [InlineKeyboardButton(text="🛠️ Система", callback_data="admin_submenu_system")],
@@ -62,14 +63,27 @@ def get_admin_communications_submenu_keyboard(language: str = "ru") -> InlineKey
             InlineKeyboardButton(text=texts.ADMIN_MESSAGES, callback_data="admin_messages")
         ],
         [
+            InlineKeyboardButton(text="👋 Приветственный текст", callback_data="welcome_text_panel"),
+            InlineKeyboardButton(text="📢 Сообщения в меню", callback_data="user_messages_panel")
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")
+        ]
+    ])
+
+
+def get_admin_support_submenu_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
             InlineKeyboardButton(text="🎫 Тикеты поддержки", callback_data="admin_tickets")
         ],
         [
-            InlineKeyboardButton(text="🛟 Настройки поддержки", callback_data="admin_support_settings")
+            InlineKeyboardButton(text="🧾 Аудит модераторов", callback_data="admin_support_audit")
         ],
         [
-            InlineKeyboardButton(text="👋 Приветственный текст", callback_data="welcome_text_panel"),
-            InlineKeyboardButton(text="📢 Сообщения в меню", callback_data="user_messages_panel")
+            InlineKeyboardButton(text="🛟 Настройки поддержки", callback_data="admin_support_settings")
         ],
         [
             InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")

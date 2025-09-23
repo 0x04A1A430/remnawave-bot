@@ -703,6 +703,23 @@ class SubscriptionServer(Base):
     subscription = relationship("Subscription", backref="subscription_servers")
     server_squad = relationship("ServerSquad", backref="subscription_servers")
 
+
+class SupportAuditLog(Base):
+    __tablename__ = "support_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    actor_telegram_id = Column(BigInteger, nullable=False)
+    is_moderator = Column(Boolean, default=False)
+    action = Column(String(50), nullable=False)  # close_ticket, block_user_timed, block_user_perm, unblock_user
+    ticket_id = Column(Integer, ForeignKey("tickets.id", ondelete="SET NULL"), nullable=True)
+    target_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    details = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+
+    actor = relationship("User", foreign_keys=[actor_user_id])
+    ticket = relationship("Ticket", foreign_keys=[ticket_id])
+
 class UserMessage(Base):
     __tablename__ = "user_messages"
     id = Column(Integer, primary_key=True, index=True)
@@ -810,6 +827,8 @@ class Ticket(Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     closed_at = Column(DateTime, nullable=True)
+    # SLA reminders
+    last_sla_reminder_at = Column(DateTime, nullable=True)
     
     # Связи
     user = relationship("User", backref="tickets")
