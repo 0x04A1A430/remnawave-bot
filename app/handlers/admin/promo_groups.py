@@ -24,14 +24,6 @@ from app.keyboards.admin import (
     get_confirmation_keyboard,
 )
 
-CREATE_AUTO_ASSIGN_PREFIX = "promo_group_create_auto_assign"
-EDIT_AUTO_ASSIGN_PREFIX = "promo_group_edit_auto_assign"
-
-CREATE_AUTO_ASSIGN_ENABLE = f"{CREATE_AUTO_ASSIGN_PREFIX}_yes"
-CREATE_AUTO_ASSIGN_DISABLE = f"{CREATE_AUTO_ASSIGN_PREFIX}_no"
-EDIT_AUTO_ASSIGN_ENABLE = f"{EDIT_AUTO_ASSIGN_PREFIX}_yes"
-EDIT_AUTO_ASSIGN_DISABLE = f"{EDIT_AUTO_ASSIGN_PREFIX}_no"
-
 logger = logging.getLogger(__name__)
 
 
@@ -260,29 +252,6 @@ async def _prompt_for_discount(
     await message.answer(texts.t(prompt_key, default_text))
 
 
-def _get_auto_assign_keyboard(texts, prefix: str) -> types.InlineKeyboardMarkup:
-    return types.InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                types.InlineKeyboardButton(
-                    text=texts.t(
-                        "ADMIN_PROMO_GROUP_AUTO_ASSIGN_ENABLE_BUTTON",
-                        "✅ Включить",
-                    ),
-                    callback_data=f"{prefix}_yes",
-                ),
-                types.InlineKeyboardButton(
-                    text=texts.t(
-                        "ADMIN_PROMO_GROUP_AUTO_ASSIGN_DISABLE_BUTTON",
-                        "🚫 Оставить выключенным",
-                    ),
-                    callback_data=f"{prefix}_no",
-                ),
-            ]
-        ]
-    )
-
-
 @admin_required
 @error_handler
 async def start_create_promo_group(
@@ -380,9 +349,8 @@ async def process_create_group_devices(
     await message.answer(
         texts.t(
             "ADMIN_PROMO_GROUP_CREATE_AUTO_ASSIGN_PROMPT",
-            "Включить автоматическое назначение по сумме трат? Выберите вариант ниже.",
-        ),
-        reply_markup=_get_auto_assign_keyboard(texts, CREATE_AUTO_ASSIGN_PREFIX),
+            "Включить автоматическое назначение по сумме трат? (да/нет)",
+        )
     )
 
 
@@ -435,20 +403,26 @@ async def _finalize_create_group(
     )
 
 
-async def _apply_create_auto_assign_choice(
+@admin_required
+@error_handler
+async def process_create_group_auto_assign_enabled(
     message: types.Message,
     state: FSMContext,
     db_user,
     db: AsyncSession,
-    *,
-    auto_assign_enabled: bool,
 ):
     data = await state.get_data()
     texts = get_texts(data.get("language", db_user.language))
 
-    await state.update_data(new_group_auto_assign_enabled=auto_assign_enabled)
+    try:
+        auto_enabled = _parse_bool_response(message.text)
+    except ValueError:
+        await message.answer(texts.t("ADMIN_PROMO_GROUP_INVALID_BOOL", "Введите «да» или «нет»."))
+        return
 
-    if auto_assign_enabled:
+    await state.update_data(new_group_auto_assign_enabled=auto_enabled)
+
+    if auto_enabled:
         await state.set_state(AdminStates.creating_promo_group_auto_assign_threshold)
         await message.answer(
             texts.t(
@@ -466,58 +440,6 @@ async def _apply_create_auto_assign_choice(
         auto_assign_enabled=False,
         spent_threshold_kopeks=0,
     )
-
-
-@admin_required
-@error_handler
-async def process_create_group_auto_assign_enabled(
-    message: types.Message,
-    state: FSMContext,
-    db_user,
-    db: AsyncSession,
-):
-    data = await state.get_data()
-    texts = get_texts(data.get("language", db_user.language))
-
-    try:
-        auto_enabled = _parse_bool_response(message.text)
-    except ValueError:
-        await message.answer(texts.t("ADMIN_PROMO_GROUP_INVALID_BOOL", "Пожалуйста, воспользуйтесь кнопками ниже."))
-        return
-
-    await _apply_create_auto_assign_choice(
-        message,
-        state,
-        db_user,
-        db,
-        auto_assign_enabled=auto_enabled,
-    )
-
-
-@admin_required
-@error_handler
-async def process_create_group_auto_assign_enabled_callback(
-    callback: types.CallbackQuery,
-    state: FSMContext,
-    db_user,
-    db: AsyncSession,
-):
-    current_state = await state.get_state()
-    if current_state != AdminStates.creating_promo_group_auto_assign_enabled.state:
-        await callback.answer()
-        return
-
-    auto_enabled = callback.data == CREATE_AUTO_ASSIGN_ENABLE
-
-    await callback.message.edit_reply_markup()
-    await _apply_create_auto_assign_choice(
-        callback.message,
-        state,
-        db_user,
-        db,
-        auto_assign_enabled=auto_enabled,
-    )
-    await callback.answer()
 
 
 @admin_required
@@ -664,9 +586,8 @@ async def process_edit_group_devices(
     await message.answer(
         texts.t(
             "ADMIN_PROMO_GROUP_EDIT_AUTO_ASSIGN_PROMPT",
-            "Автоназначение сейчас: {status}. Включить автоматическое назначение? Выберите вариант ниже.",
-        ).format(status=status_text),
-        reply_markup=_get_auto_assign_keyboard(texts, EDIT_AUTO_ASSIGN_PREFIX),
+            "Автоназначение сейчас: {status}. Включить автоматическое назначение? (да/нет)",
+        ).format(status=status_text)
     )
 
 
@@ -705,20 +626,26 @@ async def _finalize_edit_group(
     )
 
 
-async def _apply_edit_auto_assign_choice(
+@admin_required
+@error_handler
+async def process_edit_group_auto_assign_enabled(
     message: types.Message,
     state: FSMContext,
     db_user,
     db: AsyncSession,
-    *,
-    auto_assign_enabled: bool,
 ):
     data = await state.get_data()
     texts = get_texts(data.get("language", db_user.language))
 
-    await state.update_data(edit_group_auto_assign_enabled=auto_assign_enabled)
+    try:
+        auto_enabled = _parse_bool_response(message.text)
+    except ValueError:
+        await message.answer(texts.t("ADMIN_PROMO_GROUP_INVALID_BOOL", "Введите «да» или «нет»."))
+        return
 
-    if auto_assign_enabled:
+    await state.update_data(edit_group_auto_assign_enabled=auto_enabled)
+
+    if auto_enabled:
         await state.set_state(AdminStates.editing_promo_group_auto_assign_threshold)
         current_amount = data.get("current_group_spent_threshold", 0)
         await message.answer(
@@ -737,58 +664,6 @@ async def _apply_edit_auto_assign_choice(
         auto_assign_enabled=False,
         spent_threshold_kopeks=0,
     )
-
-
-@admin_required
-@error_handler
-async def process_edit_group_auto_assign_enabled(
-    message: types.Message,
-    state: FSMContext,
-    db_user,
-    db: AsyncSession,
-):
-    data = await state.get_data()
-    texts = get_texts(data.get("language", db_user.language))
-
-    try:
-        auto_enabled = _parse_bool_response(message.text)
-    except ValueError:
-        await message.answer(texts.t("ADMIN_PROMO_GROUP_INVALID_BOOL", "Пожалуйста, воспользуйтесь кнопками ниже."))
-        return
-
-    await _apply_edit_auto_assign_choice(
-        message,
-        state,
-        db_user,
-        db,
-        auto_assign_enabled=auto_enabled,
-    )
-
-
-@admin_required
-@error_handler
-async def process_edit_group_auto_assign_enabled_callback(
-    callback: types.CallbackQuery,
-    state: FSMContext,
-    db_user,
-    db: AsyncSession,
-):
-    current_state = await state.get_state()
-    if current_state != AdminStates.editing_promo_group_auto_assign_enabled.state:
-        await callback.answer()
-        return
-
-    auto_enabled = callback.data == EDIT_AUTO_ASSIGN_ENABLE
-
-    await callback.message.edit_reply_markup()
-    await _apply_edit_auto_assign_choice(
-        callback.message,
-        state,
-        db_user,
-        db,
-        auto_assign_enabled=auto_enabled,
-    )
-    await callback.answer()
 
 
 @admin_required
@@ -964,15 +839,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_promo_group_members,
         F.data.regexp(r"^promo_group_members_\d+_page_\d+$"),
-    )
-
-    dp.callback_query.register(
-        process_create_group_auto_assign_enabled_callback,
-        F.data.in_({CREATE_AUTO_ASSIGN_ENABLE, CREATE_AUTO_ASSIGN_DISABLE}),
-    )
-    dp.callback_query.register(
-        process_edit_group_auto_assign_enabled_callback,
-        F.data.in_({EDIT_AUTO_ASSIGN_ENABLE, EDIT_AUTO_ASSIGN_DISABLE}),
     )
 
     dp.message.register(process_create_group_name, AdminStates.creating_promo_group_name)
