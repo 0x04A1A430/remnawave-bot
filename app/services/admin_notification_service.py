@@ -3,10 +3,11 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from aiogram import Bot, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import User, Subscription, Transaction
+from app.database.models import User, Subscription, Transaction, TransactionType
 from app.database.crud.user import get_user_by_id
 
 logger = logging.getLogger(__name__)
@@ -215,7 +216,17 @@ class AdminNotificationService:
             return False
         
         try:
-            topup_status = "🆕 Первое пополнение" if not user.has_made_first_topup else "🔄 Пополнение"
+            deposit_count_result = await db.execute(
+                select(func.count())
+                .select_from(Transaction)
+                .where(
+                    Transaction.user_id == user.id,
+                    Transaction.type == TransactionType.DEPOSIT.value,
+                    Transaction.is_completed.is_(True)
+                )
+            )
+            deposit_count = deposit_count_result.scalar_one() or 0
+            topup_status = "🆕 Первое пополнение" if deposit_count <= 1 else "🔄 Пополнение"
             payment_method = self._get_payment_method_display(transaction.payment_method)
             balance_change = user.balance_kopeks - old_balance
             referrer_info = await self._get_referrer_info(db, user.referred_by_id)
