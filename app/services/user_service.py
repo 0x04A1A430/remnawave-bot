@@ -17,7 +17,8 @@ from app.database.models import (
     User, UserStatus, Subscription, Transaction, PromoCode, PromoCodeUse,
     ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory,
     CryptoBotPayment, SubscriptionConversion, UserMessage, WelcomeText,
-    SentNotification, PromoGroup
+    SentNotification, PromoGroup, MulenPayPayment, Pal24Payment,
+    AdvertisingCampaign
 )
 from app.config import settings
 
@@ -493,7 +494,7 @@ class UserService:
                     select(CryptoBotPayment).where(CryptoBotPayment.user_id == user_id)
                 )
                 cryptobot_payments = cryptobot_result.scalars().all()
-                
+
                 if cryptobot_payments:
                     logger.info(f"🔄 Удаляем {len(cryptobot_payments)} CryptoBot платежей")
                     await db.execute(
@@ -508,7 +509,49 @@ class UserService:
                     await db.flush()
             except Exception as e:
                 logger.error(f"❌ Ошибка удаления CryptoBot платежей: {e}")
-    
+
+            try:
+                mulenpay_result = await db.execute(
+                    select(MulenPayPayment).where(MulenPayPayment.user_id == user_id)
+                )
+                mulenpay_payments = mulenpay_result.scalars().all()
+
+                if mulenpay_payments:
+                    logger.info(f"🔄 Удаляем {len(mulenpay_payments)} MulenPay платежей")
+                    await db.execute(
+                        update(MulenPayPayment)
+                        .where(MulenPayPayment.user_id == user_id)
+                        .values(transaction_id=None)
+                    )
+                    await db.flush()
+                    await db.execute(
+                        delete(MulenPayPayment).where(MulenPayPayment.user_id == user_id)
+                    )
+                    await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления MulenPay платежей: {e}")
+
+            try:
+                pal24_result = await db.execute(
+                    select(Pal24Payment).where(Pal24Payment.user_id == user_id)
+                )
+                pal24_payments = pal24_result.scalars().all()
+
+                if pal24_payments:
+                    logger.info(f"🔄 Удаляем {len(pal24_payments)} Pal24 платежей")
+                    await db.execute(
+                        update(Pal24Payment)
+                        .where(Pal24Payment.user_id == user_id)
+                        .values(transaction_id=None)
+                    )
+                    await db.flush()
+                    await db.execute(
+                        delete(Pal24Payment).where(Pal24Payment.user_id == user_id)
+                    )
+                    await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления Pal24 платежей: {e}")
+
             try:
                 transactions_result = await db.execute(
                     select(Transaction).where(Transaction.user_id == user_id)
@@ -589,7 +632,7 @@ class UserService:
                     select(BroadcastHistory).where(BroadcastHistory.admin_id == user_id)
                 )
                 broadcast_history = broadcast_history_result.scalars().all()
-                
+
                 if broadcast_history:
                     logger.info(f"🔄 Удаляем {len(broadcast_history)} записей истории рассылок")
                     await db.execute(
@@ -598,6 +641,23 @@ class UserService:
                     await db.flush()
             except Exception as e:
                 logger.error(f"❌ Ошибка удаления истории рассылок: {e}")
+
+            try:
+                campaigns_result = await db.execute(
+                    select(AdvertisingCampaign).where(AdvertisingCampaign.created_by == user_id)
+                )
+                campaigns = campaigns_result.scalars().all()
+
+                if campaigns:
+                    logger.info(f"🔄 Очищаем создателя у {len(campaigns)} рекламных кампаний")
+                    await db.execute(
+                        update(AdvertisingCampaign)
+                        .where(AdvertisingCampaign.created_by == user_id)
+                        .values(created_by=None)
+                    )
+                    await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка обновления рекламных кампаний: {e}")
     
             try:
                 if user.subscription:
