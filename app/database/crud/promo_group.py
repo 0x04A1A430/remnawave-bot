@@ -44,13 +44,6 @@ async def get_promo_group_by_id(db: AsyncSession, group_id: int) -> Optional[Pro
     return await db.get(PromoGroup, group_id)
 
 
-async def get_all_promo_groups(db: AsyncSession) -> List[PromoGroup]:
-    result = await db.execute(
-        select(PromoGroup).order_by(PromoGroup.is_default.desc(), PromoGroup.name)
-    )
-    return result.scalars().all()
-
-
 async def get_default_promo_group(db: AsyncSession) -> Optional[PromoGroup]:
     result = await db.execute(
         select(PromoGroup).where(PromoGroup.is_default.is_(True))
