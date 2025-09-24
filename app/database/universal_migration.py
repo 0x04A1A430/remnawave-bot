@@ -377,6 +377,75 @@ async def create_mulenpay_payments_table():
         return False
 
 
+async def ensure_mulenpay_payment_schema() -> bool:
+    logger.info("=== ОБНОВЛЕНИЕ СХЕМЫ MULEN PAY ===")
+
+    table_exists = await check_table_exists("mulenpay_payments")
+    if not table_exists:
+        logger.warning("⚠️ Таблица mulenpay_payments отсутствует — создаём заново")
+        return await create_mulenpay_payments_table()
+
+    try:
+        column_exists = await check_column_exists("mulenpay_payments", "mulen_payment_id")
+        index_exists = await check_index_exists("mulenpay_payments", "idx_mulenpay_payment_id")
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not column_exists:
+                if db_type == "sqlite":
+                    alter_sql = "ALTER TABLE mulenpay_payments ADD COLUMN mulen_payment_id INTEGER NULL"
+                elif db_type == "postgresql":
+                    alter_sql = "ALTER TABLE mulenpay_payments ADD COLUMN mulen_payment_id INTEGER NULL"
+                elif db_type == "mysql":
+                    alter_sql = "ALTER TABLE mulenpay_payments ADD COLUMN mulen_payment_id INT NULL"
+                else:
+                    logger.error(
+                        "Неподдерживаемый тип БД для добавления mulen_payment_id в mulenpay_payments: %s",
+                        db_type,
+                    )
+                    return False
+
+                await conn.execute(text(alter_sql))
+                logger.info("✅ Добавлена колонка mulenpay_payments.mulen_payment_id")
+            else:
+                logger.info("ℹ️ Колонка mulenpay_payments.mulen_payment_id уже существует")
+
+            if not index_exists:
+                if db_type == "sqlite":
+                    create_index_sql = (
+                        "CREATE INDEX IF NOT EXISTS idx_mulenpay_payment_id "
+                        "ON mulenpay_payments(mulen_payment_id)"
+                    )
+                elif db_type == "postgresql":
+                    create_index_sql = (
+                        "CREATE INDEX IF NOT EXISTS idx_mulenpay_payment_id "
+                        "ON mulenpay_payments(mulen_payment_id)"
+                    )
+                elif db_type == "mysql":
+                    create_index_sql = (
+                        "CREATE INDEX idx_mulenpay_payment_id "
+                        "ON mulenpay_payments(mulen_payment_id)"
+                    )
+                else:
+                    logger.error(
+                        "Неподдерживаемый тип БД для создания индекса mulenpay_payment_id: %s",
+                        db_type,
+                    )
+                    return False
+
+                await conn.execute(text(create_index_sql))
+                logger.info("✅ Создан индекс idx_mulenpay_payment_id")
+            else:
+                logger.info("ℹ️ Индекс idx_mulenpay_payment_id уже существует")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка обновления схемы mulenpay_payments: {e}")
+        return False
+
+
 async def create_pal24_payments_table():
     table_exists = await check_table_exists('pal24_payments')
     if table_exists:
@@ -1654,6 +1723,12 @@ async def run_universal_migration():
             logger.info("✅ Таблица Mulen Pay payments готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей Mulen Pay payments")
+
+        mulenpay_schema_ok = await ensure_mulenpay_payment_schema()
+        if mulenpay_schema_ok:
+            logger.info("✅ Схема Mulen Pay payments актуальна")
+        else:
+            logger.warning("⚠️ Не удалось обновить схему Mulen Pay payments")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PAL24 ===")
         pal24_created = await create_pal24_payments_table()
