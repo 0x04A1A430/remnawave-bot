@@ -192,6 +192,8 @@ class Settings(BaseSettings):
     MULENPAY_VAT_CODE: int = 0
     MULENPAY_PAYMENT_SUBJECT: int = 4
     MULENPAY_PAYMENT_MODE: int = 4
+    MULENPAY_MIN_AMOUNT_KOPEKS: int = 10000
+    MULENPAY_MAX_AMOUNT_KOPEKS: int = 10000000
 
     PAL24_ENABLED: bool = False
     PAL24_API_TOKEN: Optional[str] = None
