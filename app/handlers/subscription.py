@@ -17,13 +17,12 @@ from app.database.crud.subscription import (
     add_subscription_squad, update_subscription_autopay,
     add_subscription_servers  
 )
-from app.database.crud.user import subtract_user_balance, add_user_balance
+from app.database.crud.user import subtract_user_balance
 from app.database.crud.transaction import create_transaction, get_user_transactions
 from app.database.models import (
-    User, TransactionType, SubscriptionStatus,
-    SubscriptionServer, Subscription
+    User, TransactionType, SubscriptionStatus, 
+    SubscriptionServer, Subscription 
 )
-from app.database.crud.discount_offer import get_offer_by_id, mark_offer_claimed
 from app.keyboards.inline import (
     get_subscription_keyboard, get_trial_keyboard,
     get_subscription_period_keyboard, get_traffic_packages_keyboard,
@@ -4069,76 +4068,6 @@ async def handle_connect_subscription(
     await callback.answer()
 
 
-async def claim_discount_offer(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    texts = get_texts(db_user.language)
-
-    try:
-        offer_id = int(callback.data.split("_")[-1])
-    except (ValueError, AttributeError):
-        await callback.answer(
-            texts.get("DISCOUNT_CLAIM_NOT_FOUND", "❌ Предложение не найдено"),
-            show_alert=True,
-        )
-        return
-
-    offer = await get_offer_by_id(db, offer_id)
-    if not offer or offer.user_id != db_user.id:
-        await callback.answer(
-            texts.get("DISCOUNT_CLAIM_NOT_FOUND", "❌ Предложение не найдено"),
-            show_alert=True,
-        )
-        return
-
-    now = datetime.utcnow()
-    if offer.claimed_at is not None:
-        await callback.answer(
-            texts.get("DISCOUNT_CLAIM_ALREADY", "ℹ️ Скидка уже была активирована"),
-            show_alert=True,
-        )
-        return
-
-    if not offer.is_active or offer.expires_at <= now:
-        offer.is_active = False
-        await db.commit()
-        await callback.answer(
-            texts.get("DISCOUNT_CLAIM_EXPIRED", "⚠️ Время действия предложения истекло"),
-            show_alert=True,
-        )
-        return
-
-    bonus_amount = offer.bonus_amount_kopeks or 0
-    if bonus_amount > 0:
-        success = await add_user_balance(
-            db,
-            db_user,
-            bonus_amount,
-            texts.get("DISCOUNT_BONUS_DESCRIPTION", "Скидка за продление подписки"),
-        )
-        if not success:
-            await callback.answer(
-                texts.get("DISCOUNT_CLAIM_ERROR", "❌ Не удалось начислить скидку. Попробуйте позже."),
-                show_alert=True,
-            )
-            return
-
-    await mark_offer_claimed(db, offer)
-
-    success_message = texts.get(
-        "DISCOUNT_CLAIM_SUCCESS",
-        "🎉 Скидка {percent}% активирована! На баланс начислено {amount}.",
-    ).format(
-        percent=offer.discount_percent,
-        amount=settings.format_price(bonus_amount),
-    )
-
-    await callback.answer("✅ Скидка активирована!", show_alert=True)
-    await callback.message.answer(success_message)
-
-
 async def handle_device_guide(
     callback: types.CallbackQuery,
     db_user: User,
@@ -5032,11 +4961,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         apply_countries_changes,
         F.data == "countries_apply"
-    )
-
-    dp.callback_query.register(
-        claim_discount_offer,
-        F.data.startswith("claim_discount_")
     )
 
     dp.callback_query.register(
