@@ -779,6 +779,9 @@ def get_monitoring_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📋 Логи", callback_data="admin_mon_logs")
         ],
         [
+            InlineKeyboardButton(text="🔔 Уведомления", callback_data="admin_mon_notifications")
+        ],
+        [
             InlineKeyboardButton(text="🧪 Тест уведомлений", callback_data="admin_mon_test_notifications"),
             InlineKeyboardButton(text="📊 Статистика", callback_data="admin_mon_statistics")
         ],
