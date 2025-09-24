@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import threading
+from asyncio import AbstractEventLoop
 from typing import Any, Dict, Optional
 
 from flask import Flask, jsonify, request
@@ -42,7 +43,10 @@ def _normalize_payload() -> Dict[str, str]:
     return {}
 
 
-def create_pal24_flask_app(payment_service: PaymentService) -> Flask:
+def create_pal24_flask_app(
+    payment_service: PaymentService,
+    loop: AbstractEventLoop,
+) -> Flask:
     pal24_service = Pal24Service()
     app = Flask(__name__)
 
@@ -71,7 +75,8 @@ def create_pal24_flask_app(payment_service: PaymentService) -> Flask:
                     await db.close()
 
         try:
-            processed = asyncio.run(process())
+            future = asyncio.run_coroutine_threadsafe(process(), loop)
+            processed = future.result()
         except Exception as error:  # pragma: no cover - defensive
             logger.exception("Критическая ошибка обработки Pal24 webhook: %s", error)
             return jsonify({"status": "error", "reason": "internal_error"}), 500
@@ -102,8 +107,8 @@ def create_pal24_flask_app(payment_service: PaymentService) -> Flask:
 class Pal24WebhookServer:
     """Threaded Flask server for Pal24 postbacks."""
 
-    def __init__(self, payment_service: PaymentService) -> None:
-        self.app = create_pal24_flask_app(payment_service)
+    def __init__(self, payment_service: PaymentService, loop: AbstractEventLoop) -> None:
+        self.app = create_pal24_flask_app(payment_service, loop)
         self._server: Optional[Any] = None
         self._thread: Optional[threading.Thread] = None
 
@@ -143,8 +148,8 @@ class Pal24WebhookServer:
 
 
 async def start_pal24_webhook_server(payment_service: PaymentService) -> Pal24WebhookServer:
-    server = Pal24WebhookServer(payment_service)
     loop = asyncio.get_running_loop()
+    server = Pal24WebhookServer(payment_service, loop)
     await loop.run_in_executor(None, server.start)
     return server
 
