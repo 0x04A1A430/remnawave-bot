@@ -179,6 +179,17 @@ async def cached_function(key: str, expire: int = 300):
     return decorator
 
 
+async def invalidate_available_countries_cache() -> int:
+    keys = await cache.get_keys("available_countries*")
+    deleted_count = 0
+
+    for key in keys:
+        if await cache.delete(key):
+            deleted_count += 1
+
+    return deleted_count
+
+
 class UserCache:
     
     @staticmethod

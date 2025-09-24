@@ -15,6 +15,7 @@ from sqlalchemy import (
     BigInteger,
     UniqueConstraint,
     Index,
+    Table,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -263,6 +264,25 @@ class Pal24Payment(Base):
         )
 
 
+server_squad_promo_groups = Table(
+    "server_squad_promo_groups",
+    Base.metadata,
+    Column(
+        "server_squad_id",
+        Integer,
+        ForeignKey("server_squads.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "promo_group_id",
+        Integer,
+        ForeignKey("promo_groups.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("created_at", DateTime, server_default=func.now()),
+)
+
+
 class PromoGroup(Base):
     __tablename__ = "promo_groups"
 
@@ -278,6 +298,11 @@ class PromoGroup(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     users = relationship("User", back_populates="promo_group")
+    server_squads = relationship(
+        "ServerSquad",
+        secondary="server_squad_promo_groups",
+        back_populates="promo_groups",
+    )
 
     def _get_period_discounts_map(self) -> Dict[int, int]:
         raw_discounts = self.period_discounts or {}
@@ -812,7 +837,7 @@ class BroadcastHistory(Base):
 
 class ServerSquad(Base):
     __tablename__ = "server_squads"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     
     squad_uuid = Column(String(255), unique=True, nullable=False, index=True)
@@ -832,10 +857,16 @@ class ServerSquad(Base):
     sort_order = Column(Integer, default=0)
     
     max_users = Column(Integer, nullable=True) 
-    current_users = Column(Integer, default=0) 
-    
+    current_users = Column(Integer, default=0)
+
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    promo_groups = relationship(
+        "PromoGroup",
+        secondary="server_squad_promo_groups",
+        back_populates="server_squads",
+    )
     
     @property
     def price_rubles(self) -> float:
