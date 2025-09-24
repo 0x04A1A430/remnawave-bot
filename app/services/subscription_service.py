@@ -268,15 +268,12 @@ class SubscriptionService:
                 remnawave_user = await api.get_user_by_uuid(user.remnawave_uuid)
                 if not remnawave_user:
                     return False
-
+                
                 used_gb = self._bytes_to_gb(remnawave_user.used_traffic_bytes)
                 subscription.traffic_used_gb = used_gb
-
-                if used_gb > 0 and not subscription.first_usage_at:
-                    subscription.first_usage_at = datetime.utcnow()
-
+                
                 await db.commit()
-
+                
                 logger.debug(f"Синхронизирован трафик для подписки {subscription.id}: {used_gb} ГБ")
                 return True
                 
