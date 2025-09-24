@@ -5,6 +5,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
+from aiogram.exceptions import TelegramBadRequest
 
 from app.config import settings
 from app.database.database import get_db
@@ -71,7 +72,17 @@ def _build_notification_settings_view(language: str):
 async def _render_notification_settings(callback: CallbackQuery) -> None:
     language = (callback.from_user.language_code or settings.DEFAULT_LANGUAGE)
     text, keyboard = _build_notification_settings_view(language)
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+    except TelegramBadRequest as e:
+        if "message to edit" in str(e).lower():
+            logger.warning(
+                "Не удалось изменить текст сообщения с настройками уведомлений, отправляем новое сообщение: %s",
+                e,
+            )
+            await callback.message.answer(text, parse_mode="HTML", reply_markup=keyboard)
+        else:
+            raise
 
 
 async def _render_notification_settings_for_state(
@@ -94,7 +105,28 @@ async def _render_notification_settings_for_state(
     if business_connection_id:
         edit_kwargs["business_connection_id"] = business_connection_id
 
-    await bot.edit_message_text(**edit_kwargs)
+    try:
+        await bot.edit_message_text(**edit_kwargs)
+    except TelegramBadRequest as e:
+        if "message to edit" in str(e).lower():
+            logger.warning(
+                "Не удалось изменить текст сообщения (chat=%s, message=%s), отправляем новое: %s",
+                chat_id,
+                message_id,
+                e,
+            )
+            send_kwargs = {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+                "reply_markup": keyboard,
+            }
+            if business_connection_id:
+                send_kwargs["business_connection_id"] = business_connection_id
+
+            await bot.send_message(**send_kwargs)
+        else:
+            raise
 
 @router.callback_query(F.data == "admin_monitoring")
 @admin_required
