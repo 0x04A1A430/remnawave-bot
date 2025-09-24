@@ -59,8 +59,15 @@ async def create_promo_group(
     traffic_discount_percent: int,
     device_discount_percent: int,
     period_discounts: Optional[Dict[int, int]] = None,
+    auto_assign_total_spent_kopeks: Optional[int] = None,
 ) -> PromoGroup:
     normalized_period_discounts = _normalize_period_discounts(period_discounts)
+
+    auto_assign_total_spent_kopeks = (
+        max(0, auto_assign_total_spent_kopeks)
+        if auto_assign_total_spent_kopeks is not None
+        else None
+    )
 
     promo_group = PromoGroup(
         name=name.strip(),
@@ -68,6 +75,7 @@ async def create_promo_group(
         traffic_discount_percent=max(0, min(100, traffic_discount_percent)),
         device_discount_percent=max(0, min(100, device_discount_percent)),
         period_discounts=normalized_period_discounts or None,
+        auto_assign_total_spent_kopeks=auto_assign_total_spent_kopeks,
         is_default=False,
     )
 
@@ -76,12 +84,13 @@ async def create_promo_group(
     await db.refresh(promo_group)
 
     logger.info(
-        "Создана промогруппа '%s' с скидками (servers=%s%%, traffic=%s%%, devices=%s%%, periods=%s)",
+        "Создана промогруппа '%s' с скидками (servers=%s%%, traffic=%s%%, devices=%s%%, periods=%s) и порогом автоприсвоения %s₽",
         promo_group.name,
         promo_group.server_discount_percent,
         promo_group.traffic_discount_percent,
         promo_group.device_discount_percent,
         normalized_period_discounts,
+        (auto_assign_total_spent_kopeks or 0) / 100,
     )
 
     return promo_group
@@ -96,6 +105,7 @@ async def update_promo_group(
     traffic_discount_percent: Optional[int] = None,
     device_discount_percent: Optional[int] = None,
     period_discounts: Optional[Dict[int, int]] = None,
+    auto_assign_total_spent_kopeks: Optional[int] = None,
 ) -> PromoGroup:
     if name is not None:
         group.name = name.strip()
@@ -108,6 +118,8 @@ async def update_promo_group(
     if period_discounts is not None:
         normalized_period_discounts = _normalize_period_discounts(period_discounts)
         group.period_discounts = normalized_period_discounts or None
+    if auto_assign_total_spent_kopeks is not None:
+        group.auto_assign_total_spent_kopeks = max(0, auto_assign_total_spent_kopeks)
 
     await db.commit()
     await db.refresh(group)

@@ -721,6 +721,39 @@ async def ensure_promo_groups_setup():
 
                 logger.info("Добавлена колонка promo_groups.period_discounts")
 
+            auto_assign_column_exists = await check_column_exists(
+                "promo_groups", "auto_assign_total_spent_kopeks"
+            )
+
+            if not auto_assign_column_exists:
+                if db_type == "sqlite":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN auto_assign_total_spent_kopeks INTEGER DEFAULT 0"
+                        )
+                    )
+                elif db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN auto_assign_total_spent_kopeks INTEGER DEFAULT 0"
+                        )
+                    )
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN auto_assign_total_spent_kopeks INT DEFAULT 0"
+                        )
+                    )
+                else:
+                    logger.error(
+                        f"Неподдерживаемый тип БД для promo_groups.auto_assign_total_spent_kopeks: {db_type}"
+                    )
+                    return False
+
+                logger.info(
+                    "Добавлена колонка promo_groups.auto_assign_total_spent_kopeks"
+                )
+
             column_exists = await check_column_exists("users", "promo_group_id")
 
             if not column_exists:
@@ -735,6 +768,37 @@ async def ensure_promo_groups_setup():
                     return False
 
                 logger.info("Добавлена колонка users.promo_group_id")
+
+            auto_promo_flag_exists = await check_column_exists(
+                "users", "auto_promo_group_assigned"
+            )
+
+            if not auto_promo_flag_exists:
+                if db_type == "sqlite":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN auto_promo_group_assigned BOOLEAN DEFAULT 0"
+                        )
+                    )
+                elif db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN auto_promo_group_assigned BOOLEAN DEFAULT FALSE"
+                        )
+                    )
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN auto_promo_group_assigned TINYINT(1) DEFAULT 0"
+                        )
+                    )
+                else:
+                    logger.error(
+                        f"Неподдерживаемый тип БД для users.auto_promo_group_assigned: {db_type}"
+                    )
+                    return False
+
+                logger.info("Добавлена колонка users.auto_promo_group_assigned")
 
             index_exists = await check_index_exists("users", "ix_users_promo_group_id")
 
@@ -1585,6 +1649,8 @@ async def check_migration_status():
             "promo_groups_table": False,
             "users_promo_group_column": False,
             "promo_groups_period_discounts_column": False,
+            "promo_groups_auto_assign_column": False,
+            "users_auto_promo_group_assigned_column": False,
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -1598,6 +1664,8 @@ async def check_migration_status():
         status["welcome_texts_is_enabled_column"] = await check_column_exists('welcome_texts', 'is_enabled')
         status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
         status["promo_groups_period_discounts_column"] = await check_column_exists('promo_groups', 'period_discounts')
+        status["promo_groups_auto_assign_column"] = await check_column_exists('promo_groups', 'auto_assign_total_spent_kopeks')
+        status["users_auto_promo_group_assigned_column"] = await check_column_exists('users', 'auto_promo_group_assigned')
         
         media_fields_exist = (
             await check_column_exists('broadcast_history', 'has_media') and
@@ -1631,6 +1699,8 @@ async def check_migration_status():
             "promo_groups_table": "Таблица промо-групп",
             "users_promo_group_column": "Колонка promo_group_id у пользователей",
             "promo_groups_period_discounts_column": "Колонка period_discounts у промо-групп",
+            "promo_groups_auto_assign_column": "Колонка auto_assign_total_spent_kopeks у промо-групп",
+            "users_auto_promo_group_assigned_column": "Флаг автоназначения промогруппы у пользователей",
         }
         
         for check_key, check_status in status.items():
