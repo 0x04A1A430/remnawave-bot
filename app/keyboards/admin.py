@@ -920,7 +920,8 @@ def get_monitoring_status_keyboard(
     keyboard.append(info_row)
     
     test_row = [
-        InlineKeyboardButton(text="🧪 Тест уведомлений", callback_data="admin_mon_test_notifications")
+        InlineKeyboardButton(text="🧪 Тест уведомлений", callback_data="admin_mon_test_notifications"),
+        InlineKeyboardButton(text="🔔 Настройки уведомлений", callback_data="admin_mon_toggle_notifications"),
     ]
     keyboard.append(test_row)
     
@@ -943,6 +944,65 @@ def get_monitoring_settings_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(text="⬅️ К мониторингу", callback_data="admin_monitoring")
         ]
+    ])
+
+
+def get_monitoring_notification_settings_keyboard(settings_data: dict) -> InlineKeyboardMarkup:
+    def _status(enabled: bool) -> str:
+        return "🟢" if enabled else "🔴"
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=f"{_status(settings_data.get('trial_inactive_1h_enabled'))} Триал · 1 час",
+                callback_data="admin_mon_toggle_notif_trial1h",
+            ),
+            InlineKeyboardButton(
+                text=f"{_status(settings_data.get('trial_inactive_24h_enabled'))} Триал · 24 часа",
+                callback_data="admin_mon_toggle_notif_trial24h",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"{_status(settings_data.get('expired_day1_enabled'))} Истекла · 1 день",
+                callback_data="admin_mon_toggle_notif_expired_day1",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"{_status(settings_data.get('expired_day23_enabled'))} Истекла · 2-3 дня",
+                callback_data="admin_mon_toggle_notif_expired_day23",
+            ),
+            InlineKeyboardButton(
+                text=f"✏️ Скидка {settings_data.get('expired_day23_discount_percent', 0)}%",
+                callback_data="admin_mon_edit_notif_day23_discount",
+            ),
+            InlineKeyboardButton(
+                text=f"⏳ {settings_data.get('expired_day23_valid_hours', 0)} ч",
+                callback_data="admin_mon_edit_notif_day23_valid",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"{_status(settings_data.get('expired_dayn_enabled'))} Истекла · N дней",
+                callback_data="admin_mon_toggle_notif_expired_dayn",
+            ),
+            InlineKeyboardButton(
+                text=f"✏️ Скидка {settings_data.get('expired_dayn_discount_percent', 0)}%",
+                callback_data="admin_mon_edit_notif_dayn_discount",
+            ),
+            InlineKeyboardButton(
+                text=f"⏳ {settings_data.get('expired_dayn_valid_hours', 0)} ч",
+                callback_data="admin_mon_edit_notif_dayn_valid",
+            ),
+            InlineKeyboardButton(
+                text=f"📅 от {settings_data.get('expired_dayn_threshold_days', 0)} дн.",
+                callback_data="admin_mon_edit_notif_dayn_threshold",
+            ),
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_monitoring"),
+        ],
     ])
 
 

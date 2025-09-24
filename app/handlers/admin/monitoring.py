@@ -1,20 +1,73 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from typing import Callable
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 
 from app.config import settings
 from app.database.database import get_db
 from app.services.monitoring_service import monitoring_service
 from app.utils.decorators import admin_required
 from app.utils.pagination import paginate_list
-from app.keyboards.admin import get_monitoring_keyboard, get_admin_main_keyboard
+from app.keyboards.admin import (
+    get_monitoring_keyboard,
+    get_admin_main_keyboard,
+    get_monitoring_notification_settings_keyboard,
+)
 from app.localization.texts import get_texts
+from app.services.notification_settings_service import NotificationSettingsService
+from app.states import NotificationSettingsStates
 
 logger = logging.getLogger(__name__)
 router = Router()
+
+
+def _format_notification_settings_text(settings_data: dict) -> str:
+    def status(flag: bool) -> str:
+        return "🟢 Вкл" if flag else "🔴 Выкл"
+
+    return (
+        "🔔 <b>Настройки автоматических уведомлений</b>\n\n"
+        "🧪 <b>Тестовый период:</b>\n"
+        f"• 1 час без подключения: {status(settings_data.get('trial_inactive_1h_enabled'))}\n"
+        f"• 24 часа без подключения: {status(settings_data.get('trial_inactive_24h_enabled'))}\n\n"
+        "📅 <b>После окончания подписки:</b>\n"
+        f"• 1 день после истечения: {status(settings_data.get('expired_day1_enabled'))}\n"
+        f"• 2-3 дня: {status(settings_data.get('expired_day23_enabled'))}"
+        f" — скидка {settings_data.get('expired_day23_discount_percent', 0)}%"
+        f" на {settings_data.get('expired_day23_valid_hours', 0)} ч.\n"
+        f"• N дней (от {settings_data.get('expired_dayn_threshold_days', 0)}):"
+        f" {status(settings_data.get('expired_dayn_enabled'))}"
+        f" — скидка {settings_data.get('expired_dayn_discount_percent', 0)}%"
+        f" на {settings_data.get('expired_dayn_valid_hours', 0)} ч.\n\n"
+        "Нажмите на кнопки ниже для переключения или изменения параметров."
+    )
+
+
+def _get_notification_settings_view() -> tuple[str, 'InlineKeyboardMarkup']:
+    settings_data = NotificationSettingsService.get_all()
+    return (
+        _format_notification_settings_text(settings_data),
+        get_monitoring_notification_settings_keyboard(settings_data),
+    )
+
+
+async def _toggle_notification_setting(
+    callback: CallbackQuery,
+    getter: Callable[[], bool],
+    setter: Callable[[bool], bool],
+    label: str,
+) -> None:
+    new_value = not getter()
+    if setter(new_value):
+        await callback.answer(f"{label}: {'включено' if new_value else 'отключено'}")
+        text, keyboard = _get_notification_settings_view()
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+    else:
+        await callback.answer("❌ Не удалось сохранить настройку", show_alert=True)
 
 
 @router.callback_query(F.data == "admin_monitoring")
@@ -200,6 +253,17 @@ async def clear_logs_callback(callback: CallbackQuery):
         await callback.answer(f"❌ Ошибка очистки: {str(e)}", show_alert=True)
 
 
+@router.callback_query(F.data == "admin_mon_toggle_notifications")
+@admin_required
+async def monitoring_notifications_menu(callback: CallbackQuery):
+    try:
+        text, keyboard = _get_notification_settings_view()
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
+    except Exception as e:
+        logger.error(f"Ошибка отображения настроек уведомлений: {e}")
+        await callback.answer("❌ Не удалось получить настройки", show_alert=True)
+
+
 @router.callback_query(F.data == "admin_mon_test_notifications")
 @admin_required
 async def test_notifications_callback(callback: CallbackQuery):
@@ -228,6 +292,128 @@ async def test_notifications_callback(callback: CallbackQuery):
     except Exception as e:
         logger.error(f"Ошибка отправки тестового уведомления: {e}")
         await callback.answer(f"❌ Ошибка отправки: {str(e)}", show_alert=True)
+
+
+@router.callback_query(F.data == "admin_mon_toggle_notif_trial1h")
+@admin_required
+async def toggle_trial_1h_notification(callback: CallbackQuery):
+    await _toggle_notification_setting(
+        callback,
+        NotificationSettingsService.is_trial_inactive_1h_enabled,
+        NotificationSettingsService.set_trial_inactive_1h_enabled,
+        "Триал 1ч",
+    )
+
+
+@router.callback_query(F.data == "admin_mon_toggle_notif_trial24h")
+@admin_required
+async def toggle_trial_24h_notification(callback: CallbackQuery):
+    await _toggle_notification_setting(
+        callback,
+        NotificationSettingsService.is_trial_inactive_24h_enabled,
+        NotificationSettingsService.set_trial_inactive_24h_enabled,
+        "Триал 24ч",
+    )
+
+
+@router.callback_query(F.data == "admin_mon_toggle_notif_expired_day1")
+@admin_required
+async def toggle_expired_day1_notification(callback: CallbackQuery):
+    await _toggle_notification_setting(
+        callback,
+        NotificationSettingsService.is_expired_day1_enabled,
+        NotificationSettingsService.set_expired_day1_enabled,
+        "Истекла 1 день",
+    )
+
+
+@router.callback_query(F.data == "admin_mon_toggle_notif_expired_day23")
+@admin_required
+async def toggle_expired_day23_notification(callback: CallbackQuery):
+    await _toggle_notification_setting(
+        callback,
+        NotificationSettingsService.is_expired_day23_enabled,
+        NotificationSettingsService.set_expired_day23_enabled,
+        "Истекла 2-3 дня",
+    )
+
+
+@router.callback_query(F.data == "admin_mon_toggle_notif_expired_dayn")
+@admin_required
+async def toggle_expired_dayn_notification(callback: CallbackQuery):
+    await _toggle_notification_setting(
+        callback,
+        NotificationSettingsService.is_expired_dayn_enabled,
+        NotificationSettingsService.set_expired_dayn_enabled,
+        "Истекла N дней",
+    )
+
+
+async def _start_waiting_for_value(
+    callback: CallbackQuery,
+    state: FSMContext,
+    param: str,
+    prompt: str,
+) -> None:
+    await state.set_state(NotificationSettingsStates.waiting_for_value)
+    await state.update_data(param=param)
+    await callback.message.answer(prompt)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_mon_edit_notif_day23_discount")
+@admin_required
+async def edit_day23_discount(callback: CallbackQuery, state: FSMContext):
+    await _start_waiting_for_value(
+        callback,
+        state,
+        "day23_discount",
+        "Введите новую скидку для уведомления на 2-3 день (%).",
+    )
+
+
+@router.callback_query(F.data == "admin_mon_edit_notif_day23_valid")
+@admin_required
+async def edit_day23_valid(callback: CallbackQuery, state: FSMContext):
+    await _start_waiting_for_value(
+        callback,
+        state,
+        "day23_valid",
+        "Введите срок действия предложения для 2-3 дня (в часах).",
+    )
+
+
+@router.callback_query(F.data == "admin_mon_edit_notif_dayn_discount")
+@admin_required
+async def edit_dayn_discount(callback: CallbackQuery, state: FSMContext):
+    await _start_waiting_for_value(
+        callback,
+        state,
+        "dayn_discount",
+        "Введите новую скидку для уведомления после N дней (%).",
+    )
+
+
+@router.callback_query(F.data == "admin_mon_edit_notif_dayn_valid")
+@admin_required
+async def edit_dayn_valid(callback: CallbackQuery, state: FSMContext):
+    await _start_waiting_for_value(
+        callback,
+        state,
+        "dayn_valid",
+        "Введите срок действия предложения после N дней (в часах).",
+    )
+
+
+@router.callback_query(F.data == "admin_mon_edit_notif_dayn_threshold")
+@admin_required
+async def edit_dayn_threshold(callback: CallbackQuery, state: FSMContext):
+    await _start_waiting_for_value(
+        callback,
+        state,
+        "dayn_threshold",
+        "Введите через сколько дней после окончания отправлять усиленную скидку (минимум 4).",
+    )
 
 
 @router.callback_query(F.data == "admin_mon_statistics")
@@ -284,6 +470,47 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
     except Exception as e:
         logger.error(f"Ошибка получения статистики: {e}")
         await callback.answer(f"❌ Ошибка получения статистики: {str(e)}", show_alert=True)
+
+
+@router.message(NotificationSettingsStates.waiting_for_value)
+@admin_required
+async def notification_setting_value(message: Message, state: FSMContext):
+    data = await state.get_data()
+    param = data.get("param")
+    value_raw = (message.text or "").strip()
+
+    try:
+        value_int = int(value_raw)
+    except ValueError:
+        await message.answer("❌ Введите целое число.")
+        return
+
+    if param == "day23_discount":
+        success = NotificationSettingsService.set_expired_day23_discount_percent(value_int)
+        result_text = "Скидка для уведомлений на 2-3 день обновлена."
+    elif param == "day23_valid":
+        success = NotificationSettingsService.set_expired_day23_valid_hours(value_int)
+        result_text = "Срок действия предложения на 2-3 день обновлён."
+    elif param == "dayn_discount":
+        success = NotificationSettingsService.set_expired_dayn_discount_percent(value_int)
+        result_text = "Скидка для уведомлений после N дней обновлена."
+    elif param == "dayn_valid":
+        success = NotificationSettingsService.set_expired_dayn_valid_hours(value_int)
+        result_text = "Срок действия предложения после N дней обновлён."
+    elif param == "dayn_threshold":
+        success = NotificationSettingsService.set_expired_dayn_threshold_days(value_int)
+        result_text = "Порог дней для усиленной скидки обновлён."
+    else:
+        success = False
+        result_text = "Неизвестный параметр."
+
+    if success:
+        await message.answer(f"✅ {result_text}")
+        text, keyboard = _get_notification_settings_view()
+        await message.answer(text, parse_mode="HTML", reply_markup=keyboard)
+        await state.clear()
+    else:
+        await message.answer("❌ Не удалось сохранить значение. Попробуйте ещё раз.")
 
 
 def get_monitoring_logs_keyboard(current_page: int, total_pages: int):

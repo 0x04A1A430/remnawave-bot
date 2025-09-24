@@ -24,6 +24,7 @@ from app.database.crud.notification import (
 from app.database.models import MonitoringLog, SubscriptionStatus, Subscription, User, Ticket, TicketStatus
 from app.services.subscription_service import SubscriptionService
 from app.services.payment_service import PaymentService
+from app.services.notification_settings_service import NotificationSettingsService
 from app.localization.texts import get_texts
 
 from app.external.remnawave_api import (
@@ -80,10 +81,12 @@ class MonitoringService:
         async for db in get_db():
             try:
                 await self._cleanup_notification_cache()
-                
+
                 await self._check_expired_subscriptions(db)
+                await self._check_expired_followups(db)
                 await self._check_expiring_subscriptions(db)
-                await self._check_trial_expiring_soon(db)  
+                await self._check_trial_expiring_soon(db)
+                await self._check_trial_inactive_users(db)
                 await self._process_autopayments(db)
                 await self._cleanup_inactive_users(db)
                 await self._sync_with_remnawave(db)
@@ -117,7 +120,7 @@ class MonitoringService:
     async def _check_expired_subscriptions(self, db: AsyncSession):
         try:
             expired_subscriptions = await get_expired_subscriptions(db)
-            
+
             for subscription in expired_subscriptions:
                 from app.database.crud.subscription import expire_subscription
                 await expire_subscription(db, subscription)
@@ -140,6 +143,119 @@ class MonitoringService:
                 
         except Exception as e:
             logger.error(f"Ошибка проверки истёкших подписок: {e}")
+
+    async def _check_expired_followups(self, db: AsyncSession):
+        try:
+            if not self.bot:
+                return
+
+            day1_enabled = NotificationSettingsService.is_expired_day1_enabled()
+            day23_enabled = NotificationSettingsService.is_expired_day23_enabled()
+            dayn_enabled = NotificationSettingsService.is_expired_dayn_enabled()
+
+            if not any([day1_enabled, day23_enabled, dayn_enabled]):
+                return
+
+            result = await db.execute(
+                select(Subscription)
+                .options(selectinload(Subscription.user))
+                .where(Subscription.status == SubscriptionStatus.EXPIRED.value)
+            )
+            expired_subscriptions = result.scalars().all()
+
+            if not expired_subscriptions:
+                return
+
+            now = datetime.utcnow()
+            sent_day1 = 0
+            sent_day23 = 0
+            sent_dayn = 0
+            threshold_n = NotificationSettingsService.get_expired_dayn_threshold_days()
+            discount_day23 = NotificationSettingsService.get_expired_day23_discount_percent()
+            discount_dayn = NotificationSettingsService.get_expired_dayn_discount_percent()
+            valid_day23 = NotificationSettingsService.get_expired_day23_valid_hours()
+            valid_dayn = NotificationSettingsService.get_expired_dayn_valid_hours()
+
+            for subscription in expired_subscriptions:
+                user = subscription.user
+                if not user:
+                    continue
+
+                delta = now - subscription.end_date
+                if delta.total_seconds() < 0:
+                    continue
+
+                days_since = int(delta.total_seconds() // 86400)
+
+                if days_since < 1:
+                    continue
+
+                if (
+                    day1_enabled
+                    and days_since == 1
+                    and not await notification_sent(db, user.id, subscription.id, "expired_followup_day1", days_since)
+                ):
+                    success = await self._send_expired_followup_notification(
+                        user,
+                        subscription,
+                        "day1",
+                        days_since=days_since,
+                    )
+                    if success:
+                        await record_notification(db, user.id, subscription.id, "expired_followup_day1", days_since)
+                        sent_day1 += 1
+
+                if (
+                    day23_enabled
+                    and days_since in {2, 3}
+                    and not await notification_sent(db, user.id, subscription.id, "expired_followup_day23", days_since)
+                ):
+                    success = await self._send_expired_followup_notification(
+                        user,
+                        subscription,
+                        "day23",
+                        days_since=days_since,
+                        discount_percent=discount_day23,
+                        valid_hours=valid_day23,
+                    )
+                    if success:
+                        await record_notification(db, user.id, subscription.id, "expired_followup_day23", days_since)
+                        sent_day23 += 1
+
+                if (
+                    dayn_enabled
+                    and days_since >= threshold_n
+                    and not await notification_sent(db, user.id, subscription.id, "expired_followup_dayn", days_since)
+                ):
+                    success = await self._send_expired_followup_notification(
+                        user,
+                        subscription,
+                        "dayn",
+                        days_since=days_since,
+                        discount_percent=discount_dayn,
+                        valid_hours=valid_dayn,
+                        threshold_days=threshold_n,
+                    )
+                    if success:
+                        await record_notification(db, user.id, subscription.id, "expired_followup_dayn", days_since)
+                        sent_dayn += 1
+
+            total_sent = sent_day1 + sent_day23 + sent_dayn
+            if total_sent > 0:
+                await self._log_monitoring_event(
+                    db,
+                    "expired_followup_notifications",
+                    "Отправлены напоминания после окончания подписки",
+                    {
+                        "sent_day1": sent_day1,
+                        "sent_day23": sent_day23,
+                        "sent_dayn": sent_dayn,
+                        "total": total_sent,
+                    },
+                )
+
+        except Exception as e:
+            logger.error(f"Ошибка отправки последующих уведомлений по истекшим подпискам: {e}")
 
     async def update_remnawave_user(
         self,
@@ -250,7 +366,7 @@ class MonitoringService:
     async def _check_trial_expiring_soon(self, db: AsyncSession):
         try:
             threshold_time = datetime.utcnow() + timedelta(hours=2)
-            
+
             result = await db.execute(
                 select(Subscription)
                 .options(selectinload(Subscription.user))
@@ -288,7 +404,99 @@ class MonitoringService:
                 
         except Exception as e:
             logger.error(f"Ошибка проверки истекающих тестовых подписок: {e}")
-    
+
+    async def _check_trial_inactive_users(self, db: AsyncSession):
+        try:
+            if not self.bot:
+                return
+
+            one_hour_enabled = NotificationSettingsService.is_trial_inactive_1h_enabled()
+            day_enabled = NotificationSettingsService.is_trial_inactive_24h_enabled()
+
+            if not (one_hour_enabled or day_enabled):
+                return
+
+            result = await db.execute(
+                select(Subscription)
+                .options(selectinload(Subscription.user))
+                .where(
+                    Subscription.is_trial == True,
+                    Subscription.first_usage_at.is_(None),
+                    Subscription.start_date.is_not(None),
+                    Subscription.status.in_(
+                        [
+                            SubscriptionStatus.ACTIVE.value,
+                            SubscriptionStatus.TRIAL.value,
+                        ]
+                    ),
+                )
+            )
+            trial_subscriptions = result.scalars().all()
+
+            if not trial_subscriptions:
+                return
+
+            now = datetime.utcnow()
+            sent_1h = 0
+            sent_24h = 0
+
+            for subscription in trial_subscriptions:
+                user = subscription.user
+                if not user:
+                    continue
+
+                try:
+                    sync_success = await self.subscription_service.sync_subscription_usage(db, subscription)
+                    if sync_success:
+                        await db.refresh(subscription)
+                except Exception as sync_error:  # pragma: no cover - defensive log
+                    logger.debug(
+                        "Не удалось синхронизировать использование триальной подписки %s: %s",
+                        subscription.id,
+                        sync_error,
+                    )
+
+                if subscription.first_usage_at:
+                    continue
+
+                started_at = subscription.start_date or subscription.created_at
+                if not started_at:
+                    continue
+
+                time_since_start = now - started_at
+
+                if (
+                    one_hour_enabled
+                    and time_since_start >= timedelta(hours=1)
+                    and not await notification_sent(db, user.id, subscription.id, "trial_inactive_1h", 0)
+                ):
+                    success = await self._send_trial_inactive_notification(user, subscription, "1h")
+                    if success:
+                        await record_notification(db, user.id, subscription.id, "trial_inactive_1h", 0)
+                        sent_1h += 1
+
+                if (
+                    day_enabled
+                    and time_since_start >= timedelta(days=1)
+                    and not await notification_sent(db, user.id, subscription.id, "trial_inactive_24h", 1)
+                ):
+                    success = await self._send_trial_inactive_notification(user, subscription, "24h")
+                    if success:
+                        await record_notification(db, user.id, subscription.id, "trial_inactive_24h", 1)
+                        sent_24h += 1
+
+            total_sent = sent_1h + sent_24h
+            if total_sent > 0:
+                await self._log_monitoring_event(
+                    db,
+                    "trial_inactive_notifications",
+                    "Отправлены напоминания о неиспользуемом триале",
+                    {"sent_1h": sent_1h, "sent_24h": sent_24h, "total": total_sent},
+                )
+
+        except Exception as e:
+            logger.error(f"Ошибка проверки неиспользуемых триалов: {e}")
+
     async def _get_expiring_paid_subscriptions(self, db: AsyncSession, days_before: int) -> List[Subscription]:
         current_time = datetime.utcnow()
         threshold_date = current_time + timedelta(days=days_before)
@@ -465,7 +673,7 @@ class MonitoringService:
     async def _send_trial_ending_notification(self, user: User, subscription: Subscription) -> bool:
         try:
             texts = get_texts(user.language)
-            
+
             message = f"""
 🎁 <b>Тестовая подписка скоро закончится!</b>
 
@@ -501,7 +709,170 @@ class MonitoringService:
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об окончании тестовой подписки пользователю {user.telegram_id}: {e}")
             return False
-    
+
+    async def _send_trial_inactive_notification(self, user: User, subscription: Subscription, stage: str) -> bool:
+        try:
+            language = (user.language or settings.DEFAULT_LANGUAGE).lower()
+            support_url = settings.get_support_contact_url()
+            support_text = settings.get_support_contact_display()
+
+            if stage == "1h":
+                if language.startswith("en"):
+                    message = (
+                        "👋 <b>Let's set up your VPN</b>\n\n"
+                        "It's been an hour since you activated the trial, but we haven't seen any connections yet.\n\n"
+                        "Tap the button below to add the configuration and start browsing safely."
+                    )
+                else:
+                    message = (
+                        "👋 <b>Давайте подключим VPN</b>\n\n"
+                        "Прошел час после активации тестового доступа, но подключений пока нет.\n\n"
+                        "Нажмите кнопку ниже, чтобы добавить конфигурацию и начать пользоваться сервисом."
+                    )
+            else:  # 24h stage
+                if language.startswith("en"):
+                    message = (
+                        "⏰ <b>Trial is still waiting for you</b>\n\n"
+                        "A whole day has passed and the VPN is still not connected.\n\n"
+                        "Connect now and make the most of the test period — it only takes a minute!"
+                    )
+                else:
+                    message = (
+                        "⏰ <b>Тест все еще не используется</b>\n\n"
+                        "Прошли сутки, но VPN так и не был подключен.\n\n"
+                        "Подключитесь сейчас и успейте воспользоваться тестовым периодом — это занимает меньше минуты!"
+                    )
+
+            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+            buttons = [
+                [InlineKeyboardButton(text="🔗 Подключить VPN" if not language.startswith("en") else "🔗 Connect VPN", callback_data="subscription_connect")],
+                [InlineKeyboardButton(text="📱 Моя подписка" if not language.startswith("en") else "📱 My subscription", callback_data="menu_subscription")],
+            ]
+
+            if support_url:
+                buttons.append(
+                    [
+                        InlineKeyboardButton(
+                            text=("🛟 Поддержка" if not language.startswith("en") else "🛟 Support"),
+                            url=support_url,
+                        )
+                    ]
+                )
+            elif support_text:
+                message += f"\n\n💬 {support_text}"
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+            await self.bot.send_message(
+                user.telegram_id,
+                message,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о неиспользуемом триале пользователю {user.telegram_id}: {e}")
+            return False
+
+    async def _send_expired_followup_notification(
+        self,
+        user: User,
+        subscription: Subscription,
+        stage: str,
+        *,
+        days_since: int,
+        discount_percent: int | None = None,
+        valid_hours: int | None = None,
+        threshold_days: int | None = None,
+    ) -> bool:
+        try:
+            language = (user.language or settings.DEFAULT_LANGUAGE).lower()
+            support_url = settings.get_support_contact_url()
+            support_text = settings.get_support_contact_display()
+
+            if language.startswith("en"):
+                if stage == "day1":
+                    message = (
+                        "📅 <b>Your VPN subscription expired yesterday</b>\n\n"
+                        "Renew now to restore unlimited access.\n"
+                        "Tap a button below — activation is instant."
+                    )
+                elif stage == "day23":
+                    message = (
+                        "🔥 <b>Special return offer</b>\n\n"
+                        f"It's been {days_since} days since the subscription expired.\n"
+                        f"Renew now with a {discount_percent}% discount valid for {valid_hours} hours."
+                    )
+                else:
+                    trigger_days = threshold_days or days_since
+                    message = (
+                        "🎁 <b>Extra discount just for you</b>\n\n"
+                        f"The subscription ended {days_since} days ago.\n"
+                        f"Come back with a {discount_percent}% discount valid for {valid_hours} hours.\n"
+                        f"Offer unlocked after {trigger_days} days without renewal."
+                    )
+                extend_text = "⏰ Renew subscription"
+                buy_text = "💎 Buy new period"
+                balance_text = "💳 Top up balance"
+                support_button_text = "🛟 Support"
+            else:
+                if stage == "day1":
+                    message = (
+                        "📅 <b>Подписка истекла вчера</b>\n\n"
+                        "Продлите доступ прямо сейчас — активация моментальная."
+                    )
+                elif stage == "day23":
+                    message = (
+                        "🔥 <b>Скидка на продление</b>\n\n"
+                        f"Подписка закончилась {days_since} дня назад.\n"
+                        f"Вернитесь со скидкой {discount_percent}% — предложение действует {valid_hours} ч."
+                    )
+                else:
+                    trigger_days = threshold_days or days_since
+                    message = (
+                        "🎁 <b>Дополнительная скидка для возврата</b>\n\n"
+                        f"Прошло {days_since} дней без подписки.\n"
+                        f"Продлите её со скидкой {discount_percent}% в течение {valid_hours} ч.\n"
+                        f"Предложение доступно после {trigger_days} дней без продления."
+                    )
+                extend_text = "⏰ Продлить подписку"
+                buy_text = "💎 Купить новый период"
+                balance_text = "💳 Пополнить баланс"
+                support_button_text = "🛟 Поддержка"
+
+            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+            buttons = [
+                [InlineKeyboardButton(text=extend_text, callback_data="subscription_extend")],
+                [InlineKeyboardButton(text=buy_text, callback_data="menu_buy")],
+                [InlineKeyboardButton(text=balance_text, callback_data="balance_topup")],
+            ]
+
+            if support_url:
+                buttons.append([
+                    InlineKeyboardButton(text=support_button_text, url=support_url)
+                ])
+            elif support_text:
+                message += f"\n\n💬 {support_text}"
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+            await self.bot.send_message(
+                user.telegram_id,
+                message,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"Ошибка отправки уведомления о завершившейся подписке пользователю {user.telegram_id}: {e}"
+            )
+            return False
+
     async def _send_autopay_success_notification(self, user: User, amount: int, days: int):
         try:
             texts = get_texts(user.language)
