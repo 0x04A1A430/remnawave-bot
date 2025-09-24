@@ -1,7 +1,7 @@
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import desc, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -26,23 +26,6 @@ def _normalize_period_discounts(period_discounts: Optional[Dict[int, int]]) -> D
     return normalized
 
 logger = logging.getLogger(__name__)
-
-_UNSET = object()
-
-
-def _normalize_auto_assign_amount(amount_kopeks: Optional[int]) -> Optional[int]:
-    if amount_kopeks is None:
-        return None
-
-    try:
-        normalized = int(amount_kopeks)
-    except (TypeError, ValueError):
-        return None
-
-    if normalized <= 0:
-        return None
-
-    return normalized
 
 
 async def get_promo_groups_with_counts(
@@ -76,10 +59,8 @@ async def create_promo_group(
     traffic_discount_percent: int,
     device_discount_percent: int,
     period_discounts: Optional[Dict[int, int]] = None,
-    auto_assign_amount_kopeks: Optional[int] = None,
 ) -> PromoGroup:
     normalized_period_discounts = _normalize_period_discounts(period_discounts)
-    normalized_auto_amount = _normalize_auto_assign_amount(auto_assign_amount_kopeks)
 
     promo_group = PromoGroup(
         name=name.strip(),
@@ -87,7 +68,6 @@ async def create_promo_group(
         traffic_discount_percent=max(0, min(100, traffic_discount_percent)),
         device_discount_percent=max(0, min(100, device_discount_percent)),
         period_discounts=normalized_period_discounts or None,
-        auto_assign_amount_kopeks=normalized_auto_amount,
         is_default=False,
     )
 
@@ -116,7 +96,6 @@ async def update_promo_group(
     traffic_discount_percent: Optional[int] = None,
     device_discount_percent: Optional[int] = None,
     period_discounts: Optional[Dict[int, int]] = None,
-    auto_assign_amount_kopeks: Any = _UNSET,
 ) -> PromoGroup:
     if name is not None:
         group.name = name.strip()
@@ -129,8 +108,6 @@ async def update_promo_group(
     if period_discounts is not None:
         normalized_period_discounts = _normalize_period_discounts(period_discounts)
         group.period_discounts = normalized_period_discounts or None
-    if auto_assign_amount_kopeks is not _UNSET:
-        group.auto_assign_amount_kopeks = _normalize_auto_assign_amount(auto_assign_amount_kopeks)
 
     await db.commit()
     await db.refresh(group)
@@ -193,23 +170,3 @@ async def count_promo_group_members(db: AsyncSession, group_id: int) -> int:
         select(func.count(User.id)).where(User.promo_group_id == group_id)
     )
     return result.scalar_one()
-
-
-async def get_auto_assign_promo_group(
-    db: AsyncSession,
-    total_amount_kopeks: int,
-) -> Optional[PromoGroup]:
-    if total_amount_kopeks <= 0:
-        return None
-
-    result = await db.execute(
-        select(PromoGroup)
-        .where(
-            PromoGroup.auto_assign_amount_kopeks.is_not(None),
-            PromoGroup.auto_assign_amount_kopeks > 0,
-            PromoGroup.auto_assign_amount_kopeks <= total_amount_kopeks,
-        )
-        .order_by(desc(PromoGroup.auto_assign_amount_kopeks), PromoGroup.id)
-    )
-
-    return result.scalars().first()

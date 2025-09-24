@@ -14,7 +14,6 @@ from app.database.crud.transaction import (
 from app.database.crud.user import get_user_by_telegram_id, add_user_balance
 from app.external.tribute import TributeService as TributeAPI
 from app.services.payment_service import PaymentService
-from app.services.promo_group_service import maybe_assign_auto_promo_group
 
 logger = logging.getLogger(__name__)
 
@@ -140,10 +139,8 @@ class TributeService:
                 if not user.has_made_first_topup:
                     user.has_made_first_topup = True
                     logger.info(f"Отмечен первый топап для пользователя {user_telegram_id}")
-
-                await maybe_assign_auto_promo_group(session, user, self.bot)
-
-
+                
+                
                 try:
                     from app.services.admin_notification_service import AdminNotificationService
                     notification_service = AdminNotificationService(self.bot)
@@ -336,13 +333,11 @@ class TributeService:
                 old_balance = user.balance_kopeks
                 user.balance_kopeks += amount_kopeks
                 user.updated_at = datetime.utcnow()
-
+                
                 await session.commit()
-
-                await maybe_assign_auto_promo_group(session, user, self.bot)
-
+                
                 logger.info(f"💰 ПРИНУДИТЕЛЬНО обновлен баланс: {old_balance} -> {user.balance_kopeks} коп")
-
+                
                 await self._send_success_notification(user_id, amount_kopeks)
                 
                 logger.info(f"✅ Принудительно обработан платеж {payment_id}")
