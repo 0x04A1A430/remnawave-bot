@@ -255,7 +255,7 @@ async def show_system_submenu(
     
     await callback.message.edit_text(
         "🛠️ **Системные функции**\n\n"
-        "Обновления, резервные копии и системные операции:",
+        "Отчеты, обновления, резервные копии и системные операции:",
         reply_markup=get_admin_system_submenu_keyboard(db_user.language),
         parse_mode="Markdown"
     )
