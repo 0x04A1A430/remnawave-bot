@@ -77,9 +77,9 @@ async def _render_notification_settings(callback: CallbackQuery) -> None:
 async def _render_notification_settings_for_state(bot, chat_id: int, message_id: int, language: str) -> None:
     text, keyboard = _build_notification_settings_view(language)
     await bot.edit_message_text(
-        text=text,
-        chat_id=chat_id,
-        message_id=message_id,
+        text,
+        chat_id,
+        message_id,
         parse_mode="HTML",
         reply_markup=keyboard,
     )
