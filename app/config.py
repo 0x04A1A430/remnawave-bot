@@ -2,7 +2,6 @@ import os
 import re
 import html
 from collections import defaultdict
-from datetime import time as dt_time
 from typing import List, Optional, Union, Dict
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, Field
@@ -27,8 +26,6 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
     ADMIN_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
     ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID: Optional[int] = None
-    ADMIN_REPORTS_TOPIC_ID: Optional[int] = None
-    ADMIN_REPORTS_TIME_MOSCOW: str = "09:00"
 
     CHANNEL_SUB_ID: Optional[str] = None
     CHANNEL_LINK: Optional[str] = None
@@ -639,26 +636,6 @@ class Settings(BaseSettings):
     def is_admin_notifications_enabled(self) -> bool:
         return (self.ADMIN_NOTIFICATIONS_ENABLED and
                 self.get_admin_notifications_chat_id() is not None)
-
-    def get_admin_reports_topic_id(self) -> Optional[int]:
-        if not self.ADMIN_REPORTS_TOPIC_ID:
-            return None
-
-        try:
-            return int(self.ADMIN_REPORTS_TOPIC_ID)
-        except (ValueError, TypeError):
-            return None
-
-    def get_admin_reports_time(self) -> dt_time:
-        raw_value = (self.ADMIN_REPORTS_TIME_MOSCOW or "09:00").strip()
-
-        try:
-            hours_str, minutes_str = raw_value.split(":", maxsplit=1)
-            hours = max(0, min(23, int(hours_str)))
-            minutes = max(0, min(59, int(minutes_str)))
-            return dt_time(hour=hours, minute=minutes)
-        except (ValueError, AttributeError):
-            return dt_time(hour=9, minute=0)
 
     def get_backup_send_chat_id(self) -> Optional[int]:
         if not self.BACKUP_SEND_CHAT_ID:

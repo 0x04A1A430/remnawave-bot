@@ -12,8 +12,7 @@ from app.keyboards.admin import (
     get_admin_communications_submenu_keyboard,
     get_admin_support_submenu_keyboard,
     get_admin_settings_submenu_keyboard,
-    get_admin_system_submenu_keyboard,
-    get_admin_reports_keyboard,
+    get_admin_system_submenu_keyboard
 )
 from app.localization.texts import get_texts
 from app.handlers.admin import support_settings as support_settings_handlers
@@ -140,23 +139,6 @@ async def show_support_submenu(
     await callback.message.edit_text(
         "🛟 **Поддержка**\n\n" + ("Доступ к тикетам." if is_moderator_only else "Управление тикетами и настройками поддержки:"),
         reply_markup=kb,
-        parse_mode="Markdown"
-    )
-    await callback.answer()
-
-
-@admin_required
-@error_handler
-async def show_reports_submenu(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession
-):
-    texts = get_texts(db_user.language)
-
-    await callback.message.edit_text(
-        f"📈 **{texts.ADMIN_REPORTS}**\n\n" + texts.ADMIN_REPORTS_MENU_HINT,
-        reply_markup=get_admin_reports_keyboard(db_user.language),
         parse_mode="Markdown"
     )
     await callback.answer()
@@ -423,11 +405,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_support_audit,
         F.data.in_(["admin_support_audit"]) | F.data.startswith("admin_support_audit_page_")
-    )
-
-    dp.callback_query.register(
-        show_reports_submenu,
-        F.data == "admin_submenu_reports"
     )
     
     dp.callback_query.register(
