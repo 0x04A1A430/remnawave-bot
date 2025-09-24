@@ -412,7 +412,9 @@ class SubscriptionService:
             promo_group = promo_group or (user.promo_group if user else None)
 
             servers_price, _ = await self.get_countries_price_by_uuids(
-                subscription.connected_squads, db
+                subscription.connected_squads,
+                db,
+                promo_group_id=promo_group.id if promo_group else None,
             )
 
             servers_discount_percent = _resolve_discount_percent(
@@ -547,9 +549,11 @@ class SubscriptionService:
             return False
     
     async def get_countries_price_by_uuids(
-        self, 
-        country_uuids: List[str], 
-        db: AsyncSession
+        self,
+        country_uuids: List[str],
+        db: AsyncSession,
+        *,
+        promo_group_id: Optional[int] = None,
     ) -> Tuple[int, List[int]]:
         try:
             from app.database.crud.server_squad import get_server_squad_by_uuid
@@ -559,7 +563,12 @@ class SubscriptionService:
             
             for country_uuid in country_uuids:
                 server = await get_server_squad_by_uuid(db, country_uuid)
-                if server and server.is_available and not server.is_full:
+                is_allowed = True
+                if promo_group_id is not None and server:
+                    allowed_ids = {pg.id for pg in server.allowed_promo_groups}
+                    is_allowed = promo_group_id in allowed_ids
+
+                if server and server.is_available and not server.is_full and is_allowed:
                     price = server.price_kopeks
                     total_price += price
                     prices_list.append(price)
@@ -731,7 +740,9 @@ class SubscriptionService:
             promo_group = promo_group or (user.promo_group if user else None)
 
             servers_price_per_month, _ = await self.get_countries_price_by_uuids(
-                subscription.connected_squads, db
+                subscription.connected_squads,
+                db,
+                promo_group_id=promo_group.id if promo_group else None,
             )
             servers_discount_percent = _resolve_discount_percent(
                 user,

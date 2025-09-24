@@ -67,13 +67,28 @@ class CacheService:
     async def delete(self, key: str) -> bool:
         if not self._connected:
             return False
-        
+
         try:
             deleted = await self.redis_client.delete(key)
             return deleted > 0
         except Exception as e:
             logger.error(f"Ошибка удаления из кеша {key}: {e}")
             return False
+
+    async def delete_pattern(self, pattern: str) -> int:
+        if not self._connected:
+            return 0
+
+        try:
+            keys = await self.redis_client.keys(pattern)
+            if not keys:
+                return 0
+
+            deleted = await self.redis_client.delete(*keys)
+            return int(deleted)
+        except Exception as e:
+            logger.error(f"Ошибка удаления ключей по шаблону {pattern}: {e}")
+            return 0
     
     async def exists(self, key: str) -> bool:
         if not self._connected:
