@@ -1529,6 +1529,77 @@ async def handle_quick_amount_selection(
         await callback.answer("❌ Ошибка обработки запроса", show_alert=True)
 
 
+@error_handler
+async def handle_topup_amount_callback(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+):
+    try:
+        _, method, amount_str = callback.data.split("|", 2)
+        amount_kopeks = int(amount_str)
+    except ValueError:
+        await callback.answer("❌ Некорректный запрос", show_alert=True)
+        return
+
+    if amount_kopeks <= 0:
+        await callback.answer("❌ Некорректная сумма", show_alert=True)
+        return
+
+    try:
+        if method == "yookassa":
+            from app.database.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                await process_yookassa_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "yookassa_sbp":
+            from app.database.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                await process_yookassa_sbp_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "mulenpay":
+            from app.database.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                await process_mulenpay_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "pal24":
+            from app.database.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                await process_pal24_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "cryptobot":
+            from app.database.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                await process_cryptobot_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "stars":
+            await process_stars_payment_amount(
+                callback.message, db_user, amount_kopeks, state
+            )
+        elif method == "tribute":
+            await start_tribute_payment(callback, db_user)
+            return
+        else:
+            await callback.answer("❌ Неизвестный способ оплаты", show_alert=True)
+            return
+
+        await callback.answer()
+
+    except Exception as error:
+        logger.error(f"Ошибка быстрого пополнения: {error}")
+        await callback.answer("❌ Ошибка обработки запроса", show_alert=True)
+
+
 def register_handlers(dp: Dispatcher):
     
     dp.callback_query.register(
@@ -1630,4 +1701,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_quick_amount_selection,
         F.data.startswith("quick_amount_")
+    )
+
+    dp.callback_query.register(
+        handle_topup_amount_callback,
+        F.data.startswith("topup_amount|")
     )

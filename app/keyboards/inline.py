@@ -270,29 +270,36 @@ def get_server_status_keyboard(
 def get_insufficient_balance_keyboard(
     language: str = DEFAULT_LANGUAGE,
     resume_callback: str | None = None,
-    ) -> InlineKeyboardMarkup:
+    amount_kopeks: int | None = None,
+) -> InlineKeyboardMarkup:
 
     texts = get_texts(language)
-    keyboard: list[list[InlineKeyboardButton]] = [
-        [
-            InlineKeyboardButton(
-                text=texts.GO_TO_BALANCE_TOP_UP,
-                callback_data="balance_topup",
-            )
-        ]
-    ]
+    keyboard = get_payment_methods_keyboard(amount_kopeks or 0, language)
 
     if resume_callback:
-        keyboard.append([
-            InlineKeyboardButton(
-                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                callback_data=resume_callback,
+        keyboard.inline_keyboard.insert(
+            0,
+            [
+                InlineKeyboardButton(
+                    text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                    callback_data=resume_callback,
+                )
+            ],
+        )
+
+    if keyboard.inline_keyboard:
+        last_row = keyboard.inline_keyboard[-1]
+        if (
+            len(last_row) == 1
+            and isinstance(last_row[0], InlineKeyboardButton)
+            and last_row[0].callback_data == "menu_balance"
+        ):
+            keyboard.inline_keyboard[-1][0] = InlineKeyboardButton(
+                text=last_row[0].text,
+                callback_data="back_to_menu",
             )
-        ])
 
-    keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")])
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+    return keyboard
 
 
 def get_subscription_keyboard(
@@ -367,8 +374,11 @@ def get_subscription_keyboard(
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-def get_payment_methods_keyboard_with_cart(language: str = "ru") -> InlineKeyboardMarkup:
-    keyboard = get_payment_methods_keyboard(0, language)
+def get_payment_methods_keyboard_with_cart(
+    language: str = "ru",
+    amount_kopeks: int = 0,
+) -> InlineKeyboardMarkup:
+    keyboard = get_payment_methods_keyboard(amount_kopeks, language)
     
     # Добавляем кнопку "Очистить корзину"
     keyboard.inline_keyboard.append([
@@ -396,21 +406,26 @@ def get_subscription_confirm_keyboard_with_cart(language: str = "ru") -> InlineK
         )]
     ])
 
-def get_insufficient_balance_keyboard_with_cart(language: str = "ru") -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="💰 Пополнить баланс",
-            callback_data="balance_topup"
-        )],
-        [InlineKeyboardButton(
-            text="🗑️ Очистить корзину",
-            callback_data="clear_saved_cart"
-        )],
-        [InlineKeyboardButton(
-            text="🔙 Назад",
-            callback_data="back_to_menu"
-        )]
-    ])
+def get_insufficient_balance_keyboard_with_cart(
+    language: str = "ru",
+    amount_kopeks: int = 0,
+) -> InlineKeyboardMarkup:
+    keyboard = get_insufficient_balance_keyboard(
+        language,
+        amount_kopeks=amount_kopeks,
+    )
+
+    keyboard.inline_keyboard.insert(
+        0,
+        [
+            InlineKeyboardButton(
+                text="🗑️ Очистить корзину и вернуться",
+                callback_data="clear_saved_cart",
+            )
+        ],
+    )
+
+    return keyboard
 
 def get_trial_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
@@ -624,29 +639,35 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
 def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
-    
-    
+
+    amount_kopeks = max(0, int(amount_kopeks or 0))
+
+    def _build_callback(method: str) -> str:
+        if amount_kopeks > 0:
+            return f"topup_amount|{method}|{amount_kopeks}"
+        return f"topup_{method}"
+
     if settings.TELEGRAM_STARS_ENABLED:
         keyboard.append([
             InlineKeyboardButton(
-                text=texts.t("PAYMENT_TELEGRAM_STARS", "⭐ Telegram Stars"), 
-                callback_data="topup_stars"
+                text=texts.t("PAYMENT_TELEGRAM_STARS", "⭐ Telegram Stars"),
+                callback_data=_build_callback("stars")
             )
         ])
 
     if settings.is_yookassa_enabled():
         keyboard.append([
             InlineKeyboardButton(
-                text=texts.t("PAYMENT_CARD_YOOKASSA", "💳 Банковская карта (YooKassa)"), 
-                callback_data="topup_yookassa"
+                text=texts.t("PAYMENT_CARD_YOOKASSA", "💳 Банковская карта (YooKassa)"),
+                callback_data=_build_callback("yookassa")
             )
         ])
-        
+
         if settings.YOOKASSA_SBP_ENABLED:
             keyboard.append([
                 InlineKeyboardButton(
-                    text=texts.t("PAYMENT_SBP_YOOKASSA", "🏦 Оплатить по СБП (YooKassa)"), 
-                    callback_data="topup_yookassa_sbp"
+                    text=texts.t("PAYMENT_SBP_YOOKASSA", "🏦 Оплатить по СБП (YooKassa)"),
+                    callback_data=_build_callback("yookassa_sbp")
                 )
             ])
 
@@ -654,7 +675,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append([
             InlineKeyboardButton(
                 text=texts.t("PAYMENT_CARD_TRIBUTE", "💳 Банковская карта (Tribute)"),
-                callback_data="topup_tribute"
+                callback_data=_build_callback("tribute")
             )
         ])
 
@@ -662,7 +683,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append([
             InlineKeyboardButton(
                 text=texts.t("PAYMENT_CARD_MULENPAY", "💳 Банковская карта (Mulen Pay)"),
-                callback_data="topup_mulenpay"
+                callback_data=_build_callback("mulenpay")
             )
         ])
 
@@ -670,7 +691,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append([
             InlineKeyboardButton(
                 text=texts.t("PAYMENT_CARD_PAL24", "💳 Банковская карта (PayPalych)"),
-                callback_data="topup_pal24"
+                callback_data=_build_callback("pal24")
             )
         ])
 
@@ -678,29 +699,29 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         keyboard.append([
             InlineKeyboardButton(
                 text=texts.t("PAYMENT_CRYPTOBOT", "🪙 Криптовалюта (CryptoBot)"),
-                callback_data="topup_cryptobot"
+                callback_data=_build_callback("cryptobot")
             )
         ])
 
     keyboard.append([
         InlineKeyboardButton(
-            text=texts.t("PAYMENT_VIA_SUPPORT", "🛠️ Через поддержку"), 
+            text=texts.t("PAYMENT_VIA_SUPPORT", "🛠️ Через поддержку"),
             callback_data="topup_support"
         )
     ])
-    
-    if len(keyboard) == 1:  
+
+    if len(keyboard) == 1:
         keyboard.insert(0, [
             InlineKeyboardButton(
                 text=texts.t("PAYMENTS_TEMPORARILY_UNAVAILABLE", "⚠️ Способы оплаты временно недоступны"),
                 callback_data="payment_methods_unavailable"
             )
         ])
-    
+
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="menu_balance")
     ])
-    
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_yookassa_payment_keyboard(
