@@ -860,15 +860,19 @@ async def process_mulenpay_payment_amount(
         await message.answer("❌ Оплата через Mulen Pay временно недоступна")
         return
 
+    if amount_kopeks < settings.MULENPAY_MIN_AMOUNT_KOPEKS:
+        await message.answer(
+            f"Минимальная сумма пополнения: {settings.format_price(settings.MULENPAY_MIN_AMOUNT_KOPEKS)}"
+        )
+        return
+
+    if amount_kopeks > settings.MULENPAY_MAX_AMOUNT_KOPEKS:
+        await message.answer(
+            f"Максимальная сумма пополнения: {settings.format_price(settings.MULENPAY_MAX_AMOUNT_KOPEKS)}"
+        )
+        return
+
     amount_rubles = amount_kopeks / 100
-
-    if amount_rubles < 100:
-        await message.answer("Минимальная сумма пополнения: 100 ₽")
-        return
-
-    if amount_rubles > 100000:
-        await message.answer("Максимальная сумма пополнения: 100,000 ₽")
-        return
 
     try:
         payment_service = PaymentService(message.bot)

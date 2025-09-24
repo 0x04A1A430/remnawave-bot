@@ -722,6 +722,22 @@ class PaymentService:
             logger.error("MulenPay сервис не инициализирован")
             return None
 
+        if amount_kopeks < settings.MULENPAY_MIN_AMOUNT_KOPEKS:
+            logger.warning(
+                "Сумма MulenPay меньше минимальной: %s < %s",
+                amount_kopeks,
+                settings.MULENPAY_MIN_AMOUNT_KOPEKS,
+            )
+            return None
+
+        if amount_kopeks > settings.MULENPAY_MAX_AMOUNT_KOPEKS:
+            logger.warning(
+                "Сумма MulenPay больше максимальной: %s > %s",
+                amount_kopeks,
+                settings.MULENPAY_MAX_AMOUNT_KOPEKS,
+            )
+            return None
+
         try:
             payment_uuid = f"mulen_{user_id}_{uuid.uuid4().hex}"
             amount_rubles = amount_kopeks / 100
