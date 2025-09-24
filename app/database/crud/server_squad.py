@@ -4,7 +4,12 @@ from sqlalchemy import select, and_, func, update, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import ServerSquad, SubscriptionServer, Subscription
+from app.database.models import (
+    ServerSquad,
+    SubscriptionServer,
+    Subscription,
+    PromoGroup,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +23,10 @@ async def create_server_squad(
     price_kopeks: int = 0,
     description: str = None,
     max_users: int = None,
-    is_available: bool = True
+    is_available: bool = True,
+    promo_group_ids: Optional[List[int]] = None,
 ) -> ServerSquad:
-    
+
     server_squad = ServerSquad(
         squad_uuid=squad_uuid,
         display_name=display_name,
@@ -29,13 +35,43 @@ async def create_server_squad(
         price_kopeks=price_kopeks,
         description=description,
         max_users=max_users,
-        is_available=is_available
+        is_available=is_available,
     )
-    
+
     db.add(server_squad)
+    await db.flush()
+
+    target_group_ids = [
+        group_id for group_id in (promo_group_ids or []) if isinstance(group_id, int)
+    ]
+
+    if target_group_ids:
+        groups_result = await db.execute(
+            select(PromoGroup).where(PromoGroup.id.in_(target_group_ids))
+        )
+        groups = groups_result.scalars().all()
+    else:
+        groups = []
+
+    if not groups:
+        default_group_result = await db.execute(
+            select(PromoGroup).where(PromoGroup.is_default.is_(True))
+        )
+        default_group = default_group_result.scalars().first()
+        if default_group:
+            groups = [default_group]
+        else:
+            logger.warning(
+                "Не найдена базовая промогруппа для сервера %s. Сервер останется без ограничений",
+                display_name,
+            )
+
+    if groups:
+        server_squad.promo_groups = groups
+
     await db.commit()
     await db.refresh(server_squad)
-    
+
     logger.info(f"✅ Создан сервер {display_name} (UUID: {squad_uuid})")
     return server_squad
 
@@ -46,7 +82,9 @@ async def get_server_squad_by_uuid(
 ) -> Optional[ServerSquad]:
     
     result = await db.execute(
-        select(ServerSquad).where(ServerSquad.squad_uuid == squad_uuid)
+        select(ServerSquad)
+        .options(selectinload(ServerSquad.promo_groups))
+        .where(ServerSquad.squad_uuid == squad_uuid)
     )
     return result.scalar_one_or_none()
 
@@ -57,7 +95,9 @@ async def get_server_squad_by_id(
 ) -> Optional[ServerSquad]:
     
     result = await db.execute(
-        select(ServerSquad).where(ServerSquad.id == server_id)
+        select(ServerSquad)
+        .options(selectinload(ServerSquad.promo_groups))
+        .where(ServerSquad.id == server_id)
     )
     return result.scalar_one_or_none()
 
@@ -69,7 +109,7 @@ async def get_all_server_squads(
     limit: int = 50
 ) -> Tuple[List[ServerSquad], int]:
     
-    query = select(ServerSquad)
+    query = select(ServerSquad).options(selectinload(ServerSquad.promo_groups))
     
     if available_only:
         query = query.where(ServerSquad.is_available == True)
@@ -84,21 +124,33 @@ async def get_all_server_squads(
     offset = (page - 1) * limit
     query = query.order_by(ServerSquad.sort_order, ServerSquad.display_name)
     query = query.offset(offset).limit(limit)
-    
+
     result = await db.execute(query)
-    servers = result.scalars().all()
-    
+    servers = result.scalars().unique().all()
+
     return servers, total_count
 
 
-async def get_available_server_squads(db: AsyncSession) -> List[ServerSquad]:
-    
-    result = await db.execute(
+async def get_available_server_squads(
+    db: AsyncSession,
+    *,
+    promo_group_id: Optional[int] = None,
+) -> List[ServerSquad]:
+
+    query = (
         select(ServerSquad)
-        .where(ServerSquad.is_available == True)
+        .options(selectinload(ServerSquad.promo_groups))
+        .where(ServerSquad.is_available.is_(True))
         .order_by(ServerSquad.sort_order, ServerSquad.display_name)
     )
-    return result.scalars().all()
+
+    if promo_group_id is not None:
+        query = query.join(ServerSquad.promo_groups).where(
+            PromoGroup.id == promo_group_id
+        )
+
+    result = await db.execute(query)
+    return result.scalars().unique().all()
 
 
 async def update_server_squad(
@@ -124,8 +176,42 @@ async def update_server_squad(
     )
     
     await db.commit()
-    
+
     return await get_server_squad_by_id(db, server_id)
+
+
+async def set_server_squad_promo_groups(
+    db: AsyncSession,
+    server_id: int,
+    promo_group_ids: List[int],
+) -> Optional[ServerSquad]:
+
+    if not promo_group_ids:
+        return None
+
+    server_result = await db.execute(
+        select(ServerSquad)
+        .options(selectinload(ServerSquad.promo_groups))
+        .where(ServerSquad.id == server_id)
+    )
+    server = server_result.scalar_one_or_none()
+
+    if not server:
+        return None
+
+    groups_result = await db.execute(
+        select(PromoGroup).where(PromoGroup.id.in_(promo_group_ids))
+    )
+    groups = groups_result.scalars().all()
+
+    if not groups:
+        return None
+
+    server.promo_groups = groups
+    await db.commit()
+    await db.refresh(server)
+
+    return server
 
 
 async def delete_server_squad(db: AsyncSession, server_id: int) -> bool:

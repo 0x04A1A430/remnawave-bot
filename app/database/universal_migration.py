@@ -861,6 +861,102 @@ async def ensure_promo_groups_setup():
                 "users", "auto_promo_group_assigned"
             )
 
+
+async def ensure_server_squad_promo_groups_link() -> bool:
+    logger.info("=== НАСТРОЙКА server_squad_promo_groups ===")
+
+    try:
+        table_exists = await check_table_exists("server_squad_promo_groups")
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not table_exists:
+                if db_type == "sqlite":
+                    create_sql = """
+                    CREATE TABLE IF NOT EXISTS server_squad_promo_groups (
+                        server_squad_id INTEGER NOT NULL,
+                        promo_group_id INTEGER NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (server_squad_id, promo_group_id),
+                        FOREIGN KEY (server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE,
+                        FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                    )
+                    """
+                elif db_type == "postgresql":
+                    create_sql = """
+                    CREATE TABLE IF NOT EXISTS server_squad_promo_groups (
+                        server_squad_id INTEGER NOT NULL,
+                        promo_group_id INTEGER NOT NULL,
+                        created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (server_squad_id, promo_group_id),
+                        FOREIGN KEY (server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE,
+                        FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                    )
+                    """
+                elif db_type == "mysql":
+                    create_sql = """
+                    CREATE TABLE IF NOT EXISTS server_squad_promo_groups (
+                        server_squad_id INT NOT NULL,
+                        promo_group_id INT NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (server_squad_id, promo_group_id),
+                        FOREIGN KEY (server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE,
+                        FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB
+                    """
+                else:
+                    logger.error(
+                        f"Неподдерживаемый тип БД для server_squad_promo_groups: {db_type}"
+                    )
+                    return False
+
+                await conn.execute(text(create_sql))
+                logger.info("Создана таблица server_squad_promo_groups")
+
+            if db_type == "postgresql":
+                default_query = (
+                    "SELECT id FROM promo_groups WHERE is_default IS TRUE ORDER BY id LIMIT 1"
+                )
+            else:
+                default_query = (
+                    "SELECT id FROM promo_groups WHERE is_default = 1 ORDER BY id LIMIT 1"
+                )
+
+            result = await conn.execute(text(default_query))
+            row = result.fetchone()
+
+            if not row:
+                logger.warning("Базовая промогруппа не найдена, пропускаем привязку серверов")
+                return True
+
+            default_group_id = row[0]
+
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO server_squad_promo_groups (server_squad_id, promo_group_id)
+                    SELECT ss.id, :default_id
+                    FROM server_squads ss
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM server_squad_promo_groups spg
+                        WHERE spg.server_squad_id = ss.id
+                    )
+                    """
+                ),
+                {"default_id": default_group_id},
+            )
+
+            logger.info(
+                "Серверы без назначенных промогрупп привязаны к базовой промогруппе"
+            )
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка настройки server_squad_promo_groups: {e}")
+        return False
+
             if not auto_promo_flag_exists:
                 if db_type == "sqlite":
                     await conn.execute(
@@ -1669,6 +1765,13 @@ async def run_universal_migration():
             logger.info("✅ Промо группы готовы")
         else:
             logger.warning("⚠️ Проблемы с настройкой промо групп")
+
+        logger.info("=== ПРИВЯЗКА СЕРВЕРОВ К ПРОМО ГРУППАМ ===")
+        promo_links_ready = await ensure_server_squad_promo_groups_link()
+        if promo_links_ready:
+            logger.info("✅ Серверы привязаны к промогруппам")
+        else:
+            logger.warning("⚠️ Проблемы с привязкой серверов к промогруппам")
 
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()

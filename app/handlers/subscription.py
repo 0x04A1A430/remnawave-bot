@@ -99,7 +99,7 @@ async def _prepare_subscription_summary(
     )
 
     summary_data = dict(data)
-    countries = await _get_available_countries()
+    countries = await _get_available_countries(db_user.promo_group_id)
 
     months_in_period = calculate_months_from_days(summary_data['period_days'])
     period_display = format_period_description(summary_data['period_days'], db_user.language)
@@ -1003,7 +1003,7 @@ async def return_to_saved_cart(
     
     from app.utils.pricing_utils import calculate_months_from_days, format_period_description
     
-    countries = await _get_available_countries()
+    countries = await _get_available_countries(db_user.promo_group_id)
     selected_countries_names = []
     
     months_in_period = calculate_months_from_days(data['period_days'])
@@ -1043,7 +1043,7 @@ async def handle_add_countries(
     db: AsyncSession,
     state: FSMContext
 ):
-    if not await _should_show_countries_management():
+    if not await _should_show_countries_management(db_user.promo_group_id):
         await callback.answer("ℹ️ Управление серверами недоступно - доступен только один сервер", show_alert=True)
         return
     
@@ -1054,7 +1054,7 @@ async def handle_add_countries(
         await callback.answer("⚠ Эта функция доступна только для платных подписок", show_alert=True)
         return
     
-    countries = await _get_available_countries()
+    countries = await _get_available_countries(db_user.promo_group_id)
     current_countries = subscription.connected_squads
     
     current_countries_names = []
@@ -1151,7 +1151,7 @@ async def handle_manage_country(
     
     await state.update_data(countries=current_selected)
     
-    countries = await _get_available_countries()
+    countries = await _get_available_countries(db_user.promo_group_id)
     
     try:
         await callback.message.edit_reply_markup(
@@ -1203,7 +1203,7 @@ async def apply_countries_changes(
     
     logger.info(f"🔧 Добавлено: {added}, Удалено: {removed}")
     
-    countries = await _get_available_countries()
+    countries = await _get_available_countries(db_user.promo_group_id)
     
     months_to_pay = get_remaining_months(subscription.end_date)
     
@@ -2527,15 +2527,15 @@ async def select_period(
         )
         await state.set_state(SubscriptionStates.selecting_traffic)
     else:
-        if await _should_show_countries_management():
-            countries = await _get_available_countries()
+        if await _should_show_countries_management(db_user.promo_group_id):
+            countries = await _get_available_countries(db_user.promo_group_id)
             await callback.message.edit_text(
                 texts.SELECT_COUNTRIES,
                 reply_markup=get_countries_keyboard(countries, [], db_user.language)
             )
             await state.set_state(SubscriptionStates.selecting_countries)
         else:
-            countries = await _get_available_countries()
+            countries = await _get_available_countries(db_user.promo_group_id)
             available_countries = [c for c in countries if c.get('is_available', True)]
             data['countries'] = [available_countries[0]['uuid']] if available_countries else []
             await state.set_data(data)
@@ -2683,15 +2683,15 @@ async def select_traffic(
     
     await state.set_data(data)
     
-    if await _should_show_countries_management():
-        countries = await _get_available_countries()
+    if await _should_show_countries_management(db_user.promo_group_id):
+        countries = await _get_available_countries(db_user.promo_group_id)
         await callback.message.edit_text(
             texts.SELECT_COUNTRIES,
             reply_markup=get_countries_keyboard(countries, [], db_user.language)
         )
         await state.set_state(SubscriptionStates.selecting_countries)
     else:
-        countries = await _get_available_countries()
+        countries = await _get_available_countries(db_user.promo_group_id)
         available_countries = [c for c in countries if c.get('is_available', True)]
         data['countries'] = [available_countries[0]['uuid']] if available_countries else []
         await state.set_data(data)
@@ -2722,7 +2722,7 @@ async def select_country(
     else:
         selected_countries.append(country_uuid)
     
-    countries = await _get_available_countries()
+    countries = await _get_available_countries(db_user.promo_group_id)
     
     period_base_price = PERIOD_PRICES[data['period_days']]
     from app.utils.pricing_utils import apply_percentage_discount
@@ -2797,7 +2797,7 @@ async def select_devices(
         settings.get_traffic_price(data['traffic_gb'])
     )
     
-    countries = await _get_available_countries()
+    countries = await _get_available_countries(db_user.promo_group_id)
     countries_price = sum(
         c['price_kopeks'] for c in countries 
         if c['uuid'] in data['countries']
@@ -2866,7 +2866,7 @@ async def confirm_purchase(
         else None
     )
 
-    countries = await _get_available_countries()
+    countries = await _get_available_countries(db_user.promo_group_id)
     
     months_in_period = data.get(
         'months_in_period', calculate_months_from_days(data['period_days'])
@@ -3523,7 +3523,7 @@ async def handle_subscription_settings(
 Выберите что хотите изменить:
 """
     
-    show_countries = await _should_show_countries_management()
+    show_countries = await _should_show_countries_management(db_user.promo_group_id)
     
     await callback.message.edit_text(
         settings_text,
@@ -3636,8 +3636,8 @@ async def handle_subscription_config_back(
             await state.set_state(SubscriptionStates.selecting_period)
 
     elif current_state == SubscriptionStates.selecting_devices.state:
-        if await _should_show_countries_management():
-            countries = await _get_available_countries()
+        if await _should_show_countries_management(db_user.promo_group_id):
+            countries = await _get_available_countries(db_user.promo_group_id)
             data = await state.get_data()
             selected_countries = data.get('countries', [])
 
@@ -3683,68 +3683,99 @@ async def handle_subscription_cancel(
 
     await callback.answer("❌ Покупка отменена")
 
-async def _get_available_countries():
-    from app.utils.cache import cache
+async def _get_available_countries(
+    promo_group_id: Optional[int] = None,
+):
+    from app.utils.cache import cache, cache_key
     from app.database.database import AsyncSessionLocal
     from app.database.crud.server_squad import get_available_server_squads
-    
-    cached_countries = await cache.get("available_countries")
+
+    cache_key_value = cache_key(
+        "available_countries",
+        promo_group_id if promo_group_id is not None else "all",
+    )
+
+    cached_countries = await cache.get(cache_key_value)
     if cached_countries:
         return cached_countries
-    
+
     try:
         async with AsyncSessionLocal() as db:
-            available_servers = await get_available_server_squads(db)
-        
+            available_servers = await get_available_server_squads(
+                db, promo_group_id=promo_group_id
+            )
+
         countries = []
         for server in available_servers:
             countries.append({
                 "uuid": server.squad_uuid,
-                "name": server.display_name, 
+                "name": server.display_name,
                 "price_kopeks": server.price_kopeks,
                 "country_code": server.country_code,
-                "is_available": server.is_available and not server.is_full
+                "is_available": server.is_available and not server.is_full,
             })
-        
-        if not countries:
+
+        if not countries and promo_group_id is None:
             logger.info("🔄 Серверов в БД нет, получаем из RemnaWave...")
             from app.services.remnawave_service import RemnaWaveService
-            
+
             service = RemnaWaveService()
             squads = await service.get_all_squads()
-            
+
             for squad in squads:
                 squad_name = squad["name"]
-                
-                if not any(flag in squad_name for flag in ["🇳🇱", "🇩🇪", "🇺🇸", "🇫🇷", "🇬🇧", "🇮🇹", "🇪🇸", "🇨🇦", "🇯🇵", "🇸🇬", "🇦🇺"]):
+
+                if not any(
+                    flag in squad_name
+                    for flag in [
+                        "🇳🇱",
+                        "🇩🇪",
+                        "🇺🇸",
+                        "🇫🇷",
+                        "🇬🇧",
+                        "🇮🇹",
+                        "🇪🇸",
+                        "🇨🇦",
+                        "🇯🇵",
+                        "🇸🇬",
+                        "🇦🇺",
+                    ]
+                ):
                     name_lower = squad_name.lower()
                     if "netherlands" in name_lower or "нидерланды" in name_lower or "nl" in name_lower:
                         squad_name = f"🇳🇱 {squad_name}"
                     elif "germany" in name_lower or "германия" in name_lower or "de" in name_lower:
                         squad_name = f"🇩🇪 {squad_name}"
-                    elif "usa" in name_lower or "сша" in name_lower or "america" in name_lower or "us" in name_lower:
+                    elif (
+                        "usa" in name_lower
+                        or "сша" in name_lower
+                        or "america" in name_lower
+                        or "us" in name_lower
+                    ):
                         squad_name = f"🇺🇸 {squad_name}"
                     else:
                         squad_name = f"🌐 {squad_name}"
-                
+
                 countries.append({
                     "uuid": squad["uuid"],
                     "name": squad_name,
-                    "price_kopeks": 0, 
-                    "is_available": True
+                    "price_kopeks": 0,
+                    "is_available": True,
                 })
-        
-        await cache.set("available_countries", countries, 300)
-        return countries
-        
+
+        if countries:
+            await cache.set(cache_key_value, countries, 300)
+            return countries
+
     except Exception as e:
         logger.error(f"Ошибка получения списка стран: {e}")
-        fallback_countries = [
-            {"uuid": "default-free", "name": "🆓 Бесплатный сервер", "price_kopeks": 0, "is_available": True},
-        ]
-        
-        await cache.set("available_countries", fallback_countries, 60)
-        return fallback_countries
+
+    fallback_countries = [
+        {"uuid": "default-free", "name": "🆓 Бесплатный сервер", "price_kopeks": 0, "is_available": True},
+    ]
+
+    await cache.set(cache_key_value, fallback_countries, 60)
+    return fallback_countries
 
 async def _get_countries_info(squad_uuids):
     countries = await _get_available_countries()
@@ -3776,7 +3807,7 @@ async def handle_add_country_to_subscription(
     logger.info(f"🔍 Данные состояния: {data}")
     
     selected_countries = data.get('countries', [])
-    countries = await _get_available_countries()
+    countries = await _get_available_countries(db_user.promo_group_id)
     
     if country_uuid in selected_countries:
         selected_countries.remove(country_uuid)
@@ -3808,9 +3839,11 @@ async def handle_add_country_to_subscription(
     
     await callback.answer()
 
-async def _should_show_countries_management() -> bool:
+async def _should_show_countries_management(
+    promo_group_id: Optional[int] = None,
+) -> bool:
     try:
-        countries = await _get_available_countries()
+        countries = await _get_available_countries(promo_group_id)
         available_countries = [c for c in countries if c.get('is_available', True)]
         return len(available_countries) > 1
     except Exception as e:
@@ -3839,7 +3872,7 @@ async def confirm_add_countries_to_subscription(
         await callback.answer("⚠️ Изменения не обнаружены", show_alert=True)
         return
     
-    countries = await _get_available_countries()
+    countries = await _get_available_countries(db_user.promo_group_id)
     total_price = 0
     new_countries_names = []
     removed_countries_names = []
