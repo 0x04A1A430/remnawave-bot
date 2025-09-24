@@ -14,7 +14,6 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     UniqueConstraint,
-    Index,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -359,7 +358,6 @@ class User(Base):
     subscription = relationship("Subscription", back_populates="user", uselist=False)
     transactions = relationship("Transaction", back_populates="user")
     referral_earnings = relationship("ReferralEarning", foreign_keys="ReferralEarning.user_id", back_populates="user")
-    discount_offers = relationship("DiscountOffer", back_populates="user")
     lifetime_used_traffic_bytes = Column(BigInteger, default=0)
     auto_promo_group_assigned = Column(Boolean, nullable=False, default=False)
     last_remnawave_sync = Column(DateTime, nullable=True)
@@ -422,9 +420,8 @@ class Subscription(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     
     remnawave_short_uuid = Column(String(255), nullable=True)
-
+    
     user = relationship("User", back_populates="subscription")
-    discount_offers = relationship("DiscountOffer", back_populates="subscription")
     
     @property
     def is_active(self) -> bool:
@@ -767,28 +764,6 @@ class SentNotification(Base):
 
     user = relationship("User", backref="sent_notifications")
     subscription = relationship("Subscription", backref="sent_notifications")
-
-
-class DiscountOffer(Base):
-    __tablename__ = "discount_offers"
-    __table_args__ = (
-        Index("ix_discount_offers_user_type", "user_id", "notification_type"),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True)
-    notification_type = Column(String(50), nullable=False)
-    discount_percent = Column(Integer, nullable=False, default=0)
-    bonus_amount_kopeks = Column(Integer, nullable=False, default=0)
-    expires_at = Column(DateTime, nullable=False)
-    claimed_at = Column(DateTime, nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-
-    user = relationship("User", back_populates="discount_offers")
-    subscription = relationship("Subscription", back_populates="discount_offers")
 
 class BroadcastHistory(Base):
     __tablename__ = "broadcast_history"
