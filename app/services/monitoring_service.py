@@ -2,37 +2,46 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Set
-from sqlalchemy.ext.asyncio import AsyncSession
+
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from sqlalchemy import select, and_, or_
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database.database import get_db
-from app.database.crud.subscription import (
-    get_expired_subscriptions, get_expiring_subscriptions,
-    get_subscriptions_for_autopay, deactivate_subscription,
-    extend_subscription
-)
-from app.database.crud.user import (
-    get_user_by_id, get_inactive_users, delete_user,
-    subtract_user_balance
+from app.database.crud.discount_offer import (
+    deactivate_expired_offers,
+    upsert_discount_offer,
 )
 from app.database.crud.notification import (
     notification_sent,
     record_notification,
 )
-from app.database.crud.discount_offer import (
-    upsert_discount_offer,
-    deactivate_expired_offers,
+from app.database.crud.subscription import (
+    deactivate_subscription,
+    extend_subscription,
+    get_expired_subscriptions,
+    get_expiring_subscriptions,
+    get_subscriptions_for_autopay,
+)
+from app.database.crud.user import (
+    delete_user,
+    get_inactive_users,
+    get_user_by_id,
+    subtract_user_balance,
 )
 from app.database.models import MonitoringLog, SubscriptionStatus, Subscription, User, Ticket, TicketStatus
-from app.services.subscription_service import SubscriptionService
-from app.services.payment_service import PaymentService
 from app.localization.texts import get_texts
 from app.services.notification_settings_service import NotificationSettingsService
+from app.services.payment_service import PaymentService
+from app.services.subscription_service import SubscriptionService
 
 from app.external.remnawave_api import (
-    RemnaWaveUser, UserStatus, TrafficLimitStrategy, RemnaWaveAPIError
+    RemnaWaveAPIError,
+    RemnaWaveUser,
+    TrafficLimitStrategy,
+    UserStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,9 +54,43 @@ class MonitoringService:
         self.subscription_service = SubscriptionService()
         self.payment_service = PaymentService()
         self.bot = bot
-        self._notified_users: Set[str] = set() 
+        self._notified_users: Set[str] = set()
         self._last_cleanup = datetime.utcnow()
         self._sla_task = None
+
+    @staticmethod
+    def _is_unreachable_error(error: TelegramBadRequest) -> bool:
+        message = str(error).lower()
+        unreachable_markers = (
+            "chat not found",
+            "user is deactivated",
+            "bot was blocked by the user",
+            "bot can't initiate conversation",
+            "can't initiate conversation",
+            "user not found",
+            "peer id invalid",
+        )
+        return any(marker in message for marker in unreachable_markers)
+
+    def _handle_unreachable_user(self, user: User, error: Exception, context: str) -> bool:
+        if isinstance(error, TelegramForbiddenError):
+            logger.warning(
+                "⚠️ Пользователь %s недоступен (%s): бот заблокирован",
+                user.telegram_id,
+                context,
+            )
+            return True
+
+        if isinstance(error, TelegramBadRequest) and self._is_unreachable_error(error):
+            logger.warning(
+                "⚠️ Пользователь %s недоступен (%s): %s",
+                user.telegram_id,
+                context,
+                error,
+            )
+            return True
+
+        return False
     
     async def start_monitoring(self):
         if self.is_running:
@@ -619,9 +662,22 @@ class MonitoringService:
                 reply_markup=keyboard
             )
             return True
-            
+
+        except (TelegramForbiddenError, TelegramBadRequest) as exc:
+            if self._handle_unreachable_user(user, exc, "уведомление об истечении подписки"):
+                return True
+            logger.error(
+                "Ошибка Telegram API при отправке уведомления об истечении подписки пользователю %s: %s",
+                user.telegram_id,
+                exc,
+            )
+            return False
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления об истечении подписки пользователю {user.telegram_id}: {e}")
+            logger.error(
+                "Ошибка отправки уведомления об истечении подписки пользователю %s: %s",
+                user.telegram_id,
+                e,
+            )
             return False
     
     async def _send_subscription_expiring_notification(self, user: User, subscription: Subscription, days: int) -> bool:
@@ -663,9 +719,22 @@ class MonitoringService:
                 reply_markup=keyboard
             )
             return True
-            
+
+        except (TelegramForbiddenError, TelegramBadRequest) as exc:
+            if self._handle_unreachable_user(user, exc, "уведомление об истекающей подписке"):
+                return True
+            logger.error(
+                "Ошибка Telegram API при отправке уведомления об истечении подписки пользователю %s: %s",
+                user.telegram_id,
+                exc,
+            )
+            return False
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления об истечении подписки пользователю {user.telegram_id}: {e}")
+            logger.error(
+                "Ошибка отправки уведомления об истечении подписки пользователю %s: %s",
+                user.telegram_id,
+                e,
+            )
             return False
     
     async def _send_trial_ending_notification(self, user: User, subscription: Subscription) -> bool:
@@ -703,9 +772,22 @@ class MonitoringService:
                 reply_markup=keyboard
             )
             return True
-            
+
+        except (TelegramForbiddenError, TelegramBadRequest) as exc:
+            if self._handle_unreachable_user(user, exc, "уведомление о завершении тестовой подписки"):
+                return True
+            logger.error(
+                "Ошибка Telegram API при отправке уведомления о завершении тестовой подписки пользователю %s: %s",
+                user.telegram_id,
+                exc,
+            )
+            return False
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления об окончании тестовой подписки пользователю {user.telegram_id}: {e}")
+            logger.error(
+                "Ошибка отправки уведомления об окончании тестовой подписки пользователю %s: %s",
+                user.telegram_id,
+                e,
+            )
             return False
 
     async def _send_trial_inactive_notification(self, user: User, subscription: Subscription, hours: int) -> bool:
@@ -750,8 +832,21 @@ class MonitoringService:
             )
             return True
 
+        except (TelegramForbiddenError, TelegramBadRequest) as exc:
+            if self._handle_unreachable_user(user, exc, "уведомление о бездействии на тесте"):
+                return True
+            logger.error(
+                "Ошибка Telegram API при отправке уведомления об отсутствии подключения пользователю %s: %s",
+                user.telegram_id,
+                exc,
+            )
+            return False
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления об отсутствии подключения пользователю {user.telegram_id}: {e}")
+            logger.error(
+                "Ошибка отправки уведомления об отсутствии подключения пользователю %s: %s",
+                user.telegram_id,
+                e,
+            )
             return False
 
     async def _send_expired_day1_notification(self, user: User, subscription: Subscription) -> bool:
@@ -785,8 +880,21 @@ class MonitoringService:
             )
             return True
 
+        except (TelegramForbiddenError, TelegramBadRequest) as exc:
+            if self._handle_unreachable_user(user, exc, "напоминание об истекшей подписке"):
+                return True
+            logger.error(
+                "Ошибка Telegram API при отправке напоминания об истекшей подписке пользователю %s: %s",
+                user.telegram_id,
+                exc,
+            )
+            return False
         except Exception as e:
-            logger.error(f"Ошибка отправки напоминания об истекшей подписке пользователю {user.telegram_id}: {e}")
+            logger.error(
+                "Ошибка отправки напоминания об истекшей подписке пользователю %s: %s",
+                user.telegram_id,
+                e,
+            )
             return False
 
     async def _send_expired_discount_notification(
@@ -846,8 +954,21 @@ class MonitoringService:
             )
             return True
 
+        except (TelegramForbiddenError, TelegramBadRequest) as exc:
+            if self._handle_unreachable_user(user, exc, "скидочное уведомление"):
+                return True
+            logger.error(
+                "Ошибка Telegram API при отправке скидочного уведомления пользователю %s: %s",
+                user.telegram_id,
+                exc,
+            )
+            return False
         except Exception as e:
-            logger.error(f"Ошибка отправки скидочного уведомления пользователю {user.telegram_id}: {e}")
+            logger.error(
+                "Ошибка отправки скидочного уведомления пользователю %s: %s",
+                user.telegram_id,
+                e,
+            )
             return False
 
     async def _send_autopay_success_notification(self, user: User, amount: int, days: int):
@@ -858,9 +979,20 @@ class MonitoringService:
                 amount=settings.format_price(amount)
             )
             await self.bot.send_message(user.telegram_id, message, parse_mode="HTML")
+        except (TelegramForbiddenError, TelegramBadRequest) as exc:
+            if not self._handle_unreachable_user(user, exc, "уведомление об успешном автоплатеже"):
+                logger.error(
+                    "Ошибка Telegram API при отправке уведомления об автоплатеже пользователю %s: %s",
+                    user.telegram_id,
+                    exc,
+                )
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления об автоплатеже пользователю {user.telegram_id}: {e}")
-    
+            logger.error(
+                "Ошибка отправки уведомления об автоплатеже пользователю %s: %s",
+                user.telegram_id,
+                e,
+            )
+
     async def _send_autopay_failed_notification(self, user: User, balance: int, required: int):
         try:
             texts = get_texts(user.language)
@@ -877,14 +1009,25 @@ class MonitoringService:
             ])
             
             await self.bot.send_message(
-                user.telegram_id, 
-                message, 
+                user.telegram_id,
+                message,
                 parse_mode="HTML",
                 reply_markup=keyboard
             )
-            
+
+        except (TelegramForbiddenError, TelegramBadRequest) as exc:
+            if not self._handle_unreachable_user(user, exc, "уведомление о неудачном автоплатеже"):
+                logger.error(
+                    "Ошибка Telegram API при отправке уведомления о неудачном автоплатеже пользователю %s: %s",
+                    user.telegram_id,
+                    exc,
+                )
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления о неудачном автоплатеже пользователю {user.telegram_id}: {e}")
+            logger.error(
+                "Ошибка отправки уведомления о неудачном автоплатеже пользователю %s: %s",
+                user.telegram_id,
+                e,
+            )
     
     async def _cleanup_inactive_users(self, db: AsyncSession):
         try:
