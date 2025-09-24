@@ -591,7 +591,16 @@ async def complete_registration_from_callback(
     data = await state.get_data() or {}
     language = data.get('language', DEFAULT_LANGUAGE)
     texts = get_texts(language)
-    
+
+    campaign_id = data.get('campaign_id')
+    is_new_user_registration = (
+        existing_user is None
+        or (
+            existing_user
+            and existing_user.status == UserStatus.DELETED.value
+        )
+    )
+
     referrer_id = data.get('referrer_id')
     if not referrer_id and data.get('referral_code'):
         referrer = await get_user_by_referral_code(db, data['referral_code'])
@@ -689,7 +698,16 @@ async def complete_registration_from_callback(
     from app.database.crud.welcome_text import get_welcome_text_for_user
     offer_text = await get_welcome_text_for_user(db, callback.from_user)
 
-    if offer_text:
+    skip_welcome_offer = bool(campaign_id) and is_new_user_registration
+
+    if skip_welcome_offer:
+        logger.info(
+            "ℹ️ Пропускаем приветственное предложение для нового пользователя %s из рекламной кампании %s",
+            user.telegram_id,
+            campaign_id,
+        )
+
+    if offer_text and not skip_welcome_offer:
         try:
             await callback.message.answer(
                 offer_text,
@@ -797,7 +815,16 @@ async def complete_registration(
     data = await state.get_data() or {}
     language = data.get('language', DEFAULT_LANGUAGE)
     texts = get_texts(language)
-    
+
+    campaign_id = data.get('campaign_id')
+    is_new_user_registration = (
+        existing_user is None
+        or (
+            existing_user
+            and existing_user.status == UserStatus.DELETED.value
+        )
+    )
+
     referrer_id = data.get('referrer_id')
     if not referrer_id and data.get('referral_code'):
         referrer = await get_user_by_referral_code(db, data['referral_code'])
@@ -895,7 +922,16 @@ async def complete_registration(
     from app.database.crud.welcome_text import get_welcome_text_for_user
     offer_text = await get_welcome_text_for_user(db, message.from_user)
 
-    if offer_text:
+    skip_welcome_offer = bool(campaign_id) and is_new_user_registration
+
+    if skip_welcome_offer:
+        logger.info(
+            "ℹ️ Пропускаем приветственное предложение для нового пользователя %s из рекламной кампании %s",
+            user.telegram_id,
+            campaign_id,
+        )
+
+    if offer_text and not skip_welcome_offer:
         try:
             await message.answer(
                 offer_text,
