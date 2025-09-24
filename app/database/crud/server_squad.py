@@ -1,12 +1,20 @@
 import logging
-from typing import List, Optional, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
+
 from sqlalchemy import select, and_, func, update, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import ServerSquad, SubscriptionServer, Subscription
+from app.database.models import PromoGroup, ServerSquad, SubscriptionServer, Subscription
 
 logger = logging.getLogger(__name__)
+
+
+async def _get_default_promo_group_id(db: AsyncSession) -> Optional[int]:
+    result = await db.execute(
+        select(PromoGroup.id).where(PromoGroup.is_default.is_(True)).limit(1)
+    )
+    return result.scalar_one_or_none()
 
 
 async def create_server_squad(
@@ -18,9 +26,30 @@ async def create_server_squad(
     price_kopeks: int = 0,
     description: str = None,
     max_users: int = None,
-    is_available: bool = True
+    is_available: bool = True,
+    promo_group_ids: Optional[Iterable[int]] = None,
 ) -> ServerSquad:
-    
+
+    normalized_group_ids: Sequence[int]
+    if promo_group_ids is None:
+        default_id = await _get_default_promo_group_id(db)
+        normalized_group_ids = [default_id] if default_id is not None else []
+    else:
+        normalized_group_ids = [int(pg_id) for pg_id in set(promo_group_ids)]
+
+    if not normalized_group_ids:
+        raise ValueError("Server squad must be linked to at least one promo group")
+
+    promo_groups_result = await db.execute(
+        select(PromoGroup).where(PromoGroup.id.in_(normalized_group_ids))
+    )
+    promo_groups = promo_groups_result.scalars().all()
+
+    if len(promo_groups) != len(normalized_group_ids):
+        logger.warning(
+            "Не все промогруппы найдены при создании сервера %s", display_name
+        )
+
     server_squad = ServerSquad(
         squad_uuid=squad_uuid,
         display_name=display_name,
@@ -29,9 +58,10 @@ async def create_server_squad(
         price_kopeks=price_kopeks,
         description=description,
         max_users=max_users,
-        is_available=is_available
+        is_available=is_available,
+        allowed_promo_groups=promo_groups,
     )
-    
+
     db.add(server_squad)
     await db.commit()
     await db.refresh(server_squad)
@@ -46,9 +76,11 @@ async def get_server_squad_by_uuid(
 ) -> Optional[ServerSquad]:
     
     result = await db.execute(
-        select(ServerSquad).where(ServerSquad.squad_uuid == squad_uuid)
+        select(ServerSquad)
+        .options(selectinload(ServerSquad.allowed_promo_groups))
+        .where(ServerSquad.squad_uuid == squad_uuid)
     )
-    return result.scalar_one_or_none()
+    return result.scalars().unique().one_or_none()
 
 
 async def get_server_squad_by_id(
@@ -57,9 +89,11 @@ async def get_server_squad_by_id(
 ) -> Optional[ServerSquad]:
     
     result = await db.execute(
-        select(ServerSquad).where(ServerSquad.id == server_id)
+        select(ServerSquad)
+        .options(selectinload(ServerSquad.allowed_promo_groups))
+        .where(ServerSquad.id == server_id)
     )
-    return result.scalar_one_or_none()
+    return result.scalars().unique().one_or_none()
 
 
 async def get_all_server_squads(
@@ -91,14 +125,59 @@ async def get_all_server_squads(
     return servers, total_count
 
 
-async def get_available_server_squads(db: AsyncSession) -> List[ServerSquad]:
-    
-    result = await db.execute(
+async def get_available_server_squads(
+    db: AsyncSession,
+    promo_group_id: Optional[int] = None,
+) -> List[ServerSquad]:
+
+    query = (
         select(ServerSquad)
-        .where(ServerSquad.is_available == True)
+        .options(selectinload(ServerSquad.allowed_promo_groups))
+        .where(ServerSquad.is_available.is_(True))
         .order_by(ServerSquad.sort_order, ServerSquad.display_name)
     )
-    return result.scalars().all()
+
+    if promo_group_id is not None:
+        query = query.join(ServerSquad.allowed_promo_groups).where(
+            PromoGroup.id == promo_group_id
+        )
+
+    result = await db.execute(query)
+    return result.scalars().unique().all()
+
+
+async def update_server_squad_promo_groups(
+    db: AsyncSession, server_id: int, promo_group_ids: Iterable[int]
+) -> Optional[ServerSquad]:
+    unique_ids = [int(pg_id) for pg_id in set(promo_group_ids)]
+
+    if not unique_ids:
+        raise ValueError("Нужно выбрать хотя бы одну промогруппу")
+
+    server = await get_server_squad_by_id(db, server_id)
+    if not server:
+        return None
+
+    result = await db.execute(
+        select(PromoGroup).where(PromoGroup.id.in_(unique_ids))
+    )
+    promo_groups = result.scalars().all()
+
+    if not promo_groups:
+        raise ValueError("Не найдены промогруппы для обновления сервера")
+
+    server.allowed_promo_groups = promo_groups
+    await db.commit()
+    await db.refresh(server)
+
+    logger.info(
+        "Обновлены промогруппы сервера %s (ID: %s): %s",
+        server.display_name,
+        server.id,
+        ", ".join(pg.name for pg in promo_groups),
+    )
+
+    return server
 
 
 async def update_server_squad(

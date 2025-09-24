@@ -1515,13 +1515,113 @@ async def fix_subscription_duplicates_universal():
                 deleted_count = delete_result.rowcount
                 total_deleted += deleted_count
                 logger.info(f"Удалено {deleted_count} дублирующихся подписок для пользователя {user_id}")
-            
+
             logger.info(f"Всего удалено дублирующихся подписок: {total_deleted}")
             return total_deleted
-            
+
         except Exception as e:
             logger.error(f"Ошибка при очистке дублирующихся подписок: {e}")
             raise
+
+
+async def ensure_server_promo_groups_setup() -> bool:
+    logger.info("=== НАСТРОЙКА ДОСТУПА СЕРВЕРОВ К ПРОМОГРУППАМ ===")
+
+    try:
+        table_exists = await check_table_exists("server_squad_promo_groups")
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not table_exists:
+                if db_type == "sqlite":
+                    create_sql = """
+                    CREATE TABLE server_squad_promo_groups (
+                        server_squad_id INTEGER NOT NULL,
+                        promo_group_id INTEGER NOT NULL,
+                        PRIMARY KEY (server_squad_id, promo_group_id),
+                        FOREIGN KEY (server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE,
+                        FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_server_squad_promo_groups_promo ON server_squad_promo_groups(promo_group_id);
+                    """
+                elif db_type == "postgresql":
+                    create_sql = """
+                    CREATE TABLE server_squad_promo_groups (
+                        server_squad_id INTEGER NOT NULL REFERENCES server_squads(id) ON DELETE CASCADE,
+                        promo_group_id INTEGER NOT NULL REFERENCES promo_groups(id) ON DELETE CASCADE,
+                        PRIMARY KEY (server_squad_id, promo_group_id)
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_server_squad_promo_groups_promo ON server_squad_promo_groups(promo_group_id);
+                    """
+                else:
+                    create_sql = """
+                    CREATE TABLE server_squad_promo_groups (
+                        server_squad_id INT NOT NULL,
+                        promo_group_id INT NOT NULL,
+                        PRIMARY KEY (server_squad_id, promo_group_id),
+                        FOREIGN KEY (server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE,
+                        FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_server_squad_promo_groups_promo ON server_squad_promo_groups(promo_group_id);
+                    """
+
+                await conn.execute(text(create_sql))
+                logger.info("✅ Таблица server_squad_promo_groups создана")
+            else:
+                logger.info("ℹ️ Таблица server_squad_promo_groups уже существует")
+
+            default_query = (
+                "SELECT id FROM promo_groups WHERE is_default IS TRUE LIMIT 1"
+                if db_type == "postgresql"
+                else "SELECT id FROM promo_groups WHERE is_default = 1 LIMIT 1"
+            )
+            default_result = await conn.execute(text(default_query))
+            default_row = default_result.fetchone()
+
+            if not default_row:
+                logger.warning("⚠️ Не найдена базовая промогруппа для назначения серверам")
+                return True
+
+            default_group_id = default_row[0]
+
+            servers_result = await conn.execute(text("SELECT id FROM server_squads"))
+            server_ids = [row[0] for row in servers_result.fetchall()]
+
+            assigned_count = 0
+            for server_id in server_ids:
+                existing = await conn.execute(
+                    text(
+                        "SELECT 1 FROM server_squad_promo_groups WHERE server_squad_id = :sid LIMIT 1"
+                    ),
+                    {"sid": server_id},
+                )
+                if existing.fetchone():
+                    continue
+
+                await conn.execute(
+                    text(
+                        "INSERT INTO server_squad_promo_groups (server_squad_id, promo_group_id) "
+                        "VALUES (:sid, :gid)"
+                    ),
+                    {"sid": server_id, "gid": default_group_id},
+                )
+                assigned_count += 1
+
+            if assigned_count:
+                logger.info(
+                    f"✅ Базовая промогруппа назначена {assigned_count} серверам"
+                )
+            else:
+                logger.info("ℹ️ Все серверы уже имеют назначенные промогруппы")
+
+        return True
+
+    except Exception as e:
+        logger.error(
+            f"Ошибка настройки таблицы server_squad_promo_groups: {e}"
+        )
+        return False
 
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
@@ -1670,6 +1770,12 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с настройкой промо групп")
 
+        server_promo_groups_ready = await ensure_server_promo_groups_setup()
+        if server_promo_groups_ready:
+            logger.info("✅ Доступ серверов по промогруппам настроен")
+        else:
+            logger.warning("⚠️ Проблемы с настройкой доступа серверов к промогруппам")
+
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()
         if fk_updated:
@@ -1742,6 +1848,7 @@ async def check_migration_status():
             "subscription_duplicates": False,
             "subscription_conversions_table": False,
             "promo_groups_table": False,
+            "server_promo_groups_table": False,
             "users_promo_group_column": False,
             "promo_groups_period_discounts_column": False,
             "promo_groups_auto_assign_column": False,
@@ -1755,6 +1862,7 @@ async def check_migration_status():
         status["welcome_texts_table"] = await check_table_exists('welcome_texts')
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
         status["promo_groups_table"] = await check_table_exists('promo_groups')
+        status["server_promo_groups_table"] = await check_table_exists('server_squad_promo_groups')
 
         status["welcome_texts_is_enabled_column"] = await check_column_exists('welcome_texts', 'is_enabled')
         status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
@@ -1792,6 +1900,7 @@ async def check_migration_status():
             "subscription_conversions_table": "Таблица конверсий подписок",
             "subscription_duplicates": "Отсутствие дубликатов подписок",
             "promo_groups_table": "Таблица промо-групп",
+            "server_promo_groups_table": "Связи серверов и промогрупп",
             "users_promo_group_column": "Колонка promo_group_id у пользователей",
             "promo_groups_period_discounts_column": "Колонка period_discounts у промо-групп",
             "promo_groups_auto_assign_column": "Колонка auto_assign_total_spent_kopeks у промо-групп",
