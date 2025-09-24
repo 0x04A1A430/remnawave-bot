@@ -418,9 +418,7 @@ class Subscription(Base):
     
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-
-    first_usage_at = Column(DateTime, nullable=True)
-
+    
     remnawave_short_uuid = Column(String(255), nullable=True)
     
     user = relationship("User", back_populates="subscription")
