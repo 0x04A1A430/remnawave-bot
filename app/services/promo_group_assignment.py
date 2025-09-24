@@ -43,12 +43,6 @@ async def maybe_assign_promo_group_by_total_spent(
         logger.debug("Не удалось найти пользователя %s для автовыдачи промогруппы", user_id)
         return None
 
-    if user.auto_promo_group_assigned:
-        logger.debug(
-            "Пользователь %s уже получал промогруппу автоматически, пропускаем", user.telegram_id
-        )
-        return None
-
     total_spent = await get_user_total_spent_kopeks(db, user_id)
     if total_spent <= 0:
         return None
@@ -59,6 +53,15 @@ async def maybe_assign_promo_group_by_total_spent(
 
     try:
         previous_group_id = user.promo_group_id
+
+        if user.auto_promo_group_assigned and target_group.id == previous_group_id:
+            logger.debug(
+                "Пользователь %s уже находится в актуальной промогруппе '%s', повторная выдача не требуется",
+                user.telegram_id,
+                target_group.name,
+            )
+            return target_group
+
         user.auto_promo_group_assigned = True
         user.updated_at = datetime.utcnow()
 
