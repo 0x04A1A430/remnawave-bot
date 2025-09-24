@@ -250,6 +250,13 @@ class Settings(BaseSettings):
             "link": "external_link",
             "url": "external_link",
             "external_link": "external_link",
+            "miniapp": "external_link_miniapp",
+            "mini_app": "external_link_miniapp",
+            "mini-app": "external_link_miniapp",
+            "webapp": "external_link_miniapp",
+            "web_app": "external_link_miniapp",
+            "web-app": "external_link_miniapp",
+            "external_link_miniapp": "external_link_miniapp",
             "xray": "xray",
             "xraychecker": "xray",
             "xray_metrics": "xray",
@@ -257,8 +264,10 @@ class Settings(BaseSettings):
         }
 
         mode = aliases.get(normalized, normalized)
-        if mode not in {"disabled", "external_link", "xray"}:
-            raise ValueError("SERVER_STATUS_MODE must be one of: disabled, external_link, xray")
+        if mode not in {"disabled", "external_link", "external_link_miniapp", "xray"}:
+            raise ValueError(
+                "SERVER_STATUS_MODE must be one of: disabled, external_link, external_link_miniapp, xray"
+            )
         return mode
 
     @field_validator('SERVER_STATUS_ITEMS_PER_PAGE', mode='before')

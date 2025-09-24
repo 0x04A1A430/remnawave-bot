@@ -112,8 +112,8 @@ docker compose logs
 
 | Переменная | Описание | Пример |
 |------------|----------|--------|
-| `SERVER_STATUS_MODE` | Режим работы кнопки: `disabled`, `external_link` (просто ссылка) или `xray` (интеграция с XrayChecker). | `xray` |
-| `SERVER_STATUS_EXTERNAL_URL` | Прямая ссылка на внешний мониторинг (используется в режиме `external_link`). | `https://status.example.com` |
+| `SERVER_STATUS_MODE` | Режим работы кнопки: `disabled`, `external_link` (открывает ссылку в браузере), `external_link_miniapp` (открывает ссылку во встроенном мини-приложении Telegram) или `xray` (интеграция с XrayChecker). | `xray` |
+| `SERVER_STATUS_EXTERNAL_URL` | Прямая ссылка на внешний мониторинг (используется в режимах `external_link` и `external_link_miniapp`). | `https://status.example.com` |
 | `SERVER_STATUS_METRICS_URL` | URL страницы метрик XrayChecker (Prometheus формат). | `https://sub.example.com/metrics` |
 | `SERVER_STATUS_METRICS_USERNAME` / `SERVER_STATUS_METRICS_PASSWORD` | Данные Basic Auth, если страница метрик защищена паролем. | `status` / `secret` |
 | `SERVER_STATUS_ITEMS_PER_PAGE` | Количество серверов, показываемых на одной странице в режиме интеграции. | `10` |
@@ -541,9 +541,9 @@ MONITORING_LOGS_RETENTION_DAYS=30
 NOTIFICATION_CACHE_HOURS=24
 
 # ===== СТАТУС СЕРВЕРОВ =====
-# Режимы: disabled, external_link, xray
+# Режимы: disabled, external_link, external_link_miniapp, xray
 SERVER_STATUS_MODE=disabled
-# Ссылка на внешний мониторинг (для режима external_link)
+# Ссылка на внешний мониторинг (для режимов external_link и external_link_miniapp)
 SERVER_STATUS_EXTERNAL_URL=
 # URL метрик XrayChecker (для режима xray)
 SERVER_STATUS_METRICS_URL=

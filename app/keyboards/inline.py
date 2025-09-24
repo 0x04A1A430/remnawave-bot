@@ -172,6 +172,15 @@ def get_main_menu_keyboard(
             keyboard.append([
                 InlineKeyboardButton(text=server_status_text, url=status_url)
             ])
+    elif server_status_mode == "external_link_miniapp":
+        status_url = settings.get_server_status_external_url()
+        if status_url:
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=server_status_text,
+                    web_app=types.WebAppInfo(url=status_url),
+                )
+            ])
     elif server_status_mode == "xray":
         keyboard.append([
             InlineKeyboardButton(text=server_status_text, callback_data="menu_server_status")
