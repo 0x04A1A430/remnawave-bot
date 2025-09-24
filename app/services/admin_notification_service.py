@@ -20,7 +20,6 @@ class AdminNotificationService:
         self.chat_id = getattr(settings, 'ADMIN_NOTIFICATIONS_CHAT_ID', None)
         self.topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_TOPIC_ID', None)
         self.ticket_topic_id = getattr(settings, 'ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID', None)
-        self.reports_topic_id = settings.get_admin_reports_topic_id()
         self.enabled = getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False)
     
     async def _get_referrer_info(self, db: AsyncSession, referred_by_id: Optional[int]) -> str:
@@ -307,18 +306,11 @@ class AdminNotificationService:
             logger.error(f"Ошибка отправки уведомления о продлении: {e}")
             return False
     
-    async def _send_message(
-        self,
-        text: str,
-        reply_markup: types.InlineKeyboardMarkup | None = None,
-        *,
-        ticket_event: bool = False,
-        topic_id: Optional[int] = None
-    ) -> bool:
+    async def _send_message(self, text: str, reply_markup: types.InlineKeyboardMarkup | None = None, *, ticket_event: bool = False) -> bool:
         if not self.chat_id:
             logger.warning("ADMIN_NOTIFICATIONS_CHAT_ID не настроен")
             return False
-
+        
         try:
             message_kwargs = {
                 'chat_id': self.chat_id,
@@ -329,9 +321,7 @@ class AdminNotificationService:
             
             # route to ticket-specific topic if provided
             thread_id = None
-            if topic_id:
-                thread_id = topic_id
-            elif ticket_event and self.ticket_topic_id:
+            if ticket_event and self.ticket_topic_id:
                 thread_id = self.ticket_topic_id
             elif self.topic_id:
                 thread_id = self.topic_id
@@ -339,7 +329,7 @@ class AdminNotificationService:
                 message_kwargs['message_thread_id'] = thread_id
             if reply_markup is not None:
                 message_kwargs['reply_markup'] = reply_markup
-
+            
             await self.bot.send_message(**message_kwargs)
             logger.info(f"Уведомление отправлено в чат {self.chat_id}")
             return True
@@ -356,16 +346,6 @@ class AdminNotificationService:
     
     def _is_enabled(self) -> bool:
         return self.enabled and bool(self.chat_id)
-
-    def is_enabled(self) -> bool:
-        return self._is_enabled()
-
-    async def send_report_message(self, text: str, *, topic_id: Optional[int] = None) -> bool:
-        if not self._is_enabled():
-            return False
-
-        effective_topic = topic_id or self.reports_topic_id or self.topic_id
-        return await self._send_message(text, topic_id=effective_topic)
     
     def _get_payment_method_display(self, payment_method: Optional[str]) -> str:
         method_names = {

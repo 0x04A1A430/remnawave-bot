@@ -10,7 +10,6 @@ def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👥 Юзеры/Подписки", callback_data="admin_submenu_users")],
         [InlineKeyboardButton(text="💰 Промокоды/Статистика", callback_data="admin_submenu_promo")],
-        [InlineKeyboardButton(text=texts.ADMIN_REPORTS, callback_data="admin_submenu_reports")],
         [InlineKeyboardButton(text="🛟 Поддержка", callback_data="admin_submenu_support")],
         [InlineKeyboardButton(text="📨 Сообщения", callback_data="admin_submenu_communications")],
         [InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin_submenu_settings")],
@@ -89,17 +88,6 @@ def get_admin_support_submenu_keyboard(language: str = "ru") -> InlineKeyboardMa
         [
             InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")
         ]
-    ])
-
-
-def get_admin_reports_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=texts.ADMIN_REPORTS_DAILY, callback_data="admin_report_daily")],
-        [InlineKeyboardButton(text=texts.ADMIN_REPORTS_WEEKLY, callback_data="admin_report_weekly")],
-        [InlineKeyboardButton(text=texts.ADMIN_REPORTS_MONTHLY, callback_data="admin_report_monthly")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")]
     ])
 
 
