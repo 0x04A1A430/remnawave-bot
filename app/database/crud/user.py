@@ -116,6 +116,7 @@ async def create_user(
         has_had_paid_subscription=False,
         has_made_first_topup=False,
         promo_group_id=promo_group_id,
+        promo_group_auto_assigned=False,
     )
     
     db.add(user)

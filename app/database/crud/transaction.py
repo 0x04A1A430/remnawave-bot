@@ -98,6 +98,21 @@ async def get_user_transactions_count(
     return result.scalar()
 
 
+async def get_user_total_completed_deposits(db: AsyncSession, user_id: int) -> int:
+    result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0))
+        .where(
+            and_(
+                Transaction.user_id == user_id,
+                Transaction.type == TransactionType.DEPOSIT.value,
+                Transaction.is_completed.is_(True),
+            )
+        )
+    )
+
+    return result.scalar_one()
+
+
 async def complete_transaction(db: AsyncSession, transaction: Transaction) -> Transaction:
     
     transaction.is_completed = True
