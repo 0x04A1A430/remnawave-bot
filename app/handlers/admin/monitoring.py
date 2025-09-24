@@ -5,6 +5,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
+from aiogram.exceptions import TelegramBadRequest
 
 from app.config import settings
 from app.database.database import get_db
@@ -94,7 +95,24 @@ async def _render_notification_settings_for_state(
     if business_connection_id:
         edit_kwargs["business_connection_id"] = business_connection_id
 
-    await bot.edit_message_text(**edit_kwargs)
+    try:
+        await bot.edit_message_text(**edit_kwargs)
+    except TelegramBadRequest as exc:
+        if "no text in the message to edit" in (exc.message or "").lower():
+            caption_kwargs = {
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "caption": text,
+                "parse_mode": "HTML",
+                "reply_markup": keyboard,
+            }
+
+            if business_connection_id:
+                caption_kwargs["business_connection_id"] = business_connection_id
+
+            await bot.edit_message_caption(**caption_kwargs)
+        else:
+            raise
 
 @router.callback_query(F.data == "admin_monitoring")
 @admin_required
