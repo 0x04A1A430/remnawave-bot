@@ -93,17 +93,14 @@ def get_admin_support_submenu_keyboard(language: str = "ru") -> InlineKeyboardMa
 
 def get_admin_settings_submenu_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
-
+    
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text=texts.ADMIN_REMNAWAVE, callback_data="admin_remnawave"),
             InlineKeyboardButton(text=texts.ADMIN_MONITORING, callback_data="admin_monitoring")
         ],
         [
-            InlineKeyboardButton(text=texts.t("ADMIN_MONITORING_SETTINGS", "🔔 Настройки уведомлений"), callback_data="admin_mon_settings"),
-            InlineKeyboardButton(text=texts.ADMIN_RULES, callback_data="admin_rules")
-        ],
-        [
+            InlineKeyboardButton(text=texts.ADMIN_RULES, callback_data="admin_rules"),
             InlineKeyboardButton(text="🔧 Техработы", callback_data="maintenance_panel")
         ],
         [
@@ -784,9 +781,6 @@ def get_monitoring_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(text="🧪 Тест уведомлений", callback_data="admin_mon_test_notifications"),
             InlineKeyboardButton(text="📊 Статистика", callback_data="admin_mon_statistics")
-        ],
-        [
-            InlineKeyboardButton(text="⚙️ Настройки уведомлений", callback_data="admin_mon_settings")
         ],
         [
             InlineKeyboardButton(text="⬅️ Назад в админку", callback_data="admin_panel")
