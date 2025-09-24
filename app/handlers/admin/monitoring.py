@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
 from app.config import settings
@@ -607,7 +607,7 @@ async def monitoring_command(message: Message):
         await message.answer(f"❌ Ошибка: {str(e)}")
 
 
-@router.message(StateFilter(AdminStates.editing_notification_value))
+@router.message(AdminStates.editing_notification_value)
 async def process_notification_value_input(message: Message, state: FSMContext):
     data = await state.get_data()
     if not data:
