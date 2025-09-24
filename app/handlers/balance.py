@@ -1182,7 +1182,13 @@ async def check_mulenpay_payment_status(
                 f"\n❌ Платеж не был завершен. Попробуйте создать новый платеж или обратитесь в {settings.get_support_contact_display()}"
             )
 
-        await callback.answer("".join(message_lines), show_alert=True)
+        message_text = "".join(message_lines)
+
+        if len(message_text) > 190:
+            await callback.message.answer(message_text)
+            await callback.answer("ℹ️ Статус платежа отправлен в чат", show_alert=True)
+        else:
+            await callback.answer(message_text, show_alert=True)
 
     except Exception as e:
         logger.error(f"Ошибка проверки статуса MulenPay: {e}")
