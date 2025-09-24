@@ -21,7 +21,9 @@ from app.database.models import (
     ReferralEarning, Squad, ServiceRule, SystemSetting, MonitoringLog,
     SubscriptionConversion, SentNotification, BroadcastHistory,
     ServerSquad, SubscriptionServer, UserMessage, YooKassaPayment,
-    CryptoBotPayment, WelcomeText, Base
+    CryptoBotPayment, WelcomeText, Base, PromoGroup, AdvertisingCampaign,
+    AdvertisingCampaignRegistration, SupportAuditLog, Ticket, TicketMessage,
+    MulenPayPayment, Pal24Payment
 )
 
 logger = logging.getLogger(__name__)
@@ -61,29 +63,34 @@ class BackupService:
         self._settings = self._load_settings()
         
         self.backup_models_ordered = [
-            ServiceRule, 
             SystemSetting,
+            ServiceRule,
             Squad,
-            PromoCode,
             ServerSquad,
-            
-            User, 
-            
-            WelcomeText, 
+            PromoGroup,
+            User,
+            PromoCode,
+            WelcomeText,
+            UserMessage,
             Subscription,
+            SubscriptionServer,
+            SubscriptionConversion,
             Transaction,
             YooKassaPayment,
             CryptoBotPayment,
+            MulenPayPayment,
+            Pal24Payment,
             PromoCodeUse,
             ReferralEarning,
-            SubscriptionConversion,
+            SentNotification,
             BroadcastHistory,
-            UserMessage,
-            
-            SentNotification, 
-            SubscriptionServer,  
+            AdvertisingCampaign,
+            AdvertisingCampaignRegistration,
+            Ticket,
+            TicketMessage,
+            SupportAuditLog,
         ]
-        
+
         if self._settings.include_logs:
             self.backup_models_ordered.append(MonitoringLog)
 
@@ -329,60 +336,47 @@ class BackupService:
                         await self._clear_database_tables(db)
                     
                     models_by_table = {model.__tablename__: model for model in self.backup_models_ordered}
-                    
-                    await self._restore_users_without_referrals(db, backup_data, models_by_table)
-                    
-                    for model in self.backup_models_ordered:
-                        table_name = model.__tablename__
-                        
-                        if table_name == "users":
+
+                    pre_restore_tables = {"promo_groups"}
+                    for table_name in pre_restore_tables:
+                        model = models_by_table.get(table_name)
+                        if not model:
                             continue
-                            
+
                         records = backup_data.get(table_name, [])
                         if not records:
                             continue
-                        
+
                         logger.info(f"🔥 Восстанавливаем таблицу {table_name} ({len(records)} записей)")
-                        
-                        for record_data in records:
-                            try:
-                                processed_data = self._process_record_data(record_data, model, table_name)
-                                
-                                primary_key_col = self._get_primary_key_column(model)
-                                
-                                if primary_key_col and primary_key_col in processed_data:
-                                    existing_record = await db.execute(
-                                        select(model).where(
-                                            getattr(model, primary_key_col) == processed_data[primary_key_col]
-                                        )
-                                    )
-                                    existing = existing_record.scalar_one_or_none()
-                                    
-                                    if existing and not clear_existing:
-                                        for key, value in processed_data.items():
-                                            if key != primary_key_col:
-                                                setattr(existing, key, value)
-                                        logger.debug(f"Обновлена существующая запись {primary_key_col}={processed_data[primary_key_col]} в {table_name}")
-                                    else:
-                                        instance = model(**processed_data)
-                                        db.add(instance)
-                                else:
-                                    instance = model(**processed_data)
-                                    db.add(instance)
-                                
-                                restored_records += 1
-                                
-                            except Exception as e:
-                                logger.error(f"Ошибка восстановления записи в {table_name}: {e}")
-                                logger.error(f"Проблемные данные: {record_data}")
-                                await db.rollback()
-                                raise e
-                        
-                        restored_tables += 1
-                        logger.info(f"✅ Таблица {table_name} восстановлена")
-                    
+                        restored = await self._restore_table_records(db, model, table_name, records, clear_existing)
+                        restored_records += restored
+
+                        if restored:
+                            restored_tables += 1
+                            logger.info(f"✅ Таблица {table_name} восстановлена")
+
+                    await self._restore_users_without_referrals(db, backup_data, models_by_table)
+
+                    for model in self.backup_models_ordered:
+                        table_name = model.__tablename__
+
+                        if table_name == "users" or table_name in pre_restore_tables:
+                            continue
+
+                        records = backup_data.get(table_name, [])
+                        if not records:
+                            continue
+
+                        logger.info(f"🔥 Восстанавливаем таблицу {table_name} ({len(records)} записей)")
+                        restored = await self._restore_table_records(db, model, table_name, records, clear_existing)
+                        restored_records += restored
+
+                        if restored:
+                            restored_tables += 1
+                            logger.info(f"✅ Таблица {table_name} восстановлена")
+
                     await self._update_user_referrals(db, backup_data)
-                    
+
                     await db.commit()
                     
                     break
@@ -549,14 +543,64 @@ class BackupService:
                 return col.name
         return None
 
+    async def _restore_table_records(
+        self,
+        db: AsyncSession,
+        model,
+        table_name: str,
+        records: List[Dict[str, Any]],
+        clear_existing: bool
+    ) -> int:
+        restored_count = 0
+
+        for record_data in records:
+            try:
+                processed_data = self._process_record_data(record_data, model, table_name)
+
+                primary_key_col = self._get_primary_key_column(model)
+
+                if primary_key_col and primary_key_col in processed_data:
+                    existing_record = await db.execute(
+                        select(model).where(
+                            getattr(model, primary_key_col) == processed_data[primary_key_col]
+                        )
+                    )
+                    existing = existing_record.scalar_one_or_none()
+
+                    if existing and not clear_existing:
+                        for key, value in processed_data.items():
+                            if key != primary_key_col:
+                                setattr(existing, key, value)
+                    else:
+                        instance = model(**processed_data)
+                        db.add(instance)
+                else:
+                    instance = model(**processed_data)
+                    db.add(instance)
+
+                restored_count += 1
+
+            except Exception as e:
+                logger.error(f"Ошибка восстановления записи в {table_name}: {e}")
+                logger.error(f"Проблемные данные: {record_data}")
+                await db.rollback()
+                raise e
+
+        return restored_count
+
     async def _clear_database_tables(self, db: AsyncSession):
         tables_order = [
-            "subscription_servers", "sent_notifications", 
-            "user_messages", "broadcast_history", "subscription_conversions", 
-            "referral_earnings", "promocode_uses", "transactions", 
-            "yookassa_payments", "cryptobot_payments", "welcome_texts",
-            "subscriptions", "users", "promocodes", "server_squads", 
-            "squads", "service_rules", "system_settings", "monitoring_logs"
+            "ticket_messages", "tickets", "support_audit_logs",
+            "advertising_campaign_registrations", "advertising_campaigns",
+            "subscription_servers", "sent_notifications",
+            "user_messages", "broadcast_history", "subscription_conversions",
+            "referral_earnings", "promocode_uses",
+            "yookassa_payments", "cryptobot_payments",
+            "mulenpay_payments", "pal24_payments",
+            "transactions", "welcome_texts", "subscriptions",
+            "promocodes", "users", "promo_groups",
+            "server_squads", "squads", "service_rules",
+            "system_settings", "monitoring_logs"
         ]
         
         for table_name in tables_order:
