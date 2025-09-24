@@ -964,7 +964,10 @@ async def save_cart_and_redirect_to_topup(
         f"🛒 Ваша корзина сохранена!\n"
         f"После пополнения баланса вы сможете вернуться к оформлению подписки.\n\n"
         f"Выберите способ пополнения:",
-        reply_markup=get_payment_methods_keyboard_with_cart(db_user.language),
+        reply_markup=get_payment_methods_keyboard_with_cart(
+            db_user.language,
+            missing_amount,
+        ),
         parse_mode="HTML"
     )
 
@@ -990,7 +993,10 @@ async def return_to_saved_cart(
             f"Требуется: {texts.format_price(total_price)}\n"
             f"У вас: {texts.format_price(db_user.balance_kopeks)}\n"
             f"Не хватает: {texts.format_price(missing_amount)}",
-            reply_markup=get_insufficient_balance_keyboard_with_cart(db_user.language)
+            reply_markup=get_insufficient_balance_keyboard_with_cart(
+                db_user.language,
+                missing_amount,
+            )
         )
         return
     
@@ -1225,10 +1231,33 @@ async def apply_countries_changes(
     logger.info(f"Стоимость новых серверов: {cost_per_month/100}₽/мес × {charged_months} мес = {total_cost/100}₽")
     
     if total_cost > 0 and db_user.balance_kopeks < total_cost:
-        await callback.answer(
-            f"⚠️ Недостаточно средств!\nТребуется: {texts.format_price(total_cost)} (за {charged_months} мес)\nУ вас: {texts.format_price(db_user.balance_kopeks)}", 
-            show_alert=True
+        missing_kopeks = total_cost - db_user.balance_kopeks
+        required_text = f"{texts.format_price(total_cost)} (за {charged_months} мес)"
+        message_text = texts.t(
+            "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+            (
+                "⚠️ <b>Недостаточно средств</b>\n\n"
+                "Стоимость услуги: {required}\n"
+                "На балансе: {balance}\n"
+                "Не хватает: {missing}\n\n"
+                "Выберите способ пополнения. Сумма подставится автоматически."
+            ),
+        ).format(
+            required=required_text,
+            balance=texts.format_price(db_user.balance_kopeks),
+            missing=texts.format_price(missing_kopeks),
         )
+
+        await callback.message.answer(
+            message_text,
+            reply_markup=get_insufficient_balance_keyboard(
+                db_user.language,
+                resume_callback=resume_callback,
+                amount_kopeks=missing_kopeks,
+            ),
+            parse_mode="HTML",
+        )
+        await callback.answer()
         return
     
     try:
@@ -1415,10 +1444,32 @@ async def confirm_change_devices(
         price, charged_months = calculate_prorated_price(devices_price_per_month, subscription.end_date)
         
         if price > 0 and db_user.balance_kopeks < price:
-            await callback.answer(
-                f"⚠️ Недостаточно средств!\nТребуется: {texts.format_price(price)} (за {charged_months} мес)\nУ вас: {texts.format_price(db_user.balance_kopeks)}", 
-                show_alert=True
+            missing_kopeks = price - db_user.balance_kopeks
+            required_text = f"{texts.format_price(price)} (за {charged_months} мес)"
+            message_text = texts.t(
+                "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+                (
+                    "⚠️ <b>Недостаточно средств</b>\n\n"
+                    "Стоимость услуги: {required}\n"
+                    "На балансе: {balance}\n"
+                    "Не хватает: {missing}\n\n"
+                    "Выберите способ пополнения. Сумма подставится автоматически."
+                ),
+            ).format(
+                required=required_text,
+                balance=texts.format_price(db_user.balance_kopeks),
+                missing=texts.format_price(missing_kopeks),
             )
+
+            await callback.message.answer(
+                message_text,
+                reply_markup=get_insufficient_balance_keyboard(
+                    db_user.language,
+                    amount_kopeks=missing_kopeks,
+                ),
+                parse_mode="HTML",
+            )
+            await callback.answer()
             return
         
         action_text = f"увеличить до {new_devices_count}"
@@ -1989,6 +2040,8 @@ async def confirm_add_devices(
     devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
+
+    resume_callback = None
     
     new_total_devices = subscription.device_limit + devices_count
     
@@ -2007,12 +2060,30 @@ async def confirm_add_devices(
     
     if db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
+        required_text = f"{texts.format_price(price)} (за {charged_months} мес)"
+        message_text = texts.t(
+            "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+            (
+                "⚠️ <b>Недостаточно средств</b>\n\n"
+                "Стоимость услуги: {required}\n"
+                "На балансе: {balance}\n"
+                "Не хватает: {missing}\n\n"
+                "Выберите способ пополнения. Сумма подставится автоматически."
+            ),
+        ).format(
+            required=required_text,
+            balance=texts.format_price(db_user.balance_kopeks),
+            missing=texts.format_price(missing_kopeks),
+        )
+
         await callback.message.edit_text(
-            texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
+            message_text,
             reply_markup=get_insufficient_balance_keyboard(
                 db_user.language,
                 resume_callback=resume_callback,
+                amount_kopeks=missing_kopeks,
             ),
+            parse_mode="HTML",
         )
         await callback.answer()
         return
@@ -2204,9 +2275,29 @@ async def confirm_extend_subscription(
 
     if db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
+        required_text = texts.format_price(price)
+        message_text = texts.t(
+            "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+            (
+                "⚠️ <b>Недостаточно средств</b>\n\n"
+                "Стоимость услуги: {required}\n"
+                "На балансе: {balance}\n"
+                "Не хватает: {missing}\n\n"
+                "Выберите способ пополнения. Сумма подставится автоматически."
+            ),
+        ).format(
+            required=required_text,
+            balance=texts.format_price(db_user.balance_kopeks),
+            missing=texts.format_price(missing_kopeks),
+        )
+
         await callback.message.edit_text(
-            texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
-            reply_markup=get_insufficient_balance_keyboard(db_user.language),
+            message_text,
+            reply_markup=get_insufficient_balance_keyboard(
+                db_user.language,
+                amount_kopeks=missing_kopeks,
+            ),
+            parse_mode="HTML",
         )
         await callback.answer()
         return
@@ -2320,13 +2411,32 @@ async def confirm_reset_traffic(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
-    reset_price = PERIOD_PRICES[30] 
-    
+    reset_price = PERIOD_PRICES[30]
+
     if db_user.balance_kopeks < reset_price:
         missing_kopeks = reset_price - db_user.balance_kopeks
+        message_text = texts.t(
+            "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+            (
+                "⚠️ <b>Недостаточно средств</b>\n\n"
+                "Стоимость услуги: {required}\n"
+                "На балансе: {balance}\n"
+                "Не хватает: {missing}\n\n"
+                "Выберите способ пополнения. Сумма подставится автоматически."
+            ),
+        ).format(
+            required=texts.format_price(reset_price),
+            balance=texts.format_price(db_user.balance_kopeks),
+            missing=texts.format_price(missing_kopeks),
+        )
+
         await callback.message.edit_text(
-            texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
-            reply_markup=get_insufficient_balance_keyboard(db_user.language),
+            message_text,
+            reply_markup=get_insufficient_balance_keyboard(
+                db_user.language,
+                amount_kopeks=missing_kopeks,
+            ),
+            parse_mode="HTML",
         )
         await callback.answer()
         return
@@ -2961,12 +3071,29 @@ async def confirm_purchase(
     
     if db_user.balance_kopeks < final_price:
         missing_kopeks = final_price - db_user.balance_kopeks
+        message_text = texts.t(
+            "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+            (
+                "⚠️ <b>Недостаточно средств</b>\n\n"
+                "Стоимость услуги: {required}\n"
+                "На балансе: {balance}\n"
+                "Не хватает: {missing}\n\n"
+                "Выберите способ пополнения. Сумма подставится автоматически."
+            ),
+        ).format(
+            required=texts.format_price(final_price),
+            balance=texts.format_price(db_user.balance_kopeks),
+            missing=texts.format_price(missing_kopeks),
+        )
+
         await callback.message.edit_text(
-            texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
+            message_text,
             reply_markup=get_insufficient_balance_keyboard(
                 db_user.language,
                 resume_callback=resume_callback,
+                amount_kopeks=missing_kopeks,
             ),
+            parse_mode="HTML",
         )
         await callback.answer()
         return
@@ -2981,12 +3108,29 @@ async def confirm_purchase(
         
         if not success:
             missing_kopeks = final_price - db_user.balance_kopeks
+            message_text = texts.t(
+                "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+                (
+                    "⚠️ <b>Недостаточно средств</b>\n\n"
+                    "Стоимость услуги: {required}\n"
+                    "На балансе: {balance}\n"
+                    "Не хватает: {missing}\n\n"
+                    "Выберите способ пополнения. Сумма подставится автоматически."
+                ),
+            ).format(
+                required=texts.format_price(final_price),
+                balance=texts.format_price(db_user.balance_kopeks),
+                missing=texts.format_price(missing_kopeks),
+            )
+
             await callback.message.edit_text(
-                texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
+                message_text,
                 reply_markup=get_insufficient_balance_keyboard(
                     db_user.language,
                     resume_callback=resume_callback,
+                    amount_kopeks=missing_kopeks,
                 ),
+                parse_mode="HTML",
             )
             await callback.answer()
             return
@@ -3232,9 +3376,28 @@ async def add_traffic(
     
     if db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
+        message_text = texts.t(
+            "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+            (
+                "⚠️ <b>Недостаточно средств</b>\n\n"
+                "Стоимость услуги: {required}\n"
+                "На балансе: {balance}\n"
+                "Не хватает: {missing}\n\n"
+                "Выберите способ пополнения. Сумма подставится автоматически."
+            ),
+        ).format(
+            required=texts.format_price(price),
+            balance=texts.format_price(db_user.balance_kopeks),
+            missing=texts.format_price(missing_kopeks),
+        )
+
         await callback.message.edit_text(
-            texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
-            reply_markup=get_insufficient_balance_keyboard(db_user.language),
+            message_text,
+            reply_markup=get_insufficient_balance_keyboard(
+                db_user.language,
+                amount_kopeks=missing_kopeks,
+            ),
+            parse_mode="HTML",
         )
         await callback.answer()
         return
@@ -3689,9 +3852,28 @@ async def confirm_add_countries_to_subscription(
     
     if new_countries and db_user.balance_kopeks < total_price:
         missing_kopeks = total_price - db_user.balance_kopeks
+        message_text = texts.t(
+            "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+            (
+                "⚠️ <b>Недостаточно средств</b>\n\n"
+                "Стоимость услуги: {required}\n"
+                "На балансе: {balance}\n"
+                "Не хватает: {missing}\n\n"
+                "Выберите способ пополнения. Сумма подставится автоматически."
+            ),
+        ).format(
+            required=texts.format_price(total_price),
+            balance=texts.format_price(db_user.balance_kopeks),
+            missing=texts.format_price(missing_kopeks),
+        )
+
         await callback.message.edit_text(
-            texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
-            reply_markup=get_insufficient_balance_keyboard(db_user.language),
+            message_text,
+            reply_markup=get_insufficient_balance_keyboard(
+                db_user.language,
+                amount_kopeks=missing_kopeks,
+            ),
+            parse_mode="HTML",
         )
         await state.clear()
         await callback.answer()
@@ -4355,9 +4537,28 @@ async def confirm_switch_traffic(
         
         if db_user.balance_kopeks < total_price_difference:
             missing_kopeks = total_price_difference - db_user.balance_kopeks
+            message_text = texts.t(
+                "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+                (
+                    "⚠️ <b>Недостаточно средств</b>\n\n"
+                    "Стоимость услуги: {required}\n"
+                    "На балансе: {balance}\n"
+                    "Не хватает: {missing}\n\n"
+                    "Выберите способ пополнения. Сумма подставится автоматически."
+                ),
+            ).format(
+                required=f"{texts.format_price(total_price_difference)} (за {months_remaining} мес)",
+                balance=texts.format_price(db_user.balance_kopeks),
+                missing=texts.format_price(missing_kopeks),
+            )
+
             await callback.message.edit_text(
-                texts.INSUFFICIENT_BALANCE.format(amount=texts.format_price(missing_kopeks)),
-                reply_markup=get_insufficient_balance_keyboard(db_user.language),
+                message_text,
+                reply_markup=get_insufficient_balance_keyboard(
+                    db_user.language,
+                    amount_kopeks=missing_kopeks,
+                ),
+                parse_mode="HTML",
             )
             await callback.answer()
             return
