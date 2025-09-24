@@ -186,6 +186,18 @@ class Settings(BaseSettings):
     MULENPAY_PAYMENT_SUBJECT: int = 4
     MULENPAY_PAYMENT_MODE: int = 4
 
+    PAL24_ENABLED: bool = False
+    PAL24_API_TOKEN: Optional[str] = None
+    PAL24_SHOP_ID: Optional[str] = None
+    PAL24_SIGNATURE_TOKEN: Optional[str] = None
+    PAL24_BASE_URL: str = "https://pal24.pro/api/v1/"
+    PAL24_WEBHOOK_PATH: str = "/pal24-webhook"
+    PAL24_WEBHOOK_PORT: int = 8084
+    PAL24_PAYMENT_DESCRIPTION: str = "Пополнение баланса"
+    PAL24_MIN_AMOUNT_KOPEKS: int = 10000
+    PAL24_MAX_AMOUNT_KOPEKS: int = 100000000
+    PAL24_REQUEST_TIMEOUT: int = 30
+
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
     HIDE_SUBSCRIPTION_LINK: bool = False
@@ -461,6 +473,13 @@ class Settings(BaseSettings):
             and self.MULENPAY_API_KEY is not None
             and self.MULENPAY_SECRET_KEY is not None
             and self.MULENPAY_SHOP_ID is not None
+        )
+
+    def is_pal24_enabled(self) -> bool:
+        return (
+            self.PAL24_ENABLED
+            and self.PAL24_API_TOKEN is not None
+            and self.PAL24_SHOP_ID is not None
         )
 
     def get_cryptobot_base_url(self) -> str:

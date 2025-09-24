@@ -657,6 +657,14 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
             )
         ])
 
+    if settings.is_pal24_enabled():
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("PAYMENT_CARD_PAL24", "💳 Банковская карта (PayPalych)"),
+                callback_data="topup_pal24"
+            )
+        ])
+
     if settings.is_cryptobot_enabled():
         keyboard.append([
             InlineKeyboardButton(

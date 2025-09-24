@@ -35,7 +35,7 @@
 
 ### ⚡ **Полная автоматизация VPN бизнеса**
 - 🎯 **Готовое решение** - разверни за 5 минут, начни продавать сегодня
-- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + ЮKassa + MulenPay + P2P
+- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + ЮKassa + MulenPay + PayPalych + P2P
 - 🔄 **Автоматизация 99%** - от регистрации до продления подписок
 - 📊 **Детальная аналитика** - полная картина вашего бизнеса
 - 💬 **Уведомления в топики** об: Активация триала 💎 Покупка подписки 🔄 Конверсия из триала в платную ⏰ Продление подписки 💰 Пополнение баланса 🚧 Включении тех работ ♻️ Появлении новой версии бота
@@ -486,6 +486,25 @@ MULENPAY_VAT_CODE=0
 MULENPAY_PAYMENT_SUBJECT=4
 MULENPAY_PAYMENT_MODE=4
 
+# PAYPALYCH / PAL24
+PAL24_ENABLED=false
+PAL24_API_TOKEN=
+PAL24_SHOP_ID=
+PAL24_SIGNATURE_TOKEN=
+PAL24_BASE_URL=https://pal24.pro/api/v1/
+PAL24_WEBHOOK_PATH=/pal24-webhook
+PAL24_WEBHOOK_PORT=8084
+PAL24_PAYMENT_DESCRIPTION="Пополнение баланса"
+PAL24_MIN_AMOUNT_KOPEKS=10000
+PAL24_MAX_AMOUNT_KOPEKS=100000000
+PAL24_REQUEST_TIMEOUT=30
+
+# Настройки PayPalych
+1. Включите интеграцию (`PAL24_ENABLED=true`) и укажите `PAL24_API_TOKEN`, `PAL24_SHOP_ID`, а также `PAL24_SIGNATURE_TOKEN` для проверки подписи уведомлений.
+2. Настройте в кабинете PayPalych **Result URL** и success/fail redirect на `https://<ваш-домен>/pal24-webhook`.
+3. Убедитесь, что порт `PAL24_WEBHOOK_PORT` (по умолчанию `8084`) проброшен через прокси/фаервол.
+4. Для теста можно отправить postback вручную (пример команды см. ниже в разделе «Проверка PayPalych postback»).
+
 # ===== ИНТЕРФЕЙС И UX =====
 
 # Включить логотип для всех сообщений (true - с изображением, false - только текст)
@@ -617,6 +636,7 @@ WEBHOOK_PATH=/webhook
 - 💳 Tribute
 - 💳 YooKassa (включая СБП и онлайн-чек)
 - 💳 MulenPay
+- 💳 PayPalych (Pal24)
 - 💰 CryptoBot (мультивалюта и срок жизни инвойсов)
 - 🎁 Реферальные и промо-бонусы
 - Детальная история транзакций и чеков
@@ -642,7 +662,7 @@ WEBHOOK_PATH=/webhook
 
 📊 **Мощная аналитика**
 - 👥 Детальная статистика пользователей и подписок
-- 💰 Анализ платежей по источникам (Stars, YooKassa, Tribute, CryptoBot)
+- 💰 Анализ платежей по источникам (Stars, YooKassa, Tribute, MulenPay, PayPalych, CryptoBot)
 - 🖥️ Мониторинг серверов Remnawave и статуса сквадов
 - 📈 Финансовые отчеты, конверсии и эффективность рекламных кампаний
 
@@ -935,6 +955,7 @@ docker compose down -v --remove-orphans
    - **Telegram Stars**: Работает автоматически
    - **Tribute**: Настрой webhook на `https://your-domain.com/tribute-webhook`
    - **YooKassa**: Настрой webhook на `https://your-domain.com/yookassa-webhook`
+   - **PayPalych**: Укажи Result URL `https://your-domain.com/pal24-webhook` в кабинете Pal24
 
 
 ### 🛠️ Настройка Уведомлений в топик группы
@@ -1147,7 +1168,7 @@ docker system prune
 |----------|-------------|---------|
 | **Бот не отвечает** | `docker logs remnawave_bot` | Проверь `BOT_TOKEN` и интернет |
 | **Ошибки БД** | `docker compose ps postgres` | Проверь статус PostgreSQL |
-| **Webhook не работает** | Проверь порты 8081/8082 | Настрой прокси-сервер правильно |
+| **Webhook не работает** | Проверь порты 8081/8082/8084 | Настрой прокси-сервер правильно |
 | **API недоступен** | Проверь логи бота | Проверь `REMNAWAVE_API_URL` и ключ |
 | **Мониторинг не работает** | Админ панель → Мониторинг | Проверь `MAINTENANCE_AUTO_ENABLE` |
 | **Платежи не проходят** | Проверь webhook'и | Настрой URL в платежных системах |
@@ -1186,7 +1207,16 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
-    
+
+    # PayPalych webhook endpoint
+    location /pal24-webhook {
+        proxy_pass http://127.0.0.1:8084;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     # Для YooKassa
     location /yookassa-webhook {
         proxy_pass http://127.0.0.1:8082;
@@ -1217,16 +1247,39 @@ your-domain.com {
     handle /mulenpay-webhook* {
         reverse_proxy localhost:8081
     }
-    
+
+    handle /pal24-webhook* {
+        reverse_proxy localhost:8084
+    }
+
     handle /yookassa-webhook* {
         reverse_proxy localhost:8082
     }
-    
+
     handle /health {
         reverse_proxy localhost:8081/health
     }
 }
 ```
+
+#### 🧪 Проверка PayPalych postback
+
+```bash
+# Генерируем подпись: md5("100.00:test-order-1:${PAL24_SIGNATURE_TOKEN}")
+SIGNATURE=$(python - <<'PY'
+import hashlib, os
+token = os.environ.get('PAL24_SIGNATURE_TOKEN', 'test_token')
+payload = f"100.00:test-order-1:{token}".encode()
+print(hashlib.md5(payload).hexdigest().upper())
+PY
+)
+
+curl -X POST https://your-domain.com/pal24-webhook \
+  -H "Content-Type: application/json" \
+  -d '{"InvId": "test-order-1", "OutSum": "100.00", "Status": "SUCCESS", "SignatureValue": "'$SIGNATURE'"}'
+```
+
+Ответ `{"status": "ok"}` подтверждает корректную обработку вебхука.
 
 ---
 

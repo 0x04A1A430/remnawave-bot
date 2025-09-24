@@ -376,6 +376,150 @@ async def create_mulenpay_payments_table():
         logger.error(f"Ошибка создания таблицы mulenpay_payments: {e}")
         return False
 
+
+async def create_pal24_payments_table():
+    table_exists = await check_table_exists('pal24_payments')
+    if table_exists:
+        logger.info("Таблица pal24_payments уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE pal24_payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    bill_id VARCHAR(255) NOT NULL UNIQUE,
+                    order_id VARCHAR(255) NULL,
+                    amount_kopeks INTEGER NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    type VARCHAR(20) NOT NULL DEFAULT 'normal',
+                    status VARCHAR(50) NOT NULL DEFAULT 'NEW',
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    is_paid BOOLEAN NOT NULL DEFAULT 0,
+                    paid_at DATETIME NULL,
+                    last_status VARCHAR(50) NULL,
+                    last_status_checked_at DATETIME NULL,
+                    link_url TEXT NULL,
+                    link_page_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    payment_id VARCHAR(255) NULL,
+                    payment_status VARCHAR(50) NULL,
+                    payment_method VARCHAR(50) NULL,
+                    balance_amount VARCHAR(50) NULL,
+                    balance_currency VARCHAR(10) NULL,
+                    payer_account VARCHAR(255) NULL,
+                    ttl INTEGER NULL,
+                    expires_at DATETIME NULL,
+                    transaction_id INTEGER NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_pal24_bill_id ON pal24_payments(bill_id);
+                CREATE INDEX idx_pal24_order_id ON pal24_payments(order_id);
+                CREATE INDEX idx_pal24_payment_id ON pal24_payments(payment_id);
+                """
+
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE pal24_payments (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    bill_id VARCHAR(255) NOT NULL UNIQUE,
+                    order_id VARCHAR(255) NULL,
+                    amount_kopeks INTEGER NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    type VARCHAR(20) NOT NULL DEFAULT 'normal',
+                    status VARCHAR(50) NOT NULL DEFAULT 'NEW',
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+                    paid_at TIMESTAMP NULL,
+                    last_status VARCHAR(50) NULL,
+                    last_status_checked_at TIMESTAMP NULL,
+                    link_url TEXT NULL,
+                    link_page_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    payment_id VARCHAR(255) NULL,
+                    payment_status VARCHAR(50) NULL,
+                    payment_method VARCHAR(50) NULL,
+                    balance_amount VARCHAR(50) NULL,
+                    balance_currency VARCHAR(10) NULL,
+                    payer_account VARCHAR(255) NULL,
+                    ttl INTEGER NULL,
+                    expires_at TIMESTAMP NULL,
+                    transaction_id INTEGER NULL REFERENCES transactions(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX idx_pal24_bill_id ON pal24_payments(bill_id);
+                CREATE INDEX idx_pal24_order_id ON pal24_payments(order_id);
+                CREATE INDEX idx_pal24_payment_id ON pal24_payments(payment_id);
+                """
+
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE pal24_payments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    bill_id VARCHAR(255) NOT NULL UNIQUE,
+                    order_id VARCHAR(255) NULL,
+                    amount_kopeks INT NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    type VARCHAR(20) NOT NULL DEFAULT 'normal',
+                    status VARCHAR(50) NOT NULL DEFAULT 'NEW',
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    is_paid BOOLEAN NOT NULL DEFAULT 0,
+                    paid_at DATETIME NULL,
+                    last_status VARCHAR(50) NULL,
+                    last_status_checked_at DATETIME NULL,
+                    link_url TEXT NULL,
+                    link_page_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    payment_id VARCHAR(255) NULL,
+                    payment_status VARCHAR(50) NULL,
+                    payment_method VARCHAR(50) NULL,
+                    balance_amount VARCHAR(50) NULL,
+                    balance_currency VARCHAR(10) NULL,
+                    payer_account VARCHAR(255) NULL,
+                    ttl INT NULL,
+                    expires_at DATETIME NULL,
+                    transaction_id INT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_pal24_bill_id ON pal24_payments(bill_id);
+                CREATE INDEX idx_pal24_order_id ON pal24_payments(order_id);
+                CREATE INDEX idx_pal24_payment_id ON pal24_payments(payment_id);
+                """
+
+            else:
+                logger.error(f"Неподдерживаемый тип БД для таблицы pal24_payments: {db_type}")
+                return False
+
+            await conn.execute(text(create_sql))
+            logger.info("Таблица pal24_payments успешно создана")
+            return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы pal24_payments: {e}")
+        return False
+
 async def create_user_messages_table():
     table_exists = await check_table_exists('user_messages')
     if table_exists:
@@ -1211,6 +1355,13 @@ async def run_universal_migration():
             logger.info("✅ Таблица Mulen Pay payments готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей Mulen Pay payments")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PAL24 ===")
+        pal24_created = await create_pal24_payments_table()
+        if pal24_created:
+            logger.info("✅ Таблица Pal24 payments готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей Pal24 payments")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_MESSAGES ===")
         user_messages_created = await create_user_messages_table()
