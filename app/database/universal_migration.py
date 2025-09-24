@@ -681,6 +681,46 @@ async def ensure_promo_groups_setup():
                         f"Не удалось добавить уникальное ограничение uq_promo_groups_name: {e}"
                     )
 
+            period_discounts_column_exists = await check_column_exists(
+                "promo_groups", "period_discounts"
+            )
+
+            if not period_discounts_column_exists:
+                if db_type == "sqlite":
+                    await conn.execute(
+                        text("ALTER TABLE promo_groups ADD COLUMN period_discounts JSON")
+                    )
+                    await conn.execute(
+                        text("UPDATE promo_groups SET period_discounts = '{}' WHERE period_discounts IS NULL")
+                    )
+                elif db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN period_discounts JSONB"
+                        )
+                    )
+                    await conn.execute(
+                        text(
+                            "UPDATE promo_groups SET period_discounts = '{}'::jsonb WHERE period_discounts IS NULL"
+                        )
+                    )
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text("ALTER TABLE promo_groups ADD COLUMN period_discounts JSON")
+                    )
+                    await conn.execute(
+                        text(
+                            "UPDATE promo_groups SET period_discounts = JSON_OBJECT() WHERE period_discounts IS NULL"
+                        )
+                    )
+                else:
+                    logger.error(
+                        f"Неподдерживаемый тип БД для promo_groups.period_discounts: {db_type}"
+                    )
+                    return False
+
+                logger.info("Добавлена колонка promo_groups.period_discounts")
+
             column_exists = await check_column_exists("users", "promo_group_id")
 
             if not column_exists:
@@ -1543,7 +1583,8 @@ async def check_migration_status():
             "subscription_duplicates": False,
             "subscription_conversions_table": False,
             "promo_groups_table": False,
-            "users_promo_group_column": False
+            "users_promo_group_column": False,
+            "promo_groups_period_discounts_column": False,
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -1556,6 +1597,7 @@ async def check_migration_status():
 
         status["welcome_texts_is_enabled_column"] = await check_column_exists('welcome_texts', 'is_enabled')
         status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
+        status["promo_groups_period_discounts_column"] = await check_column_exists('promo_groups', 'period_discounts')
         
         media_fields_exist = (
             await check_column_exists('broadcast_history', 'has_media') and
@@ -1587,7 +1629,8 @@ async def check_migration_status():
             "subscription_conversions_table": "Таблица конверсий подписок",
             "subscription_duplicates": "Отсутствие дубликатов подписок",
             "promo_groups_table": "Таблица промо-групп",
-            "users_promo_group_column": "Колонка promo_group_id у пользователей"
+            "users_promo_group_column": "Колонка promo_group_id у пользователей",
+            "promo_groups_period_discounts_column": "Колонка period_discounts у промо-групп",
         }
         
         for check_key, check_status in status.items():

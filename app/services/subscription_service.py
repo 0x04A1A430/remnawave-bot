@@ -299,7 +299,15 @@ class SubscriptionService:
         if settings.MAX_DEVICES_LIMIT > 0 and devices > settings.MAX_DEVICES_LIMIT:
             raise ValueError(f"Превышен максимальный лимит устройств: {settings.MAX_DEVICES_LIMIT}")
     
-        base_price = PERIOD_PRICES.get(period_days, 0)
+        base_price_original = PERIOD_PRICES.get(period_days, 0)
+        period_discount_percent = _resolve_discount_percent(
+            user,
+            promo_group,
+            "period",
+            period_days=period_days,
+        )
+        base_discount_total = base_price_original * period_discount_percent // 100
+        base_price = base_price_original - base_discount_total
         
         promo_group = promo_group or (user.promo_group if user else None)
 
@@ -353,7 +361,13 @@ class SubscriptionService:
         total_price = base_price + discounted_traffic_price + total_servers_price + discounted_devices_price
 
         logger.info(f"Расчет стоимости новой подписки:")
-        logger.info(f"   Период {period_days} дней: {base_price/100}₽")
+        base_log = f"   Период {period_days} дней: {base_price_original/100}₽"
+        if base_discount_total > 0:
+            base_log += (
+                f" → {base_price/100}₽"
+                f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
+            )
+        logger.info(base_log)
         if discounted_traffic_price > 0:
             message = f"   Трафик {traffic_gb} ГБ: {traffic_price/100}₽"
             if traffic_discount > 0:
@@ -391,7 +405,7 @@ class SubscriptionService:
         try:
             from app.config import PERIOD_PRICES
 
-            base_price = PERIOD_PRICES.get(period_days, 0)
+            base_price_original = PERIOD_PRICES.get(period_days, 0)
 
             if user is None:
                 user = getattr(subscription, "user", None)
@@ -430,6 +444,15 @@ class SubscriptionService:
             traffic_discount = traffic_price * traffic_discount_percent // 100
             discounted_traffic_price = traffic_price - traffic_discount
 
+            period_discount_percent = _resolve_discount_percent(
+                user,
+                promo_group,
+                "period",
+                period_days=period_days,
+            )
+            base_discount_total = base_price_original * period_discount_percent // 100
+            base_price = base_price_original - base_discount_total
+
             total_price = (
                 base_price
                 + discounted_servers_price
@@ -438,7 +461,13 @@ class SubscriptionService:
             )
 
             logger.info(f"💰 Расчет стоимости продления для подписки {subscription.id} (по текущим ценам):")
-            logger.info(f"   📅 Период {period_days} дней: {base_price/100}₽")
+            base_log = f"   📅 Период {period_days} дней: {base_price_original/100}₽"
+            if base_discount_total > 0:
+                base_log += (
+                    f" → {base_price/100}₽"
+                    f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
+                )
+            logger.info(base_log)
             if servers_price > 0:
                 message = f"   🌍 Серверы ({len(subscription.connected_squads)}) по текущим ценам: {discounted_servers_price/100}₽"
                 if servers_discount > 0:
@@ -577,7 +606,15 @@ class SubscriptionService:
         
         months_in_period = calculate_months_from_days(period_days)
         
-        base_price = PERIOD_PRICES.get(period_days, 0)
+        base_price_original = PERIOD_PRICES.get(period_days, 0)
+        period_discount_percent = _resolve_discount_percent(
+            user,
+            promo_group,
+            "period",
+            period_days=period_days,
+        )
+        base_discount_total = base_price_original * period_discount_percent // 100
+        base_price = base_price_original - base_discount_total
         
         promo_group = promo_group or (user.promo_group if user else None)
 
@@ -637,7 +674,13 @@ class SubscriptionService:
         total_price = base_price + total_traffic_price + total_servers_price + total_devices_price
 
         logger.info(f"Расчет стоимости новой подписки на {period_days} дней ({months_in_period} мес):")
-        logger.info(f"   Период {period_days} дней: {base_price/100}₽")
+        base_log = f"   Период {period_days} дней: {base_price_original/100}₽"
+        if base_discount_total > 0:
+            base_log += (
+                f" → {base_price/100}₽"
+                f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
+            )
+        logger.info(base_log)
         if total_traffic_price > 0:
             message = (
                 f"   Трафик {traffic_gb} ГБ: {traffic_price_per_month/100}₽/мес x {months_in_period} = {total_traffic_price/100}₽"
@@ -681,7 +724,7 @@ class SubscriptionService:
 
             months_in_period = calculate_months_from_days(period_days)
 
-            base_price = PERIOD_PRICES.get(period_days, 0)
+            base_price_original = PERIOD_PRICES.get(period_days, 0)
 
             if user is None:
                 user = getattr(subscription, "user", None)
@@ -723,10 +766,25 @@ class SubscriptionService:
             discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
             total_traffic_price = discounted_traffic_per_month * months_in_period
 
+            period_discount_percent = _resolve_discount_percent(
+                user,
+                promo_group,
+                "period",
+                period_days=period_days,
+            )
+            base_discount_total = base_price_original * period_discount_percent // 100
+            base_price = base_price_original - base_discount_total
+
             total_price = base_price + total_servers_price + total_devices_price + total_traffic_price
 
             logger.info(f"💰 Расчет стоимости продления подписки {subscription.id} на {period_days} дней ({months_in_period} мес):")
-            logger.info(f"   📅 Период {period_days} дней: {base_price/100}₽")
+            base_log = f"   📅 Период {period_days} дней: {base_price_original/100}₽"
+            if base_discount_total > 0:
+                base_log += (
+                    f" → {base_price/100}₽"
+                    f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
+                )
+            logger.info(base_log)
             if total_servers_price > 0:
                 message = (
                     f"   🌍 Серверы: {servers_price_per_month/100}₽/мес x {months_in_period} = {total_servers_price/100}₽"

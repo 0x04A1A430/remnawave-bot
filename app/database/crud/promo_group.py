@@ -1,11 +1,29 @@
 import logging
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import PromoGroup, User
+
+
+def _normalize_period_discounts(period_discounts: Optional[Dict[int, int]]) -> Dict[int, int]:
+    if not period_discounts:
+        return {}
+
+    normalized: Dict[int, int] = {}
+
+    for key, value in period_discounts.items():
+        try:
+            period = int(key)
+            percent = int(value)
+        except (TypeError, ValueError):
+            continue
+
+        normalized[period] = max(0, min(100, percent))
+
+    return normalized
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +58,16 @@ async def create_promo_group(
     server_discount_percent: int,
     traffic_discount_percent: int,
     device_discount_percent: int,
+    period_discounts: Optional[Dict[int, int]] = None,
 ) -> PromoGroup:
+    normalized_period_discounts = _normalize_period_discounts(period_discounts)
+
     promo_group = PromoGroup(
         name=name.strip(),
         server_discount_percent=max(0, min(100, server_discount_percent)),
         traffic_discount_percent=max(0, min(100, traffic_discount_percent)),
         device_discount_percent=max(0, min(100, device_discount_percent)),
+        period_discounts=normalized_period_discounts or None,
         is_default=False,
     )
 
@@ -54,11 +76,12 @@ async def create_promo_group(
     await db.refresh(promo_group)
 
     logger.info(
-        "Создана промогруппа '%s' с скидками (servers=%s%%, traffic=%s%%, devices=%s%%)",
+        "Создана промогруппа '%s' с скидками (servers=%s%%, traffic=%s%%, devices=%s%%, periods=%s)",
         promo_group.name,
         promo_group.server_discount_percent,
         promo_group.traffic_discount_percent,
         promo_group.device_discount_percent,
+        normalized_period_discounts,
     )
 
     return promo_group
@@ -72,6 +95,7 @@ async def update_promo_group(
     server_discount_percent: Optional[int] = None,
     traffic_discount_percent: Optional[int] = None,
     device_discount_percent: Optional[int] = None,
+    period_discounts: Optional[Dict[int, int]] = None,
 ) -> PromoGroup:
     if name is not None:
         group.name = name.strip()
@@ -81,6 +105,9 @@ async def update_promo_group(
         group.traffic_discount_percent = max(0, min(100, traffic_discount_percent))
     if device_discount_percent is not None:
         group.device_discount_percent = max(0, min(100, device_discount_percent))
+    if period_discounts is not None:
+        normalized_period_discounts = _normalize_period_discounts(period_discounts)
+        group.period_discounts = normalized_period_discounts or None
 
     await db.commit()
     await db.refresh(group)
