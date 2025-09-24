@@ -2,7 +2,6 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from aiogram import Router, F
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -95,23 +94,7 @@ async def _render_notification_settings_for_state(
     if business_connection_id:
         edit_kwargs["business_connection_id"] = business_connection_id
 
-    try:
-        await bot.edit_message_text(**edit_kwargs)
-    except TelegramBadRequest as error:
-        if "there is no text in the message to edit" in (error.message or "").lower():
-            send_kwargs = {
-                "chat_id": chat_id,
-                "text": text,
-                "parse_mode": "HTML",
-                "reply_markup": keyboard,
-            }
-
-            if business_connection_id:
-                send_kwargs["business_connection_id"] = business_connection_id
-
-            await bot.send_message(**send_kwargs)
-        else:
-            raise
+    await bot.edit_message_text(**edit_kwargs)
 
 @router.callback_query(F.data == "admin_monitoring")
 @admin_required
