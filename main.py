@@ -19,6 +19,7 @@ from app.external.yookassa_webhook import start_yookassa_webhook_server
 from app.external.pal24_webhook import start_pal24_webhook_server, Pal24WebhookServer
 from app.database.universal_migration import run_universal_migration
 from app.services.backup_service import backup_service
+from app.services.reporting_service import reporting_service
 from app.localization.loader import ensure_locale_templates
 
 
@@ -111,7 +112,14 @@ async def main():
             logger.info("✅ Сервис бекапов инициализирован")
         except Exception as e:
             logger.error(f"❌ Ошибка инициализации сервиса бекапов: {e}")
-        
+
+        logger.info("📊 Инициализация сервиса отчетов...")
+        try:
+            reporting_service.set_bot(bot)
+            await reporting_service.start()
+        except Exception as e:
+            logger.error(f"❌ Ошибка запуска сервиса отчетов: {e}")
+
         payment_service = PaymentService(bot)
         
         webhook_needed = (
@@ -188,6 +196,10 @@ async def main():
         logger.info(f"   Мониторинг: {'Включен' if monitoring_task else 'Отключен'}")
         logger.info(f"   Техработы: {'Включен' if maintenance_task else 'Отключен'}")
         logger.info(f"   Проверка версий: {'Включен' if version_check_task else 'Отключен'}")
+        logger.info(
+            "   Отчеты: %s",
+            "Включен" if reporting_service.is_running() else "Отключен",
+        )
         logger.info("=" * 50)
         
         try:
@@ -276,6 +288,12 @@ async def main():
                 await version_check_task
             except asyncio.CancelledError:
                 pass
+
+        logger.info("ℹ️ Остановка сервиса отчетов...")
+        try:
+            await reporting_service.stop()
+        except Exception as e:
+            logger.error(f"Ошибка остановки сервиса отчетов: {e}")
 
         logger.info("ℹ️ Остановка сервиса бекапов...")
         try:
