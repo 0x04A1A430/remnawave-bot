@@ -40,15 +40,6 @@ async def get_promo_groups_with_counts(
     return result.all()
 
 
-async def get_all_promo_groups(db: AsyncSession) -> List[PromoGroup]:
-    result = await db.execute(
-        select(PromoGroup).order_by(
-            PromoGroup.is_default.desc(), PromoGroup.name
-        )
-    )
-    return result.scalars().all()
-
-
 async def get_promo_group_by_id(db: AsyncSession, group_id: int) -> Optional[PromoGroup]:
     return await db.get(PromoGroup, group_id)
 

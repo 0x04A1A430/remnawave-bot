@@ -1,7 +1,5 @@
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional, Sequence, Set, Tuple
-
 from aiogram import Dispatcher, types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
@@ -9,14 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.states import AdminStates
-from app.database.models import (
-    User,
-    UserStatus,
-    Subscription,
-    SubscriptionStatus,
-    TransactionType,
-    ServerSquad,
-)
+from app.database.models import User, UserStatus, Subscription, SubscriptionStatus, TransactionType 
 from app.database.crud.user import get_user_by_id
 from app.database.crud.campaign import (
     get_campaign_registration_by_user,
@@ -34,11 +25,7 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
 from app.services.remnawave_service import RemnaWaveService
 from app.external.remnawave_api import TrafficLimitStrategy
-from app.database.crud.server_squad import (
-    get_all_server_squads,
-    get_server_squad_by_uuid,
-    get_server_squad_by_id,
-)
+from app.database.crud.server_squad import get_all_server_squads, get_server_squad_by_uuid, get_server_squad_by_id
 
 logger = logging.getLogger(__name__)
 
@@ -1884,122 +1871,6 @@ async def show_server_selection(
     await _show_servers_for_user(callback, user_id, db)
     await callback.answer()
 
-def _is_server_allowed_for_user(server: ServerSquad, user: Optional[User]) -> bool:
-    promo_groups = list(getattr(server, "promo_groups", []) or [])
-
-    if not promo_groups:
-        return True
-
-    user_group_id = getattr(user, "promo_group_id", None)
-
-    if user_group_id is None:
-        return any(getattr(group, "is_default", False) for group in promo_groups)
-
-    return any(group.id == user_group_id for group in promo_groups)
-
-
-def _prepare_server_choices_for_user(
-    user: Optional[User],
-    servers: Sequence[ServerSquad],
-    current_squads: Set[str],
-) -> List[Tuple[ServerSquad, bool, bool]]:
-    selected_restricted: List[Tuple[ServerSquad, bool, bool]] = []
-    selected_allowed: List[Tuple[ServerSquad, bool, bool]] = []
-    available_allowed: List[Tuple[ServerSquad, bool, bool]] = []
-    inactive_allowed: List[Tuple[ServerSquad, bool, bool]] = []
-
-    for server in servers:
-        is_selected = server.squad_uuid in current_squads
-        is_allowed = _is_server_allowed_for_user(server, user)
-
-        if is_selected and not is_allowed:
-            selected_restricted.append((server, True, False))
-        elif is_selected:
-            selected_allowed.append((server, True, True))
-        elif not is_allowed:
-            continue
-        elif server.is_available:
-            available_allowed.append((server, False, True))
-        else:
-            inactive_allowed.append((server, False, True))
-
-    return selected_restricted + selected_allowed + available_allowed + inactive_allowed
-
-
-def _build_server_selection_view(
-    user: Optional[User],
-    servers: Sequence[ServerSquad],
-    current_squads: Set[str],
-    user_id: int,
-    limit: int,
-) -> Tuple[Optional[str], Optional[types.InlineKeyboardMarkup], bool]:
-    prepared = _prepare_server_choices_for_user(user, servers, current_squads)
-
-    if not prepared:
-        return None, None, False
-
-    has_restricted = any(not is_allowed for _, _, is_allowed in prepared)
-
-    text_lines = [
-        "🌍 <b>Управление серверами</b>",
-        "",
-        "Нажмите на сервер чтобы добавить/убрать:",
-        "✅ - выбранный сервер",
-        "⚪ - доступный сервер",
-    ]
-
-    if has_restricted:
-        text_lines.append(
-            "🚫 - недоступен для промогруппы пользователя (можно только отключить)"
-        )
-
-    text_lines.append("🔒 - неактивный (только для уже назначенных)")
-    text_lines.append("")
-
-    rows: List[List[types.InlineKeyboardButton]] = []
-
-    for server, is_selected, is_allowed in prepared[:limit]:
-        if is_selected and not is_allowed:
-            emoji = "🚫"
-            label = f"{server.display_name} (недоступен)"
-        elif is_selected:
-            emoji = "✅"
-            label = server.display_name
-        elif server.is_available:
-            emoji = "⚪"
-            label = server.display_name
-        else:
-            emoji = "🔒"
-            label = f"{server.display_name} (неактивен)"
-
-        rows.append([
-            types.InlineKeyboardButton(
-                text=f"{emoji} {label}",
-                callback_data=f"admin_user_toggle_server_{user_id}_{server.id}",
-            )
-        ])
-
-    if len(prepared) > limit:
-        text_lines.append(
-            f"📝 Показано первых {limit} из {len(prepared)} серверов"
-        )
-        text_lines.append("")
-
-    rows.append([
-        types.InlineKeyboardButton(
-            text="✅ Готово", callback_data=f"admin_user_subscription_{user_id}"
-        ),
-        types.InlineKeyboardButton(
-            text="⬅️ Назад", callback_data=f"admin_user_subscription_{user_id}"
-        ),
-    ])
-
-    markup = types.InlineKeyboardMarkup(inline_keyboard=rows)
-    text = "\n".join(text_lines)
-
-    return text, markup, True
-
-
 async def _show_servers_for_user(
     callback: types.CallbackQuery,
     user_id: int,
@@ -2007,38 +1878,71 @@ async def _show_servers_for_user(
 ):
     try:
         user = await get_user_by_id(db, user_id)
-        current_squads_list: List[str] = []
+        current_squads = []
         if user and user.subscription:
-            current_squads_list = list(user.subscription.connected_squads or [])
-
-        current_squads = set(current_squads_list)
+            current_squads = user.subscription.connected_squads or []
+        
         all_servers, _ = await get_all_server_squads(db, available_only=False)
-
-        text, markup, has_servers = _build_server_selection_view(
-            user,
-            all_servers,
-            current_squads,
-            user_id,
-            limit=20,
-        )
-
-        if not has_servers:
+        
+        servers_to_show = []
+        for server in all_servers:
+            if server.is_available or server.squad_uuid in current_squads:
+                servers_to_show.append(server)
+        
+        if not servers_to_show:
             await callback.message.edit_text(
-                "❌ Не найдено серверов для текущей промогруппы",
+                "❌ Доступные серверы не найдены",
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text="⬅️ Назад",
-                            callback_data=f"admin_user_subscription_{user_id}",
-                        )
-                    ]
-                ]),
+                    [types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_subscription_{user_id}")]
+                ])
             )
             return
-
+        
+        text = f"🌍 <b>Управление серверами</b>\n\n"
+        text += f"Нажмите на сервер чтобы добавить/убрать:\n"
+        text += f"✅ - выбранный сервер\n"
+        text += f"⚪ - доступный сервер\n"
+        text += f"🔒 - неактивный (только для уже назначенных)\n\n"
+        
+        keyboard = []
+        selected_servers = [s for s in servers_to_show if s.squad_uuid in current_squads]
+        available_servers = [s for s in servers_to_show if s.squad_uuid not in current_squads and s.is_available]
+        inactive_servers = [s for s in servers_to_show if s.squad_uuid not in current_squads and not s.is_available]
+        
+        sorted_servers = selected_servers + available_servers + inactive_servers
+        
+        for server in sorted_servers[:20]: 
+            is_selected = server.squad_uuid in current_squads
+            
+            if is_selected:
+                emoji = "✅"
+            elif server.is_available:
+                emoji = "⚪"
+            else:
+                emoji = "🔒"
+            
+            display_name = server.display_name
+            if not server.is_available and not is_selected:
+                display_name += " (неактивный)"
+            
+            keyboard.append([
+                types.InlineKeyboardButton(
+                    text=f"{emoji} {display_name}",
+                    callback_data=f"admin_user_toggle_server_{user_id}_{server.id}"
+                )
+            ])
+        
+        if len(servers_to_show) > 20:
+            text += f"\n📝 Показано первых 20 из {len(servers_to_show)} серверов"
+        
+        keyboard.append([
+            types.InlineKeyboardButton(text="✅ Готово", callback_data=f"admin_user_subscription_{user_id}"),
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_subscription_{user_id}")
+        ])
+        
         await callback.message.edit_text(
             text,
-            reply_markup=markup,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
         )
         
     except Exception as e:
@@ -2068,21 +1972,11 @@ async def toggle_user_server(
         
         subscription = user.subscription
         current_squads = list(subscription.connected_squads or [])
-        current_squad_set = set(current_squads)
-
-        is_allowed = _is_server_allowed_for_user(server, user)
-
-        if server.squad_uuid in current_squad_set:
+        
+        if server.squad_uuid in current_squads:
             current_squads.remove(server.squad_uuid)
             action_text = "удален"
         else:
-            if not is_allowed:
-                await callback.answer(
-                    "❌ Этот сервер недоступен для промогруппы пользователя",
-                    show_alert=True,
-                )
-                return
-
             current_squads.append(server.squad_uuid)
             action_text = "добавлен"
         
@@ -2124,38 +2018,47 @@ async def refresh_server_selection_screen(
 ):
     try:
         user = await get_user_by_id(db, user_id)
-        current_squads_list: List[str] = []
+        current_squads = []
         if user and user.subscription:
-            current_squads_list = list(user.subscription.connected_squads or [])
-
-        current_squads = set(current_squads_list)
-        servers, _ = await get_all_server_squads(db, available_only=False)
-
-        text, markup, has_servers = _build_server_selection_view(
-            user,
-            servers,
-            current_squads,
-            user_id,
-            limit=15,
-        )
-
-        if not has_servers:
+            current_squads = user.subscription.connected_squads or []
+        
+        servers, _ = await get_all_server_squads(db, available_only=True)
+        
+        if not servers:
             await callback.message.edit_text(
-                "❌ Не найдено серверов для текущей промогруппы",
+                "❌ Доступные серверы не найдены",
                 reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-                    [
-                        types.InlineKeyboardButton(
-                            text="⬅️ Назад",
-                            callback_data=f"admin_user_subscription_{user_id}",
-                        )
-                    ]
-                ]),
+                    [types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_subscription_{user_id}")]
+                ])
             )
             return
-
+        
+        text = f"🌍 <b>Управление серверами</b>\n\n"
+        text += f"Нажмите на сервер чтобы добавить/убрать:\n\n"
+        
+        keyboard = []
+        for server in servers[:15]:
+            is_selected = server.squad_uuid in current_squads
+            emoji = "✅" if is_selected else "⚪"
+            
+            keyboard.append([
+                types.InlineKeyboardButton(
+                    text=f"{emoji} {server.display_name}",
+                    callback_data=f"admin_user_toggle_server_{user_id}_{server.id}"
+                )
+            ])
+        
+        if len(servers) > 15:
+            text += f"\n📝 Показано первых 15 из {len(servers)} серверов"
+        
+        keyboard.append([
+            types.InlineKeyboardButton(text="✅ Готово", callback_data=f"admin_user_subscription_{user_id}"),
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data=f"admin_user_subscription_{user_id}")
+        ])
+        
         await callback.message.edit_text(
             text,
-            reply_markup=markup,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
         )
         
     except Exception as e:
