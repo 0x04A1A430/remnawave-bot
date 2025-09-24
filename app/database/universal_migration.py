@@ -1535,7 +1535,7 @@ async def ensure_server_promo_groups_setup() -> bool:
 
             if not table_exists:
                 if db_type == "sqlite":
-                    create_sql = """
+                    create_table_sql = """
                     CREATE TABLE server_squad_promo_groups (
                         server_squad_id INTEGER NOT NULL,
                         promo_group_id INTEGER NOT NULL,
@@ -1543,19 +1543,23 @@ async def ensure_server_promo_groups_setup() -> bool:
                         FOREIGN KEY (server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE,
                         FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
                     );
+                    """
+                    create_index_sql = """
                     CREATE INDEX IF NOT EXISTS idx_server_squad_promo_groups_promo ON server_squad_promo_groups(promo_group_id);
                     """
                 elif db_type == "postgresql":
-                    create_sql = """
+                    create_table_sql = """
                     CREATE TABLE server_squad_promo_groups (
                         server_squad_id INTEGER NOT NULL REFERENCES server_squads(id) ON DELETE CASCADE,
                         promo_group_id INTEGER NOT NULL REFERENCES promo_groups(id) ON DELETE CASCADE,
                         PRIMARY KEY (server_squad_id, promo_group_id)
                     );
+                    """
+                    create_index_sql = """
                     CREATE INDEX IF NOT EXISTS idx_server_squad_promo_groups_promo ON server_squad_promo_groups(promo_group_id);
                     """
                 else:
-                    create_sql = """
+                    create_table_sql = """
                     CREATE TABLE server_squad_promo_groups (
                         server_squad_id INT NOT NULL,
                         promo_group_id INT NOT NULL,
@@ -1563,10 +1567,13 @@ async def ensure_server_promo_groups_setup() -> bool:
                         FOREIGN KEY (server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE,
                         FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
                     );
+                    """
+                    create_index_sql = """
                     CREATE INDEX IF NOT EXISTS idx_server_squad_promo_groups_promo ON server_squad_promo_groups(promo_group_id);
                     """
 
-                await conn.execute(text(create_sql))
+                await conn.execute(text(create_table_sql))
+                await conn.execute(text(create_index_sql))
                 logger.info("✅ Таблица server_squad_promo_groups создана")
             else:
                 logger.info("ℹ️ Таблица server_squad_promo_groups уже существует")
