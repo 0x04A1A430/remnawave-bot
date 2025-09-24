@@ -965,9 +965,7 @@ async def create_subscription(
     device_limit: int = 1,
     connected_squads: list = None,
     remnawave_short_uuid: str = None,
-    subscription_url: str = "",
-    first_connected_at: datetime | None = None,
-    last_connected_at: datetime | None = None,
+    subscription_url: str = ""
 ) -> Subscription:
     
     if end_date is None:
@@ -986,9 +984,7 @@ async def create_subscription(
         device_limit=device_limit,
         connected_squads=connected_squads,
         remnawave_short_uuid=remnawave_short_uuid,
-        subscription_url=subscription_url,
-        first_connected_at=first_connected_at,
-        last_connected_at=last_connected_at
+        subscription_url=subscription_url
     )
     
     db.add(subscription)

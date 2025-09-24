@@ -138,9 +138,3 @@ class AdminSubmenuStates(StatesGroup):
     in_communications_submenu = State()
     in_settings_submenu = State()
     in_system_submenu = State()
-
-
-class MonitoringNotificationStates(StatesGroup):
-    waiting_for_day23_discount = State()
-    waiting_for_dayN_discount = State()
-    waiting_for_dayN_threshold = State()
