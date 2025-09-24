@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict
 from enum import Enum
 
 from sqlalchemy import (
@@ -270,31 +270,65 @@ class PromoGroup(Base):
     server_discount_percent = Column(Integer, nullable=False, default=0)
     traffic_discount_percent = Column(Integer, nullable=False, default=0)
     device_discount_percent = Column(Integer, nullable=False, default=0)
+    period_discounts = Column(JSON, nullable=True, default=dict)
     is_default = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     users = relationship("User", back_populates="promo_group")
 
+    def _get_period_discounts_map(self) -> Dict[int, int]:
+        raw_discounts = self.period_discounts or {}
+
+        if isinstance(raw_discounts, dict):
+            items = raw_discounts.items()
+        else:
+            items = []
+
+        normalized: Dict[int, int] = {}
+
+        for key, value in items:
+            try:
+                period = int(key)
+                percent = int(value)
+            except (TypeError, ValueError):
+                continue
+
+            normalized[period] = max(0, min(100, percent))
+
+        return normalized
+
+    def _get_period_discount(self, period_days: Optional[int]) -> int:
+        if not period_days:
+            return 0
+
+        discounts = self._get_period_discounts_map()
+
+        if period_days in discounts:
+            return discounts[period_days]
+
+        if self.is_default:
+            try:
+                from app.config import settings
+
+                if settings.is_base_promo_group_period_discount_enabled():
+                    config_discounts = settings.get_base_promo_group_period_discounts()
+                    return config_discounts.get(period_days, 0)
+            except Exception:
+                return 0
+
+        return 0
+
     def get_discount_percent(self, category: str, period_days: Optional[int] = None) -> int:
+        if category == "period":
+            return max(0, min(100, self._get_period_discount(period_days)))
+
         mapping = {
             "servers": self.server_discount_percent,
             "traffic": self.traffic_discount_percent,
             "devices": self.device_discount_percent,
         }
         percent = mapping.get(category, 0)
-
-        if self.is_default and period_days is not None:
-            try:
-                from app.config import settings
-
-                if settings.is_base_promo_group_period_discount_enabled():
-                    discounts = settings.get_base_promo_group_period_discounts()
-                    if period_days in discounts:
-                        period_discount = discounts[period_days]
-                        percent = period_discount
-            except Exception:
-                pass
 
         return max(0, min(100, percent))
 
