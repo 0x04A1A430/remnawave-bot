@@ -1234,7 +1234,7 @@ async def fix_foreign_keys_for_user_deletion():
 
 async def add_referral_system_columns():
     logger.info("=== МИГРАЦИЯ РЕФЕРАЛЬНОЙ СИСТЕМЫ ===")
-    
+
     try:
         async with engine.begin() as conn:
             db_type = await get_database_type()
@@ -1280,6 +1280,38 @@ async def add_referral_system_columns():
                 
     except Exception as e:
         logger.error(f"Ошибка миграции реферальной системы: {e}")
+        return False
+
+
+async def add_subscription_connection_columns() -> bool:
+    logger.info("=== ДОБАВЛЕНИЕ ПОЛЕЙ ПОДКЛЮЧЕНИЙ ПОДПИСОК ===")
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            for column_name in ("first_connected_at", "last_connected_at"):
+                column_exists = await check_column_exists("subscriptions", column_name)
+                if column_exists:
+                    logger.info(f"Колонка {column_name} уже существует в subscriptions")
+                    continue
+
+                if db_type == "sqlite":
+                    column_def = "TIMESTAMP"
+                elif db_type == "mysql":
+                    column_def = "DATETIME"
+                else:
+                    column_def = "TIMESTAMP"
+
+                await conn.execute(
+                    text(f"ALTER TABLE subscriptions ADD COLUMN {column_name} {column_def}")
+                )
+                logger.info(f"Добавлена колонка {column_name} в subscriptions")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка добавления полей подключений подписок: {e}")
         return False
 
 async def create_subscription_conversions_table():
@@ -1445,7 +1477,11 @@ async def run_universal_migration():
         referral_migration_success = await add_referral_system_columns()
         if not referral_migration_success:
             logger.warning("⚠️ Проблемы с миграцией реферальной системы")
-        
+
+        connections_added = await add_subscription_connection_columns()
+        if not connections_added:
+            logger.warning("⚠️ Проблемы с добавлением полей подключений подписок")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ CRYPTOBOT ===")
         cryptobot_created = await create_cryptobot_payments_table()
         if cryptobot_created:
@@ -1651,6 +1687,8 @@ async def check_migration_status():
             "promo_groups_period_discounts_column": False,
             "promo_groups_auto_assign_column": False,
             "users_auto_promo_group_assigned_column": False,
+            "subscriptions_first_connected_column": False,
+            "subscriptions_last_connected_column": False,
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -1666,6 +1704,8 @@ async def check_migration_status():
         status["promo_groups_period_discounts_column"] = await check_column_exists('promo_groups', 'period_discounts')
         status["promo_groups_auto_assign_column"] = await check_column_exists('promo_groups', 'auto_assign_total_spent_kopeks')
         status["users_auto_promo_group_assigned_column"] = await check_column_exists('users', 'auto_promo_group_assigned')
+        status["subscriptions_first_connected_column"] = await check_column_exists('subscriptions', 'first_connected_at')
+        status["subscriptions_last_connected_column"] = await check_column_exists('subscriptions', 'last_connected_at')
         
         media_fields_exist = (
             await check_column_exists('broadcast_history', 'has_media') and
@@ -1701,6 +1741,8 @@ async def check_migration_status():
             "promo_groups_period_discounts_column": "Колонка period_discounts у промо-групп",
             "promo_groups_auto_assign_column": "Колонка auto_assign_total_spent_kopeks у промо-групп",
             "users_auto_promo_group_assigned_column": "Флаг автоназначения промогруппы у пользователей",
+            "subscriptions_first_connected_column": "Колонка first_connected_at у подписок",
+            "subscriptions_last_connected_column": "Колонка last_connected_at у подписок",
         }
         
         for check_key, check_status in status.items():
