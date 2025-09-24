@@ -49,6 +49,16 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             return await handler(event, data)
 
 
+        # Админам разрешаем пропускать проверку подписки, чтобы не блокировать
+        # работу панели управления даже при отсутствии подписки. Важно делать
+        # это до обращения к состоянию, чтобы не выполнять лишние операции.
+        if settings.is_admin(telegram_id):
+            logger.debug(
+                "✅ Пользователь %s является администратором — пропускаем проверку подписки",
+                telegram_id,
+            )
+            return await handler(event, data)
+
         state: FSMContext = data.get('state')
         current_state = None
 
