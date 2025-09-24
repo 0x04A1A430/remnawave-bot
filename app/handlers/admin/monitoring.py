@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.exceptions import TelegramBadRequest
@@ -680,7 +680,21 @@ async def process_notification_value_input(message: Message, state: FSMContext):
         await message.answer(texts.get("NOTIFICATION_VALUE_INVALID", "❌ Некорректное значение, попробуйте снова."))
         return
 
-    await message.answer(texts.get("NOTIFICATION_VALUE_UPDATED", "✅ Настройки обновлены."))
+    back_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.get("BACK", "⬅️ Назад"),
+                    callback_data="admin_mon_notify_settings",
+                )
+            ]
+        ]
+    )
+
+    await message.answer(
+        texts.get("NOTIFICATION_VALUE_UPDATED", "✅ Настройки обновлены."),
+        reply_markup=back_keyboard,
+    )
 
     chat_id = data.get("settings_message_chat")
     message_id = data.get("settings_message_id")
