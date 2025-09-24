@@ -1,7 +1,9 @@
+import logging
 import os
 import re
 import html
 from collections import defaultdict
+from datetime import time
 from typing import List, Optional, Union, Dict
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, Field
@@ -26,6 +28,11 @@ class Settings(BaseSettings):
     ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
     ADMIN_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
     ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID: Optional[int] = None
+
+    ADMIN_REPORTS_ENABLED: bool = False
+    ADMIN_REPORTS_CHAT_ID: Optional[str] = None
+    ADMIN_REPORTS_TOPIC_ID: Optional[int] = None
+    ADMIN_REPORTS_SEND_TIME: Optional[str] = None
 
     CHANNEL_SUB_ID: Optional[str] = None
     CHANNEL_LINK: Optional[str] = None
@@ -425,6 +432,32 @@ class Settings(BaseSettings):
     def format_price(self, price_kopeks: int) -> str:
         rubles = price_kopeks // 100
         return f"{rubles} ₽"
+
+    def get_reports_chat_id(self) -> Optional[str]:
+        if self.ADMIN_REPORTS_CHAT_ID:
+            return self.ADMIN_REPORTS_CHAT_ID
+        return self.ADMIN_NOTIFICATIONS_CHAT_ID
+
+    def get_reports_topic_id(self) -> Optional[int]:
+        return self.ADMIN_REPORTS_TOPIC_ID or None
+
+    def get_reports_send_time(self) -> Optional[time]:
+        value = self.ADMIN_REPORTS_SEND_TIME
+        if not value:
+            return None
+
+        try:
+            hours_str, minutes_str = value.strip().split(":", 1)
+            hours = int(hours_str)
+            minutes = int(minutes_str)
+            if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+                raise ValueError
+            return time(hour=hours, minute=minutes)
+        except (ValueError, AttributeError):
+            logging.getLogger(__name__).warning(
+                "Некорректное значение ADMIN_REPORTS_SEND_TIME: %s", value
+            )
+            return None
     
     def kopeks_to_rubles(self, kopeks: int) -> float:
         return kopeks / 100
