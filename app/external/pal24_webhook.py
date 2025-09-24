@@ -69,10 +69,7 @@ def create_pal24_flask_app(
 
         async def process() -> bool:
             async for db in get_db():
-                try:
-                    return await payment_service.process_pal24_postback(db, parsed_payload)
-                finally:
-                    await db.close()
+                return await payment_service.process_pal24_postback(db, parsed_payload)
 
         try:
             future = asyncio.run_coroutine_threadsafe(process(), loop)
