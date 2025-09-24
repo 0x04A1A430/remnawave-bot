@@ -74,15 +74,27 @@ async def _render_notification_settings(callback: CallbackQuery) -> None:
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
 
 
-async def _render_notification_settings_for_state(bot, chat_id: int, message_id: int, language: str) -> None:
+async def _render_notification_settings_for_state(
+    bot,
+    chat_id: int,
+    message_id: int,
+    language: str,
+    business_connection_id: str | None = None,
+) -> None:
     text, keyboard = _build_notification_settings_view(language)
-    await bot.edit_message_text(
-        text,
-        chat_id,
-        message_id,
-        parse_mode="HTML",
-        reply_markup=keyboard,
-    )
+
+    edit_kwargs = {
+        "text": text,
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "parse_mode": "HTML",
+        "reply_markup": keyboard,
+    }
+
+    if business_connection_id:
+        edit_kwargs["business_connection_id"] = business_connection_id
+
+    await bot.edit_message_text(**edit_kwargs)
 
 @router.callback_query(F.data == "admin_monitoring")
 @admin_required
@@ -221,6 +233,11 @@ async def _start_notification_value_edit(
         notification_setting_field=field,
         settings_message_chat=callback.message.chat.id,
         settings_message_id=callback.message.message_id,
+        settings_business_connection_id=(
+            str(getattr(callback.message, "business_connection_id", None))
+            if getattr(callback.message, "business_connection_id", None) is not None
+            else None
+        ),
         settings_language=language,
     )
     texts = get_texts(language)
@@ -649,8 +666,15 @@ async def process_notification_value_input(message: Message, state: FSMContext):
 
     chat_id = data.get("settings_message_chat")
     message_id = data.get("settings_message_id")
+    business_connection_id = data.get("settings_business_connection_id")
     if chat_id and message_id:
-        await _render_notification_settings_for_state(message.bot, chat_id, message_id, language)
+        await _render_notification_settings_for_state(
+            message.bot,
+            chat_id,
+            message_id,
+            language,
+            business_connection_id=business_connection_id,
+        )
 
     await state.clear()
 
