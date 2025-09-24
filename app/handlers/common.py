@@ -1,6 +1,5 @@
 import logging
 from aiogram import Dispatcher, types, F
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -125,7 +124,6 @@ def register_handlers(dp: Dispatcher):
     # чтобы их обработка не прерывалась общим хендлером неизвестных сообщений
     dp.message.register(
         handle_unknown_message,
-        StateFilter(None),
         F.successful_payment.is_(None)
     )
     
