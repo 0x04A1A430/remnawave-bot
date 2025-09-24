@@ -20,6 +20,7 @@ from app.external.pal24_webhook import start_pal24_webhook_server, Pal24WebhookS
 from app.database.universal_migration import run_universal_migration
 from app.services.backup_service import backup_service
 from app.localization.loader import ensure_locale_templates
+from app.services.report_service import report_service
 
 
 class GracefulExit:
@@ -60,6 +61,7 @@ async def main():
     monitoring_task = None
     maintenance_task = None
     version_check_task = None
+    reports_task = None
     polling_task = None
     
     try:
@@ -96,6 +98,9 @@ async def main():
         version_service.set_notification_service(admin_notification_service)
         logger.info(f"📄 Сервис версий настроен для репозитория: {version_service.repo}")
         logger.info(f"📦 Текущая версия: {version_service.current_version}")
+
+        report_service.set_notification_service(admin_notification_service)
+        reports_task = await report_service.start()
         
         logger.info("🔗 Бот подключен к сервисам мониторинга и техработ")
 
@@ -222,6 +227,13 @@ async def main():
                         if settings.is_version_check_enabled():
                             logger.info("🔄 Перезапуск сервиса проверки версий...")
                             version_check_task = asyncio.create_task(version_service.start_periodic_check())
+
+                if reports_task and reports_task.done():
+                    exception = reports_task.exception()
+                    if exception:
+                        logger.error(f"Сервис отчетов завершился с ошибкой: {exception}")
+                        new_task = await report_service.start()
+                        reports_task = new_task if new_task else None
                         
                 if polling_task.done():
                     exception = polling_task.exception()
@@ -276,6 +288,12 @@ async def main():
                 await version_check_task
             except asyncio.CancelledError:
                 pass
+
+        logger.info("ℹ️ Остановка сервиса отчетов...")
+        try:
+            await report_service.stop()
+        except Exception as e:
+            logger.error(f"Ошибка остановки сервиса отчетов: {e}")
 
         logger.info("ℹ️ Остановка сервиса бекапов...")
         try:

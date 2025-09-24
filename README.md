@@ -254,6 +254,8 @@ ADMIN_NOTIFICATIONS_ENABLED=true
 ADMIN_NOTIFICATIONS_CHAT_ID=-1001234567890   # Замени на ID твоего канала (-100) - ПРЕФИКС ЗАКРЫТОГО КАНАЛА! ВСТАВИТЬ СВОЙ ID СРАЗУ ПОСЛЕ (-100) БЕЗ ПРОБЕЛОВ!
 ADMIN_NOTIFICATIONS_TOPIC_ID=123             # Опционально: ID топика
 ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID=126      # Опционально: ID топика для тикетов
+ADMIN_REPORTS_TOPIC_ID=130                   # Опционально: отдельный ID топика для отчетов
+ADMIN_REPORTS_TIME_MOSCOW=09:00              # Время ежедневного отчета (МСК)
 # Обязательная подписка на канал
 CHANNEL_SUB_ID= # Опционально ID твоего канала (-100)
 CHANNEL_IS_REQUIRED_SUB=false # Обязательна ли подписка на канал
@@ -969,7 +971,11 @@ docker compose down -v --remove-orphans
 ADMIN_NOTIFICATIONS_ENABLED=true
 ADMIN_NOTIFICATIONS_CHAT_ID=-1001234567890  # ID канала/группы
 ADMIN_NOTIFICATIONS_TOPIC_ID=123             # ID топика (опционально)
+ADMIN_REPORTS_TOPIC_ID=130                   # ID топика для отчетов (опционально)
+ADMIN_REPORTS_TIME_MOSCOW=09:00              # Время ежедневного отчета (МСК)
 ```
+
+> ⚙️ Бот автоматически отправит ежедневный отчет за предыдущие сутки в указанное время (по МСК). Если `ADMIN_REPORTS_TOPIC_ID` не задан, отчеты будут приходить в основной топик уведомлений. В админ-панели доступен раздел «Отчеты» для ручной отправки ежедневных, недельных и месячных сводок.
 
 #### 2. Создание канала
 
