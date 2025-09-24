@@ -608,6 +608,96 @@ async def create_discount_offers_table():
         logger.error(f"Ошибка создания таблицы discount_offers: {e}")
         return False
 
+
+async def create_server_squad_promo_groups_table():
+    table_exists = await check_table_exists('server_squad_promo_groups')
+    if table_exists:
+        logger.info("Таблица server_squad_promo_groups уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text("""
+                    CREATE TABLE server_squad_promo_groups (
+                        server_squad_id INTEGER NOT NULL,
+                        promo_group_id INTEGER NOT NULL,
+                        PRIMARY KEY (server_squad_id, promo_group_id),
+                        FOREIGN KEY(server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE,
+                        FOREIGN KEY(promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                    )
+                """))
+
+            elif db_type == 'postgresql':
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS server_squad_promo_groups (
+                        server_squad_id INTEGER NOT NULL REFERENCES server_squads(id) ON DELETE CASCADE,
+                        promo_group_id INTEGER NOT NULL REFERENCES promo_groups(id) ON DELETE CASCADE,
+                        PRIMARY KEY (server_squad_id, promo_group_id)
+                    )
+                """))
+
+            elif db_type == 'mysql':
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS server_squad_promo_groups (
+                        server_squad_id INTEGER NOT NULL,
+                        promo_group_id INTEGER NOT NULL,
+                        PRIMARY KEY (server_squad_id, promo_group_id),
+                        CONSTRAINT fk_sspg_server FOREIGN KEY(server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE,
+                        CONSTRAINT fk_sspg_group FOREIGN KEY(promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                    )
+                """))
+
+            else:
+                raise ValueError(f"Unsupported database type: {db_type}")
+
+        logger.info("✅ Таблица server_squad_promo_groups успешно создана")
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы server_squad_promo_groups: {e}")
+        return False
+
+
+async def ensure_server_squads_have_default_promo_group():
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            default_group_sql = "SELECT id FROM promo_groups WHERE is_default IS TRUE LIMIT 1"
+            if db_type in {'sqlite', 'mysql'}:
+                default_group_sql = "SELECT id FROM promo_groups WHERE is_default = 1 LIMIT 1"
+
+            result = await conn.execute(text(default_group_sql))
+            row = result.fetchone()
+
+            if not row:
+                logger.warning("⚠️ Базовая промогруппа не найдена, пропускаем привязку серверов")
+                return False
+
+            default_group_id = row[0]
+
+            await conn.execute(
+                text("""
+                    INSERT INTO server_squad_promo_groups (server_squad_id, promo_group_id)
+                    SELECT ss.id, :group_id
+                    FROM server_squads ss
+                    LEFT JOIN server_squad_promo_groups spg
+                        ON spg.server_squad_id = ss.id
+                    WHERE spg.server_squad_id IS NULL
+                """),
+                {"group_id": default_group_id},
+            )
+
+        logger.info("✅ Все серверы без привязки получили базовую промогруппу")
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка назначения базовой промогруппы серверам: {e}")
+        return False
+
 async def create_user_messages_table():
     table_exists = await check_table_exists('user_messages')
     if table_exists:
@@ -1562,12 +1652,26 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей discount_offers")
 
+        logger.info("=== СОЗДАНИЕ СВЯЗИ SERVER_SQUAD_PROMO_GROUPS ===")
+        promo_link_created = await create_server_squad_promo_groups_table()
+        if promo_link_created:
+            logger.info("✅ Таблица server_squad_promo_groups готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей server_squad_promo_groups")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_MESSAGES ===")
         user_messages_created = await create_user_messages_table()
         if user_messages_created:
             logger.info("✅ Таблица user_messages готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей user_messages")
+
+        logger.info("=== НАЗНАЧЕНИЕ БАЗОВОЙ ПРОМОГРУППЫ СЕРВЕРАМ ===")
+        default_assignment_done = await ensure_server_squads_have_default_promo_group()
+        if default_assignment_done:
+            logger.info("✅ Базовая промогруппа назначена серверам без связей")
+        else:
+            logger.warning("⚠️ Не удалось назначить базовую промогруппу серверам")
 
         logger.info("=== СОЗДАНИЕ/ОБНОВЛЕНИЕ ТАБЛИЦЫ WELCOME_TEXTS ===")
         welcome_texts_created = await create_welcome_texts_table()
