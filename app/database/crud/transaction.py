@@ -134,11 +134,25 @@ async def complete_transaction(db: AsyncSession, transaction: Transaction) -> Tr
 
     transaction.is_completed = True
     transaction.completed_at = datetime.utcnow()
-    
+
     await db.commit()
     await db.refresh(transaction)
-    
+
     logger.info(f"✅ Транзакция {transaction.id} завершена")
+
+    try:
+        from app.services.promo_group_assignment import (
+            maybe_assign_promo_group_by_total_spent,
+        )
+
+        await maybe_assign_promo_group_by_total_spent(db, transaction.user_id)
+    except Exception as exc:
+        logger.debug(
+            "Не удалось проверить автовыдачу промогруппы для пользователя %s: %s",
+            transaction.user_id,
+            exc,
+        )
+
     return transaction
 
 
