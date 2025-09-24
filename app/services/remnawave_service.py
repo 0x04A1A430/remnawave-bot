@@ -35,7 +35,7 @@ class RemnaWaveService:
     def _parse_remnawave_date(self, date_str: str) -> datetime:
         if not date_str:
             return datetime.utcnow() + timedelta(days=30)
-
+        
         try:
             
             cleaned_date = date_str.strip()
@@ -59,33 +59,7 @@ class RemnaWaveService:
         except Exception as e:
             logger.warning(f"⚠️ Не удалось распарсить дату '{date_str}': {e}. Используем дефолтную дату.")
             return datetime.utcnow() + timedelta(days=30)
-
-    def _parse_optional_remnawave_date(self, date_str: Optional[str]) -> Optional[datetime]:
-        if not date_str:
-            return None
-
-        try:
-            cleaned_date = date_str.strip()
-
-            if cleaned_date.endswith('Z'):
-                cleaned_date = cleaned_date[:-1] + '+00:00'
-
-            if '+00:00+00:00' in cleaned_date:
-                cleaned_date = cleaned_date.replace('+00:00+00:00', '+00:00')
-
-            cleaned_date = re.sub(r'(\+\d{2}:\d{2})\+\d{2}:\d{2}$', r'\1', cleaned_date)
-
-            parsed_date = datetime.fromisoformat(cleaned_date)
-
-            if parsed_date.tzinfo is not None:
-                parsed_date = parsed_date.replace(tzinfo=None)
-
-            return parsed_date
-
-        except Exception as e:
-            logger.debug(f"Не удалось распарсить дату '{date_str}': {e}")
-            return None
-
+    
     async def get_system_statistics(self) -> Dict[str, Any]:
             try:
                 async with self.api as api:
@@ -650,7 +624,7 @@ class RemnaWaveService:
         
             used_traffic_bytes = panel_user.get('usedTrafficBytes', 0)
             traffic_used_gb = used_traffic_bytes / (1024**3)
-
+        
             active_squads = panel_user.get('activeInternalSquads', [])
             squad_uuids = []
             if isinstance(active_squads, list):
@@ -660,25 +634,17 @@ class RemnaWaveService:
                     elif isinstance(squad, str):
                         squad_uuids.append(squad)
         
-            first_connected_at = self._parse_optional_remnawave_date(panel_user.get('firstConnectedAt'))
-            last_connected_at = (
-                self._parse_optional_remnawave_date(panel_user.get('onlineAt'))
-                or self._parse_optional_remnawave_date(panel_user.get('subLastOpenedAt'))
-            )
-
             subscription_data = {
                 'user_id': user.id,
                 'status': status.value,
-                'is_trial': False,
+                'is_trial': False, 
                 'end_date': expire_at,
                 'traffic_limit_gb': traffic_limit_gb,
                 'traffic_used_gb': traffic_used_gb,
                 'device_limit': panel_user.get('hwidDeviceLimit', 1) or 1,
                 'connected_squads': squad_uuids,
                 'remnawave_short_uuid': panel_user.get('shortUuid'),
-                'subscription_url': panel_user.get('subscriptionUrl', ''),
-                'first_connected_at': first_connected_at,
-                'last_connected_at': last_connected_at,
+                'subscription_url': panel_user.get('subscriptionUrl', '')
             }
         
             subscription = await create_subscription(db, **subscription_data)
@@ -760,26 +726,13 @@ class RemnaWaveService:
             if subscription.device_limit != device_limit:
                 subscription.device_limit = device_limit
                 logger.debug(f"Обновлен лимит устройств: {device_limit}")
-
+        
             if not subscription.remnawave_short_uuid:
                 subscription.remnawave_short_uuid = panel_user.get('shortUuid')
-
+        
             panel_url = panel_user.get('subscriptionUrl', '')
             if not subscription.subscription_url or subscription.subscription_url != panel_url:
                 subscription.subscription_url = panel_url
-
-            first_connected_at = self._parse_optional_remnawave_date(panel_user.get('firstConnectedAt'))
-            if first_connected_at and subscription.first_connected_at != first_connected_at:
-                subscription.first_connected_at = first_connected_at
-                logger.debug(f"Обновлено первое подключение: {first_connected_at}")
-
-            last_connected_at = (
-                self._parse_optional_remnawave_date(panel_user.get('onlineAt'))
-                or self._parse_optional_remnawave_date(panel_user.get('subLastOpenedAt'))
-            )
-            if last_connected_at and subscription.last_connected_at != last_connected_at:
-                subscription.last_connected_at = last_connected_at
-                logger.debug(f"Обновлено последнее подключение: {last_connected_at}")
         
             active_squads = panel_user.get('activeInternalSquads', [])
             squad_uuids = []

@@ -415,15 +415,12 @@ class Subscription(Base):
     
     autopay_enabled = Column(Boolean, default=False)
     autopay_days_before = Column(Integer, default=3)
-
+    
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-
+    
     remnawave_short_uuid = Column(String(255), nullable=True)
-
-    first_connected_at = Column(DateTime, nullable=True)
-    last_connected_at = Column(DateTime, nullable=True)
-
+    
     user = relationship("User", back_populates="subscription")
     
     @property
