@@ -37,6 +37,20 @@ async def create_transaction(
     await db.refresh(transaction)
     
     logger.info(f"💳 Создана транзакция: {type.value} на {amount_kopeks/100}₽ для пользователя {user_id}")
+
+    try:
+        from app.services.promo_group_assignment import (
+            maybe_assign_promo_group_by_total_spent,
+        )
+
+        await maybe_assign_promo_group_by_total_spent(db, user_id)
+    except Exception as exc:
+        logger.debug(
+            "Не удалось проверить автовыдачу промогруппы для пользователя %s: %s",
+            user_id,
+            exc,
+        )
+
     return transaction
 
 
@@ -98,8 +112,26 @@ async def get_user_transactions_count(
     return result.scalar()
 
 
+async def get_user_total_spent_kopeks(db: AsyncSession, user_id: int) -> int:
+    result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount_kopeks), 0)).where(
+            and_(
+                Transaction.user_id == user_id,
+                Transaction.is_completed.is_(True),
+                Transaction.type.in_(
+                    [
+                        TransactionType.DEPOSIT.value,
+                        TransactionType.SUBSCRIPTION_PAYMENT.value,
+                    ]
+                ),
+            )
+        )
+    )
+    return int(result.scalar_one())
+
+
 async def complete_transaction(db: AsyncSession, transaction: Transaction) -> Transaction:
-    
+
     transaction.is_completed = True
     transaction.completed_at = datetime.utcnow()
     
