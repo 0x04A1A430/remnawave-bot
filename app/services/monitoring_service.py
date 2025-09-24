@@ -1,9 +1,11 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.types import FSInputFile
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -47,6 +49,9 @@ from app.external.remnawave_api import (
 logger = logging.getLogger(__name__)
 
 
+LOGO_PATH = Path(settings.LOGO_FILE)
+
+
 class MonitoringService:
     
     def __init__(self, bot=None):
@@ -57,6 +62,45 @@ class MonitoringService:
         self._notified_users: Set[str] = set()
         self._last_cleanup = datetime.utcnow()
         self._sla_task = None
+
+    async def _send_message_with_logo(
+        self,
+        chat_id: int,
+        text: str,
+        reply_markup=None,
+        parse_mode: Optional[str] = "HTML",
+    ):
+        """Отправляет сообщение, добавляя логотип при необходимости."""
+        if not self.bot:
+            raise RuntimeError("Bot instance is not available")
+
+        if (
+            settings.ENABLE_LOGO_MODE
+            and LOGO_PATH.exists()
+            and (text is None or len(text) <= 1000)
+        ):
+            try:
+                return await self.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=FSInputFile(LOGO_PATH),
+                    caption=text,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode,
+                )
+            except TelegramBadRequest as exc:
+                logger.warning(
+                    "Не удалось отправить сообщение с логотипом пользователю %s: %s. "
+                    "Отправляем текстовое сообщение.",
+                    chat_id,
+                    exc,
+                )
+
+        return await self.bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode,
+        )
 
     @staticmethod
     def _is_unreachable_error(error: TelegramBadRequest) -> bool:
@@ -654,12 +698,12 @@ class MonitoringService:
                 [InlineKeyboardButton(text="💎 Купить подписку", callback_data="menu_buy")],
                 [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="balance_topup")]
             ])
-            
-            await self.bot.send_message(
-                user.telegram_id, 
-                message, 
+
+            await self._send_message_with_logo(
+                chat_id=user.telegram_id,
+                text=message,
                 parse_mode="HTML",
-                reply_markup=keyboard
+                reply_markup=keyboard,
             )
             return True
 
@@ -711,12 +755,12 @@ class MonitoringService:
                 [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="balance_topup")],
                 [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")]
             ])
-            
-            await self.bot.send_message(
-                user.telegram_id, 
-                message, 
+
+            await self._send_message_with_logo(
+                chat_id=user.telegram_id,
+                text=message,
                 parse_mode="HTML",
-                reply_markup=keyboard
+                reply_markup=keyboard,
             )
             return True
 
@@ -764,12 +808,12 @@ class MonitoringService:
                 [InlineKeyboardButton(text="💎 Купить подписку", callback_data="menu_buy")],
                 [InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="balance_topup")]
             ])
-            
-            await self.bot.send_message(
-                user.telegram_id, 
-                message, 
+
+            await self._send_message_with_logo(
+                chat_id=user.telegram_id,
+                text=message,
                 parse_mode="HTML",
-                reply_markup=keyboard
+                reply_markup=keyboard,
             )
             return True
 
@@ -824,9 +868,9 @@ class MonitoringService:
                 [InlineKeyboardButton(text=texts.t("SUPPORT_BUTTON", "🆘 Поддержка"), callback_data="menu_support")],
             ])
 
-            await self.bot.send_message(
-                user.telegram_id,
-                message,
+            await self._send_message_with_logo(
+                chat_id=user.telegram_id,
+                text=message,
                 parse_mode="HTML",
                 reply_markup=keyboard,
             )
@@ -872,9 +916,9 @@ class MonitoringService:
                 [InlineKeyboardButton(text=texts.t("SUPPORT_BUTTON", "🆘 Поддержка"), callback_data="menu_support")],
             ])
 
-            await self.bot.send_message(
-                user.telegram_id,
-                message,
+            await self._send_message_with_logo(
+                chat_id=user.telegram_id,
+                text=message,
                 parse_mode="HTML",
                 reply_markup=keyboard,
             )
@@ -946,9 +990,9 @@ class MonitoringService:
                 [InlineKeyboardButton(text=texts.t("SUPPORT_BUTTON", "🆘 Поддержка"), callback_data="menu_support")],
             ])
 
-            await self.bot.send_message(
-                user.telegram_id,
-                message,
+            await self._send_message_with_logo(
+                chat_id=user.telegram_id,
+                text=message,
                 parse_mode="HTML",
                 reply_markup=keyboard,
             )
@@ -978,7 +1022,11 @@ class MonitoringService:
                 days=days,
                 amount=settings.format_price(amount)
             )
-            await self.bot.send_message(user.telegram_id, message, parse_mode="HTML")
+            await self._send_message_with_logo(
+                chat_id=user.telegram_id,
+                text=message,
+                parse_mode="HTML",
+            )
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
             if not self._handle_unreachable_user(user, exc, "уведомление об успешном автоплатеже"):
                 logger.error(
@@ -1008,11 +1056,11 @@ class MonitoringService:
                 [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")]
             ])
             
-            await self.bot.send_message(
-                user.telegram_id,
-                message,
+            await self._send_message_with_logo(
+                chat_id=user.telegram_id,
+                text=message,
                 parse_mode="HTML",
-                reply_markup=keyboard
+                reply_markup=keyboard,
             )
 
         except (TelegramForbiddenError, TelegramBadRequest) as exc:
