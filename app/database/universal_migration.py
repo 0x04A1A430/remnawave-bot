@@ -520,94 +520,6 @@ async def create_pal24_payments_table():
         logger.error(f"Ошибка создания таблицы pal24_payments: {e}")
         return False
 
-
-async def create_discount_offers_table():
-    table_exists = await check_table_exists('discount_offers')
-    if table_exists:
-        logger.info("Таблица discount_offers уже существует")
-        return True
-
-    try:
-        async with engine.begin() as conn:
-            db_type = await get_database_type()
-
-            if db_type == 'sqlite':
-                await conn.execute(text("""
-                    CREATE TABLE discount_offers (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        subscription_id INTEGER NULL,
-                        notification_type VARCHAR(50) NOT NULL,
-                        discount_percent INTEGER NOT NULL DEFAULT 0,
-                        bonus_amount_kopeks INTEGER NOT NULL DEFAULT 0,
-                        expires_at DATETIME NOT NULL,
-                        claimed_at DATETIME NULL,
-                        is_active BOOLEAN NOT NULL DEFAULT 1,
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-                        FOREIGN KEY(subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL
-                    )
-                """))
-                await conn.execute(text("""
-                    CREATE INDEX IF NOT EXISTS ix_discount_offers_user_type
-                    ON discount_offers (user_id, notification_type)
-                """))
-
-            elif db_type == 'postgresql':
-                await conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS discount_offers (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                        subscription_id INTEGER NULL REFERENCES subscriptions(id) ON DELETE SET NULL,
-                        notification_type VARCHAR(50) NOT NULL,
-                        discount_percent INTEGER NOT NULL DEFAULT 0,
-                        bonus_amount_kopeks INTEGER NOT NULL DEFAULT 0,
-                        expires_at TIMESTAMP NOT NULL,
-                        claimed_at TIMESTAMP NULL,
-                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """))
-                await conn.execute(text("""
-                    CREATE INDEX IF NOT EXISTS ix_discount_offers_user_type
-                    ON discount_offers (user_id, notification_type)
-                """))
-
-            elif db_type == 'mysql':
-                await conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS discount_offers (
-                        id INTEGER PRIMARY KEY AUTO_INCREMENT,
-                        user_id INTEGER NOT NULL,
-                        subscription_id INTEGER NULL,
-                        notification_type VARCHAR(50) NOT NULL,
-                        discount_percent INTEGER NOT NULL DEFAULT 0,
-                        bonus_amount_kopeks INTEGER NOT NULL DEFAULT 0,
-                        expires_at DATETIME NOT NULL,
-                        claimed_at DATETIME NULL,
-                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                        CONSTRAINT fk_discount_offers_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-                        CONSTRAINT fk_discount_offers_subscription FOREIGN KEY(subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL
-                    )
-                """))
-                await conn.execute(text("""
-                    CREATE INDEX ix_discount_offers_user_type
-                    ON discount_offers (user_id, notification_type)
-                """))
-
-            else:
-                raise ValueError(f"Unsupported database type: {db_type}")
-
-        logger.info("✅ Таблица discount_offers успешно создана")
-        return True
-
-    except Exception as e:
-        logger.error(f"Ошибка создания таблицы discount_offers: {e}")
-        return False
-
 async def create_user_messages_table():
     table_exists = await check_table_exists('user_messages')
     if table_exists:
@@ -1554,13 +1466,6 @@ async def run_universal_migration():
             logger.info("✅ Таблица Pal24 payments готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей Pal24 payments")
-
-        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ DISCOUNT_OFFERS ===")
-        discount_created = await create_discount_offers_table()
-        if discount_created:
-            logger.info("✅ Таблица discount_offers готова")
-        else:
-            logger.warning("⚠️ Проблемы с таблицей discount_offers")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_MESSAGES ===")
         user_messages_created = await create_user_messages_table()
