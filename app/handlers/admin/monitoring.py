@@ -54,19 +54,247 @@ def _build_notification_settings_view(language: str):
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{trial_1h_status} • 1 час после триала", callback_data="admin_mon_notify_toggle_trial_1h")],
+        [InlineKeyboardButton(text="🧪 Тест: 1 час после триала", callback_data="admin_mon_notify_preview_trial_1h")],
         [InlineKeyboardButton(text=f"{trial_24h_status} • 24 часа после триала", callback_data="admin_mon_notify_toggle_trial_24h")],
+        [InlineKeyboardButton(text="🧪 Тест: 24 часа после триала", callback_data="admin_mon_notify_preview_trial_24h")],
         [InlineKeyboardButton(text=f"{expired_1d_status} • 1 день после истечения", callback_data="admin_mon_notify_toggle_expired_1d")],
+        [InlineKeyboardButton(text="🧪 Тест: 1 день после истечения", callback_data="admin_mon_notify_preview_expired_1d")],
         [InlineKeyboardButton(text=f"{second_wave_status} • 2-3 дня со скидкой", callback_data="admin_mon_notify_toggle_expired_2d")],
+        [InlineKeyboardButton(text="🧪 Тест: скидка 2-3 день", callback_data="admin_mon_notify_preview_expired_2d")],
         [InlineKeyboardButton(text=f"✏️ Скидка 2-3 дня: {second_percent}%", callback_data="admin_mon_notify_edit_2d_percent")],
         [InlineKeyboardButton(text=f"⏱️ Срок скидки 2-3 дня: {second_hours} ч", callback_data="admin_mon_notify_edit_2d_hours")],
         [InlineKeyboardButton(text=f"{third_wave_status} • {third_days} дней со скидкой", callback_data="admin_mon_notify_toggle_expired_nd")],
+        [InlineKeyboardButton(text="🧪 Тест: скидка спустя дни", callback_data="admin_mon_notify_preview_expired_nd")],
         [InlineKeyboardButton(text=f"✏️ Скидка {third_days} дней: {third_percent}%", callback_data="admin_mon_notify_edit_nd_percent")],
         [InlineKeyboardButton(text=f"⏱️ Срок скидки {third_days} дней: {third_hours} ч", callback_data="admin_mon_notify_edit_nd_hours")],
         [InlineKeyboardButton(text=f"📆 Порог уведомления: {third_days} дн.", callback_data="admin_mon_notify_edit_nd_threshold")],
+        [InlineKeyboardButton(text="🧪 Отправить все тесты", callback_data="admin_mon_notify_preview_all")],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_mon_settings")],
     ])
 
     return summary_text, keyboard
+
+
+def _build_notification_preview_message(language: str, notification_type: str):
+    texts = get_texts(language)
+    now = datetime.now()
+    price_30_days = settings.format_price(settings.PRICE_30_DAYS)
+
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+    header = "🧪 <b>Тестовое уведомление мониторинга</b>\n\n"
+
+    if notification_type == "trial_inactive_1h":
+        template = texts.get(
+            "TRIAL_INACTIVE_1H",
+            (
+                "⏳ <b>Прошёл час, а подключения нет</b>\n\n"
+                "Если возникли сложности с запуском — воспользуйтесь инструкциями."
+            ),
+        )
+        message = template.format(
+            price=price_30_days,
+            end_date=(now + timedelta(days=settings.TRIAL_DURATION_DAYS)).strftime("%d.%m.%Y %H:%M"),
+        )
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                        callback_data="subscription_connect",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
+                        callback_data="menu_subscription",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("SUPPORT_BUTTON", "🆘 Поддержка"),
+                        callback_data="menu_support",
+                    )
+                ],
+            ]
+        )
+    elif notification_type == "trial_inactive_24h":
+        template = texts.get(
+            "TRIAL_INACTIVE_24H",
+            (
+                "⏳ <b>Вы ещё не подключились к VPN</b>\n\n"
+                "Прошли сутки с активации тестового периода, но трафик не зафиксирован."
+                "\n\nНажмите кнопку ниже, чтобы подключиться."
+            ),
+        )
+        message = template.format(
+            price=price_30_days,
+            end_date=(now + timedelta(days=1)).strftime("%d.%m.%Y %H:%M"),
+        )
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                        callback_data="subscription_connect",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
+                        callback_data="menu_subscription",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("SUPPORT_BUTTON", "🆘 Поддержка"),
+                        callback_data="menu_support",
+                    )
+                ],
+            ]
+        )
+    elif notification_type == "expired_1d":
+        template = texts.get(
+            "SUBSCRIPTION_EXPIRED_1D",
+            (
+                "⛔ <b>Подписка закончилась</b>\n\n"
+                "Доступ был отключён {end_date}. Продлите подписку, чтобы вернуться в сервис."
+            ),
+        )
+        message = template.format(
+            end_date=(now - timedelta(days=1)).strftime("%d.%m.%Y %H:%M"),
+            price=price_30_days,
+        )
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
+                        callback_data="subscription_extend",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("BALANCE_TOPUP", "💳 Пополнить баланс"),
+                        callback_data="balance_topup",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("SUPPORT_BUTTON", "🆘 Поддержка"),
+                        callback_data="menu_support",
+                    )
+                ],
+            ]
+        )
+    elif notification_type == "expired_2d":
+        percent = NotificationSettingsService.get_second_wave_discount_percent()
+        valid_hours = NotificationSettingsService.get_second_wave_valid_hours()
+        bonus_amount = settings.PRICE_30_DAYS * percent // 100
+        template = texts.get(
+            "SUBSCRIPTION_EXPIRED_SECOND_WAVE",
+            (
+                "🔥 <b>Скидка {percent}% на продление</b>\n\n"
+                "Нажмите «Получить скидку», и мы начислим {bonus} на баланс. "
+                "Предложение действует до {expires_at}."
+            ),
+        )
+        message = template.format(
+            percent=percent,
+            bonus=settings.format_price(bonus_amount),
+            expires_at=(now + timedelta(hours=valid_hours)).strftime("%d.%m.%Y %H:%M"),
+            trigger_days=3,
+        )
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🎁 Получить скидку",
+                        callback_data="claim_discount_preview",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
+                        callback_data="subscription_extend",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("BALANCE_TOPUP", "💳 Пополнить баланс"),
+                        callback_data="balance_topup",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("SUPPORT_BUTTON", "🆘 Поддержка"),
+                        callback_data="menu_support",
+                    )
+                ],
+            ]
+        )
+    elif notification_type == "expired_nd":
+        percent = NotificationSettingsService.get_third_wave_discount_percent()
+        valid_hours = NotificationSettingsService.get_third_wave_valid_hours()
+        trigger_days = NotificationSettingsService.get_third_wave_trigger_days()
+        bonus_amount = settings.PRICE_30_DAYS * percent // 100
+        template = texts.get(
+            "SUBSCRIPTION_EXPIRED_THIRD_WAVE",
+            (
+                "🎁 <b>Индивидуальная скидка {percent}%</b>\n\n"
+                "Прошло {trigger_days} дней без подписки — возвращайтесь, и мы добавим {bonus} на баланс. "
+                "Скидка действует до {expires_at}."
+            ),
+        )
+        message = template.format(
+            percent=percent,
+            bonus=settings.format_price(bonus_amount),
+            trigger_days=trigger_days,
+            expires_at=(now + timedelta(hours=valid_hours)).strftime("%d.%m.%Y %H:%M"),
+        )
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🎁 Получить скидку",
+                        callback_data="claim_discount_preview",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
+                        callback_data="subscription_extend",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("BALANCE_TOPUP", "💳 Пополнить баланс"),
+                        callback_data="balance_topup",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=texts.t("SUPPORT_BUTTON", "🆘 Поддержка"),
+                        callback_data="menu_support",
+                    )
+                ],
+            ]
+        )
+    else:
+        raise ValueError(f"Unsupported notification type: {notification_type}")
+
+    footer = "\n\n<i>Сообщение отправлено только вам для проверки оформления.</i>"
+    return header + message + footer, keyboard
+
+
+async def _send_notification_preview(bot, chat_id: int, language: str, notification_type: str) -> None:
+    message, keyboard = _build_notification_preview_message(language, notification_type)
+    await bot.send_message(
+        chat_id,
+        message,
+        parse_mode="HTML",
+        reply_markup=keyboard,
+    )
 
 
 async def _render_notification_settings(callback: CallbackQuery) -> None:
@@ -200,6 +428,18 @@ async def toggle_trial_1h_notification(callback: CallbackQuery):
     await _render_notification_settings(callback)
 
 
+@router.callback_query(F.data == "admin_mon_notify_preview_trial_1h")
+@admin_required
+async def preview_trial_1h_notification(callback: CallbackQuery):
+    try:
+        language = callback.from_user.language_code or settings.DEFAULT_LANGUAGE
+        await _send_notification_preview(callback.bot, callback.from_user.id, language, "trial_inactive_1h")
+        await callback.answer("✅ Пример отправлен")
+    except Exception as exc:
+        logger.error("Failed to send trial 1h preview: %s", exc)
+        await callback.answer("❌ Не удалось отправить тест", show_alert=True)
+
+
 @router.callback_query(F.data == "admin_mon_notify_toggle_trial_24h")
 @admin_required
 async def toggle_trial_24h_notification(callback: CallbackQuery):
@@ -207,6 +447,18 @@ async def toggle_trial_24h_notification(callback: CallbackQuery):
     NotificationSettingsService.set_trial_inactive_24h_enabled(not enabled)
     await callback.answer("✅ Включено" if not enabled else "⏸️ Отключено")
     await _render_notification_settings(callback)
+
+
+@router.callback_query(F.data == "admin_mon_notify_preview_trial_24h")
+@admin_required
+async def preview_trial_24h_notification(callback: CallbackQuery):
+    try:
+        language = callback.from_user.language_code or settings.DEFAULT_LANGUAGE
+        await _send_notification_preview(callback.bot, callback.from_user.id, language, "trial_inactive_24h")
+        await callback.answer("✅ Пример отправлен")
+    except Exception as exc:
+        logger.error("Failed to send trial 24h preview: %s", exc)
+        await callback.answer("❌ Не удалось отправить тест", show_alert=True)
 
 
 @router.callback_query(F.data == "admin_mon_notify_toggle_expired_1d")
@@ -218,6 +470,18 @@ async def toggle_expired_1d_notification(callback: CallbackQuery):
     await _render_notification_settings(callback)
 
 
+@router.callback_query(F.data == "admin_mon_notify_preview_expired_1d")
+@admin_required
+async def preview_expired_1d_notification(callback: CallbackQuery):
+    try:
+        language = callback.from_user.language_code or settings.DEFAULT_LANGUAGE
+        await _send_notification_preview(callback.bot, callback.from_user.id, language, "expired_1d")
+        await callback.answer("✅ Пример отправлен")
+    except Exception as exc:
+        logger.error("Failed to send expired 1d preview: %s", exc)
+        await callback.answer("❌ Не удалось отправить тест", show_alert=True)
+
+
 @router.callback_query(F.data == "admin_mon_notify_toggle_expired_2d")
 @admin_required
 async def toggle_second_wave_notification(callback: CallbackQuery):
@@ -227,6 +491,18 @@ async def toggle_second_wave_notification(callback: CallbackQuery):
     await _render_notification_settings(callback)
 
 
+@router.callback_query(F.data == "admin_mon_notify_preview_expired_2d")
+@admin_required
+async def preview_second_wave_notification(callback: CallbackQuery):
+    try:
+        language = callback.from_user.language_code or settings.DEFAULT_LANGUAGE
+        await _send_notification_preview(callback.bot, callback.from_user.id, language, "expired_2d")
+        await callback.answer("✅ Пример отправлен")
+    except Exception as exc:
+        logger.error("Failed to send second wave preview: %s", exc)
+        await callback.answer("❌ Не удалось отправить тест", show_alert=True)
+
+
 @router.callback_query(F.data == "admin_mon_notify_toggle_expired_nd")
 @admin_required
 async def toggle_third_wave_notification(callback: CallbackQuery):
@@ -234,6 +510,38 @@ async def toggle_third_wave_notification(callback: CallbackQuery):
     NotificationSettingsService.set_third_wave_enabled(not enabled)
     await callback.answer("✅ Включено" if not enabled else "⏸️ Отключено")
     await _render_notification_settings(callback)
+
+
+@router.callback_query(F.data == "admin_mon_notify_preview_expired_nd")
+@admin_required
+async def preview_third_wave_notification(callback: CallbackQuery):
+    try:
+        language = callback.from_user.language_code or settings.DEFAULT_LANGUAGE
+        await _send_notification_preview(callback.bot, callback.from_user.id, language, "expired_nd")
+        await callback.answer("✅ Пример отправлен")
+    except Exception as exc:
+        logger.error("Failed to send third wave preview: %s", exc)
+        await callback.answer("❌ Не удалось отправить тест", show_alert=True)
+
+
+@router.callback_query(F.data == "admin_mon_notify_preview_all")
+@admin_required
+async def preview_all_notifications(callback: CallbackQuery):
+    try:
+        language = callback.from_user.language_code or settings.DEFAULT_LANGUAGE
+        chat_id = callback.from_user.id
+        for notification_type in [
+            "trial_inactive_1h",
+            "trial_inactive_24h",
+            "expired_1d",
+            "expired_2d",
+            "expired_nd",
+        ]:
+            await _send_notification_preview(callback.bot, chat_id, language, notification_type)
+        await callback.answer("✅ Все тестовые уведомления отправлены")
+    except Exception as exc:
+        logger.error("Failed to send all notification previews: %s", exc)
+        await callback.answer("❌ Не удалось отправить тесты", show_alert=True)
 
 
 async def _start_notification_value_edit(
