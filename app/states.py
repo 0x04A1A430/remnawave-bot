@@ -69,12 +69,14 @@ class AdminStates(StatesGroup):
     creating_promo_group_server_discount = State()
     creating_promo_group_device_discount = State()
     creating_promo_group_period_discount = State()
+    creating_promo_group_auto_amount = State()
 
     editing_promo_group_name = State()
     editing_promo_group_traffic_discount = State()
     editing_promo_group_server_discount = State()
     editing_promo_group_device_discount = State()
     editing_promo_group_period_discount = State()
+    editing_promo_group_auto_amount = State()
     
     editing_squad_price = State()
     editing_traffic_price = State()

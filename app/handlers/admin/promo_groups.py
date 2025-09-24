@@ -1,5 +1,5 @@
 import logging
-import logging
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Dict, Optional
 
 from aiogram import Dispatcher, types, F
@@ -109,6 +109,23 @@ def _format_period_discounts_value(discounts: Dict[int, int]) -> str:
     )
 
 
+def _format_auto_assign_line(texts, group: PromoGroup) -> Optional[str]:
+    amount = getattr(group, "auto_assign_amount_kopeks", None)
+    if not amount:
+        return None
+
+    return texts.t(
+        "ADMIN_PROMO_GROUP_AUTO_ASSIGN_LINE",
+        "🎯 Автовыдача с суммы: {amount}",
+    ).format(amount=settings.format_price(amount))
+
+
+def _format_auto_assign_value(amount_kopeks: Optional[int]) -> str:
+    if not amount_kopeks:
+        return settings.format_price(0)
+    return settings.format_price(amount_kopeks)
+
+
 def _parse_period_discounts_input(value: str) -> Dict[int, int]:
     cleaned = (value or "").strip()
 
@@ -140,7 +157,51 @@ def _parse_period_discounts_input(value: str) -> Dict[int, int]:
     return discounts
 
 
+def _parse_auto_assign_amount_input(value: str) -> Optional[int]:
+    cleaned = (value or "").strip()
+
+    if not cleaned:
+        raise ValueError
+
+    normalized = cleaned.replace(" ", "").replace(",", ".")
+
+    if normalized in {"0", "-", "нет", "off", "disable"}:
+        return None
+
+    try:
+        decimal_value = Decimal(normalized)
+    except (InvalidOperation, ValueError):
+        raise ValueError
+
+    if decimal_value <= 0:
+        return None
+
+    kopeks = (decimal_value * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    return int(kopeks)
+
+
 async def _prompt_for_period_discounts(
+    message: types.Message,
+    state: FSMContext,
+    prompt_key: str,
+    default_text: str,
+    *,
+    current_value: Optional[str] = None,
+):
+    data = await state.get_data()
+    texts = get_texts(data.get("language", "ru"))
+    prompt_text = texts.t(prompt_key, default_text)
+
+    if current_value is not None:
+        try:
+            prompt_text = prompt_text.format(current=current_value)
+        except KeyError:
+            pass
+
+    await message.answer(prompt_text)
+
+
+async def _prompt_for_auto_assign_amount(
     message: types.Message,
     state: FSMContext,
     prompt_key: str,
@@ -191,11 +252,18 @@ async def show_promo_groups_menu(
             group_lines = [
                 f"{'⭐' if group.is_default else '🎯'} <b>{group.name}</b>{default_suffix}",
                 _format_discount_line(texts, group),
+            ]
+
+            auto_line = _format_auto_assign_line(texts, group)
+            if auto_line:
+                group_lines.append(auto_line)
+
+            group_lines.extend([
                 texts.t(
                     "ADMIN_PROMO_GROUPS_MEMBERS_COUNT",
                     "Участников: {count}",
                 ).format(count=member_count),
-            ]
+            ])
 
             period_lines = _format_period_discounts_lines(texts, group, db_user.language)
             group_lines.extend(period_lines)
@@ -265,11 +333,18 @@ async def show_promo_group_details(
             "💳 <b>Промогруппа:</b> {name}",
         ).format(name=group.name),
         _format_discount_line(texts, group),
+    ]
+
+    auto_line = _format_auto_assign_line(texts, group)
+    if auto_line:
+        lines.append(auto_line)
+
+    lines.append(
         texts.t(
             "ADMIN_PROMO_GROUP_DETAILS_MEMBERS",
             "Участников: {count}",
         ).format(count=member_count),
-    ]
+    )
 
     period_lines = _format_period_discounts_lines(texts, group, db_user.language)
     lines.extend(period_lines)
@@ -464,6 +539,39 @@ async def process_create_group_period_discounts(
         )
         return
 
+    await state.update_data(new_group_period_discounts=period_discounts)
+    await state.set_state(AdminStates.creating_promo_group_auto_amount)
+
+    await _prompt_for_auto_assign_amount(
+        message,
+        state,
+        "ADMIN_PROMO_GROUP_CREATE_AUTO_ASSIGN_PROMPT",
+        "Введите сумму пополнений (в рублях) для автоматической выдачи. Отправьте 0, если не нужно.",
+    )
+
+
+@admin_required
+@error_handler
+async def process_create_group_auto_amount(
+    message: types.Message,
+    state: FSMContext,
+    db_user,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    texts = get_texts(data.get("language", db_user.language))
+
+    try:
+        auto_amount = _parse_auto_assign_amount_input(message.text)
+    except ValueError:
+        await message.answer(
+            texts.t(
+                "ADMIN_PROMO_GROUP_INVALID_AUTO_ASSIGN",
+                "Введите корректную сумму или 0 для отключения.",
+            )
+        )
+        return
+
     try:
         group = await create_promo_group(
             db,
@@ -471,7 +579,8 @@ async def process_create_group_period_discounts(
             traffic_discount_percent=data["new_group_traffic"],
             server_discount_percent=data["new_group_servers"],
             device_discount_percent=data["new_group_devices"],
-            period_discounts=period_discounts,
+            period_discounts=data.get("new_group_period_discounts"),
+            auto_assign_amount_kopeks=auto_amount,
         )
     except Exception as e:
         logger.error(f"Не удалось создать промогруппу: {e}")
@@ -647,6 +756,46 @@ async def process_edit_group_period_discounts(
         await state.clear()
         return
 
+    await state.update_data(edit_group_period_discounts=period_discounts)
+    await state.set_state(AdminStates.editing_promo_group_auto_amount)
+
+    await _prompt_for_auto_assign_amount(
+        message,
+        state,
+        "ADMIN_PROMO_GROUP_EDIT_AUTO_ASSIGN_PROMPT",
+        "Введите новую сумму (текущая: {current}). Отправьте 0, если без автовыдачи.",
+        current_value=_format_auto_assign_value(getattr(group, "auto_assign_amount_kopeks", None)),
+    )
+
+
+@admin_required
+@error_handler
+async def process_edit_group_auto_amount(
+    message: types.Message,
+    state: FSMContext,
+    db_user,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    texts = get_texts(data.get("language", db_user.language))
+
+    try:
+        auto_amount = _parse_auto_assign_amount_input(message.text)
+    except ValueError:
+        await message.answer(
+            texts.t(
+                "ADMIN_PROMO_GROUP_INVALID_AUTO_ASSIGN",
+                "Введите корректную сумму или 0 для отключения.",
+            )
+        )
+        return
+
+    group = await get_promo_group_by_id(db, data.get("edit_group_id"))
+    if not group:
+        await message.answer("❌ Промогруппа не найдена")
+        await state.clear()
+        return
+
     await update_promo_group(
         db,
         group,
@@ -654,7 +803,8 @@ async def process_edit_group_period_discounts(
         traffic_discount_percent=data["edit_group_traffic"],
         server_discount_percent=data["edit_group_servers"],
         device_discount_percent=data["edit_group_devices"],
-        period_discounts=period_discounts,
+        period_discounts=data.get("edit_group_period_discounts"),
+        auto_assign_amount_kopeks=auto_amount,
     )
 
     await state.clear()
@@ -828,6 +978,10 @@ def register_handlers(dp: Dispatcher):
         process_create_group_period_discounts,
         AdminStates.creating_promo_group_period_discount,
     )
+    dp.message.register(
+        process_create_group_auto_amount,
+        AdminStates.creating_promo_group_auto_amount,
+    )
 
     dp.message.register(process_edit_group_name, AdminStates.editing_promo_group_name)
     dp.message.register(
@@ -845,4 +999,8 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(
         process_edit_group_period_discounts,
         AdminStates.editing_promo_group_period_discount,
+    )
+    dp.message.register(
+        process_edit_group_auto_amount,
+        AdminStates.editing_promo_group_auto_amount,
     )

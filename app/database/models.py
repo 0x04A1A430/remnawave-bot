@@ -271,6 +271,7 @@ class PromoGroup(Base):
     traffic_discount_percent = Column(Integer, nullable=False, default=0)
     device_discount_percent = Column(Integer, nullable=False, default=0)
     period_discounts = Column(JSON, nullable=True, default=dict)
+    auto_assign_amount_kopeks = Column(Integer, nullable=True)
     is_default = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
@@ -335,7 +336,7 @@ class PromoGroup(Base):
 
 class User(Base):
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     telegram_id = Column(BigInteger, unique=True, index=True, nullable=False)
     username = Column(String(255), nullable=True)
@@ -365,6 +366,7 @@ class User(Base):
     has_made_first_topup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="RESTRICT"), nullable=False, index=True)
     promo_group = relationship("PromoGroup", back_populates="users")
+    promo_group_auto_assigned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     @property
     def balance_rubles(self) -> float:

@@ -30,6 +30,7 @@ from app.services.subscription_checkout_service import (
 )
 from app.services.mulenpay_service import MulenPayService
 from app.services.pal24_service import Pal24Service, Pal24APIError
+from app.services.promo_group_service import maybe_assign_auto_promo_group
 from app.database.crud.mulenpay import (
     create_mulenpay_payment,
     get_mulenpay_payment_by_local_id,
@@ -179,7 +180,9 @@ class PaymentService:
                         logger.error(f"Ошибка обработки реферального пополнения: {e}")
                 else:
                     logger.info(f"❌ Описание '{description_for_referral}' не подходит для реферальной логики")
-                
+
+                await maybe_assign_auto_promo_group(db, user, self.bot)
+
                 if self.bot:
                     try:
                         from app.services.admin_notification_service import AdminNotificationService
@@ -461,7 +464,9 @@ class PaymentService:
                         await process_referral_topup(db, user.id, updated_payment.amount_kopeks, self.bot)
                     except Exception as e:
                         logger.error(f"Ошибка обработки реферального пополнения YooKassa: {e}")
-                    
+
+                    await maybe_assign_auto_promo_group(db, user, self.bot)
+
                     if self.bot:
                         try:
                             from app.services.admin_notification_service import AdminNotificationService
@@ -528,7 +533,8 @@ class PaymentService:
             user = await get_user_by_id(db, payment.user_id)
             if user:
                 await add_user_balance(db, user, payment.amount_kopeks, f"Пополнение YooKassa: {payment.amount_kopeks//100}₽")
-            
+                await maybe_assign_auto_promo_group(db, user, self.bot)
+
             logger.info(f"Успешно обработан платеж YooKassa {payment.yookassa_payment_id}: "
                        f"пользователь {payment.user_id} получил {payment.amount_kopeks/100}₽")
             
@@ -993,6 +999,8 @@ class PaymentService:
                         referral_error,
                     )
 
+                await maybe_assign_auto_promo_group(db, user, self.bot)
+
                 await update_mulenpay_payment_status(
                     db,
                     payment=payment,
@@ -1181,6 +1189,8 @@ class PaymentService:
                 await process_referral_topup(db, user.id, payment.amount_kopeks, self.bot)
             except Exception as referral_error:
                 logger.error("Ошибка обработки реферального пополнения Pal24: %s", referral_error)
+
+            await maybe_assign_auto_promo_group(db, user, self.bot)
 
             if self.bot:
                 try:
@@ -1438,7 +1448,9 @@ class PaymentService:
                         await process_referral_topup(db, user.id, amount_kopeks, self.bot)
                     except Exception as e:
                         logger.error(f"Ошибка обработки реферального пополнения CryptoBot: {e}")
-                    
+
+                    await maybe_assign_auto_promo_group(db, user, self.bot)
+
                     if self.bot:
                         try:
                             from app.services.admin_notification_service import AdminNotificationService
