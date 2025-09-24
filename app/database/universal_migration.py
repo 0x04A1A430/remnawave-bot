@@ -387,6 +387,7 @@ async def ensure_mulenpay_payment_schema() -> bool:
 
     try:
         column_exists = await check_column_exists("mulenpay_payments", "mulen_payment_id")
+        paid_at_column_exists = await check_column_exists("mulenpay_payments", "paid_at")
         index_exists = await check_index_exists("mulenpay_payments", "idx_mulenpay_payment_id")
 
         async with engine.begin() as conn:
@@ -410,6 +411,25 @@ async def ensure_mulenpay_payment_schema() -> bool:
                 logger.info("✅ Добавлена колонка mulenpay_payments.mulen_payment_id")
             else:
                 logger.info("ℹ️ Колонка mulenpay_payments.mulen_payment_id уже существует")
+
+            if not paid_at_column_exists:
+                if db_type == "sqlite":
+                    alter_paid_at_sql = "ALTER TABLE mulenpay_payments ADD COLUMN paid_at DATETIME NULL"
+                elif db_type == "postgresql":
+                    alter_paid_at_sql = "ALTER TABLE mulenpay_payments ADD COLUMN paid_at TIMESTAMP NULL"
+                elif db_type == "mysql":
+                    alter_paid_at_sql = "ALTER TABLE mulenpay_payments ADD COLUMN paid_at DATETIME NULL"
+                else:
+                    logger.error(
+                        "Неподдерживаемый тип БД для добавления paid_at в mulenpay_payments: %s",
+                        db_type,
+                    )
+                    return False
+
+                await conn.execute(text(alter_paid_at_sql))
+                logger.info("✅ Добавлена колонка mulenpay_payments.paid_at")
+            else:
+                logger.info("ℹ️ Колонка mulenpay_payments.paid_at уже существует")
 
             if not index_exists:
                 if db_type == "sqlite":
