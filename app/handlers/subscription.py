@@ -103,7 +103,15 @@ async def _prepare_subscription_summary(
     months_in_period = calculate_months_from_days(summary_data['period_days'])
     period_display = format_period_description(summary_data['period_days'], db_user.language)
 
-    base_price = PERIOD_PRICES[summary_data['period_days']]
+    base_price_original = PERIOD_PRICES[summary_data['period_days']]
+    period_discount_percent = db_user.get_promo_discount(
+        "period",
+        summary_data['period_days'],
+    )
+    base_price, base_discount_total = apply_percentage_discount(
+        base_price_original,
+        period_discount_percent,
+    )
 
     if settings.is_traffic_fixed():
         traffic_limit = settings.get_fixed_traffic_limit()
@@ -195,6 +203,9 @@ async def _prepare_subscription_summary(
     summary_data['server_prices_for_period'] = selected_server_prices
     summary_data['months_in_period'] = months_in_period
     summary_data['base_price'] = base_price
+    summary_data['base_price_original'] = base_price_original
+    summary_data['base_discount_percent'] = period_discount_percent
+    summary_data['base_discount_total'] = base_discount_total
     summary_data['final_traffic_gb'] = final_traffic_gb
     summary_data['traffic_price_per_month'] = traffic_price_per_month
     summary_data['traffic_discount_percent'] = traffic_component["discount_percent"]
@@ -226,7 +237,15 @@ async def _prepare_subscription_summary(
         else:
             traffic_display = f"{summary_data.get('traffic_gb', 0)} ГБ"
 
-    details_lines = [f"- Базовый период: {texts.format_price(base_price)}"]
+    base_line = f"- Базовый период: {texts.format_price(base_price_original)}"
+    if base_discount_total > 0:
+        base_line += (
+            f" → {texts.format_price(base_price)}"
+            f" (скидка {period_discount_percent}%:"
+            f" -{texts.format_price(base_discount_total)})"
+        )
+
+    details_lines = [base_line]
 
     if total_traffic_price > 0:
         traffic_line = (
@@ -317,26 +336,29 @@ def _build_promo_group_discount_text(
 
     period_lines: List[str] = []
 
-    if (
-        promo_group.is_default
-        and periods
-        and settings.is_base_promo_group_period_discount_enabled()
-    ):
-        discounts = settings.get_base_promo_group_period_discounts()
+    period_candidates: set[int] = set(periods or [])
 
-        for period_days in periods:
-            percent = discounts.get(period_days, 0)
-
-            if percent <= 0:
+    raw_period_discounts = getattr(promo_group, "period_discounts", None)
+    if isinstance(raw_period_discounts, dict):
+        for key in raw_period_discounts.keys():
+            try:
+                period_candidates.add(int(key))
+            except (TypeError, ValueError):
                 continue
 
-            period_display = format_period_description(period_days, db_user.language)
-            period_lines.append(
-                texts.PROMO_GROUP_PERIOD_DISCOUNT_ITEM.format(
-                    period=period_display,
-                    percent=percent,
-                )
+    for period_days in sorted(period_candidates):
+        percent = promo_group.get_discount_percent("period", period_days)
+
+        if percent <= 0:
+            continue
+
+        period_display = format_period_description(period_days, db_user.language)
+        period_lines.append(
+            texts.PROMO_GROUP_PERIOD_DISCOUNT_ITEM.format(
+                period=period_display,
+                percent=percent,
             )
+        )
 
     if not service_lines and not period_lines:
         return ""
@@ -666,8 +688,26 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
         
         subscription_service = SubscriptionService()
         
-        base_cost = PERIOD_PRICES.get(30, 0)
-        
+        base_cost_original = PERIOD_PRICES.get(30, 0)
+        try:
+            owner = subscription.user
+        except AttributeError:
+            owner = None
+
+        period_discount_percent = 0
+        if owner:
+            try:
+                period_discount_percent = owner.get_promo_discount("period", 30)
+            except AttributeError:
+                period_discount_percent = 0
+
+        from app.utils.pricing_utils import apply_percentage_discount
+
+        base_cost, _ = apply_percentage_discount(
+            base_cost_original,
+            period_discount_percent,
+        )
+
         try:
             servers_cost, _ = await subscription_service.get_countries_price_by_uuids(
                 subscription.connected_squads, db
@@ -683,7 +723,14 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
         total_cost = base_cost + servers_cost + traffic_cost + devices_cost
         
         logger.info(f"📊 Месячная стоимость конфигурации подписки {subscription.id}:")
-        logger.info(f"   📅 Базовый тариф (30 дней): {base_cost/100}₽")
+        base_log = f"   📅 Базовый тариф (30 дней): {base_cost_original/100}₽"
+        if period_discount_percent > 0:
+            discount_value = base_cost_original * period_discount_percent // 100
+            base_log += (
+                f" → {base_cost/100}₽"
+                f" (скидка {period_discount_percent}%: -{discount_value/100}₽)"
+            )
+        logger.info(base_log)
         if servers_cost > 0:
             logger.info(f"   🌍 Серверы: {servers_cost/100}₽")
         if traffic_cost > 0:
@@ -1801,7 +1848,14 @@ async def handle_extend_subscription(
             months_in_period = calculate_months_from_days(days)
             
             from app.config import PERIOD_PRICES
-            base_price = PERIOD_PRICES.get(days, 0)
+            from app.utils.pricing_utils import apply_percentage_discount
+
+            base_price_original = PERIOD_PRICES.get(days, 0)
+            period_discount_percent = db_user.get_promo_discount("period", days)
+            base_price, _ = apply_percentage_discount(
+                base_price_original,
+                period_discount_percent,
+            )
             
             servers_price_per_month, _ = await subscription_service.get_countries_price_by_uuids(
                 subscription.connected_squads, db
@@ -2015,7 +2069,11 @@ async def confirm_extend_subscription(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import calculate_months_from_days, validate_pricing_calculation
+    from app.utils.pricing_utils import (
+        calculate_months_from_days,
+        validate_pricing_calculation,
+        apply_percentage_discount,
+    )
     from app.services.admin_notification_service import AdminNotificationService
 
     days = int(callback.data.split('_')[2])
@@ -2032,8 +2090,14 @@ async def confirm_extend_subscription(
 
     try:
         from app.config import PERIOD_PRICES
+        from app.utils.pricing_utils import apply_percentage_discount
 
-        base_price = PERIOD_PRICES.get(days, 0)
+        base_price_original = PERIOD_PRICES.get(days, 0)
+        period_discount_percent = db_user.get_promo_discount("period", days)
+        base_price, base_discount_total = apply_percentage_discount(
+            base_price_original,
+            period_discount_percent,
+        )
 
         subscription_service = SubscriptionService()
         servers_price_per_month, per_server_monthly_prices = await subscription_service.get_countries_price_by_uuids(
@@ -2091,7 +2155,13 @@ async def confirm_extend_subscription(
             return
 
         logger.info(f"💰 Расчет продления подписки {subscription.id} на {days} дней ({months_in_period} мес):")
-        logger.info(f"   📅 Период {days} дней: {base_price/100}₽")
+        base_log = f"   📅 Период {days} дней: {base_price_original/100}₽"
+        if base_discount_total > 0:
+            base_log += (
+                f" → {base_price/100}₽"
+                f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
+            )
+        logger.info(base_log)
         if total_servers_price > 0:
             logger.info(
                 f"   🌐 Серверы: {servers_price_per_month/100}₽/мес × {months_in_period}"
@@ -2543,7 +2613,15 @@ async def select_country(
     
     countries = await _get_available_countries()
     
-    base_price = PERIOD_PRICES[data['period_days']] + settings.get_traffic_price(data['traffic_gb'])
+    period_base_price = PERIOD_PRICES[data['period_days']]
+    from app.utils.pricing_utils import apply_percentage_discount
+
+    discounted_base_price, _ = apply_percentage_discount(
+        period_base_price,
+        db_user.get_promo_discount("period", data['period_days']),
+    )
+
+    base_price = discounted_base_price + settings.get_traffic_price(data['traffic_gb'])
     
     try:
         subscription_service = SubscriptionService()
@@ -2683,7 +2761,34 @@ async def confirm_purchase(
         'months_in_period', calculate_months_from_days(data['period_days'])
     )
 
-    base_price = data.get('base_price', PERIOD_PRICES[data['period_days']])
+    base_price = data.get('base_price')
+    base_price_original = data.get('base_price_original')
+    base_discount_percent = data.get('base_discount_percent')
+    base_discount_total = data.get('base_discount_total')
+
+    if base_price is None:
+        base_price_original = PERIOD_PRICES[data['period_days']]
+        base_discount_percent = db_user.get_promo_discount(
+            "period",
+            data['period_days'],
+        )
+        base_price, base_discount_total = apply_percentage_discount(
+            base_price_original,
+            base_discount_percent,
+        )
+    else:
+        if base_price_original is None:
+            base_price_original = PERIOD_PRICES[data['period_days']]
+        if base_discount_percent is None:
+            base_discount_percent = db_user.get_promo_discount(
+                "period",
+                data['period_days'],
+            )
+        if base_discount_total is None:
+            _, base_discount_total = apply_percentage_discount(
+                base_price_original,
+                base_discount_percent,
+            )
     server_prices = data.get('server_prices_for_period', [])
 
     if not server_prices:
@@ -2812,7 +2917,13 @@ async def confirm_purchase(
         return
     
     logger.info(f"Расчет покупки подписки на {data['period_days']} дней ({months_in_period} мес):")
-    logger.info(f"   Период: {base_price/100}₽")
+    base_log = f"   Период: {base_price_original/100}₽"
+    if base_discount_total and base_discount_total > 0:
+        base_log += (
+            f" → {base_price/100}₽"
+            f" (скидка {base_discount_percent}%: -{base_discount_total/100}₽)"
+        )
+    logger.info(base_log)
     if total_traffic_price > 0:
         message = (
             f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period}"
