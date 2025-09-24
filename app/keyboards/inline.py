@@ -87,13 +87,24 @@ def get_main_menu_keyboard(
 
     if has_active_subscription and subscription_is_active:
         connect_mode = settings.CONNECT_BUTTON_MODE
+        subscription_url = getattr(subscription, "subscription_url", None)
+
+        def _fallback_connect_button() -> InlineKeyboardButton:
+            return InlineKeyboardButton(
+                text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                callback_data="subscription_connect",
+            )
+
         if connect_mode == "miniapp_subscription":
-            keyboard.append([
-                InlineKeyboardButton(
-                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                    web_app=types.WebAppInfo(url=subscription.subscription_url)
-                )
-            ])
+            if subscription_url:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                        web_app=types.WebAppInfo(url=subscription_url)
+                    )
+                ])
+            else:
+                keyboard.append([_fallback_connect_button()])
         elif connect_mode == "miniapp_custom":
             keyboard.append([
                 InlineKeyboardButton(
@@ -102,19 +113,17 @@ def get_main_menu_keyboard(
                 )
             ])
         elif connect_mode == "link":
-            keyboard.append([
-                InlineKeyboardButton(
-                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                    url=subscription.subscription_url
-                )
-            ])
+            if subscription_url:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                        url=subscription_url
+                    )
+                ])
+            else:
+                keyboard.append([_fallback_connect_button()])
         else:
-            keyboard.append([
-                InlineKeyboardButton(
-                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                    callback_data="subscription_connect"
-                )
-            ])
+            keyboard.append([_fallback_connect_button()])
 
         keyboard.append([
             InlineKeyboardButton(text=balance_button_text, callback_data="menu_balance"),
