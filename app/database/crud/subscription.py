@@ -13,12 +13,7 @@ from app.database.models import (
     PromoGroup,
 )
 from app.database.crud.notification import clear_notifications
-from app.utils.pricing_utils import (
-    calculate_months_from_days,
-    get_remaining_months,
-    resolve_discount_percent,
-    resolve_addon_discount_percent,
-)
+from app.utils.pricing_utils import calculate_months_from_days, get_remaining_months
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -510,12 +505,16 @@ def _get_discount_percent(
     *,
     period_days: Optional[int] = None,
 ) -> int:
-    return resolve_discount_percent(
-        user,
-        promo_group,
-        category,
-        period_days=period_days,
-    )
+    if user is not None:
+        try:
+            return user.get_promo_discount(category, period_days)
+        except AttributeError:
+            pass
+
+    if promo_group is not None:
+        return promo_group.get_discount_percent(category, period_days)
+
+    return 0
 
 
 async def calculate_subscription_total_cost(
@@ -848,7 +847,7 @@ async def calculate_addon_cost_for_remaining_period(
 
     if additional_traffic_gb > 0:
         traffic_price_per_month = settings.get_traffic_price(additional_traffic_gb)
-        traffic_discount_percent = resolve_addon_discount_percent(
+        traffic_discount_percent = _get_discount_percent(
             user,
             promo_group,
             "traffic",
@@ -869,7 +868,7 @@ async def calculate_addon_cost_for_remaining_period(
 
     if additional_devices > 0:
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-        devices_discount_percent = resolve_addon_discount_percent(
+        devices_discount_percent = _get_discount_percent(
             user,
             promo_group,
             "devices",
@@ -898,7 +897,7 @@ async def calculate_addon_cost_for_remaining_period(
             server_data = result.first()
             if server_data:
                 server_price_per_month, server_name = server_data
-                servers_discount_percent = resolve_addon_discount_percent(
+                servers_discount_percent = _get_discount_percent(
                     user,
                     promo_group,
                     "servers",
