@@ -40,7 +40,7 @@ from app.keyboards.inline import (
     get_devices_management_keyboard, get_device_reset_confirm_keyboard,
     get_device_management_help_keyboard,
     get_happ_download_platform_keyboard, get_happ_download_link_keyboard,
-    get_happ_download_button_row, get_happ_subscription_keyboard,
+    get_happ_download_button_row,
     get_payment_methods_keyboard_with_cart,
     get_subscription_confirm_keyboard_with_cart,
     get_insufficient_balance_keyboard_with_cart
@@ -4115,8 +4115,6 @@ async def handle_happ_download_platform_choice(
     db: AsyncSession
 ):
     platform = callback.data.split('_')[-1]
-    if platform == "pc":
-        platform = "windows"
     texts = get_texts(db_user.language)
     link = settings.get_happ_download_link(platform)
 
@@ -4130,8 +4128,7 @@ async def handle_happ_download_platform_choice(
     platform_names = {
         "ios": texts.t("HAPP_PLATFORM_IOS", "🍎 iOS"),
         "android": texts.t("HAPP_PLATFORM_ANDROID", "🤖 Android"),
-        "windows": texts.t("HAPP_PLATFORM_WINDOWS", "💻 Windows"),
-        "mac": texts.t("HAPP_PLATFORM_MAC", "🍏 Mac OS"),
+        "pc": texts.t("HAPP_PLATFORM_PC", "💻 ПК"),
     }
 
     link_text = texts.t(
@@ -4631,10 +4628,6 @@ async def handle_open_subscription_link(
             happ_message,
             parse_mode="HTML",
             disable_web_page_preview=True,
-            reply_markup=get_happ_subscription_keyboard(
-                subscription_link,
-                db_user.language,
-            ),
         )
         await callback.answer()
         return
@@ -5347,15 +5340,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(
         handle_happ_download_platform_choice,
-        F.data.in_(
-            [
-                "happ_download_ios",
-                "happ_download_android",
-                "happ_download_windows",
-                "happ_download_mac",
-                "happ_download_pc",
-            ]
-        )
+        F.data.in_(["happ_download_ios", "happ_download_android", "happ_download_pc"])
     )
 
     dp.callback_query.register(
