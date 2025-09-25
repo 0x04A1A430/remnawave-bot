@@ -292,7 +292,6 @@ class PromoGroup(Base):
     device_discount_percent = Column(Integer, nullable=False, default=0)
     period_discounts = Column(JSON, nullable=True, default=dict)
     auto_assign_total_spent_kopeks = Column(Integer, nullable=True, default=None)
-    apply_discounts_to_addons = Column(Boolean, nullable=False, default=False)
     is_default = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
@@ -360,15 +359,6 @@ class PromoGroup(Base):
 
         return max(0, min(100, percent))
 
-    def get_addon_discount_percent(
-        self,
-        category: str,
-        period_days: Optional[int] = None,
-    ) -> int:
-        if not self.apply_discounts_to_addons:
-            return 0
-        return self.get_discount_percent(category, period_days)
-
 
 class User(Base):
     __tablename__ = "users"
@@ -418,15 +408,7 @@ class User(Base):
         if not self.promo_group:
             return 0
         return self.promo_group.get_discount_percent(category, period_days)
-
-    def get_addon_discount(self, category: str, period_days: Optional[int] = None) -> int:
-        if not self.promo_group:
-            return 0
-        try:
-            return self.promo_group.get_addon_discount_percent(category, period_days)
-        except AttributeError:
-            return 0
-
+    
     def add_balance(self, kopeks: int) -> None:
         self.balance_kopeks += kopeks
     
