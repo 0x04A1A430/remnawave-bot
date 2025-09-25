@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 
+from aiogram.enums import ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import FSInputFile
 from sqlalchemy import select, and_, or_
@@ -21,8 +22,11 @@ from app.database.crud.notification import (
     record_notification,
 )
 from app.database.crud.subscription import (
+    activate_subscription,
     deactivate_subscription,
     extend_subscription,
+    get_active_trial_subscriptions,
+    get_disabled_trial_subscriptions,
     get_expired_subscriptions,
     get_expiring_subscriptions,
     get_subscriptions_for_autopay,
@@ -33,7 +37,15 @@ from app.database.crud.user import (
     get_user_by_id,
     subtract_user_balance,
 )
-from app.database.models import MonitoringLog, SubscriptionStatus, Subscription, User, Ticket, TicketStatus
+from app.database.models import (
+    MonitoringLog,
+    SubscriptionStatus,
+    Subscription,
+    User,
+    Ticket,
+    TicketStatus,
+    UserStatus,
+)
 from app.localization.texts import get_texts
 from app.services.notification_settings_service import NotificationSettingsService
 from app.services.payment_service import PaymentService
@@ -181,6 +193,7 @@ class MonitoringService:
                 await self._check_expiring_subscriptions(db)
                 await self._check_trial_expiring_soon(db)
                 await self._check_trial_inactivity_notifications(db)
+                await self._check_trial_channel_subscriptions(db)
                 await self._check_expired_subscription_followups(db)
                 await self._process_autopayments(db)
                 await self._cleanup_inactive_users(db)
@@ -455,6 +468,122 @@ class MonitoringService:
 
         except Exception as e:
             logger.error(f"Ошибка проверки неактивных тестовых подписок: {e}")
+
+    async def _check_trial_channel_subscriptions(self, db: AsyncSession):
+        if not self.bot:
+            logger.debug("Пропускаем проверку подписки на канал — bot не инициализирован")
+            return
+
+        channel_id = settings.CHANNEL_SUB_ID
+
+        if not channel_id or not settings.CHANNEL_IS_REQUIRED_SUB:
+            logger.debug("Пропускаем проверку подписки на канал — настройка отключена")
+            return
+
+        try:
+            active_trials = await get_active_trial_subscriptions(db)
+            disabled_trials = await get_disabled_trial_subscriptions(db)
+
+            if not active_trials and not disabled_trials:
+                return
+
+            good_statuses = {
+                ChatMemberStatus.MEMBER,
+                ChatMemberStatus.ADMINISTRATOR,
+                ChatMemberStatus.CREATOR,
+            }
+            bad_statuses = {
+                ChatMemberStatus.LEFT,
+                ChatMemberStatus.KICKED,
+                ChatMemberStatus.RESTRICTED,
+            }
+
+            async def fetch_member_status(user: User) -> Optional[ChatMemberStatus]:
+                try:
+                    member = await self.bot.get_chat_member(channel_id, user.telegram_id)
+                    return member.status
+                except TelegramBadRequest as exc:
+                    message = str(exc).lower()
+                    if "user not found" in message:
+                        return ChatMemberStatus.LEFT
+                    if "chat not found" in message:
+                        logger.error(f"❌ Канал {channel_id} не найден: {exc}")
+                        return None
+                    logger.error(
+                        "❌ Ошибка проверки подписки пользователя %s: %s",
+                        user.telegram_id,
+                        exc,
+                    )
+                    return None
+                except TelegramForbiddenError as exc:
+                    logger.error(f"❌ Бот не имеет доступа к каналу {channel_id}: {exc}")
+                    return None
+                except Exception as exc:
+                    logger.error(
+                        "❌ Неожиданная ошибка при проверке подписки пользователя %s: %s",
+                        user.telegram_id,
+                        exc,
+                    )
+                    return None
+
+            disabled_count = 0
+            reactivated_count = 0
+
+            for subscription in active_trials:
+                user = subscription.user
+                if not user or user.status != UserStatus.ACTIVE.value:
+                    continue
+
+                status = await fetch_member_status(user)
+
+                if status in bad_statuses:
+                    await deactivate_subscription(db, subscription)
+                    disabled_count += 1
+
+                    if user.remnawave_uuid:
+                        await self.subscription_service.disable_remnawave_user(user.remnawave_uuid)
+
+            for subscription in disabled_trials:
+                user = subscription.user
+                if not user or user.status != UserStatus.ACTIVE.value:
+                    continue
+
+                status = await fetch_member_status(user)
+
+                if status in good_statuses:
+                    updated_subscription = await activate_subscription(db, subscription)
+                    reactivated_count += 1
+
+                    if user.remnawave_uuid:
+                        await self.subscription_service.update_remnawave_user(db, updated_subscription)
+
+            if disabled_count or reactivated_count:
+                logger.info(
+                    "🔄 Проверка подписки на канал: деактивировано %s, восстановлено %s",
+                    disabled_count,
+                    reactivated_count,
+                )
+                await self._log_monitoring_event(
+                    db,
+                    "trial_channel_subscription_check",
+                    "Проверка подписки на канал для триальных пользователей",
+                    {
+                        "disabled": disabled_count,
+                        "reactivated": reactivated_count,
+                        "checked_active": len(active_trials),
+                        "checked_disabled": len(disabled_trials),
+                    },
+                )
+
+        except Exception as exc:
+            logger.error(f"Ошибка проверки подписки на канал: {exc}")
+            await self._log_monitoring_event(
+                db,
+                "trial_channel_subscription_error",
+                f"Ошибка проверки подписки на канал: {str(exc)}",
+                {"error": str(exc)},
+                is_success=False,
+            )
 
     async def _check_expired_subscription_followups(self, db: AsyncSession):
         if not NotificationSettingsService.are_notifications_globally_enabled():
