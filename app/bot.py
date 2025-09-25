@@ -39,6 +39,7 @@ from app.handlers.admin import (
     welcome_text as admin_welcome_text,
     tickets as admin_tickets,
     reports as admin_reports,
+    configuration as admin_configuration,
 )
 from app.handlers.stars_payments import register_stars_handlers
 
@@ -141,6 +142,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_welcome_text.register_welcome_text_handlers(dp)
     admin_tickets.register_handlers(dp)
     admin_reports.register_handlers(dp)
+    admin_configuration.register_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
     logger.info("⭐ Зарегистрированы обработчики Telegram Stars платежей")

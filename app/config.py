@@ -4,14 +4,59 @@ import re
 import html
 from collections import defaultdict
 from datetime import time
-from typing import List, Optional, Union, Dict
+from typing import Any, Dict, List, Optional, Union, get_args, get_origin
+import json
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, Field
 from pathlib import Path
 
 
 class Settings(BaseSettings):
-    
+
+    _initial_values: Dict[str, Any] = {}
+    EDITABLE_EXCLUDED_KEYS: set[str] = {"BOT_TOKEN", "ADMIN_IDS"}
+    CATEGORY_ALIASES: Dict[str, str] = {
+        "ADMIN": "Администрирование",
+        "APP": "App Config",
+        "AUTOPAY": "Автоплатежи",
+        "AVAILABLE": "Доступность",
+        "BACKUP": "Резервные копии",
+        "BASE": "Базовые значения",
+        "CAMPAIGN": "Кампании",
+        "CHANNEL": "Телеграм-каналы",
+        "CONNECT": "Кнопка подключения",
+        "CRYPTOBOT": "CryptoBot",
+        "DATABASE": "База данных",
+        "DEFAULT": "Значения по умолчанию",
+        "DEBUG": "Отладка",
+        "ENABLE": "Флаги",
+        "HAPP": "Happ",
+        "INACTIVE": "Неактивные",
+        "LOG": "Логирование",
+        "LOGO": "Логотип",
+        "MAINTENANCE": "Техработы",
+        "MINIAPP": "Mini App",
+        "MONITORING": "Мониторинг",
+        "NOTIFICATION": "Уведомления",
+        "PAYMENT": "Платежи",
+        "PAL24": "PayPalych",
+        "POSTGRES": "PostgreSQL",
+        "PRICE": "Цены",
+        "REFERRAL": "Рефералы",
+        "REMNAWAVE": "Remnawave API",
+        "SERVER": "Серверы",
+        "SKIP": "Пропуски",
+        "SQLITE": "SQLite",
+        "SUPPORT": "Поддержка",
+        "TELEGRAM": "Telegram",
+        "TRAFFIC": "Трафик",
+        "TRIAL": "Триал",
+        "TRIBUTE": "Tribute",
+        "VERSION": "Версии",
+        "WEBHOOK": "Webhook",
+        "YOOKASSA": "YooKassa",
+    }
+
     BOT_TOKEN: str
     ADMIN_IDS: str = ""
     SUPPORT_USERNAME: str = "@support"
@@ -964,7 +1009,170 @@ class Settings(BaseSettings):
     
     def is_support_contact_enabled(self) -> bool:
         return self.get_support_system_mode() in {"contact", "both"}
-    
+
+    def model_post_init(self, __context: Any) -> None:  # type: ignore[override]
+        try:
+            super().model_post_init(__context)
+        except AttributeError:
+            pass
+        object.__setattr__(self, "_initial_values", self.model_dump())
+
+    def get_initial_value(self, key: str) -> Any:
+        return (self._initial_values or {}).get(key, getattr(self, key, None))
+
+    def get_initial_editable_values(self) -> Dict[str, Any]:
+        return {
+            key: self.get_initial_value(key)
+            for key in self.model_fields.keys()
+            if self.is_editable_field(key)
+        }
+
+    def is_editable_field(self, key: str) -> bool:
+        return key in self.model_fields and key not in self.EDITABLE_EXCLUDED_KEYS
+
+    def get_field_category_key(self, key: str) -> str:
+        if "_" in key:
+            return key.split("_", 1)[0].upper()
+        return "GENERAL"
+
+    def get_field_category_label(self, key: str) -> str:
+        category_key = self.get_field_category_key(key)
+        if category_key == "GENERAL":
+            return "Прочее"
+        return self.CATEGORY_ALIASES.get(category_key, category_key.capitalize())
+
+    def get_field_label(self, key: str) -> str:
+        return key.replace("_", " ").strip().title()
+
+    def get_field_type_annotation(self, key: str) -> Any:
+        field = self.model_fields.get(key)
+        if not field:
+            raise KeyError(key)
+        return field.annotation
+
+    def get_field_type_name(self, key: str) -> str:
+        annotation = self.get_field_type_annotation(key)
+        origin = get_origin(annotation)
+        if origin is Union:
+            args = [arg for arg in get_args(annotation) if arg is not type(None)]
+            if not args:
+                return "str"
+            return f"Optional[{self._type_to_name(args[0])}]"
+        return self._type_to_name(annotation)
+
+    def _type_to_name(self, annotation: Any) -> str:
+        if annotation in {str, Optional[str]}:
+            return "str"
+        if annotation is bool:
+            return "bool"
+        if annotation is int:
+            return "int"
+        if annotation is float:
+            return "float"
+        if annotation in {list, List[str]}:
+            return "list"
+        if annotation in {dict, Dict[str, Any]}:
+            return "dict"
+        if hasattr(annotation, "__name__"):
+            return annotation.__name__
+        return str(annotation)
+
+    def format_value_for_display(self, key: str, value: Any | None = None) -> str:
+        actual_value = getattr(self, key, None) if value is None else value
+        if actual_value is None:
+            return "—"
+        if isinstance(actual_value, bool):
+            return "✅ Включено" if actual_value else "🚫 Выключено"
+        if isinstance(actual_value, (list, dict)):
+            try:
+                return json.dumps(actual_value, ensure_ascii=False)
+            except Exception:
+                return str(actual_value)
+        return str(actual_value)
+
+    def serialize_value_for_storage(self, key: str, value: Any | None = None) -> Any:
+        actual_value = getattr(self, key, None) if value is None else value
+        if isinstance(actual_value, Path):
+            return str(actual_value)
+        if isinstance(actual_value, set):
+            return list(actual_value)
+        return actual_value
+
+    def cast_value(self, key: str, value: Any) -> Any:
+        annotation = self.get_field_type_annotation(key)
+        return self._convert_value(annotation, value)
+
+    def parse_raw_value(self, key: str, raw_value: str) -> Any:
+        annotation = self.get_field_type_annotation(key)
+        return self._convert_value(annotation, raw_value)
+
+    def _convert_value(self, annotation: Any, value: Any) -> Any:
+        origin = get_origin(annotation)
+        if origin is Union:
+            args = [arg for arg in get_args(annotation) if arg is not type(None)]
+            if not args:
+                return value
+            if value in ("", None, "none", "None", "null", "Null"):
+                return None
+            return self._convert_value(args[0], value)
+
+        if annotation is bool:
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, (int, float)):
+                return bool(value)
+            value_str = str(value).strip().lower()
+            if value_str in {"true", "1", "yes", "on", "да"}:
+                return True
+            if value_str in {"false", "0", "no", "off", "нет"}:
+                return False
+            raise ValueError("Некорректное булево значение")
+
+        if annotation is int:
+            if isinstance(value, int):
+                return value
+            if value in ("", None):
+                raise ValueError("Значение не может быть пустым")
+            return int(str(value).strip())
+
+        if annotation is float:
+            if isinstance(value, float):
+                return value
+            if isinstance(value, int):
+                return float(value)
+            if value in ("", None):
+                raise ValueError("Значение не может быть пустым")
+            return float(str(value).replace(',', '.'))
+
+        if annotation in {str, Any}:
+            return "" if value is None else str(value)
+
+        if annotation in {list, List[str]}:
+            if isinstance(value, list):
+                return value
+            return [item.strip() for item in str(value).split(',') if item.strip()]
+
+        if annotation in {dict, Dict[str, Any]}:
+            if isinstance(value, dict):
+                return value
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                pass
+            raise ValueError("Ожидается JSON-объект")
+
+        return value
+
+    def apply_override(self, key: str, value: Any) -> None:
+        object.__setattr__(self, key, value)
+
+    def apply_overrides(self, overrides: Dict[str, Any]) -> None:
+        for key, value in overrides.items():
+            if self.is_editable_field(key):
+                self.apply_override(key, value)
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
