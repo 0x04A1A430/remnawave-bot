@@ -1,5 +1,5 @@
 import math
-from typing import Tuple
+from typing import List, Sequence, Tuple, TypeVar
 
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
@@ -7,13 +7,83 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.localization.texts import get_texts
-from app.services.system_settings_service import bot_configuration_service
+from app.services.system_settings_service import (
+    SettingDefinition,
+    bot_configuration_service,
+)
 from app.states import BotConfigStates
 from app.utils.decorators import admin_required, error_handler
 
 
 CATEGORY_PAGE_SIZE = 10
 SETTINGS_PAGE_SIZE = 8
+
+
+_CATEGORY_ICONS: dict[str, str] = {
+    "PAYMENT": "💳",
+    "YOOKASSA": "🇷🇺",
+    "CRYPTOBOT": "🪙",
+    "MULENPAY": "💸",
+    "PAL24": "🏦",
+    "TELEGRAM": "⭐",
+    "REFERRAL": "🤝",
+    "PRICE": "💰",
+    "TRAFFIC": "📡",
+    "TRIAL": "🧪",
+    "DEFAULT": "🧷",
+    "REMNAWAVE": "🌊",
+    "ADMIN": "🛡️",
+    "SUPPORT": "🆘",
+    "CHANNEL": "📣",
+    "AUTOPAY": "🔁",
+    "MONITORING": "📈",
+    "SERVER": "🖥️",
+    "MAINTENANCE": "🛠️",
+    "WEBHOOK": "🔗",
+    "BACKUP": "🗄️",
+    "VERSION": "🧾",
+    "LOG": "📄",
+    "DEBUG": "🐞",
+    "DATABASE": "🗃️",
+    "POSTGRES": "🐘",
+    "SQLITE": "💾",
+    "REDIS": "🧠",
+    "CONNECT": "🔌",
+    "TRIBUTE": "🎁",
+    "HAPP": "📲",
+}
+
+_SETTING_TYPE_ICONS: dict[type, str] = {
+    bool: "🔘",
+    int: "🔢",
+    float: "🔢",
+    str: "📝",
+}
+
+_DEFAULT_CATEGORY_ICON = "🗂️"
+_DEFAULT_SETTING_ICON = "⚙️"
+
+_ChunkItem = TypeVar("_ChunkItem")
+
+
+def _chunk(items: Sequence[_ChunkItem], size: int) -> List[List[_ChunkItem]]:
+    if size <= 0:
+        raise ValueError("size must be greater than zero")
+    return [list(items[index : index + size]) for index in range(0, len(items), size)]
+
+
+def _format_category_button(label: str, count: int, category_key: str) -> str:
+    icon = _CATEGORY_ICONS.get(category_key.upper(), _DEFAULT_CATEGORY_ICON)
+    return f"{icon} {label} ({count})"
+
+
+def _format_setting_button(
+    definition: SettingDefinition, value_preview: str
+) -> str:
+    icon = _SETTING_TYPE_ICONS.get(definition.python_type, _DEFAULT_SETTING_ICON)
+    if value_preview == "—":
+        value_preview = "по умолчанию"
+    return f"{icon} {definition.display_name} · {value_preview}"
 
 
 def _parse_category_payload(payload: str) -> Tuple[str, int]:
@@ -40,14 +110,17 @@ def _build_categories_keyboard(language: str, page: int = 1) -> types.InlineKeyb
     sliced = categories[start:end]
 
     rows: list[list[types.InlineKeyboardButton]] = []
-    for category_key, label, count in sliced:
-        button_text = f"{label} ({count})"
-        rows.append([
-            types.InlineKeyboardButton(
-                text=button_text,
-                callback_data=f"botcfg_cat:{category_key}:1",
+    for chunk in _chunk(sliced, 2):
+        row: list[types.InlineKeyboardButton] = []
+        for category_key, label, count in chunk:
+            button_text = _format_category_button(label, count, category_key)
+            row.append(
+                types.InlineKeyboardButton(
+                    text=button_text,
+                    callback_data=f"botcfg_cat:{category_key}:1",
+                )
             )
-        ])
+        rows.append(row)
 
     if total_pages > 1:
         nav_row: list[types.InlineKeyboardButton] = []
@@ -92,15 +165,20 @@ def _build_settings_keyboard(
 
     rows: list[list[types.InlineKeyboardButton]] = []
 
-    for definition in sliced:
-        value_preview = bot_configuration_service.format_value_for_list(definition.key)
-        button_text = f"{definition.key} = {value_preview}"
-        rows.append([
-            types.InlineKeyboardButton(
-                text=button_text,
-                callback_data=f"botcfg_setting:{definition.key}",
+    for chunk in _chunk(sliced, 2):
+        row: list[types.InlineKeyboardButton] = []
+        for definition in chunk:
+            value_preview = bot_configuration_service.format_value_for_list(
+                definition.key
             )
-        ])
+            button_text = _format_setting_button(definition, value_preview)
+            row.append(
+                types.InlineKeyboardButton(
+                    text=button_text,
+                    callback_data=f"botcfg_setting:{definition.key}",
+                )
+            )
+        rows.append(row)
 
     if total_pages > 1:
         nav_row: list[types.InlineKeyboardButton] = []
@@ -173,12 +251,15 @@ def _build_setting_keyboard(key: str) -> types.InlineKeyboardMarkup:
 
 
 def _render_setting_text(key: str) -> str:
+    definition = bot_configuration_service.get_definition(key)
     summary = bot_configuration_service.get_setting_summary(key)
 
     lines = [
         "🧩 <b>Настройка</b>",
+        f"<b>Название:</b> {definition.display_name}",
         f"<b>Ключ:</b> <code>{summary['key']}</code>",
         f"<b>Тип:</b> {summary['type']}",
+        f"<b>Категория:</b> {definition.category_label}",
         f"<b>Текущее значение:</b> {summary['current']}",
         f"<b>Значение по умолчанию:</b> {summary['original']}",
         f"<b>Переопределено в БД:</b> {'✅ Да' if summary['has_override'] else '❌ Нет'}",
@@ -272,10 +353,12 @@ async def start_edit_setting(
     definition = bot_configuration_service.get_definition(key)
 
     summary = bot_configuration_service.get_setting_summary(key)
+    display_name = definition.display_name
     texts = get_texts(db_user.language)
 
     instructions = [
         "✏️ <b>Редактирование настройки</b>",
+        f"Название: {display_name}",
         f"Ключ: <code>{summary['key']}</code>",
         f"Тип: {summary['type']}",
         f"Текущее значение: {summary['current']}",
