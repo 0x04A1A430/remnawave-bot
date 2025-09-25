@@ -521,10 +521,17 @@ HIDE_SUBSCRIPTION_LINK=false
 # miniapp_subscription - открывает ссылку подписки в мини-приложении (режим 2)
 # miniapp_custom - открывает заданную ссылку в мини-приложении (режим 3)
 # link - Открывает ссылку напрямую в браузере (режим 4)
+# happ_cryptolink - открывает ссылку из поля cryptoLink (режим 5)
 CONNECT_BUTTON_MODE=guide
 
 # URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
 MINIAPP_CUSTOM_URL=
+
+# Параметры режима happ_cryptolink
+CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED=false
+HAPP_DOWNLOAD_LINK_IOS=
+HAPP_DOWNLOAD_LINK_ANDROID=
+HAPP_DOWNLOAD_LINK_PC=
 
 # Пропустить принятие правил использования бота
 SKIP_RULES_ACCEPT=false

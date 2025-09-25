@@ -39,6 +39,8 @@ from app.keyboards.inline import (
     get_extend_subscription_keyboard_with_prices, get_confirm_change_devices_keyboard,
     get_devices_management_keyboard, get_device_reset_confirm_keyboard,
     get_device_management_help_keyboard,
+    get_happ_download_platform_keyboard, get_happ_download_link_keyboard,
+    get_happ_download_button_row,
     get_payment_methods_keyboard_with_cart,
     get_subscription_confirm_keyboard_with_cart,
     get_insufficient_balance_keyboard_with_cart
@@ -61,6 +63,7 @@ from app.utils.pricing_utils import (
     format_period_description,
 )
 from app.utils.pagination import paginate_list
+from app.utils.subscription_utils import get_display_subscription_link
 
 logger = logging.getLogger(__name__)
 
@@ -561,12 +564,13 @@ async def show_subscription_info(
             message += f"• {device_info}\n"
         message += texts.t("SUBSCRIPTION_CONNECTED_DEVICES_FOOTER", "</blockquote>")
     
-    if hasattr(subscription, 'subscription_url') and subscription.subscription_url:
+    subscription_link = get_display_subscription_link(subscription)
+    if subscription_link:
         if actual_status in ['trial_active', 'paid_active'] and not settings.HIDE_SUBSCRIPTION_LINK:
             message += "\n\n" + texts.t(
                 "SUBSCRIPTION_CONNECT_LINK_SECTION",
                 "🔗 <b>Ссылка для подключения:</b>\n<code>{subscription_url}</code>",
-            ).format(subscription_url=subscription.subscription_url)
+            ).format(subscription_url=subscription_link)
             message += "\n\n" + texts.t(
                 "SUBSCRIPTION_CONNECT_LINK_PROMPT",
                 "📱 Скопируйте ссылку и добавьте в ваше VPN приложение",
@@ -833,11 +837,12 @@ async def activate_trial(
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о триале: {e}")
         
-        if remnawave_user and hasattr(subscription, 'subscription_url') and subscription.subscription_url:
+        subscription_link = get_display_subscription_link(subscription)
+        if remnawave_user and subscription_link:
             subscription_import_link = texts.t(
                 "SUBSCRIPTION_IMPORT_LINK_SECTION",
                 "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>",
-            ).format(subscription_url=subscription.subscription_url)
+            ).format(subscription_url=subscription_link)
 
             trial_success_text = (
                 f"{texts.TRIAL_ACTIVATED}\n\n"
@@ -852,7 +857,7 @@ async def activate_trial(
                     [
                         InlineKeyboardButton(
                             text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                            web_app=types.WebAppInfo(url=subscription.subscription_url),
+                            web_app=types.WebAppInfo(url=subscription_link),
                         )
                     ],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
@@ -877,11 +882,20 @@ async def activate_trial(
                     ],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
-            elif connect_mode == "link":
-                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription.subscription_url)],
-                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
+            elif connect_mode in {"link", "happ_cryptolink"}:
+                rows = [
+                    [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription_link)]
+                ]
+                happ_row = get_happ_download_button_row(texts)
+                if happ_row:
+                    rows.append(happ_row)
+                rows.append([
+                    InlineKeyboardButton(
+                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                        callback_data="back_to_menu"
+                    )
                 ])
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
             else:
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), callback_data="subscription_connect")],
@@ -3279,11 +3293,12 @@ async def confirm_purchase(
         await db.refresh(db_user)
         await db.refresh(subscription)
         
-        if remnawave_user and hasattr(subscription, 'subscription_url') and subscription.subscription_url:
+        subscription_link = get_display_subscription_link(subscription)
+        if remnawave_user and subscription_link:
             import_link_section = texts.t(
                 "SUBSCRIPTION_IMPORT_LINK_SECTION",
                 "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>",
-            ).format(subscription_url=subscription.subscription_url)
+            ).format(subscription_url=subscription_link)
 
             success_text = (
                 f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
@@ -3298,7 +3313,7 @@ async def confirm_purchase(
                     [
                         InlineKeyboardButton(
                             text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                            web_app=types.WebAppInfo(url=subscription.subscription_url),
+                            web_app=types.WebAppInfo(url=subscription_link),
                         )
                     ],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
@@ -3323,11 +3338,15 @@ async def confirm_purchase(
                     ],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
-            elif connect_mode == "link":
-                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription.subscription_url)],
-                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
-                ])
+            elif connect_mode in {"link", "happ_cryptolink"}:
+                rows = [
+                    [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription_link)]
+                ]
+                happ_row = get_happ_download_button_row(texts)
+                if happ_row:
+                    rows.append(happ_row)
+                rows.append([InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")])
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
             else:
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), callback_data="subscription_connect")],
@@ -4005,8 +4024,87 @@ async def confirm_reset_devices(
     db_user: User,
     db: AsyncSession
 ):
-    
+
     await handle_device_management(callback, db_user, db)
+
+async def handle_happ_download_request(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    texts = get_texts(db_user.language)
+    prompt_text = texts.t(
+        "HAPP_DOWNLOAD_PROMPT",
+        "📥 <b>Скачать Happ</b>\nВыберите ваше устройство:",
+    )
+
+    keyboard = get_happ_download_platform_keyboard(db_user.language)
+
+    await callback.message.answer(prompt_text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
+
+
+async def handle_happ_download_platform_choice(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    platform = callback.data.split('_')[-1]
+    texts = get_texts(db_user.language)
+    link = settings.get_happ_download_link(platform)
+
+    if not link:
+        await callback.answer(
+            texts.t("HAPP_DOWNLOAD_LINK_NOT_SET", "❌ Ссылка для этого устройства не настроена"),
+            show_alert=True,
+        )
+        return
+
+    platform_names = {
+        "ios": texts.t("HAPP_PLATFORM_IOS", "🍎 iOS"),
+        "android": texts.t("HAPP_PLATFORM_ANDROID", "🤖 Android"),
+        "pc": texts.t("HAPP_PLATFORM_PC", "💻 ПК"),
+    }
+
+    link_text = texts.t(
+        "HAPP_DOWNLOAD_LINK_MESSAGE",
+        "⬇️ Скачайте Happ для {platform}:",
+    ).format(platform=platform_names.get(platform, platform.upper()))
+
+    keyboard = get_happ_download_link_keyboard(db_user.language, link)
+
+    await callback.message.edit_text(link_text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
+
+
+async def handle_happ_download_close(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+
+    await callback.answer()
+
+
+async def handle_happ_download_back(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    texts = get_texts(db_user.language)
+    prompt_text = texts.t(
+        "HAPP_DOWNLOAD_PROMPT",
+        "📥 <b>Скачать Happ</b>\nВыберите ваше устройство:",
+    )
+
+    keyboard = get_happ_download_platform_keyboard(db_user.language)
+
+    await callback.message.edit_text(prompt_text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
 
 async def handle_connect_subscription(
     callback: types.CallbackQuery,
@@ -4015,8 +4113,9 @@ async def handle_connect_subscription(
 ):
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
-    
-    if not subscription or not subscription.subscription_url:
+    subscription_link = get_display_subscription_link(subscription)
+
+    if not subscription_link:
         await callback.answer(
             texts.t(
                 "SUBSCRIPTION_NO_ACTIVE_LINK",
@@ -4033,7 +4132,7 @@ async def handle_connect_subscription(
             [
                 InlineKeyboardButton(
                     text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                    web_app=types.WebAppInfo(url=subscription.subscription_url)
+                    web_app=types.WebAppInfo(url=subscription_link)
                 )
             ],
             [
@@ -4086,18 +4185,23 @@ async def handle_connect_subscription(
             parse_mode="HTML"
         )
 
-    elif connect_mode == "link":
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    elif connect_mode in {"link", "happ_cryptolink"}:
+        rows = [
             [
                 InlineKeyboardButton(
                     text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                    url=subscription.subscription_url
+                    url=subscription_link
                 )
-            ],
-            [
-                InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
             ]
+        ]
+        happ_row = get_happ_download_button_row(texts)
+        if happ_row:
+            rows.append(happ_row)
+        rows.append([
+            InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
         ])
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
 
         await callback.message.edit_text(
             texts.t(
@@ -4119,7 +4223,7 @@ async def handle_connect_subscription(
 <code>{subscription_url}</code>
 
 💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
-        ).format(subscription_url=subscription.subscription_url)
+        ).format(subscription_url=subscription_link)
 
         await callback.message.edit_text(
             device_text,
@@ -4208,8 +4312,9 @@ async def handle_device_guide(
     device_type = callback.data.split('_')[2] 
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
-    
-    if not subscription or not subscription.subscription_url:
+    subscription_link = get_display_subscription_link(subscription)
+
+    if not subscription_link:
         await callback.answer(
             texts.t("SUBSCRIPTION_LINK_UNAVAILABLE", "❌ Ссылка подписки недоступна"),
             show_alert=True,
@@ -4217,6 +4322,13 @@ async def handle_device_guide(
         return
 
     apps = get_apps_for_device(device_type, db_user.language)
+    subscription_link = get_display_subscription_link(subscription)
+    if not subscription_link:
+        await callback.answer(
+            texts.t("SUBSCRIPTION_LINK_UNAVAILABLE", "❌ Ссылка подписки недоступна"),
+            show_alert=True,
+        )
+        return
 
     if not apps:
         await callback.answer(
@@ -4234,7 +4346,7 @@ async def handle_device_guide(
         ).format(device_name=get_device_name(device_type, db_user.language))
         + "\n\n"
         + texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
-        + f"\n<code>{subscription.subscription_url}</code>\n\n"
+        + f"\n<code>{subscription_link}</code>\n\n"
         + texts.t(
             "SUBSCRIPTION_DEVICE_FEATURED_APP",
             "📋 <b>Рекомендуемое приложение:</b> {app_name}",
@@ -4273,7 +4385,7 @@ async def handle_device_guide(
     await callback.message.edit_text(
         guide_text,
         reply_markup=get_connection_guide_keyboard(
-            subscription.subscription_url,
+            subscription_link,
             featured_app,
             db_user.language
         ),
@@ -4343,7 +4455,7 @@ async def handle_specific_app_guide(
         ).format(app_name=app['name'], device_name=get_device_name(device_type, db_user.language))
         + "\n\n"
         + texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
-        + f"\n<code>{subscription.subscription_url}</code>\n\n"
+        + f"\n<code>{subscription_link}</code>\n\n"
         + texts.t("SUBSCRIPTION_DEVICE_STEP_INSTALL_TITLE", "<b>Шаг 1 - Установка:</b>")
         + f"\n{app['installationStep']['description'][db_user.language]}\n\n"
         + texts.t("SUBSCRIPTION_DEVICE_STEP_ADD_TITLE", "<b>Шаг 2 - Добавление подписки:</b>")
@@ -4366,7 +4478,7 @@ async def handle_specific_app_guide(
     await callback.message.edit_text(
         guide_text,
         reply_markup=get_specific_app_keyboard(
-            subscription.subscription_url,
+            subscription_link,
             app,
             device_type,
             db_user.language
@@ -4391,9 +4503,11 @@ async def handle_open_subscription_link(
     db_user: User,
     db: AsyncSession
 ):
+    texts = get_texts(db_user.language)
     subscription = db_user.subscription
-    
-    if not subscription or not subscription.subscription_url:
+    subscription_link = get_display_subscription_link(subscription)
+
+    if not subscription_link:
         await callback.answer(
             texts.t("SUBSCRIPTION_LINK_UNAVAILABLE", "❌ Ссылка подписки недоступна"),
             show_alert=True,
@@ -4403,7 +4517,7 @@ async def handle_open_subscription_link(
     link_text = (
         texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
         + "\n\n"
-        + f"<code>{subscription.subscription_url}</code>\n\n"
+        + f"<code>{subscription_link}</code>\n\n"
         + texts.t("SUBSCRIPTION_LINK_USAGE_TITLE", "📱 <b>Как использовать:</b>")
         + "\n"
         + "\n".join(
@@ -4530,11 +4644,12 @@ async def show_device_connection_help(
 ):
     
     subscription = db_user.subscription
-    
-    if not subscription or not subscription.subscription_url:
+    subscription_link = get_display_subscription_link(subscription)
+
+    if not subscription_link:
         await callback.answer("❌ Ссылка подписки недоступна", show_alert=True)
         return
-    
+
     help_text = f"""
 📱 <b>Как подключить устройство заново</b>
 
@@ -4553,7 +4668,7 @@ async def show_device_connection_help(
 • Нажмите "Подключить"
 
 <b>🔗 Ваша ссылка подписки:</b>
-<code>{subscription.subscription_url}</code>
+<code>{subscription_link}</code>
 
 💡 <b>Совет:</b> Сохраните эту ссылку - она понадобится для подключения новых устройств
 """
@@ -5098,6 +5213,26 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         claim_discount_offer,
         F.data.startswith("claim_discount_")
+    )
+
+    dp.callback_query.register(
+        handle_happ_download_request,
+        F.data == "subscription_happ_download"
+    )
+
+    dp.callback_query.register(
+        handle_happ_download_platform_choice,
+        F.data.in_(["happ_download_ios", "happ_download_android", "happ_download_pc"])
+    )
+
+    dp.callback_query.register(
+        handle_happ_download_close,
+        F.data == "happ_download_close"
+    )
+
+    dp.callback_query.register(
+        handle_happ_download_back,
+        F.data == "happ_download_back"
     )
 
     dp.callback_query.register(

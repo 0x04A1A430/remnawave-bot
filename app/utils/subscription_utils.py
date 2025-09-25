@@ -1,9 +1,10 @@
 import logging
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import Subscription, User
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -93,5 +94,18 @@ async def cleanup_duplicate_subscriptions(db: AsyncSession) -> int:
     
     await db.commit()
     logger.info(f"🧹 Очищено {total_deleted} дублирующихся подписок")
-    
+
     return total_deleted
+
+
+def get_display_subscription_link(subscription: Optional[Subscription]) -> Optional[str]:
+    if not subscription:
+        return None
+
+    base_link = getattr(subscription, "subscription_url", None)
+
+    if settings.is_happ_cryptolink_mode():
+        crypto_link = getattr(subscription, "subscription_crypto_link", None)
+        return crypto_link or base_link
+
+    return base_link

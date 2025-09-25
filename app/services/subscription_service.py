@@ -130,7 +130,8 @@ class SubscriptionService:
                     )
                 
                 subscription.remnawave_short_uuid = updated_user.short_uuid
-                subscription.subscription_url = updated_user.subscription_url 
+                subscription.subscription_url = updated_user.subscription_url
+                subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 user.remnawave_uuid = updated_user.uuid
                 
                 await db.commit()
@@ -190,6 +191,7 @@ class SubscriptionService:
                 )
                 
                 subscription.subscription_url = updated_user.subscription_url
+                subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 await db.commit()
                 
                 status_text = "активным" if is_actually_active else "истёкшим"
@@ -233,6 +235,7 @@ class SubscriptionService:
                 
                 subscription.remnawave_short_uuid = updated_user.short_uuid
                 subscription.subscription_url = updated_user.subscription_url
+                subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 await db.commit()
                 
                 logger.info(f"✅ Обновлена ссылка подписки для пользователя {user.telegram_id}")
@@ -534,6 +537,7 @@ class SubscriptionService:
                 
                 subscription.remnawave_short_uuid = None
                 subscription.subscription_url = ""
+                subscription.subscription_crypto_link = ""
                 subscription.connected_squads = []
                 
                 user.remnawave_uuid = None
