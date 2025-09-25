@@ -17,7 +17,7 @@ from app.database.crud.campaign import (
     get_campaign_by_start_parameter,
     get_campaign_by_id,
 )
-from app.database.models import UserStatus
+from app.database.models import UserStatus, SubscriptionStatus
 from app.keyboards.inline import (
     get_rules_keyboard, get_main_menu_keyboard, get_post_registration_keyboard
 )
@@ -25,6 +25,7 @@ from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts, get_rules
 from app.services.referral_service import process_referral_registration
 from app.services.campaign_service import AdvertisingCampaignService
+from app.services.subscription_service import SubscriptionService
 from app.utils.user_utils import generate_unique_referral_code
 from app.database.crud.user_message import get_random_active_message
 
@@ -1140,6 +1141,34 @@ async def required_sub_channel_check(
                 texts.t("CHANNEL_SUBSCRIBE_REQUIRED_ALERT", "❌ Вы не подписались на канал!"),
                 show_alert=True,
             )
+
+        if user and user.subscription:
+            subscription = user.subscription
+            if (
+                subscription.is_trial
+                and subscription.status == SubscriptionStatus.DISABLED.value
+            ):
+                subscription.status = SubscriptionStatus.ACTIVE.value
+                subscription.updated_at = datetime.utcnow()
+                await db.commit()
+                await db.refresh(subscription)
+                logger.info(
+                    "✅ Триальная подписка пользователя %s восстановлена после подтверждения подписки на канал",
+                    user.telegram_id,
+                )
+
+                try:
+                    subscription_service = SubscriptionService()
+                    if user.remnawave_uuid:
+                        await subscription_service.update_remnawave_user(db, subscription)
+                    else:
+                        await subscription_service.create_remnawave_user(db, subscription)
+                except Exception as api_error:
+                    logger.error(
+                        "❌ Ошибка обновления RemnaWave при восстановлении подписки пользователя %s: %s",
+                        user.telegram_id if user else query.from_user.id,
+                        api_error,
+                    )
 
         await query.answer(
             texts.t("CHANNEL_SUBSCRIBE_THANKS", "✅ Спасибо за подписку"),
