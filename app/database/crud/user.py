@@ -97,6 +97,7 @@ async def create_user(
             server_discount_percent=0,
             traffic_discount_percent=0,
             device_discount_percent=0,
+            apply_addon_discounts=True,
             is_default=True,
         )
         db.add(default_group)

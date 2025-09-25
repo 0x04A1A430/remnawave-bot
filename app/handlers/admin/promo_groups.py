@@ -39,6 +39,21 @@ def _format_discount_line(texts, group) -> str:
     )
 
 
+def _format_addon_discount_line(texts, group: PromoGroup) -> str:
+    enabled = getattr(group, "apply_addon_discounts", True)
+    key = (
+        "ADMIN_PROMO_GROUP_ADDON_DISCOUNT_ENABLED"
+        if enabled
+        else "ADMIN_PROMO_GROUP_ADDON_DISCOUNT_DISABLED"
+    )
+    default = (
+        "Скидки на доп. услуги: применяются"
+        if enabled
+        else "Скидки на доп. услуги: не применяются"
+    )
+    return texts.t(key, default)
+
+
 def _normalize_periods_dict(raw: Optional[Dict]) -> Dict[int, int]:
     if not raw or not isinstance(raw, dict):
         return {}
@@ -174,6 +189,16 @@ def _format_rubles(amount_kopeks: int) -> str:
     return formatted.replace(",", " ")
 
 
+def _format_addon_discount_state(texts, enabled: bool) -> str:
+    key = (
+        "ADMIN_PROMO_GROUP_ADDON_DISCOUNT_STATE_ENABLED"
+        if enabled
+        else "ADMIN_PROMO_GROUP_ADDON_DISCOUNT_STATE_DISABLED"
+    )
+    default = "включены" if enabled else "выключены"
+    return texts.t(key, default)
+
+
 def _format_auto_assign_line(texts, group: PromoGroup) -> str:
     threshold = getattr(group, "auto_assign_total_spent_kopeks", 0) or 0
 
@@ -223,6 +248,17 @@ def _parse_auto_assign_threshold_input(value: str) -> int:
     return max(0, kopeks)
 
 
+def _parse_boolean_choice(value: str) -> bool:
+    cleaned = (value or "").strip().lower()
+
+    if cleaned in {"1", "true", "yes", "y", "да", "+", "on", "вкл"}:
+        return True
+    if cleaned in {"0", "false", "no", "n", "нет", "-", "off", "выкл"}:
+        return False
+
+    raise ValueError
+
+
 async def _prompt_for_auto_assign_threshold(
     message: types.Message,
     state: FSMContext,
@@ -257,6 +293,7 @@ def _build_edit_menu_content(
     lines = [
         header,
         _format_discount_line(texts, group),
+        _format_addon_discount_line(texts, group),
         _format_auto_assign_line(texts, group),
     ]
 
@@ -316,6 +353,15 @@ def _build_edit_menu_content(
                     "⏳ Скидки по периодам",
                 ),
                 callback_data=f"promo_group_edit_field_{group.id}_periods",
+            )
+        ],
+        [
+            types.InlineKeyboardButton(
+                text=texts.t(
+                    "ADMIN_PROMO_GROUP_EDIT_FIELD_ADDONS",
+                    "🎁 Скидки на доп. услуги",
+                ),
+                callback_data=f"promo_group_edit_field_{group.id}_addons",
             )
         ],
         [
@@ -399,6 +445,7 @@ async def show_promo_groups_menu(
             group_lines = [
                 f"{'⭐' if group.is_default else '🎯'} <b>{group.name}</b>{default_suffix}",
                 _format_discount_line(texts, group),
+                _format_addon_discount_line(texts, group),
                 _format_auto_assign_line(texts, group),
                 texts.t(
                     "ADMIN_PROMO_GROUPS_MEMBERS_COUNT",
@@ -474,6 +521,7 @@ async def show_promo_group_details(
             "💳 <b>Промогруппа:</b> {name}",
         ).format(name=group.name),
         _format_discount_line(texts, group),
+        _format_addon_discount_line(texts, group),
         _format_auto_assign_line(texts, group),
         texts.t(
             "ADMIN_PROMO_GROUP_DETAILS_MEMBERS",
@@ -675,6 +723,39 @@ async def process_create_group_period_discounts(
         return
 
     await state.update_data(new_group_period_discounts=period_discounts)
+    await state.set_state(AdminStates.creating_promo_group_addon_discount)
+
+    await message.answer(
+        texts.t(
+            "ADMIN_PROMO_GROUP_CREATE_ADDONS_PROMPT",
+            "Включать скидки на докупку доп. услуг? (да/нет)",
+        )
+    )
+
+
+@admin_required
+@error_handler
+async def process_create_group_addon_discounts(
+    message: types.Message,
+    state: FSMContext,
+    db_user,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    texts = get_texts(data.get("language", db_user.language))
+
+    try:
+        apply_addons = _parse_boolean_choice(message.text)
+    except ValueError:
+        await message.answer(
+            texts.t(
+                "ADMIN_PROMO_GROUP_INVALID_ADDON_DISCOUNT",
+                "Введите «да» или «нет».",
+            )
+        )
+        return
+
+    await state.update_data(new_group_apply_addon_discounts=apply_addons)
     await state.set_state(AdminStates.creating_promo_group_auto_assign)
 
     await _prompt_for_auto_assign_threshold(
@@ -716,6 +797,7 @@ async def process_create_group_auto_assign(
             device_discount_percent=data["new_group_devices"],
             period_discounts=data.get("new_group_period_discounts"),
             auto_assign_total_spent_kopeks=auto_assign_kopeks,
+            apply_addon_discounts=data.get("new_group_apply_addon_discounts", True),
         )
     except Exception as e:
         logger.error(f"Не удалось создать промогруппу: {e}")
@@ -826,6 +908,17 @@ async def prompt_edit_promo_group_field(
             "ADMIN_PROMO_GROUP_EDIT_PERIOD_PROMPT",
             "Введите новые скидки на периоды (текущие: {current}). Отправьте 0, если без скидок.",
         ).format(current=_format_period_discounts_value(current_discounts))
+    elif field == "addons":
+        await state.set_state(AdminStates.editing_promo_group_addon_discount)
+        prompt = texts.t(
+            "ADMIN_PROMO_GROUP_EDIT_ADDONS_PROMPT",
+            "Включать скидки на докупку доп. услуг? Текущее значение: {current}. Введите да/нет.",
+        ).format(
+            current=_format_addon_discount_state(
+                texts,
+                getattr(group, "apply_addon_discounts", True),
+            )
+        )
     elif field == "auto":
         await state.set_state(AdminStates.editing_promo_group_auto_assign)
         prompt = texts.t(
@@ -1008,6 +1101,46 @@ async def process_edit_group_period_discounts(
         return
 
     group = await update_promo_group(db, group, period_discounts=period_discounts)
+    await state.set_state(AdminStates.editing_promo_group_menu)
+
+    await _send_edit_menu_after_update(
+        message,
+        texts,
+        group,
+        data.get("language", db_user.language),
+        texts.t("ADMIN_PROMO_GROUP_UPDATED", "Промогруппа «{name}» обновлена.").format(name=group.name),
+    )
+
+
+@admin_required
+@error_handler
+async def process_edit_group_addon_discounts(
+    message: types.Message,
+    state: FSMContext,
+    db_user,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    texts = get_texts(data.get("language", db_user.language))
+
+    try:
+        apply_addons = _parse_boolean_choice(message.text)
+    except ValueError:
+        await message.answer(
+            texts.t(
+                "ADMIN_PROMO_GROUP_INVALID_ADDON_DISCOUNT",
+                "Введите «да» или «нет».",
+            )
+        )
+        return
+
+    group = await get_promo_group_by_id(db, data.get("edit_group_id"))
+    if not group:
+        await message.answer("❌ Промогруппа не найдена")
+        await state.clear()
+        return
+
+    group = await update_promo_group(db, group, apply_addon_discounts=apply_addons)
     await state.set_state(AdminStates.editing_promo_group_menu)
 
     await _send_edit_menu_after_update(
@@ -1236,6 +1369,10 @@ def register_handlers(dp: Dispatcher):
         AdminStates.creating_promo_group_period_discount,
     )
     dp.message.register(
+        process_create_group_addon_discounts,
+        AdminStates.creating_promo_group_addon_discount,
+    )
+    dp.message.register(
         process_create_group_auto_assign,
         AdminStates.creating_promo_group_auto_assign,
     )
@@ -1256,6 +1393,10 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(
         process_edit_group_period_discounts,
         AdminStates.editing_promo_group_period_discount,
+    )
+    dp.message.register(
+        process_edit_group_addon_discounts,
+        AdminStates.editing_promo_group_addon_discount,
     )
     dp.message.register(
         process_edit_group_auto_assign,

@@ -292,6 +292,7 @@ class PromoGroup(Base):
     device_discount_percent = Column(Integer, nullable=False, default=0)
     period_discounts = Column(JSON, nullable=True, default=dict)
     auto_assign_total_spent_kopeks = Column(Integer, nullable=True, default=None)
+    apply_addon_discounts = Column(Boolean, nullable=False, default=True)
     is_default = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

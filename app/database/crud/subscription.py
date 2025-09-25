@@ -845,6 +845,10 @@ async def calculate_addon_cost_for_remaining_period(
         user = getattr(subscription, "user", None)
     promo_group = promo_group or (user.promo_group if user else None)
 
+    addon_discounts_enabled = True
+    if promo_group is not None:
+        addon_discounts_enabled = getattr(promo_group, "apply_addon_discounts", True)
+
     if additional_traffic_gb > 0:
         traffic_price_per_month = settings.get_traffic_price(additional_traffic_gb)
         traffic_discount_percent = _get_discount_percent(
@@ -853,6 +857,8 @@ async def calculate_addon_cost_for_remaining_period(
             "traffic",
             period_days=period_hint_days,
         )
+        if not addon_discounts_enabled:
+            traffic_discount_percent = 0
         traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
         discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
         traffic_total_cost = discounted_traffic_per_month * months_to_pay
@@ -874,6 +880,8 @@ async def calculate_addon_cost_for_remaining_period(
             "devices",
             period_days=period_hint_days,
         )
+        if not addon_discounts_enabled:
+            devices_discount_percent = 0
         devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
         discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
         devices_total_cost = discounted_devices_per_month * months_to_pay
@@ -903,6 +911,8 @@ async def calculate_addon_cost_for_remaining_period(
                     "servers",
                     period_days=period_hint_days,
                 )
+                if not addon_discounts_enabled:
+                    servers_discount_percent = 0
                 server_discount_per_month = server_price_per_month * servers_discount_percent // 100
                 discounted_server_per_month = server_price_per_month - server_discount_per_month
                 server_total_cost = discounted_server_per_month * months_to_pay
