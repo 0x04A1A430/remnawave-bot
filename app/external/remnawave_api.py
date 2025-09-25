@@ -58,6 +58,8 @@ class RemnaWaveUser:
     ss_password: Optional[str] = None
     first_connected_at: Optional[datetime] = None
     last_triggered_threshold: int = 0
+    happ_link: Optional[str] = None
+    happ_crypto_link: Optional[str] = None
 
 
 @dataclass
@@ -92,6 +94,8 @@ class SubscriptionInfo:
     ss_conf_links: Dict[str, str]
     subscription_url: str
     happ: Optional[Dict[str, str]]
+    happ_link: Optional[str] = None
+    happ_crypto_link: Optional[str] = None
 
 
 class RemnaWaveAPIError(Exception):
@@ -584,6 +588,10 @@ class RemnaWaveAPI:
     
     
     def _parse_user(self, user_data: Dict) -> RemnaWaveUser:
+        happ_data = user_data.get('happ') or {}
+        happ_link = happ_data.get('link') or happ_data.get('url')
+        happ_crypto_link = happ_data.get('cryptoLink') or happ_data.get('crypto_link')
+
         return RemnaWaveUser(
             uuid=user_data['uuid'],
             short_uuid=user_data['shortUuid'],
@@ -612,7 +620,9 @@ class RemnaWaveAPI:
             vless_uuid=user_data.get('vlessUuid'),
             ss_password=user_data.get('ssPassword'),
             first_connected_at=self._parse_optional_datetime(user_data.get('firstConnectedAt')),
-            last_triggered_threshold=user_data.get('lastTriggeredThreshold', 0)
+            last_triggered_threshold=user_data.get('lastTriggeredThreshold', 0),
+            happ_link=happ_link,
+            happ_crypto_link=happ_crypto_link
         )
 
     def _parse_optional_datetime(self, date_str: Optional[str]) -> Optional[datetime]:
@@ -645,13 +655,19 @@ class RemnaWaveAPI:
         )
     
     def _parse_subscription_info(self, data: Dict) -> SubscriptionInfo:
+        happ_data = data.get('happ') or {}
+        happ_link = happ_data.get('link') or happ_data.get('url')
+        happ_crypto_link = happ_data.get('cryptoLink') or happ_data.get('crypto_link')
+
         return SubscriptionInfo(
             is_found=data['isFound'],
             user=data.get('user'),
             links=data.get('links', []),
             ss_conf_links=data.get('ssConfLinks', {}),
             subscription_url=data.get('subscriptionUrl', ''),
-            happ=data.get('happ')
+            happ=data.get('happ'),
+            happ_link=happ_link,
+            happ_crypto_link=happ_crypto_link
         )
 
 

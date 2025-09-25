@@ -333,6 +333,84 @@ async def start_yookassa_sbp_payment(
 
 
 @error_handler
+async def start_mulenpay_payment(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+):
+    texts = get_texts(db_user.language)
+
+    if not settings.is_mulenpay_enabled():
+        await callback.answer("❌ Оплата через Mulen Pay временно недоступна", show_alert=True)
+        return
+
+    message_text = texts.t(
+        "MULENPAY_TOPUP_PROMPT",
+        (
+            "💳 <b>Оплата через Mulen Pay</b>\n\n"
+            "Введите сумму для пополнения от 100 до 100 000 ₽.\n"
+            "Оплата происходит через защищенную платформу Mulen Pay."
+        ),
+    )
+
+    keyboard = get_back_keyboard(db_user.language)
+
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+        quick_amount_buttons = get_quick_amount_buttons(db_user.language)
+        if quick_amount_buttons:
+            keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
+
+    await callback.message.edit_text(
+        message_text,
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
+
+    await state.set_state(BalanceStates.waiting_for_amount)
+    await state.update_data(payment_method="mulenpay")
+    await callback.answer()
+
+
+@error_handler
+async def start_pal24_payment(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+):
+    texts = get_texts(db_user.language)
+
+    if not settings.is_pal24_enabled():
+        await callback.answer("❌ Оплата через PayPalych временно недоступна", show_alert=True)
+        return
+
+    message_text = texts.t(
+        "PAL24_TOPUP_PROMPT",
+        (
+            "💳 <b>Оплата через PayPalych</b>\n\n"
+            "Введите сумму для пополнения от 100 до 1 000 000 ₽.\n"
+            "Оплата проходит через защищенную платформу PayPalych."
+        ),
+    )
+
+    keyboard = get_back_keyboard(db_user.language)
+
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+        quick_amount_buttons = get_quick_amount_buttons(db_user.language)
+        if quick_amount_buttons:
+            keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
+
+    await callback.message.edit_text(
+        message_text,
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
+
+    await state.set_state(BalanceStates.waiting_for_amount)
+    await state.update_data(payment_method="pal24")
+    await callback.answer()
+
+
+@error_handler
 async def start_tribute_payment(
     callback: types.CallbackQuery,
     db_user: User
@@ -523,10 +601,18 @@ async def process_topup_amount(
             from app.database.database import AsyncSessionLocal
             async with AsyncSessionLocal() as db:
                 await process_yookassa_payment_amount(message, db_user, db, amount_kopeks, state)
-        elif payment_method == "yookassa_sbp": 
+        elif payment_method == "yookassa_sbp":
             from app.database.database import AsyncSessionLocal
             async with AsyncSessionLocal() as db:
                 await process_yookassa_sbp_payment_amount(message, db_user, db, amount_kopeks, state)
+        elif payment_method == "mulenpay":
+            from app.database.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
+                await process_mulenpay_payment_amount(message, db_user, db, amount_kopeks, state)
+        elif payment_method == "pal24":
+            from app.database.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
+                await process_pal24_payment_amount(message, db_user, db, amount_kopeks, state)
         elif payment_method == "cryptobot":
             from app.database.database import AsyncSessionLocal
             async with AsyncSessionLocal() as db:
@@ -761,6 +847,241 @@ async def process_yookassa_sbp_payment_amount(
 
 
 @error_handler
+async def process_mulenpay_payment_amount(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    amount_kopeks: int,
+    state: FSMContext,
+):
+    texts = get_texts(db_user.language)
+
+    if not settings.is_mulenpay_enabled():
+        await message.answer("❌ Оплата через Mulen Pay временно недоступна")
+        return
+
+    if amount_kopeks < settings.MULENPAY_MIN_AMOUNT_KOPEKS:
+        await message.answer(
+            f"Минимальная сумма пополнения: {settings.format_price(settings.MULENPAY_MIN_AMOUNT_KOPEKS)}"
+        )
+        return
+
+    if amount_kopeks > settings.MULENPAY_MAX_AMOUNT_KOPEKS:
+        await message.answer(
+            f"Максимальная сумма пополнения: {settings.format_price(settings.MULENPAY_MAX_AMOUNT_KOPEKS)}"
+        )
+        return
+
+    amount_rubles = amount_kopeks / 100
+
+    try:
+        payment_service = PaymentService(message.bot)
+        payment_result = await payment_service.create_mulenpay_payment(
+            db=db,
+            user_id=db_user.id,
+            amount_kopeks=amount_kopeks,
+            description=settings.get_balance_payment_description(amount_kopeks),
+            language=db_user.language,
+        )
+
+        if not payment_result or not payment_result.get("payment_url"):
+            await message.answer(
+                texts.t(
+                    "MULENPAY_PAYMENT_ERROR",
+                    "❌ Ошибка создания платежа Mulen Pay. Попробуйте позже или обратитесь в поддержку.",
+                )
+            )
+            await state.clear()
+            return
+
+        payment_url = payment_result.get("payment_url")
+        mulen_payment_id = payment_result.get("mulen_payment_id")
+        local_payment_id = payment_result.get("local_payment_id")
+
+        keyboard = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t(
+                            "MULENPAY_PAY_BUTTON",
+                            "💳 Оплатить через Mulen Pay",
+                        ),
+                        url=payment_url,
+                    )
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                        callback_data=f"check_mulenpay_{local_payment_id}",
+                    )
+                ],
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")],
+            ]
+        )
+
+        payment_id_display = mulen_payment_id if mulen_payment_id is not None else local_payment_id
+
+        message_template = texts.t(
+            "MULENPAY_PAYMENT_INSTRUCTIONS",
+            (
+                "💳 <b>Оплата через Mulen Pay</b>\n\n"
+                "💰 Сумма: {amount}\n"
+                "🆔 ID платежа: {payment_id}\n\n"
+                "📱 <b>Инструкция:</b>\n"
+                "1. Нажмите кнопку ‘Оплатить через Mulen Pay’\n"
+                "2. Следуйте подсказкам платежной системы\n"
+                "3. Подтвердите перевод\n"
+                "4. Средства зачислятся автоматически\n\n"
+                "❓ Если возникнут проблемы, обратитесь в {support}"
+            ),
+        )
+
+        message_text = message_template.format(
+            amount=settings.format_price(amount_kopeks),
+            payment_id=payment_id_display,
+            support=settings.get_support_contact_display_html(),
+        )
+
+        await message.answer(
+            message_text,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
+
+        await state.clear()
+
+        logger.info(
+            "Создан MulenPay платеж для пользователя %s: %s₽, ID: %s",
+            db_user.telegram_id,
+            amount_rubles,
+            payment_id_display,
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка создания MulenPay платежа: {e}")
+        await message.answer(
+            texts.t(
+                "MULENPAY_PAYMENT_ERROR",
+                "❌ Ошибка создания платежа Mulen Pay. Попробуйте позже или обратитесь в поддержку.",
+            )
+        )
+        await state.clear()
+
+
+@error_handler
+async def process_pal24_payment_amount(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    amount_kopeks: int,
+    state: FSMContext,
+):
+    texts = get_texts(db_user.language)
+
+    if not settings.is_pal24_enabled():
+        await message.answer("❌ Оплата через PayPalych временно недоступна")
+        return
+
+    if amount_kopeks < settings.PAL24_MIN_AMOUNT_KOPEKS:
+        min_rubles = settings.PAL24_MIN_AMOUNT_KOPEKS / 100
+        await message.answer(f"❌ Минимальная сумма для оплаты через PayPalych: {min_rubles:.0f} ₽")
+        return
+
+    if amount_kopeks > settings.PAL24_MAX_AMOUNT_KOPEKS:
+        max_rubles = settings.PAL24_MAX_AMOUNT_KOPEKS / 100
+        await message.answer(f"❌ Максимальная сумма для оплаты через PayPalych: {max_rubles:,.0f} ₽".replace(',', ' '))
+        return
+
+    try:
+        payment_service = PaymentService(message.bot)
+        payment_result = await payment_service.create_pal24_payment(
+            db=db,
+            user_id=db_user.id,
+            amount_kopeks=amount_kopeks,
+            description=settings.get_balance_payment_description(amount_kopeks),
+            language=db_user.language,
+        )
+
+        if not payment_result or not payment_result.get("link_url"):
+            await message.answer(
+                texts.t(
+                    "PAL24_PAYMENT_ERROR",
+                    "❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.",
+                )
+            )
+            await state.clear()
+            return
+
+        link_url = payment_result.get("link_url")
+        bill_id = payment_result.get("bill_id")
+        local_payment_id = payment_result.get("local_payment_id")
+
+        keyboard = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t("PAL24_PAY_BUTTON", "💳 Оплатить через PayPalych"),
+                        url=link_url,
+                    )
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                        callback_data=f"check_pal24_{local_payment_id}",
+                    )
+                ],
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")],
+            ]
+        )
+
+        message_template = texts.t(
+            "PAL24_PAYMENT_INSTRUCTIONS",
+            (
+                "💳 <b>Оплата через PayPalych</b>\n\n"
+                "💰 Сумма: {amount}\n"
+                "🆔 ID счета: {bill_id}\n\n"
+                "📱 <b>Инструкция:</b>\n"
+                "1. Нажмите кнопку ‘Оплатить через PayPalych’\n"
+                "2. Следуйте подсказкам платежной системы\n"
+                "3. Подтвердите перевод\n"
+                "4. Средства зачислятся автоматически\n\n"
+                "❓ Если возникнут проблемы, обратитесь в {support}"
+            ),
+        )
+
+        message_text = message_template.format(
+            amount=settings.format_price(amount_kopeks),
+            bill_id=bill_id,
+            support=settings.get_support_contact_display_html(),
+        )
+
+        await message.answer(
+            message_text,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
+
+        await state.clear()
+
+        logger.info(
+            "Создан PayPalych счет для пользователя %s: %s₽, ID: %s",
+            db_user.telegram_id,
+            amount_kopeks / 100,
+            bill_id,
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка создания PayPalych платежа: {e}")
+        await message.answer(
+            texts.t(
+                "PAL24_PAYMENT_ERROR",
+                "❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.",
+            )
+        )
+        await state.clear()
+
+
+@error_handler
 async def check_yookassa_payment_status(
     callback: types.CallbackQuery,
     db: AsyncSession
@@ -814,6 +1135,122 @@ async def check_yookassa_payment_status(
     except Exception as e:
         logger.error(f"Ошибка проверки статуса платежа: {e}")
         await callback.answer("❌ Ошибка проверки статуса", show_alert=True)
+
+
+@error_handler
+async def check_mulenpay_payment_status(
+    callback: types.CallbackQuery,
+    db: AsyncSession
+):
+    try:
+        local_payment_id = int(callback.data.split('_')[-1])
+        payment_service = PaymentService(callback.bot)
+        status_info = await payment_service.get_mulenpay_payment_status(db, local_payment_id)
+
+        if not status_info:
+            await callback.answer("❌ Платеж не найден", show_alert=True)
+            return
+
+        payment = status_info["payment"]
+
+        status_labels = {
+            "created": ("⏳", "Ожидает оплаты"),
+            "processing": ("⌛", "Обрабатывается"),
+            "success": ("✅", "Оплачен"),
+            "canceled": ("❌", "Отменен"),
+            "error": ("⚠️", "Ошибка"),
+            "hold": ("🔒", "Холд"),
+            "unknown": ("❓", "Неизвестно"),
+        }
+
+        emoji, status_text = status_labels.get(payment.status, ("❓", "Неизвестно"))
+
+        message_lines = [
+            "💳 Статус платежа Mulen Pay:\n\n",
+            f"🆔 ID: {payment.mulen_payment_id or payment.id}\n",
+            f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n",
+            f"📊 Статус: {emoji} {status_text}\n",
+            f"📅 Создан: {payment.created_at.strftime('%d.%m.%Y %H:%M')}\n",
+        ]
+
+        if payment.is_paid:
+            message_lines.append("\n✅ Платеж успешно завершен! Средства уже на балансе.")
+        elif payment.status in {"created", "processing"}:
+            message_lines.append(
+                "\n⏳ Платеж еще не завершен. Завершите оплату по ссылке и проверьте статус позже."
+            )
+            if payment.payment_url:
+                message_lines.append(f"\n🔗 Ссылка на оплату: {payment.payment_url}")
+        elif payment.status in {"canceled", "error"}:
+            message_lines.append(
+                f"\n❌ Платеж не был завершен. Попробуйте создать новый платеж или обратитесь в {settings.get_support_contact_display()}"
+            )
+
+        message_text = "".join(message_lines)
+
+        if len(message_text) > 190:
+            await callback.message.answer(message_text)
+            await callback.answer("ℹ️ Статус платежа отправлен в чат", show_alert=True)
+        else:
+            await callback.answer(message_text, show_alert=True)
+
+    except Exception as e:
+        logger.error(f"Ошибка проверки статуса MulenPay: {e}")
+        await callback.answer("❌ Ошибка проверки статуса", show_alert=True)
+
+
+@error_handler
+async def check_pal24_payment_status(
+    callback: types.CallbackQuery,
+    db: AsyncSession,
+):
+    try:
+        local_payment_id = int(callback.data.split('_')[-1])
+        payment_service = PaymentService(callback.bot)
+        status_info = await payment_service.get_pal24_payment_status(db, local_payment_id)
+
+        if not status_info:
+            await callback.answer("❌ Платеж не найден", show_alert=True)
+            return
+
+        payment = status_info["payment"]
+
+        status_labels = {
+            "NEW": ("⏳", "Ожидает оплаты"),
+            "PROCESS": ("⌛", "Обрабатывается"),
+            "SUCCESS": ("✅", "Оплачен"),
+            "FAIL": ("❌", "Отменен"),
+            "UNDERPAID": ("⚠️", "Недоплата"),
+            "OVERPAID": ("⚠️", "Переплата"),
+        }
+
+        emoji, status_text = status_labels.get(payment.status, ("❓", "Неизвестно"))
+
+        message_lines = [
+            "💳 Статус платежа PayPalych:\n\n",
+            f"🆔 ID счета: {payment.bill_id}\n",
+            f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n",
+            f"📊 Статус: {emoji} {status_text}\n",
+            f"📅 Создан: {payment.created_at.strftime('%d.%m.%Y %H:%M')}\n",
+        ]
+
+        if payment.is_paid:
+            message_lines.append("\n✅ Платеж успешно завершен! Средства уже на балансе.")
+        elif payment.status in {"NEW", "PROCESS"}:
+            message_lines.append("\n⏳ Платеж еще не завершен. Оплатите счет и проверьте статус позже.")
+            if payment.link_url:
+                message_lines.append(f"\n🔗 Ссылка на оплату: {payment.link_url}")
+        elif payment.status in {"FAIL", "UNDERPAID", "OVERPAID"}:
+            message_lines.append(
+                f"\n❌ Платеж не завершен корректно. Обратитесь в {settings.get_support_contact_display()}"
+            )
+
+        await callback.answer("".join(message_lines), show_alert=True)
+
+    except Exception as e:
+        logger.error(f"Ошибка проверки статуса PayPalych: {e}")
+        await callback.answer("❌ Ошибка проверки статуса", show_alert=True)
+
 
 @error_handler
 async def start_cryptobot_payment(
@@ -1085,6 +1522,12 @@ async def handle_quick_amount_selection(
                 await process_yookassa_sbp_payment_amount(
                     callback.message, db_user, db, amount_kopeks, state
                 )
+        elif payment_method == "mulenpay":
+            from app.database.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
+                await process_mulenpay_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
         else:
             await callback.answer("❌ Неизвестный способ оплаты", show_alert=True)
             return
@@ -1093,6 +1536,77 @@ async def handle_quick_amount_selection(
         await callback.answer("❌ Ошибка обработки суммы", show_alert=True)
     except Exception as e:
         logger.error(f"Ошибка обработки быстрого выбора суммы: {e}")
+        await callback.answer("❌ Ошибка обработки запроса", show_alert=True)
+
+
+@error_handler
+async def handle_topup_amount_callback(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+):
+    try:
+        _, method, amount_str = callback.data.split("|", 2)
+        amount_kopeks = int(amount_str)
+    except ValueError:
+        await callback.answer("❌ Некорректный запрос", show_alert=True)
+        return
+
+    if amount_kopeks <= 0:
+        await callback.answer("❌ Некорректная сумма", show_alert=True)
+        return
+
+    try:
+        if method == "yookassa":
+            from app.database.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                await process_yookassa_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "yookassa_sbp":
+            from app.database.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                await process_yookassa_sbp_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "mulenpay":
+            from app.database.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                await process_mulenpay_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "pal24":
+            from app.database.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                await process_pal24_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "cryptobot":
+            from app.database.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as db:
+                await process_cryptobot_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "stars":
+            await process_stars_payment_amount(
+                callback.message, db_user, amount_kopeks, state
+            )
+        elif method == "tribute":
+            await start_tribute_payment(callback, db_user)
+            return
+        else:
+            await callback.answer("❌ Неизвестный способ оплаты", show_alert=True)
+            return
+
+        await callback.answer()
+
+    except Exception as error:
+        logger.error(f"Ошибка быстрого пополнения: {error}")
         await callback.answer("❌ Ошибка обработки запроса", show_alert=True)
 
 
@@ -1132,12 +1646,22 @@ def register_handlers(dp: Dispatcher):
         start_yookassa_sbp_payment,
         F.data == "topup_yookassa_sbp"
     )
-    
+
+    dp.callback_query.register(
+        start_mulenpay_payment,
+        F.data == "topup_mulenpay"
+    )
+
+    dp.callback_query.register(
+        start_pal24_payment,
+        F.data == "topup_pal24"
+    )
+
     dp.callback_query.register(
         check_yookassa_payment_status,
         F.data.startswith("check_yookassa_")
     )
-    
+
     dp.callback_query.register(
         start_tribute_payment,
         F.data == "topup_tribute"
@@ -1169,6 +1693,16 @@ def register_handlers(dp: Dispatcher):
     )
 
     dp.callback_query.register(
+        check_mulenpay_payment_status,
+        F.data.startswith("check_mulenpay_")
+    )
+
+    dp.callback_query.register(
+        check_pal24_payment_status,
+        F.data.startswith("check_pal24_")
+    )
+
+    dp.callback_query.register(
         handle_payment_methods_unavailable,
         F.data == "payment_methods_unavailable"
     )
@@ -1177,4 +1711,9 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_quick_amount_selection,
         F.data.startswith("quick_amount_")
+    )
+
+    dp.callback_query.register(
+        handle_topup_amount_callback,
+        F.data.startswith("topup_amount|")
     )

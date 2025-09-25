@@ -35,7 +35,7 @@
 
 ### ⚡ **Полная автоматизация VPN бизнеса**
 - 🎯 **Готовое решение** - разверни за 5 минут, начни продавать сегодня
-- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + ЮKassa + P2P
+- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + ЮKassa + MulenPay + PayPalych + P2P
 - 🔄 **Автоматизация 99%** - от регистрации до продления подписок
 - 📊 **Детальная аналитика** - полная картина вашего бизнеса
 - 💬 **Уведомления в топики** об: Активация триала 💎 Покупка подписки 🔄 Конверсия из триала в платную ⏰ Продление подписки 💰 Пополнение баланса 🚧 Включении тех работ ♻️ Появлении новой версии бота
@@ -112,8 +112,8 @@ docker compose logs
 
 | Переменная | Описание | Пример |
 |------------|----------|--------|
-| `SERVER_STATUS_MODE` | Режим работы кнопки: `disabled`, `external_link` (просто ссылка) или `xray` (интеграция с XrayChecker). | `xray` |
-| `SERVER_STATUS_EXTERNAL_URL` | Прямая ссылка на внешний мониторинг (используется в режиме `external_link`). | `https://status.example.com` |
+| `SERVER_STATUS_MODE` | Режим работы кнопки: `disabled`, `external_link` (открывает ссылку в браузере), `external_link_miniapp` (открывает ссылку во встроенном мини-приложении Telegram) или `xray` (интеграция с XrayChecker). | `xray` |
+| `SERVER_STATUS_EXTERNAL_URL` | Прямая ссылка на внешний мониторинг (используется в режимах `external_link` и `external_link_miniapp`). | `https://status.example.com` |
 | `SERVER_STATUS_METRICS_URL` | URL страницы метрик XrayChecker (Prometheus формат). | `https://sub.example.com/metrics` |
 | `SERVER_STATUS_METRICS_USERNAME` / `SERVER_STATUS_METRICS_PASSWORD` | Данные Basic Auth, если страница метрик защищена паролем. | `status` / `secret` |
 | `SERVER_STATUS_ITEMS_PER_PAGE` | Количество серверов, показываемых на одной странице в режиме интеграции. | `10` |
@@ -248,11 +248,17 @@ ADMIN_IDS=
 # Ссылка на поддержку: Telegram username (например, @support) или полный URL
 SUPPORT_USERNAME=@support
 
+
 # Уведомления администраторов
 ADMIN_NOTIFICATIONS_ENABLED=true
 ADMIN_NOTIFICATIONS_CHAT_ID=-1001234567890   # Замени на ID твоего канала (-100) - ПРЕФИКС ЗАКРЫТОГО КАНАЛА! ВСТАВИТЬ СВОЙ ID СРАЗУ ПОСЛЕ (-100) БЕЗ ПРОБЕЛОВ!
 ADMIN_NOTIFICATIONS_TOPIC_ID=123             # Опционально: ID топика
-
+ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID=126      # Опционально: ID топика для тикетов
+# Автоматические отчеты
+ADMIN_REPORTS_ENABLED=false
+ADMIN_REPORTS_CHAT_ID=                        # Опционально: чат для отчетов (по умолчанию ADMIN_NOTIFICATIONS_CHAT_ID)
+ADMIN_REPORTS_TOPIC_ID=                      # ID топика для отчетов
+ADMIN_REPORTS_SEND_TIME=10:00                # Время отправки (по МСК) ежедневного отчета
 # Обязательная подписка на канал
 CHANNEL_SUB_ID= # Опционально ID твоего канала (-100)
 CHANNEL_IS_REQUIRED_SUB=false # Обязательна ли подписка на канал
@@ -274,6 +280,7 @@ POSTGRES_PASSWORD=secure_password_123
 
 # SQLite настройки (для локального запуска)
 SQLITE_PATH=./data/bot.db
+LOCALES_PATH=./locales
 
 # Redis
 REDIS_URL=redis://redis:6379/0
@@ -299,6 +306,11 @@ REMNAWAVE_SECRET_KEY=
 #   {username_clean}    — логин из Telegram (без @)
 #   {telegram_id}       — ID Telegram
 REMNAWAVE_USER_DESCRIPTION_TEMPLATE="Bot user: {full_name} {username}"
+
+# Режим удаления пользователей из панели RemnaWave
+# delete - полностью удалить пользователя из панели
+# disable - только деактивировать пользователя
+REMNAWAVE_USER_DELETE_MODE=delete
 
 # ========= ПОДПИСКИ =========
 # ===== ТРИАЛ ПОДПИСКА =====
@@ -437,6 +449,13 @@ YOOKASSA_WEBHOOK_PATH=/yookassa-webhook
 YOOKASSA_WEBHOOK_PORT=8082
 YOOKASSA_WEBHOOK_SECRET=your_webhook_secret
 
+# Лимиты сумм пополнения через YooKassa (в копейках)
+YOOKASSA_MIN_AMOUNT_KOPEKS=5000
+YOOKASSA_MAX_AMOUNT_KOPEKS=1000000
+
+# Быстрый выбор суммы пополнения через YooKassa
+YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED=true
+
 # ===== НАСТРОЙКИ ОПИСАНИЙ ПЛАТЕЖЕЙ =====
 # Эти настройки позволяют изменить описания платежей, 
 # чтобы избежать блокировок платежных систем
@@ -447,7 +466,7 @@ PAYMENT_BALANCE_TEMPLATE={service_name} - {description}
 PAYMENT_SUBSCRIPTION_TEMPLATE={service_name} - {description}
 
 # CRYPTOBOT
-CRYPTOBOT_ENABLED=true
+CRYPTOBOT_ENABLED=false
 CRYPTOBOT_API_TOKEN=123456789:AAzQcZWQqQAbsfgPnOLr4FHC8Doa4L7KryC
 CRYPTOBOT_WEBHOOK_SECRET=your_webhook_secret_here
 CRYPTOBOT_BASE_URL=https://pay.crypt.bot
@@ -457,6 +476,35 @@ CRYPTOBOT_WEBHOOK_PORT=8081
 CRYPTOBOT_DEFAULT_ASSET=USDT
 CRYPTOBOT_ASSETS=USDT,TON,BTC,ETH,LTC,BNB,TRX,USDC
 CRYPTOBOT_INVOICE_EXPIRES_HOURS=24
+
+# MULENPAY
+MULENPAY_ENABLED=false
+MULENPAY_API_KEY=
+MULENPAY_SECRET_KEY=
+MULENPAY_SHOP_ID=<ID магазина>
+# необязательно, есть дефолтные значения
+MULENPAY_BASE_URL=https://mulenpay.ru/api
+MULENPAY_WEBHOOK_PATH=/mulenpay-webhook
+MULENPAY_DESCRIPTION="Пополнение баланса"
+MULENPAY_LANGUAGE=ru
+MULENPAY_VAT_CODE=0
+MULENPAY_PAYMENT_SUBJECT=4
+MULENPAY_PAYMENT_MODE=4
+MULENPAY_MIN_AMOUNT_KOPEKS=10000
+MULENPAY_MAX_AMOUNT_KOPEKS=10000000
+
+# PAYPALYCH / PAL24
+PAL24_ENABLED=false
+PAL24_API_TOKEN=
+PAL24_SHOP_ID=
+PAL24_SIGNATURE_TOKEN=
+PAL24_BASE_URL=https://pal24.pro/api/v1/
+PAL24_WEBHOOK_PATH=/pal24-webhook
+PAL24_WEBHOOK_PORT=8084
+PAL24_PAYMENT_DESCRIPTION="Пополнение баланса"
+PAL24_MIN_AMOUNT_KOPEKS=10000
+PAL24_MAX_AMOUNT_KOPEKS=100000000
+PAL24_REQUEST_TIMEOUT=30
 
 # ===== ИНТЕРФЕЙС И UX =====
 
@@ -472,10 +520,20 @@ HIDE_SUBSCRIPTION_LINK=false
 # miniapp_subscription - открывает ссылку подписки в мини-приложении (режим 2)
 # miniapp_custom - открывает заданную ссылку в мини-приложении (режим 3)
 # link - Открывает ссылку напрямую в браузере (режим 4)
+# happ_cryptolink - Вывод cryptoLink ссылки на подписку Happ (режим 5)
 CONNECT_BUTTON_MODE=guide
 
 # URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
 MINIAPP_CUSTOM_URL=
+
+# Параметры режима happ_cryptolink
+CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED=false
+HAPP_DOWNLOAD_LINK_IOS=
+HAPP_DOWNLOAD_LINK_ANDROID=
+HAPP_DOWNLOAD_LINK_MACOS=
+HAPP_DOWNLOAD_LINK_WINDOWS=
+# Кнопка (Подключится) с редиректом (тк ссылки с happ:// тг не поддерживает) - Без установленной ссылки на редирект кнопки (подключится) не будет! Пример: https://sub.domain.sub/redirect-page/?redirect_to=
+HAPP_CRYPTOLINK_REDIRECT_TEMPLATE=
 
 # Пропустить принятие правил использования бота
 SKIP_RULES_ACCEPT=false
@@ -492,6 +550,23 @@ ENABLE_NOTIFICATIONS=true
 NOTIFICATION_RETRY_ATTEMPTS=3
 MONITORING_LOGS_RETENTION_DAYS=30
 NOTIFICATION_CACHE_HOURS=24
+
+# ===== СТАТУС СЕРВЕРОВ =====
+# Режимы: disabled, external_link, external_link_miniapp, xray
+SERVER_STATUS_MODE=disabled
+# Ссылка на внешний мониторинг (для режимов external_link и external_link_miniapp)
+SERVER_STATUS_EXTERNAL_URL=
+# URL метрик XrayChecker (для режима xray)
+SERVER_STATUS_METRICS_URL=
+# Данные Basic Auth (опционально)
+SERVER_STATUS_METRICS_USERNAME=
+SERVER_STATUS_METRICS_PASSWORD=
+# Проверять SSL сертификат при запросе метрик
+SERVER_STATUS_METRICS_VERIFY_SSL=true
+# Таймаут запроса к метрикам (в секундах)
+SERVER_STATUS_REQUEST_TIMEOUT=10
+# Количество серверов на странице в режиме интеграции
+SERVER_STATUS_ITEMS_PER_PAGE=10
 
 # ===== РЕЖИМ ТЕХНИЧЕСКИХ РАБОТ =====
 MAINTENANCE_MODE=false
@@ -540,8 +615,6 @@ LOG_FILE=logs/bot.log
 DEBUG=false
 WEBHOOK_URL=
 WEBHOOK_PATH=/webhook
-
-
 ```
 
 </details>
@@ -573,6 +646,8 @@ WEBHOOK_PATH=/webhook
 - ⭐ Telegram Stars
 - 💳 Tribute
 - 💳 YooKassa (включая СБП и онлайн-чек)
+- 💳 MulenPay
+- 💳 PayPalych (Pal24)
 - 💰 CryptoBot (мультивалюта и срок жизни инвойсов)
 - 🎁 Реферальные и промо-бонусы
 - Детальная история транзакций и чеков
@@ -598,7 +673,7 @@ WEBHOOK_PATH=/webhook
 
 📊 **Мощная аналитика**
 - 👥 Детальная статистика пользователей и подписок
-- 💰 Анализ платежей по источникам (Stars, YooKassa, Tribute, CryptoBot)
+- 💰 Анализ платежей по источникам (Stars, YooKassa, Tribute, MulenPay, PayPalych, CryptoBot)
 - 🖥️ Мониторинг серверов Remnawave и статуса сквадов
 - 📈 Финансовые отчеты, конверсии и эффективность рекламных кампаний
 
@@ -891,6 +966,7 @@ docker compose down -v --remove-orphans
    - **Telegram Stars**: Работает автоматически
    - **Tribute**: Настрой webhook на `https://your-domain.com/tribute-webhook`
    - **YooKassa**: Настрой webhook на `https://your-domain.com/yookassa-webhook`
+   - **PayPalych**: Укажи Result URL `https://your-domain.com/pal24-webhook` в кабинете Pal24
 
 
 ### 🛠️ Настройка Уведомлений в топик группы
@@ -1103,7 +1179,7 @@ docker system prune
 |----------|-------------|---------|
 | **Бот не отвечает** | `docker logs remnawave_bot` | Проверь `BOT_TOKEN` и интернет |
 | **Ошибки БД** | `docker compose ps postgres` | Проверь статус PostgreSQL |
-| **Webhook не работает** | Проверь порты 8081/8082 | Настрой прокси-сервер правильно |
+| **Webhook не работает** | Проверь порты 8081/8082/8084 | Настрой прокси-сервер правильно |
 | **API недоступен** | Проверь логи бота | Проверь `REMNAWAVE_API_URL` и ключ |
 | **Мониторинг не работает** | Админ панель → Мониторинг | Проверь `MAINTENANCE_AUTO_ENABLE` |
 | **Платежи не проходят** | Проверь webhook'и | Настрой URL в платежных системах |
@@ -1124,20 +1200,41 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
-
+    
     # CryptoBot webhook endpoint
-    handle /cryptobot-webhook* {
-        reverse_proxy localhost:8081 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-        }
+    location /cryptobot-webhook {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
     
+    # MulenPay webhook endpoint
+    location /mulenpay-webhook {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # PayPalych webhook endpoint
+    location /pal24-webhook {
+        proxy_pass http://127.0.0.1:8084;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     # Для YooKassa
     location /yookassa-webhook {
         proxy_pass http://127.0.0.1:8082;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
     
     # Health check
@@ -1153,20 +1250,47 @@ your-domain.com {
     handle /tribute-webhook* {
         reverse_proxy localhost:8081
     }
-
+    
     handle /cryptobot-webhook* {
         reverse_proxy localhost:8081
     }
     
+    handle /mulenpay-webhook* {
+        reverse_proxy localhost:8081
+    }
+
+    handle /pal24-webhook* {
+        reverse_proxy localhost:8084
+    }
+
     handle /yookassa-webhook* {
         reverse_proxy localhost:8082
     }
-    
+
     handle /health {
         reverse_proxy localhost:8081/health
     }
 }
 ```
+
+#### 🧪 Проверка PayPalych postback
+
+```bash
+# Генерируем подпись: md5("100.00:test-order-1:${PAL24_SIGNATURE_TOKEN}")
+SIGNATURE=$(python - <<'PY'
+import hashlib, os
+token = os.environ.get('PAL24_SIGNATURE_TOKEN', 'test_token')
+payload = f"100.00:test-order-1:{token}".encode()
+print(hashlib.md5(payload).hexdigest().upper())
+PY
+)
+
+curl -X POST https://your-domain.com/pal24-webhook \
+  -H "Content-Type: application/json" \
+  -d '{"InvId": "test-order-1", "OutSum": "100.00", "Status": "SUCCESS", "SignatureValue": "'$SIGNATURE'"}'
+```
+
+Ответ `{"status": "ok"}` подтверждает корректную обработку вебхука.
 
 ---
 

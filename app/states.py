@@ -68,20 +68,26 @@ class AdminStates(StatesGroup):
     creating_promo_group_traffic_discount = State()
     creating_promo_group_server_discount = State()
     creating_promo_group_device_discount = State()
+    creating_promo_group_period_discount = State()
+    creating_promo_group_auto_assign = State()
 
+    editing_promo_group_menu = State()
     editing_promo_group_name = State()
     editing_promo_group_traffic_discount = State()
     editing_promo_group_server_discount = State()
     editing_promo_group_device_discount = State()
+    editing_promo_group_period_discount = State()
+    editing_promo_group_auto_assign = State()
     
     editing_squad_price = State()
     editing_traffic_price = State()
     editing_device_price = State()
     editing_user_devices = State()
     editing_user_traffic = State()
-    
+
     editing_rules_page = State()
-    
+    editing_notification_value = State()
+
     confirming_sync = State()
 
     editing_server_name = State()
@@ -89,6 +95,7 @@ class AdminStates(StatesGroup):
     editing_server_country = State()
     editing_server_limit = State()
     editing_server_description = State()
+    editing_server_promo_groups = State()
     
     creating_server_uuid = State()
     creating_server_name = State()

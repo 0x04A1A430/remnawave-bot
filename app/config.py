@@ -1,7 +1,9 @@
+import logging
 import os
 import re
 import html
 from collections import defaultdict
+from datetime import time
 from typing import List, Optional, Union, Dict
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, Field
@@ -16,11 +18,21 @@ class Settings(BaseSettings):
     SUPPORT_MENU_ENABLED: bool = True
     SUPPORT_SYSTEM_MODE: str = "both"  # one of: tickets, contact, both
     SUPPORT_MENU_ENABLED: bool = True
+    # SLA for support tickets
+    SUPPORT_TICKET_SLA_ENABLED: bool = True
+    SUPPORT_TICKET_SLA_MINUTES: int = 5
+    SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS: int = 60
+    SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES: int = 15
 
     ADMIN_NOTIFICATIONS_ENABLED: bool = False
     ADMIN_NOTIFICATIONS_CHAT_ID: Optional[str] = None
     ADMIN_NOTIFICATIONS_TOPIC_ID: Optional[int] = None
     ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID: Optional[int] = None
+
+    ADMIN_REPORTS_ENABLED: bool = False
+    ADMIN_REPORTS_CHAT_ID: Optional[str] = None
+    ADMIN_REPORTS_TOPIC_ID: Optional[int] = None
+    ADMIN_REPORTS_SEND_TIME: Optional[str] = None
 
     CHANNEL_SUB_ID: Optional[str] = None
     CHANNEL_LINK: Optional[str] = None
@@ -169,8 +181,41 @@ class Settings(BaseSettings):
     CRYPTOBOT_ASSETS: str = "USDT,TON,BTC,ETH"
     CRYPTOBOT_INVOICE_EXPIRES_HOURS: int = 24
 
+    MULENPAY_ENABLED: bool = False
+    MULENPAY_API_KEY: Optional[str] = None
+    MULENPAY_SECRET_KEY: Optional[str] = None
+    MULENPAY_SHOP_ID: Optional[int] = None
+    MULENPAY_BASE_URL: str = "https://mulenpay.ru/api"
+    MULENPAY_WEBHOOK_PATH: str = "/mulenpay-webhook"
+    MULENPAY_DESCRIPTION: str = "Пополнение баланса"
+    MULENPAY_LANGUAGE: str = "ru"
+    MULENPAY_VAT_CODE: int = 0
+    MULENPAY_PAYMENT_SUBJECT: int = 4
+    MULENPAY_PAYMENT_MODE: int = 4
+    MULENPAY_MIN_AMOUNT_KOPEKS: int = 10000
+    MULENPAY_MAX_AMOUNT_KOPEKS: int = 10000000
+
+    PAL24_ENABLED: bool = False
+    PAL24_API_TOKEN: Optional[str] = None
+    PAL24_SHOP_ID: Optional[str] = None
+    PAL24_SIGNATURE_TOKEN: Optional[str] = None
+    PAL24_BASE_URL: str = "https://pal24.pro/api/v1/"
+    PAL24_WEBHOOK_PATH: str = "/pal24-webhook"
+    PAL24_WEBHOOK_PORT: int = 8084
+    PAL24_PAYMENT_DESCRIPTION: str = "Пополнение баланса"
+    PAL24_MIN_AMOUNT_KOPEKS: int = 10000
+    PAL24_MAX_AMOUNT_KOPEKS: int = 100000000
+    PAL24_REQUEST_TIMEOUT: int = 30
+
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
+    CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
+    HAPP_CRYPTOLINK_REDIRECT_TEMPLATE: Optional[str] = None
+    HAPP_DOWNLOAD_LINK_IOS: Optional[str] = None
+    HAPP_DOWNLOAD_LINK_ANDROID: Optional[str] = None
+    HAPP_DOWNLOAD_LINK_MACOS: Optional[str] = None
+    HAPP_DOWNLOAD_LINK_WINDOWS: Optional[str] = None
+    HAPP_DOWNLOAD_LINK_PC: Optional[str] = None
     HIDE_SUBSCRIPTION_LINK: bool = False
     ENABLE_LOGO_MODE: bool = True
     LOGO_FILE: str = "vpn_logo.png"
@@ -221,6 +266,13 @@ class Settings(BaseSettings):
             "link": "external_link",
             "url": "external_link",
             "external_link": "external_link",
+            "miniapp": "external_link_miniapp",
+            "mini_app": "external_link_miniapp",
+            "mini-app": "external_link_miniapp",
+            "webapp": "external_link_miniapp",
+            "web_app": "external_link_miniapp",
+            "web-app": "external_link_miniapp",
+            "external_link_miniapp": "external_link_miniapp",
             "xray": "xray",
             "xraychecker": "xray",
             "xray_metrics": "xray",
@@ -228,8 +280,10 @@ class Settings(BaseSettings):
         }
 
         mode = aliases.get(normalized, normalized)
-        if mode not in {"disabled", "external_link", "xray"}:
-            raise ValueError("SERVER_STATUS_MODE must be one of: disabled, external_link, xray")
+        if mode not in {"disabled", "external_link", "external_link_miniapp", "xray"}:
+            raise ValueError(
+                "SERVER_STATUS_MODE must be one of: disabled, external_link, external_link_miniapp, xray"
+            )
         return mode
 
     @field_validator('SERVER_STATUS_ITEMS_PER_PAGE', mode='before')
@@ -387,6 +441,32 @@ class Settings(BaseSettings):
     def format_price(self, price_kopeks: int) -> str:
         rubles = price_kopeks // 100
         return f"{rubles} ₽"
+
+    def get_reports_chat_id(self) -> Optional[str]:
+        if self.ADMIN_REPORTS_CHAT_ID:
+            return self.ADMIN_REPORTS_CHAT_ID
+        return self.ADMIN_NOTIFICATIONS_CHAT_ID
+
+    def get_reports_topic_id(self) -> Optional[int]:
+        return self.ADMIN_REPORTS_TOPIC_ID or None
+
+    def get_reports_send_time(self) -> Optional[time]:
+        value = self.ADMIN_REPORTS_SEND_TIME
+        if not value:
+            return None
+
+        try:
+            hours_str, minutes_str = value.strip().split(":", 1)
+            hours = int(hours_str)
+            minutes = int(minutes_str)
+            if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+                raise ValueError
+            return time(hour=hours, minute=minutes)
+        except (ValueError, AttributeError):
+            logging.getLogger(__name__).warning(
+                "Некорректное значение ADMIN_REPORTS_SEND_TIME: %s", value
+            )
+            return None
     
     def kopeks_to_rubles(self, kopeks: int) -> float:
         return kopeks / 100
@@ -435,9 +515,24 @@ class Settings(BaseSettings):
         return "https://t.me/"
 
     def is_cryptobot_enabled(self) -> bool:
-        return (self.CRYPTOBOT_ENABLED and 
+        return (self.CRYPTOBOT_ENABLED and
                 self.CRYPTOBOT_API_TOKEN is not None)
-    
+
+    def is_mulenpay_enabled(self) -> bool:
+        return (
+            self.MULENPAY_ENABLED
+            and self.MULENPAY_API_KEY is not None
+            and self.MULENPAY_SECRET_KEY is not None
+            and self.MULENPAY_SHOP_ID is not None
+        )
+
+    def is_pal24_enabled(self) -> bool:
+        return (
+            self.PAL24_ENABLED
+            and self.PAL24_API_TOKEN is not None
+            and self.PAL24_SHOP_ID is not None
+        )
+
     def get_cryptobot_base_url(self) -> str:
         if self.CRYPTOBOT_TESTNET:
             return "https://testnet-pay.crypt.bot"
@@ -454,6 +549,34 @@ class Settings(BaseSettings):
     
     def get_cryptobot_invoice_expires_seconds(self) -> int:
         return self.CRYPTOBOT_INVOICE_EXPIRES_HOURS * 3600
+
+    def is_happ_cryptolink_mode(self) -> bool:
+        return self.CONNECT_BUTTON_MODE == "happ_cryptolink"
+
+    def is_happ_download_button_enabled(self) -> bool:
+        return self.is_happ_cryptolink_mode() and self.CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED
+
+    def get_happ_cryptolink_redirect_template(self) -> Optional[str]:
+        template = (self.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE or "").strip()
+        return template or None
+
+    def get_happ_download_link(self, platform: str) -> Optional[str]:
+        platform_key = platform.lower()
+
+        if platform_key == "pc":
+            platform_key = "windows"
+
+        links = {
+            "ios": (self.HAPP_DOWNLOAD_LINK_IOS or "").strip(),
+            "android": (self.HAPP_DOWNLOAD_LINK_ANDROID or "").strip(),
+            "macos": (self.HAPP_DOWNLOAD_LINK_MACOS or "").strip(),
+            "windows": (
+                (self.HAPP_DOWNLOAD_LINK_WINDOWS or "").strip()
+                or (self.HAPP_DOWNLOAD_LINK_PC or "").strip()
+            ),
+        }
+        link = links.get(platform_key)
+        return link if link else None
 
     def is_maintenance_mode(self) -> bool:
         return self.MAINTENANCE_MODE
@@ -841,32 +964,6 @@ class Settings(BaseSettings):
     
     def is_support_contact_enabled(self) -> bool:
         return self.get_support_system_mode() in {"contact", "both"}
-        
-        enabled_packages = [pkg for pkg in packages if pkg["enabled"]]
-        if not enabled_packages:
-            return 0
-        
-        unlimited_package = next((pkg for pkg in enabled_packages if pkg["gb"] == 0), None)
-        
-        finite_packages = [pkg for pkg in enabled_packages if pkg["gb"] > 0]
-        if finite_packages:
-            max_package = max(finite_packages, key=lambda x: x["gb"])
-            
-            if gb > max_package["gb"]:
-                if unlimited_package:
-                    return unlimited_package["price"]
-                else:
-                    return max_package["price"]
-            
-            suitable_packages = [pkg for pkg in finite_packages if pkg["gb"] >= gb]
-            if suitable_packages:
-                nearest_package = min(suitable_packages, key=lambda x: x["gb"])
-                return nearest_package["price"]
-        
-        if unlimited_package:
-            return unlimited_package["price"]
-        
-        return 0
     
     model_config = {
         "env_file": ".env",

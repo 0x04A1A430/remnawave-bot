@@ -1,9 +1,11 @@
 import logging
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import select, delete
+from urllib.parse import quote
+from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import Subscription, User
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -93,5 +95,49 @@ async def cleanup_duplicate_subscriptions(db: AsyncSession) -> int:
     
     await db.commit()
     logger.info(f"🧹 Очищено {total_deleted} дублирующихся подписок")
-    
+
     return total_deleted
+
+
+def get_display_subscription_link(subscription: Optional[Subscription]) -> Optional[str]:
+    if not subscription:
+        return None
+
+    base_link = getattr(subscription, "subscription_url", None)
+
+    if settings.is_happ_cryptolink_mode():
+        crypto_link = getattr(subscription, "subscription_crypto_link", None)
+        return crypto_link or base_link
+
+    return base_link
+
+
+def get_happ_cryptolink_redirect_link(subscription_link: Optional[str]) -> Optional[str]:
+    if not subscription_link:
+        return None
+
+    template = settings.get_happ_cryptolink_redirect_template()
+    if not template:
+        return None
+
+    encoded_link = quote(subscription_link, safe="")
+    replacements = {
+        "{subscription_link}": encoded_link,
+        "{link}": encoded_link,
+        "{subscription_link_raw}": subscription_link,
+        "{link_raw}": subscription_link,
+    }
+
+    replaced = False
+    for placeholder, value in replacements.items():
+        if placeholder in template:
+            template = template.replace(placeholder, value)
+            replaced = True
+
+    if replaced:
+        return template
+
+    if template.endswith(("=", "?", "&")):
+        return f"{template}{encoded_link}"
+
+    return f"{template}{encoded_link}"

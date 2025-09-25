@@ -531,7 +531,15 @@ async def calculate_subscription_total_cost(
     
     months_in_period = calculate_months_from_days(period_days)
     
-    base_price = PERIOD_PRICES.get(period_days, 0)
+    base_price_original = PERIOD_PRICES.get(period_days, 0)
+    period_discount_percent = _get_discount_percent(
+        user,
+        promo_group,
+        "period",
+        period_days=period_days,
+    )
+    base_discount_total = base_price_original * period_discount_percent // 100
+    base_price = base_price_original - base_discount_total
     
     promo_group = promo_group or (user.promo_group if user else None)
 
@@ -577,6 +585,9 @@ async def calculate_subscription_total_cost(
 
     details = {
         'base_price': base_price,
+        'base_price_original': base_price_original,
+        'base_discount_percent': period_discount_percent,
+        'base_discount_total': base_discount_total,
         'traffic_price_per_month': traffic_price_per_month,
         'traffic_discount_percent': traffic_discount_percent,
         'traffic_discount_total': total_traffic_discount,
@@ -954,7 +965,8 @@ async def create_subscription(
     device_limit: int = 1,
     connected_squads: list = None,
     remnawave_short_uuid: str = None,
-    subscription_url: str = ""
+    subscription_url: str = "",
+    subscription_crypto_link: str = ""
 ) -> Subscription:
     
     if end_date is None:
@@ -973,7 +985,8 @@ async def create_subscription(
         device_limit=device_limit,
         connected_squads=connected_squads,
         remnawave_short_uuid=remnawave_short_uuid,
-        subscription_url=subscription_url
+        subscription_url=subscription_url,
+        subscription_crypto_link=subscription_crypto_link
     )
     
     db.add(subscription)

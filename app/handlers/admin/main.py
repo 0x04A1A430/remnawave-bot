@@ -10,14 +10,18 @@ from app.keyboards.admin import (
     get_admin_users_submenu_keyboard,
     get_admin_promo_submenu_keyboard,
     get_admin_communications_submenu_keyboard,
+    get_admin_support_submenu_keyboard,
     get_admin_settings_submenu_keyboard,
     get_admin_system_submenu_keyboard
 )
 from app.localization.texts import get_texts
 from app.handlers.admin import support_settings as support_settings_handlers
 from app.utils.decorators import admin_required, error_handler
+from app.services.support_settings_service import SupportSettingsService
 from app.database.crud.rules import clear_all_rules, get_rules_statistics
 from app.localization.texts import clear_rules_cache
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from app.database.crud.ticket import TicketCRUD
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +119,115 @@ async def show_communications_submenu(
 
 @admin_required
 @error_handler
+async def show_support_submenu(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    texts = get_texts(db_user.language)
+    # Moderators have access only to tickets and not to settings
+    is_moderator_only = (not settings.is_admin(callback.from_user.id) and SupportSettingsService.is_moderator(callback.from_user.id))
+    
+    from app.keyboards.admin import get_admin_support_submenu_keyboard
+    kb = get_admin_support_submenu_keyboard(db_user.language)
+    if is_moderator_only:
+        # Rebuild keyboard to include only tickets and back to main menu
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🎫 Тикеты поддержки", callback_data="admin_tickets")],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_menu")]
+        ])
+    await callback.message.edit_text(
+        "🛟 **Поддержка**\n\n" + ("Доступ к тикетам." if is_moderator_only else "Управление тикетами и настройками поддержки:"),
+        reply_markup=kb,
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+# Moderator panel entry (from main menu quick button)
+async def show_moderator_panel(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎫 Тикеты поддержки", callback_data="admin_tickets")],
+        [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_menu")]
+    ])
+    await callback.message.edit_text(
+        "🧑‍⚖️ <b>Модерация поддержки</b>\n\nДоступ к тикетам поддержки.",
+        parse_mode="HTML",
+        reply_markup=kb
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_support_audit(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    # pagination
+    page = 1
+    if callback.data.startswith("admin_support_audit_page_"):
+        try:
+            page = int(callback.data.split("_")[-1])
+        except Exception:
+            page = 1
+    per_page = 10
+    total = await TicketCRUD.count_support_audit(db)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if page < 1:
+        page = 1
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * per_page
+    logs = await TicketCRUD.list_support_audit(db, limit=per_page, offset=offset)
+
+    lines = ["🧾 <b>Аудит модераторов</b>", ""]
+    if not logs:
+        lines.append("Пока пусто")
+    else:
+        for log in logs:
+            role = "Модератор" if getattr(log, 'is_moderator', False) else "Админ"
+            ts = log.created_at.strftime('%d.%m.%Y %H:%M') if getattr(log, 'created_at', None) else ''
+            action_map = {
+                'close_ticket': 'Закрытие тикета',
+                'block_user_timed': 'Блокировка (время)',
+                'block_user_perm': 'Блокировка (навсегда)',
+                'unblock_user': 'Снятие блока',
+            }
+            action_text = action_map.get(log.action, log.action)
+            ticket_part = f" тикет #{log.ticket_id}" if log.ticket_id else ""
+            details = log.details or {}
+            extra = ""
+            if log.action == 'block_user_timed' and 'minutes' in details:
+                extra = f" ({details['minutes']} мин)"
+            lines.append(f"{ts} • {role} <code>{log.actor_telegram_id}</code> — {action_text}{ticket_part}{extra}")
+
+    # keyboard with pagination
+    nav_row = []
+    if total_pages > 1:
+        if page > 1:
+            nav_row.append(InlineKeyboardButton(text="⬅️", callback_data=f"admin_support_audit_page_{page-1}"))
+        nav_row.append(InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="current_page"))
+        if page < total_pages:
+            nav_row.append(InlineKeyboardButton(text="➡️", callback_data=f"admin_support_audit_page_{page+1}"))
+
+    kb_rows = []
+    if nav_row:
+        kb_rows.append(nav_row)
+    kb_rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_submenu_support")])
+    kb = InlineKeyboardMarkup(inline_keyboard=kb_rows)
+
+    await callback.message.edit_text("\n".join(lines), parse_mode="HTML", reply_markup=kb)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
 async def show_settings_submenu(
     callback: types.CallbackQuery,
     db_user: User,
@@ -142,7 +255,7 @@ async def show_system_submenu(
     
     await callback.message.edit_text(
         "🛠️ **Системные функции**\n\n"
-        "Обновления, резервные копии и системные операции:",
+        "Отчеты, обновления, резервные копии и системные операции:",
         reply_markup=get_admin_system_submenu_keyboard(db_user.language),
         parse_mode="Markdown"
     )
@@ -286,6 +399,15 @@ def register_handlers(dp: Dispatcher):
     )
     
     dp.callback_query.register(
+        show_support_submenu,
+        F.data == "admin_submenu_support"
+    )
+    dp.callback_query.register(
+        show_support_audit,
+        F.data.in_(["admin_support_audit"]) | F.data.startswith("admin_support_audit_page_")
+    )
+    
+    dp.callback_query.register(
         show_settings_submenu,
         F.data == "admin_submenu_settings"
     )
@@ -293,6 +415,10 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_system_submenu,
         F.data == "admin_submenu_system"
+    )
+    dp.callback_query.register(
+        show_moderator_panel,
+        F.data == "moderator_panel"
     )
     # Support settings module
     support_settings_handlers.register_handlers(dp)

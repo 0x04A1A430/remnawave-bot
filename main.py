@@ -16,8 +16,10 @@ from app.services.payment_service import PaymentService
 from app.services.version_service import version_service
 from app.external.webhook_server import WebhookServer
 from app.external.yookassa_webhook import start_yookassa_webhook_server
+from app.external.pal24_webhook import start_pal24_webhook_server, Pal24WebhookServer
 from app.database.universal_migration import run_universal_migration
 from app.services.backup_service import backup_service
+from app.services.reporting_service import reporting_service
 from app.localization.loader import ensure_locale_templates
 
 
@@ -55,6 +57,7 @@ async def main():
     
     webhook_server = None
     yookassa_server_task = None
+    pal24_server: Pal24WebhookServer | None = None
     monitoring_task = None
     maintenance_task = None
     version_check_task = None
@@ -109,15 +112,28 @@ async def main():
             logger.info("✅ Сервис бекапов инициализирован")
         except Exception as e:
             logger.error(f"❌ Ошибка инициализации сервиса бекапов: {e}")
-        
+
+        logger.info("📊 Инициализация сервиса отчетов...")
+        try:
+            reporting_service.set_bot(bot)
+            await reporting_service.start()
+        except Exception as e:
+            logger.error(f"❌ Ошибка запуска сервиса отчетов: {e}")
+
         payment_service = PaymentService(bot)
         
-        webhook_needed = settings.TRIBUTE_ENABLED or settings.is_cryptobot_enabled()
+        webhook_needed = (
+            settings.TRIBUTE_ENABLED
+            or settings.is_cryptobot_enabled()
+            or settings.is_mulenpay_enabled()
+        )
         
         if webhook_needed:
             enabled_services = []
             if settings.TRIBUTE_ENABLED:
                 enabled_services.append("Tribute")
+            if settings.is_mulenpay_enabled():
+                enabled_services.append("Mulen Pay")
             if settings.is_cryptobot_enabled():
                 enabled_services.append("CryptoBot")
             
@@ -134,7 +150,13 @@ async def main():
             )
         else:
             logger.info("ℹ️ YooKassa отключена, webhook сервер не запускается")
-        
+
+        if settings.is_pal24_enabled():
+            logger.info("💳 Запуск PayPalych webhook сервера...")
+            pal24_server = await start_pal24_webhook_server(payment_service)
+        else:
+            logger.info("ℹ️ PayPalych отключен, webhook сервер не запускается")
+
         logger.info("📊 Запуск службы мониторинга...")
         monitoring_task = asyncio.create_task(monitoring_service.start_monitoring())
         
@@ -160,14 +182,24 @@ async def main():
         if webhook_needed:
             if settings.TRIBUTE_ENABLED:
                 logger.info(f"   Tribute: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.TRIBUTE_WEBHOOK_PATH}")
+            if settings.is_mulenpay_enabled():
+                logger.info(f"   Mulen Pay: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.MULENPAY_WEBHOOK_PATH}")
             if settings.is_cryptobot_enabled():
                 logger.info(f"   CryptoBot: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.CRYPTOBOT_WEBHOOK_PATH}")
         if settings.is_yookassa_enabled():
             logger.info(f"   YooKassa: {settings.WEBHOOK_URL}:{settings.YOOKASSA_WEBHOOK_PORT}{settings.YOOKASSA_WEBHOOK_PATH}")
+        if settings.is_pal24_enabled():
+            logger.info(
+                f"   PayPalych: {settings.WEBHOOK_URL}:{settings.PAL24_WEBHOOK_PORT}{settings.PAL24_WEBHOOK_PATH}"
+            )
         logger.info("📄 Активные фоновые сервисы:")
         logger.info(f"   Мониторинг: {'Включен' if monitoring_task else 'Отключен'}")
         logger.info(f"   Техработы: {'Включен' if maintenance_task else 'Отключен'}")
         logger.info(f"   Проверка версий: {'Включен' if version_check_task else 'Отключен'}")
+        logger.info(
+            "   Отчеты: %s",
+            "Включен" if reporting_service.is_running() else "Отключен",
+        )
         logger.info("=" * 50)
         
         try:
@@ -235,6 +267,10 @@ async def main():
                 await monitoring_task
             except asyncio.CancelledError:
                 pass
+
+        if pal24_server:
+            logger.info("ℹ️ Остановка PayPalych webhook сервера...")
+            await asyncio.get_running_loop().run_in_executor(None, pal24_server.stop)
         
         if maintenance_task and not maintenance_task.done():
             logger.info("ℹ️ Остановка службы техработ...")
@@ -252,6 +288,12 @@ async def main():
                 await version_check_task
             except asyncio.CancelledError:
                 pass
+
+        logger.info("ℹ️ Остановка сервиса отчетов...")
+        try:
+            await reporting_service.stop()
+        except Exception as e:
+            logger.error(f"Ошибка остановки сервиса отчетов: {e}")
 
         logger.info("ℹ️ Остановка сервиса бекапов...")
         try:

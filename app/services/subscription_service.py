@@ -38,6 +38,26 @@ def _resolve_discount_percent(
 
     return 0
 
+
+def _resolve_addon_discount_percent(
+    user: Optional[User],
+    promo_group: Optional[PromoGroup],
+    category: str,
+    *,
+    period_days: Optional[int] = None,
+) -> int:
+    group = promo_group or (getattr(user, "promo_group", None) if user else None)
+
+    if group is not None and not getattr(group, "apply_discounts_to_addons", True):
+        return 0
+
+    return _resolve_discount_percent(
+        user,
+        promo_group,
+        category,
+        period_days=period_days,
+    )
+
 def get_traffic_reset_strategy():
     from app.config import settings
     strategy = settings.DEFAULT_TRAFFIC_RESET_STRATEGY.upper()
@@ -130,7 +150,8 @@ class SubscriptionService:
                     )
                 
                 subscription.remnawave_short_uuid = updated_user.short_uuid
-                subscription.subscription_url = updated_user.subscription_url 
+                subscription.subscription_url = updated_user.subscription_url
+                subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 user.remnawave_uuid = updated_user.uuid
                 
                 await db.commit()
@@ -190,6 +211,7 @@ class SubscriptionService:
                 )
                 
                 subscription.subscription_url = updated_user.subscription_url
+                subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 await db.commit()
                 
                 status_text = "активным" if is_actually_active else "истёкшим"
@@ -233,6 +255,7 @@ class SubscriptionService:
                 
                 subscription.remnawave_short_uuid = updated_user.short_uuid
                 subscription.subscription_url = updated_user.subscription_url
+                subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 await db.commit()
                 
                 logger.info(f"✅ Обновлена ссылка подписки для пользователя {user.telegram_id}")
@@ -299,7 +322,15 @@ class SubscriptionService:
         if settings.MAX_DEVICES_LIMIT > 0 and devices > settings.MAX_DEVICES_LIMIT:
             raise ValueError(f"Превышен максимальный лимит устройств: {settings.MAX_DEVICES_LIMIT}")
     
-        base_price = PERIOD_PRICES.get(period_days, 0)
+        base_price_original = PERIOD_PRICES.get(period_days, 0)
+        period_discount_percent = _resolve_discount_percent(
+            user,
+            promo_group,
+            "period",
+            period_days=period_days,
+        )
+        base_discount_total = base_price_original * period_discount_percent // 100
+        base_price = base_price_original - base_discount_total
         
         promo_group = promo_group or (user.promo_group if user else None)
 
@@ -353,7 +384,13 @@ class SubscriptionService:
         total_price = base_price + discounted_traffic_price + total_servers_price + discounted_devices_price
 
         logger.info(f"Расчет стоимости новой подписки:")
-        logger.info(f"   Период {period_days} дней: {base_price/100}₽")
+        base_log = f"   Период {period_days} дней: {base_price_original/100}₽"
+        if base_discount_total > 0:
+            base_log += (
+                f" → {base_price/100}₽"
+                f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
+            )
+        logger.info(base_log)
         if discounted_traffic_price > 0:
             message = f"   Трафик {traffic_gb} ГБ: {traffic_price/100}₽"
             if traffic_discount > 0:
@@ -391,14 +428,16 @@ class SubscriptionService:
         try:
             from app.config import PERIOD_PRICES
 
-            base_price = PERIOD_PRICES.get(period_days, 0)
+            base_price_original = PERIOD_PRICES.get(period_days, 0)
 
             if user is None:
                 user = getattr(subscription, "user", None)
             promo_group = promo_group or (user.promo_group if user else None)
 
             servers_price, _ = await self.get_countries_price_by_uuids(
-                subscription.connected_squads, db
+                subscription.connected_squads,
+                db,
+                promo_group_id=promo_group.id if promo_group else None,
             )
 
             servers_discount_percent = _resolve_discount_percent(
@@ -430,6 +469,15 @@ class SubscriptionService:
             traffic_discount = traffic_price * traffic_discount_percent // 100
             discounted_traffic_price = traffic_price - traffic_discount
 
+            period_discount_percent = _resolve_discount_percent(
+                user,
+                promo_group,
+                "period",
+                period_days=period_days,
+            )
+            base_discount_total = base_price_original * period_discount_percent // 100
+            base_price = base_price_original - base_discount_total
+
             total_price = (
                 base_price
                 + discounted_servers_price
@@ -438,7 +486,13 @@ class SubscriptionService:
             )
 
             logger.info(f"💰 Расчет стоимости продления для подписки {subscription.id} (по текущим ценам):")
-            logger.info(f"   📅 Период {period_days} дней: {base_price/100}₽")
+            base_log = f"   📅 Период {period_days} дней: {base_price_original/100}₽"
+            if base_discount_total > 0:
+                base_log += (
+                    f" → {base_price/100}₽"
+                    f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
+                )
+            logger.info(base_log)
             if servers_price > 0:
                 message = f"   🌍 Серверы ({len(subscription.connected_squads)}) по текущим ценам: {discounted_servers_price/100}₽"
                 if servers_discount > 0:
@@ -503,6 +557,7 @@ class SubscriptionService:
                 
                 subscription.remnawave_short_uuid = None
                 subscription.subscription_url = ""
+                subscription.subscription_crypto_link = ""
                 subscription.connected_squads = []
                 
                 user.remnawave_uuid = None
@@ -518,9 +573,11 @@ class SubscriptionService:
             return False
     
     async def get_countries_price_by_uuids(
-        self, 
-        country_uuids: List[str], 
-        db: AsyncSession
+        self,
+        country_uuids: List[str],
+        db: AsyncSession,
+        *,
+        promo_group_id: Optional[int] = None,
     ) -> Tuple[int, List[int]]:
         try:
             from app.database.crud.server_squad import get_server_squad_by_uuid
@@ -530,7 +587,12 @@ class SubscriptionService:
             
             for country_uuid in country_uuids:
                 server = await get_server_squad_by_uuid(db, country_uuid)
-                if server and server.is_available and not server.is_full:
+                is_allowed = True
+                if promo_group_id is not None and server:
+                    allowed_ids = {pg.id for pg in server.allowed_promo_groups}
+                    is_allowed = promo_group_id in allowed_ids
+
+                if server and server.is_available and not server.is_full and is_allowed:
                     price = server.price_kopeks
                     total_price += price
                     prices_list.append(price)
@@ -577,7 +639,15 @@ class SubscriptionService:
         
         months_in_period = calculate_months_from_days(period_days)
         
-        base_price = PERIOD_PRICES.get(period_days, 0)
+        base_price_original = PERIOD_PRICES.get(period_days, 0)
+        period_discount_percent = _resolve_discount_percent(
+            user,
+            promo_group,
+            "period",
+            period_days=period_days,
+        )
+        base_discount_total = base_price_original * period_discount_percent // 100
+        base_price = base_price_original - base_discount_total
         
         promo_group = promo_group or (user.promo_group if user else None)
 
@@ -637,7 +707,13 @@ class SubscriptionService:
         total_price = base_price + total_traffic_price + total_servers_price + total_devices_price
 
         logger.info(f"Расчет стоимости новой подписки на {period_days} дней ({months_in_period} мес):")
-        logger.info(f"   Период {period_days} дней: {base_price/100}₽")
+        base_log = f"   Период {period_days} дней: {base_price_original/100}₽"
+        if base_discount_total > 0:
+            base_log += (
+                f" → {base_price/100}₽"
+                f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
+            )
+        logger.info(base_log)
         if total_traffic_price > 0:
             message = (
                 f"   Трафик {traffic_gb} ГБ: {traffic_price_per_month/100}₽/мес x {months_in_period} = {total_traffic_price/100}₽"
@@ -681,14 +757,16 @@ class SubscriptionService:
 
             months_in_period = calculate_months_from_days(period_days)
 
-            base_price = PERIOD_PRICES.get(period_days, 0)
+            base_price_original = PERIOD_PRICES.get(period_days, 0)
 
             if user is None:
                 user = getattr(subscription, "user", None)
             promo_group = promo_group or (user.promo_group if user else None)
 
             servers_price_per_month, _ = await self.get_countries_price_by_uuids(
-                subscription.connected_squads, db
+                subscription.connected_squads,
+                db,
+                promo_group_id=promo_group.id if promo_group else None,
             )
             servers_discount_percent = _resolve_discount_percent(
                 user,
@@ -723,10 +801,25 @@ class SubscriptionService:
             discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
             total_traffic_price = discounted_traffic_per_month * months_in_period
 
+            period_discount_percent = _resolve_discount_percent(
+                user,
+                promo_group,
+                "period",
+                period_days=period_days,
+            )
+            base_discount_total = base_price_original * period_discount_percent // 100
+            base_price = base_price_original - base_discount_total
+
             total_price = base_price + total_servers_price + total_devices_price + total_traffic_price
 
             logger.info(f"💰 Расчет стоимости продления подписки {subscription.id} на {period_days} дней ({months_in_period} мес):")
-            logger.info(f"   📅 Период {period_days} дней: {base_price/100}₽")
+            base_log = f"   📅 Период {period_days} дней: {base_price_original/100}₽"
+            if base_discount_total > 0:
+                base_log += (
+                    f" → {base_price/100}₽"
+                    f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
+                )
+            logger.info(base_log)
             if total_servers_price > 0:
                 message = (
                     f"   🌍 Серверы: {servers_price_per_month/100}₽/мес x {months_in_period} = {total_servers_price/100}₽"
@@ -785,7 +878,7 @@ class SubscriptionService:
 
         if additional_traffic_gb > 0:
             traffic_price_per_month = settings.get_traffic_price(additional_traffic_gb)
-            traffic_discount_percent = _resolve_discount_percent(
+            traffic_discount_percent = _resolve_addon_discount_percent(
                 user,
                 promo_group,
                 "traffic",
@@ -808,7 +901,7 @@ class SubscriptionService:
 
         if additional_devices > 0:
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-            devices_discount_percent = _resolve_discount_percent(
+            devices_discount_percent = _resolve_addon_discount_percent(
                 user,
                 promo_group,
                 "devices",
@@ -835,7 +928,7 @@ class SubscriptionService:
                 server = await get_server_squad_by_id(db, server_id)
                 if server and server.is_available:
                     server_price_per_month = server.price_kopeks
-                    servers_discount_percent = _resolve_discount_percent(
+                    servers_discount_percent = _resolve_addon_discount_percent(
                         user,
                         promo_group,
                         "servers",

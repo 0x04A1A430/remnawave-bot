@@ -274,6 +274,429 @@ async def create_cryptobot_payments_table():
         logger.error(f"Ошибка создания таблицы cryptobot_payments: {e}")
         return False
 
+
+async def create_mulenpay_payments_table():
+    table_exists = await check_table_exists('mulenpay_payments')
+    if table_exists:
+        logger.info("Таблица mulenpay_payments уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE mulenpay_payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    mulen_payment_id INTEGER NULL,
+                    uuid VARCHAR(255) NOT NULL UNIQUE,
+                    amount_kopeks INTEGER NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    status VARCHAR(50) NOT NULL DEFAULT 'created',
+                    is_paid BOOLEAN DEFAULT 0,
+                    paid_at DATETIME NULL,
+                    payment_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    transaction_id INTEGER NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_mulenpay_uuid ON mulenpay_payments(uuid);
+                CREATE INDEX idx_mulenpay_payment_id ON mulenpay_payments(mulen_payment_id);
+                """
+
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE mulenpay_payments (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    mulen_payment_id INTEGER NULL,
+                    uuid VARCHAR(255) NOT NULL UNIQUE,
+                    amount_kopeks INTEGER NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    status VARCHAR(50) NOT NULL DEFAULT 'created',
+                    is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+                    paid_at TIMESTAMP NULL,
+                    payment_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    transaction_id INTEGER NULL REFERENCES transactions(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX idx_mulenpay_uuid ON mulenpay_payments(uuid);
+                CREATE INDEX idx_mulenpay_payment_id ON mulenpay_payments(mulen_payment_id);
+                """
+
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE mulenpay_payments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    mulen_payment_id INT NULL,
+                    uuid VARCHAR(255) NOT NULL UNIQUE,
+                    amount_kopeks INT NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    status VARCHAR(50) NOT NULL DEFAULT 'created',
+                    is_paid BOOLEAN NOT NULL DEFAULT 0,
+                    paid_at DATETIME NULL,
+                    payment_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    transaction_id INT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_mulenpay_uuid ON mulenpay_payments(uuid);
+                CREATE INDEX idx_mulenpay_payment_id ON mulenpay_payments(mulen_payment_id);
+                """
+
+            else:
+                logger.error(f"Неподдерживаемый тип БД для таблицы mulenpay_payments: {db_type}")
+                return False
+
+            await conn.execute(text(create_sql))
+            logger.info("Таблица mulenpay_payments успешно создана")
+            return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы mulenpay_payments: {e}")
+        return False
+
+
+async def ensure_mulenpay_payment_schema() -> bool:
+    logger.info("=== ОБНОВЛЕНИЕ СХЕМЫ MULEN PAY ===")
+
+    table_exists = await check_table_exists("mulenpay_payments")
+    if not table_exists:
+        logger.warning("⚠️ Таблица mulenpay_payments отсутствует — создаём заново")
+        return await create_mulenpay_payments_table()
+
+    try:
+        column_exists = await check_column_exists("mulenpay_payments", "mulen_payment_id")
+        paid_at_column_exists = await check_column_exists("mulenpay_payments", "paid_at")
+        index_exists = await check_index_exists("mulenpay_payments", "idx_mulenpay_payment_id")
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not column_exists:
+                if db_type == "sqlite":
+                    alter_sql = "ALTER TABLE mulenpay_payments ADD COLUMN mulen_payment_id INTEGER NULL"
+                elif db_type == "postgresql":
+                    alter_sql = "ALTER TABLE mulenpay_payments ADD COLUMN mulen_payment_id INTEGER NULL"
+                elif db_type == "mysql":
+                    alter_sql = "ALTER TABLE mulenpay_payments ADD COLUMN mulen_payment_id INT NULL"
+                else:
+                    logger.error(
+                        "Неподдерживаемый тип БД для добавления mulen_payment_id в mulenpay_payments: %s",
+                        db_type,
+                    )
+                    return False
+
+                await conn.execute(text(alter_sql))
+                logger.info("✅ Добавлена колонка mulenpay_payments.mulen_payment_id")
+            else:
+                logger.info("ℹ️ Колонка mulenpay_payments.mulen_payment_id уже существует")
+
+            if not paid_at_column_exists:
+                if db_type == "sqlite":
+                    alter_paid_at_sql = "ALTER TABLE mulenpay_payments ADD COLUMN paid_at DATETIME NULL"
+                elif db_type == "postgresql":
+                    alter_paid_at_sql = "ALTER TABLE mulenpay_payments ADD COLUMN paid_at TIMESTAMP NULL"
+                elif db_type == "mysql":
+                    alter_paid_at_sql = "ALTER TABLE mulenpay_payments ADD COLUMN paid_at DATETIME NULL"
+                else:
+                    logger.error(
+                        "Неподдерживаемый тип БД для добавления paid_at в mulenpay_payments: %s",
+                        db_type,
+                    )
+                    return False
+
+                await conn.execute(text(alter_paid_at_sql))
+                logger.info("✅ Добавлена колонка mulenpay_payments.paid_at")
+            else:
+                logger.info("ℹ️ Колонка mulenpay_payments.paid_at уже существует")
+
+            if not index_exists:
+                if db_type == "sqlite":
+                    create_index_sql = (
+                        "CREATE INDEX IF NOT EXISTS idx_mulenpay_payment_id "
+                        "ON mulenpay_payments(mulen_payment_id)"
+                    )
+                elif db_type == "postgresql":
+                    create_index_sql = (
+                        "CREATE INDEX IF NOT EXISTS idx_mulenpay_payment_id "
+                        "ON mulenpay_payments(mulen_payment_id)"
+                    )
+                elif db_type == "mysql":
+                    create_index_sql = (
+                        "CREATE INDEX idx_mulenpay_payment_id "
+                        "ON mulenpay_payments(mulen_payment_id)"
+                    )
+                else:
+                    logger.error(
+                        "Неподдерживаемый тип БД для создания индекса mulenpay_payment_id: %s",
+                        db_type,
+                    )
+                    return False
+
+                await conn.execute(text(create_index_sql))
+                logger.info("✅ Создан индекс idx_mulenpay_payment_id")
+            else:
+                logger.info("ℹ️ Индекс idx_mulenpay_payment_id уже существует")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка обновления схемы mulenpay_payments: {e}")
+        return False
+
+
+async def create_pal24_payments_table():
+    table_exists = await check_table_exists('pal24_payments')
+    if table_exists:
+        logger.info("Таблица pal24_payments уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE pal24_payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    bill_id VARCHAR(255) NOT NULL UNIQUE,
+                    order_id VARCHAR(255) NULL,
+                    amount_kopeks INTEGER NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    type VARCHAR(20) NOT NULL DEFAULT 'normal',
+                    status VARCHAR(50) NOT NULL DEFAULT 'NEW',
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    is_paid BOOLEAN NOT NULL DEFAULT 0,
+                    paid_at DATETIME NULL,
+                    last_status VARCHAR(50) NULL,
+                    last_status_checked_at DATETIME NULL,
+                    link_url TEXT NULL,
+                    link_page_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    payment_id VARCHAR(255) NULL,
+                    payment_status VARCHAR(50) NULL,
+                    payment_method VARCHAR(50) NULL,
+                    balance_amount VARCHAR(50) NULL,
+                    balance_currency VARCHAR(10) NULL,
+                    payer_account VARCHAR(255) NULL,
+                    ttl INTEGER NULL,
+                    expires_at DATETIME NULL,
+                    transaction_id INTEGER NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_pal24_bill_id ON pal24_payments(bill_id);
+                CREATE INDEX idx_pal24_order_id ON pal24_payments(order_id);
+                CREATE INDEX idx_pal24_payment_id ON pal24_payments(payment_id);
+                """
+
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE pal24_payments (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    bill_id VARCHAR(255) NOT NULL UNIQUE,
+                    order_id VARCHAR(255) NULL,
+                    amount_kopeks INTEGER NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    type VARCHAR(20) NOT NULL DEFAULT 'normal',
+                    status VARCHAR(50) NOT NULL DEFAULT 'NEW',
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+                    paid_at TIMESTAMP NULL,
+                    last_status VARCHAR(50) NULL,
+                    last_status_checked_at TIMESTAMP NULL,
+                    link_url TEXT NULL,
+                    link_page_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    payment_id VARCHAR(255) NULL,
+                    payment_status VARCHAR(50) NULL,
+                    payment_method VARCHAR(50) NULL,
+                    balance_amount VARCHAR(50) NULL,
+                    balance_currency VARCHAR(10) NULL,
+                    payer_account VARCHAR(255) NULL,
+                    ttl INTEGER NULL,
+                    expires_at TIMESTAMP NULL,
+                    transaction_id INTEGER NULL REFERENCES transactions(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX idx_pal24_bill_id ON pal24_payments(bill_id);
+                CREATE INDEX idx_pal24_order_id ON pal24_payments(order_id);
+                CREATE INDEX idx_pal24_payment_id ON pal24_payments(payment_id);
+                """
+
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE pal24_payments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    bill_id VARCHAR(255) NOT NULL UNIQUE,
+                    order_id VARCHAR(255) NULL,
+                    amount_kopeks INT NOT NULL,
+                    currency VARCHAR(10) NOT NULL DEFAULT 'RUB',
+                    description TEXT NULL,
+                    type VARCHAR(20) NOT NULL DEFAULT 'normal',
+                    status VARCHAR(50) NOT NULL DEFAULT 'NEW',
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    is_paid BOOLEAN NOT NULL DEFAULT 0,
+                    paid_at DATETIME NULL,
+                    last_status VARCHAR(50) NULL,
+                    last_status_checked_at DATETIME NULL,
+                    link_url TEXT NULL,
+                    link_page_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    callback_payload JSON NULL,
+                    payment_id VARCHAR(255) NULL,
+                    payment_status VARCHAR(50) NULL,
+                    payment_method VARCHAR(50) NULL,
+                    balance_amount VARCHAR(50) NULL,
+                    balance_currency VARCHAR(10) NULL,
+                    payer_account VARCHAR(255) NULL,
+                    ttl INT NULL,
+                    expires_at DATETIME NULL,
+                    transaction_id INT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_pal24_bill_id ON pal24_payments(bill_id);
+                CREATE INDEX idx_pal24_order_id ON pal24_payments(order_id);
+                CREATE INDEX idx_pal24_payment_id ON pal24_payments(payment_id);
+                """
+
+            else:
+                logger.error(f"Неподдерживаемый тип БД для таблицы pal24_payments: {db_type}")
+                return False
+
+            await conn.execute(text(create_sql))
+            logger.info("Таблица pal24_payments успешно создана")
+            return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы pal24_payments: {e}")
+        return False
+
+
+async def create_discount_offers_table():
+    table_exists = await check_table_exists('discount_offers')
+    if table_exists:
+        logger.info("Таблица discount_offers уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text("""
+                    CREATE TABLE discount_offers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        subscription_id INTEGER NULL,
+                        notification_type VARCHAR(50) NOT NULL,
+                        discount_percent INTEGER NOT NULL DEFAULT 0,
+                        bonus_amount_kopeks INTEGER NOT NULL DEFAULT 0,
+                        expires_at DATETIME NOT NULL,
+                        claimed_at DATETIME NULL,
+                        is_active BOOLEAN NOT NULL DEFAULT 1,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY(subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS ix_discount_offers_user_type
+                    ON discount_offers (user_id, notification_type)
+                """))
+
+            elif db_type == 'postgresql':
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS discount_offers (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        subscription_id INTEGER NULL REFERENCES subscriptions(id) ON DELETE SET NULL,
+                        notification_type VARCHAR(50) NOT NULL,
+                        discount_percent INTEGER NOT NULL DEFAULT 0,
+                        bonus_amount_kopeks INTEGER NOT NULL DEFAULT 0,
+                        expires_at TIMESTAMP NOT NULL,
+                        claimed_at TIMESTAMP NULL,
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS ix_discount_offers_user_type
+                    ON discount_offers (user_id, notification_type)
+                """))
+
+            elif db_type == 'mysql':
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS discount_offers (
+                        id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                        user_id INTEGER NOT NULL,
+                        subscription_id INTEGER NULL,
+                        notification_type VARCHAR(50) NOT NULL,
+                        discount_percent INTEGER NOT NULL DEFAULT 0,
+                        bonus_amount_kopeks INTEGER NOT NULL DEFAULT 0,
+                        expires_at DATETIME NOT NULL,
+                        claimed_at DATETIME NULL,
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        CONSTRAINT fk_discount_offers_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        CONSTRAINT fk_discount_offers_subscription FOREIGN KEY(subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE INDEX ix_discount_offers_user_type
+                    ON discount_offers (user_id, notification_type)
+                """))
+
+            else:
+                raise ValueError(f"Unsupported database type: {db_type}")
+
+        logger.info("✅ Таблица discount_offers успешно создана")
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы discount_offers: {e}")
+        return False
+
 async def create_user_messages_table():
     table_exists = await check_table_exists('user_messages')
     if table_exists:
@@ -435,6 +858,127 @@ async def ensure_promo_groups_setup():
                         f"Не удалось добавить уникальное ограничение uq_promo_groups_name: {e}"
                     )
 
+            period_discounts_column_exists = await check_column_exists(
+                "promo_groups", "period_discounts"
+            )
+
+            if not period_discounts_column_exists:
+                if db_type == "sqlite":
+                    await conn.execute(
+                        text("ALTER TABLE promo_groups ADD COLUMN period_discounts JSON")
+                    )
+                    await conn.execute(
+                        text("UPDATE promo_groups SET period_discounts = '{}' WHERE period_discounts IS NULL")
+                    )
+                elif db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN period_discounts JSONB"
+                        )
+                    )
+                    await conn.execute(
+                        text(
+                            "UPDATE promo_groups SET period_discounts = '{}'::jsonb WHERE period_discounts IS NULL"
+                        )
+                    )
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text("ALTER TABLE promo_groups ADD COLUMN period_discounts JSON")
+                    )
+                    await conn.execute(
+                        text(
+                            "UPDATE promo_groups SET period_discounts = JSON_OBJECT() WHERE period_discounts IS NULL"
+                        )
+                    )
+                else:
+                    logger.error(
+                        f"Неподдерживаемый тип БД для promo_groups.period_discounts: {db_type}"
+                    )
+                    return False
+
+                logger.info("Добавлена колонка promo_groups.period_discounts")
+
+            auto_assign_column_exists = await check_column_exists(
+                "promo_groups", "auto_assign_total_spent_kopeks"
+            )
+
+            if not auto_assign_column_exists:
+                if db_type == "sqlite":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN auto_assign_total_spent_kopeks INTEGER DEFAULT 0"
+                        )
+                    )
+                elif db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN auto_assign_total_spent_kopeks INTEGER DEFAULT 0"
+                        )
+                    )
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN auto_assign_total_spent_kopeks INT DEFAULT 0"
+                        )
+                    )
+                else:
+                    logger.error(
+                        f"Неподдерживаемый тип БД для promo_groups.auto_assign_total_spent_kopeks: {db_type}"
+                    )
+                    return False
+
+                logger.info(
+                    "Добавлена колонка promo_groups.auto_assign_total_spent_kopeks"
+                )
+
+            addon_discount_column_exists = await check_column_exists(
+                "promo_groups", "apply_discounts_to_addons"
+            )
+
+            if not addon_discount_column_exists:
+                if db_type == "sqlite":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN apply_discounts_to_addons BOOLEAN NOT NULL DEFAULT 1"
+                        )
+                    )
+                    await conn.execute(
+                        text(
+                            "UPDATE promo_groups SET apply_discounts_to_addons = 1 WHERE apply_discounts_to_addons IS NULL"
+                        )
+                    )
+                elif db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN apply_discounts_to_addons BOOLEAN NOT NULL DEFAULT TRUE"
+                        )
+                    )
+                    await conn.execute(
+                        text(
+                            "UPDATE promo_groups SET apply_discounts_to_addons = TRUE WHERE apply_discounts_to_addons IS NULL"
+                        )
+                    )
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE promo_groups ADD COLUMN apply_discounts_to_addons TINYINT(1) NOT NULL DEFAULT 1"
+                        )
+                    )
+                    await conn.execute(
+                        text(
+                            "UPDATE promo_groups SET apply_discounts_to_addons = 1 WHERE apply_discounts_to_addons IS NULL"
+                        )
+                    )
+                else:
+                    logger.error(
+                        f"Неподдерживаемый тип БД для promo_groups.apply_discounts_to_addons: {db_type}"
+                    )
+                    return False
+
+                logger.info(
+                    "Добавлена колонка promo_groups.apply_discounts_to_addons"
+                )
+
             column_exists = await check_column_exists("users", "promo_group_id")
 
             if not column_exists:
@@ -449,6 +993,70 @@ async def ensure_promo_groups_setup():
                     return False
 
                 logger.info("Добавлена колонка users.promo_group_id")
+
+            auto_promo_flag_exists = await check_column_exists(
+                "users", "auto_promo_group_assigned"
+            )
+
+            if not auto_promo_flag_exists:
+                if db_type == "sqlite":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN auto_promo_group_assigned BOOLEAN DEFAULT 0"
+                        )
+                    )
+                elif db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN auto_promo_group_assigned BOOLEAN DEFAULT FALSE"
+                        )
+                    )
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN auto_promo_group_assigned TINYINT(1) DEFAULT 0"
+                        )
+                    )
+                else:
+                    logger.error(
+                        f"Неподдерживаемый тип БД для users.auto_promo_group_assigned: {db_type}"
+                    )
+                    return False
+
+                logger.info("Добавлена колонка users.auto_promo_group_assigned")
+
+            threshold_column_exists = await check_column_exists(
+                "users", "auto_promo_group_threshold_kopeks"
+            )
+
+            if not threshold_column_exists:
+                if db_type == "sqlite":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN auto_promo_group_threshold_kopeks INTEGER NOT NULL DEFAULT 0"
+                        )
+                    )
+                elif db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN auto_promo_group_threshold_kopeks BIGINT NOT NULL DEFAULT 0"
+                        )
+                    )
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN auto_promo_group_threshold_kopeks BIGINT NOT NULL DEFAULT 0"
+                        )
+                    )
+                else:
+                    logger.error(
+                        f"Неподдерживаемый тип БД для users.auto_promo_group_threshold_kopeks: {db_type}"
+                    )
+                    return False
+
+                logger.info(
+                    "Добавлена колонка users.auto_promo_group_threshold_kopeks"
+                )
 
             index_exists = await check_index_exists("users", "ix_users_promo_group_id")
 
@@ -815,6 +1423,63 @@ async def add_ticket_reply_block_columns():
         logger.error(f"Ошибка добавления колонок блокировок в tickets: {e}")
         return False
 
+
+async def add_ticket_sla_columns():
+    try:
+        col_exists = await check_column_exists('tickets', 'last_sla_reminder_at')
+        if col_exists:
+            return True
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            if db_type == 'sqlite':
+                alter_sql = "ALTER TABLE tickets ADD COLUMN last_sla_reminder_at DATETIME NULL"
+            elif db_type == 'postgresql':
+                alter_sql = "ALTER TABLE tickets ADD COLUMN last_sla_reminder_at TIMESTAMP NULL"
+            elif db_type == 'mysql':
+                alter_sql = "ALTER TABLE tickets ADD COLUMN last_sla_reminder_at DATETIME NULL"
+            else:
+                logger.error(f"Неподдерживаемый тип БД для добавления last_sla_reminder_at: {db_type}")
+                return False
+            await conn.execute(text(alter_sql))
+            logger.info("✅ Добавлена колонка tickets.last_sla_reminder_at")
+            return True
+    except Exception as e:
+        logger.error(f"Ошибка добавления SLA колонки в tickets: {e}")
+        return False
+
+
+async def add_subscription_crypto_link_column() -> bool:
+    column_exists = await check_column_exists('subscriptions', 'subscription_crypto_link')
+    if column_exists:
+        logger.info("ℹ️ Колонка subscription_crypto_link уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN subscription_crypto_link TEXT"))
+            elif db_type == 'postgresql':
+                await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN subscription_crypto_link VARCHAR"))
+            elif db_type == 'mysql':
+                await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN subscription_crypto_link VARCHAR(512)"))
+            else:
+                logger.error(f"Неподдерживаемый тип БД для добавления subscription_crypto_link: {db_type}")
+                return False
+
+            await conn.execute(text(
+                "UPDATE subscriptions SET subscription_crypto_link = subscription_url "
+                "WHERE subscription_crypto_link IS NULL OR subscription_crypto_link = ''"
+            ))
+
+        logger.info("✅ Добавлена колонка subscription_crypto_link в таблицу subscriptions")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка добавления колонки subscription_crypto_link: {e}")
+        return False
+
+
 async def fix_foreign_keys_for_user_deletion():
     try:
         async with engine.begin() as conn:
@@ -1053,13 +1718,120 @@ async def fix_subscription_duplicates_universal():
                 deleted_count = delete_result.rowcount
                 total_deleted += deleted_count
                 logger.info(f"Удалено {deleted_count} дублирующихся подписок для пользователя {user_id}")
-            
+
             logger.info(f"Всего удалено дублирующихся подписок: {total_deleted}")
             return total_deleted
-            
+
         except Exception as e:
             logger.error(f"Ошибка при очистке дублирующихся подписок: {e}")
             raise
+
+
+async def ensure_server_promo_groups_setup() -> bool:
+    logger.info("=== НАСТРОЙКА ДОСТУПА СЕРВЕРОВ К ПРОМОГРУППАМ ===")
+
+    try:
+        table_exists = await check_table_exists("server_squad_promo_groups")
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not table_exists:
+                if db_type == "sqlite":
+                    create_table_sql = """
+                    CREATE TABLE server_squad_promo_groups (
+                        server_squad_id INTEGER NOT NULL,
+                        promo_group_id INTEGER NOT NULL,
+                        PRIMARY KEY (server_squad_id, promo_group_id),
+                        FOREIGN KEY (server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE,
+                        FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                    );
+                    """
+                    create_index_sql = """
+                    CREATE INDEX IF NOT EXISTS idx_server_squad_promo_groups_promo ON server_squad_promo_groups(promo_group_id);
+                    """
+                elif db_type == "postgresql":
+                    create_table_sql = """
+                    CREATE TABLE server_squad_promo_groups (
+                        server_squad_id INTEGER NOT NULL REFERENCES server_squads(id) ON DELETE CASCADE,
+                        promo_group_id INTEGER NOT NULL REFERENCES promo_groups(id) ON DELETE CASCADE,
+                        PRIMARY KEY (server_squad_id, promo_group_id)
+                    );
+                    """
+                    create_index_sql = """
+                    CREATE INDEX IF NOT EXISTS idx_server_squad_promo_groups_promo ON server_squad_promo_groups(promo_group_id);
+                    """
+                else:
+                    create_table_sql = """
+                    CREATE TABLE server_squad_promo_groups (
+                        server_squad_id INT NOT NULL,
+                        promo_group_id INT NOT NULL,
+                        PRIMARY KEY (server_squad_id, promo_group_id),
+                        FOREIGN KEY (server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE,
+                        FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                    );
+                    """
+                    create_index_sql = """
+                    CREATE INDEX IF NOT EXISTS idx_server_squad_promo_groups_promo ON server_squad_promo_groups(promo_group_id);
+                    """
+
+                await conn.execute(text(create_table_sql))
+                await conn.execute(text(create_index_sql))
+                logger.info("✅ Таблица server_squad_promo_groups создана")
+            else:
+                logger.info("ℹ️ Таблица server_squad_promo_groups уже существует")
+
+            default_query = (
+                "SELECT id FROM promo_groups WHERE is_default IS TRUE LIMIT 1"
+                if db_type == "postgresql"
+                else "SELECT id FROM promo_groups WHERE is_default = 1 LIMIT 1"
+            )
+            default_result = await conn.execute(text(default_query))
+            default_row = default_result.fetchone()
+
+            if not default_row:
+                logger.warning("⚠️ Не найдена базовая промогруппа для назначения серверам")
+                return True
+
+            default_group_id = default_row[0]
+
+            servers_result = await conn.execute(text("SELECT id FROM server_squads"))
+            server_ids = [row[0] for row in servers_result.fetchall()]
+
+            assigned_count = 0
+            for server_id in server_ids:
+                existing = await conn.execute(
+                    text(
+                        "SELECT 1 FROM server_squad_promo_groups WHERE server_squad_id = :sid LIMIT 1"
+                    ),
+                    {"sid": server_id},
+                )
+                if existing.fetchone():
+                    continue
+
+                await conn.execute(
+                    text(
+                        "INSERT INTO server_squad_promo_groups (server_squad_id, promo_group_id) "
+                        "VALUES (:sid, :gid)"
+                    ),
+                    {"sid": server_id, "gid": default_group_id},
+                )
+                assigned_count += 1
+
+            if assigned_count:
+                logger.info(
+                    f"✅ Базовая промогруппа назначена {assigned_count} серверам"
+                )
+            else:
+                logger.info("ℹ️ Все серверы уже имеют назначенные промогруппы")
+
+        return True
+
+    except Exception as e:
+        logger.error(
+            f"Ошибка настройки таблицы server_squad_promo_groups: {e}"
+        )
+        return False
 
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
@@ -1078,6 +1850,33 @@ async def run_universal_migration():
             logger.info("✅ Таблица CryptoBot payments готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей CryptoBot payments")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ MULEN PAY ===")
+        mulenpay_created = await create_mulenpay_payments_table()
+        if mulenpay_created:
+            logger.info("✅ Таблица Mulen Pay payments готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей Mulen Pay payments")
+
+        mulenpay_schema_ok = await ensure_mulenpay_payment_schema()
+        if mulenpay_schema_ok:
+            logger.info("✅ Схема Mulen Pay payments актуальна")
+        else:
+            logger.warning("⚠️ Не удалось обновить схему Mulen Pay payments")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PAL24 ===")
+        pal24_created = await create_pal24_payments_table()
+        if pal24_created:
+            logger.info("✅ Таблица Pal24 payments готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей Pal24 payments")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ DISCOUNT_OFFERS ===")
+        discount_created = await create_discount_offers_table()
+        if discount_created:
+            logger.info("✅ Таблица discount_offers готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей discount_offers")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_MESSAGES ===")
         user_messages_created = await create_user_messages_table()
@@ -1107,12 +1906,98 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с добавлением полей блокировок в tickets")
 
+        logger.info("=== ДОБАВЛЕНИЕ ПОЛЕЙ SLA В TICKETS ===")
+        sla_cols_added = await add_ticket_sla_columns()
+        if sla_cols_added:
+            logger.info("✅ Поля SLA в tickets готовы")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением полей SLA в tickets")
+
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ CRYPTO LINK ДЛЯ ПОДПИСОК ===")
+        crypto_link_added = await add_subscription_crypto_link_column()
+        if crypto_link_added:
+            logger.info("✅ Колонка subscription_crypto_link готова")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением колонки subscription_crypto_link")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ АУДИТА ПОДДЕРЖКИ ===")
+        try:
+            async with engine.begin() as conn:
+                db_type = await get_database_type()
+                if not await check_table_exists('support_audit_logs'):
+                    if db_type == 'sqlite':
+                        create_sql = """
+                        CREATE TABLE support_audit_logs (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            actor_user_id INTEGER NULL,
+                            actor_telegram_id BIGINT NOT NULL,
+                            is_moderator BOOLEAN NOT NULL DEFAULT 0,
+                            action VARCHAR(50) NOT NULL,
+                            ticket_id INTEGER NULL,
+                            target_user_id INTEGER NULL,
+                            details JSON NULL,
+                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (actor_user_id) REFERENCES users(id),
+                            FOREIGN KEY (ticket_id) REFERENCES tickets(id),
+                            FOREIGN KEY (target_user_id) REFERENCES users(id)
+                        );
+                        CREATE INDEX idx_support_audit_logs_ticket ON support_audit_logs(ticket_id);
+                        CREATE INDEX idx_support_audit_logs_actor ON support_audit_logs(actor_telegram_id);
+                        CREATE INDEX idx_support_audit_logs_action ON support_audit_logs(action);
+                        """
+                    elif db_type == 'postgresql':
+                        create_sql = """
+                        CREATE TABLE support_audit_logs (
+                            id SERIAL PRIMARY KEY,
+                            actor_user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+                            actor_telegram_id BIGINT NOT NULL,
+                            is_moderator BOOLEAN NOT NULL DEFAULT FALSE,
+                            action VARCHAR(50) NOT NULL,
+                            ticket_id INTEGER NULL REFERENCES tickets(id) ON DELETE SET NULL,
+                            target_user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+                            details JSON NULL,
+                            created_at TIMESTAMP DEFAULT NOW()
+                        );
+                        CREATE INDEX idx_support_audit_logs_ticket ON support_audit_logs(ticket_id);
+                        CREATE INDEX idx_support_audit_logs_actor ON support_audit_logs(actor_telegram_id);
+                        CREATE INDEX idx_support_audit_logs_action ON support_audit_logs(action);
+                        """
+                    else:
+                        create_sql = """
+                        CREATE TABLE support_audit_logs (
+                            id INT AUTO_INCREMENT PRIMARY KEY,
+                            actor_user_id INT NULL,
+                            actor_telegram_id BIGINT NOT NULL,
+                            is_moderator BOOLEAN NOT NULL DEFAULT 0,
+                            action VARCHAR(50) NOT NULL,
+                            ticket_id INT NULL,
+                            target_user_id INT NULL,
+                            details JSON NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE INDEX idx_support_audit_logs_ticket ON support_audit_logs(ticket_id);
+                        CREATE INDEX idx_support_audit_logs_actor ON support_audit_logs(actor_telegram_id);
+                        CREATE INDEX idx_support_audit_logs_action ON support_audit_logs(action);
+                        """
+                    await conn.execute(text(create_sql))
+                    logger.info("✅ Таблица support_audit_logs создана")
+                else:
+                    logger.info("ℹ️ Таблица support_audit_logs уже существует")
+        except Exception as e:
+            logger.warning(f"⚠️ Проблемы с созданием таблицы support_audit_logs: {e}")
+
         logger.info("=== НАСТРОЙКА ПРОМО ГРУПП ===")
         promo_groups_ready = await ensure_promo_groups_setup()
         if promo_groups_ready:
             logger.info("✅ Промо группы готовы")
         else:
             logger.warning("⚠️ Проблемы с настройкой промо групп")
+
+        server_promo_groups_ready = await ensure_server_promo_groups_setup()
+        if server_promo_groups_ready:
+            logger.info("✅ Доступ серверов по промогруппам настроен")
+        else:
+            logger.warning("⚠️ Проблемы с настройкой доступа серверов к промогруппам")
 
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()
@@ -1186,7 +2071,14 @@ async def check_migration_status():
             "subscription_duplicates": False,
             "subscription_conversions_table": False,
             "promo_groups_table": False,
-            "users_promo_group_column": False
+            "server_promo_groups_table": False,
+            "users_promo_group_column": False,
+            "promo_groups_period_discounts_column": False,
+            "promo_groups_auto_assign_column": False,
+            "promo_groups_addon_discount_column": False,
+            "users_auto_promo_group_assigned_column": False,
+            "users_auto_promo_group_threshold_column": False,
+            "subscription_crypto_link_column": False,
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -1196,9 +2088,16 @@ async def check_migration_status():
         status["welcome_texts_table"] = await check_table_exists('welcome_texts')
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
         status["promo_groups_table"] = await check_table_exists('promo_groups')
+        status["server_promo_groups_table"] = await check_table_exists('server_squad_promo_groups')
 
         status["welcome_texts_is_enabled_column"] = await check_column_exists('welcome_texts', 'is_enabled')
         status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
+        status["promo_groups_period_discounts_column"] = await check_column_exists('promo_groups', 'period_discounts')
+        status["promo_groups_auto_assign_column"] = await check_column_exists('promo_groups', 'auto_assign_total_spent_kopeks')
+        status["promo_groups_addon_discount_column"] = await check_column_exists('promo_groups', 'apply_discounts_to_addons')
+        status["users_auto_promo_group_assigned_column"] = await check_column_exists('users', 'auto_promo_group_assigned')
+        status["users_auto_promo_group_threshold_column"] = await check_column_exists('users', 'auto_promo_group_threshold_kopeks')
+        status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         
         media_fields_exist = (
             await check_column_exists('broadcast_history', 'has_media') and
@@ -1230,7 +2129,14 @@ async def check_migration_status():
             "subscription_conversions_table": "Таблица конверсий подписок",
             "subscription_duplicates": "Отсутствие дубликатов подписок",
             "promo_groups_table": "Таблица промо-групп",
-            "users_promo_group_column": "Колонка promo_group_id у пользователей"
+            "server_promo_groups_table": "Связи серверов и промогрупп",
+            "users_promo_group_column": "Колонка promo_group_id у пользователей",
+            "promo_groups_period_discounts_column": "Колонка period_discounts у промо-групп",
+            "promo_groups_auto_assign_column": "Колонка auto_assign_total_spent_kopeks у промо-групп",
+            "promo_groups_addon_discount_column": "Колонка apply_discounts_to_addons у промо-групп",
+            "users_auto_promo_group_assigned_column": "Флаг автоназначения промогруппы у пользователей",
+            "users_auto_promo_group_threshold_column": "Порог последней авто-промогруппы у пользователей",
+            "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
         }
         
         for check_key, check_status in status.items():
