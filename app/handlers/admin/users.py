@@ -1988,7 +1988,7 @@ async def toggle_user_server(
         if user.remnawave_uuid:
             try:
                 remnawave_service = RemnaWaveService()
-                async with remnawave_service.api as api:
+                async with remnawave_service.get_api_client() as api:
                     await api.update_user(
                         uuid=user.remnawave_uuid,
                         active_internal_squads=current_squads,
@@ -2332,7 +2332,7 @@ async def reset_user_devices(
             return
         
         remnawave_service = RemnaWaveService()
-        async with remnawave_service.api as api:
+        async with remnawave_service.get_api_client() as api:
             success = await api.reset_user_devices(user.remnawave_uuid)
         
         if success:
@@ -2372,7 +2372,7 @@ async def _update_user_devices(db: AsyncSession, user_id: int, devices: int, adm
         if user.remnawave_uuid:
             try:
                 remnawave_service = RemnaWaveService()
-                async with remnawave_service.api as api:
+                async with remnawave_service.get_api_client() as api:
                     await api.update_user(
                         uuid=user.remnawave_uuid,
                         hwid_device_limit=devices,
@@ -2414,7 +2414,7 @@ async def _update_user_traffic(db: AsyncSession, user_id: int, traffic_gb: int, 
                 from app.external.remnawave_api import TrafficLimitStrategy
                 
                 remnawave_service = RemnaWaveService()
-                async with remnawave_service.api as api:
+                async with remnawave_service.get_api_client() as api:
                     await api.update_user(
                         uuid=user.remnawave_uuid,
                         traffic_limit_bytes=traffic_gb * (1024**3) if traffic_gb > 0 else 0,
@@ -2873,7 +2873,7 @@ async def admin_buy_subscription_execute(
                 remnawave_service = RemnaWaveService()
                 
                 if target_user.remnawave_uuid:
-                    async with remnawave_service.api as api:
+                    async with remnawave_service.get_api_client() as api:
                         remnawave_user = await api.update_user(
                             uuid=target_user.remnawave_uuid,
                             status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
@@ -2890,7 +2890,7 @@ async def admin_buy_subscription_execute(
                         )
                 else:
                     username = f"user_{target_user.telegram_id}"
-                    async with remnawave_service.api as api:
+                    async with remnawave_service.get_api_client() as api:
                         remnawave_user = await api.create_user(
                             username=username,
                             expire_at=subscription.end_date,

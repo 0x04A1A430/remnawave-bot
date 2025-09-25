@@ -549,7 +549,7 @@ async def show_subscription_info(
             from app.services.remnawave_service import RemnaWaveService
             service = RemnaWaveService()
             
-            async with service.api as api:
+            async with service.get_api_client() as api:
                 response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
                 
                 if response and 'response' in response:
@@ -651,7 +651,7 @@ async def get_current_devices_detailed(db_user: User) -> dict:
         from app.services.remnawave_service import RemnaWaveService
         service = RemnaWaveService()
         
-        async with service.api as api:
+        async with service.get_api_client() as api:
             response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
             
             if response and 'response' in response:
@@ -724,7 +724,7 @@ async def get_current_devices_count(db_user: User) -> str:
         from app.services.remnawave_service import RemnaWaveService
         service = RemnaWaveService()
         
-        async with service.api as api:
+        async with service.get_api_client() as api:
             response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
             
             if response and 'response' in response:
@@ -1826,7 +1826,7 @@ async def handle_device_management(
         from app.services.remnawave_service import RemnaWaveService
         service = RemnaWaveService()
         
-        async with service.api as api:
+        async with service.get_api_client() as api:
             response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
             
             if response and 'response' in response:
@@ -1910,7 +1910,7 @@ async def handle_devices_page(
         from app.services.remnawave_service import RemnaWaveService
         service = RemnaWaveService()
         
-        async with service.api as api:
+        async with service.get_api_client() as api:
             response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
             
             if response and 'response' in response:
@@ -1953,7 +1953,7 @@ async def handle_single_device_reset(
         from app.services.remnawave_service import RemnaWaveService
         service = RemnaWaveService()
         
-        async with service.api as api:
+        async with service.get_api_client() as api:
             response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
             
             if response and 'response' in response:
@@ -2026,7 +2026,7 @@ async def handle_all_devices_reset_from_management(
         from app.services.remnawave_service import RemnaWaveService
         service = RemnaWaveService()
         
-        async with service.api as api:
+        async with service.get_api_client() as api:
             devices_response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
             
             if not devices_response or 'response' not in devices_response:
@@ -2723,7 +2723,7 @@ async def confirm_reset_traffic(
         
         user = db_user
         if user.remnawave_uuid:
-            async with remnawave_service.api as api:
+            async with remnawave_service.get_api_client() as api:
                 await api.reset_user_traffic(user.remnawave_uuid)
         
         await create_transaction(

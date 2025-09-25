@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.localization.texts import get_texts
+from app.services.remnawave_service import RemnaWaveService
 from app.services.system_settings_service import bot_configuration_service
 from app.states import BotConfigStates
 from app.utils.decorators import admin_required, error_handler
@@ -324,6 +325,18 @@ def _build_settings_keyboard(
 
     rows: list[list[types.InlineKeyboardButton]] = []
 
+    if category_key == "REMNAWAVE":
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text="🔌 Проверить подключение",
+                    callback_data=(
+                        f"botcfg_test_remnawave:{group_key}:{category_key}:{category_page}:{page}"
+                    ),
+                )
+            ]
+        )
+
     for definition in sliced:
         value_preview = bot_configuration_service.format_value_for_list(definition.key)
         button_text = f"{definition.display_name} · {value_preview}"
@@ -553,6 +566,63 @@ async def show_bot_config_category(
         reply_markup=keyboard,
     )
     await callback.answer()
+
+
+@admin_required
+@error_handler
+async def test_remnawave_connection(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    parts = callback.data.split(":", 5)
+    group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
+    category_key = parts[2] if len(parts) > 2 else "REMNAWAVE"
+
+    try:
+        category_page = max(1, int(parts[3])) if len(parts) > 3 else 1
+    except ValueError:
+        category_page = 1
+
+    try:
+        settings_page = max(1, int(parts[4])) if len(parts) > 4 else 1
+    except ValueError:
+        settings_page = 1
+
+    service = RemnaWaveService()
+    result = await service.test_api_connection()
+
+    status = result.get("status")
+    message: str
+
+    if status == "connected":
+        message = "✅ Подключение успешно"
+    elif status == "not_configured":
+        message = f"⚠️ {result.get('message', 'RemnaWave API не настроен')}"
+    else:
+        base_message = result.get("message", "Ошибка подключения")
+        status_code = result.get("status_code")
+        if status_code:
+            message = f"❌ {base_message} (HTTP {status_code})"
+        else:
+            message = f"❌ {base_message}"
+
+    definitions = bot_configuration_service.get_settings_for_category(category_key)
+    if definitions:
+        keyboard = _build_settings_keyboard(
+            category_key,
+            group_key,
+            category_page,
+            db_user.language,
+            settings_page,
+        )
+        try:
+            await callback.message.edit_reply_markup(reply_markup=keyboard)
+        except Exception:
+            # ignore inability to refresh markup, main result shown in alert
+            pass
+
+    await callback.answer(message, show_alert=True)
 
 
 @admin_required
@@ -889,6 +959,10 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(
         show_bot_config_category,
         F.data.startswith("botcfg_cat:"),
+    )
+    dp.callback_query.register(
+        test_remnawave_connection,
+        F.data.startswith("botcfg_test_remnawave:"),
     )
     dp.callback_query.register(
         show_bot_config_setting,

@@ -23,7 +23,7 @@ async def _refresh_remnawave_description(
 ) -> None:
     try:
         remnawave_service = RemnaWaveService()
-        async with remnawave_service.api as api:
+        async with remnawave_service.get_api_client() as api:
             await api.update_user(uuid=remnawave_uuid, description=description)
         logger.info(
             f"✅ [Middleware] Описание пользователя {telegram_id} обновлено в RemnaWave"

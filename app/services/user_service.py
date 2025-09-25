@@ -360,7 +360,7 @@ class UserService:
                     
                     if delete_mode == "delete":
                         # Удаляем пользователя из панели Remnawave
-                        async with remnawave_service.api as api:
+                        async with remnawave_service.get_api_client() as api:
                             delete_success = await api.delete_user(user.remnawave_uuid)
                             if delete_success:
                                 logger.info(f"✅ RemnaWave пользователь {user.remnawave_uuid} удален из панели")
