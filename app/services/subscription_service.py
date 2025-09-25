@@ -228,29 +228,17 @@ class SubscriptionService:
             return None
     
     async def disable_remnawave_user(self, user_uuid: str) -> bool:
-
+        
         try:
             async with self.api as api:
                 await api.disable_user(user_uuid)
                 logger.info(f"✅ Отключен RemnaWave пользователь {user_uuid}")
                 return True
-
+                
         except Exception as e:
             logger.error(f"Ошибка отключения RemnaWave пользователя: {e}")
             return False
-
-    async def enable_remnawave_user(self, user_uuid: str) -> bool:
-
-        try:
-            async with self.api as api:
-                await api.enable_user(user_uuid)
-                logger.info(f"✅ Включен RemnaWave пользователь {user_uuid}")
-                return True
-
-        except Exception as e:
-            logger.error(f"Ошибка включения RemnaWave пользователя: {e}")
-            return False
-
+    
     async def revoke_subscription(
         self,
         db: AsyncSession,
