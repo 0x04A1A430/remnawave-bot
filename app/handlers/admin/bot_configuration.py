@@ -1,7 +1,9 @@
 import math
+import time
 from typing import Iterable, List, Tuple
 
 from aiogram import Dispatcher, F, types
+from aiogram.filters import BaseFilter, StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +57,57 @@ CATEGORY_GROUP_DEFINITIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
 
 CATEGORY_FALLBACK_KEY = "other"
 CATEGORY_FALLBACK_TITLE = "📦 Прочие настройки"
+
+
+async def _store_setting_context(
+    state: FSMContext,
+    *,
+    key: str,
+    group_key: str,
+    category_page: int,
+    settings_page: int,
+) -> None:
+    await state.update_data(
+        setting_key=key,
+        setting_group_key=group_key,
+        setting_category_page=category_page,
+        setting_settings_page=settings_page,
+        botcfg_origin="bot_config",
+        botcfg_timestamp=time.time(),
+    )
+
+
+class BotConfigInputFilter(BaseFilter):
+    def __init__(self, timeout: float = 300.0) -> None:
+        self.timeout = timeout
+
+    async def __call__(
+        self,
+        message: types.Message,
+        state: FSMContext,
+    ) -> bool:
+        if not message.text or message.text.startswith("/"):
+            return False
+
+        if message.chat.type != "private":
+            return False
+
+        data = await state.get_data()
+
+        if data.get("botcfg_origin") != "bot_config":
+            return False
+
+        if not data.get("setting_key"):
+            return False
+
+        timestamp = data.get("botcfg_timestamp")
+        if timestamp is None:
+            return True
+
+        try:
+            return (time.time() - float(timestamp)) <= self.timeout
+        except (TypeError, ValueError):
+            return False
 
 
 def _chunk(buttons: Iterable[types.InlineKeyboardButton], size: int) -> Iterable[List[types.InlineKeyboardButton]]:
@@ -430,6 +483,7 @@ async def show_bot_config_setting(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
     parts = callback.data.split(":", 4)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
@@ -445,6 +499,13 @@ async def show_bot_config_setting(
     text = _render_setting_text(key)
     keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
     await callback.message.edit_text(text, reply_markup=keyboard)
+    await _store_setting_context(
+        state,
+        key=key,
+        group_key=group_key,
+        category_page=category_page,
+        settings_page=settings_page,
+    )
     await callback.answer()
 
 
@@ -502,11 +563,12 @@ async def start_edit_setting(
         ),
     )
 
-    await state.update_data(
-        setting_key=key,
-        setting_group_key=group_key,
-        setting_category_page=category_page,
-        setting_settings_page=settings_page,
+    await _store_setting_context(
+        state,
+        key=key,
+        group_key=group_key,
+        category_page=category_page,
+        settings_page=settings_page,
     )
     await state.set_state(BotConfigStates.waiting_for_value)
     await callback.answer()
@@ -545,6 +607,55 @@ async def handle_edit_setting(
     await message.answer("✅ Настройка обновлена")
     await message.answer(text, reply_markup=keyboard)
     await state.clear()
+    await _store_setting_context(
+        state,
+        key=key,
+        group_key=group_key,
+        category_page=category_page,
+        settings_page=settings_page,
+    )
+
+
+@admin_required
+@error_handler
+async def handle_direct_setting_input(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    data = await state.get_data()
+
+    key = data.get("setting_key")
+    group_key = data.get("setting_group_key", CATEGORY_FALLBACK_KEY)
+    category_page = int(data.get("setting_category_page", 1) or 1)
+    settings_page = int(data.get("setting_settings_page", 1) or 1)
+
+    if not key:
+        return
+
+    try:
+        value = bot_configuration_service.parse_user_value(key, message.text or "")
+    except ValueError as error:
+        await message.answer(f"⚠️ {error}")
+        return
+
+    await bot_configuration_service.set_value(db, key, value)
+    await db.commit()
+
+    text = _render_setting_text(key)
+    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
+    await message.answer("✅ Настройка обновлена")
+    await message.answer(text, reply_markup=keyboard)
+
+    await state.clear()
+    await _store_setting_context(
+        state,
+        key=key,
+        group_key=group_key,
+        category_page=category_page,
+        settings_page=settings_page,
+    )
 
 
 @admin_required
@@ -553,6 +664,7 @@ async def reset_setting(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
     parts = callback.data.split(":", 4)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
@@ -571,6 +683,13 @@ async def reset_setting(
     text = _render_setting_text(key)
     keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
     await callback.message.edit_text(text, reply_markup=keyboard)
+    await _store_setting_context(
+        state,
+        key=key,
+        group_key=group_key,
+        category_page=category_page,
+        settings_page=settings_page,
+    )
     await callback.answer("Сброшено к значению по умолчанию")
 
 
@@ -580,6 +699,7 @@ async def toggle_setting(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
     parts = callback.data.split(":", 4)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
@@ -600,6 +720,13 @@ async def toggle_setting(
     text = _render_setting_text(key)
     keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
     await callback.message.edit_text(text, reply_markup=keyboard)
+    await _store_setting_context(
+        state,
+        key=key,
+        group_key=group_key,
+        category_page=category_page,
+        settings_page=settings_page,
+    )
     await callback.answer("Обновлено")
 
 
@@ -631,6 +758,12 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(
         toggle_setting,
         F.data.startswith("botcfg_toggle:"),
+    )
+    dp.message.register(
+        handle_direct_setting_input,
+        StateFilter(None),
+        F.text,
+        BotConfigInputFilter(),
     )
     dp.message.register(
         handle_edit_setting,
