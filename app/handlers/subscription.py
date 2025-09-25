@@ -566,7 +566,11 @@ async def show_subscription_info(
     
     subscription_link = get_display_subscription_link(subscription)
     if subscription_link:
-        if actual_status in ['trial_active', 'paid_active'] and not settings.HIDE_SUBSCRIPTION_LINK:
+        if (
+            actual_status in ['trial_active', 'paid_active']
+            and not settings.HIDE_SUBSCRIPTION_LINK
+            and not settings.is_happ_cryptolink_mode()
+        ):
             message += "\n\n" + texts.t(
                 "SUBSCRIPTION_CONNECT_LINK_SECTION",
                 "🔗 <b>Ссылка для подключения:</b>\n<code>{subscription_url}</code>",
@@ -839,16 +843,30 @@ async def activate_trial(
         
         subscription_link = get_display_subscription_link(subscription)
         if remnawave_user and subscription_link:
-            subscription_import_link = texts.t(
-                "SUBSCRIPTION_IMPORT_LINK_SECTION",
-                "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>",
-            ).format(subscription_url=subscription_link)
+            if settings.is_happ_cryptolink_mode():
+                trial_success_text = (
+                    f"{texts.TRIAL_ACTIVATED}\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_HAPP_LINK_PROMPT",
+                        "🔒 Ссылка на подписку создана. Нажмите кнопку \"Подключиться\" ниже, чтобы открыть её в Happ.",
+                    )
+                    + "\n\n"
+                    + texts.t(
+                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
+                        '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
+                    )
+                )
+            else:
+                subscription_import_link = texts.t(
+                    "SUBSCRIPTION_IMPORT_LINK_SECTION",
+                    "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>",
+                ).format(subscription_url=subscription_link)
 
-            trial_success_text = (
-                f"{texts.TRIAL_ACTIVATED}\n\n"
-                f"{subscription_import_link}\n\n"
-                f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
-            )
+                trial_success_text = (
+                    f"{texts.TRIAL_ACTIVATED}\n\n"
+                    f"{subscription_import_link}\n\n"
+                    f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
+                )
 
             connect_mode = settings.CONNECT_BUTTON_MODE
 
@@ -882,9 +900,28 @@ async def activate_trial(
                     ],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
-            elif connect_mode in {"link", "happ_cryptolink"}:
+            elif connect_mode == "link":
                 rows = [
                     [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription_link)]
+                ]
+                happ_row = get_happ_download_button_row(texts)
+                if happ_row:
+                    rows.append(happ_row)
+                rows.append([
+                    InlineKeyboardButton(
+                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                        callback_data="back_to_menu"
+                    )
+                ])
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+            elif connect_mode == "happ_cryptolink":
+                rows = [
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                            callback_data="open_subscription_link",
+                        )
+                    ]
                 ]
                 happ_row = get_happ_download_button_row(texts)
                 if happ_row:
@@ -3295,16 +3332,30 @@ async def confirm_purchase(
         
         subscription_link = get_display_subscription_link(subscription)
         if remnawave_user and subscription_link:
-            import_link_section = texts.t(
-                "SUBSCRIPTION_IMPORT_LINK_SECTION",
-                "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>",
-            ).format(subscription_url=subscription_link)
+            if settings.is_happ_cryptolink_mode():
+                success_text = (
+                    f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_HAPP_LINK_PROMPT",
+                        "🔒 Ссылка на подписку создана. Нажмите кнопку \"Подключиться\" ниже, чтобы открыть её в Happ.",
+                    )
+                    + "\n\n"
+                    + texts.t(
+                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
+                        '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
+                    )
+                )
+            else:
+                import_link_section = texts.t(
+                    "SUBSCRIPTION_IMPORT_LINK_SECTION",
+                    "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>",
+                ).format(subscription_url=subscription_link)
 
-            success_text = (
-                f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
-                f"{import_link_section}\n\n"
-                f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
-            )
+                success_text = (
+                    f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
+                    f"{import_link_section}\n\n"
+                    f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
+                )
 
             connect_mode = settings.CONNECT_BUTTON_MODE
 
@@ -3338,9 +3389,23 @@ async def confirm_purchase(
                     ],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
-            elif connect_mode in {"link", "happ_cryptolink"}:
+            elif connect_mode == "link":
                 rows = [
                     [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription_link)]
+                ]
+                happ_row = get_happ_download_button_row(texts)
+                if happ_row:
+                    rows.append(happ_row)
+                rows.append([InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")])
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+            elif connect_mode == "happ_cryptolink":
+                rows = [
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                            callback_data="open_subscription_link",
+                        )
+                    ]
                 ]
                 happ_row = get_happ_download_button_row(texts)
                 if happ_row:
@@ -4185,7 +4250,7 @@ async def handle_connect_subscription(
             parse_mode="HTML"
         )
 
-    elif connect_mode in {"link", "happ_cryptolink"}:
+    elif connect_mode == "link":
         rows = [
             [
                 InlineKeyboardButton(
@@ -4206,14 +4271,41 @@ async def handle_connect_subscription(
         await callback.message.edit_text(
             texts.t(
                 "SUBSCRIPTION_CONNECT_LINK_MESSAGE",
-                """🚀 <b>Подключить подписку</b>
+                """🚀 <b>Подключить подписку</b>",
 
 🔗 Нажмите кнопку ниже, чтобы открыть ссылку подписки:""",
             ),
             reply_markup=keyboard,
             parse_mode="HTML"
         )
+    elif connect_mode == "happ_cryptolink":
+        rows = [
+            [
+                InlineKeyboardButton(
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                    callback_data="open_subscription_link",
+                )
+            ]
+        ]
+        happ_row = get_happ_download_button_row(texts)
+        if happ_row:
+            rows.append(happ_row)
+        rows.append([
+            InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
+        ])
 
+        keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
+
+        await callback.message.edit_text(
+            texts.t(
+                "SUBSCRIPTION_CONNECT_LINK_MESSAGE",
+                """🚀 <b>Подключить подписку</b>",
+
+🔗 Нажмите кнопку ниже, чтобы открыть ссылку подписки:""",
+            ),
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
     else:
         device_text = texts.t(
             "SUBSCRIPTION_CONNECT_DEVICE_MESSAGE",
@@ -4512,6 +4604,32 @@ async def handle_open_subscription_link(
             texts.t("SUBSCRIPTION_LINK_UNAVAILABLE", "❌ Ссылка подписки недоступна"),
             show_alert=True,
         )
+        return
+
+    if settings.is_happ_cryptolink_mode():
+        happ_message = (
+            texts.t(
+                "SUBSCRIPTION_HAPP_OPEN_TITLE",
+                "🔗 <b>Подключение через Happ</b>",
+            )
+            + "\n\n"
+            + texts.t(
+                "SUBSCRIPTION_HAPP_OPEN_LINK",
+                "<a href=\"{subscription_link}\">🔓 Открыть ссылку в Happ</a>",
+            ).format(subscription_link=subscription_link)
+            + "\n\n"
+            + texts.t(
+                "SUBSCRIPTION_HAPP_OPEN_HINT",
+                "💡 Если ссылка не открывается автоматически, скопируйте её вручную: <code>{subscription_link}</code>",
+            ).format(subscription_link=subscription_link)
+        )
+
+        await callback.message.answer(
+            happ_message,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+        await callback.answer()
         return
 
     link_text = (
