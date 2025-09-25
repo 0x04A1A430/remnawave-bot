@@ -1,16 +1,21 @@
 from typing import List, Optional
-from aiogram import types
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+import logging
 from datetime import datetime
-from app.database.models import User
+
+from aiogram import types
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
+from app.config import PERIOD_PRICES, TRAFFIC_PRICES, settings
+from app.database.models import User
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.pricing_utils import format_period_description
-from app.utils.subscription_utils import get_display_subscription_link
-import logging
+from app.utils.subscription_utils import (
+    get_display_subscription_link,
+    is_supported_telegram_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -255,48 +260,54 @@ def get_happ_download_button_row(texts) -> Optional[List[InlineKeyboardButton]]:
 
 
 def get_happ_cryptolink_keyboard(
-    subscription_link: str,
+    subscription_link: Optional[str],
     language: str = DEFAULT_LANGUAGE,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    buttons = [
-        [
+    buttons: List[List[InlineKeyboardButton]] = []
+
+    if is_supported_telegram_url(subscription_link):
+        buttons.append([
             InlineKeyboardButton(
                 text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                 url=subscription_link,
             )
-        ],
+        ])
+
+    buttons.extend(
         [
-            InlineKeyboardButton(
-                text=texts.t("HAPP_PLATFORM_IOS", "🍎 iOS"),
-                callback_data="happ_download_ios",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=texts.t("HAPP_PLATFORM_ANDROID", "🤖 Android"),
-                callback_data="happ_download_android",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=texts.t("HAPP_PLATFORM_MACOS", "🖥️ Mac OS"),
-                callback_data="happ_download_macos",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=texts.t("HAPP_PLATFORM_WINDOWS", "💻 Windows"),
-                callback_data="happ_download_windows",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
-                callback_data="back_to_menu",
-            )
-        ],
-    ]
+            [
+                InlineKeyboardButton(
+                    text=texts.t("HAPP_PLATFORM_IOS", "🍎 iOS"),
+                    callback_data="happ_download_ios",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t("HAPP_PLATFORM_ANDROID", "🤖 Android"),
+                    callback_data="happ_download_android",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t("HAPP_PLATFORM_MACOS", "🖥️ Mac OS"),
+                    callback_data="happ_download_macos",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t("HAPP_PLATFORM_WINDOWS", "💻 Windows"),
+                    callback_data="happ_download_windows",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                    callback_data="back_to_menu",
+                )
+            ],
+        ]
+    )
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

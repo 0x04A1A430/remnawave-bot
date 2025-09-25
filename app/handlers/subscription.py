@@ -1,17 +1,19 @@
-import logging
-from datetime import datetime, timedelta
-from aiogram import Dispatcher, types, F
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.fsm.context import FSMContext
-from sqlalchemy.ext.asyncio import AsyncSession
+import html
 import json
+import logging
 import os
-from typing import Dict, List, Any, Tuple, Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple
 
-from app.config import settings, PERIOD_PRICES, get_traffic_prices
+from aiogram import F, Dispatcher, types
+from aiogram.fsm.context import FSMContext
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import PERIOD_PRICES, get_traffic_prices, settings
 from app.states import SubscriptionStates
 from app.database.crud.subscription import (
-    get_subscription_by_user_id, create_trial_subscription, 
+    get_subscription_by_user_id, create_trial_subscription,
     create_paid_subscription, extend_subscription,
     add_subscription_traffic, add_subscription_devices,
     add_subscription_squad, update_subscription_autopay,
@@ -64,7 +66,10 @@ from app.utils.pricing_utils import (
     format_period_description,
 )
 from app.utils.pagination import paginate_list
-from app.utils.subscription_utils import get_display_subscription_link
+from app.utils.subscription_utils import (
+    get_display_subscription_link,
+    is_supported_telegram_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -4611,21 +4616,34 @@ async def handle_open_subscription_link(
         return
 
     if settings.is_happ_cryptolink_mode():
+        escaped_subscription_link = html.escape(subscription_link)
+        can_open_directly = is_supported_telegram_url(subscription_link)
+
+        link_line = texts.t(
+            "SUBSCRIPTION_HAPP_OPEN_LINK",
+            "<a href=\"{subscription_link}\">🔓 Открыть ссылку в Happ</a>",
+        )
+
+        if can_open_directly:
+            formatted_link_line = link_line.format(subscription_link=subscription_link)
+        else:
+            formatted_link_line = texts.t(
+                "SUBSCRIPTION_HAPP_OPEN_COPY",
+                "🔓 Скопируйте ссылку и откройте в Happ: <code>{subscription_link}</code>",
+            ).format(subscription_link=escaped_subscription_link)
+
         happ_message = (
             texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_TITLE",
                 "🔗 <b>Подключение через Happ</b>",
             )
             + "\n\n"
-            + texts.t(
-                "SUBSCRIPTION_HAPP_OPEN_LINK",
-                "<a href=\"{subscription_link}\">🔓 Открыть ссылку в Happ</a>",
-            ).format(subscription_link=subscription_link)
+            + formatted_link_line
             + "\n\n"
             + texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_HINT",
                 "💡 Если ссылка не открывается автоматически, скопируйте её вручную: <code>{subscription_link}</code>",
-            ).format(subscription_link=subscription_link)
+            ).format(subscription_link=escaped_subscription_link)
         )
 
         keyboard = get_happ_cryptolink_keyboard(subscription_link, db_user.language)
@@ -4639,10 +4657,12 @@ async def handle_open_subscription_link(
         await callback.answer()
         return
 
+    escaped_subscription_link = html.escape(subscription_link)
+
     link_text = (
         texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
         + "\n\n"
-        + f"<code>{subscription_link}</code>\n\n"
+        + f"<code>{escaped_subscription_link}</code>\n\n"
         + texts.t("SUBSCRIPTION_LINK_USAGE_TITLE", "📱 <b>Как использовать:</b>")
         + "\n"
         + "\n".join(
