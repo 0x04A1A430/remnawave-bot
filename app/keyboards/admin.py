@@ -100,6 +100,9 @@ def get_admin_settings_submenu_keyboard(language: str = "ru") -> InlineKeyboardM
             InlineKeyboardButton(text=texts.ADMIN_MONITORING, callback_data="admin_monitoring")
         ],
         [
+            InlineKeyboardButton(text="🧩 Конфигурация бота", callback_data="admin_bot_config"),
+        ],
+        [
             InlineKeyboardButton(
                 text=texts.t("ADMIN_MONITORING_SETTINGS", "⚙️ Настройки мониторинга"),
                 callback_data="admin_mon_settings"
