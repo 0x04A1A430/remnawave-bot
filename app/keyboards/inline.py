@@ -1313,10 +1313,8 @@ def get_manage_countries_keyboard(
     for country in countries:
         uuid = country['uuid']
         name = country['name']
-        price_per_month = country.get('price_kopeks', 0)
-        discounted_price_per_month = country.get('discounted_price_kopeks', price_per_month)
-        discount_percent = country.get('discount_percent', 0)
-
+        price_per_month = country['price_kopeks']
+        
         if uuid in current_subscription_countries:
             if uuid in selected:
                 icon = "✅"
@@ -1325,41 +1323,31 @@ def get_manage_countries_keyboard(
         else:
             if uuid in selected:
                 icon = "➕"
-                total_cost += discounted_price_per_month * months_multiplier
+                total_cost += price_per_month * months_multiplier
             else:
                 icon = "⚪"
         
         if uuid not in current_subscription_countries and uuid in selected:
-            total_price = discounted_price_per_month * months_multiplier
+            total_price = price_per_month * months_multiplier
             if months_multiplier > 1:
-                price_text = (
-                    f" ({texts.format_price(discounted_price_per_month)} / мес × {months_multiplier}"
-                    f" = {texts.format_price(total_price)})"
-                )
-                logger.info(
-                    "🔍 Сервер %s: %s/мес × %s мес = %s (скидка %s%%)",
-                    name,
-                    texts.format_price(discounted_price_per_month),
-                    months_multiplier,
-                    texts.format_price(total_price),
-                    discount_percent,
-                )
+                price_text = f" ({price_per_month//100}₽/мес × {months_multiplier} = {total_price//100}₽)"
+                logger.info(f"🔍 Сервер {name}: {price_per_month/100}₽/мес × {months_multiplier} мес = {total_price/100}₽")
             else:
-                price_text = f" ({texts.format_price(total_price)})"
+                price_text = f" ({total_price//100}₽)"
             display_name = f"{icon} {name}{price_text}"
         else:
             display_name = f"{icon} {name}"
-
+        
         buttons.append([
             InlineKeyboardButton(
                 text=display_name,
                 callback_data=f"country_manage_{uuid}"
             )
         ])
-
+    
     if total_cost > 0:
-        apply_text = f"✅ Применить изменения ({texts.format_price(total_cost)})"
-        logger.info("🔍 Общая стоимость новых серверов: %s", texts.format_price(total_cost))
+        apply_text = f"✅ Применить изменения ({total_cost//100} ₽)"
+        logger.info(f"🔍 Общая стоимость новых серверов: {total_cost/100}₽")
     else:
         apply_text = "✅ Применить изменения"
     
