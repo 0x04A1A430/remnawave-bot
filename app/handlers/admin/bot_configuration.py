@@ -9,10 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
 from app.localization.texts import get_texts
+from app.config import settings
 from app.services.remnawave_service import RemnaWaveService
+from app.services.payment_service import PaymentService
+from app.services.tribute_service import TributeService
 from app.services.system_settings_service import bot_configuration_service
 from app.states import BotConfigStates
 from app.utils.decorators import admin_required, error_handler
+from app.utils.currency_converter import currency_converter
+from app.external.telegram_stars import TelegramStarsService
 
 
 CATEGORY_PAGE_SIZE = 10
@@ -324,6 +329,7 @@ def _build_settings_keyboard(
     sliced = definitions[start:end]
 
     rows: list[list[types.InlineKeyboardButton]] = []
+    texts = get_texts(language)
 
     if category_key == "REMNAWAVE":
         rows.append(
@@ -336,6 +342,38 @@ def _build_settings_keyboard(
                 )
             ]
         )
+
+    test_payment_buttons: list[list[types.InlineKeyboardButton]] = []
+
+    def _test_button(text: str, method: str) -> types.InlineKeyboardButton:
+        return types.InlineKeyboardButton(
+            text=text,
+            callback_data=(
+                f"botcfg_test_payment:{method}:{group_key}:{category_key}:{category_page}:{page}"
+            ),
+        )
+
+    if category_key == "YOOKASSA":
+        label = texts.t("PAYMENT_CARD_YOOKASSA", "💳 Банковская карта (YooKassa)")
+        test_payment_buttons.append([_test_button(f"{label} · тест", "yookassa")])
+    elif category_key == "TRIBUTE":
+        label = texts.t("PAYMENT_CARD_TRIBUTE", "💳 Банковская карта (Tribute)")
+        test_payment_buttons.append([_test_button(f"{label} · тест", "tribute")])
+    elif category_key == "MULENPAY":
+        label = texts.t("PAYMENT_CARD_MULENPAY", "💳 Банковская карта (Mulen Pay)")
+        test_payment_buttons.append([_test_button(f"{label} · тест", "mulenpay")])
+    elif category_key == "PAL24":
+        label = texts.t("PAYMENT_CARD_PAL24", "💳 Банковская карта (PayPalych)")
+        test_payment_buttons.append([_test_button(f"{label} · тест", "pal24")])
+    elif category_key == "TELEGRAM":
+        label = texts.t("PAYMENT_TELEGRAM_STARS", "⭐ Telegram Stars")
+        test_payment_buttons.append([_test_button(f"{label} · тест", "stars")])
+    elif category_key == "CRYPTOBOT":
+        label = texts.t("PAYMENT_CRYPTOBOT", "🪙 Криптовалюта (CryptoBot)")
+        test_payment_buttons.append([_test_button(f"{label} · тест", "cryptobot")])
+
+    if test_payment_buttons:
+        rows.extend(test_payment_buttons)
 
     for definition in sliced:
         value_preview = bot_configuration_service.format_value_for_list(definition.key)
@@ -623,6 +661,347 @@ async def test_remnawave_connection(
             pass
 
     await callback.answer(message, show_alert=True)
+
+
+@admin_required
+@error_handler
+async def test_payment_provider(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    parts = callback.data.split(":", 6)
+    method = parts[1] if len(parts) > 1 else ""
+    group_key = parts[2] if len(parts) > 2 else CATEGORY_FALLBACK_KEY
+    category_key = parts[3] if len(parts) > 3 else "PAYMENT"
+
+    try:
+        category_page = max(1, int(parts[4])) if len(parts) > 4 else 1
+    except ValueError:
+        category_page = 1
+
+    try:
+        settings_page = max(1, int(parts[5])) if len(parts) > 5 else 1
+    except ValueError:
+        settings_page = 1
+
+    language = db_user.language
+    texts = get_texts(language)
+    payment_service = PaymentService(callback.bot)
+
+    message_text: str
+
+    async def _refresh_markup() -> None:
+        definitions = bot_configuration_service.get_settings_for_category(category_key)
+        if definitions:
+            keyboard = _build_settings_keyboard(
+                category_key,
+                group_key,
+                category_page,
+                language,
+                settings_page,
+            )
+            try:
+                await callback.message.edit_reply_markup(reply_markup=keyboard)
+            except Exception:
+                pass
+
+    if method == "yookassa":
+        if not settings.is_yookassa_enabled():
+            await callback.answer("❌ YooKassa отключена", show_alert=True)
+            return
+
+        amount_kopeks = 10 * 100
+        description = settings.get_balance_payment_description(amount_kopeks)
+        payment_result = await payment_service.create_yookassa_payment(
+            db=db,
+            user_id=db_user.id,
+            amount_kopeks=amount_kopeks,
+            description=f"Тестовый платеж (админ): {description}",
+            metadata={
+                "user_telegram_id": str(db_user.telegram_id),
+                "purpose": "admin_test_payment",
+                "provider": "yookassa",
+            },
+        )
+
+        if not payment_result or not payment_result.get("confirmation_url"):
+            await callback.answer("❌ Не удалось создать тестовый платеж YooKassa", show_alert=True)
+            await _refresh_markup()
+            return
+
+        confirmation_url = payment_result["confirmation_url"]
+        message_text = (
+            "🧪 <b>Тестовый платеж YooKassa</b>\n\n"
+            f"💰 Сумма: {texts.format_price(amount_kopeks)}\n"
+            f"🆔 ID: {payment_result['yookassa_payment_id']}"
+        )
+        reply_markup = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="💳 Оплатить картой",
+                        url=confirmation_url,
+                    )
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text="📊 Проверить статус",
+                        callback_data=f"check_yookassa_{payment_result['local_payment_id']}",
+                    )
+                ],
+            ]
+        )
+        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode="HTML")
+        await callback.answer("✅ Ссылка на платеж YooKassa отправлена", show_alert=True)
+        await _refresh_markup()
+        return
+
+    if method == "tribute":
+        if not settings.TRIBUTE_ENABLED:
+            await callback.answer("❌ Tribute отключен", show_alert=True)
+            return
+
+        tribute_service = TributeService(callback.bot)
+        try:
+            payment_url = await tribute_service.create_payment_link(
+                user_id=db_user.telegram_id,
+                amount_kopeks=10 * 100,
+                description="Тестовый платеж Tribute (админ)",
+            )
+        except Exception:
+            payment_url = None
+
+        if not payment_url:
+            await callback.answer("❌ Не удалось создать платеж Tribute", show_alert=True)
+            await _refresh_markup()
+            return
+
+        message_text = (
+            "🧪 <b>Тестовый платеж Tribute</b>\n\n"
+            f"💰 Сумма: {texts.format_price(10 * 100)}\n"
+            "🔗 Нажмите кнопку ниже, чтобы открыть ссылку на оплату."
+        )
+        reply_markup = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="💳 Перейти к оплате",
+                        url=payment_url,
+                    )
+                ]
+            ]
+        )
+        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode="HTML")
+        await callback.answer("✅ Ссылка на платеж Tribute отправлена", show_alert=True)
+        await _refresh_markup()
+        return
+
+    if method == "mulenpay":
+        if not settings.is_mulenpay_enabled():
+            await callback.answer("❌ MulenPay отключен", show_alert=True)
+            return
+
+        amount_kopeks = 1 * 100
+        payment_result = await payment_service.create_mulenpay_payment(
+            db=db,
+            user_id=db_user.id,
+            amount_kopeks=amount_kopeks,
+            description="Тестовый платеж MulenPay (админ)",
+            language=language,
+        )
+
+        if not payment_result or not payment_result.get("payment_url"):
+            await callback.answer("❌ Не удалось создать платеж MulenPay", show_alert=True)
+            await _refresh_markup()
+            return
+
+        payment_url = payment_result["payment_url"]
+        message_text = (
+            "🧪 <b>Тестовый платеж MulenPay</b>\n\n"
+            f"💰 Сумма: {texts.format_price(amount_kopeks)}\n"
+            f"🆔 ID: {payment_result['mulen_payment_id']}"
+        )
+        reply_markup = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="💳 Перейти к оплате",
+                        url=payment_url,
+                    )
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text="📊 Проверить статус",
+                        callback_data=f"check_mulenpay_{payment_result['local_payment_id']}",
+                    )
+                ],
+            ]
+        )
+        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode="HTML")
+        await callback.answer("✅ Ссылка на платеж MulenPay отправлена", show_alert=True)
+        await _refresh_markup()
+        return
+
+    if method == "pal24":
+        if not settings.is_pal24_enabled():
+            await callback.answer("❌ PayPalych отключен", show_alert=True)
+            return
+
+        amount_kopeks = 10 * 100
+        payment_result = await payment_service.create_pal24_payment(
+            db=db,
+            user_id=db_user.id,
+            amount_kopeks=amount_kopeks,
+            description="Тестовый платеж PayPalych (админ)",
+            language=language or "ru",
+        )
+
+        if not payment_result or not payment_result.get("link_url") and not payment_result.get("link_page_url"):
+            await callback.answer("❌ Не удалось создать платеж PayPalych", show_alert=True)
+            await _refresh_markup()
+            return
+
+        payment_url = payment_result.get("link_url") or payment_result.get("link_page_url")
+        message_text = (
+            "🧪 <b>Тестовый платеж PayPalych</b>\n\n"
+            f"💰 Сумма: {texts.format_price(amount_kopeks)}\n"
+            f"🆔 Bill ID: {payment_result['bill_id']}"
+        )
+        reply_markup = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text="💳 Перейти к оплате",
+                        url=payment_url,
+                    )
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text="📊 Проверить статус",
+                        callback_data=f"check_pal24_{payment_result['local_payment_id']}",
+                    )
+                ],
+            ]
+        )
+        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode="HTML")
+        await callback.answer("✅ Ссылка на платеж PayPalych отправлена", show_alert=True)
+        await _refresh_markup()
+        return
+
+    if method == "stars":
+        if not settings.TELEGRAM_STARS_ENABLED:
+            await callback.answer("❌ Telegram Stars отключены", show_alert=True)
+            return
+
+        stars_rate = settings.get_stars_rate()
+        amount_kopeks = max(1, int(round(stars_rate * 100)))
+        payload = f"admin_stars_test_{db_user.id}_{int(time.time())}"
+        try:
+            invoice_link = await payment_service.create_stars_invoice(
+                amount_kopeks=amount_kopeks,
+                description="Тестовый платеж Telegram Stars (админ)",
+                payload=payload,
+            )
+        except Exception:
+            invoice_link = None
+
+        if not invoice_link:
+            await callback.answer("❌ Не удалось создать платеж Telegram Stars", show_alert=True)
+            await _refresh_markup()
+            return
+
+        stars_amount = TelegramStarsService.calculate_stars_from_rubles(amount_kopeks / 100)
+        message_text = (
+            "🧪 <b>Тестовый платеж Telegram Stars</b>\n\n"
+            f"💰 Сумма: {texts.format_price(amount_kopeks)}\n"
+            f"⭐ К оплате: {stars_amount}"
+        )
+        reply_markup = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t("PAYMENT_TELEGRAM_STARS", "⭐ Открыть счет"),
+                        url=invoice_link,
+                    )
+                ]
+            ]
+        )
+        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode="HTML")
+        await callback.answer("✅ Ссылка на платеж Stars отправлена", show_alert=True)
+        await _refresh_markup()
+        return
+
+    if method == "cryptobot":
+        if not settings.is_cryptobot_enabled():
+            await callback.answer("❌ CryptoBot отключен", show_alert=True)
+            return
+
+        amount_rubles = 100.0
+        try:
+            current_rate = await currency_converter.get_usd_to_rub_rate()
+        except Exception:
+            current_rate = None
+
+        if not current_rate or current_rate <= 0:
+            current_rate = 100.0
+
+        amount_usd = round(amount_rubles / current_rate, 2)
+        if amount_usd < 1:
+            amount_usd = 1.0
+
+        payment_result = await payment_service.create_cryptobot_payment(
+            db=db,
+            user_id=db_user.id,
+            amount_usd=amount_usd,
+            asset=settings.CRYPTOBOT_DEFAULT_ASSET,
+            description=f"Тестовый платеж CryptoBot {amount_rubles:.0f} ₽ ({amount_usd:.2f} USD)",
+            payload=f"admin_cryptobot_test_{db_user.id}_{int(time.time())}",
+        )
+
+        if not payment_result:
+            await callback.answer("❌ Не удалось создать платеж CryptoBot", show_alert=True)
+            await _refresh_markup()
+            return
+
+        payment_url = (
+            payment_result.get("bot_invoice_url")
+            or payment_result.get("mini_app_invoice_url")
+            or payment_result.get("web_app_invoice_url")
+        )
+
+        if not payment_url:
+            await callback.answer("❌ Не удалось получить ссылку на оплату CryptoBot", show_alert=True)
+            await _refresh_markup()
+            return
+
+        amount_kopeks = int(amount_rubles * 100)
+        message_text = (
+            "🧪 <b>Тестовый платеж CryptoBot</b>\n\n"
+            f"💰 Сумма к зачислению: {texts.format_price(amount_kopeks)}\n"
+            f"💵 К оплате: {amount_usd:.2f} USD\n"
+            f"🪙 Актив: {payment_result['asset']}"
+        )
+        reply_markup = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(text="🪙 Открыть счет", url=payment_url)
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text="📊 Проверить статус",
+                        callback_data=f"check_cryptobot_{payment_result['local_payment_id']}",
+                    )
+                ],
+            ]
+        )
+        await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode="HTML")
+        await callback.answer("✅ Ссылка на платеж CryptoBot отправлена", show_alert=True)
+        await _refresh_markup()
+        return
+
+    await callback.answer("❌ Неизвестный способ тестирования платежа", show_alert=True)
+    await _refresh_markup()
 
 
 @admin_required
@@ -963,6 +1342,10 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(
         test_remnawave_connection,
         F.data.startswith("botcfg_test_remnawave:"),
+    )
+    dp.callback_query.register(
+        test_payment_provider,
+        F.data.startswith("botcfg_test_payment:"),
     )
     dp.callback_query.register(
         show_bot_config_setting,
