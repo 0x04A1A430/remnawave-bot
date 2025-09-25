@@ -64,7 +64,10 @@ from app.utils.pricing_utils import (
     format_period_description,
 )
 from app.utils.pagination import paginate_list
-from app.utils.subscription_utils import get_display_subscription_link
+from app.utils.subscription_utils import (
+    get_display_subscription_link,
+    get_happ_cryptolink_redirect_link,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -4611,6 +4614,7 @@ async def handle_open_subscription_link(
         return
 
     if settings.is_happ_cryptolink_mode():
+        redirect_link = get_happ_cryptolink_redirect_link(subscription_link)
         happ_message = (
             texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_TITLE",
@@ -4628,7 +4632,17 @@ async def handle_open_subscription_link(
             ).format(subscription_link=subscription_link)
         )
 
-        keyboard = get_happ_cryptolink_keyboard(subscription_link, db_user.language)
+        if redirect_link:
+            happ_message += "\n\n" + texts.t(
+                "SUBSCRIPTION_HAPP_OPEN_BUTTON_HINT",
+                "▶️ Нажмите кнопку \"Подключиться\" ниже, чтобы открыть Happ и добавить подписку автоматически.",
+            )
+
+        keyboard = get_happ_cryptolink_keyboard(
+            subscription_link,
+            db_user.language,
+            redirect_link=redirect_link,
+        )
 
         await callback.message.answer(
             happ_message,
