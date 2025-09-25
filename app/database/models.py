@@ -388,6 +388,7 @@ class User(Base):
     discount_offers = relationship("DiscountOffer", back_populates="user")
     lifetime_used_traffic_bytes = Column(BigInteger, default=0)
     auto_promo_group_assigned = Column(Boolean, nullable=False, default=False)
+    auto_promo_group_threshold_kopeks = Column(BigInteger, nullable=False, default=0)
     last_remnawave_sync = Column(DateTime, nullable=True)
     trojan_password = Column(String(255), nullable=True)
     vless_uuid = Column(String(255), nullable=True)

@@ -1025,6 +1025,39 @@ async def ensure_promo_groups_setup():
 
                 logger.info("Добавлена колонка users.auto_promo_group_assigned")
 
+            threshold_column_exists = await check_column_exists(
+                "users", "auto_promo_group_threshold_kopeks"
+            )
+
+            if not threshold_column_exists:
+                if db_type == "sqlite":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN auto_promo_group_threshold_kopeks INTEGER NOT NULL DEFAULT 0"
+                        )
+                    )
+                elif db_type == "postgresql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN auto_promo_group_threshold_kopeks BIGINT NOT NULL DEFAULT 0"
+                        )
+                    )
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN auto_promo_group_threshold_kopeks BIGINT NOT NULL DEFAULT 0"
+                        )
+                    )
+                else:
+                    logger.error(
+                        f"Неподдерживаемый тип БД для users.auto_promo_group_threshold_kopeks: {db_type}"
+                    )
+                    return False
+
+                logger.info(
+                    "Добавлена колонка users.auto_promo_group_threshold_kopeks"
+                )
+
             index_exists = await check_index_exists("users", "ix_users_promo_group_id")
 
             if not index_exists:
@@ -2044,6 +2077,7 @@ async def check_migration_status():
             "promo_groups_auto_assign_column": False,
             "promo_groups_addon_discount_column": False,
             "users_auto_promo_group_assigned_column": False,
+            "users_auto_promo_group_threshold_column": False,
             "subscription_crypto_link_column": False,
         }
         
@@ -2062,6 +2096,7 @@ async def check_migration_status():
         status["promo_groups_auto_assign_column"] = await check_column_exists('promo_groups', 'auto_assign_total_spent_kopeks')
         status["promo_groups_addon_discount_column"] = await check_column_exists('promo_groups', 'apply_discounts_to_addons')
         status["users_auto_promo_group_assigned_column"] = await check_column_exists('users', 'auto_promo_group_assigned')
+        status["users_auto_promo_group_threshold_column"] = await check_column_exists('users', 'auto_promo_group_threshold_kopeks')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         
         media_fields_exist = (
@@ -2100,6 +2135,7 @@ async def check_migration_status():
             "promo_groups_auto_assign_column": "Колонка auto_assign_total_spent_kopeks у промо-групп",
             "promo_groups_addon_discount_column": "Колонка apply_discounts_to_addons у промо-групп",
             "users_auto_promo_group_assigned_column": "Флаг автоназначения промогруппы у пользователей",
+            "users_auto_promo_group_threshold_column": "Порог последней авто-промогруппы у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
         }
         
