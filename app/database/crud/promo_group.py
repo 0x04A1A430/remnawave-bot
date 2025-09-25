@@ -60,7 +60,6 @@ async def create_promo_group(
     device_discount_percent: int,
     period_discounts: Optional[Dict[int, int]] = None,
     auto_assign_total_spent_kopeks: Optional[int] = None,
-    addon_discounts_enabled: bool = True,
 ) -> PromoGroup:
     normalized_period_discounts = _normalize_period_discounts(period_discounts)
 
@@ -70,8 +69,6 @@ async def create_promo_group(
         else None
     )
 
-    addon_discounts_enabled = bool(addon_discounts_enabled)
-
     promo_group = PromoGroup(
         name=name.strip(),
         server_discount_percent=max(0, min(100, server_discount_percent)),
@@ -79,7 +76,6 @@ async def create_promo_group(
         device_discount_percent=max(0, min(100, device_discount_percent)),
         period_discounts=normalized_period_discounts or None,
         auto_assign_total_spent_kopeks=auto_assign_total_spent_kopeks,
-        addon_discounts_enabled=addon_discounts_enabled,
         is_default=False,
     )
 
@@ -88,15 +84,13 @@ async def create_promo_group(
     await db.refresh(promo_group)
 
     logger.info(
-        "Создана промогруппа '%s' с скидками (servers=%s%%, traffic=%s%%, devices=%s%%, periods=%s)"
-        " и порогом автоприсвоения %s₽ (скидки на доп. услуги: %s)",
+        "Создана промогруппа '%s' с скидками (servers=%s%%, traffic=%s%%, devices=%s%%, periods=%s) и порогом автоприсвоения %s₽",
         promo_group.name,
         promo_group.server_discount_percent,
         promo_group.traffic_discount_percent,
         promo_group.device_discount_percent,
         normalized_period_discounts,
         (auto_assign_total_spent_kopeks or 0) / 100,
-        addon_discounts_enabled,
     )
 
     return promo_group
@@ -112,7 +106,6 @@ async def update_promo_group(
     device_discount_percent: Optional[int] = None,
     period_discounts: Optional[Dict[int, int]] = None,
     auto_assign_total_spent_kopeks: Optional[int] = None,
-    addon_discounts_enabled: Optional[bool] = None,
 ) -> PromoGroup:
     if name is not None:
         group.name = name.strip()
@@ -127,8 +120,6 @@ async def update_promo_group(
         group.period_discounts = normalized_period_discounts or None
     if auto_assign_total_spent_kopeks is not None:
         group.auto_assign_total_spent_kopeks = max(0, auto_assign_total_spent_kopeks)
-    if addon_discounts_enabled is not None:
-        group.addon_discounts_enabled = bool(addon_discounts_enabled)
 
     await db.commit()
     await db.refresh(group)
