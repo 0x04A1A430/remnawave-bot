@@ -30,14 +30,22 @@ async def show_remnawave_menu(
 ):
    remnawave_service = RemnaWaveService()
    connection_test = await remnawave_service.test_api_connection()
-   
-   status_emoji = "✅" if connection_test["status"] == "connected" else "❌"
-   
+
+   status = connection_test.get("status")
+   if status == "connected":
+       status_emoji = "✅"
+   elif status == "not_configured":
+       status_emoji = "ℹ️"
+   else:
+       status_emoji = "❌"
+
+   api_url_display = settings.REMNAWAVE_API_URL or "—"
+
    text = f"""
 🖥️ <b>Управление Remnawave</b>
 
-📡 <b>Соединение:</b> {status_emoji} {connection_test["message"]}
-🌐 <b>URL:</b> <code>{settings.REMNAWAVE_API_URL}</code>
+📡 <b>Соединение:</b> {status_emoji} {connection_test.get("message", "Нет данных")}
+🌐 <b>URL:</b> <code>{api_url_display}</code>
 
 Выберите действие:
 """
@@ -194,7 +202,7 @@ async def show_traffic_stats(
     remnawave_service = RemnaWaveService()
     
     try:
-        async with remnawave_service.api as api:
+        async with remnawave_service.get_api_client() as api:
             bandwidth_stats = await api.get_bandwidth_stats()
             
             realtime_usage = await api.get_nodes_realtime_usage()
