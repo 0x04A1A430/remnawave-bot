@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.enums import ChatMemberStatus
 from aiogram.types import FSInputFile
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -181,6 +182,7 @@ class MonitoringService:
                 await self._check_expiring_subscriptions(db)
                 await self._check_trial_expiring_soon(db)
                 await self._check_trial_inactivity_notifications(db)
+                await self._check_trial_channel_subscriptions(db)
                 await self._check_expired_subscription_followups(db)
                 await self._process_autopayments(db)
                 await self._cleanup_inactive_users(db)
@@ -455,6 +457,145 @@ class MonitoringService:
 
         except Exception as e:
             logger.error(f"Ошибка проверки неактивных тестовых подписок: {e}")
+
+    async def _check_trial_channel_subscriptions(self, db: AsyncSession):
+        if not settings.CHANNEL_IS_REQUIRED_SUB:
+            return
+
+        channel_id = settings.CHANNEL_SUB_ID
+        if not channel_id:
+            return
+
+        if not self.bot:
+            logger.debug("⚠️ Пропускаем проверку подписки на канал — бот недоступен")
+            return
+
+        try:
+            now = datetime.utcnow()
+            result = await db.execute(
+                select(Subscription)
+                .options(selectinload(Subscription.user))
+                .where(
+                    and_(
+                        Subscription.is_trial.is_(True),
+                        Subscription.end_date > now,
+                        Subscription.status.in_(
+                            [
+                                SubscriptionStatus.ACTIVE.value,
+                                SubscriptionStatus.DISABLED.value,
+                            ]
+                        ),
+                    )
+                )
+            )
+
+            subscriptions = result.scalars().all()
+            if not subscriptions:
+                return
+
+            disabled_count = 0
+            restored_count = 0
+
+            for subscription in subscriptions:
+                user = subscription.user
+                if not user or not user.telegram_id:
+                    continue
+
+                try:
+                    member = await self.bot.get_chat_member(channel_id, user.telegram_id)
+                    member_status = member.status
+                    is_member = member_status in (
+                        ChatMemberStatus.MEMBER,
+                        ChatMemberStatus.ADMINISTRATOR,
+                        ChatMemberStatus.CREATOR,
+                    )
+                except TelegramForbiddenError as error:
+                    logger.error(
+                        "❌ Не удалось проверить подписку пользователя %s на канал %s: бот заблокирован (%s)",
+                        user.telegram_id,
+                        channel_id,
+                        error,
+                    )
+                    continue
+                except TelegramBadRequest as error:
+                    logger.error(
+                        "❌ Ошибка Telegram при проверке подписки пользователя %s: %s",
+                        user.telegram_id,
+                        error,
+                    )
+                    continue
+                except Exception as error:
+                    logger.error(
+                        "❌ Неожиданная ошибка при проверке подписки пользователя %s: %s",
+                        user.telegram_id,
+                        error,
+                    )
+                    continue
+
+                if subscription.status == SubscriptionStatus.ACTIVE.value and not is_member:
+                    subscription = await deactivate_subscription(db, subscription)
+                    disabled_count += 1
+                    logger.info(
+                        "🚫 Триальная подписка пользователя %s (ID %s) отключена из-за отписки от канала",
+                        user.telegram_id,
+                        subscription.id,
+                    )
+
+                    if user.remnawave_uuid:
+                        try:
+                            await self.subscription_service.disable_remnawave_user(user.remnawave_uuid)
+                        except Exception as api_error:
+                            logger.error(
+                                "❌ Не удалось отключить пользователя RemnaWave %s: %s",
+                                user.remnawave_uuid,
+                                api_error,
+                            )
+                elif subscription.status == SubscriptionStatus.DISABLED.value and is_member:
+                    subscription.status = SubscriptionStatus.ACTIVE.value
+                    subscription.updated_at = datetime.utcnow()
+                    await db.commit()
+                    await db.refresh(subscription)
+                    restored_count += 1
+
+                    logger.info(
+                        "✅ Триальная подписка пользователя %s (ID %s) восстановлена после повторной подписки на канал",
+                        user.telegram_id,
+                        subscription.id,
+                    )
+
+                    try:
+                        if user.remnawave_uuid:
+                            await self.subscription_service.update_remnawave_user(db, subscription)
+                        else:
+                            await self.subscription_service.create_remnawave_user(db, subscription)
+                    except Exception as api_error:
+                        logger.error(
+                            "❌ Не удалось обновить RemnaWave пользователя %s: %s",
+                            user.telegram_id,
+                            api_error,
+                        )
+
+            if disabled_count or restored_count:
+                await self._log_monitoring_event(
+                    db,
+                    "trial_channel_subscription_check",
+                    (
+                        "Проверено {total} триальных подписок: отключено {disabled}, "
+                        "восстановлено {restored}"
+                    ).format(
+                        total=len(subscriptions),
+                        disabled=disabled_count,
+                        restored=restored_count,
+                    ),
+                    {
+                        "checked": len(subscriptions),
+                        "disabled": disabled_count,
+                        "restored": restored_count,
+                    },
+                )
+
+        except Exception as error:
+            logger.error(f"Ошибка проверки подписки на канал для триальных пользователей: {error}")
 
     async def _check_expired_subscription_followups(self, db: AsyncSession):
         if not NotificationSettingsService.are_notifications_globally_enabled():
