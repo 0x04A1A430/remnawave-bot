@@ -1,6 +1,5 @@
 import math
-from dataclasses import dataclass
-from typing import Iterable, List, Tuple
+from typing import Tuple
 
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
@@ -13,93 +12,8 @@ from app.states import BotConfigStates
 from app.utils.decorators import admin_required, error_handler
 
 
+CATEGORY_PAGE_SIZE = 10
 SETTINGS_PAGE_SIZE = 8
-
-
-@dataclass(frozen=True)
-class _CategoryPresentation:
-    key: str
-    label: str
-    icon: str
-
-
-@dataclass(frozen=True)
-class _CategoryGroup:
-    title: str
-    categories: Tuple[_CategoryPresentation, ...]
-
-
-_CATEGORY_GROUPS: Tuple[_CategoryGroup, ...] = (
-    _CategoryGroup(
-        "⚙️ Основные настройки",
-        (
-            _CategoryPresentation("REMNAWAVE", "Основные параметры", "⚙️"),
-            _CategoryPresentation("DEFAULT", "Значения по умолчанию", "🧭"),
-            _CategoryPresentation("VERSION", "Версии и обновления", "🆕"),
-            _CategoryPresentation("MAINTENANCE", "Техработы", "🧹"),
-            _CategoryPresentation("DEBUG", "Отладка", "🐞"),
-            _CategoryPresentation("LOG", "Логи", "📄"),
-        ),
-    ),
-    _CategoryGroup(
-        "🛠️ Инфраструктура",
-        (
-            _CategoryPresentation("DATABASE", "База данных", "🗄️"),
-            _CategoryPresentation("POSTGRES", "PostgreSQL", "🐘"),
-            _CategoryPresentation("SQLITE", "SQLite", "🧱"),
-            _CategoryPresentation("REDIS", "Redis", "🧠"),
-            _CategoryPresentation("SERVER", "Серверы", "🖥️"),
-            _CategoryPresentation("MONITORING", "Мониторинг", "📡"),
-            _CategoryPresentation("BACKUP", "Резервные копии", "💾"),
-            _CategoryPresentation("WEBHOOK", "Вебхуки", "🪝"),
-        ),
-    ),
-    _CategoryGroup(
-        "💳 Оплаты и продления",
-        (
-            _CategoryPresentation("PAYMENT", "Оплаты", "💳"),
-            _CategoryPresentation("YOOKASSA", "YooKassa", "🇷🇺"),
-            _CategoryPresentation("CRYPTOBOT", "CryptoBot", "🪙"),
-            _CategoryPresentation("MULENPAY", "MulenPay", "💠"),
-            _CategoryPresentation("PAL24", "PayPalych", "💼"),
-            _CategoryPresentation("AUTOPAY", "Автопродление", "🔁"),
-        ),
-    ),
-    _CategoryGroup(
-        "🧪 Продукт и тарифы",
-        (
-            _CategoryPresentation("TRIAL", "Триал и лимиты", "🧪"),
-            _CategoryPresentation("PRICE", "Цены", "💰"),
-            _CategoryPresentation("TRAFFIC", "Трафик", "🚦"),
-            _CategoryPresentation("REFERRAL", "Реферальная программа", "🤝"),
-            _CategoryPresentation("TRIBUTE", "Tribute", "🎖️"),
-            _CategoryPresentation("HAPP", "Happ", "🎯"),
-            _CategoryPresentation("CONNECT", "Кнопка подключения", "🔌"),
-        ),
-    ),
-    _CategoryGroup(
-        "💬 Коммуникации и поддержка",
-        (
-            _CategoryPresentation("CHANNEL", "Каналы", "📣"),
-            _CategoryPresentation("SUPPORT", "Поддержка", "🆘"),
-            _CategoryPresentation("ADMIN", "Администрирование", "🛡️"),
-            _CategoryPresentation("TELEGRAM", "Telegram Stars", "⭐"),
-        ),
-    ),
-)
-
-
-def _chunked(iterable: Iterable[types.InlineKeyboardButton], size: int) -> List[List[types.InlineKeyboardButton]]:
-    chunk: List[types.InlineKeyboardButton] = []
-    rows: List[List[types.InlineKeyboardButton]] = []
-    for button in iterable:
-        chunk.append(button)
-        if len(chunk) == size:
-            rows.append(chunk)
-            chunk = []
-    if chunk:
-        rows.append(chunk)
-    return rows
 
 
 def _parse_category_payload(payload: str) -> Tuple[str, int]:
@@ -118,74 +32,47 @@ def _parse_category_payload(payload: str) -> Tuple[str, int]:
 
 def _build_categories_keyboard(language: str, page: int = 1) -> types.InlineKeyboardMarkup:
     categories = bot_configuration_service.get_categories()
-    catalog: dict[str, tuple[str, str, int]] = {}
-    for category_key, label, count in categories:
-        catalog[category_key.upper()] = (category_key, label, count)
+    total_pages = max(1, math.ceil(len(categories) / CATEGORY_PAGE_SIZE))
+    page = max(1, min(page, total_pages))
 
-    processed: set[str] = set()
+    start = (page - 1) * CATEGORY_PAGE_SIZE
+    end = start + CATEGORY_PAGE_SIZE
+    sliced = categories[start:end]
+
     rows: list[list[types.InlineKeyboardButton]] = []
-
-    for group in _CATEGORY_GROUPS:
-        group_buttons: list[types.InlineKeyboardButton] = []
-        for item in group.categories:
-            stored = catalog.get(item.key)
-            if not stored:
-                continue
-
-            category_key, fallback_label, count = stored
-            processed.add(category_key)
-
-            label = item.label or fallback_label
-            button_text = f"{item.icon} {label} · {count}"
-            group_buttons.append(
-                types.InlineKeyboardButton(
-                    text=button_text,
-                    callback_data=f"botcfg_cat:{category_key}:1",
-                )
-            )
-
-        if not group_buttons:
-            continue
-
-        rows.append(
-            [
-                types.InlineKeyboardButton(
-                    text=group.title, callback_data="botcfg_categories:noop"
-                )
-            ]
-        )
-        rows.extend(_chunked(group_buttons, 2))
-
-    leftover_buttons: list[types.InlineKeyboardButton] = []
-    for category_key, label, count in categories:
-        if category_key in processed:
-            continue
-
-        button_text = f"📁 {label} · {count}"
-        leftover_buttons.append(
+    for category_key, label, count in sliced:
+        button_text = f"{label} ({count})"
+        rows.append([
             types.InlineKeyboardButton(
                 text=button_text,
                 callback_data=f"botcfg_cat:{category_key}:1",
             )
-        )
+        ])
 
-    if leftover_buttons:
-        rows.append(
-            [
+    if total_pages > 1:
+        nav_row: list[types.InlineKeyboardButton] = []
+        if page > 1:
+            nav_row.append(
                 types.InlineKeyboardButton(
-                    text="📁 Прочие категории", callback_data="botcfg_categories:noop"
+                    text="⬅️", callback_data=f"botcfg_categories:{page - 1}"
                 )
-            ]
-        )
-        rows.extend(_chunked(leftover_buttons, 2))
-
-    rows.append(
-        [
-            types.InlineKeyboardButton(
-                text="⬅️ Назад", callback_data="admin_submenu_settings"
             )
-        ]
-    )
+        nav_row.append(
+            types.InlineKeyboardButton(
+                text=f"{page}/{total_pages}", callback_data="botcfg_categories:noop"
+            )
+        )
+        if page < total_pages:
+            nav_row.append(
+                types.InlineKeyboardButton(
+                    text="➡️", callback_data=f"botcfg_categories:{page + 1}"
+                )
+            )
+        rows.append(nav_row)
+
+    rows.append([
+        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_submenu_settings")
+    ])
 
     return types.InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -207,19 +94,7 @@ def _build_settings_keyboard(
 
     for definition in sliced:
         value_preview = bot_configuration_service.format_value_for_list(definition.key)
-        type_icon = {
-            bool: "🔘",
-            int: "🔢",
-            float: "🔢",
-            str: "📝",
-        }.get(definition.python_type, "⚙️")
-
-        override_icon = "⭐ " if bot_configuration_service.has_override(definition.key) else ""
-        optional_suffix = " (опц.)" if definition.is_optional else ""
-        display_name = definition.display_name
-        button_text = (
-            f"{override_icon}{type_icon} {display_name}{optional_suffix} · {value_preview}"
-        )
+        button_text = f"{definition.key} = {value_preview}"
         rows.append([
             types.InlineKeyboardButton(
                 text=button_text,
@@ -302,8 +177,6 @@ def _render_setting_text(key: str) -> str:
 
     lines = [
         "🧩 <b>Настройка</b>",
-        f"<b>Название:</b> {summary['name']}",
-        f"<b>Категория:</b> {summary['category_label']}",
         f"<b>Ключ:</b> <code>{summary['key']}</code>",
         f"<b>Тип:</b> {summary['type']}",
         f"<b>Текущее значение:</b> {summary['current']}",
