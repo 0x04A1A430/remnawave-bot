@@ -1,10 +1,13 @@
 import logging
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import select, delete, func
+from urllib.parse import urlsplit
+
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.database.models import Subscription, User
+
 from app.config import settings
+from app.database.models import Subscription, User
 
 logger = logging.getLogger(__name__)
 
@@ -109,3 +112,17 @@ def get_display_subscription_link(subscription: Optional[Subscription]) -> Optio
         return crypto_link or base_link
 
     return base_link
+
+
+def is_supported_telegram_url(url: Optional[str]) -> bool:
+    """Check whether Telegram allows using the given URL in inline buttons."""
+
+    if not url:
+        return False
+
+    try:
+        scheme = urlsplit(url).scheme
+    except ValueError:
+        return False
+
+    return scheme in {"http", "https", "tg", "ton"}
