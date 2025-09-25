@@ -112,6 +112,25 @@ def get_main_menu_keyboard(
                     web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL)
                 )
             ])
+        elif connect_mode == "happ_cryptolink":
+            happ_link = getattr(subscription, "happ_crypto_link", None)
+            if happ_link:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                        url=happ_link,
+                    )
+                ])
+            else:
+                keyboard.append([_fallback_connect_button()])
+
+            if settings.is_happ_download_button_enabled():
+                keyboard.append([
+                    InlineKeyboardButton(
+                        text=texts.t("DOWNLOAD_HAPP_APP_BUTTON", "📲 Скачать приложение Happ"),
+                        callback_data="download_happ_app",
+                    )
+                ])
         elif connect_mode == "link":
             if subscription_url:
                 keyboard.append([
