@@ -226,14 +226,31 @@ async def deactivate_subscription(
     db: AsyncSession,
     subscription: Subscription
 ) -> Subscription:
-    
+
     subscription.status = SubscriptionStatus.DISABLED.value
     subscription.updated_at = datetime.utcnow()
-    
+
     await db.commit()
     await db.refresh(subscription)
-    
+
     logger.info(f"❌ Подписка пользователя {subscription.user_id} деактивирована")
+    return subscription
+
+
+async def activate_subscription(
+    db: AsyncSession,
+    subscription: Subscription
+) -> Subscription:
+
+    if subscription.status != SubscriptionStatus.ACTIVE.value:
+        subscription.status = SubscriptionStatus.ACTIVE.value
+        subscription.updated_at = datetime.utcnow()
+
+        await db.commit()
+        await db.refresh(subscription)
+
+        logger.info(f"✅ Подписка пользователя {subscription.user_id} активирована")
+
     return subscription
 
 
@@ -241,7 +258,7 @@ async def get_expiring_subscriptions(
     db: AsyncSession,
     days_before: int = 3
 ) -> List[Subscription]:
-    
+
     threshold_date = datetime.utcnow() + timedelta(days=days_before)
     
     result = await db.execute(
@@ -270,6 +287,44 @@ async def get_expired_subscriptions(db: AsyncSession) -> List[Subscription]:
             )
         )
     )
+    return result.scalars().all()
+
+
+async def get_active_trial_subscriptions(db: AsyncSession) -> List[Subscription]:
+
+    current_time = datetime.utcnow()
+
+    result = await db.execute(
+        select(Subscription)
+        .options(selectinload(Subscription.user))
+        .where(
+            and_(
+                Subscription.is_trial == True,
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date > current_time,
+            )
+        )
+    )
+
+    return result.scalars().all()
+
+
+async def get_disabled_trial_subscriptions(db: AsyncSession) -> List[Subscription]:
+
+    current_time = datetime.utcnow()
+
+    result = await db.execute(
+        select(Subscription)
+        .options(selectinload(Subscription.user))
+        .where(
+            and_(
+                Subscription.is_trial == True,
+                Subscription.status == SubscriptionStatus.DISABLED.value,
+                Subscription.end_date > current_time,
+            )
+        )
+    )
+
     return result.scalars().all()
 
 
