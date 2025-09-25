@@ -1366,6 +1366,39 @@ async def add_ticket_sla_columns():
         logger.error(f"Ошибка добавления SLA колонки в tickets: {e}")
         return False
 
+
+async def add_subscription_crypto_link_column() -> bool:
+    column_exists = await check_column_exists('subscriptions', 'subscription_crypto_link')
+    if column_exists:
+        logger.info("ℹ️ Колонка subscription_crypto_link уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN subscription_crypto_link TEXT"))
+            elif db_type == 'postgresql':
+                await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN subscription_crypto_link VARCHAR"))
+            elif db_type == 'mysql':
+                await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN subscription_crypto_link VARCHAR(512)"))
+            else:
+                logger.error(f"Неподдерживаемый тип БД для добавления subscription_crypto_link: {db_type}")
+                return False
+
+            await conn.execute(text(
+                "UPDATE subscriptions SET subscription_crypto_link = subscription_url "
+                "WHERE subscription_crypto_link IS NULL OR subscription_crypto_link = ''"
+            ))
+
+        logger.info("✅ Добавлена колонка subscription_crypto_link в таблицу subscriptions")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка добавления колонки subscription_crypto_link: {e}")
+        return False
+
+
 async def fix_foreign_keys_for_user_deletion():
     try:
         async with engine.begin() as conn:
@@ -1799,6 +1832,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с добавлением полей SLA в tickets")
 
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ CRYPTO LINK ДЛЯ ПОДПИСОК ===")
+        crypto_link_added = await add_subscription_crypto_link_column()
+        if crypto_link_added:
+            logger.info("✅ Колонка subscription_crypto_link готова")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением колонки subscription_crypto_link")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ АУДИТА ПОДДЕРЖКИ ===")
         try:
             async with engine.begin() as conn:
@@ -1955,6 +1995,7 @@ async def check_migration_status():
             "promo_groups_period_discounts_column": False,
             "promo_groups_auto_assign_column": False,
             "users_auto_promo_group_assigned_column": False,
+            "subscription_crypto_link_column": False,
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -1971,6 +2012,7 @@ async def check_migration_status():
         status["promo_groups_period_discounts_column"] = await check_column_exists('promo_groups', 'period_discounts')
         status["promo_groups_auto_assign_column"] = await check_column_exists('promo_groups', 'auto_assign_total_spent_kopeks')
         status["users_auto_promo_group_assigned_column"] = await check_column_exists('users', 'auto_promo_group_assigned')
+        status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         
         media_fields_exist = (
             await check_column_exists('broadcast_history', 'has_media') and
@@ -2007,6 +2049,7 @@ async def check_migration_status():
             "promo_groups_period_discounts_column": "Колонка period_discounts у промо-групп",
             "promo_groups_auto_assign_column": "Колонка auto_assign_total_spent_kopeks у промо-групп",
             "users_auto_promo_group_assigned_column": "Флаг автоназначения промогруппы у пользователей",
+            "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
         }
         
         for check_key, check_status in status.items():

@@ -209,6 +209,10 @@ class Settings(BaseSettings):
 
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
+    CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
+    HAPP_DOWNLOAD_LINK_IOS: Optional[str] = None
+    HAPP_DOWNLOAD_LINK_ANDROID: Optional[str] = None
+    HAPP_DOWNLOAD_LINK_PC: Optional[str] = None
     HIDE_SUBSCRIPTION_LINK: bool = False
     ENABLE_LOGO_MODE: bool = True
     LOGO_FILE: str = "vpn_logo.png"
@@ -542,6 +546,22 @@ class Settings(BaseSettings):
     
     def get_cryptobot_invoice_expires_seconds(self) -> int:
         return self.CRYPTOBOT_INVOICE_EXPIRES_HOURS * 3600
+
+    def is_happ_cryptolink_mode(self) -> bool:
+        return self.CONNECT_BUTTON_MODE == "happ_cryptolink"
+
+    def is_happ_download_button_enabled(self) -> bool:
+        return self.is_happ_cryptolink_mode() and self.CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED
+
+    def get_happ_download_link(self, platform: str) -> Optional[str]:
+        platform_key = platform.lower()
+        links = {
+            "ios": (self.HAPP_DOWNLOAD_LINK_IOS or "").strip(),
+            "android": (self.HAPP_DOWNLOAD_LINK_ANDROID or "").strip(),
+            "pc": (self.HAPP_DOWNLOAD_LINK_PC or "").strip(),
+        }
+        link = links.get(platform_key)
+        return link if link else None
 
     def is_maintenance_mode(self) -> bool:
         return self.MAINTENANCE_MODE
