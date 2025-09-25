@@ -868,25 +868,16 @@ async def _render_user_promo_group(
             traffic=current_group.traffic_discount_percent,
             devices=current_group.device_discount_percent,
         )
-        addon_line = texts.ADMIN_USER_PROMO_GROUP_ADDON_DISCOUNT.format(
-            state=(
-                texts.ADMIN_USER_PROMO_GROUP_ADDON_DISCOUNT_ENABLED
-                if getattr(current_group, "apply_addon_discounts", True)
-                else texts.ADMIN_USER_PROMO_GROUP_ADDON_DISCOUNT_DISABLED
-            )
-        )
         current_group_id = current_group.id
     else:
         current_line = texts.ADMIN_USER_PROMO_GROUP_CURRENT_NONE
         discount_line = texts.ADMIN_USER_PROMO_GROUP_DISCOUNTS_NONE
-        addon_line = texts.ADMIN_USER_PROMO_GROUP_ADDON_DISCOUNT_NONE
         current_group_id = None
 
     text = (
         f"{texts.ADMIN_USER_PROMO_GROUP_TITLE}\n\n"
         f"{current_line}\n"
-        f"{discount_line}\n"
-        f"{addon_line}\n\n"
+        f"{discount_line}\n\n"
         f"{texts.ADMIN_USER_PROMO_GROUP_SELECT}"
     )
 

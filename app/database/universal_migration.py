@@ -790,7 +790,6 @@ async def ensure_promo_groups_setup():
                                 server_discount_percent INTEGER NOT NULL DEFAULT 0,
                                 traffic_discount_percent INTEGER NOT NULL DEFAULT 0,
                                 device_discount_percent INTEGER NOT NULL DEFAULT 0,
-                                apply_addon_discounts BOOLEAN NOT NULL DEFAULT 1,
                                 is_default BOOLEAN NOT NULL DEFAULT 0,
                                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -813,7 +812,6 @@ async def ensure_promo_groups_setup():
                                 server_discount_percent INTEGER NOT NULL DEFAULT 0,
                                 traffic_discount_percent INTEGER NOT NULL DEFAULT 0,
                                 device_discount_percent INTEGER NOT NULL DEFAULT 0,
-                                apply_addon_discounts BOOLEAN NOT NULL DEFAULT TRUE,
                                 is_default BOOLEAN NOT NULL DEFAULT FALSE,
                                 created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                                 updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -832,7 +830,6 @@ async def ensure_promo_groups_setup():
                                 server_discount_percent INT NOT NULL DEFAULT 0,
                                 traffic_discount_percent INT NOT NULL DEFAULT 0,
                                 device_discount_percent INT NOT NULL DEFAULT 0,
-                                apply_addon_discounts TINYINT(1) NOT NULL DEFAULT 1,
                                 is_default TINYINT(1) NOT NULL DEFAULT 0,
                                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -932,44 +929,6 @@ async def ensure_promo_groups_setup():
 
                 logger.info(
                     "Добавлена колонка promo_groups.auto_assign_total_spent_kopeks"
-                )
-
-            addon_discount_column_exists = await check_column_exists(
-                "promo_groups", "apply_addon_discounts"
-            )
-
-            if not addon_discount_column_exists:
-                if db_type == "sqlite":
-                    await conn.execute(
-                        text(
-                            "ALTER TABLE promo_groups ADD COLUMN apply_addon_discounts BOOLEAN NOT NULL DEFAULT 1"
-                        )
-                    )
-                elif db_type == "postgresql":
-                    await conn.execute(
-                        text(
-                            "ALTER TABLE promo_groups ADD COLUMN apply_addon_discounts BOOLEAN NOT NULL DEFAULT TRUE"
-                        )
-                    )
-                elif db_type == "mysql":
-                    await conn.execute(
-                        text(
-                            "ALTER TABLE promo_groups ADD COLUMN apply_addon_discounts TINYINT(1) NOT NULL DEFAULT 1"
-                        )
-                    )
-                else:
-                    logger.error(
-                        f"Неподдерживаемый тип БД для promo_groups.apply_addon_discounts: {db_type}"
-                    )
-                    return False
-
-                await conn.execute(
-                    text(
-                        "UPDATE promo_groups SET apply_addon_discounts = 1 WHERE apply_addon_discounts IS NULL"
-                    )
-                )
-                logger.info(
-                    "Добавлена колонка promo_groups.apply_addon_discounts"
                 )
 
             column_exists = await check_column_exists("users", "promo_group_id")
@@ -2035,7 +1994,6 @@ async def check_migration_status():
             "users_promo_group_column": False,
             "promo_groups_period_discounts_column": False,
             "promo_groups_auto_assign_column": False,
-            "promo_groups_addon_discount_column": False,
             "users_auto_promo_group_assigned_column": False,
             "subscription_crypto_link_column": False,
         }
@@ -2053,7 +2011,6 @@ async def check_migration_status():
         status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
         status["promo_groups_period_discounts_column"] = await check_column_exists('promo_groups', 'period_discounts')
         status["promo_groups_auto_assign_column"] = await check_column_exists('promo_groups', 'auto_assign_total_spent_kopeks')
-        status["promo_groups_addon_discount_column"] = await check_column_exists('promo_groups', 'apply_addon_discounts')
         status["users_auto_promo_group_assigned_column"] = await check_column_exists('users', 'auto_promo_group_assigned')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         
@@ -2091,7 +2048,6 @@ async def check_migration_status():
             "users_promo_group_column": "Колонка promo_group_id у пользователей",
             "promo_groups_period_discounts_column": "Колонка period_discounts у промо-групп",
             "promo_groups_auto_assign_column": "Колонка auto_assign_total_spent_kopeks у промо-групп",
-            "promo_groups_addon_discount_column": "Колонка apply_addon_discounts у промо-групп",
             "users_auto_promo_group_assigned_column": "Флаг автоназначения промогруппы у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
         }
