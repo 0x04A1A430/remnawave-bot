@@ -529,6 +529,9 @@ MINIAPP_CUSTOM_URL=
 
 # Параметры режима happ_cryptolink
 CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED=false
+CONNECT_BUTTON_HAPP_REDIRECT_ENABLED=false
+# Шаблон редиректа, поддерживает плейсхолдер {subscription_link}. Если плейсхолдер не указан, ссылка добавится в конец
+CONNECT_BUTTON_HAPP_REDIRECT_TEMPLATE=
 HAPP_DOWNLOAD_LINK_IOS=
 HAPP_DOWNLOAD_LINK_ANDROID=
 HAPP_DOWNLOAD_LINK_MACOS=

@@ -4611,12 +4611,22 @@ async def handle_open_subscription_link(
         return
 
     if settings.is_happ_cryptolink_mode():
+        redirect_link = settings.get_happ_redirect_url(subscription_link)
         happ_message = (
             texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_TITLE",
                 "🔗 <b>Подключение через Happ</b>",
             )
             + "\n\n"
+            + (
+                texts.t(
+                    "SUBSCRIPTION_HAPP_OPEN_REDIRECT_HINT",
+                    "👇 Нажмите кнопку ниже, чтобы открыть Happ напрямую.",
+                )
+                + "\n\n"
+                if redirect_link
+                else ""
+            )
             + texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_LINK",
                 "<a href=\"{subscription_link}\">🔓 Открыть ссылку в Happ</a>",
@@ -4628,7 +4638,11 @@ async def handle_open_subscription_link(
             ).format(subscription_link=subscription_link)
         )
 
-        keyboard = get_happ_cryptolink_keyboard(subscription_link, db_user.language)
+        keyboard = get_happ_cryptolink_keyboard(
+            subscription_link,
+            db_user.language,
+            redirect_link=redirect_link,
+        )
 
         await callback.message.answer(
             happ_message,
