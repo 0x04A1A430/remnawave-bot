@@ -103,6 +103,8 @@
   "HAPP_DOWNLOAD_PROMPT": "📥 <b>Скачать Happ</b>\nВыберите ваше устройство:",
   "HAPP_PLATFORM_IOS": "🍎 iOS",
   "HAPP_PLATFORM_ANDROID": "🤖 Android",
+  "HAPP_PLATFORM_MACOS": "🖥️ Mac OS",
+  "HAPP_PLATFORM_WINDOWS": "💻 Windows",
   "HAPP_PLATFORM_PC": "💻 ПК",
   "HAPP_DOWNLOAD_LINK_MESSAGE": "⬇️ Скачайте Happ для {platform}:",
   "HAPP_DOWNLOAD_LINK_NOT_SET": "❌ Ссылка для этого устройства не настроена",

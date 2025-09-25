@@ -23,6 +23,8 @@
   "HAPP_DOWNLOAD_PROMPT": "📥 <b>Download Happ</b>\nChoose your device:",
   "HAPP_PLATFORM_IOS": "🍎 iOS",
   "HAPP_PLATFORM_ANDROID": "🤖 Android",
+  "HAPP_PLATFORM_MACOS": "🖥️ Mac OS",
+  "HAPP_PLATFORM_WINDOWS": "💻 Windows",
   "HAPP_PLATFORM_PC": "💻 PC",
   "HAPP_DOWNLOAD_LINK_MESSAGE": "⬇️ Download Happ for {platform}:",
   "HAPP_DOWNLOAD_LINK_NOT_SET": "❌ Download link for this device is not configured",
