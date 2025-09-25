@@ -257,65 +257,46 @@ def get_happ_download_button_row(texts) -> Optional[List[InlineKeyboardButton]]:
 def get_happ_cryptolink_keyboard(
     subscription_link: str,
     language: str = DEFAULT_LANGUAGE,
-    redirect_link: Optional[str] = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    buttons: list[list[InlineKeyboardButton]] = []
-
-    if redirect_link:
-        buttons.append(
-            [
-                InlineKeyboardButton(
-                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                    url=redirect_link,
-                )
-            ]
-        )
-
-    buttons.extend(
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                url=subscription_link,
+            )
+        ],
         [
             InlineKeyboardButton(
                 text=texts.t("HAPP_PLATFORM_IOS", "🍎 iOS"),
                 callback_data="happ_download_ios",
             )
-        ]
-    )
-
-    buttons.append(
+        ],
         [
             InlineKeyboardButton(
                 text=texts.t("HAPP_PLATFORM_ANDROID", "🤖 Android"),
                 callback_data="happ_download_android",
             )
-        ]
-    )
-
-    buttons.append(
+        ],
         [
             InlineKeyboardButton(
                 text=texts.t("HAPP_PLATFORM_MACOS", "🖥️ Mac OS"),
                 callback_data="happ_download_macos",
             )
-        ]
-    )
-
-    buttons.append(
+        ],
         [
             InlineKeyboardButton(
                 text=texts.t("HAPP_PLATFORM_WINDOWS", "💻 Windows"),
                 callback_data="happ_download_windows",
             )
-        ]
-    )
-
-    buttons.append(
+        ],
         [
             InlineKeyboardButton(
                 text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
                 callback_data="back_to_menu",
             )
-        ]
-    )
+        ],
+    ]
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

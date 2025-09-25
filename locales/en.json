@@ -197,6 +197,7 @@
   "NO_TICKETS_ADMIN": "No tickets to display.",
   "ADMIN_TICKETS_TITLE": "🎫 All support tickets:",
   "ADMIN_TICKET_REPLY_INPUT": "Enter support reply:",
+
   "ADMIN_TICKET_REPLY_SENT": "✅ Reply sent!",
   "TICKET_MARKED_ANSWERED": "✅ Ticket marked as answered.",
   "TICKET_UPDATE_ERROR": "❌ Error updating ticket.",
@@ -518,6 +519,5 @@
   "NOTIFY_PROMPT_SECOND_HOURS": "Enter the number of hours the discount is active (1-168):",
   "NOTIFY_PROMPT_THIRD_PERCENT": "Enter a new discount percentage for the late offer (0-100):",
   "NOTIFY_PROMPT_THIRD_HOURS": "Enter the number of hours the late discount is active (1-168):",
-  "NOTIFY_PROMPT_THIRD_DAYS": "After how many days without a subscription should we send the offer? (minimum 2):",
-  "SUBSCRIPTION_HAPP_OPEN_REDIRECT_HINT": "👇 Tap the button below to open Happ directly."
+  "NOTIFY_PROMPT_THIRD_DAYS": "After how many days without a subscription should we send the offer? (minimum 2):"
 }
