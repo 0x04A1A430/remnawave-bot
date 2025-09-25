@@ -2,6 +2,7 @@ from typing import List, Optional
 from aiogram import types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
+from urllib.parse import urlparse
 from app.database.models import User
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -254,49 +255,74 @@ def get_happ_download_button_row(texts) -> Optional[List[InlineKeyboardButton]]:
     ]
 
 
+def _is_supported_inline_button_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+
+    if not parsed.scheme:
+        return False
+
+    return parsed.scheme.lower() in {"http", "https", "tg", "ton", "ftp"}
+
+
 def get_happ_cryptolink_keyboard(
     subscription_link: str,
     language: str = DEFAULT_LANGUAGE,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    buttons = [
-        [
+    buttons = []
+
+    if _is_supported_inline_button_url(subscription_link):
+        buttons.append([
             InlineKeyboardButton(
                 text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                 url=subscription_link,
             )
-        ],
-        [
+        ])
+    else:
+        buttons.append([
             InlineKeyboardButton(
-                text=texts.t("HAPP_PLATFORM_IOS", "🍎 iOS"),
-                callback_data="happ_download_ios",
+                text=texts.t("HAPP_COPY_LINK_BUTTON", "📋 Получить ссылку"),
+                callback_data="happ_copy_link",
             )
-        ],
+        ])
+
+    buttons.extend(
         [
-            InlineKeyboardButton(
-                text=texts.t("HAPP_PLATFORM_ANDROID", "🤖 Android"),
-                callback_data="happ_download_android",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=texts.t("HAPP_PLATFORM_MACOS", "🖥️ Mac OS"),
-                callback_data="happ_download_macos",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=texts.t("HAPP_PLATFORM_WINDOWS", "💻 Windows"),
-                callback_data="happ_download_windows",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
-                callback_data="back_to_menu",
-            )
-        ],
-    ]
+            [
+                InlineKeyboardButton(
+                    text=texts.t("HAPP_PLATFORM_IOS", "🍎 iOS"),
+                    callback_data="happ_download_ios",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t("HAPP_PLATFORM_ANDROID", "🤖 Android"),
+                    callback_data="happ_download_android",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t("HAPP_PLATFORM_MACOS", "🖥️ Mac OS"),
+                    callback_data="happ_download_macos",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t("HAPP_PLATFORM_WINDOWS", "💻 Windows"),
+                    callback_data="happ_download_windows",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                    callback_data="back_to_menu",
+                )
+            ],
+        ]
+    )
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
