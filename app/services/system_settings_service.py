@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 from dataclasses import dataclass
@@ -46,6 +47,13 @@ class SettingDefinition:
         return _title_from_key(self.key)
 
 
+@dataclass(slots=True)
+class ChoiceOption:
+    value: Any
+    label: str
+    description: Optional[str] = None
+
+
 class BotConfigurationService:
     EXCLUDED_KEYS: set[str] = {"BOT_TOKEN", "ADMIN_IDS"}
 
@@ -83,9 +91,100 @@ class BotConfigurationService:
         "TELEGRAM": "Telegram Stars",
     }
 
+    CHOICES: Dict[str, List[ChoiceOption]] = {
+        "DATABASE_MODE": [
+            ChoiceOption("auto", "🤖 Авто"),
+            ChoiceOption("postgresql", "🐘 PostgreSQL"),
+            ChoiceOption("sqlite", "💾 SQLite"),
+        ],
+        "REMNAWAVE_AUTH_TYPE": [
+            ChoiceOption("api_key", "🔑 API Key"),
+            ChoiceOption("basic_auth", "🧾 Basic Auth"),
+        ],
+        "REMNAWAVE_USER_DELETE_MODE": [
+            ChoiceOption("delete", "🗑 Удалять"),
+            ChoiceOption("disable", "🚫 Деактивировать"),
+        ],
+        "TRAFFIC_SELECTION_MODE": [
+            ChoiceOption("selectable", "📦 Выбор пакетов"),
+            ChoiceOption("fixed", "📏 Фиксированный лимит"),
+        ],
+        "DEFAULT_TRAFFIC_RESET_STRATEGY": [
+            ChoiceOption("NO_RESET", "♾️ Без сброса"),
+            ChoiceOption("DAY", "📅 Ежедневно"),
+            ChoiceOption("WEEK", "🗓 Еженедельно"),
+            ChoiceOption("MONTH", "📆 Ежемесячно"),
+        ],
+        "SUPPORT_SYSTEM_MODE": [
+            ChoiceOption("tickets", "🎫 Только тикеты"),
+            ChoiceOption("contact", "💬 Только контакт"),
+            ChoiceOption("both", "🔁 Оба варианта"),
+        ],
+        "CONNECT_BUTTON_MODE": [
+            ChoiceOption("guide", "📘 Гайд"),
+            ChoiceOption("miniapp_subscription", "🧾 Mini App подписка"),
+            ChoiceOption("miniapp_custom", "🧩 Mini App (ссылка)"),
+            ChoiceOption("link", "🔗 Прямая ссылка"),
+            ChoiceOption("happ_cryptolink", "🪙 Happ CryptoLink"),
+        ],
+        "SERVER_STATUS_MODE": [
+            ChoiceOption("disabled", "🚫 Отключено"),
+            ChoiceOption("external_link", "🌐 Внешняя ссылка"),
+            ChoiceOption("external_link_miniapp", "🧭 Mini App ссылка"),
+            ChoiceOption("xray", "📊 XRay Checker"),
+        ],
+        "YOOKASSA_PAYMENT_MODE": [
+            ChoiceOption("full_payment", "💳 Полная оплата"),
+            ChoiceOption("partial_payment", "🪙 Частичная оплата"),
+            ChoiceOption("advance", "💼 Аванс"),
+            ChoiceOption("full_prepayment", "📦 Полная предоплата"),
+            ChoiceOption("partial_prepayment", "📦 Частичная предоплата"),
+            ChoiceOption("credit", "💰 Кредит"),
+            ChoiceOption("credit_payment", "💸 Погашение кредита"),
+        ],
+        "YOOKASSA_PAYMENT_SUBJECT": [
+            ChoiceOption("commodity", "📦 Товар"),
+            ChoiceOption("excise", "🥃 Подакцизный товар"),
+            ChoiceOption("job", "🛠 Работа"),
+            ChoiceOption("service", "🧾 Услуга"),
+            ChoiceOption("gambling_bet", "🎲 Ставка"),
+            ChoiceOption("gambling_prize", "🏆 Выигрыш"),
+            ChoiceOption("lottery", "🎫 Лотерея"),
+            ChoiceOption("lottery_prize", "🎁 Приз лотереи"),
+            ChoiceOption("intellectual_activity", "🧠 Интеллектуальная деятельность"),
+            ChoiceOption("payment", "💱 Платеж"),
+            ChoiceOption("agent_commission", "🤝 Комиссия агента"),
+            ChoiceOption("composite", "🧩 Композитный"),
+            ChoiceOption("another", "📄 Другое"),
+        ],
+        "YOOKASSA_VAT_CODE": [
+            ChoiceOption(1, "1 — НДС не облагается"),
+            ChoiceOption(2, "2 — НДС 0%"),
+            ChoiceOption(3, "3 — НДС 10%"),
+            ChoiceOption(4, "4 — НДС 20%"),
+            ChoiceOption(5, "5 — НДС 10/110"),
+            ChoiceOption(6, "6 — НДС 20/120"),
+        ],
+        "MULENPAY_LANGUAGE": [
+            ChoiceOption("ru", "🇷🇺 Русский"),
+            ChoiceOption("en", "🇬🇧 Английский"),
+        ],
+        "LOG_LEVEL": [
+            ChoiceOption("DEBUG", "🐞 Debug"),
+            ChoiceOption("INFO", "ℹ️ Info"),
+            ChoiceOption("WARNING", "⚠️ Warning"),
+            ChoiceOption("ERROR", "❌ Error"),
+            ChoiceOption("CRITICAL", "🔥 Critical"),
+        ],
+    }
+
     _definitions: Dict[str, SettingDefinition] = {}
     _original_values: Dict[str, Any] = settings.model_dump()
     _overrides_raw: Dict[str, Optional[str]] = {}
+    _callback_tokens: Dict[str, str] = {}
+    _token_to_key: Dict[str, str] = {}
+    _choice_tokens: Dict[str, Dict[Any, str]] = {}
+    _choice_token_lookup: Dict[str, Dict[str, Any]] = {}
 
     @classmethod
     def initialize_definitions(cls) -> None:
@@ -114,6 +213,11 @@ class BotConfigurationService:
                 type_label=type_label,
                 is_optional=is_optional,
             )
+
+            cls._register_callback_token(key)
+            if key in cls.CHOICES:
+                cls._ensure_choice_tokens(key)
+
 
     @classmethod
     def _resolve_category_key(cls, key: str) -> str:
@@ -223,6 +327,83 @@ class BotConfigurationService:
         return _truncate(formatted)
 
     @classmethod
+    def get_choice_options(cls, key: str) -> List[ChoiceOption]:
+        cls.initialize_definitions()
+        return cls.CHOICES.get(key, [])
+
+    @classmethod
+    def has_choices(cls, key: str) -> bool:
+        return bool(cls.get_choice_options(key))
+
+    @classmethod
+    def get_callback_token(cls, key: str) -> str:
+        cls.initialize_definitions()
+        return cls._callback_tokens[key]
+
+    @classmethod
+    def resolve_callback_token(cls, token: str) -> str:
+        cls.initialize_definitions()
+        return cls._token_to_key[token]
+
+    @classmethod
+    def get_choice_token(cls, key: str, value: Any) -> Optional[str]:
+        cls.initialize_definitions()
+        cls._ensure_choice_tokens(key)
+        return cls._choice_tokens.get(key, {}).get(value)
+
+    @classmethod
+    def resolve_choice_token(cls, key: str, token: str) -> Any:
+        cls.initialize_definitions()
+        cls._ensure_choice_tokens(key)
+        return cls._choice_token_lookup.get(key, {})[token]
+
+    @classmethod
+    def _register_callback_token(cls, key: str) -> None:
+        if key in cls._callback_tokens:
+            return
+
+        base = hashlib.blake2s(key.encode("utf-8"), digest_size=6).hexdigest()
+        candidate = base
+        counter = 1
+        while candidate in cls._token_to_key and cls._token_to_key[candidate] != key:
+            suffix = cls._encode_base36(counter)
+            candidate = f"{base}{suffix}"[:16]
+            counter += 1
+
+        cls._callback_tokens[key] = candidate
+        cls._token_to_key[candidate] = key
+
+    @classmethod
+    def _ensure_choice_tokens(cls, key: str) -> None:
+        if key in cls._choice_tokens:
+            return
+
+        options = cls.CHOICES.get(key, [])
+        value_to_token: Dict[Any, str] = {}
+        token_to_value: Dict[str, Any] = {}
+
+        for index, option in enumerate(options):
+            token = cls._encode_base36(index)
+            value_to_token[option.value] = token
+            token_to_value[token] = option.value
+
+        cls._choice_tokens[key] = value_to_token
+        cls._choice_token_lookup[key] = token_to_value
+
+    @staticmethod
+    def _encode_base36(number: int) -> str:
+        if number < 0:
+            raise ValueError("number must be non-negative")
+        alphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+        if number == 0:
+            return "0"
+        result = []
+        while number:
+            number, rem = divmod(number, 36)
+            result.append(alphabet[rem])
+        return "".join(reversed(result))
+
+    @classmethod
     async def initialize(cls) -> None:
         cls.initialize_definitions()
 
@@ -310,12 +491,34 @@ class BotConfigurationService:
             raise ValueError("Введите 'true' или 'false' (или 'да'/'нет')")
 
         if python_type is int:
-            return int(text)
+            parsed_value: Any = int(text)
+        elif python_type is float:
+            parsed_value = float(text.replace(",", "."))
+        else:
+            parsed_value = text
 
-        if python_type is float:
-            return float(text.replace(",", "."))
+        choices = cls.get_choice_options(key)
+        if choices:
+            allowed_values = {option.value for option in choices}
+            if python_type is str:
+                lowered_map = {
+                    str(option.value).lower(): option.value for option in choices
+                }
+                normalized = lowered_map.get(str(parsed_value).lower())
+                if normalized is not None:
+                    parsed_value = normalized
+                elif parsed_value not in allowed_values:
+                    readable = ", ".join(
+                        f"{option.label} ({cls.format_value(option.value)})" for option in choices
+                    )
+                    raise ValueError(f"Доступные значения: {readable}")
+            elif parsed_value not in allowed_values:
+                readable = ", ".join(
+                    f"{option.label} ({cls.format_value(option.value)})" for option in choices
+                )
+                raise ValueError(f"Доступные значения: {readable}")
 
-        return text
+        return parsed_value
 
     @classmethod
     async def set_value(cls, db: AsyncSession, key: str, value: Any) -> None:
