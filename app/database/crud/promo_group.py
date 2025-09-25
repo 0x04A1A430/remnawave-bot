@@ -60,6 +60,7 @@ async def create_promo_group(
     device_discount_percent: int,
     period_discounts: Optional[Dict[int, int]] = None,
     auto_assign_total_spent_kopeks: Optional[int] = None,
+    addon_discounts_enabled: bool = True,
 ) -> PromoGroup:
     normalized_period_discounts = _normalize_period_discounts(period_discounts)
 
@@ -77,6 +78,7 @@ async def create_promo_group(
         period_discounts=normalized_period_discounts or None,
         auto_assign_total_spent_kopeks=auto_assign_total_spent_kopeks,
         is_default=False,
+        addon_discounts_enabled=addon_discounts_enabled,
     )
 
     db.add(promo_group)
@@ -106,6 +108,7 @@ async def update_promo_group(
     device_discount_percent: Optional[int] = None,
     period_discounts: Optional[Dict[int, int]] = None,
     auto_assign_total_spent_kopeks: Optional[int] = None,
+    addon_discounts_enabled: Optional[bool] = None,
 ) -> PromoGroup:
     if name is not None:
         group.name = name.strip()
@@ -120,6 +123,8 @@ async def update_promo_group(
         group.period_discounts = normalized_period_discounts or None
     if auto_assign_total_spent_kopeks is not None:
         group.auto_assign_total_spent_kopeks = max(0, auto_assign_total_spent_kopeks)
+    if addon_discounts_enabled is not None:
+        group.addon_discounts_enabled = bool(addon_discounts_enabled)
 
     await db.commit()
     await db.refresh(group)

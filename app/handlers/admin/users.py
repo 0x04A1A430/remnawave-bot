@@ -835,6 +835,7 @@ async def show_user_management(
 • Скидка на сервера: {promo_group.server_discount_percent}%
 • Скидка на трафик: {promo_group.traffic_discount_percent}%
 • Скидка на устройства: {promo_group.device_discount_percent}%
+• Скидки на доп. услуги при докупке: {"включены" if getattr(promo_group, "addon_discounts_enabled", True) else "отключены"}
 """
     else:
         text += "\n<b>Промогруппа:</b> Не назначена"
@@ -863,21 +864,36 @@ async def _render_user_promo_group(
 
     if current_group:
         current_line = texts.ADMIN_USER_PROMO_GROUP_CURRENT.format(name=current_group.name)
+        addon_status = (
+            texts.t("ADMIN_PROMO_GROUP_ADDON_DISCOUNT_ENABLED_VALUE", "включены")
+            if getattr(current_group, "addon_discounts_enabled", True)
+            else texts.t("ADMIN_PROMO_GROUP_ADDON_DISCOUNT_DISABLED_VALUE", "отключены")
+        )
         discount_line = texts.ADMIN_USER_PROMO_GROUP_DISCOUNTS.format(
             servers=current_group.server_discount_percent,
             traffic=current_group.traffic_discount_percent,
             devices=current_group.device_discount_percent,
+            addons=addon_status,
         )
+        addon_line = texts.t(
+            "ADMIN_USER_PROMO_GROUP_ADDON_DISCOUNT_LINE",
+            "Скидки на доп. услуги при докупке: {status}",
+        ).format(status=addon_status)
         current_group_id = current_group.id
     else:
         current_line = texts.ADMIN_USER_PROMO_GROUP_CURRENT_NONE
         discount_line = texts.ADMIN_USER_PROMO_GROUP_DISCOUNTS_NONE
+        addon_line = texts.t(
+            "ADMIN_USER_PROMO_GROUP_ADDON_DISCOUNT_NONE",
+            "Скидки на доп. услуги при докупке: —",
+        )
         current_group_id = None
 
     text = (
         f"{texts.ADMIN_USER_PROMO_GROUP_TITLE}\n\n"
         f"{current_line}\n"
-        f"{discount_line}\n\n"
+        f"{discount_line}\n"
+        f"{addon_line}\n\n"
         f"{texts.ADMIN_USER_PROMO_GROUP_SELECT}"
     )
 
