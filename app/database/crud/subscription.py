@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -13,7 +13,11 @@ from app.database.models import (
     PromoGroup,
 )
 from app.database.crud.notification import clear_notifications
-from app.utils.pricing_utils import calculate_months_from_days, get_remaining_months
+from app.utils.pricing_utils import (
+    calculate_months_from_days,
+    get_remaining_months,
+    resolve_addon_discount_percent,
+)
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -517,6 +521,23 @@ def _get_discount_percent(
     return 0
 
 
+def _get_addon_discount_percent(
+    user: Optional[User],
+    promo_group: Optional[PromoGroup],
+    category: str,
+    *,
+    period_days: Optional[int] = None,
+) -> int:
+    group = promo_group or (getattr(user, "promo_group", None) if user else None)
+
+    return resolve_addon_discount_percent(
+        user,
+        group,
+        category,
+        period_days=period_days,
+    )
+
+
 async def calculate_subscription_total_cost(
     db: AsyncSession,
     period_days: int,
@@ -836,7 +857,7 @@ async def calculate_addon_cost_for_remaining_period(
     if additional_server_ids is None:
         additional_server_ids = []
 
-    months_to_pay = get_remaining_months(subscription.end_date)
+    months_to_pay = max(1, get_remaining_months(subscription.end_date))
     period_hint_days = months_to_pay * 30 if months_to_pay > 0 else None
 
     total_cost = 0
@@ -847,7 +868,7 @@ async def calculate_addon_cost_for_remaining_period(
 
     if additional_traffic_gb > 0:
         traffic_price_per_month = settings.get_traffic_price(additional_traffic_gb)
-        traffic_discount_percent = _get_discount_percent(
+        traffic_discount_percent = _get_addon_discount_percent(
             user,
             promo_group,
             "traffic",
@@ -868,7 +889,7 @@ async def calculate_addon_cost_for_remaining_period(
 
     if additional_devices > 0:
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-        devices_discount_percent = _get_discount_percent(
+        devices_discount_percent = _get_addon_discount_percent(
             user,
             promo_group,
             "devices",
@@ -892,12 +913,19 @@ async def calculate_addon_cost_for_remaining_period(
         for server_id in additional_server_ids:
             result = await db.execute(
                 select(ServerSquad.price_kopeks, ServerSquad.display_name)
-                .where(ServerSquad.id == server_id)
+                .where(
+                    ServerSquad.id == server_id,
+                    ServerSquad.is_available.is_(True),
+                    or_(
+                        ServerSquad.max_users.is_(None),
+                        ServerSquad.current_users < ServerSquad.max_users,
+                    ),
+                )
             )
             server_data = result.first()
             if server_data:
                 server_price_per_month, server_name = server_data
-                servers_discount_percent = _get_discount_percent(
+                servers_discount_percent = _get_addon_discount_percent(
                     user,
                     promo_group,
                     "servers",
