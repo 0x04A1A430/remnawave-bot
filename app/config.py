@@ -210,8 +210,6 @@ class Settings(BaseSettings):
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
     CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
-    HAPP_CRYPTOLINK_PROXY_BASE_URL: Optional[str] = None
-    HAPP_CRYPTOLINK_PROXY_PATH: str = "/happ-link"
     HAPP_DOWNLOAD_LINK_IOS: Optional[str] = None
     HAPP_DOWNLOAD_LINK_ANDROID: Optional[str] = None
     HAPP_DOWNLOAD_LINK_PC: Optional[str] = None
@@ -549,25 +547,8 @@ class Settings(BaseSettings):
     def get_cryptobot_invoice_expires_seconds(self) -> int:
         return self.CRYPTOBOT_INVOICE_EXPIRES_HOURS * 3600
 
-    def get_happ_cryptolink_proxy_base_url(self) -> Optional[str]:
-        base_url = (self.HAPP_CRYPTOLINK_PROXY_BASE_URL or self.WEBHOOK_URL or "").strip()
-        if not base_url:
-            return None
-        return base_url.rstrip('/')
-
-    def get_happ_cryptolink_proxy_path(self) -> str:
-        path = (self.HAPP_CRYPTOLINK_PROXY_PATH or "").strip()
-        if not path:
-            path = "/happ-link"
-        if not path.startswith('/'):
-            path = f"/{path}"
-        return path
-
     def is_happ_cryptolink_mode(self) -> bool:
         return self.CONNECT_BUTTON_MODE == "happ_cryptolink"
-
-    def is_happ_cryptolink_proxy_enabled(self) -> bool:
-        return self.is_happ_cryptolink_mode() and self.get_happ_cryptolink_proxy_base_url() is not None
 
     def is_happ_download_button_enabled(self) -> bool:
         return self.is_happ_cryptolink_mode() and self.CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED

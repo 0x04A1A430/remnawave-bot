@@ -5,7 +5,6 @@ from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import Subscription, User
 from app.config import settings
-from app.utils.happ_links import build_happ_proxy_link
 
 logger = logging.getLogger(__name__)
 
@@ -107,11 +106,6 @@ def get_display_subscription_link(subscription: Optional[Subscription]) -> Optio
 
     if settings.is_happ_cryptolink_mode():
         crypto_link = getattr(subscription, "subscription_crypto_link", None)
-        if crypto_link:
-            proxy_link = build_happ_proxy_link(crypto_link)
-            if proxy_link:
-                return proxy_link
-            logger.warning("Не удалось сформировать прокси-ссылку для Happ, возвращаем стандартную ссылку")
-        return base_link
+        return crypto_link or base_link
 
     return base_link
