@@ -18,7 +18,9 @@ async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
     try:
         logger.info(f"📋 Pre-checkout query от {query.from_user.id}: {query.total_amount} XTR, payload: {query.invoice_payload}")
 
-        if not query.invoice_payload or not query.invoice_payload.startswith("balance_"):
+        allowed_prefixes = ("balance_", "admin_stars_test_")
+
+        if not query.invoice_payload or not query.invoice_payload.startswith(allowed_prefixes):
             logger.warning(f"Невалидный payload: {query.invoice_payload}")
             await query.answer(
                 ok=False,
