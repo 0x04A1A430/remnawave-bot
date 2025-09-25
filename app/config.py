@@ -974,14 +974,22 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-PERIOD_PRICES = {
-    14: settings.PRICE_14_DAYS,
-    30: settings.PRICE_30_DAYS,
-    60: settings.PRICE_60_DAYS,
-    90: settings.PRICE_90_DAYS,
-    180: settings.PRICE_180_DAYS,
-    360: settings.PRICE_360_DAYS,
-}
+PERIOD_PRICES: Dict[int, int] = {}
+
+
+def refresh_period_prices() -> None:
+    PERIOD_PRICES.clear()
+    PERIOD_PRICES.update({
+        14: settings.PRICE_14_DAYS,
+        30: settings.PRICE_30_DAYS,
+        60: settings.PRICE_60_DAYS,
+        90: settings.PRICE_90_DAYS,
+        180: settings.PRICE_180_DAYS,
+        360: settings.PRICE_360_DAYS,
+    })
+
+refresh_period_prices()
+
 
 def get_traffic_prices() -> Dict[int, int]:
     packages = settings.get_traffic_packages()

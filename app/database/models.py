@@ -25,6 +25,17 @@ from sqlalchemy.sql import func
 Base = declarative_base()
 
 
+class BotConfig(Base):
+    __tablename__ = "bot_config"
+
+    key = Column(String(120), primary_key=True)
+    value = Column(Text, nullable=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return f"<BotConfig(key={self.key!r}, value={self.value!r})>"
+
+
 server_squad_promo_groups = Table(
     "server_squad_promo_groups",
     Base.metadata,

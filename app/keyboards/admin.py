@@ -106,6 +106,12 @@ def get_admin_settings_submenu_keyboard(language: str = "ru") -> InlineKeyboardM
             )
         ],
         [
+            InlineKeyboardButton(
+                text=texts.t("ADMIN_BOT_CONFIG", "🧩 Конфигурация бота"),
+                callback_data="admin_bot_config"
+            )
+        ],
+        [
             InlineKeyboardButton(text=texts.ADMIN_RULES, callback_data="admin_rules"),
             InlineKeyboardButton(text="🔧 Техработы", callback_data="maintenance_panel")
         ],

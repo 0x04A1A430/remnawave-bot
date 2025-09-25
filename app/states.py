@@ -87,6 +87,7 @@ class AdminStates(StatesGroup):
 
     editing_rules_page = State()
     editing_notification_value = State()
+    editing_bot_config_value = State()
 
     confirming_sync = State()
 
