@@ -243,7 +243,6 @@ class UserService:
 
             user.promo_group_id = promo_group.id
             user.promo_group = promo_group
-            user.auto_promo_group_assigned = False
             user.updated_at = datetime.utcnow()
 
             await db.commit()
