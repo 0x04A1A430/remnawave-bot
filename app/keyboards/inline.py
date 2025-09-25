@@ -1,4 +1,5 @@
 from typing import List, Optional
+from urllib.parse import urlparse
 from aiogram import types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
@@ -13,6 +14,21 @@ from app.utils.subscription_utils import get_display_subscription_link
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+_SUPPORTED_INLINE_URL_SCHEMES = {"http", "https", "tg"}
+
+
+def _is_supported_inline_url(url: str) -> bool:
+    if not url:
+        return False
+
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+
+    return parsed.scheme.lower() in _SUPPORTED_INLINE_URL_SCHEMES
 
 def get_rules_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
@@ -259,13 +275,22 @@ def get_happ_cryptolink_keyboard(
     language: str = DEFAULT_LANGUAGE,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    buttons = [
-        [
+    buttons: List[List[InlineKeyboardButton]] = []
+
+    if _is_supported_inline_url(subscription_link):
+        buttons.append([
             InlineKeyboardButton(
                 text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
                 url=subscription_link,
             )
-        ],
+        ])
+    else:
+        logger.debug(
+            "Unsupported subscription link scheme for inline button: %s",
+            subscription_link,
+        )
+
+    buttons.extend([
         [
             InlineKeyboardButton(
                 text=texts.t("HAPP_PLATFORM_IOS", "🍎 iOS"),
@@ -296,7 +321,7 @@ def get_happ_cryptolink_keyboard(
                 callback_data="back_to_menu",
             )
         ],
-    ]
+    ])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
