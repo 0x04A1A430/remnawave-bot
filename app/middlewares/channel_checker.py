@@ -7,10 +7,15 @@ from aiogram.types import TelegramObject, Update, Message, CallbackQuery
 from aiogram.enums import ChatMemberStatus
 
 from app.config import settings
+from app.database.database import get_db
+from app.database.crud.subscription import deactivate_subscription
+from app.database.crud.user import get_user_by_telegram_id
+from app.database.models import SubscriptionStatus
 from app.keyboards.inline import get_channel_sub_keyboard
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.check_reg_process import is_registration_process
+from app.services.subscription_service import SubscriptionService
 
 logger = logging.getLogger(__name__)
 
@@ -95,11 +100,14 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 return await handler(event, data)
             elif member.status in self.BAD_MEMBER_STATUS:
                 logger.info(f"❌ Пользователь {telegram_id} не подписан на канал (статус: {member.status})")
-                
+
+                if telegram_id:
+                    await self._deactivate_trial_subscription(telegram_id)
+
                 if isinstance(event, CallbackQuery) and event.data == "sub_channel_check":
                     await event.answer("❌ Вы еще не подписались на канал! Подпишитесь и попробуйте снова.", show_alert=True)
-                    return 
-                
+                    return
+
                 return await self._deny_message(event, bot, channel_link)
             else:
                 logger.warning(f"⚠️ Неожиданный статус пользователя {telegram_id}: {member.status}")
@@ -119,6 +127,53 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         except Exception as e:
             logger.error(f"❌ Неожиданная ошибка при проверке подписки: {e}")
             return await handler(event, data)
+
+    async def _deactivate_trial_subscription(self, telegram_id: int) -> None:
+        async for db in get_db():
+            try:
+                user = await get_user_by_telegram_id(db, telegram_id)
+                if not user or not user.subscription:
+                    logger.debug(
+                        "⚠️ Пользователь %s отсутствует или не имеет подписки — пропускаем деактивацию",
+                        telegram_id,
+                    )
+                    break
+
+                subscription = user.subscription
+                if (not subscription.is_trial or
+                        subscription.status != SubscriptionStatus.ACTIVE.value):
+                    logger.debug(
+                        "ℹ️ Подписка пользователя %s не требует деактивации (trial=%s, status=%s)",
+                        telegram_id,
+                        subscription.is_trial,
+                        subscription.status,
+                    )
+                    break
+
+                await deactivate_subscription(db, subscription)
+                logger.info(
+                    "🚫 Триальная подписка пользователя %s отключена после отписки от канала",
+                    telegram_id,
+                )
+
+                if user.remnawave_uuid:
+                    service = SubscriptionService()
+                    try:
+                        await service.disable_remnawave_user(user.remnawave_uuid)
+                    except Exception as api_error:
+                        logger.error(
+                            "❌ Не удалось отключить пользователя RemnaWave %s: %s",
+                            user.remnawave_uuid,
+                            api_error,
+                        )
+            except Exception as db_error:
+                logger.error(
+                    "❌ Ошибка деактивации подписки пользователя %s после отписки: %s",
+                    telegram_id,
+                    db_error,
+                )
+            finally:
+                break
 
     @staticmethod
     async def _deny_message(event: TelegramObject, bot: Bot, channel_link: str):
