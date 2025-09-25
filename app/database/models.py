@@ -292,6 +292,7 @@ class PromoGroup(Base):
     device_discount_percent = Column(Integer, nullable=False, default=0)
     period_discounts = Column(JSON, nullable=True, default=dict)
     auto_assign_total_spent_kopeks = Column(Integer, nullable=True, default=None)
+    apply_addon_discounts = Column(Boolean, nullable=False, default=True)
     is_default = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
@@ -346,7 +347,16 @@ class PromoGroup(Base):
 
         return 0
 
-    def get_discount_percent(self, category: str, period_days: Optional[int] = None) -> int:
+    def get_discount_percent(
+        self,
+        category: str,
+        period_days: Optional[int] = None,
+        *,
+        is_addon_purchase: bool = False,
+    ) -> int:
+        if is_addon_purchase and not self.apply_addon_discounts:
+            return 0
+
         if category == "period":
             return max(0, min(100, self._get_period_discount(period_days)))
 
@@ -404,10 +414,20 @@ class User(Base):
         parts = [self.first_name, self.last_name]
         return " ".join(filter(None, parts)) or self.username or f"ID{self.telegram_id}"
 
-    def get_promo_discount(self, category: str, period_days: Optional[int] = None) -> int:
+    def get_promo_discount(
+        self,
+        category: str,
+        period_days: Optional[int] = None,
+        *,
+        is_addon_purchase: bool = False,
+    ) -> int:
         if not self.promo_group:
             return 0
-        return self.promo_group.get_discount_percent(category, period_days)
+        return self.promo_group.get_discount_percent(
+            category,
+            period_days,
+            is_addon_purchase=is_addon_purchase,
+        )
     
     def add_balance(self, kopeks: int) -> None:
         self.balance_kopeks += kopeks
