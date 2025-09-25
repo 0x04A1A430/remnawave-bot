@@ -3,7 +3,6 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Dict, Optional, Tuple
 
 from aiogram import Dispatcher, types, F
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,43 +28,28 @@ from app.utils.pricing_utils import format_period_description
 logger = logging.getLogger(__name__)
 
 
-def _format_discount_lines(texts, group) -> Tuple[str, ...]:
-    header = texts.t(
-        "ADMIN_PROMO_GROUP_DISCOUNTS_HEADER",
-        "💸 <b>Размер скидок</b>",
+def _format_discount_line(texts, group) -> str:
+    return texts.t(
+        "ADMIN_PROMO_GROUPS_DISCOUNTS",
+        "Скидки — серверы: {servers}%, трафик: {traffic}%, устройства: {devices}%",
+    ).format(
+        servers=group.server_discount_percent,
+        traffic=group.traffic_discount_percent,
+        devices=group.device_discount_percent,
     )
-
-    servers_line = texts.t(
-        "ADMIN_PROMO_GROUP_DISCOUNTS_SERVERS",
-        "• Серверы: {percent}%",
-    ).format(percent=group.server_discount_percent)
-
-    traffic_line = texts.t(
-        "ADMIN_PROMO_GROUP_DISCOUNTS_TRAFFIC",
-        "• Трафик: {percent}%",
-    ).format(percent=group.traffic_discount_percent)
-
-    devices_line = texts.t(
-        "ADMIN_PROMO_GROUP_DISCOUNTS_DEVICES",
-        "• Устройства: {percent}%",
-    ).format(percent=group.device_discount_percent)
-
-    return header, servers_line, traffic_line, devices_line
 
 
 def _format_addon_discounts_line(texts, group: PromoGroup) -> str:
     enabled = getattr(group, "apply_discounts_to_addons", True)
-    status = texts.t(
-        "ADMIN_PROMO_GROUP_ADDON_DISCOUNT_STATUS_ENABLED"
-        if enabled
-        else "ADMIN_PROMO_GROUP_ADDON_DISCOUNT_STATUS_DISABLED",
-        "включены" if enabled else "отключены",
-    )
-
+    if enabled:
+        return texts.t(
+            "ADMIN_PROMO_GROUP_ADDON_DISCOUNT_ENABLED",
+            "Скидки на доп. услуги: включены",
+        )
     return texts.t(
-        "ADMIN_PROMO_GROUP_ADDON_DISCOUNTS_LINE",
-        "• Доп. услуги: {status}",
-    ).format(status=status)
+        "ADMIN_PROMO_GROUP_ADDON_DISCOUNT_DISABLED",
+        "Скидки на доп. услуги: отключены",
+    )
 
 
 def _get_addon_discounts_button_text(texts, group: PromoGroup) -> str:
@@ -296,10 +280,12 @@ def _build_edit_menu_content(
         "✏️ Настройки промогруппы «{name}»",
     ).format(name=group.name)
 
-    lines = [header]
-    lines.extend(_format_discount_lines(texts, group))
-    lines.append(_format_addon_discounts_line(texts, group))
-    lines.append(_format_auto_assign_line(texts, group))
+    lines = [
+        header,
+        _format_discount_line(texts, group),
+        _format_addon_discounts_line(texts, group),
+        _format_auto_assign_line(texts, group),
+    ]
 
     period_lines = _format_period_discounts_lines(texts, group, language)
     lines.extend(period_lines)
@@ -408,22 +394,12 @@ async def _send_edit_menu_after_update(
 ):
     menu_text, keyboard = _build_edit_menu_content(texts, group, language)
     parts = [part for part in [success_message, menu_text] if part]
-    text = "\n\n".join(parts)
 
-    try:
-        await message.edit_text(
-            text,
-            reply_markup=keyboard,
-            parse_mode="HTML",
-        )
-    except TelegramBadRequest as exc:
-        if "message is not modified" in str(exc).lower():
-            return
-        await message.answer(
-            text,
-            reply_markup=keyboard,
-            parse_mode="HTML",
-        )
+    await message.answer(
+        "\n\n".join(parts),
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
 
 
 @admin_required
@@ -455,7 +431,7 @@ async def show_promo_groups_menu(
             )
             group_lines = [
                 f"{'⭐' if group.is_default else '🎯'} <b>{group.name}</b>{default_suffix}",
-                "\n".join(_format_discount_lines(texts, group)),
+                _format_discount_line(texts, group),
                 _format_auto_assign_line(texts, group),
                 texts.t(
                     "ADMIN_PROMO_GROUPS_MEMBERS_COUNT",
@@ -530,7 +506,7 @@ async def show_promo_group_details(
             "ADMIN_PROMO_GROUP_DETAILS_TITLE",
             "💳 <b>Промогруппа:</b> {name}",
         ).format(name=group.name),
-        "\n".join(_format_discount_lines(texts, group)),
+        _format_discount_line(texts, group),
         _format_auto_assign_line(texts, group),
         texts.t(
             "ADMIN_PROMO_GROUP_DETAILS_MEMBERS",
@@ -1285,7 +1261,7 @@ async def toggle_promo_group_addon_discounts(
         status_text,
     )
 
-    await callback.answer(status_text)
+    await callback.answer()
 
 
 def register_handlers(dp: Dispatcher):
