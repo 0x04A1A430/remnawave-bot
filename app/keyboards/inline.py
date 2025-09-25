@@ -88,7 +88,6 @@ def get_main_menu_keyboard(
     if has_active_subscription and subscription_is_active:
         connect_mode = settings.CONNECT_BUTTON_MODE
         subscription_url = getattr(subscription, "subscription_url", None)
-        happ_crypto_link = getattr(subscription, "happ_crypto_link", None)
 
         def _fallback_connect_button() -> InlineKeyboardButton:
             return InlineKeyboardButton(
@@ -123,33 +122,8 @@ def get_main_menu_keyboard(
                 ])
             else:
                 keyboard.append([_fallback_connect_button()])
-        elif connect_mode == "happ_cryptolink":
-            if happ_crypto_link:
-                keyboard.append([
-                    InlineKeyboardButton(
-                        text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                        url=happ_crypto_link
-                    )
-                ])
-            elif subscription_url:
-                keyboard.append([
-                    InlineKeyboardButton(
-                        text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                        url=subscription_url
-                    )
-                ])
-            else:
-                keyboard.append([_fallback_connect_button()])
         else:
             keyboard.append([_fallback_connect_button()])
-
-        if settings.CONNECT_BUTTON_MODE == "happ_cryptolink" and settings.is_happ_download_button_enabled():
-            keyboard.append([
-                InlineKeyboardButton(
-                    text=texts.t("HAPP_DOWNLOAD_BUTTON", "📥 Скачать Happ"),
-                    callback_data="happ_download_app",
-                )
-            ])
 
         keyboard.append([
             InlineKeyboardButton(text=balance_button_text, callback_data="menu_balance"),
@@ -375,31 +349,6 @@ def get_subscription_keyboard(
                 keyboard.append([
                     InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription.subscription_url)
                 ])
-            elif connect_mode == "happ_cryptolink":
-                happ_link = getattr(subscription, "happ_crypto_link", None)
-
-                if happ_link:
-                    keyboard.append([
-                        InlineKeyboardButton(
-                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                            url=happ_link
-                        )
-                    ])
-                else:
-                    keyboard.append([
-                        InlineKeyboardButton(
-                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                            callback_data="subscription_connect"
-                        )
-                    ])
-
-                if settings.is_happ_download_button_enabled():
-                    keyboard.append([
-                        InlineKeyboardButton(
-                            text=texts.t("HAPP_DOWNLOAD_BUTTON", "📥 Скачать Happ"),
-                            callback_data="happ_download_app"
-                        )
-                    ])
             else:
                 keyboard.append([
                     InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), callback_data="subscription_connect")
@@ -1288,7 +1237,7 @@ def get_manage_countries_keyboard(
 def get_device_selection_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     from app.config import settings
     texts = get_texts(language)
-
+    
     keyboard = [
         [
             InlineKeyboardButton(text=texts.t("DEVICE_GUIDE_IOS", "📱 iOS (iPhone/iPad)"), callback_data="device_guide_ios"),
@@ -1316,7 +1265,7 @@ def get_device_selection_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKey
 
 
 def get_connection_guide_keyboard(
-    subscription_url: str,
+    subscription_url: str, 
     app: dict, 
     language: str = DEFAULT_LANGUAGE
 ) -> InlineKeyboardMarkup:
@@ -1352,90 +1301,6 @@ def get_connection_guide_keyboard(
         ]
     ])
     
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
-def get_happ_download_device_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    links = settings.get_happ_download_links()
-
-    buttons: List[List[InlineKeyboardButton]] = []
-    platform_buttons: List[InlineKeyboardButton] = []
-
-    if links.get("ios"):
-        platform_buttons.append(
-            InlineKeyboardButton(
-                text=texts.t("HAPP_DOWNLOAD_IOS", "🍏 iOS"),
-                callback_data="happ_download_platform_ios",
-            )
-        )
-
-    if links.get("android"):
-        platform_buttons.append(
-            InlineKeyboardButton(
-                text=texts.t("HAPP_DOWNLOAD_ANDROID", "🤖 Android"),
-                callback_data="happ_download_platform_android",
-            )
-        )
-
-    if platform_buttons:
-        if len(platform_buttons) > 1:
-            buttons.append(platform_buttons[:2])
-        else:
-            buttons.append([platform_buttons[0]])
-
-    if len(platform_buttons) > 2:
-        buttons.append(platform_buttons[2:])
-
-    if links.get("desktop"):
-        buttons.append([
-            InlineKeyboardButton(
-                text=texts.t("HAPP_DOWNLOAD_DESKTOP", "💻 ПК"),
-                callback_data="happ_download_platform_desktop",
-            )
-        ])
-
-    buttons.append([
-        InlineKeyboardButton(
-            text=texts.t("BACK_TO_SUBSCRIPTION", "⬅️ К подписке"),
-            callback_data="subscription_connect",
-        )
-    ])
-
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-
-def get_happ_download_link_keyboard(
-    platform: str,
-    language: str = DEFAULT_LANGUAGE,
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    links = settings.get_happ_download_links()
-    keyboard: List[List[InlineKeyboardButton]] = []
-
-    link = links.get(platform)
-    if link:
-        keyboard.append([
-            InlineKeyboardButton(
-                text=texts.t("HAPP_DOWNLOAD_OPEN", "📥 Скачать приложение"),
-                url=link,
-            )
-        ])
-
-    keyboard.append([
-        InlineKeyboardButton(
-            text=texts.t("HAPP_DOWNLOAD_CHOOSE_DEVICE", "📱 Выбрать устройство"),
-            callback_data="happ_download_app",
-        )
-    ])
-
-    keyboard.append([
-        InlineKeyboardButton(
-            text=texts.t("BACK_TO_SUBSCRIPTION", "⬅️ К подписке"),
-            callback_data="subscription_connect",
-        )
-    ])
-
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 

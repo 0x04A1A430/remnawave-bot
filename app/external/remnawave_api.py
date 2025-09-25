@@ -35,7 +35,7 @@ class RemnaWaveUser:
     username: str
     status: UserStatus
     used_traffic_bytes: int
-    lifetime_used_traffic_bytes: int
+    lifetime_used_traffic_bytes: int 
     traffic_limit_bytes: int
     traffic_limit_strategy: TrafficLimitStrategy
     expire_at: datetime
@@ -48,7 +48,6 @@ class RemnaWaveUser:
     active_internal_squads: List[Dict[str, str]]
     created_at: datetime
     updated_at: datetime
-    happ: Optional[Dict[str, str]] = None
     sub_last_user_agent: Optional[str] = None
     sub_last_opened_at: Optional[datetime] = None
     online_at: Optional[datetime] = None
@@ -604,7 +603,6 @@ class RemnaWaveAPI:
             active_internal_squads=user_data['activeInternalSquads'],
             created_at=datetime.fromisoformat(user_data['createdAt'].replace('Z', '+00:00')),
             updated_at=datetime.fromisoformat(user_data['updatedAt'].replace('Z', '+00:00')),
-            happ=user_data.get('happ'),
             sub_last_user_agent=user_data.get('subLastUserAgent'),
             sub_last_opened_at=self._parse_optional_datetime(user_data.get('subLastOpenedAt')),
             online_at=self._parse_optional_datetime(user_data.get('onlineAt')),

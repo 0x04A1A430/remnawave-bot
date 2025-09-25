@@ -435,7 +435,6 @@ class Subscription(Base):
     traffic_used_gb = Column(Float, default=0.0)
 
     subscription_url = Column(String, nullable=True)
-    happ_crypto_link = Column(String, nullable=True)
     
     device_limit = Column(Integer, default=1)
     
