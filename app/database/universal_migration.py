@@ -1,9 +1,12 @@
 import logging
 from sqlalchemy import text, inspect
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.config import settings, Settings
 from app.database.database import engine
 
 logger = logging.getLogger(__name__)
+
+BOT_CONFIG_EXCLUDED_KEYS = {"BOT_TOKEN", "ADMIN_IDS"}
 
 async def get_database_type():
     return engine.dialect.name
@@ -38,6 +41,94 @@ async def check_table_exists(table_name: str) -> bool:
             
     except Exception as e:
         logger.error(f"Ошибка проверки существования таблицы {table_name}: {e}")
+        return False
+
+
+def _serialize_config_value(value):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+async def create_bot_config_table() -> bool:
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS bot_config (
+                        key TEXT PRIMARY KEY,
+                        value TEXT NULL,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+            elif db_type == "postgresql":
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS bot_config (
+                        key VARCHAR(120) PRIMARY KEY,
+                        value TEXT NULL,
+                        updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+            elif db_type == "mysql":
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS bot_config (
+                        `key` VARCHAR(120) PRIMARY KEY,
+                        `value` TEXT NULL,
+                        `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    )
+                """))
+            else:
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS bot_config (
+                        key VARCHAR(120) PRIMARY KEY,
+                        value TEXT NULL,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы bot_config: {e}")
+        return False
+
+
+async def sync_bot_config_defaults() -> bool:
+    try:
+        all_keys = [
+            key for key in Settings.model_fields.keys()
+            if key not in BOT_CONFIG_EXCLUDED_KEYS
+        ]
+
+        async with engine.begin() as conn:
+            existing = await conn.execute(text("SELECT key FROM bot_config"))
+            existing_keys = {row[0] for row in existing.fetchall()}
+
+            inserted = 0
+            for key in all_keys:
+                if key in existing_keys:
+                    continue
+
+                value = getattr(settings, key, None)
+                serialized = _serialize_config_value(value)
+
+                await conn.execute(
+                    text("INSERT INTO bot_config (key, value) VALUES (:key, :value)"),
+                    {"key": key, "value": serialized},
+                )
+                inserted += 1
+
+        if inserted:
+            logger.info(f"Добавлено {inserted} новых параметров в bot_config")
+        else:
+            logger.info("Конфигурация bot_config уже актуальна")
+
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка синхронизации значений bot_config: {e}")
         return False
 
 async def check_column_exists(table_name: str, column_name: str) -> bool:
@@ -1843,7 +1934,19 @@ async def run_universal_migration():
         referral_migration_success = await add_referral_system_columns()
         if not referral_migration_success:
             logger.warning("⚠️ Проблемы с миграцией реферальной системы")
-        
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ BOT_CONFIG ===")
+        bot_config_created = await create_bot_config_table()
+        if bot_config_created:
+            logger.info("✅ Таблица bot_config готова")
+            bot_config_synced = await sync_bot_config_defaults()
+            if bot_config_synced:
+                logger.info("✅ Конфигурация bot_config синхронизирована с текущими настройками")
+            else:
+                logger.warning("⚠️ Не удалось синхронизировать значения bot_config")
+        else:
+            logger.warning("⚠️ Проблемы с созданием таблицы bot_config")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ CRYPTOBOT ===")
         cryptobot_created = await create_cryptobot_payments_table()
         if cryptobot_created:
