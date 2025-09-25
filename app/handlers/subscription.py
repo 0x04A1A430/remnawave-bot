@@ -93,6 +93,51 @@ def _apply_discount_to_monthly_component(
     }
 
 
+def _get_addon_discount_percent_for_user(
+    user: User,
+    category: str,
+    period_days: Optional[int] = None,
+) -> int:
+    promo_group = getattr(user, "promo_group", None)
+
+    if promo_group is not None and not getattr(promo_group, "apply_discounts_to_addons", True):
+        return 0
+
+    try:
+        return user.get_promo_discount(category, period_days)
+    except AttributeError:
+        return 0
+
+
+def _calculate_discounted_addon_price(
+    subscription: Subscription,
+    user: User,
+    base_price_per_month: int,
+    category: str,
+) -> Dict[str, int]:
+    months_to_pay = max(1, get_remaining_months(subscription.end_date))
+    period_hint_days = months_to_pay * 30 if months_to_pay > 0 else None
+    discount_percent = _get_addon_discount_percent_for_user(
+        user,
+        category,
+        period_hint_days,
+    )
+
+    discount_per_month = base_price_per_month * discount_percent // 100
+    discounted_per_month = base_price_per_month - discount_per_month
+    total_price = discounted_per_month * months_to_pay
+    total_discount = discount_per_month * months_to_pay
+
+    return {
+        "total_price": total_price,
+        "charged_months": months_to_pay,
+        "discount_percent": discount_percent,
+        "discount_total": total_discount,
+        "discount_per_month": discount_per_month,
+        "discounted_per_month": discounted_per_month,
+    }
+
+
 async def _prepare_subscription_summary(
     db_user: User,
     data: Dict[str, Any],
@@ -1287,35 +1332,64 @@ async def apply_countries_changes(
 
     logger.info(f"🔧 Добавлено: {added}, Удалено: {removed}")
 
-    months_to_pay = get_remaining_months(subscription.end_date)
-    
+    months_to_pay = max(1, get_remaining_months(subscription.end_date))
+    period_hint_days = months_to_pay * 30 if months_to_pay > 0 else None
+    servers_discount_percent = _get_addon_discount_percent_for_user(
+        db_user,
+        "servers",
+        period_hint_days,
+    )
+
     cost_per_month = 0
     added_names = []
     removed_names = []
-    
+
     added_server_prices = []
-    
+    total_cost = 0
+    total_discount = 0
+
     for country in countries:
         if country['uuid'] in added:
             server_price_per_month = country['price_kopeks']
             cost_per_month += server_price_per_month
             added_names.append(country['name'])
+            server_discount_per_month = (
+                server_price_per_month * servers_discount_percent // 100
+            )
+            discounted_per_month = server_price_per_month - server_discount_per_month
+            server_total_price = discounted_per_month * months_to_pay
+            added_server_prices.append(server_total_price)
+            total_cost += server_total_price
+            total_discount += server_discount_per_month * months_to_pay
         if country['uuid'] in removed:
             removed_names.append(country['name'])
-    
-    total_cost, charged_months = calculate_prorated_price(cost_per_month, subscription.end_date)
-    
-    for country in countries:
-        if country['uuid'] in added:
-            server_price_per_month = country['price_kopeks']
-            server_total_price = server_price_per_month * charged_months
-            added_server_prices.append(server_total_price)
-    
-    logger.info(f"Стоимость новых серверов: {cost_per_month/100}₽/мес × {charged_months} мес = {total_cost/100}₽")
-    
+
+    charged_months = months_to_pay
+
+    if added and servers_discount_percent > 0:
+        logger.info(
+            "Стоимость новых серверов: %s₽/мес × %s мес = %s₽ (скидка %s%%: -%s₽)",
+            cost_per_month / 100,
+            charged_months,
+            total_cost / 100,
+            servers_discount_percent,
+            total_discount / 100,
+        )
+    else:
+        logger.info(
+            "Стоимость новых серверов: %s₽/мес × %s мес = %s₽",
+            cost_per_month / 100,
+            charged_months,
+            total_cost / 100,
+        )
+
     if total_cost > 0 and db_user.balance_kopeks < total_cost:
         missing_kopeks = total_cost - db_user.balance_kopeks
         required_text = f"{texts.format_price(total_cost)} (за {charged_months} мес)"
+        if total_discount > 0:
+            required_text += (
+                f"\n💸 Скидка {servers_discount_percent}%: -{texts.format_price(total_discount)}"
+            )
         message_text = texts.t(
             "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
             (
@@ -1398,6 +1472,10 @@ async def apply_countries_changes(
             success_text += "\n".join(f"• {name}" for name in added_names)
             if total_cost > 0:
                 success_text += f"\n💰 Списано: {texts.format_price(total_cost)} (за {charged_months} мес)"
+                if total_discount > 0:
+                    success_text += (
+                        f"\n💸 Скидка {servers_discount_percent}%: -{texts.format_price(total_discount)}"
+                    )
             success_text += "\n"
         
         if removed_names:
@@ -1493,8 +1571,6 @@ async def confirm_change_devices(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
-    
     new_devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
@@ -1522,13 +1598,26 @@ async def confirm_change_devices(
             chargeable_devices = max(0, additional_devices - free_devices)
         else:
             chargeable_devices = additional_devices
-        
+
         devices_price_per_month = chargeable_devices * settings.PRICE_PER_DEVICE
-        price, charged_months = calculate_prorated_price(devices_price_per_month, subscription.end_date)
-        
+        pricing = _calculate_discounted_addon_price(
+            subscription,
+            db_user,
+            devices_price_per_month,
+            "devices",
+        )
+        price = pricing["total_price"]
+        charged_months = pricing["charged_months"]
+        discount_percent = pricing["discount_percent"]
+        discount_total = pricing["discount_total"]
+
         if price > 0 and db_user.balance_kopeks < price:
             missing_kopeks = price - db_user.balance_kopeks
             required_text = f"{texts.format_price(price)} (за {charged_months} мес)"
+            if discount_total > 0:
+                required_text += (
+                    f"\n💸 Скидка {discount_percent}%: -{texts.format_price(discount_total)}"
+                )
             message_text = texts.t(
                 "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
                 (
@@ -1554,9 +1643,13 @@ async def confirm_change_devices(
             )
             await callback.answer()
             return
-        
+
         action_text = f"увеличить до {new_devices_count}"
         cost_text = f"Доплата: {texts.format_price(price)} (за {charged_months} мес)" if price > 0 else "Бесплатно"
+        if price > 0 and discount_total > 0:
+            cost_text += (
+                f" (скидка {discount_percent}%: -{texts.format_price(discount_total)})"
+            )
         
     else:  
         price = 0
@@ -1605,7 +1698,7 @@ async def execute_change_devices(
                 await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
                 return
             
-            charged_months = get_remaining_months(subscription.end_date)
+            charged_months = max(1, get_remaining_months(subscription.end_date))
             await create_transaction(
                 db=db,
                 user_id=db_user.id,
@@ -2120,8 +2213,6 @@ async def confirm_add_devices(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
-    
     devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
@@ -2139,13 +2230,43 @@ async def confirm_add_devices(
         return
     
     devices_price_per_month = devices_count * settings.PRICE_PER_DEVICE
-    price, charged_months = calculate_prorated_price(devices_price_per_month, subscription.end_date)
-    
-    logger.info(f"Добавление {devices_count} устройств: {devices_price_per_month/100}₽/мес × {charged_months} мес = {price/100}₽")
+    pricing = _calculate_discounted_addon_price(
+        subscription,
+        db_user,
+        devices_price_per_month,
+        "devices",
+    )
+    price = pricing["total_price"]
+    charged_months = pricing["charged_months"]
+    discount_percent = pricing["discount_percent"]
+    discount_total = pricing["discount_total"]
+
+    if discount_percent > 0:
+        logger.info(
+            "Добавление %s устройств: %s₽/мес × %s мес = %s₽ (скидка %s%%: -%s₽)",
+            devices_count,
+            devices_price_per_month / 100,
+            charged_months,
+            price / 100,
+            discount_percent,
+            discount_total / 100,
+        )
+    else:
+        logger.info(
+            "Добавление %s устройств: %s₽/мес × %s мес = %s₽",
+            devices_count,
+            devices_price_per_month / 100,
+            charged_months,
+            price / 100,
+        )
     
     if db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
         required_text = f"{texts.format_price(price)} (за {charged_months} мес)"
+        if discount_total > 0:
+            required_text += (
+                f"\n💸 Скидка {discount_percent}%: -{texts.format_price(discount_total)}"
+            )
         message_text = texts.t(
             "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
             (
@@ -2204,7 +2325,12 @@ async def confirm_add_devices(
             f"✅ Устройства успешно добавлены!\n\n"
             f"📱 Добавлено: {devices_count} устройств\n"
             f"Новый лимит: {subscription.device_limit} устройств\n"
-            f"💰 Списано: {texts.format_price(price)} (за {charged_months} мес)",
+            f"💰 Списано: {texts.format_price(price)} (за {charged_months} мес)"
+            + (
+                f"\n💸 Скидка {discount_percent}%: -{texts.format_price(discount_total)}"
+                if discount_total > 0
+                else ""
+            ),
             reply_markup=get_back_keyboard(db_user.language)
         )
         
@@ -3501,12 +3627,42 @@ async def add_traffic(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
-    price = settings.get_traffic_price(traffic_gb)
-    
-    if price == 0 and traffic_gb != 0:
+    price_per_month = settings.get_traffic_price(traffic_gb)
+
+    if price_per_month == 0 and traffic_gb != 0:
         await callback.answer("⚠️ Цена для этого пакета не настроена", show_alert=True)
         return
-    
+
+    pricing = _calculate_discounted_addon_price(
+        subscription,
+        db_user,
+        price_per_month,
+        "traffic",
+    )
+    price = pricing["total_price"]
+    charged_months = pricing["charged_months"]
+    discount_percent = pricing["discount_percent"]
+    discount_total = pricing["discount_total"]
+
+    if discount_percent > 0:
+        logger.info(
+            "Добавление трафика +%s ГБ: %s₽/мес × %s мес = %s₽ (скидка %s%%: -%s₽)",
+            traffic_gb,
+            price_per_month / 100,
+            charged_months,
+            price / 100,
+            discount_percent,
+            discount_total / 100,
+        )
+    else:
+        logger.info(
+            "Добавление трафика +%s ГБ: %s₽/мес × %s мес = %s₽",
+            traffic_gb,
+            price_per_month / 100,
+            charged_months,
+            price / 100,
+        )
+
     if db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
         message_text = texts.t(
@@ -3519,7 +3675,14 @@ async def add_traffic(
                 "Выберите способ пополнения. Сумма подставится автоматически."
             ),
         ).format(
-            required=texts.format_price(price),
+            required=(
+                f"{texts.format_price(price)} (за {charged_months} мес)"
+                + (
+                    f"\n💸 Скидка {discount_percent}%: -{texts.format_price(discount_total)}"
+                    if discount_total > 0
+                    else ""
+                )
+            ),
             balance=texts.format_price(db_user.balance_kopeks),
             missing=texts.format_price(missing_kopeks),
         )
@@ -3538,7 +3701,7 @@ async def add_traffic(
     try:
         success = await subtract_user_balance(
             db, db_user, price,
-            f"Добавление {traffic_gb} ГБ трафика"
+            f"Добавление {traffic_gb} ГБ трафика на {charged_months} мес"
         )
         
         if not success:
@@ -3558,7 +3721,9 @@ async def add_traffic(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=price,
-            description=f"Добавление {traffic_gb} ГБ трафика"
+            description=(
+                f"Добавление {traffic_gb} ГБ трафика на {charged_months} мес"
+            )
         )
         
         
@@ -3571,6 +3736,12 @@ async def add_traffic(
         else:
             success_text += f"📈 Добавлено: {traffic_gb} ГБ\n"
             success_text += f"Новый лимит: {texts.format_traffic(subscription.traffic_limit_gb)}"
+        if price > 0:
+            success_text += f"\n💰 Списано: {texts.format_price(price)} (за {charged_months} мес)"
+            if discount_total > 0:
+                success_text += (
+                    f"\n💸 Скидка {discount_percent}%: -{texts.format_price(discount_total)}"
+                )
         
         await callback.message.edit_text(
             success_text,

@@ -1,8 +1,12 @@
 from datetime import datetime, timedelta
-from typing import Tuple
+from typing import Tuple, Optional, TYPE_CHECKING
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+if TYPE_CHECKING:  # pragma: no cover
+    from app.database.models import User, PromoGroup
 
 
 def calculate_months_from_days(days: int) -> int:
@@ -59,6 +63,32 @@ def apply_percentage_discount(amount: int, percent: int) -> Tuple[int, int]:
     )
 
     return discounted_amount, discount_value
+
+
+def resolve_addon_discount_percent(
+    user: Optional["User"],
+    promo_group: Optional["PromoGroup"],
+    category: str,
+    *,
+    period_days: Optional[int] = None,
+) -> int:
+    """Return discount percent for add-on purchases respecting promo-group rules."""
+
+    group = promo_group or (getattr(user, "promo_group", None) if user else None)
+
+    if group is not None and not getattr(group, "apply_discounts_to_addons", True):
+        return 0
+
+    if user is not None:
+        try:
+            return user.get_promo_discount(category, period_days)
+        except AttributeError:
+            pass
+
+    if promo_group is not None:
+        return promo_group.get_discount_percent(category, period_days)
+
+    return 0
 
 
 def format_period_description(days: int, language: str = "ru") -> str:
