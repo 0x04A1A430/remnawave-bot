@@ -58,7 +58,6 @@ class RemnaWaveUser:
     ss_password: Optional[str] = None
     first_connected_at: Optional[datetime] = None
     last_triggered_threshold: int = 0
-    happ: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -92,7 +91,7 @@ class SubscriptionInfo:
     links: List[str]
     ss_conf_links: Dict[str, str]
     subscription_url: str
-    happ: Optional[Dict[str, Any]]
+    happ: Optional[Dict[str, str]]
 
 
 class RemnaWaveAPIError(Exception):
@@ -613,8 +612,7 @@ class RemnaWaveAPI:
             vless_uuid=user_data.get('vlessUuid'),
             ss_password=user_data.get('ssPassword'),
             first_connected_at=self._parse_optional_datetime(user_data.get('firstConnectedAt')),
-            last_triggered_threshold=user_data.get('lastTriggeredThreshold', 0),
-            happ=user_data.get('happ'),
+            last_triggered_threshold=user_data.get('lastTriggeredThreshold', 0)
         )
 
     def _parse_optional_datetime(self, date_str: Optional[str]) -> Optional[datetime]:
