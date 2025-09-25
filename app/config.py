@@ -213,6 +213,7 @@ class Settings(BaseSettings):
     HAPP_DOWNLOAD_LINK_IOS: Optional[str] = None
     HAPP_DOWNLOAD_LINK_ANDROID: Optional[str] = None
     HAPP_DOWNLOAD_LINK_PC: Optional[str] = None
+    HAPP_DOWNLOAD_LINK_MAC: Optional[str] = None
     HIDE_SUBSCRIPTION_LINK: bool = False
     ENABLE_LOGO_MODE: bool = True
     LOGO_FILE: str = "vpn_logo.png"
@@ -559,6 +560,8 @@ class Settings(BaseSettings):
             "ios": (self.HAPP_DOWNLOAD_LINK_IOS or "").strip(),
             "android": (self.HAPP_DOWNLOAD_LINK_ANDROID or "").strip(),
             "pc": (self.HAPP_DOWNLOAD_LINK_PC or "").strip(),
+            "mac": (self.HAPP_DOWNLOAD_LINK_MAC or "").strip(),
+            "windows": (self.HAPP_DOWNLOAD_LINK_PC or "").strip(),
         }
         link = links.get(platform_key)
         return link if link else None
