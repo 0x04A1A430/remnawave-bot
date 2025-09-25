@@ -254,64 +254,12 @@ def get_happ_download_button_row(texts) -> Optional[List[InlineKeyboardButton]]:
     ]
 
 
-def get_happ_subscription_keyboard(
-    subscription_link: str,
-    language: str = DEFAULT_LANGUAGE,
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard: List[List[InlineKeyboardButton]] = [
-        [
-            InlineKeyboardButton(
-                text=texts.t("SUBSCRIPTION_HAPP_CONNECT_BUTTON", "🔗 Подключиться"),
-                url=subscription_link,
-            )
-        ]
-    ]
-
-    if settings.is_happ_download_button_enabled():
-        keyboard.extend(
-            [
-                [
-                    InlineKeyboardButton(
-                        text=texts.t("HAPP_PLATFORM_IOS", "🍎 iOS"),
-                        callback_data="happ_download_ios",
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t("HAPP_PLATFORM_ANDROID", "🤖 Android"),
-                        callback_data="happ_download_android",
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t("HAPP_PLATFORM_WINDOWS", "💻 Windows"),
-                        callback_data="happ_download_windows",
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text=texts.t("HAPP_PLATFORM_MAC", "🍏 Mac OS"),
-                        callback_data="happ_download_mac",
-                    )
-                ],
-            ]
-        )
-
-    keyboard.append([
-        InlineKeyboardButton(text=texts.t("BACK_TO_MENU", "🏠 В главное меню"), callback_data="menu_subscription")
-    ])
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
 def get_happ_download_platform_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     buttons = [
         [InlineKeyboardButton(text=texts.t("HAPP_PLATFORM_IOS", "🍎 iOS"), callback_data="happ_download_ios")],
         [InlineKeyboardButton(text=texts.t("HAPP_PLATFORM_ANDROID", "🤖 Android"), callback_data="happ_download_android")],
-        [InlineKeyboardButton(text=texts.t("HAPP_PLATFORM_WINDOWS", "💻 Windows"), callback_data="happ_download_windows")],
-        [InlineKeyboardButton(text=texts.t("HAPP_PLATFORM_MAC", "🍏 Mac OS"), callback_data="happ_download_mac")],
+        [InlineKeyboardButton(text=texts.t("HAPP_PLATFORM_PC", "💻 ПК"), callback_data="happ_download_pc")],
         [InlineKeyboardButton(text=texts.BACK, callback_data="happ_download_close")],
     ]
 
