@@ -25,16 +25,6 @@ from sqlalchemy.sql import func
 Base = declarative_base()
 
 
-class AppSetting(Base):
-    __tablename__ = "app_settings"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    setting_key = Column(String(120), unique=True, nullable=False, index=True)
-    value = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-
-
 server_squad_promo_groups = Table(
     "server_squad_promo_groups",
     Base.metadata,
