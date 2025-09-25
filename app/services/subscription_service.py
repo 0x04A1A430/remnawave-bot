@@ -39,7 +39,7 @@ def _resolve_discount_percent(
     return 0
 
 
-def resolve_addon_discount_percent(
+def _resolve_addon_discount_percent(
     user: Optional[User],
     promo_group: Optional[PromoGroup],
     category: str,
@@ -878,7 +878,7 @@ class SubscriptionService:
 
         if additional_traffic_gb > 0:
             traffic_price_per_month = settings.get_traffic_price(additional_traffic_gb)
-            traffic_discount_percent = resolve_addon_discount_percent(
+            traffic_discount_percent = _resolve_addon_discount_percent(
                 user,
                 promo_group,
                 "traffic",
@@ -901,7 +901,7 @@ class SubscriptionService:
 
         if additional_devices > 0:
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-            devices_discount_percent = resolve_addon_discount_percent(
+            devices_discount_percent = _resolve_addon_discount_percent(
                 user,
                 promo_group,
                 "devices",
@@ -928,7 +928,7 @@ class SubscriptionService:
                 server = await get_server_squad_by_id(db, server_id)
                 if server and server.is_available:
                     server_price_per_month = server.price_kopeks
-                    servers_discount_percent = resolve_addon_discount_percent(
+                    servers_discount_percent = _resolve_addon_discount_percent(
                         user,
                         promo_group,
                         "servers",
