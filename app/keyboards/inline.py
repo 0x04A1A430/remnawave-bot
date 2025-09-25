@@ -9,7 +9,10 @@ from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.pricing_utils import format_period_description
-from app.utils.subscription_utils import get_display_subscription_link
+from app.utils.subscription_utils import (
+    get_display_subscription_link,
+    get_happ_cryptolink_redirect_link,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -257,15 +260,22 @@ def get_happ_download_button_row(texts) -> Optional[List[InlineKeyboardButton]]:
 def get_happ_cryptolink_keyboard(
     subscription_link: str,
     language: str = DEFAULT_LANGUAGE,
+    redirect_link: Optional[str] = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    buttons = [
-        [
+    final_redirect_link = redirect_link or get_happ_cryptolink_redirect_link(subscription_link)
+
+    buttons: List[List[InlineKeyboardButton]] = []
+
+    if final_redirect_link:
+        buttons.append([
             InlineKeyboardButton(
                 text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                url=subscription_link,
+                url=final_redirect_link,
             )
-        ],
+        ])
+
+    buttons.extend([
         [
             InlineKeyboardButton(
                 text=texts.t("HAPP_PLATFORM_IOS", "🍎 iOS"),
@@ -296,7 +306,7 @@ def get_happ_cryptolink_keyboard(
                 callback_data="back_to_menu",
             )
         ],
-    ]
+    ])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

@@ -210,6 +210,7 @@ class Settings(BaseSettings):
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
     CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
+    HAPP_CRYPTOLINK_REDIRECT_TEMPLATE: Optional[str] = None
     HAPP_DOWNLOAD_LINK_IOS: Optional[str] = None
     HAPP_DOWNLOAD_LINK_ANDROID: Optional[str] = None
     HAPP_DOWNLOAD_LINK_MACOS: Optional[str] = None
@@ -554,6 +555,10 @@ class Settings(BaseSettings):
 
     def is_happ_download_button_enabled(self) -> bool:
         return self.is_happ_cryptolink_mode() and self.CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED
+
+    def get_happ_cryptolink_redirect_template(self) -> Optional[str]:
+        template = (self.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE or "").strip()
+        return template or None
 
     def get_happ_download_link(self, platform: str) -> Optional[str]:
         platform_key = platform.lower()
