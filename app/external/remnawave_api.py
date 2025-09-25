@@ -58,7 +58,6 @@ class RemnaWaveUser:
     ss_password: Optional[str] = None
     first_connected_at: Optional[datetime] = None
     last_triggered_threshold: int = 0
-    happ_crypto_link: Optional[str] = None
 
 
 @dataclass
@@ -613,8 +612,7 @@ class RemnaWaveAPI:
             vless_uuid=user_data.get('vlessUuid'),
             ss_password=user_data.get('ssPassword'),
             first_connected_at=self._parse_optional_datetime(user_data.get('firstConnectedAt')),
-            last_triggered_threshold=user_data.get('lastTriggeredThreshold', 0),
-            happ_crypto_link=(user_data.get('happ') or {}).get('cryptoLink')
+            last_triggered_threshold=user_data.get('lastTriggeredThreshold', 0)
         )
 
     def _parse_optional_datetime(self, date_str: Optional[str]) -> Optional[datetime]:

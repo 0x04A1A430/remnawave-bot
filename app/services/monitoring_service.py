@@ -277,9 +277,8 @@ class MonitoringService:
                     ),
                     active_internal_squads=subscription.connected_squads
                 )
-
+                
                 subscription.subscription_url = updated_user.subscription_url
-                subscription.happ_crypto_link = updated_user.happ_crypto_link
                 await db.commit()
                 
                 status_text = "активным" if is_active else "истёкшим"
