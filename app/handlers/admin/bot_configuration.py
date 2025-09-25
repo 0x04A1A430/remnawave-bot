@@ -1,7 +1,10 @@
 import math
+from datetime import datetime, timezone
 from typing import Iterable, List, Tuple
 
 from aiogram import Dispatcher, F, types
+from aiogram.exceptions import SkipHandler
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -337,6 +340,61 @@ def _build_setting_keyboard(
     return types.InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+async def _store_setting_context(
+    state: FSMContext,
+    *,
+    key: str,
+    group_key: str,
+    category_page: int,
+    settings_page: int,
+) -> None:
+    await state.update_data(
+        setting_key=key,
+        setting_group_key=group_key,
+        setting_category_page=category_page,
+        setting_settings_page=settings_page,
+        setting_context_timestamp=datetime.now(timezone.utc).timestamp(),
+    )
+
+
+async def _clear_setting_context(state: FSMContext) -> None:
+    await state.update_data(
+        setting_key=None,
+        setting_group_key=None,
+        setting_category_page=None,
+        setting_settings_page=None,
+        setting_context_timestamp=None,
+    )
+
+
+async def _has_fresh_setting_context(message: types.Message, state: FSMContext) -> bool:
+    data = await state.get_data()
+    key = data.get("setting_key")
+
+    if not key:
+        return False
+
+    timestamp = data.get("setting_context_timestamp")
+
+    if not timestamp:
+        return True
+
+    try:
+        context_time = datetime.fromtimestamp(float(timestamp), tz=timezone.utc)
+    except (TypeError, ValueError):
+        await _clear_setting_context(state)
+        return False
+
+    now = datetime.now(timezone.utc)
+
+    # Считаем контекст устаревшим, если прошло больше 5 минут
+    if (now - context_time).total_seconds() > 300:
+        await _clear_setting_context(state)
+        return False
+
+    return True
+
+
 def _render_setting_text(key: str) -> str:
     summary = bot_configuration_service.get_setting_summary(key)
 
@@ -360,7 +418,9 @@ async def show_bot_config_menu(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
+    await _clear_setting_context(state)
     keyboard = _build_groups_keyboard()
     await callback.message.edit_text(
         "🧩 <b>Конфигурация бота</b>\n\nВыберите раздел настроек:",
@@ -375,7 +435,9 @@ async def show_bot_config_group(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
+    await _clear_setting_context(state)
     group_key, page = _parse_group_payload(callback.data)
     grouped = _get_grouped_categories()
     group_lookup = {key: (title, items) for key, title, items in grouped}
@@ -399,7 +461,9 @@ async def show_bot_config_category(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
+    await _clear_setting_context(state)
     group_key, category_key, category_page, settings_page = _parse_category_payload(
         callback.data
     )
@@ -430,6 +494,7 @@ async def show_bot_config_setting(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
     parts = callback.data.split(":", 4)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
@@ -442,6 +507,13 @@ async def show_bot_config_setting(
     except ValueError:
         settings_page = 1
     key = parts[4] if len(parts) > 4 else ""
+    await _store_setting_context(
+        state,
+        key=key,
+        group_key=group_key,
+        category_page=category_page,
+        settings_page=settings_page,
+    )
     text = _render_setting_text(key)
     keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
     await callback.message.edit_text(text, reply_markup=keyboard)
@@ -502,11 +574,12 @@ async def start_edit_setting(
         ),
     )
 
-    await state.update_data(
-        setting_key=key,
-        setting_group_key=group_key,
-        setting_category_page=category_page,
-        setting_settings_page=settings_page,
+    await _store_setting_context(
+        state,
+        key=key,
+        group_key=group_key,
+        category_page=category_page,
+        settings_page=settings_page,
     )
     await state.set_state(BotConfigStates.waiting_for_value)
     await callback.answer()
@@ -545,6 +618,21 @@ async def handle_edit_setting(
     await message.answer("✅ Настройка обновлена")
     await message.answer(text, reply_markup=keyboard)
     await state.clear()
+
+
+@admin_required
+@error_handler
+async def handle_setting_message_without_state(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    if not await _has_fresh_setting_context(message, state):
+        raise SkipHandler()
+
+    await state.set_state(BotConfigStates.waiting_for_value)
+    await handle_edit_setting(message, db_user, db, state)
 
 
 @admin_required
@@ -631,6 +719,11 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(
         toggle_setting,
         F.data.startswith("botcfg_toggle:"),
+    )
+    dp.message.register(
+        handle_setting_message_without_state,
+        StateFilter(None),
+        _has_fresh_setting_context,
     )
     dp.message.register(
         handle_edit_setting,
