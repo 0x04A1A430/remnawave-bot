@@ -1366,6 +1366,33 @@ async def add_ticket_sla_columns():
         logger.error(f"Ошибка добавления SLA колонки в tickets: {e}")
         return False
 
+
+async def add_happ_crypto_link_column() -> bool:
+    logger.info("=== ДОБАВЛЕНИЕ ПОЛЯ HAPP_CRYPTO_LINK В SUBSCRIPTIONS ===")
+
+    try:
+        column_exists = await check_column_exists('subscriptions', 'happ_crypto_link')
+        if column_exists:
+            logger.info("ℹ️ Поле happ_crypto_link уже существует")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type in ('sqlite', 'postgresql', 'mysql'):
+                alter_sql = "ALTER TABLE subscriptions ADD COLUMN happ_crypto_link TEXT"
+            else:
+                logger.error(f"Неподдерживаемый тип БД для добавления поля: {db_type}")
+                return False
+
+            await conn.execute(text(alter_sql))
+            logger.info("✅ Поле happ_crypto_link успешно добавлено")
+            return True
+
+    except Exception as e:
+        logger.error(f"Ошибка добавления поля happ_crypto_link: {e}")
+        return False
+
 async def fix_foreign_keys_for_user_deletion():
     try:
         async with engine.begin() as conn:
@@ -1799,6 +1826,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с добавлением полей SLA в tickets")
 
+        logger.info("=== ДОБАВЛЕНИЕ ПОЛЯ HAPP_CRYPTO_LINK В SUBSCRIPTIONS ===")
+        happ_crypto_added = await add_happ_crypto_link_column()
+        if happ_crypto_added:
+            logger.info("✅ Поле happ_crypto_link в subscriptions готово")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением поля happ_crypto_link в subscriptions")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ АУДИТА ПОДДЕРЖКИ ===")
         try:
             async with engine.begin() as conn:
@@ -1955,6 +1989,7 @@ async def check_migration_status():
             "promo_groups_period_discounts_column": False,
             "promo_groups_auto_assign_column": False,
             "users_auto_promo_group_assigned_column": False,
+            "subscriptions_happ_crypto_link_column": False,
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -1971,6 +2006,7 @@ async def check_migration_status():
         status["promo_groups_period_discounts_column"] = await check_column_exists('promo_groups', 'period_discounts')
         status["promo_groups_auto_assign_column"] = await check_column_exists('promo_groups', 'auto_assign_total_spent_kopeks')
         status["users_auto_promo_group_assigned_column"] = await check_column_exists('users', 'auto_promo_group_assigned')
+        status["subscriptions_happ_crypto_link_column"] = await check_column_exists('subscriptions', 'happ_crypto_link')
         
         media_fields_exist = (
             await check_column_exists('broadcast_history', 'has_media') and
@@ -2007,6 +2043,7 @@ async def check_migration_status():
             "promo_groups_period_discounts_column": "Колонка period_discounts у промо-групп",
             "promo_groups_auto_assign_column": "Колонка auto_assign_total_spent_kopeks у промо-групп",
             "users_auto_promo_group_assigned_column": "Флаг автоназначения промогруппы у пользователей",
+            "subscriptions_happ_crypto_link_column": "Поле happ_crypto_link в subscriptions",
         }
         
         for check_key, check_status in status.items():
