@@ -26,24 +26,15 @@ def _resolve_discount_percent(
     category: str,
     *,
     period_days: Optional[int] = None,
-    is_addon_purchase: bool = False,
 ) -> int:
     if user is not None:
         try:
-            return user.get_promo_discount(
-                category,
-                period_days,
-                is_addon_purchase=is_addon_purchase,
-            )
+            return user.get_promo_discount(category, period_days)
         except AttributeError:
             pass
 
     if promo_group is not None:
-        return promo_group.get_discount_percent(
-            category,
-            period_days,
-            is_addon_purchase=is_addon_purchase,
-        )
+        return promo_group.get_discount_percent(category, period_days)
 
     return 0
 
@@ -872,7 +863,6 @@ class SubscriptionService:
                 promo_group,
                 "traffic",
                 period_days=period_hint_days,
-                is_addon_purchase=True,
             )
             traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
             discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
@@ -896,7 +886,6 @@ class SubscriptionService:
                 promo_group,
                 "devices",
                 period_days=period_hint_days,
-                is_addon_purchase=True,
             )
             devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
             discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
@@ -924,7 +913,6 @@ class SubscriptionService:
                         promo_group,
                         "servers",
                         period_days=period_hint_days,
-                        is_addon_purchase=True,
                     )
                     server_discount_per_month = (
                         server_price_per_month * servers_discount_percent // 100

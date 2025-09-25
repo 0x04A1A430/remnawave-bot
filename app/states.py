@@ -69,7 +69,6 @@ class AdminStates(StatesGroup):
     creating_promo_group_server_discount = State()
     creating_promo_group_device_discount = State()
     creating_promo_group_period_discount = State()
-    creating_promo_group_addon_discount = State()
     creating_promo_group_auto_assign = State()
 
     editing_promo_group_menu = State()
@@ -77,7 +76,6 @@ class AdminStates(StatesGroup):
     editing_promo_group_traffic_discount = State()
     editing_promo_group_server_discount = State()
     editing_promo_group_device_discount = State()
-    editing_promo_group_addon_discount = State()
     editing_promo_group_period_discount = State()
     editing_promo_group_auto_assign = State()
     
