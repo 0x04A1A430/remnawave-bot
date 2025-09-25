@@ -1251,7 +1251,11 @@ async def apply_countries_changes(
     db: AsyncSession,
     state: FSMContext
 ):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
+    from app.utils.pricing_utils import (
+        get_remaining_months,
+        calculate_prorated_price,
+        apply_percentage_discount,
+    )
     
     logger.info(f"🔧 Применение изменений стран")
     
@@ -1292,23 +1296,38 @@ async def apply_countries_changes(
     cost_per_month = 0
     added_names = []
     removed_names = []
-    
+
     added_server_prices = []
-    
+    servers_discount_percent = db_user.get_promo_discount(
+        "servers",
+        for_addon=True,
+    )
+    discounted_prices_by_uuid: Dict[str, int] = {}
+
     for country in countries:
         if country['uuid'] in added:
             server_price_per_month = country['price_kopeks']
-            cost_per_month += server_price_per_month
+            discounted_per_month = server_price_per_month
+            if servers_discount_percent:
+                discounted_per_month, _ = apply_percentage_discount(
+                    server_price_per_month,
+                    servers_discount_percent,
+                )
+            discounted_prices_by_uuid[country['uuid']] = discounted_per_month
+            cost_per_month += discounted_per_month
             added_names.append(country['name'])
         if country['uuid'] in removed:
             removed_names.append(country['name'])
-    
+
     total_cost, charged_months = calculate_prorated_price(cost_per_month, subscription.end_date)
-    
+
     for country in countries:
         if country['uuid'] in added:
-            server_price_per_month = country['price_kopeks']
-            server_total_price = server_price_per_month * charged_months
+            discounted_per_month = discounted_prices_by_uuid.get(
+                country['uuid'],
+                country['price_kopeks'],
+            )
+            server_total_price = discounted_per_month * charged_months
             added_server_prices.append(server_total_price)
     
     logger.info(f"Стоимость новых серверов: {cost_per_month/100}₽/мес × {charged_months} мес = {total_cost/100}₽")
@@ -1493,7 +1512,11 @@ async def confirm_change_devices(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
+    from app.utils.pricing_utils import (
+        get_remaining_months,
+        calculate_prorated_price,
+        apply_percentage_discount,
+    )
     
     new_devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
@@ -1524,6 +1547,15 @@ async def confirm_change_devices(
             chargeable_devices = additional_devices
         
         devices_price_per_month = chargeable_devices * settings.PRICE_PER_DEVICE
+        devices_discount_percent = db_user.get_promo_discount(
+            "devices",
+            for_addon=True,
+        )
+        if devices_discount_percent:
+            devices_price_per_month, _ = apply_percentage_discount(
+                devices_price_per_month,
+                devices_discount_percent,
+            )
         price, charged_months = calculate_prorated_price(devices_price_per_month, subscription.end_date)
         
         if price > 0 and db_user.balance_kopeks < price:
@@ -1584,7 +1616,11 @@ async def execute_change_devices(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
+    from app.utils.pricing_utils import (
+        get_remaining_months,
+        calculate_prorated_price,
+        apply_percentage_discount,
+    )
     
     callback_parts = callback.data.split('_')
     new_devices_count = int(callback_parts[3])
@@ -2120,7 +2156,7 @@ async def confirm_add_devices(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
+    from app.utils.pricing_utils import get_remaining_months, apply_percentage_discount
     
     devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
@@ -2139,6 +2175,15 @@ async def confirm_add_devices(
         return
     
     devices_price_per_month = devices_count * settings.PRICE_PER_DEVICE
+    devices_discount_percent = db_user.get_promo_discount(
+        "devices",
+        for_addon=True,
+    )
+    if devices_discount_percent:
+        devices_price_per_month, _ = apply_percentage_discount(
+            devices_price_per_month,
+            devices_discount_percent,
+        )
     price, charged_months = calculate_prorated_price(devices_price_per_month, subscription.end_date)
     
     logger.info(f"Добавление {devices_count} устройств: {devices_price_per_month/100}₽/мес × {charged_months} мес = {price/100}₽")
@@ -3496,12 +3541,20 @@ async def add_traffic(
     if settings.is_traffic_fixed():
         await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
         return
-    
+
     traffic_gb = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
-    
+
     price = settings.get_traffic_price(traffic_gb)
+    traffic_discount_percent = db_user.get_promo_discount(
+        "traffic",
+        for_addon=True,
+    )
+    if traffic_discount_percent:
+        from app.utils.pricing_utils import apply_percentage_discount
+
+        price, _ = apply_percentage_discount(price, traffic_discount_percent)
     
     if price == 0 and traffic_gb != 0:
         await callback.answer("⚠️ Цена для этого пакета не настроена", show_alert=True)
@@ -4900,7 +4953,7 @@ async def confirm_switch_traffic(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
+    from app.utils.pricing_utils import get_remaining_months, apply_percentage_discount
     
     new_traffic_gb = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
@@ -4914,6 +4967,19 @@ async def confirm_switch_traffic(
     
     old_price_per_month = settings.get_traffic_price(current_traffic)
     new_price_per_month = settings.get_traffic_price(new_traffic_gb)
+    traffic_discount_percent = db_user.get_promo_discount(
+        "traffic",
+        for_addon=True,
+    )
+    if traffic_discount_percent:
+        old_price_per_month, _ = apply_percentage_discount(
+            old_price_per_month,
+            traffic_discount_percent,
+        )
+        new_price_per_month, _ = apply_percentage_discount(
+            new_price_per_month,
+            traffic_discount_percent,
+        )
     
     months_remaining = get_remaining_months(subscription.end_date)
     price_difference_per_month = new_price_per_month - old_price_per_month
