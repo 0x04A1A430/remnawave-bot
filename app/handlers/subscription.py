@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 import json
 import os
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Any, Tuple, Optional, Set
 
 from app.config import settings, PERIOD_PRICES, get_traffic_prices
 from app.states import SubscriptionStates
@@ -49,7 +49,7 @@ from app.keyboards.inline import (
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.services.admin_notification_service import AdminNotificationService
-from app.services.subscription_service import SubscriptionService
+from app.services.subscription_service import SubscriptionService, resolve_addon_discount_percent
 from app.services.subscription_checkout_service import (
     clear_subscription_checkout_draft,
     get_subscription_checkout_draft,
@@ -62,6 +62,7 @@ from app.utils.pricing_utils import (
     calculate_prorated_price,
     validate_pricing_calculation,
     format_period_description,
+    apply_percentage_discount,
 )
 from app.utils.pagination import paginate_list
 from app.utils.subscription_utils import (
@@ -1137,14 +1138,22 @@ async def handle_add_countries(
     text += "⚪ - не выбрана\n\n"
     text += "⚠️ <b>Важно:</b> Повторное подключение отключенных стран будет платным!"
     
+    (
+        countries_with_pricing,
+        _country_map,
+        _available_country_ids,
+        _servers_discount_percent,
+        _months_to_pay,
+    ) = _prepare_countries_with_addon_pricing(db_user, countries)
+
     await state.update_data(countries=current_countries.copy())
-    
+
     await callback.message.edit_text(
         text,
         reply_markup=get_manage_countries_keyboard(
-            countries, 
-            current_countries.copy(), 
-            current_countries, 
+            countries_with_pricing,
+            current_countries.copy(),
+            current_countries,
             db_user.language,
             subscription.end_date
         ),
@@ -1208,10 +1217,19 @@ async def handle_manage_country(
         return
 
     data = await state.get_data()
-    current_selected = data.get('countries', subscription.connected_squads.copy())
+    current_countries = subscription.connected_squads
+    current_selected = data.get('countries', current_countries.copy())
 
     countries = await _get_available_countries(db_user.promo_group_id)
-    allowed_country_ids = {country['uuid'] for country in countries}
+    (
+        countries_with_pricing,
+        _country_map,
+        available_country_ids,
+        _servers_discount_percent,
+        _months_to_pay,
+    ) = _prepare_countries_with_addon_pricing(db_user, countries)
+
+    allowed_country_ids = available_country_ids | set(current_countries)
 
     if country_uuid not in allowed_country_ids and country_uuid not in current_selected:
         await callback.answer("❌ Сервер недоступен для вашей промогруппы", show_alert=True)
@@ -1231,11 +1249,11 @@ async def handle_manage_country(
     try:
         await callback.message.edit_reply_markup(
             reply_markup=get_manage_countries_keyboard(
-                countries,
-                current_selected, 
-                subscription.connected_squads, 
+                countries_with_pricing,
+                current_selected,
+                current_countries,
                 db_user.language,
-                subscription.end_date 
+                subscription.end_date
             )
         )
         logger.info(f"✅ Клавиатура обновлена")
@@ -1270,7 +1288,15 @@ async def apply_countries_changes(
     current_countries = subscription.connected_squads
 
     countries = await _get_available_countries(db_user.promo_group_id)
-    allowed_country_ids = {country['uuid'] for country in countries}
+    (
+        countries_with_pricing,
+        _country_map,
+        available_country_ids,
+        servers_discount_percent,
+        months_to_pay,
+    ) = _prepare_countries_with_addon_pricing(db_user, countries)
+
+    allowed_country_ids = available_country_ids | set(current_countries)
 
     selected_countries = [
         country_uuid
@@ -1278,7 +1304,10 @@ async def apply_countries_changes(
         if country_uuid in allowed_country_ids or country_uuid in current_countries
     ]
 
-    added = [c for c in selected_countries if c not in current_countries]
+    added = [
+        c for c in selected_countries
+        if c not in current_countries and c in available_country_ids
+    ]
     removed = [c for c in current_countries if c not in selected_countries]
 
     if not added and not removed:
@@ -1287,31 +1316,37 @@ async def apply_countries_changes(
 
     logger.info(f"🔧 Добавлено: {added}, Удалено: {removed}")
 
-    months_to_pay = get_remaining_months(subscription.end_date)
-    
     cost_per_month = 0
     added_names = []
     removed_names = []
-    
+
     added_server_prices = []
-    
-    for country in countries:
+
+    for country in countries_with_pricing:
         if country['uuid'] in added:
-            server_price_per_month = country['price_kopeks']
+            server_price_per_month = country.get('discounted_price_kopeks', country['price_kopeks'])
             cost_per_month += server_price_per_month
             added_names.append(country['name'])
         if country['uuid'] in removed:
             removed_names.append(country['name'])
-    
-    total_cost, charged_months = calculate_prorated_price(cost_per_month, subscription.end_date)
-    
-    for country in countries:
+
+    charged_months = months_to_pay
+    total_cost = cost_per_month * charged_months
+
+    for country in countries_with_pricing:
         if country['uuid'] in added:
-            server_price_per_month = country['price_kopeks']
+            server_price_per_month = country.get('discounted_price_kopeks', country['price_kopeks'])
             server_total_price = server_price_per_month * charged_months
             added_server_prices.append(server_total_price)
-    
-    logger.info(f"Стоимость новых серверов: {cost_per_month/100}₽/мес × {charged_months} мес = {total_cost/100}₽")
+
+    if cost_per_month > 0:
+        logger.info(
+            "Стоимость новых серверов: %s₽/мес × %s мес = %s₽ (скидка %s%%)",
+            cost_per_month / 100,
+            charged_months,
+            total_cost / 100,
+            servers_discount_percent,
+        )
     
     if total_cost > 0 and db_user.balance_kopeks < total_cost:
         missing_kopeks = total_cost - db_user.balance_kopeks
@@ -1346,7 +1381,7 @@ async def apply_countries_changes(
     try:
         if added and total_cost > 0:
             success = await subtract_user_balance(
-                db, db_user, total_cost, 
+                db, db_user, total_cost,
                 f"Добавление стран: {', '.join(added_names)} на {charged_months} мес"
             )
             if not success:
@@ -1524,8 +1559,22 @@ async def confirm_change_devices(
             chargeable_devices = additional_devices
         
         devices_price_per_month = chargeable_devices * settings.PRICE_PER_DEVICE
-        price, charged_months = calculate_prorated_price(devices_price_per_month, subscription.end_date)
-        
+        end_date = getattr(subscription, "end_date", None)
+        months_to_pay = get_remaining_months(end_date) if end_date else 1
+        period_hint_days = months_to_pay * 30 if months_to_pay > 0 else None
+        devices_discount_percent = resolve_addon_discount_percent(
+            db_user,
+            getattr(db_user, "promo_group", None),
+            "devices",
+            period_days=period_hint_days,
+        )
+        discounted_devices_price_per_month, discount_per_month = apply_percentage_discount(
+            devices_price_per_month,
+            devices_discount_percent,
+        )
+        price = discounted_devices_price_per_month * months_to_pay
+        charged_months = months_to_pay
+
         if price > 0 and db_user.balance_kopeks < price:
             missing_kopeks = price - db_user.balance_kopeks
             required_text = f"{texts.format_price(price)} (за {charged_months} мес)"
@@ -2139,10 +2188,32 @@ async def confirm_add_devices(
         return
     
     devices_price_per_month = devices_count * settings.PRICE_PER_DEVICE
-    price, charged_months = calculate_prorated_price(devices_price_per_month, subscription.end_date)
-    
-    logger.info(f"Добавление {devices_count} устройств: {devices_price_per_month/100}₽/мес × {charged_months} мес = {price/100}₽")
-    
+    end_date = getattr(subscription, "end_date", None)
+    months_to_pay = get_remaining_months(end_date) if end_date else 1
+    period_hint_days = months_to_pay * 30 if months_to_pay > 0 else None
+    devices_discount_percent = resolve_addon_discount_percent(
+        db_user,
+        getattr(db_user, "promo_group", None),
+        "devices",
+        period_days=period_hint_days,
+    )
+    discounted_devices_price_per_month, discount_per_month = apply_percentage_discount(
+        devices_price_per_month,
+        devices_discount_percent,
+    )
+    price = discounted_devices_price_per_month * months_to_pay
+    charged_months = months_to_pay
+
+    logger.info(
+        "Добавление %s устройств: %s₽/мес × %s мес = %s₽ (скидка %s%%: -%s₽/мес)",
+        devices_count,
+        devices_price_per_month / 100,
+        charged_months,
+        price / 100,
+        devices_discount_percent,
+        discount_per_month / 100,
+    )
+
     if db_user.balance_kopeks < price:
         missing_kopeks = price - db_user.balance_kopeks
         required_text = f"{texts.format_price(price)} (за {charged_months} мес)"
@@ -3501,14 +3572,29 @@ async def add_traffic(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
-    price = settings.get_traffic_price(traffic_gb)
-    
-    if price == 0 and traffic_gb != 0:
+    price_per_month = settings.get_traffic_price(traffic_gb)
+
+    if price_per_month == 0 and traffic_gb != 0:
         await callback.answer("⚠️ Цена для этого пакета не настроена", show_alert=True)
         return
-    
-    if db_user.balance_kopeks < price:
-        missing_kopeks = price - db_user.balance_kopeks
+
+    end_date = getattr(subscription, "end_date", None)
+    months_to_pay = get_remaining_months(end_date) if end_date else 1
+    period_hint_days = months_to_pay * 30 if months_to_pay > 0 else None
+    traffic_discount_percent = resolve_addon_discount_percent(
+        db_user,
+        getattr(db_user, "promo_group", None),
+        "traffic",
+        period_days=period_hint_days,
+    )
+    discounted_price_per_month, discount_per_month = apply_percentage_discount(
+        price_per_month,
+        traffic_discount_percent,
+    )
+    total_price = discounted_price_per_month * months_to_pay
+
+    if db_user.balance_kopeks < total_price:
+        missing_kopeks = total_price - db_user.balance_kopeks
         message_text = texts.t(
             "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
             (
@@ -3519,7 +3605,7 @@ async def add_traffic(
                 "Выберите способ пополнения. Сумма подставится автоматически."
             ),
         ).format(
-            required=texts.format_price(price),
+            required=f"{texts.format_price(total_price)} (за {months_to_pay} мес)",
             balance=texts.format_price(db_user.balance_kopeks),
             missing=texts.format_price(missing_kopeks),
         )
@@ -3534,13 +3620,13 @@ async def add_traffic(
         )
         await callback.answer()
         return
-    
+
     try:
         success = await subtract_user_balance(
-            db, db_user, price,
+            db, db_user, total_price,
             f"Добавление {traffic_gb} ГБ трафика"
         )
-        
+
         if not success:
             await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
             return
@@ -3557,28 +3643,45 @@ async def add_traffic(
             db=db,
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
-            amount_kopeks=price,
+            amount_kopeks=total_price,
             description=f"Добавление {traffic_gb} ГБ трафика"
         )
-        
-        
+
+
         await db.refresh(db_user)
         await db.refresh(subscription)
-        
+
         success_text = f"✅ Трафик успешно добавлен!\n\n"
         if traffic_gb == 0:
             success_text += "🎉 Теперь у вас безлимитный трафик!"
         else:
             success_text += f"📈 Добавлено: {traffic_gb} ГБ\n"
             success_text += f"Новый лимит: {texts.format_traffic(subscription.traffic_limit_gb)}"
-        
+        if total_price > 0:
+            success_text += f"\n💰 Списано: {texts.format_price(total_price)} (за {months_to_pay} мес)"
+        if total_price > 0 and traffic_discount_percent > 0:
+            saved_total = discount_per_month * months_to_pay
+            if saved_total > 0:
+                success_text += (
+                    f"\n💸 Применена скидка {traffic_discount_percent}%"
+                    f" (экономия {texts.format_price(saved_total)})"
+                )
+
         await callback.message.edit_text(
             success_text,
             reply_markup=get_back_keyboard(db_user.language)
         )
-        
-        logger.info(f"✅ Пользователь {db_user.telegram_id} добавил {traffic_gb} ГБ трафика")
-        
+
+        logger.info(
+            "✅ Пользователь %s добавил %s ГБ трафика: %s₽/мес × %s мес = %s₽ (скидка %s%%)",
+            db_user.telegram_id,
+            traffic_gb,
+            price_per_month / 100,
+            months_to_pay,
+            total_price / 100,
+            traffic_discount_percent,
+        )
+
     except Exception as e:
         logger.error(f"Ошибка добавления трафика: {e}")
         await callback.message.edit_text(
@@ -3834,8 +3937,9 @@ async def _get_available_countries(promo_group_id: Optional[int] = None):
         countries = []
         for server in available_servers:
             countries.append({
+                "id": server.id,
                 "uuid": server.squad_uuid,
-                "name": server.display_name, 
+                "name": server.display_name,
                 "price_kopeks": server.price_kopeks,
                 "country_code": server.country_code,
                 "is_available": server.is_available and not server.is_full
@@ -3863,9 +3967,10 @@ async def _get_available_countries(promo_group_id: Optional[int] = None):
                         squad_name = f"🌐 {squad_name}"
                 
                 countries.append({
+                    "id": None,
                     "uuid": squad["uuid"],
                     "name": squad_name,
-                    "price_kopeks": 0, 
+                    "price_kopeks": 0,
                     "is_available": True
                 })
         
@@ -3884,6 +3989,50 @@ async def _get_available_countries(promo_group_id: Optional[int] = None):
 async def _get_countries_info(squad_uuids):
     countries = await _get_available_countries()
     return [c for c in countries if c['uuid'] in squad_uuids]
+
+
+def _prepare_countries_with_addon_pricing(
+    user: User,
+    countries: List[dict],
+) -> Tuple[List[dict], Dict[str, dict], Set[str], int, int]:
+    subscription = user.subscription
+    end_date = getattr(subscription, "end_date", None) if subscription else None
+    months_to_pay = get_remaining_months(end_date) if end_date else 1
+    period_hint_days = months_to_pay * 30 if months_to_pay > 0 else None
+    servers_discount_percent = resolve_addon_discount_percent(
+        user,
+        getattr(user, "promo_group", None),
+        "servers",
+        period_days=period_hint_days,
+    )
+
+    countries_with_pricing: List[dict] = []
+    country_map: Dict[str, dict] = {}
+    available_country_ids: Set[str] = set()
+
+    for country in countries:
+        country_copy = dict(country)
+        price_per_month = country_copy.get("price_kopeks", 0)
+        discounted_price, _ = apply_percentage_discount(
+            price_per_month,
+            servers_discount_percent,
+        )
+        country_copy["discounted_price_kopeks"] = discounted_price
+        country_copy["discount_percent"] = servers_discount_percent
+
+        if country_copy.get("is_available", True):
+            available_country_ids.add(country_copy["uuid"])
+
+        countries_with_pricing.append(country_copy)
+        country_map[country_copy["uuid"]] = country_copy
+
+    return (
+        countries_with_pricing,
+        country_map,
+        available_country_ids,
+        servers_discount_percent,
+        months_to_pay,
+    )
 
 async def handle_reset_devices(
     callback: types.CallbackQuery,
@@ -3912,7 +4061,17 @@ async def handle_add_country_to_subscription(
     
     selected_countries = data.get('countries', [])
     countries = await _get_available_countries(db_user.promo_group_id)
-    allowed_country_ids = {country['uuid'] for country in countries}
+
+    (
+        countries_with_pricing,
+        country_map,
+        available_country_ids,
+        servers_discount_percent,
+        months_to_pay,
+    ) = _prepare_countries_with_addon_pricing(db_user, countries)
+
+    subscription = db_user.subscription
+    allowed_country_ids = available_country_ids | set(subscription.connected_squads)
 
     if country_uuid not in allowed_country_ids and country_uuid not in selected_countries:
         await callback.answer("❌ Сервер недоступен для вашей промогруппы", show_alert=True)
@@ -3926,21 +4085,31 @@ async def handle_add_country_to_subscription(
         logger.info(f"🔍 Добавлена страна: {country_uuid}")
     
     total_price = 0
-    for country in countries:
-        if country['uuid'] in selected_countries and country['uuid'] not in db_user.subscription.connected_squads:
-            total_price += country['price_kopeks']
-    
+    for uuid in selected_countries:
+        if uuid in country_map and uuid not in subscription.connected_squads and uuid in available_country_ids:
+            country_data = country_map[uuid]
+            discounted_price = country_data.get("discounted_price_kopeks", country_data.get("price_kopeks", 0))
+            total_price += discounted_price * months_to_pay
+
     data['countries'] = selected_countries
     data['total_price'] = total_price
+    data['servers_discount_percent'] = servers_discount_percent
+    data['months_to_pay'] = months_to_pay
     await state.set_data(data)
-    
+
     logger.info(f"🔍 Новые выбранные страны: {selected_countries}")
     logger.info(f"🔍 Общая стоимость: {total_price}")
-    
+
     try:
         from app.keyboards.inline import get_manage_countries_keyboard
         await callback.message.edit_reply_markup(
-            reply_markup=get_manage_countries_keyboard(countries, selected_countries, db_user.subscription.connected_squads, db_user.language)
+            reply_markup=get_manage_countries_keyboard(
+                countries_with_pricing,
+                selected_countries,
+                db_user.subscription.connected_squads,
+                db_user.language,
+                subscription_end_date=subscription.end_date,
+            )
         )
         logger.info(f"✅ Клавиатура обновлена")
     except Exception as e:
@@ -3982,24 +4151,36 @@ async def confirm_add_countries_to_subscription(
         if country_uuid in allowed_country_ids or country_uuid in current_countries
     ]
 
-    new_countries = [c for c in selected_countries if c not in current_countries]
+    new_countries = [
+        c for c in selected_countries
+        if c not in current_countries and c in available_country_ids
+    ]
     removed_countries = [c for c in current_countries if c not in selected_countries]
-    
+
     if not new_countries and not removed_countries:
         await callback.answer("⚠️ Изменения не обнаружены", show_alert=True)
         return
-    
+
     total_price = 0
     new_countries_names = []
     removed_countries_names = []
-    
-    for country in countries:
-        if country['uuid'] in new_countries:
-            total_price += country['price_kopeks']
-            new_countries_names.append(country['name'])
-        if country['uuid'] in removed_countries:
+
+    for uuid in new_countries:
+        country = country_map.get(uuid)
+        if not country:
+            continue
+        discounted_price = country.get(
+            'discounted_price_kopeks',
+            country.get('price_kopeks', 0),
+        )
+        total_price += discounted_price * months_to_pay
+        new_countries_names.append(country['name'])
+
+    for uuid in removed_countries:
+        country = country_map.get(uuid)
+        if country:
             removed_countries_names.append(country['name'])
-    
+
     if new_countries and db_user.balance_kopeks < total_price:
         missing_kopeks = total_price - db_user.balance_kopeks
         message_text = texts.t(
@@ -4063,7 +4244,10 @@ async def confirm_add_countries_to_subscription(
         if new_countries_names:
             success_text += f"➕ Добавлены страны:\n{chr(10).join(f'• {name}' for name in new_countries_names)}\n"
             if total_price > 0:
-                success_text += f"💰 Списано: {texts.format_price(total_price)}\n"
+                success_text += (
+                    f"💰 Списано: {texts.format_price(total_price)}"
+                    f" (за {months_to_pay} мес)\n"
+                )
         
         if removed_countries_names:
             success_text += f"\n➖ Отключены страны:\n{chr(10).join(f'• {name}' for name in removed_countries_names)}\n"
