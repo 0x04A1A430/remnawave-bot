@@ -1366,31 +1366,6 @@ async def add_ticket_sla_columns():
         logger.error(f"Ошибка добавления SLA колонки в tickets: {e}")
         return False
 
-async def add_happ_crypto_link_column():
-    try:
-        column_exists = await check_column_exists('subscriptions', 'happ_crypto_link')
-        if column_exists:
-            return True
-
-        async with engine.begin() as conn:
-            db_type = await get_database_type()
-
-            if db_type in ('sqlite', 'postgresql', 'mysql'):
-                alter_sql = "ALTER TABLE subscriptions ADD COLUMN happ_crypto_link TEXT NULL"
-            else:
-                logger.error(
-                    f"Неподдерживаемый тип БД для добавления subscriptions.happ_crypto_link: {db_type}"
-                )
-                return False
-
-            await conn.execute(text(alter_sql))
-            logger.info("✅ Добавлена колонка subscriptions.happ_crypto_link")
-            return True
-
-    except Exception as e:
-        logger.error(f"Ошибка добавления колонки happ_crypto_link в subscriptions: {e}")
-        return False
-
 async def fix_foreign_keys_for_user_deletion():
     try:
         async with engine.begin() as conn:
@@ -1916,18 +1891,11 @@ async def run_universal_migration():
             logger.info("✅ Таблица subscription_conversions готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей subscription_conversions")
-
-        logger.info("=== ДОБАВЛЕНИЕ ПОЛЯ HAPP_CRYPTO_LINK В SUBSCRIPTIONS ===")
-        happ_crypto_link_added = await add_happ_crypto_link_column()
-        if happ_crypto_link_added:
-            logger.info("✅ Поле happ_crypto_link в subscriptions готово")
-        else:
-            logger.warning("⚠️ Проблемы с добавлением поля happ_crypto_link в subscriptions")
-
+        
         async with engine.begin() as conn:
             total_subs = await conn.execute(text("SELECT COUNT(*) FROM subscriptions"))
             unique_users = await conn.execute(text("SELECT COUNT(DISTINCT user_id) FROM subscriptions"))
-
+            
             total_count = total_subs.fetchone()[0]
             unique_count = unique_users.fetchone()[0]
             
@@ -1961,7 +1929,6 @@ async def run_universal_migration():
                 logger.info("✅ Таблица конверсий подписок создана")
                 logger.info("✅ Таблица welcome_texts с полем is_enabled готова")
                 logger.info("✅ Медиа поля в broadcast_history добавлены")
-                logger.info("✅ Поле happ_crypto_link в subscriptions добавлено")
                 logger.info("✅ Дубликаты подписок исправлены")
                 return True
                 
@@ -1982,7 +1949,6 @@ async def check_migration_status():
             "broadcast_history_media_fields": False,
             "subscription_duplicates": False,
             "subscription_conversions_table": False,
-            "subscriptions_happ_crypto_link_column": False,
             "promo_groups_table": False,
             "server_promo_groups_table": False,
             "users_promo_group_column": False,
@@ -1997,7 +1963,6 @@ async def check_migration_status():
         status["user_messages_table"] = await check_table_exists('user_messages')
         status["welcome_texts_table"] = await check_table_exists('welcome_texts')
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
-        status["subscriptions_happ_crypto_link_column"] = await check_column_exists('subscriptions', 'happ_crypto_link')
         status["promo_groups_table"] = await check_table_exists('promo_groups')
         status["server_promo_groups_table"] = await check_table_exists('server_squad_promo_groups')
 
@@ -2036,7 +2001,6 @@ async def check_migration_status():
             "broadcast_history_media_fields": "Медиа поля в broadcast_history",
             "subscription_conversions_table": "Таблица конверсий подписок",
             "subscription_duplicates": "Отсутствие дубликатов подписок",
-            "subscriptions_happ_crypto_link_column": "Поле happ_crypto_link в subscriptions",
             "promo_groups_table": "Таблица промо-групп",
             "server_promo_groups_table": "Связи серверов и промогрупп",
             "users_promo_group_column": "Колонка promo_group_id у пользователей",
