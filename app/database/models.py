@@ -291,6 +291,7 @@ class PromoGroup(Base):
     traffic_discount_percent = Column(Integer, nullable=False, default=0)
     device_discount_percent = Column(Integer, nullable=False, default=0)
     period_discounts = Column(JSON, nullable=True, default=dict)
+    addon_discounts_enabled = Column(Boolean, nullable=False, default=True)
     auto_assign_total_spent_kopeks = Column(Integer, nullable=True, default=None)
     is_default = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=func.now())
