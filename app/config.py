@@ -209,6 +209,10 @@ class Settings(BaseSettings):
 
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
+    HAPP_DOWNLOAD_BUTTON_ENABLED: bool = False
+    HAPP_DOWNLOAD_IOS_URL: Optional[str] = None
+    HAPP_DOWNLOAD_ANDROID_URL: Optional[str] = None
+    HAPP_DOWNLOAD_PC_URL: Optional[str] = None
     HIDE_SUBSCRIPTION_LINK: bool = False
     ENABLE_LOGO_MODE: bool = True
     LOGO_FILE: str = "vpn_logo.png"
@@ -895,6 +899,33 @@ class Settings(BaseSettings):
 
     def is_server_status_enabled(self) -> bool:
         return self.get_server_status_mode() != "disabled"
+
+    def is_happ_download_button_enabled(self) -> bool:
+        return (
+            self.HAPP_DOWNLOAD_BUTTON_ENABLED
+            and any(
+                link
+                for link in (
+                    self.HAPP_DOWNLOAD_IOS_URL,
+                    self.HAPP_DOWNLOAD_ANDROID_URL,
+                    self.HAPP_DOWNLOAD_PC_URL,
+                )
+                if link
+            )
+        )
+
+    def get_happ_download_link(self, platform: str) -> Optional[str]:
+        platform = (platform or "").lower()
+        mapping = {
+            "ios": self.HAPP_DOWNLOAD_IOS_URL,
+            "android": self.HAPP_DOWNLOAD_ANDROID_URL,
+            "pc": self.HAPP_DOWNLOAD_PC_URL,
+        }
+        link = mapping.get(platform)
+        if link:
+            stripped = link.strip()
+            return stripped or None
+        return None
 
     def get_server_status_external_url(self) -> Optional[str]:
         url = (self.SERVER_STATUS_EXTERNAL_URL or "").strip()

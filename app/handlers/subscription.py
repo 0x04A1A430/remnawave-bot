@@ -877,6 +877,41 @@ async def activate_trial(
                     ],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
+            elif connect_mode == "happ_cryptolink":
+                happ_link = getattr(subscription, 'happ_crypto_link', None)
+                buttons = []
+
+                if happ_link:
+                    buttons.append([
+                        InlineKeyboardButton(
+                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                            url=happ_link,
+                        )
+                    ])
+                else:
+                    buttons.append([
+                        InlineKeyboardButton(
+                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                            callback_data="subscription_connect",
+                        )
+                    ])
+
+                if settings.is_happ_download_button_enabled():
+                    buttons.append([
+                        InlineKeyboardButton(
+                            text=texts.t("DOWNLOAD_HAPP_APP_BUTTON", "📲 Скачать приложение Happ"),
+                            callback_data="download_happ_app",
+                        )
+                    ])
+
+                buttons.append([
+                    InlineKeyboardButton(
+                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                        callback_data="back_to_menu",
+                    )
+                ])
+
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
             elif connect_mode == "link":
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription.subscription_url)],
@@ -3323,6 +3358,41 @@ async def confirm_purchase(
                     ],
                     [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"), callback_data="back_to_menu")],
                 ])
+            elif connect_mode == "happ_cryptolink":
+                happ_link = getattr(subscription, 'happ_crypto_link', None)
+                buttons = []
+
+                if happ_link:
+                    buttons.append([
+                        InlineKeyboardButton(
+                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                            url=happ_link,
+                        )
+                    ])
+                else:
+                    buttons.append([
+                        InlineKeyboardButton(
+                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                            callback_data="subscription_connect",
+                        )
+                    ])
+
+                if settings.is_happ_download_button_enabled():
+                    buttons.append([
+                        InlineKeyboardButton(
+                            text=texts.t("DOWNLOAD_HAPP_APP_BUTTON", "📲 Скачать приложение Happ"),
+                            callback_data="download_happ_app",
+                        )
+                    ])
+
+                buttons.append([
+                    InlineKeyboardButton(
+                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                        callback_data="back_to_menu",
+                    )
+                ])
+
+                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
             elif connect_mode == "link":
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription.subscription_url)],
@@ -4016,7 +4086,7 @@ async def handle_connect_subscription(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
-    if not subscription or not subscription.subscription_url:
+    if not subscription:
         await callback.answer(
             texts.t(
                 "SUBSCRIPTION_NO_ACTIVE_LINK",
@@ -4027,6 +4097,26 @@ async def handle_connect_subscription(
         return
 
     connect_mode = settings.CONNECT_BUTTON_MODE
+
+    if connect_mode != "happ_cryptolink" and not subscription.subscription_url:
+        await callback.answer(
+            texts.t(
+                "SUBSCRIPTION_NO_ACTIVE_LINK",
+                "⚠ У вас нет активной подписки или ссылка еще генерируется",
+            ),
+            show_alert=True,
+        )
+        return
+
+    if connect_mode == "happ_cryptolink" and not getattr(subscription, 'happ_crypto_link', None):
+        await callback.answer(
+            texts.t(
+                "SUBSCRIPTION_HAPP_CRYPTO_LINK_MISSING",
+                "⚠ Ссылка Happ пока недоступна. Попробуйте позже.",
+            ),
+            show_alert=True,
+        )
+        return
 
     if connect_mode == "miniapp_subscription":
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -4086,6 +4176,53 @@ async def handle_connect_subscription(
             parse_mode="HTML"
         )
 
+    elif connect_mode == "happ_cryptolink":
+        happ_link = getattr(subscription, 'happ_crypto_link', None)
+
+        if not happ_link:
+            await callback.answer(
+                texts.t(
+                    "SUBSCRIPTION_HAPP_CRYPTO_LINK_MISSING",
+                    "⚠ Ссылка Happ пока недоступна. Попробуйте позже.",
+                ),
+                show_alert=True,
+            )
+            return
+
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                    url=happ_link,
+                )
+            ]
+        ]
+
+        if settings.is_happ_download_button_enabled():
+            buttons.append([
+                InlineKeyboardButton(
+                    text=texts.t("DOWNLOAD_HAPP_APP_BUTTON", "📲 Скачать приложение Happ"),
+                    callback_data="download_happ_app",
+                )
+            ])
+
+        buttons.append([
+            InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
+        ])
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+        await callback.message.edit_text(
+            texts.t(
+                "SUBSCRIPTION_CONNECT_HAPP_MESSAGE",
+                """📱 <b>Подключить подписку Happ</b>
+
+🚀 Нажмите кнопку ниже, чтобы открыть ссылку Happ для подключения подписки.""",
+            ),
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
+
     elif connect_mode == "link":
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
@@ -4126,7 +4263,133 @@ async def handle_connect_subscription(
             reply_markup=get_device_selection_keyboard(db_user.language),
             parse_mode="HTML"
         )
-    
+
+    await callback.answer()
+
+
+async def handle_download_happ_app(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+
+    if not settings.is_happ_download_button_enabled():
+        await callback.answer(
+            texts.t(
+                "DOWNLOAD_HAPP_APP_NOT_AVAILABLE",
+                "⚠️ Загрузка Happ временно недоступна.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    options = []
+    for platform in ("ios", "android", "pc"):
+        link = settings.get_happ_download_link(platform)
+        if not link:
+            continue
+
+        options.append([
+            InlineKeyboardButton(
+                text=texts.t(
+                    f"DOWNLOAD_HAPP_DEVICE_{platform.upper()}",
+                    {
+                        "ios": "📱 iOS",
+                        "android": "🤖 Android",
+                        "pc": "💻 ПК",
+                    }[platform],
+                ),
+                callback_data=f"download_happ_app_{platform}",
+            )
+        ])
+
+    if not options:
+        await callback.answer(
+            texts.t(
+                "DOWNLOAD_HAPP_APP_NOT_AVAILABLE",
+                "⚠️ Загрузка Happ временно недоступна.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    options.append([
+        InlineKeyboardButton(text=texts.BACK, callback_data="subscription_connect")
+    ])
+    options.append([
+        InlineKeyboardButton(
+            text=texts.t("BACK_TO_SUBSCRIPTION", "⬅️ К подписке"),
+            callback_data="menu_subscription",
+        )
+    ])
+
+    await callback.message.edit_text(
+        texts.t(
+            "DOWNLOAD_HAPP_APP_PROMPT",
+            """📲 <b>Скачать Happ</b>
+
+Выберите устройство, чтобы получить ссылку на загрузку:""",
+        ),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=options),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+async def handle_download_happ_device(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    _, _, platform = callback.data.partition("download_happ_app_")
+    platform = platform or ""
+    texts = get_texts(db_user.language)
+
+    link = settings.get_happ_download_link(platform)
+    if not link:
+        await callback.answer(
+            texts.t(
+                "DOWNLOAD_HAPP_APP_LINK_MISSING",
+                "⚠️ Ссылка для выбранного устройства недоступна.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    device_name = get_happ_device_name(platform, db_user.language)
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t(
+                        "DOWNLOAD_HAPP_OPEN_STORE",
+                        "📥 Открыть в магазине",
+                    ),
+                    url=link,
+                )
+            ],
+            [InlineKeyboardButton(text=texts.BACK, callback_data="download_happ_app")],
+            [
+                InlineKeyboardButton(
+                    text=texts.t("BACK_TO_SUBSCRIPTION", "⬅️ К подписке"),
+                    callback_data="menu_subscription",
+                )
+            ],
+        ]
+    )
+
+    await callback.message.edit_text(
+        texts.t(
+            "DOWNLOAD_HAPP_APP_LINK_MESSAGE",
+            """📥 <b>Скачать Happ для {device_name}</b>
+
+Нажмите кнопку ниже, чтобы открыть приложение в магазине.""",
+        ).format(device_name=device_name),
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
     await callback.answer()
 
 
@@ -4462,7 +4725,7 @@ def load_app_config() -> Dict[str, Any]:
 
 def get_apps_for_device(device_type: str, language: str = "ru") -> List[Dict[str, Any]]:
     config = load_app_config()
-    
+
     device_mapping = {
         'ios': 'ios',
         'android': 'android', 
@@ -4473,6 +4736,25 @@ def get_apps_for_device(device_type: str, language: str = "ru") -> List[Dict[str
     
     config_key = device_mapping.get(device_type, device_type)
     return config.get(config_key, [])
+
+
+def get_happ_device_name(platform: str, language: str = "ru") -> str:
+    platform = (platform or "").lower()
+
+    if language == "en":
+        names = {
+            "ios": "iOS",
+            "android": "Android",
+            "pc": "PC",
+        }
+    else:
+        names = {
+            "ios": "iOS",
+            "android": "Android",
+            "pc": "ПК",
+        }
+
+    return names.get(platform, platform.upper() or platform)
 
 
 def get_device_name(device_type: str, language: str = "ru") -> str:
@@ -5123,6 +5405,16 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_open_subscription_link,
         F.data == "open_subscription_link"
+    )
+
+    dp.callback_query.register(
+        handle_download_happ_app,
+        F.data == "download_happ_app",
+    )
+
+    dp.callback_query.register(
+        handle_download_happ_device,
+        F.data.startswith("download_happ_app_"),
     )
 
     dp.callback_query.register(

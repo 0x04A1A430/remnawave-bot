@@ -130,7 +130,10 @@ class SubscriptionService:
                     )
                 
                 subscription.remnawave_short_uuid = updated_user.short_uuid
-                subscription.subscription_url = updated_user.subscription_url 
+                subscription.subscription_url = updated_user.subscription_url
+                happ_data = getattr(updated_user, 'happ', None)
+                if isinstance(happ_data, dict):
+                    subscription.happ_crypto_link = happ_data.get('cryptoLink') or None
                 user.remnawave_uuid = updated_user.uuid
                 
                 await db.commit()
@@ -190,6 +193,9 @@ class SubscriptionService:
                 )
                 
                 subscription.subscription_url = updated_user.subscription_url
+                happ_data = getattr(updated_user, 'happ', None)
+                if isinstance(happ_data, dict):
+                    subscription.happ_crypto_link = happ_data.get('cryptoLink') or None
                 await db.commit()
                 
                 status_text = "активным" if is_actually_active else "истёкшим"
