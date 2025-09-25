@@ -1,6 +1,9 @@
-from datetime import datetime, timedelta
-from typing import Tuple
+from datetime import datetime
+from typing import Tuple, Optional, TYPE_CHECKING
 import logging
+
+if TYPE_CHECKING:
+    from app.database.models import User, PromoGroup
 
 logger = logging.getLogger(__name__)
 
@@ -115,3 +118,41 @@ STANDARD_PERIODS = {
 
 def get_period_info(days: int) -> dict:
     return STANDARD_PERIODS.get(days)
+
+
+def resolve_discount_percent(
+    user: Optional["User"],
+    promo_group: Optional["PromoGroup"],
+    category: str,
+    *,
+    period_days: Optional[int] = None,
+) -> int:
+    """Resolve the discount percent for the given category and optional period."""
+
+    if user is not None:
+        try:
+            return user.get_promo_discount(category, period_days)
+        except AttributeError:
+            pass
+
+    if promo_group is not None:
+        return promo_group.get_discount_percent(category, period_days)
+
+    return 0
+
+
+def resolve_addon_discount_percent(
+    user: Optional["User"],
+    promo_group: Optional["PromoGroup"],
+    category: str,
+    *,
+    period_days: Optional[int] = None,
+) -> int:
+    """Resolve the discount percent for add-on purchases respecting promo settings."""
+
+    group = promo_group or (getattr(user, "promo_group", None) if user else None)
+
+    if group is not None and not getattr(group, "apply_discounts_to_addons", True):
+        return 0
+
+    return resolve_discount_percent(user, promo_group, category, period_days=period_days)
