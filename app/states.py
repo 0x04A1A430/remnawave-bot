@@ -123,10 +123,6 @@ class AdminTicketStates(StatesGroup):
 class SupportSettingsStates(StatesGroup):
     waiting_for_desc = State()
 
-
-class BotConfigStates(StatesGroup):
-    waiting_for_value = State()
-
 class AutoPayStates(StatesGroup):
     setting_autopay_days = State()
     confirming_autopay_toggle = State()

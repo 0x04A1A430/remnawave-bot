@@ -21,7 +21,6 @@ from app.database.universal_migration import run_universal_migration
 from app.services.backup_service import backup_service
 from app.services.reporting_service import reporting_service
 from app.localization.loader import ensure_locale_templates
-from app.services.system_settings_service import bot_configuration_service
 
 
 class GracefulExit:
@@ -86,13 +85,6 @@ async def main():
         else:
             logger.info("ℹ️ Миграция пропущена (SKIP_MIGRATION=true)")
         
-        logger.info("⚙️ Загрузка конфигурации из БД...")
-        try:
-            await bot_configuration_service.initialize()
-            logger.info("✅ Конфигурация загружена")
-        except Exception as error:
-            logger.error(f"❌ Не удалось загрузить конфигурацию: {error}")
-
         logger.info("🤖 Настройка бота...")
         bot, dp = await setup_bot()
         
