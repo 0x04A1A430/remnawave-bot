@@ -5,6 +5,8 @@ import html
 from collections import defaultdict
 from datetime import time
 from typing import List, Optional, Union, Dict
+from urllib.parse import quote
+
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, Field
 from pathlib import Path
@@ -210,6 +212,8 @@ class Settings(BaseSettings):
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
     CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
+    CONNECT_BUTTON_HAPP_REDIRECT_ENABLED: bool = False
+    CONNECT_BUTTON_HAPP_REDIRECT_TEMPLATE: Optional[str] = None
     HAPP_DOWNLOAD_LINK_IOS: Optional[str] = None
     HAPP_DOWNLOAD_LINK_ANDROID: Optional[str] = None
     HAPP_DOWNLOAD_LINK_MACOS: Optional[str] = None
@@ -572,6 +576,33 @@ class Settings(BaseSettings):
         }
         link = links.get(platform_key)
         return link if link else None
+
+    def get_happ_redirect_url(self, subscription_link: Optional[str]) -> Optional[str]:
+        if not subscription_link:
+            return None
+
+        if not self.is_happ_cryptolink_mode():
+            return None
+
+        if not self.CONNECT_BUTTON_HAPP_REDIRECT_ENABLED:
+            return None
+
+        template = (self.CONNECT_BUTTON_HAPP_REDIRECT_TEMPLATE or "").strip()
+        if not template:
+            return None
+
+        encoded_link = quote(subscription_link, safe="")
+
+        if "{subscription_link}" in template:
+            try:
+                return template.format(subscription_link=encoded_link)
+            except Exception as exc:  # pragma: no cover - safety fallback
+                logging.getLogger(__name__).warning(
+                    "Failed to format Happ redirect template: %s", exc
+                )
+                return None
+
+        return f"{template}{encoded_link}"
 
     def is_maintenance_mode(self) -> bool:
         return self.MAINTENANCE_MODE
