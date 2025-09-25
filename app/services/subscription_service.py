@@ -14,8 +14,7 @@ from app.utils.pricing_utils import (
     calculate_months_from_days,
     get_remaining_months,
     calculate_prorated_price,
-    validate_pricing_calculation,
-    resolve_addon_discount_percent,
+    validate_pricing_calculation
 )
 
 logger = logging.getLogger(__name__)
@@ -49,9 +48,12 @@ def _resolve_addon_discount_percent(
 ) -> int:
     group = promo_group or (getattr(user, "promo_group", None) if user else None)
 
-    return resolve_addon_discount_percent(
+    if group is not None and not getattr(group, "apply_discounts_to_addons", True):
+        return 0
+
+    return _resolve_discount_percent(
         user,
-        group,
+        promo_group,
         category,
         period_days=period_days,
     )
