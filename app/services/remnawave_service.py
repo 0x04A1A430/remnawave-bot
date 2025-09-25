@@ -581,7 +581,8 @@ class RemnaWaveService:
                             subscription.autopay_enabled = False
                             subscription.remnawave_short_uuid = None
                             subscription.subscription_url = ""
-                            
+                            subscription.happ_crypto_link = None
+
                             db_user.remnawave_uuid = None
                             
                             await db.commit()
@@ -637,14 +638,15 @@ class RemnaWaveService:
             subscription_data = {
                 'user_id': user.id,
                 'status': status.value,
-                'is_trial': False, 
+                'is_trial': False,
                 'end_date': expire_at,
                 'traffic_limit_gb': traffic_limit_gb,
                 'traffic_used_gb': traffic_used_gb,
                 'device_limit': panel_user.get('hwidDeviceLimit', 1) or 1,
                 'connected_squads': squad_uuids,
                 'remnawave_short_uuid': panel_user.get('shortUuid'),
-                'subscription_url': panel_user.get('subscriptionUrl', '')
+                'subscription_url': panel_user.get('subscriptionUrl', ''),
+                'happ_crypto_link': (panel_user.get('happ') or {}).get('cryptoLink')
             }
         
             subscription = await create_subscription(db, **subscription_data)
@@ -667,7 +669,8 @@ class RemnaWaveService:
                     device_limit=1,
                     connected_squads=[],
                     remnawave_short_uuid=panel_user.get('shortUuid'),
-                    subscription_url=panel_user.get('subscriptionUrl', '')
+                    subscription_url=panel_user.get('subscriptionUrl', ''),
+                    happ_crypto_link=(panel_user.get('happ') or {}).get('cryptoLink')
                 )
                 logger.info(f"✅ Создана базовая подписка для пользователя {user.telegram_id}")
             except Exception as basic_error:
@@ -733,7 +736,11 @@ class RemnaWaveService:
             panel_url = panel_user.get('subscriptionUrl', '')
             if not subscription.subscription_url or subscription.subscription_url != panel_url:
                 subscription.subscription_url = panel_url
-        
+
+            panel_happ_link = (panel_user.get('happ') or {}).get('cryptoLink')
+            if subscription.happ_crypto_link != panel_happ_link:
+                subscription.happ_crypto_link = panel_happ_link
+
             active_squads = panel_user.get('activeInternalSquads', [])
             squad_uuids = []
             if isinstance(active_squads, list):
@@ -1113,6 +1120,7 @@ class RemnaWaveService:
                     user.subscription.autopay_days_before = 3
                     user.subscription.remnawave_short_uuid = None
                     user.subscription.subscription_url = ""
+                    user.subscription.happ_crypto_link = None
                     user.subscription.updated_at = datetime.utcnow()
                 
                 await db.commit()
