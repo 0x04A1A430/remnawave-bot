@@ -146,6 +146,27 @@ async def get_available_server_squads(
     return result.scalars().unique().all()
 
 
+async def get_promo_group_server_count(
+    db: AsyncSession,
+    promo_group_id: int,
+    *,
+    include_unavailable: bool = True,
+) -> int:
+    """Возвращает количество серверов, связанных с промогруппой."""
+
+    query = (
+        select(func.count(func.distinct(ServerSquad.id)))
+        .join(ServerSquad.allowed_promo_groups)
+        .where(PromoGroup.id == promo_group_id)
+    )
+
+    if not include_unavailable:
+        query = query.where(ServerSquad.is_available.is_(True))
+
+    result = await db.execute(query)
+    return result.scalar_one_or_none() or 0
+
+
 async def update_server_squad_promo_groups(
     db: AsyncSession, server_id: int, promo_group_ids: Iterable[int]
 ) -> Optional[ServerSquad]:
