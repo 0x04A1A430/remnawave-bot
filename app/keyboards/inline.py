@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from aiogram import types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
-from app.utils.pricing_utils import format_period_description
+from app.utils.pricing_utils import format_period_description, apply_percentage_discount
 from app.utils.subscription_utils import (
     get_display_subscription_link,
     get_happ_cryptolink_redirect_link,
@@ -16,6 +16,9 @@ from app.utils.subscription_utils import (
 import logging
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from app.database.models import PromoGroup
 
 def get_rules_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
@@ -1123,21 +1126,30 @@ def get_extend_subscription_keyboard(language: str = DEFAULT_LANGUAGE) -> Inline
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_add_traffic_keyboard(language: str = DEFAULT_LANGUAGE, subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
+def get_add_traffic_keyboard(
+    language: str = DEFAULT_LANGUAGE,
+    subscription_end_date: datetime = None,
+    promo_group: Optional["PromoGroup"] = None,
+) -> InlineKeyboardMarkup:
     from app.utils.pricing_utils import get_remaining_months
     from app.config import settings
     texts = get_texts(language)
-    
+
     months_multiplier = 1
     period_text = ""
     if subscription_end_date:
         months_multiplier = get_remaining_months(subscription_end_date)
         if months_multiplier > 1:
             period_text = f" (за {months_multiplier} мес)"
-    
+
+    period_hint_days = months_multiplier * 30 if months_multiplier > 0 else None
+    addons_enabled = bool(
+        promo_group and getattr(promo_group, "apply_discounts_to_addons", False)
+    )
+
     packages = settings.get_traffic_packages()
     enabled_packages = [pkg for pkg in packages if pkg['enabled']]
-    
+
     if not enabled_packages:
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
@@ -1151,23 +1163,50 @@ def get_add_traffic_keyboard(language: str = DEFAULT_LANGUAGE, subscription_end_
         ])
     
     buttons = []
-    
+
     for package in enabled_packages:
         gb = package['gb']
         price_per_month = package['price']
-        total_price = price_per_month * months_multiplier
-        
+        original_total = price_per_month * months_multiplier
+
+        discount_percent = 0
+        if addons_enabled:
+            try:
+                discount_percent = promo_group.get_addon_discount_percent(
+                    "traffic",
+                    period_days=period_hint_days,
+                )
+            except AttributeError:
+                discount_percent = 0
+
+        discounted_per_month, discount_per_month = apply_percentage_discount(
+            price_per_month,
+            discount_percent,
+        )
+        total_price = discounted_per_month * months_multiplier
+        total_discount = discount_per_month * months_multiplier
+
+        if total_discount > 0:
+            price_display = f"{original_total//100} ₽ → {total_price//100} ₽"
+        else:
+            price_display = f"{total_price//100} ₽"
+
+        if period_text and total_discount <= 0:
+            price_display += period_text
+        elif period_text and total_discount > 0:
+            price_display += period_text
+
         if gb == 0:
             if language == "ru":
-                text = f"♾️ Безлимитный трафик - {total_price//100} ₽{period_text}"
+                text = f"♾️ Безлимитный трафик - {price_display}"
             else:
-                text = f"♾️ Unlimited traffic - {total_price//100} ₽{period_text}"
+                text = f"♾️ Unlimited traffic - {price_display}"
         else:
             if language == "ru":
-                text = f"📊 +{gb} ГБ трафика - {total_price//100} ₽{period_text}"
+                text = f"📊 +{gb} ГБ трафика - {price_display}"
             else:
-                text = f"📊 +{gb} GB traffic - {total_price//100} ₽{period_text}"
-        
+                text = f"📊 +{gb} GB traffic - {price_display}"
+
         buttons.append([
             InlineKeyboardButton(text=text, callback_data=f"add_traffic_{gb}")
         ])
@@ -1181,20 +1220,29 @@ def get_add_traffic_keyboard(language: str = DEFAULT_LANGUAGE, subscription_end_
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
     
-def get_change_devices_keyboard(current_devices: int, language: str = DEFAULT_LANGUAGE, subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
+def get_change_devices_keyboard(
+    current_devices: int,
+    language: str = DEFAULT_LANGUAGE,
+    subscription_end_date: datetime = None,
+    promo_group: Optional["PromoGroup"] = None,
+) -> InlineKeyboardMarkup:
     from app.utils.pricing_utils import get_remaining_months
     from app.config import settings
     texts = get_texts(language)
-    
+
     months_multiplier = 1
     period_text = ""
     if subscription_end_date:
         months_multiplier = get_remaining_months(subscription_end_date)
         if months_multiplier > 1:
             period_text = f" (за {months_multiplier} мес)"
-    
+
     device_price_per_month = settings.PRICE_PER_DEVICE
-    
+    period_hint_days = months_multiplier * 30 if months_multiplier > 0 else None
+    addons_enabled = bool(
+        promo_group and getattr(promo_group, "apply_discounts_to_addons", False)
+    )
+
     buttons = []
     
     min_devices = 1 
@@ -1211,15 +1259,37 @@ def get_change_devices_keyboard(current_devices: int, language: str = DEFAULT_LA
         elif devices_count > current_devices:
             emoji = "➕"
             additional_devices = devices_count - current_devices
-            
+
             current_chargeable = max(0, current_devices - settings.DEFAULT_DEVICE_LIMIT)
             new_chargeable = max(0, devices_count - settings.DEFAULT_DEVICE_LIMIT)
             chargeable_devices = new_chargeable - current_chargeable
-            
+
             if chargeable_devices > 0:
                 price_per_month = chargeable_devices * device_price_per_month
-                total_price = price_per_month * months_multiplier
-                price_text = f" (+{total_price//100}₽{period_text})"
+                discount_percent = 0
+                if addons_enabled:
+                    try:
+                        discount_percent = promo_group.get_addon_discount_percent(
+                            "devices",
+                            period_days=period_hint_days,
+                        )
+                    except AttributeError:
+                        discount_percent = 0
+
+                discounted_per_month, discount_per_month = apply_percentage_discount(
+                    price_per_month,
+                    discount_percent,
+                )
+                total_price = discounted_per_month * months_multiplier
+                total_discount = discount_per_month * months_multiplier
+
+                if total_discount > 0:
+                    original_total = price_per_month * months_multiplier
+                    price_display = f"+{original_total//100}₽ → {total_price//100}₽"
+                else:
+                    price_display = f"+{total_price//100}₽"
+
+                price_text = f" ({price_display}{period_text})"
                 action_text = ""
             else:
                 price_text = " (бесплатно)"
@@ -1296,7 +1366,8 @@ def get_manage_countries_keyboard(
     selected: List[str],
     current_subscription_countries: List[str],
     language: str = DEFAULT_LANGUAGE,
-    subscription_end_date: datetime = None
+    subscription_end_date: datetime = None,
+    promo_group: Optional["PromoGroup"] = None
 ) -> InlineKeyboardMarkup:
     from app.utils.pricing_utils import get_remaining_months
 
@@ -1306,15 +1377,37 @@ def get_manage_countries_keyboard(
     if subscription_end_date:
         months_multiplier = get_remaining_months(subscription_end_date)
         logger.info(f"🔍 Расчет для управления странами: осталось {months_multiplier} месяцев до {subscription_end_date}")
-    
+
+    period_hint_days = months_multiplier * 30 if months_multiplier > 0 else None
+    addons_enabled = bool(
+        promo_group and getattr(promo_group, "apply_discounts_to_addons", False)
+    )
+
     buttons = []
     total_cost = 0
-    
+
     for country in countries:
         uuid = country['uuid']
         name = country['name']
         price_per_month = country['price_kopeks']
-        
+
+        discount_percent = 0
+        if addons_enabled:
+            try:
+                discount_percent = promo_group.get_addon_discount_percent(
+                    "servers",
+                    period_days=period_hint_days,
+                )
+            except AttributeError:
+                discount_percent = 0
+
+        discounted_per_month, discount_per_month = apply_percentage_discount(
+            price_per_month,
+            discount_percent,
+        )
+        discounted_total = discounted_per_month * months_multiplier
+        discount_total = discount_per_month * months_multiplier
+
         if uuid in current_subscription_countries:
             if uuid in selected:
                 icon = "✅"
@@ -1323,21 +1416,32 @@ def get_manage_countries_keyboard(
         else:
             if uuid in selected:
                 icon = "➕"
-                total_cost += price_per_month * months_multiplier
+                total_cost += discounted_total
             else:
                 icon = "⚪"
-        
+
         if uuid not in current_subscription_countries and uuid in selected:
-            total_price = price_per_month * months_multiplier
+            total_price = discounted_total
             if months_multiplier > 1:
-                price_text = f" ({price_per_month//100}₽/мес × {months_multiplier} = {total_price//100}₽)"
+                if discount_total > 0:
+                    original_total = price_per_month * months_multiplier
+                    price_text = (
+                        f" ({price_per_month//100}₽/мес × {months_multiplier}"
+                        f" = {original_total//100}₽ → {total_price//100}₽)"
+                    )
+                else:
+                    price_text = f" ({price_per_month//100}₽/мес × {months_multiplier} = {total_price//100}₽)"
                 logger.info(f"🔍 Сервер {name}: {price_per_month/100}₽/мес × {months_multiplier} мес = {total_price/100}₽")
             else:
-                price_text = f" ({total_price//100}₽)"
+                if discount_total > 0:
+                    original_total = price_per_month * months_multiplier
+                    price_text = f" ({original_total//100}₽ → {total_price//100}₽)"
+                else:
+                    price_text = f" ({total_price//100}₽)"
             display_name = f"{icon} {name}{price_text}"
         else:
             display_name = f"{icon} {name}"
-        
+
         buttons.append([
             InlineKeyboardButton(
                 text=display_name,
