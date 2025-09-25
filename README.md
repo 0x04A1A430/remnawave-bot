@@ -254,6 +254,11 @@ ADMIN_NOTIFICATIONS_ENABLED=true
 ADMIN_NOTIFICATIONS_CHAT_ID=-1001234567890   # Замени на ID твоего канала (-100) - ПРЕФИКС ЗАКРЫТОГО КАНАЛА! ВСТАВИТЬ СВОЙ ID СРАЗУ ПОСЛЕ (-100) БЕЗ ПРОБЕЛОВ!
 ADMIN_NOTIFICATIONS_TOPIC_ID=123             # Опционально: ID топика
 ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID=126      # Опционально: ID топика для тикетов
+# Автоматические отчеты
+ADMIN_REPORTS_ENABLED=false
+ADMIN_REPORTS_CHAT_ID=                        # Опционально: чат для отчетов (по умолчанию ADMIN_NOTIFICATIONS_CHAT_ID)
+ADMIN_REPORTS_TOPIC_ID=                      # ID топика для отчетов
+ADMIN_REPORTS_SEND_TIME=10:00                # Время отправки (по МСК) ежедневного отчета
 # Обязательная подписка на канал
 CHANNEL_SUB_ID= # Опционально ID твоего канала (-100)
 CHANNEL_IS_REQUIRED_SUB=false # Обязательна ли подписка на канал
@@ -501,12 +506,6 @@ PAL24_MIN_AMOUNT_KOPEKS=10000
 PAL24_MAX_AMOUNT_KOPEKS=100000000
 PAL24_REQUEST_TIMEOUT=30
 
-# Настройки PayPalych
-1. Включите интеграцию (`PAL24_ENABLED=true`) и укажите `PAL24_API_TOKEN`, `PAL24_SHOP_ID`, а также `PAL24_SIGNATURE_TOKEN` для проверки подписи уведомлений.
-2. Настройте в кабинете PayPalych **Result URL** и success/fail redirect на `https://<ваш-домен>/pal24-webhook`.
-3. Убедитесь, что порт `PAL24_WEBHOOK_PORT` (по умолчанию `8084`) проброшен через прокси/фаервол.
-4. Для теста можно отправить postback вручную (пример команды см. ниже в разделе «Проверка PayPalych postback»).
-
 # ===== ИНТЕРФЕЙС И UX =====
 
 # Включить логотип для всех сообщений (true - с изображением, false - только текст)
@@ -521,7 +520,7 @@ HIDE_SUBSCRIPTION_LINK=false
 # miniapp_subscription - открывает ссылку подписки в мини-приложении (режим 2)
 # miniapp_custom - открывает заданную ссылку в мини-приложении (режим 3)
 # link - Открывает ссылку напрямую в браузере (режим 4)
-# happ_cryptolink - открывает ссылку из поля cryptoLink (режим 5)
+# happ_cryptolink - Вывод cryptoLink ссылки на подписку Happ (режим 5)
 CONNECT_BUTTON_MODE=guide
 
 # URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
@@ -533,8 +532,8 @@ HAPP_DOWNLOAD_LINK_IOS=
 HAPP_DOWNLOAD_LINK_ANDROID=
 HAPP_DOWNLOAD_LINK_MACOS=
 HAPP_DOWNLOAD_LINK_WINDOWS=
-# (опционально) устаревшее поле для Windows, будет использовано если HAPP_DOWNLOAD_LINK_WINDOWS не задан
-HAPP_DOWNLOAD_LINK_PC=
+# Кнопка (Подключится) с редиректом (тк ссылки с happ:// тг не поддерживает) - Без установленной ссылки на редирект кнопки (подключится) не будет! Пример: https://sub.domain.sub/redirect-page/?redirect_to=
+HAPP_CRYPTOLINK_REDIRECT_TEMPLATE=
 
 # Пропустить принятие правил использования бота
 SKIP_RULES_ACCEPT=false
