@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
-from app.utils.pricing_utils import format_period_description
+from app.utils.pricing_utils import format_period_description, apply_percentage_discount
 from app.utils.subscription_utils import (
     get_display_subscription_link,
     get_happ_cryptolink_redirect_link,
@@ -1123,7 +1123,11 @@ def get_extend_subscription_keyboard(language: str = DEFAULT_LANGUAGE) -> Inline
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_add_traffic_keyboard(language: str = DEFAULT_LANGUAGE, subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
+def get_add_traffic_keyboard(
+    language: str = DEFAULT_LANGUAGE,
+    subscription_end_date: datetime = None,
+    discount_percent: int = 0,
+) -> InlineKeyboardMarkup:
     from app.utils.pricing_utils import get_remaining_months
     from app.config import settings
     texts = get_texts(language)
@@ -1155,8 +1159,13 @@ def get_add_traffic_keyboard(language: str = DEFAULT_LANGUAGE, subscription_end_
     for package in enabled_packages:
         gb = package['gb']
         price_per_month = package['price']
-        total_price = price_per_month * months_multiplier
-        
+        discounted_per_month, discount_per_month = apply_percentage_discount(
+            price_per_month,
+            discount_percent,
+        )
+        total_price = discounted_per_month * months_multiplier
+        total_discount = discount_per_month * months_multiplier
+
         if gb == 0:
             if language == "ru":
                 text = f"♾️ Безлимитный трафик - {total_price//100} ₽{period_text}"
@@ -1167,7 +1176,10 @@ def get_add_traffic_keyboard(language: str = DEFAULT_LANGUAGE, subscription_end_
                 text = f"📊 +{gb} ГБ трафика - {total_price//100} ₽{period_text}"
             else:
                 text = f"📊 +{gb} GB traffic - {total_price//100} ₽{period_text}"
-        
+
+        if discount_percent > 0 and total_discount > 0:
+            text += f" (скидка {discount_percent}%: -{total_discount//100}₽)"
+
         buttons.append([
             InlineKeyboardButton(text=text, callback_data=f"add_traffic_{gb}")
         ])
@@ -1181,7 +1193,12 @@ def get_add_traffic_keyboard(language: str = DEFAULT_LANGUAGE, subscription_end_
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
     
-def get_change_devices_keyboard(current_devices: int, language: str = DEFAULT_LANGUAGE, subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
+def get_change_devices_keyboard(
+    current_devices: int,
+    language: str = DEFAULT_LANGUAGE,
+    subscription_end_date: datetime = None,
+    discount_percent: int = 0,
+) -> InlineKeyboardMarkup:
     from app.utils.pricing_utils import get_remaining_months
     from app.config import settings
     texts = get_texts(language)
@@ -1218,8 +1235,17 @@ def get_change_devices_keyboard(current_devices: int, language: str = DEFAULT_LA
             
             if chargeable_devices > 0:
                 price_per_month = chargeable_devices * device_price_per_month
-                total_price = price_per_month * months_multiplier
+                discounted_per_month, discount_per_month = apply_percentage_discount(
+                    price_per_month,
+                    discount_percent,
+                )
+                total_price = discounted_per_month * months_multiplier
                 price_text = f" (+{total_price//100}₽{period_text})"
+                if discount_percent > 0 and discount_per_month * months_multiplier > 0:
+                    price_text += (
+                        f" (скидка {discount_percent}%:"
+                        f" -{(discount_per_month * months_multiplier)//100}₽)"
+                    )
                 action_text = ""
             else:
                 price_text = " (бесплатно)"
@@ -1296,7 +1322,8 @@ def get_manage_countries_keyboard(
     selected: List[str],
     current_subscription_countries: List[str],
     language: str = DEFAULT_LANGUAGE,
-    subscription_end_date: datetime = None
+    subscription_end_date: datetime = None,
+    discount_percent: int = 0,
 ) -> InlineKeyboardMarkup:
     from app.utils.pricing_utils import get_remaining_months
 
@@ -1311,10 +1338,18 @@ def get_manage_countries_keyboard(
     total_cost = 0
     
     for country in countries:
+        if not country.get('is_available', True):
+            continue
+
         uuid = country['uuid']
         name = country['name']
         price_per_month = country['price_kopeks']
-        
+
+        discounted_per_month, discount_per_month = apply_percentage_discount(
+            price_per_month,
+            discount_percent,
+        )
+
         if uuid in current_subscription_countries:
             if uuid in selected:
                 icon = "✅"
@@ -1323,17 +1358,31 @@ def get_manage_countries_keyboard(
         else:
             if uuid in selected:
                 icon = "➕"
-                total_cost += price_per_month * months_multiplier
+                total_cost += discounted_per_month * months_multiplier
             else:
                 icon = "⚪"
-        
+
         if uuid not in current_subscription_countries and uuid in selected:
-            total_price = price_per_month * months_multiplier
+            total_price = discounted_per_month * months_multiplier
             if months_multiplier > 1:
-                price_text = f" ({price_per_month//100}₽/мес × {months_multiplier} = {total_price//100}₽)"
-                logger.info(f"🔍 Сервер {name}: {price_per_month/100}₽/мес × {months_multiplier} мес = {total_price/100}₽")
+                price_text = (
+                    f" ({discounted_per_month//100}₽/мес × {months_multiplier} = {total_price//100}₽)"
+                )
+                logger.info(
+                    "🔍 Сервер %s: %.2f₽/мес × %s мес = %.2f₽ (скидка %.2f₽)",
+                    name,
+                    discounted_per_month / 100,
+                    months_multiplier,
+                    total_price / 100,
+                    (discount_per_month * months_multiplier) / 100,
+                )
             else:
                 price_text = f" ({total_price//100}₽)"
+            if discount_percent > 0 and discount_per_month * months_multiplier > 0:
+                price_text += (
+                    f" (скидка {discount_percent}%:"
+                    f" -{(discount_per_month * months_multiplier)//100}₽)"
+                )
             display_name = f"{icon} {name}{price_text}"
         else:
             display_name = f"{icon} {name}"
