@@ -4197,33 +4197,8 @@ async def _should_show_countries_management(user: Optional[User] = None) -> bool
     try:
         promo_group_id = user.promo_group_id if user else None
         countries = await _get_available_countries(promo_group_id)
-
-        # Базовая проверка — доступно более одного сервера
         available_countries = [c for c in countries if c.get('is_available', True)]
-        if len(available_countries) > 1:
-            return True
-
-        # Если серверов формально больше одного, но часть из них временно недоступна
-        # (например, переполнены), все равно показываем кнопку управления, чтобы
-        # пользователь видел варианты переключения.
-        unique_countries = {c.get('uuid') for c in countries if c.get('uuid')}
-        if len(unique_countries) > 1:
-            return True
-
-        # Для действующих подписок учитываем уже подключенные сервера — это позволит
-        # оставить кнопку, даже если доступен только один новый сервер, но пользователь
-        # уже использует несколько стран.
-        if user and getattr(user, "subscription", None):
-            current_countries = set(user.subscription.connected_squads or [])
-            if len(current_countries) > 1:
-                return True
-
-            if current_countries:
-                total_options = current_countries.union(unique_countries)
-                if len(total_options) > 1:
-                    return True
-
-        return False
+        return len(available_countries) > 1
     except Exception as e:
         logger.error(f"Ошибка проверки доступных серверов: {e}")
         return True
