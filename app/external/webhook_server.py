@@ -8,6 +8,11 @@ from aiohttp import web
 from aiogram import Bot
 
 from app.config import settings
+from app.utils.happ_links import (
+    HAPP_LINK_QUERY_PARAM,
+    decode_happ_link,
+    render_happ_redirect_page,
+)
 from app.services.tribute_service import TributeService
 from app.services.payment_service import PaymentService
 from app.database.database import get_db
@@ -35,9 +40,15 @@ class WebhookServer:
 
         if settings.is_cryptobot_enabled():
             self.app.router.add_post(settings.CRYPTOBOT_WEBHOOK_PATH, self._cryptobot_webhook_handler)
-        
+
         self.app.router.add_get('/health', self._health_check)
-        
+
+        if settings.is_happ_cryptolink_proxy_enabled():
+            proxy_path = settings.get_happ_cryptolink_proxy_path()
+            self.app.router.add_get(proxy_path, self._happ_cryptolink_handler)
+            self.app.router.add_head(proxy_path, self._happ_cryptolink_handler)
+            logger.info(f"  - Happ cryptoLink proxy: GET {proxy_path}")
+
         self.app.router.add_options(settings.TRIBUTE_WEBHOOK_PATH, self._options_handler)
         if settings.is_mulenpay_enabled():
             self.app.router.add_options(settings.MULENPAY_WEBHOOK_PATH, self._options_handler)
@@ -50,8 +61,10 @@ class WebhookServer:
             logger.info(f"  - Mulen Pay webhook: POST {settings.MULENPAY_WEBHOOK_PATH}")
         if settings.is_cryptobot_enabled():
             logger.info(f"  - CryptoBot webhook: POST {settings.CRYPTOBOT_WEBHOOK_PATH}")
+        if settings.is_happ_cryptolink_proxy_enabled():
+            logger.info(f"  - Happ cryptoLink proxy: GET {settings.get_happ_cryptolink_proxy_path()}")
         logger.info(f"  - Health check: GET /health")
-        
+
         return self.app
     
     async def start(self):
@@ -176,6 +189,19 @@ class WebhookServer:
 
         logger.error("Отсутствует подпись Mulen Pay webhook")
         return False
+
+    async def _happ_cryptolink_handler(self, request: web.Request) -> web.Response:
+        if request.method == 'HEAD':
+            return web.Response(status=200)
+
+        token = request.query.get(HAPP_LINK_QUERY_PARAM, "")
+        happ_link = decode_happ_link(token)
+        if not happ_link:
+            logger.warning("Получен некорректный запрос к Happ proxy: %s", request.query_string)
+            return web.Response(status=400, text="Invalid or missing link")
+
+        html_page = render_happ_redirect_page(happ_link)
+        return web.Response(text=html_page, content_type='text/html; charset=utf-8')
 
     async def _tribute_webhook_handler(self, request: web.Request) -> web.Response:
 

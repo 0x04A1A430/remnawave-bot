@@ -126,6 +126,7 @@ async def main():
             settings.TRIBUTE_ENABLED
             or settings.is_cryptobot_enabled()
             or settings.is_mulenpay_enabled()
+            or settings.is_happ_cryptolink_proxy_enabled()
         )
         
         if webhook_needed:
@@ -136,7 +137,9 @@ async def main():
                 enabled_services.append("Mulen Pay")
             if settings.is_cryptobot_enabled():
                 enabled_services.append("CryptoBot")
-            
+            if settings.is_happ_cryptolink_proxy_enabled():
+                enabled_services.append("Happ cryptoLink proxy")
+
             logger.info(f"🌐 Запуск webhook сервера для: {', '.join(enabled_services)}...")
             webhook_server = WebhookServer(bot)
             await webhook_server.start()
