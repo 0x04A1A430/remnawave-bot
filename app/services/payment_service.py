@@ -716,27 +716,30 @@ class PaymentService:
         amount_kopeks: int,
         description: str,
         language: Optional[str] = None,
+        *,
+        ignore_limits: bool = False,
     ) -> Optional[Dict[str, Any]]:
 
         if not self.mulenpay_service:
             logger.error("MulenPay сервис не инициализирован")
             return None
 
-        if amount_kopeks < settings.MULENPAY_MIN_AMOUNT_KOPEKS:
-            logger.warning(
-                "Сумма MulenPay меньше минимальной: %s < %s",
-                amount_kopeks,
-                settings.MULENPAY_MIN_AMOUNT_KOPEKS,
-            )
-            return None
+        if not ignore_limits:
+            if amount_kopeks < settings.MULENPAY_MIN_AMOUNT_KOPEKS:
+                logger.warning(
+                    "Сумма MulenPay меньше минимальной: %s < %s",
+                    amount_kopeks,
+                    settings.MULENPAY_MIN_AMOUNT_KOPEKS,
+                )
+                return None
 
-        if amount_kopeks > settings.MULENPAY_MAX_AMOUNT_KOPEKS:
-            logger.warning(
-                "Сумма MulenPay больше максимальной: %s > %s",
-                amount_kopeks,
-                settings.MULENPAY_MAX_AMOUNT_KOPEKS,
-            )
-            return None
+            if amount_kopeks > settings.MULENPAY_MAX_AMOUNT_KOPEKS:
+                logger.warning(
+                    "Сумма MulenPay больше максимальной: %s > %s",
+                    amount_kopeks,
+                    settings.MULENPAY_MAX_AMOUNT_KOPEKS,
+                )
+                return None
 
         try:
             payment_uuid = f"mulen_{user_id}_{uuid.uuid4().hex}"
@@ -818,27 +821,29 @@ class PaymentService:
         language: str,
         ttl_seconds: Optional[int] = None,
         payer_email: Optional[str] = None,
+        ignore_limits: bool = False,
     ) -> Optional[Dict[str, Any]]:
 
         if not self.pal24_service or not self.pal24_service.is_configured:
             logger.error("Pal24 сервис не инициализирован")
             return None
 
-        if amount_kopeks < settings.PAL24_MIN_AMOUNT_KOPEKS:
-            logger.warning(
-                "Сумма Pal24 меньше минимальной: %s < %s",
-                amount_kopeks,
-                settings.PAL24_MIN_AMOUNT_KOPEKS,
-            )
-            return None
+        if not ignore_limits:
+            if amount_kopeks < settings.PAL24_MIN_AMOUNT_KOPEKS:
+                logger.warning(
+                    "Сумма Pal24 меньше минимальной: %s < %s",
+                    amount_kopeks,
+                    settings.PAL24_MIN_AMOUNT_KOPEKS,
+                )
+                return None
 
-        if amount_kopeks > settings.PAL24_MAX_AMOUNT_KOPEKS:
-            logger.warning(
-                "Сумма Pal24 больше максимальной: %s > %s",
-                amount_kopeks,
-                settings.PAL24_MAX_AMOUNT_KOPEKS,
-            )
-            return None
+            if amount_kopeks > settings.PAL24_MAX_AMOUNT_KOPEKS:
+                logger.warning(
+                    "Сумма Pal24 больше максимальной: %s > %s",
+                    amount_kopeks,
+                    settings.PAL24_MAX_AMOUNT_KOPEKS,
+                )
+                return None
 
         order_id = f"pal24_{user_id}_{uuid.uuid4().hex}"
 
