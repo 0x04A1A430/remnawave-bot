@@ -4198,7 +4198,28 @@ async def _should_show_countries_management(user: Optional[User] = None) -> bool
         promo_group_id = user.promo_group_id if user else None
         countries = await _get_available_countries(promo_group_id)
         available_countries = [c for c in countries if c.get('is_available', True)]
-        return len(available_countries) > 1
+        if len(available_countries) > 1:
+            return True
+
+        if user and getattr(user, "subscription", None):
+            connected = user.subscription.connected_squads or []
+            if len(set(connected)) > 1:
+                return True
+
+        if promo_group_id is not None:
+            from app.database.database import AsyncSessionLocal
+            from app.database.crud.server_squad import get_promo_group_server_count
+
+            async with AsyncSessionLocal() as db:
+                total_servers = await get_promo_group_server_count(
+                    db,
+                    promo_group_id,
+                    include_unavailable=True,
+                )
+
+            return total_servers > 1
+
+        return False
     except Exception as e:
         logger.error(f"Ошибка проверки доступных серверов: {e}")
         return True
