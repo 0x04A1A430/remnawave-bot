@@ -965,8 +965,7 @@ async def create_subscription(
     device_limit: int = 1,
     connected_squads: list = None,
     remnawave_short_uuid: str = None,
-    subscription_url: str = "",
-    happ_crypto_link: str = None,
+    subscription_url: str = ""
 ) -> Subscription:
     
     if end_date is None:
@@ -985,8 +984,7 @@ async def create_subscription(
         device_limit=device_limit,
         connected_squads=connected_squads,
         remnawave_short_uuid=remnawave_short_uuid,
-        subscription_url=subscription_url,
-        happ_crypto_link=happ_crypto_link
+        subscription_url=subscription_url
     )
     
     db.add(subscription)

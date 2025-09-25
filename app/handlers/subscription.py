@@ -41,9 +41,7 @@ from app.keyboards.inline import (
     get_device_management_help_keyboard,
     get_payment_methods_keyboard_with_cart,
     get_subscription_confirm_keyboard_with_cart,
-    get_insufficient_balance_keyboard_with_cart,
-    get_happ_download_device_keyboard,
-    get_happ_download_link_keyboard,
+    get_insufficient_balance_keyboard_with_cart
 )
 from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
@@ -2639,10 +2637,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
     countries_info = await _get_countries_info(subscription.connected_squads)
     countries_text = ", ".join([c['name'] for c in countries_info]) if countries_info else "Нет"
     
-    if settings.CONNECT_BUTTON_MODE == "happ_cryptolink":
-        subscription_url = getattr(subscription, 'happ_crypto_link', None) or "Генерируется..."
-    else:
-        subscription_url = getattr(subscription, 'subscription_url', None) or "Генерируется..."
+    subscription_url = getattr(subscription, 'subscription_url', None) or "Генерируется..."
     
     if subscription.is_trial:
         status_text = "🎁 Тестовая"
@@ -4020,46 +4015,25 @@ async def handle_connect_subscription(
 ):
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
+    
+    if not subscription or not subscription.subscription_url:
+        await callback.answer(
+            texts.t(
+                "SUBSCRIPTION_NO_ACTIVE_LINK",
+                "⚠ У вас нет активной подписки или ссылка еще генерируется",
+            ),
+            show_alert=True,
+        )
+        return
+
     connect_mode = settings.CONNECT_BUTTON_MODE
-    subscription_url = getattr(subscription, "subscription_url", None) if subscription else None
-    happ_crypto_link = getattr(subscription, "happ_crypto_link", None) if subscription else None
-
-    if not subscription:
-        await callback.answer(
-            texts.t(
-                "SUBSCRIPTION_NO_ACTIVE_LINK",
-                "⚠ У вас нет активной подписки или ссылка еще генерируется",
-            ),
-            show_alert=True,
-        )
-        return
-
-    if connect_mode == "happ_cryptolink" and not happ_crypto_link:
-        await callback.answer(
-            texts.t(
-                "SUBSCRIPTION_NO_ACTIVE_LINK",
-                "⚠ У вас нет активной подписки или ссылка еще генерируется",
-            ),
-            show_alert=True,
-        )
-        return
-
-    if connect_mode != "happ_cryptolink" and not subscription_url:
-        await callback.answer(
-            texts.t(
-                "SUBSCRIPTION_NO_ACTIVE_LINK",
-                "⚠ У вас нет активной подписки или ссылка еще генерируется",
-            ),
-            show_alert=True,
-        )
-        return
 
     if connect_mode == "miniapp_subscription":
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                    web_app=types.WebAppInfo(url=subscription_url)
+                    web_app=types.WebAppInfo(url=subscription.subscription_url)
                 )
             ],
             [
@@ -4117,7 +4091,7 @@ async def handle_connect_subscription(
             [
                 InlineKeyboardButton(
                     text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                    url=subscription_url
+                    url=subscription.subscription_url
                 )
             ],
             [
@@ -4136,41 +4110,6 @@ async def handle_connect_subscription(
             parse_mode="HTML"
         )
 
-    elif connect_mode == "happ_cryptolink":
-        keyboard_rows = [
-            [
-                InlineKeyboardButton(
-                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                    url=happ_crypto_link,
-                )
-            ]
-        ]
-
-        if settings.is_happ_download_button_enabled():
-            keyboard_rows.append([
-                InlineKeyboardButton(
-                    text=texts.t("HAPP_DOWNLOAD_BUTTON", "📥 Скачать Happ"),
-                    callback_data="happ_download",
-                )
-            ])
-
-        keyboard_rows.append([
-            InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
-        ])
-
-        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-
-        await callback.message.edit_text(
-            texts.t(
-                "SUBSCRIPTION_CONNECT_HAPP_MESSAGE",
-                """📱 <b>Подключить Happ</b>
-
-🚀 Нажмите кнопку ниже, чтобы открыть подписку в приложении Happ.""",
-            ),
-            reply_markup=keyboard,
-            parse_mode="HTML",
-        )
-
     else:
         device_text = texts.t(
             "SUBSCRIPTION_CONNECT_DEVICE_MESSAGE",
@@ -4180,111 +4119,14 @@ async def handle_connect_subscription(
 <code>{subscription_url}</code>
 
 💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
-        ).format(subscription_url=subscription_url)
+        ).format(subscription_url=subscription.subscription_url)
 
-    await callback.message.edit_text(
-        device_text,
-        reply_markup=get_device_selection_keyboard(db_user.language),
-        parse_mode="HTML"
-    )
-
-    await callback.answer()
-
-
-async def handle_happ_download_request(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    if not settings.is_happ_download_button_enabled():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("HAPP_DOWNLOAD_DISABLED", "⚠️ Загрузка приложения сейчас недоступна"),
-            show_alert=True,
+        await callback.message.edit_text(
+            device_text,
+            reply_markup=get_device_selection_keyboard(db_user.language),
+            parse_mode="HTML"
         )
-        return
-
-    texts = get_texts(db_user.language)
-    await callback.message.answer(
-        texts.t(
-            "HAPP_DOWNLOAD_SELECT_DEVICE",
-            "📥 <b>Скачать Happ</b>\n\nВыберите устройство, чтобы получить ссылку на приложение:",
-        ),
-        reply_markup=get_happ_download_device_keyboard(db_user.language),
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-
-async def handle_happ_download_device(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    if not settings.is_happ_download_button_enabled():
-        await callback.answer()
-        return
-
-    platform = callback.data.rsplit('_', maxsplit=1)[-1]
-    link = settings.get_happ_download_link(platform)
-    texts = get_texts(db_user.language)
-
-    if not link:
-        await callback.answer(
-            texts.t("HAPP_DOWNLOAD_LINK_NOT_AVAILABLE", "❌ Ссылка для выбранной платформы недоступна"),
-            show_alert=True,
-        )
-        return
-
-    device_names = {
-        "ios": texts.t("HAPP_DOWNLOAD_DEVICE_IOS", "🍎 iOS"),
-        "android": texts.t("HAPP_DOWNLOAD_DEVICE_ANDROID", "🤖 Android"),
-        "pc": texts.t("HAPP_DOWNLOAD_DEVICE_PC", "💻 ПК"),
-    }
-
-    message_text = texts.t(
-        "HAPP_DOWNLOAD_LINK_PROMPT",
-        "📥 <b>Скачайте Happ</b> для {device_name}:",
-    ).format(device_name=device_names.get(platform, platform.upper()))
-
-    await callback.message.edit_text(
-        message_text,
-        reply_markup=get_happ_download_link_keyboard(link, db_user.language),
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-
-async def handle_happ_download_back(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    if not settings.is_happ_download_button_enabled():
-        await callback.answer()
-        return
-
-    texts = get_texts(db_user.language)
-    await callback.message.edit_text(
-        texts.t(
-            "HAPP_DOWNLOAD_SELECT_DEVICE",
-            "📥 <b>Скачать Happ</b>\n\nВыберите устройство, чтобы получить ссылку на приложение:",
-        ),
-        reply_markup=get_happ_download_device_keyboard(db_user.language),
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-
-async def handle_happ_download_close(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    try:
-        await callback.message.delete()
-    except Exception:
-        pass
+    
     await callback.answer()
 
 
@@ -5261,22 +5103,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_connect_subscription,
         F.data == "subscription_connect"
-    )
-    dp.callback_query.register(
-        handle_happ_download_request,
-        F.data == "happ_download"
-    )
-    dp.callback_query.register(
-        handle_happ_download_device,
-        F.data.startswith("happ_download_device_")
-    )
-    dp.callback_query.register(
-        handle_happ_download_back,
-        F.data == "happ_download_back"
-    )
-    dp.callback_query.register(
-        handle_happ_download_close,
-        F.data == "happ_download_close"
     )
     
     dp.callback_query.register(
