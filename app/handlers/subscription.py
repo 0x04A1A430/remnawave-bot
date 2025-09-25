@@ -4589,8 +4589,42 @@ async def handle_no_traffic_packages(
 ):
     await callback.answer(
         "⚠️ В данный момент нет доступных пакетов трафика. "
-        "Обратитесь в техподдержку для получения информации.", 
+        "Обратитесь в техподдержку для получения информации.",
         show_alert=True
+    )
+
+
+async def handle_happ_copy_subscription_link(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    texts = get_texts(db_user.language)
+    subscription = db_user.subscription
+    subscription_link = get_display_subscription_link(subscription)
+
+    if not subscription_link:
+        await callback.answer(
+            texts.t("SUBSCRIPTION_LINK_UNAVAILABLE", "❌ Ссылка подписки недоступна"),
+            show_alert=True,
+        )
+        return
+
+    await callback.message.answer(
+        texts.t(
+            "SUBSCRIPTION_HAPP_COPY_MESSAGE",
+            "🔗 <b>Ссылка для Happ:</b>\n<code>{subscription_link}</code>",
+        ).format(subscription_link=subscription_link),
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+
+    await callback.answer(
+        texts.t(
+            "SUBSCRIPTION_HAPP_COPY_ALERT",
+            "📋 Ссылка отправлена отдельным сообщением.",
+        ),
+        show_alert=False,
     )
 
 
@@ -4611,21 +4645,37 @@ async def handle_open_subscription_link(
         return
 
     if settings.is_happ_cryptolink_mode():
+        allowed_schemes = ("http://", "https://", "tg://", "ton://", "ftp://")
+        link_supported = subscription_link.startswith(allowed_schemes)
+
+        if link_supported:
+            link_line = texts.t(
+                "SUBSCRIPTION_HAPP_OPEN_LINK",
+                "<a href=\"{subscription_link}\">🔓 Открыть ссылку в Happ</a>",
+            ).format(subscription_link=subscription_link)
+        else:
+            link_line = texts.t(
+                "SUBSCRIPTION_HAPP_OPEN_LINK_UNSUPPORTED",
+                "🔓 Скопируйте ссылку из блока ниже и откройте её в Happ вручную.",
+            )
+
         happ_message = (
             texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_TITLE",
                 "🔗 <b>Подключение через Happ</b>",
             )
             + "\n\n"
-            + texts.t(
-                "SUBSCRIPTION_HAPP_OPEN_LINK",
-                "<a href=\"{subscription_link}\">🔓 Открыть ссылку в Happ</a>",
-            ).format(subscription_link=subscription_link)
+            + link_line
             + "\n\n"
             + texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_HINT",
                 "💡 Если ссылка не открывается автоматически, скопируйте её вручную: <code>{subscription_link}</code>",
             ).format(subscription_link=subscription_link)
+            + "\n\n"
+            + texts.t(
+                "SUBSCRIPTION_HAPP_OPEN_COPY_HINT",
+                "📋 Нажмите кнопку ниже, чтобы получить ссылку одним нажатием.",
+            )
         )
 
         keyboard = get_happ_cryptolink_keyboard(subscription_link, db_user.language)
@@ -5367,10 +5417,15 @@ def register_handlers(dp: Dispatcher):
     )
 
     dp.callback_query.register(
+        handle_happ_copy_subscription_link,
+        F.data == "happ_copy_link"
+    )
+
+    dp.callback_query.register(
         handle_connect_subscription,
         F.data == "subscription_connect"
     )
-    
+
     dp.callback_query.register(
         handle_device_guide,
         F.data.startswith("device_guide_")
