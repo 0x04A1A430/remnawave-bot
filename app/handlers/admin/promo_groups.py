@@ -39,32 +39,6 @@ def _format_discount_line(texts, group) -> str:
     )
 
 
-def _format_addon_discounts_line(texts, group: PromoGroup) -> str:
-    enabled = getattr(group, "apply_discounts_to_addons", True)
-    if enabled:
-        return texts.t(
-            "ADMIN_PROMO_GROUP_ADDON_DISCOUNT_ENABLED",
-            "Скидки на доп. услуги: включены",
-        )
-    return texts.t(
-        "ADMIN_PROMO_GROUP_ADDON_DISCOUNT_DISABLED",
-        "Скидки на доп. услуги: отключены",
-    )
-
-
-def _get_addon_discounts_button_text(texts, group: PromoGroup) -> str:
-    enabled = getattr(group, "apply_discounts_to_addons", True)
-    if enabled:
-        return texts.t(
-            "ADMIN_PROMO_GROUP_TOGGLE_ADDON_DISCOUNT_DISABLE",
-            "🧩 Отключить скидки на доп. услуги",
-        )
-    return texts.t(
-        "ADMIN_PROMO_GROUP_TOGGLE_ADDON_DISCOUNT_ENABLE",
-        "🧩 Включить скидки на доп. услуги",
-    )
-
-
 def _normalize_periods_dict(raw: Optional[Dict]) -> Dict[int, int]:
     if not raw or not isinstance(raw, dict):
         return {}
@@ -283,7 +257,6 @@ def _build_edit_menu_content(
     lines = [
         header,
         _format_discount_line(texts, group),
-        _format_addon_discounts_line(texts, group),
         _format_auto_assign_line(texts, group),
     ]
 
@@ -343,12 +316,6 @@ def _build_edit_menu_content(
                     "⏳ Скидки по периодам",
                 ),
                 callback_data=f"promo_group_edit_field_{group.id}_periods",
-            )
-        ],
-        [
-            types.InlineKeyboardButton(
-                text=_get_addon_discounts_button_text(texts, group),
-                callback_data=f"promo_group_toggle_addons_{group.id}",
             )
         ],
         [
@@ -1225,45 +1192,6 @@ async def delete_promo_group_confirmed(
     await callback.answer()
 
 
-@admin_required
-@error_handler
-async def toggle_promo_group_addon_discounts(
-    callback: types.CallbackQuery,
-    db_user,
-    db: AsyncSession,
-):
-    group = await _get_group_or_alert(callback, db)
-    if not group:
-        return
-
-    texts = get_texts(db_user.language)
-
-    new_value = not getattr(group, "apply_discounts_to_addons", True)
-
-    group = await update_promo_group(
-        db,
-        group,
-        apply_discounts_to_addons=new_value,
-    )
-
-    status_text = texts.t(
-        "ADMIN_PROMO_GROUP_ADDON_DISCOUNT_UPDATED_ENABLED"
-        if new_value
-        else "ADMIN_PROMO_GROUP_ADDON_DISCOUNT_UPDATED_DISABLED",
-        "Скидки на докупку доп. услуг {status}.",
-    ).format(status="включены" if new_value else "отключены")
-
-    await _send_edit_menu_after_update(
-        callback.message,
-        texts,
-        group,
-        db_user.language,
-        status_text,
-    )
-
-    await callback.answer()
-
-
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_promo_groups_menu, F.data == "admin_promo_groups")
     dp.callback_query.register(show_promo_group_details, F.data.startswith("promo_group_manage_"))
@@ -1271,10 +1199,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         prompt_edit_promo_group_field,
         F.data.startswith("promo_group_edit_field_"),
-    )
-    dp.callback_query.register(
-        toggle_promo_group_addon_discounts,
-        F.data.startswith("promo_group_toggle_addons_"),
     )
     dp.callback_query.register(
         start_edit_promo_group,

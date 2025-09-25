@@ -931,54 +931,6 @@ async def ensure_promo_groups_setup():
                     "Добавлена колонка promo_groups.auto_assign_total_spent_kopeks"
                 )
 
-            addon_discount_column_exists = await check_column_exists(
-                "promo_groups", "apply_discounts_to_addons"
-            )
-
-            if not addon_discount_column_exists:
-                if db_type == "sqlite":
-                    await conn.execute(
-                        text(
-                            "ALTER TABLE promo_groups ADD COLUMN apply_discounts_to_addons BOOLEAN NOT NULL DEFAULT 1"
-                        )
-                    )
-                    await conn.execute(
-                        text(
-                            "UPDATE promo_groups SET apply_discounts_to_addons = 1 WHERE apply_discounts_to_addons IS NULL"
-                        )
-                    )
-                elif db_type == "postgresql":
-                    await conn.execute(
-                        text(
-                            "ALTER TABLE promo_groups ADD COLUMN apply_discounts_to_addons BOOLEAN NOT NULL DEFAULT TRUE"
-                        )
-                    )
-                    await conn.execute(
-                        text(
-                            "UPDATE promo_groups SET apply_discounts_to_addons = TRUE WHERE apply_discounts_to_addons IS NULL"
-                        )
-                    )
-                elif db_type == "mysql":
-                    await conn.execute(
-                        text(
-                            "ALTER TABLE promo_groups ADD COLUMN apply_discounts_to_addons TINYINT(1) NOT NULL DEFAULT 1"
-                        )
-                    )
-                    await conn.execute(
-                        text(
-                            "UPDATE promo_groups SET apply_discounts_to_addons = 1 WHERE apply_discounts_to_addons IS NULL"
-                        )
-                    )
-                else:
-                    logger.error(
-                        f"Неподдерживаемый тип БД для promo_groups.apply_discounts_to_addons: {db_type}"
-                    )
-                    return False
-
-                logger.info(
-                    "Добавлена колонка promo_groups.apply_discounts_to_addons"
-                )
-
             column_exists = await check_column_exists("users", "promo_group_id")
 
             if not column_exists:
@@ -2042,7 +1994,6 @@ async def check_migration_status():
             "users_promo_group_column": False,
             "promo_groups_period_discounts_column": False,
             "promo_groups_auto_assign_column": False,
-            "promo_groups_addon_discount_column": False,
             "users_auto_promo_group_assigned_column": False,
             "subscription_crypto_link_column": False,
         }
@@ -2060,7 +2011,6 @@ async def check_migration_status():
         status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
         status["promo_groups_period_discounts_column"] = await check_column_exists('promo_groups', 'period_discounts')
         status["promo_groups_auto_assign_column"] = await check_column_exists('promo_groups', 'auto_assign_total_spent_kopeks')
-        status["promo_groups_addon_discount_column"] = await check_column_exists('promo_groups', 'apply_discounts_to_addons')
         status["users_auto_promo_group_assigned_column"] = await check_column_exists('users', 'auto_promo_group_assigned')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         
@@ -2098,7 +2048,6 @@ async def check_migration_status():
             "users_promo_group_column": "Колонка promo_group_id у пользователей",
             "promo_groups_period_discounts_column": "Колонка period_discounts у промо-групп",
             "promo_groups_auto_assign_column": "Колонка auto_assign_total_spent_kopeks у промо-групп",
-            "promo_groups_addon_discount_column": "Колонка apply_discounts_to_addons у промо-групп",
             "users_auto_promo_group_assigned_column": "Флаг автоназначения промогруппы у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
         }
