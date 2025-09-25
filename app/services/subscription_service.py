@@ -26,35 +26,15 @@ def _resolve_discount_percent(
     category: str,
     *,
     period_days: Optional[int] = None,
-    for_addon: bool = False,
 ) -> int:
-    effective_group = promo_group
-
-    if user is not None and effective_group is None:
-        effective_group = getattr(user, "promo_group", None)
-
-    if for_addon:
-        if user is not None:
-            try:
-                return user.get_addon_discount(category, period_days)
-            except AttributeError:
-                pass
-
-        if effective_group is not None:
-            try:
-                return effective_group.get_addon_discount_percent(category, period_days)
-            except AttributeError:
-                return 0
-        return 0
-
     if user is not None:
         try:
             return user.get_promo_discount(category, period_days)
         except AttributeError:
             pass
 
-    if effective_group is not None:
-        return effective_group.get_discount_percent(category, period_days)
+    if promo_group is not None:
+        return promo_group.get_discount_percent(category, period_days)
 
     return 0
 
@@ -883,7 +863,6 @@ class SubscriptionService:
                 promo_group,
                 "traffic",
                 period_days=period_hint_days,
-                for_addon=True,
             )
             traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
             discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
@@ -907,7 +886,6 @@ class SubscriptionService:
                 promo_group,
                 "devices",
                 period_days=period_hint_days,
-                for_addon=True,
             )
             devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
             discounted_devices_per_month = devices_price_per_month - devices_discount_per_month
@@ -935,7 +913,6 @@ class SubscriptionService:
                         promo_group,
                         "servers",
                         period_days=period_hint_days,
-                        for_addon=True,
                     )
                     server_discount_per_month = (
                         server_price_per_month * servers_discount_percent // 100
