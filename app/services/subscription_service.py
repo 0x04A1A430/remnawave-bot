@@ -130,10 +130,9 @@ class SubscriptionService:
                     )
                 
                 subscription.remnawave_short_uuid = updated_user.short_uuid
-                subscription.subscription_url = updated_user.subscription_url
-                subscription.happ_crypto_link = (updated_user.happ or {}).get('cryptoLink')
+                subscription.subscription_url = updated_user.subscription_url 
                 user.remnawave_uuid = updated_user.uuid
-
+                
                 await db.commit()
                 
                 logger.info(f"✅ Создан/обновлен RemnaWave пользователь для подписки {subscription.id}")
@@ -189,9 +188,8 @@ class SubscriptionService:
                     ),
                     active_internal_squads=subscription.connected_squads
                 )
-
+                
                 subscription.subscription_url = updated_user.subscription_url
-                subscription.happ_crypto_link = (updated_user.happ or {}).get('cryptoLink')
                 await db.commit()
                 
                 status_text = "активным" if is_actually_active else "истёкшим"
@@ -232,10 +230,9 @@ class SubscriptionService:
             
             async with self.api as api:
                 updated_user = await api.revoke_user_subscription(user.remnawave_uuid)
-
+                
                 subscription.remnawave_short_uuid = updated_user.short_uuid
                 subscription.subscription_url = updated_user.subscription_url
-                subscription.happ_crypto_link = (updated_user.happ or {}).get('cryptoLink')
                 await db.commit()
                 
                 logger.info(f"✅ Обновлена ссылка подписки для пользователя {user.telegram_id}")

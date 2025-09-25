@@ -214,10 +214,6 @@ class Settings(BaseSettings):
     LOGO_FILE: str = "vpn_logo.png"
     SKIP_RULES_ACCEPT: bool = False
     SKIP_REFERRAL_CODE: bool = False
-    HAPP_DOWNLOAD_BUTTON_ENABLED: bool = False
-    HAPP_IOS_APP_URL: Optional[str] = None
-    HAPP_ANDROID_APP_URL: Optional[str] = None
-    HAPP_DESKTOP_APP_URL: Optional[str] = None
 
     DEFAULT_LANGUAGE: str = "ru"
     AVAILABLE_LANGUAGES: str = "ru,en"
@@ -546,20 +542,6 @@ class Settings(BaseSettings):
     
     def get_cryptobot_invoice_expires_seconds(self) -> int:
         return self.CRYPTOBOT_INVOICE_EXPIRES_HOURS * 3600
-
-    def is_happ_download_button_enabled(self) -> bool:
-        if not self.HAPP_DOWNLOAD_BUTTON_ENABLED:
-            return False
-
-        links = self.get_happ_download_links()
-        return any(link for link in links.values())
-
-    def get_happ_download_links(self) -> Dict[str, Optional[str]]:
-        return {
-            "ios": self.HAPP_IOS_APP_URL,
-            "android": self.HAPP_ANDROID_APP_URL,
-            "desktop": self.HAPP_DESKTOP_APP_URL,
-        }
 
     def is_maintenance_mode(self) -> bool:
         return self.MAINTENANCE_MODE

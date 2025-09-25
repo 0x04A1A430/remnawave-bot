@@ -637,15 +637,14 @@ class RemnaWaveService:
             subscription_data = {
                 'user_id': user.id,
                 'status': status.value,
-                'is_trial': False,
+                'is_trial': False, 
                 'end_date': expire_at,
                 'traffic_limit_gb': traffic_limit_gb,
                 'traffic_used_gb': traffic_used_gb,
                 'device_limit': panel_user.get('hwidDeviceLimit', 1) or 1,
                 'connected_squads': squad_uuids,
                 'remnawave_short_uuid': panel_user.get('shortUuid'),
-                'subscription_url': panel_user.get('subscriptionUrl', ''),
-                'happ_crypto_link': (panel_user.get('happ') or {}).get('cryptoLink'),
+                'subscription_url': panel_user.get('subscriptionUrl', '')
             }
         
             subscription = await create_subscription(db, **subscription_data)
@@ -668,8 +667,7 @@ class RemnaWaveService:
                     device_limit=1,
                     connected_squads=[],
                     remnawave_short_uuid=panel_user.get('shortUuid'),
-                    subscription_url=panel_user.get('subscriptionUrl', ''),
-                    happ_crypto_link=(panel_user.get('happ') or {}).get('cryptoLink'),
+                    subscription_url=panel_user.get('subscriptionUrl', '')
                 )
                 logger.info(f"✅ Создана базовая подписка для пользователя {user.telegram_id}")
             except Exception as basic_error:
@@ -735,11 +733,7 @@ class RemnaWaveService:
             panel_url = panel_user.get('subscriptionUrl', '')
             if not subscription.subscription_url or subscription.subscription_url != panel_url:
                 subscription.subscription_url = panel_url
-
-            happ_crypto_link = (panel_user.get('happ') or {}).get('cryptoLink')
-            if subscription.happ_crypto_link != happ_crypto_link:
-                subscription.happ_crypto_link = happ_crypto_link
-
+        
             active_squads = panel_user.get('activeInternalSquads', [])
             squad_uuids = []
             if isinstance(active_squads, list):
