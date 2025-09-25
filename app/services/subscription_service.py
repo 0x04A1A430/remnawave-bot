@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,13 +13,50 @@ from app.database.crud.user import get_user_by_id
 from app.utils.pricing_utils import (
     calculate_months_from_days,
     get_remaining_months,
-    validate_pricing_calculation,
-    resolve_discount_percent,
-    resolve_addon_discount_percent,
+    calculate_prorated_price,
+    validate_pricing_calculation
 )
 
 logger = logging.getLogger(__name__)
 
+
+def _resolve_discount_percent(
+    user: Optional[User],
+    promo_group: Optional[PromoGroup],
+    category: str,
+    *,
+    period_days: Optional[int] = None,
+) -> int:
+    if user is not None:
+        try:
+            return user.get_promo_discount(category, period_days)
+        except AttributeError:
+            pass
+
+    if promo_group is not None:
+        return promo_group.get_discount_percent(category, period_days)
+
+    return 0
+
+
+def _resolve_addon_discount_percent(
+    user: Optional[User],
+    promo_group: Optional[PromoGroup],
+    category: str,
+    *,
+    period_days: Optional[int] = None,
+) -> int:
+    group = promo_group or (getattr(user, "promo_group", None) if user else None)
+
+    if group is not None and not getattr(group, "apply_discounts_to_addons", True):
+        return 0
+
+    return _resolve_discount_percent(
+        user,
+        promo_group,
+        category,
+        period_days=period_days,
+    )
 
 def get_traffic_reset_strategy():
     from app.config import settings
@@ -286,7 +323,7 @@ class SubscriptionService:
             raise ValueError(f"Превышен максимальный лимит устройств: {settings.MAX_DEVICES_LIMIT}")
     
         base_price_original = PERIOD_PRICES.get(period_days, 0)
-        period_discount_percent = resolve_discount_percent(
+        period_discount_percent = _resolve_discount_percent(
             user,
             promo_group,
             "period",
@@ -298,7 +335,7 @@ class SubscriptionService:
         promo_group = promo_group or (user.promo_group if user else None)
 
         traffic_price = settings.get_traffic_price(traffic_gb)
-        traffic_discount_percent = resolve_discount_percent(
+        traffic_discount_percent = _resolve_discount_percent(
             user,
             promo_group,
             "traffic",
@@ -309,7 +346,7 @@ class SubscriptionService:
 
         server_prices = []
         total_servers_price = 0
-        servers_discount_percent = resolve_discount_percent(
+        servers_discount_percent = _resolve_discount_percent(
             user,
             promo_group,
             "servers",
@@ -335,7 +372,7 @@ class SubscriptionService:
                 logger.warning(f"Сервер ID {server_id} недоступен")
 
         devices_price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
-        devices_discount_percent = resolve_discount_percent(
+        devices_discount_percent = _resolve_discount_percent(
             user,
             promo_group,
             "devices",
@@ -403,7 +440,7 @@ class SubscriptionService:
                 promo_group_id=promo_group.id if promo_group else None,
             )
 
-            servers_discount_percent = resolve_discount_percent(
+            servers_discount_percent = _resolve_discount_percent(
                 user,
                 promo_group,
                 "servers",
@@ -413,7 +450,7 @@ class SubscriptionService:
             discounted_servers_price = servers_price - servers_discount
 
             devices_price = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
-            devices_discount_percent = resolve_discount_percent(
+            devices_discount_percent = _resolve_discount_percent(
                 user,
                 promo_group,
                 "devices",
@@ -423,7 +460,7 @@ class SubscriptionService:
             discounted_devices_price = devices_price - devices_discount
 
             traffic_price = settings.get_traffic_price(subscription.traffic_limit_gb)
-            traffic_discount_percent = resolve_discount_percent(
+            traffic_discount_percent = _resolve_discount_percent(
                 user,
                 promo_group,
                 "traffic",
@@ -432,7 +469,7 @@ class SubscriptionService:
             traffic_discount = traffic_price * traffic_discount_percent // 100
             discounted_traffic_price = traffic_price - traffic_discount
 
-            period_discount_percent = resolve_discount_percent(
+            period_discount_percent = _resolve_discount_percent(
                 user,
                 promo_group,
                 "period",
@@ -603,7 +640,7 @@ class SubscriptionService:
         months_in_period = calculate_months_from_days(period_days)
         
         base_price_original = PERIOD_PRICES.get(period_days, 0)
-        period_discount_percent = resolve_discount_percent(
+        period_discount_percent = _resolve_discount_percent(
             user,
             promo_group,
             "period",
@@ -615,7 +652,7 @@ class SubscriptionService:
         promo_group = promo_group or (user.promo_group if user else None)
 
         traffic_price_per_month = settings.get_traffic_price(traffic_gb)
-        traffic_discount_percent = resolve_discount_percent(
+        traffic_discount_percent = _resolve_discount_percent(
             user,
             promo_group,
             "traffic",
@@ -627,7 +664,7 @@ class SubscriptionService:
 
         server_prices = []
         total_servers_price = 0
-        servers_discount_percent = resolve_discount_percent(
+        servers_discount_percent = _resolve_discount_percent(
             user,
             promo_group,
             "servers",
@@ -657,7 +694,7 @@ class SubscriptionService:
 
         additional_devices = max(0, devices - settings.DEFAULT_DEVICE_LIMIT)
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-        devices_discount_percent = resolve_discount_percent(
+        devices_discount_percent = _resolve_discount_percent(
             user,
             promo_group,
             "devices",
@@ -731,7 +768,7 @@ class SubscriptionService:
                 db,
                 promo_group_id=promo_group.id if promo_group else None,
             )
-            servers_discount_percent = resolve_discount_percent(
+            servers_discount_percent = _resolve_discount_percent(
                 user,
                 promo_group,
                 "servers",
@@ -743,7 +780,7 @@ class SubscriptionService:
 
             additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-            devices_discount_percent = resolve_discount_percent(
+            devices_discount_percent = _resolve_discount_percent(
                 user,
                 promo_group,
                 "devices",
@@ -754,7 +791,7 @@ class SubscriptionService:
             total_devices_price = discounted_devices_per_month * months_in_period
 
             traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
-            traffic_discount_percent = resolve_discount_percent(
+            traffic_discount_percent = _resolve_discount_percent(
                 user,
                 promo_group,
                 "traffic",
@@ -764,7 +801,7 @@ class SubscriptionService:
             discounted_traffic_per_month = traffic_price_per_month - traffic_discount_per_month
             total_traffic_price = discounted_traffic_per_month * months_in_period
 
-            period_discount_percent = resolve_discount_percent(
+            period_discount_percent = _resolve_discount_percent(
                 user,
                 promo_group,
                 "period",
@@ -841,7 +878,7 @@ class SubscriptionService:
 
         if additional_traffic_gb > 0:
             traffic_price_per_month = settings.get_traffic_price(additional_traffic_gb)
-            traffic_discount_percent = resolve_addon_discount_percent(
+            traffic_discount_percent = _resolve_addon_discount_percent(
                 user,
                 promo_group,
                 "traffic",
@@ -864,7 +901,7 @@ class SubscriptionService:
 
         if additional_devices > 0:
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-            devices_discount_percent = resolve_addon_discount_percent(
+            devices_discount_percent = _resolve_addon_discount_percent(
                 user,
                 promo_group,
                 "devices",
@@ -891,7 +928,7 @@ class SubscriptionService:
                 server = await get_server_squad_by_id(db, server_id)
                 if server and server.is_available:
                     server_price_per_month = server.price_kopeks
-                    servers_discount_percent = resolve_addon_discount_percent(
+                    servers_discount_percent = _resolve_addon_discount_percent(
                         user,
                         promo_group,
                         "servers",

@@ -8,12 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
-from app.utils.pricing_utils import (
-    format_period_description,
-    resolve_addon_discount_percent,
-    apply_percentage_discount,
-    get_remaining_months,
-)
+from app.utils.pricing_utils import format_period_description
 from app.utils.subscription_utils import (
     get_display_subscription_link,
     get_happ_cryptolink_redirect_link,
@@ -1128,25 +1123,21 @@ def get_extend_subscription_keyboard(language: str = DEFAULT_LANGUAGE) -> Inline
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_add_traffic_keyboard(
-    language: str = DEFAULT_LANGUAGE,
-    subscription_end_date: datetime = None,
-    user: Optional[User] = None,
-) -> InlineKeyboardMarkup:
+def get_add_traffic_keyboard(language: str = DEFAULT_LANGUAGE, subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
+    from app.utils.pricing_utils import get_remaining_months
     from app.config import settings
-
     texts = get_texts(language)
-
+    
     months_multiplier = 1
     period_text = ""
     if subscription_end_date:
         months_multiplier = get_remaining_months(subscription_end_date)
         if months_multiplier > 1:
             period_text = f" (за {months_multiplier} мес)"
-
+    
     packages = settings.get_traffic_packages()
     enabled_packages = [pkg for pkg in packages if pkg['enabled']]
-
+    
     if not enabled_packages:
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
@@ -1158,90 +1149,60 @@ def get_add_traffic_keyboard(
                 callback_data="menu_subscription"
             )]
         ])
-
-    discount_percent = 0
-    if user:
-        period_hint_days = months_multiplier * 30 if months_multiplier > 0 else None
-        discount_percent = resolve_addon_discount_percent(
-            user,
-            getattr(user, "promo_group", None),
-            "traffic",
-            period_days=period_hint_days,
-        )
-
+    
     buttons = []
-
+    
     for package in enabled_packages:
         gb = package['gb']
         price_per_month = package['price']
-        discounted_per_month, discount_per_month = apply_percentage_discount(
-            price_per_month,
-            discount_percent,
-        )
-        total_price = discounted_per_month * months_multiplier
-        total_discount = discount_per_month * months_multiplier
-
+        total_price = price_per_month * months_multiplier
+        
         if gb == 0:
-            base_text = "♾️ Безлимитный трафик"
+            if language == "ru":
+                text = f"♾️ Безлимитный трафик - {total_price//100} ₽{period_text}"
+            else:
+                text = f"♾️ Unlimited traffic - {total_price//100} ₽{period_text}"
         else:
-            base_text = f"📊 +{gb} ГБ трафика" if language == "ru" else f"📊 +{gb} GB traffic"
-
-        price_text = f" - {total_price//100} ₽{period_text}"
-        if discount_percent > 0 and total_discount > 0:
-            price_text += f" (скидка {discount_percent}%: -{total_discount//100} ₽)"
-
-        text = base_text + price_text
-
+            if language == "ru":
+                text = f"📊 +{gb} ГБ трафика - {total_price//100} ₽{period_text}"
+            else:
+                text = f"📊 +{gb} GB traffic - {total_price//100} ₽{period_text}"
+        
         buttons.append([
             InlineKeyboardButton(text=text, callback_data=f"add_traffic_{gb}")
         ])
-
+    
     buttons.append([
         InlineKeyboardButton(
             text=texts.BACK,
             callback_data="menu_subscription"
         )
     ])
-
+    
     return InlineKeyboardMarkup(inline_keyboard=buttons)
     
-def get_change_devices_keyboard(
-    current_devices: int,
-    language: str = DEFAULT_LANGUAGE,
-    subscription_end_date: datetime = None,
-    user: Optional[User] = None,
-) -> InlineKeyboardMarkup:
+def get_change_devices_keyboard(current_devices: int, language: str = DEFAULT_LANGUAGE, subscription_end_date: datetime = None) -> InlineKeyboardMarkup:
+    from app.utils.pricing_utils import get_remaining_months
     from app.config import settings
-
     texts = get_texts(language)
-
+    
     months_multiplier = 1
     period_text = ""
     if subscription_end_date:
         months_multiplier = get_remaining_months(subscription_end_date)
         if months_multiplier > 1:
             period_text = f" (за {months_multiplier} мес)"
-
-    discount_percent = 0
-    if user:
-        period_hint_days = months_multiplier * 30 if months_multiplier > 0 else None
-        discount_percent = resolve_addon_discount_percent(
-            user,
-            getattr(user, "promo_group", None),
-            "devices",
-            period_days=period_hint_days,
-        )
-
+    
     device_price_per_month = settings.PRICE_PER_DEVICE
-
+    
     buttons = []
-
-    min_devices = 1
+    
+    min_devices = 1 
     max_devices = settings.MAX_DEVICES_LIMIT if settings.MAX_DEVICES_LIMIT > 0 else 20
-
+    
     start_range = max(1, min(current_devices - 3, max_devices - 6))
     end_range = min(max_devices + 1, max(current_devices + 4, 7))
-
+    
     for devices_count in range(start_range, end_range):
         if devices_count == current_devices:
             emoji = "✅"
@@ -1250,23 +1211,15 @@ def get_change_devices_keyboard(
         elif devices_count > current_devices:
             emoji = "➕"
             additional_devices = devices_count - current_devices
-
+            
             current_chargeable = max(0, current_devices - settings.DEFAULT_DEVICE_LIMIT)
             new_chargeable = max(0, devices_count - settings.DEFAULT_DEVICE_LIMIT)
             chargeable_devices = new_chargeable - current_chargeable
-
+            
             if chargeable_devices > 0:
                 price_per_month = chargeable_devices * device_price_per_month
-                discounted_per_month, discount_per_month = apply_percentage_discount(
-                    price_per_month,
-                    discount_percent,
-                )
-                total_price = discounted_per_month * months_multiplier
-                total_discount = discount_per_month * months_multiplier
-                price_text = f" (+{total_price//100}₽{period_text}"
-                if discount_percent > 0 and total_discount > 0:
-                    price_text += f", скидка {discount_percent}% (-{total_discount//100}₽)"
-                price_text += ")"
+                total_price = price_per_month * months_multiplier
+                price_text = f" (+{total_price//100}₽{period_text})"
                 action_text = ""
             else:
                 price_text = " (бесплатно)"
@@ -1275,26 +1228,26 @@ def get_change_devices_keyboard(
             emoji = "➖"
             action_text = ""
             price_text = " (без возврата)"
-
+        
         button_text = f"{emoji} {devices_count} устр.{action_text}{price_text}"
-
+        
         buttons.append([
             InlineKeyboardButton(text=button_text, callback_data=f"change_devices_{devices_count}")
         ])
-
+    
     if current_devices < start_range or current_devices >= end_range:
         current_button = f"✅ {current_devices} устр. (текущее)"
         buttons.insert(0, [
             InlineKeyboardButton(text=current_button, callback_data=f"change_devices_{current_devices}")
         ])
-
+    
     buttons.append([
         InlineKeyboardButton(
             text=texts.BACK,
             callback_data="subscription_settings"
         )
     ])
-
+    
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def get_confirm_change_devices_keyboard(new_devices_count: int, price: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
@@ -1343,103 +1296,72 @@ def get_manage_countries_keyboard(
     selected: List[str],
     current_subscription_countries: List[str],
     language: str = DEFAULT_LANGUAGE,
-    subscription_end_date: datetime = None,
-    user: Optional[User] = None,
+    subscription_end_date: datetime = None
 ) -> InlineKeyboardMarkup:
+    from app.utils.pricing_utils import get_remaining_months
+
     texts = get_texts(language)
 
     months_multiplier = 1
     if subscription_end_date:
         months_multiplier = get_remaining_months(subscription_end_date)
         logger.info(f"🔍 Расчет для управления странами: осталось {months_multiplier} месяцев до {subscription_end_date}")
-
-    discount_percent = 0
-    if user:
-        period_hint_days = months_multiplier * 30 if months_multiplier > 0 else None
-        discount_percent = resolve_addon_discount_percent(
-            user,
-            getattr(user, "promo_group", None),
-            "servers",
-            period_days=period_hint_days,
-        )
-
+    
     buttons = []
     total_cost = 0
-
+    
     for country in countries:
         uuid = country['uuid']
         name = country['name']
         price_per_month = country['price_kopeks']
-        is_available = country.get('is_available', True)
-
-        if not is_available and uuid not in current_subscription_countries:
-            continue
-
+        
         if uuid in current_subscription_countries:
-            icon = "✅" if uuid in selected else "➖"
-        else:
-            icon = "➕" if uuid in selected else "⚪"
-
-        display_name = f"{icon} {name}"
-
-        if uuid not in current_subscription_countries and uuid in selected:
-            discounted_per_month, discount_per_month = apply_percentage_discount(
-                price_per_month,
-                discount_percent,
-            )
-            total_price = discounted_per_month * months_multiplier
-            total_cost += total_price
-
-            if months_multiplier > 1:
-                price_text = (
-                    f" ({discounted_per_month//100}₽/мес × {months_multiplier} = {total_price//100}₽"
-                )
+            if uuid in selected:
+                icon = "✅"
             else:
-                price_text = f" ({total_price//100}₽"
-
-            total_discount = discount_per_month * months_multiplier
-            if discount_percent > 0 and total_discount > 0:
-                price_text += f", скидка {discount_percent}% (-{total_discount//100}₽)"
-            price_text += ")"
-
-            logger.info(
-                f"🔍 Сервер {name}: {price_per_month/100}₽/мес × {months_multiplier} мес"
-                f" = {total_price/100}₽"
-                + (
-                    f" (скидка {discount_percent}%: -{total_discount/100}₽)"
-                    if discount_percent > 0 and total_discount > 0
-                    else ""
-                )
-            )
-
+                icon = "➖"
+        else:
+            if uuid in selected:
+                icon = "➕"
+                total_cost += price_per_month * months_multiplier
+            else:
+                icon = "⚪"
+        
+        if uuid not in current_subscription_countries and uuid in selected:
+            total_price = price_per_month * months_multiplier
+            if months_multiplier > 1:
+                price_text = f" ({price_per_month//100}₽/мес × {months_multiplier} = {total_price//100}₽)"
+                logger.info(f"🔍 Сервер {name}: {price_per_month/100}₽/мес × {months_multiplier} мес = {total_price/100}₽")
+            else:
+                price_text = f" ({total_price//100}₽)"
             display_name = f"{icon} {name}{price_text}"
-        elif not is_available:
-            display_name = f"🚫 {name}"
-
+        else:
+            display_name = f"{icon} {name}"
+        
         buttons.append([
             InlineKeyboardButton(
                 text=display_name,
                 callback_data=f"country_manage_{uuid}"
             )
         ])
-
+    
     if total_cost > 0:
         apply_text = f"✅ Применить изменения ({total_cost//100} ₽)"
         logger.info(f"🔍 Общая стоимость новых серверов: {total_cost/100}₽")
     else:
         apply_text = "✅ Применить изменения"
-
+    
     buttons.append([
         InlineKeyboardButton(text=apply_text, callback_data="countries_apply")
     ])
-
+    
     buttons.append([
         InlineKeyboardButton(
             text=texts.BACK,
             callback_data="menu_subscription"
         )
     ])
-
+    
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def get_device_selection_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
