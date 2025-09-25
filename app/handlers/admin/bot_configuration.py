@@ -1,5 +1,5 @@
 import math
-from typing import Iterable, List, Tuple
+from typing import Tuple
 
 from aiogram import Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
@@ -16,141 +16,22 @@ CATEGORY_PAGE_SIZE = 10
 SETTINGS_PAGE_SIZE = 8
 
 
-CATEGORY_GROUP_DEFINITIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
-    (
-        "core",
-        "⚙️ Основные настройки",
-        (
-            "DEFAULT",
-            "ADMIN",
-            "SUPPORT",
-            "REMNAWAVE",
-            "VERSION",
-            "DEBUG",
-            "LOG",
-            "BACKUP",
-        ),
-    ),
-    (
-        "infrastructure",
-        "🗄️ Инфраструктура",
-        ("DATABASE", "POSTGRES", "SQLITE", "REDIS", "WEBHOOK", "SERVER", "MONITORING", "MAINTENANCE"),
-    ),
-    (
-        "billing",
-        "💳 Оплаты и тарифы",
-        ("PRICE", "PAYMENT", "YOOKASSA", "CRYPTOBOT", "MULENPAY", "PAL24", "AUTOPAY", "TRIAL"),
-    ),
-    (
-        "communication",
-        "📡 Подключение и коммуникации",
-        ("CONNECT", "CHANNEL", "TELEGRAM", "HAPP"),
-    ),
-    (
-        "loyalty",
-        "🎁 Рефералы и лояльность",
-        ("REFERRAL", "TRIBUTE"),
-    ),
-)
-
-CATEGORY_FALLBACK_KEY = "other"
-CATEGORY_FALLBACK_TITLE = "📦 Прочие настройки"
-
-
-def _chunk(buttons: Iterable[types.InlineKeyboardButton], size: int) -> Iterable[List[types.InlineKeyboardButton]]:
-    buttons_list = list(buttons)
-    for index in range(0, len(buttons_list), size):
-        yield buttons_list[index : index + size]
-
-
-def _parse_category_payload(payload: str) -> Tuple[str, str, int, int]:
+def _parse_category_payload(payload: str) -> Tuple[str, int]:
     parts = payload.split(":")
-    group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
-    category_key = parts[2] if len(parts) > 2 else ""
-
-    def _safe_int(value: str, default: int = 1) -> int:
+    if len(parts) == 3:
+        _, category_key, page_raw = parts
         try:
-            return max(1, int(value))
-        except (TypeError, ValueError):
-            return default
-
-    category_page = _safe_int(parts[3]) if len(parts) > 3 else 1
-    settings_page = _safe_int(parts[4]) if len(parts) > 4 else 1
-    return group_key, category_key, category_page, settings_page
-
-
-def _parse_group_payload(payload: str) -> Tuple[str, int]:
-    parts = payload.split(":")
-    group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
-    try:
-        page = max(1, int(parts[2]))
-    except (IndexError, ValueError):
-        page = 1
-    return group_key, page
+            return category_key, max(1, int(page_raw))
+        except ValueError:
+            return category_key, 1
+    if len(parts) == 2:
+        _, category_key = parts
+        return category_key, 1
+    return "", 1
 
 
-def _get_grouped_categories() -> List[Tuple[str, str, List[Tuple[str, str, int]]]]:
+def _build_categories_keyboard(language: str, page: int = 1) -> types.InlineKeyboardMarkup:
     categories = bot_configuration_service.get_categories()
-    categories_map = {key: (label, count) for key, label, count in categories}
-    used: set[str] = set()
-    grouped: List[Tuple[str, str, List[Tuple[str, str, int]]]] = []
-
-    for group_key, title, category_keys in CATEGORY_GROUP_DEFINITIONS:
-        items: List[Tuple[str, str, int]] = []
-        for category_key in category_keys:
-            if category_key in categories_map:
-                label, count = categories_map[category_key]
-                items.append((category_key, label, count))
-                used.add(category_key)
-        if items:
-            grouped.append((group_key, title, items))
-
-    remaining = [
-        (key, label, count)
-        for key, (label, count) in categories_map.items()
-        if key not in used
-    ]
-
-    if remaining:
-        remaining.sort(key=lambda item: item[1])
-        grouped.append((CATEGORY_FALLBACK_KEY, CATEGORY_FALLBACK_TITLE, remaining))
-
-    return grouped
-
-
-def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
-    grouped = _get_grouped_categories()
-    rows: list[list[types.InlineKeyboardButton]] = []
-
-    for group_key, title, items in grouped:
-        total = sum(count for _, _, count in items)
-        rows.append(
-            [
-                types.InlineKeyboardButton(
-                    text=f"{title} ({total})",
-                    callback_data=f"botcfg_group:{group_key}:1",
-                )
-            ]
-        )
-
-    rows.append(
-        [
-            types.InlineKeyboardButton(
-                text="⬅️ Назад",
-                callback_data="admin_submenu_settings",
-            )
-        ]
-    )
-
-    return types.InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def _build_categories_keyboard(
-    group_key: str,
-    group_title: str,
-    categories: List[Tuple[str, str, int]],
-    page: int = 1,
-) -> types.InlineKeyboardMarkup:
     total_pages = max(1, math.ceil(len(categories) / CATEGORY_PAGE_SIZE))
     page = max(1, min(page, total_pages))
 
@@ -159,68 +40,45 @@ def _build_categories_keyboard(
     sliced = categories[start:end]
 
     rows: list[list[types.InlineKeyboardButton]] = []
-    rows.append(
-        [
-            types.InlineKeyboardButton(
-                text=f"— {group_title} —",
-                callback_data="botcfg_group:noop",
-            )
-        ]
-    )
-
-    buttons: List[types.InlineKeyboardButton] = []
     for category_key, label, count in sliced:
         button_text = f"{label} ({count})"
-        buttons.append(
+        rows.append([
             types.InlineKeyboardButton(
                 text=button_text,
-                callback_data=f"botcfg_cat:{group_key}:{category_key}:{page}:1",
+                callback_data=f"botcfg_cat:{category_key}:1",
             )
-        )
-
-    for chunk in _chunk(buttons, 2):
-        rows.append(list(chunk))
+        ])
 
     if total_pages > 1:
         nav_row: list[types.InlineKeyboardButton] = []
         if page > 1:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text="⬅️",
-                    callback_data=f"botcfg_group:{group_key}:{page - 1}",
+                    text="⬅️", callback_data=f"botcfg_categories:{page - 1}"
                 )
             )
         nav_row.append(
             types.InlineKeyboardButton(
-                text=f"{page}/{total_pages}",
-                callback_data="botcfg_group:noop",
+                text=f"{page}/{total_pages}", callback_data="botcfg_categories:noop"
             )
         )
         if page < total_pages:
             nav_row.append(
                 types.InlineKeyboardButton(
-                    text="➡️",
-                    callback_data=f"botcfg_group:{group_key}:{page + 1}",
+                    text="➡️", callback_data=f"botcfg_categories:{page + 1}"
                 )
             )
         rows.append(nav_row)
 
-    rows.append(
-        [
-            types.InlineKeyboardButton(
-                text="⬅️ К разделам",
-                callback_data="admin_bot_config",
-            )
-        ]
-    )
+    rows.append([
+        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_submenu_settings")
+    ])
 
     return types.InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _build_settings_keyboard(
     category_key: str,
-    group_key: str,
-    category_page: int,
     language: str,
     page: int = 1,
 ) -> types.InlineKeyboardMarkup:
@@ -236,19 +94,13 @@ def _build_settings_keyboard(
 
     for definition in sliced:
         value_preview = bot_configuration_service.format_value_for_list(definition.key)
-        button_text = f"{definition.display_name} · {value_preview}"
-        if len(button_text) > 64:
-            button_text = button_text[:63] + "…"
-        rows.append(
-            [
-                types.InlineKeyboardButton(
-                    text=button_text,
-                    callback_data=(
-                        f"botcfg_setting:{group_key}:{category_page}:{page}:{definition.key}"
-                    ),
-                )
-            ]
-        )
+        button_text = f"{definition.key} = {value_preview}"
+        rows.append([
+            types.InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"botcfg_setting:{definition.key}",
+            )
+        ])
 
     if total_pages > 1:
         nav_row: list[types.InlineKeyboardButton] = []
@@ -256,9 +108,7 @@ def _build_settings_keyboard(
             nav_row.append(
                 types.InlineKeyboardButton(
                     text="⬅️",
-                    callback_data=(
-                        f"botcfg_cat:{group_key}:{category_key}:{category_page}:{page - 1}"
-                    ),
+                    callback_data=f"botcfg_cat:{category_key}:{page - 1}",
                 )
             )
         nav_row.append(
@@ -270,9 +120,7 @@ def _build_settings_keyboard(
             nav_row.append(
                 types.InlineKeyboardButton(
                     text="➡️",
-                    callback_data=(
-                        f"botcfg_cat:{group_key}:{category_key}:{category_page}:{page + 1}"
-                    ),
+                    callback_data=f"botcfg_cat:{category_key}:{page + 1}",
                 )
             )
         rows.append(nav_row)
@@ -280,19 +128,14 @@ def _build_settings_keyboard(
     rows.append([
         types.InlineKeyboardButton(
             text="⬅️ К категориям",
-            callback_data=f"botcfg_group:{group_key}:{category_page}",
+            callback_data="admin_bot_config",
         )
     ])
 
     return types.InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _build_setting_keyboard(
-    key: str,
-    group_key: str,
-    category_page: int,
-    settings_page: int,
-) -> types.InlineKeyboardMarkup:
+def _build_setting_keyboard(key: str) -> types.InlineKeyboardMarkup:
     definition = bot_configuration_service.get_definition(key)
     rows: list[list[types.InlineKeyboardButton]] = []
 
@@ -300,18 +143,14 @@ def _build_setting_keyboard(
         rows.append([
             types.InlineKeyboardButton(
                 text="🔁 Переключить",
-                callback_data=(
-                    f"botcfg_toggle:{group_key}:{category_page}:{settings_page}:{key}"
-                ),
+                callback_data=f"botcfg_toggle:{key}",
             )
         ])
 
     rows.append([
         types.InlineKeyboardButton(
             text="✏️ Изменить",
-            callback_data=(
-                f"botcfg_edit:{group_key}:{category_page}:{settings_page}:{key}"
-            ),
+            callback_data=f"botcfg_edit:{key}",
         )
     ])
 
@@ -319,18 +158,14 @@ def _build_setting_keyboard(
         rows.append([
             types.InlineKeyboardButton(
                 text="♻️ Сбросить",
-                callback_data=(
-                    f"botcfg_reset:{group_key}:{category_page}:{settings_page}:{key}"
-                ),
+                callback_data=f"botcfg_reset:{key}",
             )
         ])
 
     rows.append([
         types.InlineKeyboardButton(
             text="⬅️ Назад",
-            callback_data=(
-                f"botcfg_cat:{group_key}:{definition.category_key}:{category_page}:{settings_page}"
-            ),
+            callback_data=f"botcfg_cat:{definition.category_key}:1",
         )
     ])
 
@@ -342,9 +177,7 @@ def _render_setting_text(key: str) -> str:
 
     lines = [
         "🧩 <b>Настройка</b>",
-        f"<b>Название:</b> {summary['name']}",
         f"<b>Ключ:</b> <code>{summary['key']}</code>",
-        f"<b>Категория:</b> {summary['category_label']}",
         f"<b>Тип:</b> {summary['type']}",
         f"<b>Текущее значение:</b> {summary['current']}",
         f"<b>Значение по умолчанию:</b> {summary['original']}",
@@ -361,9 +194,9 @@ async def show_bot_config_menu(
     db_user: User,
     db: AsyncSession,
 ):
-    keyboard = _build_groups_keyboard()
+    keyboard = _build_categories_keyboard(db_user.language)
     await callback.message.edit_text(
-        "🧩 <b>Конфигурация бота</b>\n\nВыберите раздел настроек:",
+        "🧩 <b>Конфигурация бота</b>\n\nВыберите категорию настроек:",
         reply_markup=keyboard,
     )
     await callback.answer()
@@ -371,23 +204,20 @@ async def show_bot_config_menu(
 
 @admin_required
 @error_handler
-async def show_bot_config_group(
+async def show_bot_config_categories_page(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
 ):
-    group_key, page = _parse_group_payload(callback.data)
-    grouped = _get_grouped_categories()
-    group_lookup = {key: (title, items) for key, title, items in grouped}
+    parts = callback.data.split(":")
+    try:
+        page = int(parts[1])
+    except (IndexError, ValueError):
+        page = 1
 
-    if group_key not in group_lookup:
-        await callback.answer("Эта группа больше недоступна", show_alert=True)
-        return
-
-    group_title, items = group_lookup[group_key]
-    keyboard = _build_categories_keyboard(group_key, group_title, items, page)
+    keyboard = _build_categories_keyboard(db_user.language, page)
     await callback.message.edit_text(
-        f"🧩 <b>{group_title}</b>\n\nВыберите категорию настроек:",
+        "🧩 <b>Конфигурация бота</b>\n\nВыберите категорию настроек:",
         reply_markup=keyboard,
     )
     await callback.answer()
@@ -400,9 +230,7 @@ async def show_bot_config_category(
     db_user: User,
     db: AsyncSession,
 ):
-    group_key, category_key, category_page, settings_page = _parse_category_payload(
-        callback.data
-    )
+    category_key, page = _parse_category_payload(callback.data)
     definitions = bot_configuration_service.get_settings_for_category(category_key)
 
     if not definitions:
@@ -410,13 +238,7 @@ async def show_bot_config_category(
         return
 
     category_label = definitions[0].category_label
-    keyboard = _build_settings_keyboard(
-        category_key,
-        group_key,
-        category_page,
-        db_user.language,
-        settings_page,
-    )
+    keyboard = _build_settings_keyboard(category_key, db_user.language, page)
     await callback.message.edit_text(
         f"🧩 <b>{category_label}</b>\n\nВыберите настройку для просмотра:",
         reply_markup=keyboard,
@@ -431,19 +253,9 @@ async def show_bot_config_setting(
     db_user: User,
     db: AsyncSession,
 ):
-    parts = callback.data.split(":", 4)
-    group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
-    try:
-        category_page = max(1, int(parts[2])) if len(parts) > 2 else 1
-    except ValueError:
-        category_page = 1
-    try:
-        settings_page = max(1, int(parts[3])) if len(parts) > 3 else 1
-    except ValueError:
-        settings_page = 1
-    key = parts[4] if len(parts) > 4 else ""
+    key = callback.data.split(":", 1)[1]
     text = _render_setting_text(key)
-    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
+    keyboard = _build_setting_keyboard(key)
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer()
 
@@ -456,17 +268,7 @@ async def start_edit_setting(
     db: AsyncSession,
     state: FSMContext,
 ):
-    parts = callback.data.split(":", 4)
-    group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
-    try:
-        category_page = max(1, int(parts[2])) if len(parts) > 2 else 1
-    except ValueError:
-        category_page = 1
-    try:
-        settings_page = max(1, int(parts[3])) if len(parts) > 3 else 1
-    except ValueError:
-        settings_page = 1
-    key = parts[4] if len(parts) > 4 else ""
+    key = callback.data.split(":", 1)[1]
     definition = bot_configuration_service.get_definition(key)
 
     summary = bot_configuration_service.get_setting_summary(key)
@@ -474,7 +276,6 @@ async def start_edit_setting(
 
     instructions = [
         "✏️ <b>Редактирование настройки</b>",
-        f"Название: {summary['name']}",
         f"Ключ: <code>{summary['key']}</code>",
         f"Тип: {summary['type']}",
         f"Текущее значение: {summary['current']}",
@@ -492,22 +293,14 @@ async def start_edit_setting(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.BACK,
-                        callback_data=(
-                            f"botcfg_setting:{group_key}:{category_page}:{settings_page}:{key}"
-                        ),
+                        text=texts.BACK, callback_data=f"botcfg_setting:{key}"
                     )
                 ]
             ]
         ),
     )
 
-    await state.update_data(
-        setting_key=key,
-        setting_group_key=group_key,
-        setting_category_page=category_page,
-        setting_settings_page=settings_page,
-    )
+    await state.update_data(setting_key=key)
     await state.set_state(BotConfigStates.waiting_for_value)
     await callback.answer()
 
@@ -522,9 +315,6 @@ async def handle_edit_setting(
 ):
     data = await state.get_data()
     key = data.get("setting_key")
-    group_key = data.get("setting_group_key", CATEGORY_FALLBACK_KEY)
-    category_page = data.get("setting_category_page", 1)
-    settings_page = data.get("setting_settings_page", 1)
 
     if not key:
         await message.answer("Не удалось определить редактируемую настройку. Попробуйте снова.")
@@ -541,7 +331,7 @@ async def handle_edit_setting(
     await db.commit()
 
     text = _render_setting_text(key)
-    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
+    keyboard = _build_setting_keyboard(key)
     await message.answer("✅ Настройка обновлена")
     await message.answer(text, reply_markup=keyboard)
     await state.clear()
@@ -554,22 +344,12 @@ async def reset_setting(
     db_user: User,
     db: AsyncSession,
 ):
-    parts = callback.data.split(":", 4)
-    group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
-    try:
-        category_page = max(1, int(parts[2])) if len(parts) > 2 else 1
-    except ValueError:
-        category_page = 1
-    try:
-        settings_page = max(1, int(parts[3])) if len(parts) > 3 else 1
-    except ValueError:
-        settings_page = 1
-    key = parts[4] if len(parts) > 4 else ""
+    key = callback.data.split(":", 1)[1]
     await bot_configuration_service.reset_value(db, key)
     await db.commit()
 
     text = _render_setting_text(key)
-    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
+    keyboard = _build_setting_keyboard(key)
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer("Сброшено к значению по умолчанию")
 
@@ -581,24 +361,14 @@ async def toggle_setting(
     db_user: User,
     db: AsyncSession,
 ):
-    parts = callback.data.split(":", 4)
-    group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
-    try:
-        category_page = max(1, int(parts[2])) if len(parts) > 2 else 1
-    except ValueError:
-        category_page = 1
-    try:
-        settings_page = max(1, int(parts[3])) if len(parts) > 3 else 1
-    except ValueError:
-        settings_page = 1
-    key = parts[4] if len(parts) > 4 else ""
+    key = callback.data.split(":", 1)[1]
     current = bot_configuration_service.get_current_value(key)
     new_value = not bool(current)
     await bot_configuration_service.set_value(db, key, new_value)
     await db.commit()
 
     text = _render_setting_text(key)
-    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
+    keyboard = _build_setting_keyboard(key)
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer("Обновлено")
 
@@ -609,8 +379,9 @@ def register_handlers(dp: Dispatcher) -> None:
         F.data == "admin_bot_config",
     )
     dp.callback_query.register(
-        show_bot_config_group,
-        F.data.startswith("botcfg_group:") & (~F.data.endswith(":noop")),
+        show_bot_config_categories_page,
+        F.data.startswith("botcfg_categories:")
+        & (~F.data.endswith(":noop")),
     )
     dp.callback_query.register(
         show_bot_config_category,
