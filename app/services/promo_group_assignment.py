@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 async def _get_best_group_for_spending(
     db: AsyncSession,
     total_spent_kopeks: int,
+    min_threshold_kopeks: int = 0,
 ) -> Optional[PromoGroup]:
     if total_spent_kopeks <= 0:
         return None
@@ -28,7 +29,11 @@ async def _get_best_group_for_spending(
 
     for group in groups:
         threshold = group.auto_assign_total_spent_kopeks or 0
-        if threshold and total_spent_kopeks >= threshold:
+        if (
+            threshold
+            and total_spent_kopeks >= threshold
+            and threshold > min_threshold_kopeks
+        ):
             return group
 
     return None
@@ -47,12 +52,29 @@ async def maybe_assign_promo_group_by_total_spent(
     if total_spent <= 0:
         return None
 
-    target_group = await _get_best_group_for_spending(db, total_spent)
+    previous_threshold = user.auto_promo_group_threshold_kopeks or 0
+
+    target_group = await _get_best_group_for_spending(
+        db,
+        total_spent,
+        min_threshold_kopeks=previous_threshold,
+    )
     if not target_group:
         return None
 
     try:
         previous_group_id = user.promo_group_id
+        target_threshold = target_group.auto_assign_total_spent_kopeks or 0
+
+        if target_threshold <= previous_threshold:
+            logger.debug(
+                "Порог промогруппы '%s' (%s) не превышает ранее назначенный (%s) для пользователя %s",
+                target_group.name,
+                target_threshold,
+                previous_threshold,
+                user.telegram_id,
+            )
+            return None
 
         if user.auto_promo_group_assigned and target_group.id == previous_group_id:
             logger.debug(
@@ -60,9 +82,15 @@ async def maybe_assign_promo_group_by_total_spent(
                 user.telegram_id,
                 target_group.name,
             )
+            if target_threshold > previous_threshold:
+                user.auto_promo_group_threshold_kopeks = target_threshold
+                user.updated_at = datetime.utcnow()
+                await db.commit()
+                await db.refresh(user)
             return target_group
 
         user.auto_promo_group_assigned = True
+        user.auto_promo_group_threshold_kopeks = target_threshold
         user.updated_at = datetime.utcnow()
 
         if target_group.id != previous_group_id:
