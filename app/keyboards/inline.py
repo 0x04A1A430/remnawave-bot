@@ -385,19 +385,9 @@ def get_subscription_keyboard(
                     keyboard.append([
                         InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), callback_data="subscription_connect")
                     ])
-            elif connect_mode == "link":
+            elif connect_mode in {"link", "happ_cryptolink"}:
                 keyboard.append([
-                    InlineKeyboardButton(
-                        text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                        url=subscription_link
-                    )
-                ])
-            elif connect_mode == "happ_cryptolink":
-                keyboard.append([
-                    InlineKeyboardButton(
-                        text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                        callback_data="open_subscription_link"
-                    )
+                    InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription_link)
                 ])
             else:
                 keyboard.append([
