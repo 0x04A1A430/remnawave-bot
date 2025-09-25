@@ -40,10 +40,15 @@ class SettingDefinition:
     python_type: Type[Any]
     type_label: str
     is_optional: bool
+    choices: Optional[List[Tuple[Any, str]]] = None
 
     @property
     def display_name(self) -> str:
         return _title_from_key(self.key)
+
+    @property
+    def has_choices(self) -> bool:
+        return bool(self.choices)
 
 
 class BotConfigurationService:
@@ -83,9 +88,55 @@ class BotConfigurationService:
         "TELEGRAM": "Telegram Stars",
     }
 
+    CHOICES: Dict[str, List[Tuple[Any, str]]] = {
+        "SUPPORT_SYSTEM_MODE": [
+            ("tickets", "Только тикеты"),
+            ("contact", "Только контакт"),
+            ("both", "Тикеты и контакт"),
+        ],
+        "REMNAWAVE_AUTH_TYPE": [
+            ("api_key", "API Key"),
+            ("basic_auth", "Basic Auth"),
+        ],
+        "REMNAWAVE_USER_DELETE_MODE": [
+            ("delete", "Удалять пользователя"),
+            ("disable", "Деактивировать пользователя"),
+        ],
+        "DATABASE_MODE": [
+            ("auto", "Определять автоматически"),
+            ("postgresql", "PostgreSQL"),
+            ("sqlite", "SQLite"),
+        ],
+        "TRAFFIC_SELECTION_MODE": [
+            ("selectable", "Пользователь выбирает пакет"),
+            ("fixed", "Фиксированный лимит"),
+        ],
+        "DEFAULT_TRAFFIC_RESET_STRATEGY": [
+            ("NO_RESET", "Без сброса"),
+            ("DAY", "Ежедневно"),
+            ("WEEK", "Еженедельно"),
+            ("MONTH", "Ежемесячно"),
+        ],
+        "CONNECT_BUTTON_MODE": [
+            ("guide", "Открывать гайд"),
+            ("miniapp_subscription", "Мини-приложение с подпиской"),
+            ("miniapp_custom", "Мини-приложение с кастомной ссылкой"),
+            ("link", "Прямая ссылка"),
+            ("happ_cryptolink", "Happ CryptoLink"),
+        ],
+        "SERVER_STATUS_MODE": [
+            ("disabled", "Отключено"),
+            ("external_link", "Внешняя ссылка"),
+            ("external_link_miniapp", "Мини-приложение со ссылкой"),
+            ("xray", "Интеграция XrayChecker"),
+        ],
+    }
+
     _definitions: Dict[str, SettingDefinition] = {}
     _original_values: Dict[str, Any] = settings.model_dump()
     _overrides_raw: Dict[str, Optional[str]] = {}
+    _callback_tokens: Dict[str, str] = {}
+    _token_lookup: Dict[str, str] = {}
 
     @classmethod
     def initialize_definitions(cls) -> None:
@@ -106,6 +157,8 @@ class BotConfigurationService:
                 category_key.capitalize() if category_key else "Прочее",
             )
 
+            choices = cls.CHOICES.get(key)
+
             cls._definitions[key] = SettingDefinition(
                 key=key,
                 category_key=category_key or "other",
@@ -113,6 +166,7 @@ class BotConfigurationService:
                 python_type=python_type,
                 type_label=type_label,
                 is_optional=is_optional,
+                choices=choices,
             )
 
     @classmethod
@@ -217,7 +271,7 @@ class BotConfigurationService:
     @classmethod
     def format_value_for_list(cls, key: str) -> str:
         value = cls.get_current_value(key)
-        formatted = cls.format_value(value)
+        formatted = cls._format_value_with_choices(key, value)
         if formatted == "—":
             return formatted
         return _truncate(formatted)
@@ -249,6 +303,55 @@ class BotConfigurationService:
     async def reload(cls) -> None:
         cls._overrides_raw.clear()
         await cls.initialize()
+
+    @classmethod
+    def get_callback_token(cls, key: str) -> str:
+        cls.initialize_definitions()
+        if key in cls._callback_tokens:
+            return cls._callback_tokens[key]
+
+        token = format(len(cls._callback_tokens) + 1, "x")
+        while token in cls._token_lookup:
+            token = format(len(cls._callback_tokens) + len(cls._token_lookup) + 1, "x")
+
+        cls._callback_tokens[key] = token
+        cls._token_lookup[token] = key
+        return token
+
+    @classmethod
+    def resolve_key_from_token(cls, token: str) -> Optional[str]:
+        if not token:
+            return None
+        return cls._token_lookup.get(token)
+
+    @classmethod
+    def get_choices(cls, key: str) -> List[Tuple[Any, str]]:
+        definition = cls.get_definition(key)
+        return definition.choices or []
+
+    @classmethod
+    def format_choice_label(cls, key: str, value: Any) -> Optional[str]:
+        definition = cls.get_definition(key)
+        if not definition.choices:
+            return None
+
+        for stored_value, label in definition.choices:
+            if cls._values_equal(stored_value, value):
+                return f"{label} ({stored_value})"
+        return None
+
+    @classmethod
+    def cast_choice_value(cls, key: str, raw_value: Any) -> Any:
+        definition = cls.get_definition(key)
+        python_type = definition.python_type
+
+        if python_type is bool:
+            return bool(raw_value)
+        if python_type is int:
+            return int(raw_value)
+        if python_type is float:
+            return float(raw_value)
+        return str(raw_value)
 
     @classmethod
     def deserialize_value(cls, key: str, raw_value: Optional[str]) -> Any:
@@ -348,13 +451,29 @@ class BotConfigurationService:
         return {
             "key": key,
             "name": definition.display_name,
-            "current": cls.format_value(current),
-            "original": cls.format_value(original),
+            "current": cls._format_value_with_choices(key, current),
+            "original": cls._format_value_with_choices(key, original),
             "type": definition.type_label,
             "category_key": definition.category_key,
             "category_label": definition.category_label,
             "has_override": has_override,
         }
+
+    @classmethod
+    def _format_value_with_choices(cls, key: str, value: Any) -> str:
+        formatted = cls.format_value(value)
+        definition = cls.get_definition(key)
+        if not definition.choices:
+            return formatted
+
+        choice_label = cls.format_choice_label(key, value)
+        return choice_label or formatted
+
+    @staticmethod
+    def _values_equal(a: Any, b: Any) -> bool:
+        if isinstance(a, str) and isinstance(b, str):
+            return a.lower() == b.lower()
+        return a == b
 
 
 bot_configuration_service = BotConfigurationService
