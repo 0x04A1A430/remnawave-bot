@@ -54,25 +54,13 @@ async def maybe_assign_promo_group_by_total_spent(
     try:
         previous_group_id = user.promo_group_id
 
-        if user.auto_promo_group_assigned:
-            if target_group.id == previous_group_id:
-                logger.debug(
-                    "Пользователь %s уже находится в актуальной промогруппе '%s', повторная выдача не требуется",
-                    user.telegram_id,
-                    target_group.name,
-                )
-                return target_group
-
-            current_group_name = (
-                user.promo_group.name if getattr(user, "promo_group", None) else str(previous_group_id)
-            )
+        if user.auto_promo_group_assigned and target_group.id == previous_group_id:
             logger.debug(
-                "Пользователь %s уже получал автопромогруппу '%s', но сейчас установлена '%s' вручную — пропускаем переназначение",
+                "Пользователь %s уже находится в актуальной промогруппе '%s', повторная выдача не требуется",
                 user.telegram_id,
                 target_group.name,
-                current_group_name,
             )
-            return None
+            return target_group
 
         user.auto_promo_group_assigned = True
         user.updated_at = datetime.utcnow()
