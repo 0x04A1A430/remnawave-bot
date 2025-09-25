@@ -79,6 +79,22 @@ def _parse_category_payload(payload: str) -> Tuple[str, str, int, int]:
     return group_key, category_key, category_page, settings_page
 
 
+async def _remember_setting_context(
+    state: FSMContext,
+    key: str,
+    group_key: str,
+    category_page: int,
+    settings_page: int,
+) -> None:
+    await state.update_data(
+        setting_key=key,
+        setting_group_key=group_key,
+        setting_category_page=category_page,
+        setting_settings_page=settings_page,
+    )
+    await state.set_state(BotConfigStates.waiting_for_value)
+
+
 def _parse_group_payload(payload: str) -> Tuple[str, int]:
     parts = payload.split(":")
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
@@ -349,6 +365,9 @@ def _render_setting_text(key: str) -> str:
         f"<b>Текущее значение:</b> {summary['current']}",
         f"<b>Значение по умолчанию:</b> {summary['original']}",
         f"<b>Переопределено в БД:</b> {'✅ Да' if summary['has_override'] else '❌ Нет'}",
+        "",
+        "Отправьте новое значение сообщением, чтобы обновить настройку.",
+        "Или используйте кнопки ниже для дополнительных действий.",
     ]
 
     return "\n".join(lines)
@@ -360,6 +379,7 @@ async def show_bot_config_menu(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
     keyboard = _build_groups_keyboard()
     await callback.message.edit_text(
@@ -367,6 +387,7 @@ async def show_bot_config_menu(
         reply_markup=keyboard,
     )
     await callback.answer()
+    await state.clear()
 
 
 @admin_required
@@ -375,6 +396,7 @@ async def show_bot_config_group(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
     group_key, page = _parse_group_payload(callback.data)
     grouped = _get_grouped_categories()
@@ -391,6 +413,7 @@ async def show_bot_config_group(
         reply_markup=keyboard,
     )
     await callback.answer()
+    await state.clear()
 
 
 @admin_required
@@ -399,6 +422,7 @@ async def show_bot_config_category(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
     group_key, category_key, category_page, settings_page = _parse_category_payload(
         callback.data
@@ -422,6 +446,7 @@ async def show_bot_config_category(
         reply_markup=keyboard,
     )
     await callback.answer()
+    await state.clear()
 
 
 @admin_required
@@ -430,6 +455,7 @@ async def show_bot_config_setting(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
     parts = callback.data.split(":", 4)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
@@ -446,6 +472,14 @@ async def show_bot_config_setting(
     keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer()
+
+    await _remember_setting_context(
+        state,
+        key,
+        group_key,
+        category_page,
+        settings_page,
+    )
 
 
 @admin_required
@@ -502,13 +536,13 @@ async def start_edit_setting(
         ),
     )
 
-    await state.update_data(
-        setting_key=key,
-        setting_group_key=group_key,
-        setting_category_page=category_page,
-        setting_settings_page=settings_page,
+    await _remember_setting_context(
+        state,
+        key,
+        group_key,
+        category_page,
+        settings_page,
     )
-    await state.set_state(BotConfigStates.waiting_for_value)
     await callback.answer()
 
 
@@ -534,7 +568,12 @@ async def handle_edit_setting(
     try:
         value = bot_configuration_service.parse_user_value(key, message.text or "")
     except ValueError as error:
-        await message.answer(f"⚠️ {error}")
+        error_text = str(error)
+        if error_text == "Ввод отменен пользователем":
+            await message.answer("❌ Изменение отменено")
+            await state.clear()
+        else:
+            await message.answer(f"⚠️ {error_text}")
         return
 
     await bot_configuration_service.set_value(db, key, value)
@@ -544,7 +583,13 @@ async def handle_edit_setting(
     keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
     await message.answer("✅ Настройка обновлена")
     await message.answer(text, reply_markup=keyboard)
-    await state.clear()
+    await _remember_setting_context(
+        state,
+        key,
+        group_key,
+        category_page,
+        settings_page,
+    )
 
 
 @admin_required
@@ -553,6 +598,7 @@ async def reset_setting(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
     parts = callback.data.split(":", 4)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
@@ -571,6 +617,13 @@ async def reset_setting(
     text = _render_setting_text(key)
     keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
     await callback.message.edit_text(text, reply_markup=keyboard)
+    await _remember_setting_context(
+        state,
+        key,
+        group_key,
+        category_page,
+        settings_page,
+    )
     await callback.answer("Сброшено к значению по умолчанию")
 
 
@@ -580,6 +633,7 @@ async def toggle_setting(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
+    state: FSMContext,
 ):
     parts = callback.data.split(":", 4)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
@@ -600,6 +654,13 @@ async def toggle_setting(
     text = _render_setting_text(key)
     keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
     await callback.message.edit_text(text, reply_markup=keyboard)
+    await _remember_setting_context(
+        state,
+        key,
+        group_key,
+        category_page,
+        settings_page,
+    )
     await callback.answer("Обновлено")
 
 
