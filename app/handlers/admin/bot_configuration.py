@@ -292,12 +292,13 @@ def _build_settings_keyboard(
         button_text = f"{definition.display_name} · {value_preview}"
         if len(button_text) > 64:
             button_text = button_text[:63] + "…"
+        callback_token = bot_configuration_service.get_callback_token(definition.key)
         rows.append(
             [
                 types.InlineKeyboardButton(
                     text=button_text,
                     callback_data=(
-                        f"botcfg_setting:{group_key}:{category_page}:{page}:{definition.key}"
+                        f"botcfg_setting:{group_key}:{category_page}:{page}:{callback_token}"
                     ),
                 )
             ]
@@ -348,13 +349,37 @@ def _build_setting_keyboard(
 ) -> types.InlineKeyboardMarkup:
     definition = bot_configuration_service.get_definition(key)
     rows: list[list[types.InlineKeyboardButton]] = []
+    callback_token = bot_configuration_service.get_callback_token(key)
+
+    choice_options = bot_configuration_service.get_choice_options(key)
+    if choice_options:
+        current_value = bot_configuration_service.get_current_value(key)
+        choice_buttons: list[types.InlineKeyboardButton] = []
+        for option in choice_options:
+            choice_token = bot_configuration_service.get_choice_token(key, option.value)
+            if choice_token is None:
+                continue
+            button_text = option.label
+            if current_value == option.value and not button_text.startswith("✅"):
+                button_text = f"✅ {button_text}"
+            choice_buttons.append(
+                types.InlineKeyboardButton(
+                    text=button_text,
+                    callback_data=(
+                        f"botcfg_choice:{group_key}:{category_page}:{settings_page}:{callback_token}:{choice_token}"
+                    ),
+                )
+            )
+
+        for chunk in _chunk(choice_buttons, 2):
+            rows.append(list(chunk))
 
     if definition.python_type is bool:
         rows.append([
             types.InlineKeyboardButton(
                 text="🔁 Переключить",
                 callback_data=(
-                    f"botcfg_toggle:{group_key}:{category_page}:{settings_page}:{key}"
+                    f"botcfg_toggle:{group_key}:{category_page}:{settings_page}:{callback_token}"
                 ),
             )
         ])
@@ -363,7 +388,7 @@ def _build_setting_keyboard(
         types.InlineKeyboardButton(
             text="✏️ Изменить",
             callback_data=(
-                f"botcfg_edit:{group_key}:{category_page}:{settings_page}:{key}"
+                f"botcfg_edit:{group_key}:{category_page}:{settings_page}:{callback_token}"
             ),
         )
     ])
@@ -373,7 +398,7 @@ def _build_setting_keyboard(
             types.InlineKeyboardButton(
                 text="♻️ Сбросить",
                 callback_data=(
-                    f"botcfg_reset:{group_key}:{category_page}:{settings_page}:{key}"
+                    f"botcfg_reset:{group_key}:{category_page}:{settings_page}:{callback_token}"
                 ),
             )
         ])
@@ -403,6 +428,22 @@ def _render_setting_text(key: str) -> str:
         f"<b>Значение по умолчанию:</b> {summary['original']}",
         f"<b>Переопределено в БД:</b> {'✅ Да' if summary['has_override'] else '❌ Нет'}",
     ]
+
+    choices = bot_configuration_service.get_choice_options(key)
+    if choices:
+        current_raw = bot_configuration_service.get_current_value(key)
+        lines.append("")
+        lines.append("<b>Доступные значения:</b>")
+        for option in choices:
+            marker = "✅" if current_raw == option.value else "•"
+            value_display = bot_configuration_service.format_value(option.value)
+            description = option.description or ""
+            if description:
+                lines.append(
+                    f"{marker} {option.label} — <code>{value_display}</code>\n   {description}"
+                )
+            else:
+                lines.append(f"{marker} {option.label} — <code>{value_display}</code>")
 
     return "\n".join(lines)
 
@@ -495,7 +536,12 @@ async def show_bot_config_setting(
         settings_page = max(1, int(parts[3])) if len(parts) > 3 else 1
     except ValueError:
         settings_page = 1
-    key = parts[4] if len(parts) > 4 else ""
+    token = parts[4] if len(parts) > 4 else ""
+    try:
+        key = bot_configuration_service.resolve_callback_token(token)
+    except KeyError:
+        await callback.answer("Эта настройка больше недоступна", show_alert=True)
+        return
     text = _render_setting_text(key)
     keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
     await callback.message.edit_text(text, reply_markup=keyboard)
@@ -527,7 +573,12 @@ async def start_edit_setting(
         settings_page = max(1, int(parts[3])) if len(parts) > 3 else 1
     except ValueError:
         settings_page = 1
-    key = parts[4] if len(parts) > 4 else ""
+    token = parts[4] if len(parts) > 4 else ""
+    try:
+        key = bot_configuration_service.resolve_callback_token(token)
+    except KeyError:
+        await callback.answer("Эта настройка больше недоступна", show_alert=True)
+        return
     definition = bot_configuration_service.get_definition(key)
 
     summary = bot_configuration_service.get_setting_summary(key)
@@ -555,7 +606,7 @@ async def start_edit_setting(
                     types.InlineKeyboardButton(
                         text=texts.BACK,
                         callback_data=(
-                            f"botcfg_setting:{group_key}:{category_page}:{settings_page}:{key}"
+                            f"botcfg_setting:{group_key}:{category_page}:{settings_page}:{token}"
                         ),
                     )
                 ]
@@ -676,7 +727,12 @@ async def reset_setting(
         settings_page = max(1, int(parts[3])) if len(parts) > 3 else 1
     except ValueError:
         settings_page = 1
-    key = parts[4] if len(parts) > 4 else ""
+    token = parts[4] if len(parts) > 4 else ""
+    try:
+        key = bot_configuration_service.resolve_callback_token(token)
+    except KeyError:
+        await callback.answer("Эта настройка больше недоступна", show_alert=True)
+        return
     await bot_configuration_service.reset_value(db, key)
     await db.commit()
 
@@ -711,7 +767,12 @@ async def toggle_setting(
         settings_page = max(1, int(parts[3])) if len(parts) > 3 else 1
     except ValueError:
         settings_page = 1
-    key = parts[4] if len(parts) > 4 else ""
+    token = parts[4] if len(parts) > 4 else ""
+    try:
+        key = bot_configuration_service.resolve_callback_token(token)
+    except KeyError:
+        await callback.answer("Эта настройка больше недоступна", show_alert=True)
+        return
     current = bot_configuration_service.get_current_value(key)
     new_value = not bool(current)
     await bot_configuration_service.set_value(db, key, new_value)
@@ -728,6 +789,55 @@ async def toggle_setting(
         settings_page=settings_page,
     )
     await callback.answer("Обновлено")
+
+
+@admin_required
+@error_handler
+async def apply_setting_choice(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    parts = callback.data.split(":", 5)
+    group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
+    try:
+        category_page = max(1, int(parts[2])) if len(parts) > 2 else 1
+    except ValueError:
+        category_page = 1
+    try:
+        settings_page = max(1, int(parts[3])) if len(parts) > 3 else 1
+    except ValueError:
+        settings_page = 1
+    token = parts[4] if len(parts) > 4 else ""
+    choice_token = parts[5] if len(parts) > 5 else ""
+
+    try:
+        key = bot_configuration_service.resolve_callback_token(token)
+    except KeyError:
+        await callback.answer("Эта настройка больше недоступна", show_alert=True)
+        return
+
+    try:
+        value = bot_configuration_service.resolve_choice_token(key, choice_token)
+    except KeyError:
+        await callback.answer("Это значение больше недоступно", show_alert=True)
+        return
+
+    await bot_configuration_service.set_value(db, key, value)
+    await db.commit()
+
+    text = _render_setting_text(key)
+    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await _store_setting_context(
+        state,
+        key=key,
+        group_key=group_key,
+        category_page=category_page,
+        settings_page=settings_page,
+    )
+    await callback.answer("Значение обновлено")
 
 
 def register_handlers(dp: Dispatcher) -> None:
@@ -758,6 +868,10 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(
         toggle_setting,
         F.data.startswith("botcfg_toggle:"),
+    )
+    dp.callback_query.register(
+        apply_setting_choice,
+        F.data.startswith("botcfg_choice:"),
     )
     dp.message.register(
         handle_direct_setting_input,
