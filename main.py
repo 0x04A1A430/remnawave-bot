@@ -21,7 +21,6 @@ from app.database.universal_migration import run_universal_migration
 from app.services.backup_service import backup_service
 from app.services.reporting_service import reporting_service
 from app.localization.loader import ensure_locale_templates
-from app.services.app_settings_service import AppSettingsService
 
 
 class GracefulExit:
@@ -74,29 +73,18 @@ async def main():
             logger.info("🔧 Выполняем проверку и миграцию базы данных...")
             try:
                 migration_success = await run_universal_migration()
-
+                
                 if migration_success:
                     logger.info("✅ Миграция базы данных завершена успешно")
                 else:
                     logger.warning("⚠️ Миграция завершилась с предупреждениями, но продолжаем запуск")
-
+                    
             except Exception as migration_error:
                 logger.error(f"❌ Ошибка выполнения миграции: {migration_error}")
                 logger.warning("⚠️ Продолжаем запуск без миграции")
         else:
             logger.info("ℹ️ Миграция пропущена (SKIP_MIGRATION=true)")
-
-        try:
-            await AppSettingsService.load_overrides()
-            new_level = getattr(logging, settings.LOG_LEVEL, logging.INFO)
-            root_logger = logging.getLogger()
-            root_logger.setLevel(new_level)
-            for handler in root_logger.handlers:
-                handler.setLevel(new_level)
-            logger.info("✅ Настройки из базы данных применены")
-        except Exception as settings_error:
-            logger.error(f"❌ Не удалось загрузить настройки из базы данных: {settings_error}")
-
+        
         logger.info("🤖 Настройка бота...")
         bot, dp = await setup_bot()
         

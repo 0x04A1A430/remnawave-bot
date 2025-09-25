@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from app.localization.texts import get_texts
@@ -93,14 +93,11 @@ def get_admin_support_submenu_keyboard(language: str = "ru") -> InlineKeyboardMa
 
 def get_admin_settings_submenu_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
-
+    
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text=texts.ADMIN_REMNAWAVE, callback_data="admin_remnawave"),
             InlineKeyboardButton(text=texts.ADMIN_MONITORING, callback_data="admin_monitoring")
-        ],
-        [
-            InlineKeyboardButton(text="🧩 Конфигурация бота", callback_data="admin_bot_config")
         ],
         [
             InlineKeyboardButton(
@@ -116,86 +113,6 @@ def get_admin_settings_submenu_keyboard(language: str = "ru") -> InlineKeyboardM
             InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")
         ]
     ])
-
-
-def get_bot_config_categories_keyboard(categories: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
-    rows: List[List[InlineKeyboardButton]] = []
-
-    if categories:
-        for i in range(0, len(categories), 2):
-            chunk = categories[i:i + 2]
-            row: List[InlineKeyboardButton] = []
-            for category in chunk:
-                count = len(category.get("fields", []))
-                text = f"{category['label']} ({count})"
-                row.append(
-                    InlineKeyboardButton(
-                        text=text,
-                        callback_data=f"admin_bot_config_cat:{category['key']}:1"
-                    )
-                )
-            rows.append(row)
-
-    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_submenu_settings")])
-
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def get_bot_config_settings_keyboard(
-    category_key: str,
-    fields: List[Dict[str, Any]],
-    page: int,
-    per_page: int,
-    total_pages: int
-) -> InlineKeyboardMarkup:
-    rows: List[List[InlineKeyboardButton]] = []
-
-    start_index = (page - 1) * per_page
-    end_index = start_index + per_page
-    page_fields = fields[start_index:end_index]
-
-    for field in page_fields:
-        label = field.get("label") or field["key"].title()
-        if field.get("is_overridden"):
-            text = f"⭐ {label}"
-        else:
-            text = label
-        rows.append([
-            InlineKeyboardButton(
-                text=text[:40],
-                callback_data=f"admin_bot_config_edit:{field['key']}"
-            )
-        ])
-
-    if total_pages > 1:
-        nav_row: List[InlineKeyboardButton] = []
-        if page > 1:
-            nav_row.append(
-                InlineKeyboardButton(
-                    text="⬅️",
-                    callback_data=f"admin_bot_config_cat:{category_key}:{page - 1}"
-                )
-            )
-        nav_row.append(
-            InlineKeyboardButton(
-                text=f"{page}/{total_pages}",
-                callback_data="admin_bot_config_cat:noop"
-            )
-        )
-        if page < total_pages:
-            nav_row.append(
-                InlineKeyboardButton(
-                    text="➡️",
-                    callback_data=f"admin_bot_config_cat:{category_key}:{page + 1}"
-                )
-            )
-        rows.append(nav_row)
-
-    rows.append([
-        InlineKeyboardButton(text="⬅️ Категории", callback_data="admin_bot_config")
-    ])
-
-    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_admin_system_submenu_keyboard(language: str = "ru") -> InlineKeyboardMarkup:

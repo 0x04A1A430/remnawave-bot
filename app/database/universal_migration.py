@@ -1,8 +1,7 @@
-import json
 import logging
-from sqlalchemy import text
+from sqlalchemy import text, inspect
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.database import engine
-from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -171,98 +170,6 @@ async def check_index_exists(table_name: str, index_name: str) -> bool:
         logger.error(
             f"Ошибка проверки существования индекса {index_name} для {table_name}: {e}"
         )
-        return False
-
-
-async def ensure_app_settings_table() -> bool:
-    try:
-        table_exists = await check_table_exists('app_settings')
-
-        async with engine.begin() as conn:
-            db_type = await get_database_type()
-
-            if not table_exists:
-                if db_type == 'sqlite':
-                    create_sql = """
-                    CREATE TABLE app_settings (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        setting_key VARCHAR(120) NOT NULL UNIQUE,
-                        value TEXT NULL,
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                    )
-                    """
-                elif db_type == 'postgresql':
-                    create_sql = """
-                    CREATE TABLE IF NOT EXISTS app_settings (
-                        id SERIAL PRIMARY KEY,
-                        setting_key VARCHAR(120) UNIQUE NOT NULL,
-                        value TEXT NULL,
-                        created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                    )
-                    """
-                elif db_type == 'mysql':
-                    create_sql = """
-                    CREATE TABLE IF NOT EXISTS app_settings (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        setting_key VARCHAR(120) NOT NULL UNIQUE,
-                        value TEXT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-                    """
-                else:
-                    create_sql = None
-
-                if create_sql:
-                    await conn.execute(text(create_sql))
-                    logger.info("✅ Таблица app_settings создана")
-            else:
-                logger.info("ℹ️ Таблица app_settings уже существует")
-
-            defaults = settings.get_initial_editable_values()
-
-            if defaults:
-                for key, default_value in defaults.items():
-                    if not settings.is_editable_field(key):
-                        continue
-
-                    serialized = json.dumps(
-                        settings.serialize_value_for_storage(key, default_value),
-                        ensure_ascii=False
-                    )
-
-                    if db_type == 'sqlite':
-                        insert_sql = """
-                        INSERT OR IGNORE INTO app_settings (setting_key, value, created_at, updated_at)
-                        VALUES (:setting_key, :value, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                        """
-                    elif db_type == 'postgresql':
-                        insert_sql = """
-                        INSERT INTO app_settings (setting_key, value, created_at, updated_at)
-                        VALUES (:setting_key, :value, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                        ON CONFLICT (setting_key) DO NOTHING
-                        """
-                    elif db_type == 'mysql':
-                        insert_sql = """
-                        INSERT INTO app_settings (setting_key, value, created_at, updated_at)
-                        VALUES (:setting_key, :value, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                        ON DUPLICATE KEY UPDATE setting_key = VALUES(setting_key)
-                        """
-                    else:
-                        insert_sql = None
-
-                    if insert_sql:
-                        await conn.execute(
-                            text(insert_sql),
-                            {"setting_key": key, "value": serialized}
-                        )
-
-            return True
-
-    except Exception as e:
-        logger.error(f"Ошибка создания или обновления таблицы app_settings: {e}")
         return False
 
 async def create_cryptobot_payments_table():
@@ -1932,14 +1839,7 @@ async def run_universal_migration():
     try:
         db_type = await get_database_type()
         logger.info(f"Тип базы данных: {db_type}")
-
-        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ APP_SETTINGS ===")
-        app_settings_ready = await ensure_app_settings_table()
-        if app_settings_ready:
-            logger.info("✅ Таблица app_settings готова")
-        else:
-            logger.warning("⚠️ Проблемы с таблицей app_settings")
-
+        
         referral_migration_success = await add_referral_system_columns()
         if not referral_migration_success:
             logger.warning("⚠️ Проблемы с миграцией реферальной системы")
