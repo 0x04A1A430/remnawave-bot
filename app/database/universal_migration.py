@@ -1833,6 +1833,59 @@ async def ensure_server_promo_groups_setup() -> bool:
         )
         return False
 
+async def create_system_settings_table() -> bool:
+    table_exists = await check_table_exists("system_settings")
+    if table_exists:
+        logger.info("ℹ️ Таблица system_settings уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_sql = """
+                CREATE TABLE system_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key VARCHAR(255) NOT NULL UNIQUE,
+                    value TEXT NULL,
+                    description TEXT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                """
+            elif db_type == "postgresql":
+                create_sql = """
+                CREATE TABLE system_settings (
+                    id SERIAL PRIMARY KEY,
+                    key VARCHAR(255) NOT NULL UNIQUE,
+                    value TEXT NULL,
+                    description TEXT NULL,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                );
+                """
+            else:
+                create_sql = """
+                CREATE TABLE system_settings (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    key VARCHAR(255) NOT NULL UNIQUE,
+                    value TEXT NULL,
+                    description TEXT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """
+
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица system_settings создана")
+            return True
+
+    except Exception as error:
+        logger.error(f"Ошибка создания таблицы system_settings: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
@@ -1844,6 +1897,13 @@ async def run_universal_migration():
         if not referral_migration_success:
             logger.warning("⚠️ Проблемы с миграцией реферальной системы")
         
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ SYSTEM_SETTINGS ===")
+        system_settings_ready = await create_system_settings_table()
+        if system_settings_ready:
+            logger.info("✅ Таблица system_settings готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей system_settings")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ CRYPTOBOT ===")
         cryptobot_created = await create_cryptobot_payments_table()
         if cryptobot_created:
