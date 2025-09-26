@@ -8,6 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.system_settings_service import bot_configuration_service
 
 from ..dependencies import get_db_session, require_api_token
+from ..schemas.config import (
+    SettingCategoryRef,
+    SettingCategorySummary,
+    SettingChoice,
+    SettingDefinition,
+    SettingUpdateRequest,
+)
 
 router = APIRouter()
 
@@ -59,55 +66,55 @@ def _coerce_value(key: str, value: Any) -> Any:
     return normalized
 
 
-def _serialize_definition(definition, include_choices: bool = True) -> dict[str, Any]:
+def _serialize_definition(definition, include_choices: bool = True) -> SettingDefinition:
     current = bot_configuration_service.get_current_value(definition.key)
     original = bot_configuration_service.get_original_value(definition.key)
     has_override = bot_configuration_service.has_override(definition.key)
 
-    payload: dict[str, Any] = {
-        "key": definition.key,
-        "name": definition.display_name,
-        "category": {
-            "key": definition.category_key,
-            "label": definition.category_label,
-        },
-        "type": definition.type_label,
-        "is_optional": definition.is_optional,
-        "current": current,
-        "original": original,
-        "has_override": has_override,
-    }
-
+    choices: list[SettingChoice] = []
     if include_choices:
         choices = [
-            {
-                "value": option.value,
-                "label": option.label,
-                "description": option.description,
-            }
+            SettingChoice(
+                value=option.value,
+                label=option.label,
+                description=option.description,
+            )
             for option in bot_configuration_service.get_choice_options(definition.key)
         ]
-        if choices:
-            payload["choices"] = choices
 
-    return payload
+    return SettingDefinition(
+        key=definition.key,
+        name=definition.display_name,
+        category=SettingCategoryRef(
+            key=definition.category_key,
+            label=definition.category_label,
+        ),
+        type=definition.type_label,
+        is_optional=definition.is_optional,
+        current=current,
+        original=original,
+        has_override=has_override,
+        choices=choices,
+    )
 
 
-@router.get("/categories")
-async def list_categories(_: object = Depends(require_api_token)) -> list[dict[str, Any]]:
+@router.get("/categories", response_model=list[SettingCategorySummary])
+async def list_categories(
+    _: object = Depends(require_api_token),
+) -> list[SettingCategorySummary]:
     categories = bot_configuration_service.get_categories()
     return [
-        {"key": key, "label": label, "items": count}
+        SettingCategorySummary(key=key, label=label, items=count)
         for key, label, count in categories
     ]
 
 
-@router.get("")
+@router.get("", response_model=list[SettingDefinition])
 async def list_settings(
     _: object = Depends(require_api_token),
     category: Optional[str] = Query(default=None, alias="category_key"),
-) -> list[dict[str, Any]]:
-    items = []
+) -> list[SettingDefinition]:
+    items: list[SettingDefinition] = []
     if category:
         definitions = bot_configuration_service.get_settings_for_category(category)
         items.extend(_serialize_definition(defn) for defn in definitions)
@@ -120,11 +127,11 @@ async def list_settings(
     return items
 
 
-@router.get("/{key}")
+@router.get("/{key}", response_model=SettingDefinition)
 async def get_setting(
     key: str,
     _: object = Depends(require_api_token),
-) -> dict[str, Any]:
+) -> SettingDefinition:
     try:
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:  # pragma: no cover - защита от некорректного ключа
@@ -133,34 +140,31 @@ async def get_setting(
     return _serialize_definition(definition)
 
 
-@router.put("/{key}")
+@router.put("/{key}", response_model=SettingDefinition)
 async def update_setting(
     key: str,
-    payload: dict[str, Any],
+    payload: SettingUpdateRequest,
     _: object = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
-) -> dict[str, Any]:
+) -> SettingDefinition:
     try:
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Setting not found") from error
 
-    if "value" not in payload:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Missing value")
-
-    value = _coerce_value(key, payload["value"])
+    value = _coerce_value(key, payload.value)
     await bot_configuration_service.set_value(db, key, value)
     await db.commit()
 
     return _serialize_definition(definition)
 
 
-@router.delete("/{key}")
+@router.delete("/{key}", response_model=SettingDefinition)
 async def reset_setting(
     key: str,
     _: object = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
-) -> dict[str, Any]:
+) -> SettingDefinition:
     try:
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:
