@@ -740,20 +740,51 @@ class Squad(Base):
 
 class ServiceRule(Base):
     __tablename__ = "service_rules"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    
+
     order = Column(Integer, default=0)
     title = Column(String(255), nullable=False)
-    
+
     content = Column(Text, nullable=False)
-    
+
     is_active = Column(Boolean, default=True)
-    
+
     language = Column(String(5), default="ru")
-    
+
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    token_hash = Column(String(128), unique=True, nullable=False)
+    token_prefix = Column(String(32), nullable=False)
+    description = Column(Text, nullable=True)
+    permissions = Column(JSON, nullable=True)
+    allowed_ips = Column(JSON, nullable=True)
+    is_active = Column(Boolean, default=True)
+    expires_at = Column(DateTime, nullable=True)
+    last_used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("token_prefix", name="uq_api_tokens_token_prefix"),
+    )
+
+    def is_valid(self) -> bool:
+        if not self.is_active:
+            return False
+        if self.expires_at and self.expires_at < datetime.utcnow():
+            return False
+        return True
+
+    def __repr__(self) -> str:
+        return f"<ApiToken id={self.id} name={self.name} active={self.is_active}>"
 
 
 class SystemSetting(Base):
