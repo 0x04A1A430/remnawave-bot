@@ -1,7 +1,11 @@
 import logging
-from sqlalchemy import text, inspect
+from sqlalchemy import inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.database.database import engine
+
+from app.config import settings
+from app.database.database import AsyncSessionLocal, engine
+from app.database.models import WebApiToken
+from app.utils.security import hash_api_token
 
 logger = logging.getLogger(__name__)
 
@@ -1886,6 +1890,126 @@ async def create_system_settings_table() -> bool:
         return False
 
 
+async def create_web_api_tokens_table() -> bool:
+    table_exists = await check_table_exists("web_api_tokens")
+    if table_exists:
+        logger.info("ℹ️ Таблица web_api_tokens уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_sql = """
+                CREATE TABLE web_api_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(255) NOT NULL,
+                    token_hash VARCHAR(128) NOT NULL UNIQUE,
+                    token_prefix VARCHAR(32) NOT NULL,
+                    description TEXT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    expires_at DATETIME NULL,
+                    last_used_at DATETIME NULL,
+                    last_used_ip VARCHAR(64) NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    created_by VARCHAR(255) NULL
+                );
+                CREATE INDEX idx_web_api_tokens_active ON web_api_tokens(is_active);
+                CREATE INDEX idx_web_api_tokens_prefix ON web_api_tokens(token_prefix);
+                CREATE INDEX idx_web_api_tokens_last_used ON web_api_tokens(last_used_at);
+                """
+            elif db_type == "postgresql":
+                create_sql = """
+                CREATE TABLE web_api_tokens (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    token_hash VARCHAR(128) NOT NULL UNIQUE,
+                    token_prefix VARCHAR(32) NOT NULL,
+                    description TEXT NULL,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW(),
+                    expires_at TIMESTAMP NULL,
+                    last_used_at TIMESTAMP NULL,
+                    last_used_ip VARCHAR(64) NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_by VARCHAR(255) NULL
+                );
+                CREATE INDEX idx_web_api_tokens_active ON web_api_tokens(is_active);
+                CREATE INDEX idx_web_api_tokens_prefix ON web_api_tokens(token_prefix);
+                CREATE INDEX idx_web_api_tokens_last_used ON web_api_tokens(last_used_at);
+                """
+            else:
+                create_sql = """
+                CREATE TABLE web_api_tokens (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    token_hash VARCHAR(128) NOT NULL UNIQUE,
+                    token_prefix VARCHAR(32) NOT NULL,
+                    description TEXT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NULL,
+                    last_used_at TIMESTAMP NULL,
+                    last_used_ip VARCHAR(64) NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_by VARCHAR(255) NULL
+                ) ENGINE=InnoDB;
+                CREATE INDEX idx_web_api_tokens_active ON web_api_tokens(is_active);
+                CREATE INDEX idx_web_api_tokens_prefix ON web_api_tokens(token_prefix);
+                CREATE INDEX idx_web_api_tokens_last_used ON web_api_tokens(last_used_at);
+                """
+
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица web_api_tokens создана")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы web_api_tokens: {error}")
+        return False
+
+
+async def ensure_default_web_api_token() -> bool:
+    default_token = (settings.WEB_API_DEFAULT_TOKEN or "").strip()
+    if not default_token:
+        return True
+
+    token_name = (settings.WEB_API_DEFAULT_TOKEN_NAME or "Bootstrap Token").strip()
+
+    try:
+        async with AsyncSessionLocal() as session:
+            token_hash = hash_api_token(default_token, settings.WEB_API_TOKEN_HASH_ALGORITHM)
+            result = await session.execute(
+                select(WebApiToken).where(WebApiToken.token_hash == token_hash)
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    existing.updated_at = existing.updated_at or existing.created_at
+                    await session.commit()
+                return True
+
+            token = WebApiToken(
+                name=token_name or "Bootstrap Token",
+                token_hash=token_hash,
+                token_prefix=default_token[:12],
+                description="Автоматически создан при миграции",
+                created_by="migration",
+                is_active=True,
+            )
+            session.add(token)
+            await session.commit()
+            logger.info("✅ Создан дефолтный токен веб-API из конфигурации")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания дефолтного веб-API токена: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
@@ -1903,6 +2027,20 @@ async def run_universal_migration():
             logger.info("✅ Таблица system_settings готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей system_settings")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ WEB_API_TOKENS ===")
+        web_api_tokens_ready = await create_web_api_tokens_table()
+        if web_api_tokens_ready:
+            logger.info("✅ Таблица web_api_tokens готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей web_api_tokens")
+
+        logger.info("=== ПРОВЕРКА БАЗОВЫХ ТОКЕНОВ ВЕБ-API ===")
+        default_token_ready = await ensure_default_web_api_token()
+        if default_token_ready:
+            logger.info("✅ Бутстрап токен веб-API готов")
+        else:
+            logger.warning("⚠️ Не удалось создать бутстрап токен веб-API")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ CRYPTOBOT ===")
         cryptobot_created = await create_cryptobot_payments_table()
