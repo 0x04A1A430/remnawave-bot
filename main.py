@@ -22,6 +22,7 @@ from app.services.backup_service import backup_service
 from app.services.reporting_service import reporting_service
 from app.localization.loader import ensure_locale_templates
 from app.services.system_settings_service import bot_configuration_service
+from app.webapi.server import WebAPIServer
 
 
 class GracefulExit:
@@ -63,6 +64,7 @@ async def main():
     maintenance_task = None
     version_check_task = None
     polling_task = None
+    webapi_server: WebAPIServer | None = None
     
     try:
         logger.info("📊 Инициализация базы данных...")
@@ -165,6 +167,17 @@ async def main():
         else:
             logger.info("ℹ️ PayPalych отключен, webhook сервер не запускается")
 
+        if settings.is_webapi_enabled():
+            try:
+                logger.info("🌐 Запуск Web API сервера...")
+                webapi_server = WebAPIServer()
+                await webapi_server.start()
+            except Exception as webapi_error:
+                logger.error(f"❌ Не удалось запустить Web API: {webapi_error}")
+                webapi_server = None
+        else:
+            logger.info("ℹ️ Web API отключен")
+
         logger.info("📊 Запуск службы мониторинга...")
         monitoring_task = asyncio.create_task(monitoring_service.start_monitoring())
         
@@ -199,6 +212,10 @@ async def main():
         if settings.is_pal24_enabled():
             logger.info(
                 f"   PayPalych: {settings.WEBHOOK_URL}:{settings.PAL24_WEBHOOK_PORT}{settings.PAL24_WEBHOOK_PATH}"
+            )
+        if settings.is_webapi_enabled():
+            logger.info(
+                "   Web API: http://%s:%s/api", settings.WEBAPI_HOST, settings.WEBAPI_PORT
             )
         logger.info("📄 Активные фоновые сервисы:")
         logger.info(f"   Мониторинг: {'Включен' if monitoring_task else 'Отключен'}")
@@ -279,7 +296,14 @@ async def main():
         if pal24_server:
             logger.info("ℹ️ Остановка PayPalych webhook сервера...")
             await asyncio.get_running_loop().run_in_executor(None, pal24_server.stop)
-        
+
+        if webapi_server is not None:
+            logger.info("ℹ️ Остановка Web API...")
+            try:
+                await webapi_server.stop()
+            except Exception as error:
+                logger.error(f"Ошибка остановки Web API: {error}")
+
         if maintenance_task and not maintenance_task.done():
             logger.info("ℹ️ Остановка службы техработ...")
             await maintenance_service.stop_monitoring()

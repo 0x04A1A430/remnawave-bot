@@ -3,7 +3,7 @@ import os
 import re
 import html
 from collections import defaultdict
-from datetime import time
+from datetime import time, timedelta
 from typing import List, Optional, Union, Dict
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, Field
@@ -231,10 +231,27 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     WEBHOOK_URL: Optional[str] = None
     WEBHOOK_PATH: str = "/webhook"
-    
+
+    WEBAPI_ENABLED: bool = False
+    WEBAPI_HOST: str = "0.0.0.0"
+    WEBAPI_PORT: int = 8080
+    WEBAPI_ROOT_PATH: str = ""
+    WEBAPI_ALLOWED_ORIGINS: str = "*"
+    WEBAPI_ALLOWED_IPS: str = ""
+    WEBAPI_LOG_LEVEL: str = "INFO"
+    WEBAPI_ACCESS_LOG: bool = False
+    WEBAPI_DOCS_ENABLED: bool = False
+    WEBAPI_TITLE: str = "Remnawave Bot Admin API"
+    WEBAPI_DESCRIPTION: str = (
+        "REST API для управления ботом Remnawave и интеграции веб-админки"
+    )
+    WEBAPI_VERSION: str = "1.0.0"
+    WEBAPI_MASTER_KEY: Optional[str] = None
+    WEBAPI_TOKEN_TTL_HOURS: int = 0
+
     APP_CONFIG_PATH: str = "app-config.json"
     ENABLE_DEEP_LINKS: bool = True
-    APP_CONFIG_CACHE_TTL: int = 3600 
+    APP_CONFIG_CACHE_TTL: int = 3600
 
     VERSION_CHECK_ENABLED: bool = True
     VERSION_CHECK_REPO: str = "fr1ngg/remnawave-bedolaga-telegram-bot"
@@ -964,11 +981,36 @@ class Settings(BaseSettings):
     
     def is_support_contact_enabled(self) -> bool:
         return self.get_support_system_mode() in {"contact", "both"}
-    
+
+    def is_webapi_enabled(self) -> bool:
+        return bool(self.WEBAPI_ENABLED)
+
+    def get_webapi_allowed_origins(self) -> List[str]:
+        raw = (self.WEBAPI_ALLOWED_ORIGINS or "").strip()
+        if not raw or raw == "*":
+            return ["*"]
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+    def get_webapi_allowed_ips(self) -> List[str]:
+        raw = (self.WEBAPI_ALLOWED_IPS or "").strip()
+        if not raw:
+            return []
+        return [ip.strip() for ip in raw.split(",") if ip.strip()]
+
+    def get_webapi_token_ttl(self) -> Optional[timedelta]:
+        try:
+            hours = int(self.WEBAPI_TOKEN_TTL_HOURS)
+        except (TypeError, ValueError):
+            hours = 0
+
+        if hours <= 0:
+            return None
+        return timedelta(hours=hours)
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
-        "extra": "ignore"  
+        "extra": "ignore"
     }
 
 
