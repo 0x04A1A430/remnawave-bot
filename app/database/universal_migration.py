@@ -1886,82 +1886,6 @@ async def create_system_settings_table() -> bool:
         return False
 
 
-async def create_api_tokens_table() -> bool:
-    table_exists = await check_table_exists("api_tokens")
-    if table_exists:
-        logger.info("ℹ️ Таблица api_tokens уже существует")
-        return True
-
-    try:
-        async with engine.begin() as conn:
-            db_type = await get_database_type()
-
-            if db_type == "sqlite":
-                create_sql = """
-                CREATE TABLE api_tokens (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    token_hash TEXT NOT NULL UNIQUE,
-                    token_prefix TEXT NOT NULL UNIQUE,
-                    description TEXT NULL,
-                    permissions TEXT NULL,
-                    allowed_ips TEXT NULL,
-                    is_active BOOLEAN NOT NULL DEFAULT 1,
-                    expires_at DATETIME NULL,
-                    last_used_at DATETIME NULL,
-                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-                );
-                """
-            elif db_type == "postgresql":
-                create_sql = """
-                CREATE TABLE api_tokens (
-                    id SERIAL PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    token_hash VARCHAR(128) NOT NULL UNIQUE,
-                    token_prefix VARCHAR(32) NOT NULL UNIQUE,
-                    description TEXT NULL,
-                    permissions JSONB NULL,
-                    allowed_ips JSONB NULL,
-                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                    expires_at TIMESTAMP NULL,
-                    last_used_at TIMESTAMP NULL,
-                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-                );
-                """
-            elif db_type == "mysql":
-                create_sql = """
-                CREATE TABLE api_tokens (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    token_hash VARCHAR(128) NOT NULL UNIQUE,
-                    token_prefix VARCHAR(32) NOT NULL UNIQUE,
-                    description TEXT NULL,
-                    permissions JSON NULL,
-                    allowed_ips JSON NULL,
-                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                    expires_at DATETIME NULL,
-                    last_used_at DATETIME NULL,
-                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-                """
-            else:
-                logger.warning(
-                    f"⚠️ Неизвестный тип базы данных {db_type}, пропускаем создание api_tokens"
-                )
-                return False
-
-            await conn.execute(text(create_sql))
-            logger.info("✅ Таблица api_tokens создана")
-            return True
-
-    except Exception as error:
-        logger.error(f"Ошибка создания таблицы api_tokens: {error}")
-        return False
-
-
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
@@ -1979,13 +1903,6 @@ async def run_universal_migration():
             logger.info("✅ Таблица system_settings готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей system_settings")
-
-        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ API TOKENS ===")
-        api_tokens_ready = await create_api_tokens_table()
-        if api_tokens_ready:
-            logger.info("✅ Таблица api_tokens готова")
-        else:
-            logger.warning("⚠️ Проблемы с таблицей api_tokens")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ CRYPTOBOT ===")
         cryptobot_created = await create_cryptobot_payments_table()
