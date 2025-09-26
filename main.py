@@ -63,7 +63,6 @@ async def main():
     maintenance_task = None
     version_check_task = None
     polling_task = None
-    web_api_server = None
     
     try:
         logger.info("📊 Инициализация базы данных...")
@@ -183,22 +182,6 @@ async def main():
         else:
             logger.info("ℹ️ Проверка версий отключена")
         
-        if settings.is_web_api_enabled():
-            try:
-                from app.webapi import WebAPIServer
-
-                web_api_server = WebAPIServer()
-                await web_api_server.start()
-                logger.info(
-                    "🌐 Административное веб-API запущено: http://%s:%s",
-                    settings.WEB_API_HOST,
-                    settings.WEB_API_PORT,
-                )
-            except Exception as error:
-                logger.error(f"❌ Не удалось запустить веб-API: {error}")
-        else:
-            logger.info("ℹ️ Веб-API отключено")
-
         logger.info("📄 Запуск polling...")
         polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=True))
         
@@ -337,13 +320,6 @@ async def main():
         if webhook_server:
             logger.info("ℹ️ Остановка webhook сервера...")
             await webhook_server.stop()
-
-        if web_api_server:
-            try:
-                await web_api_server.stop()
-                logger.info("✅ Административное веб-API остановлено")
-            except Exception as error:
-                logger.error(f"Ошибка остановки веб-API: {error}")
         
         if 'bot' in locals():
             try:

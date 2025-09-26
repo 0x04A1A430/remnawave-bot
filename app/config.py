@@ -231,19 +231,6 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     WEBHOOK_URL: Optional[str] = None
     WEBHOOK_PATH: str = "/webhook"
-
-    WEB_API_ENABLED: bool = False
-    WEB_API_HOST: str = "0.0.0.0"
-    WEB_API_PORT: int = 8080
-    WEB_API_WORKERS: int = 1
-    WEB_API_ALLOWED_ORIGINS: str = "*"
-    WEB_API_DOCS_ENABLED: bool = False
-    WEB_API_TITLE: str = "Remnawave Bot Admin API"
-    WEB_API_VERSION: str = "1.0.0"
-    WEB_API_DEFAULT_TOKEN: Optional[str] = None
-    WEB_API_DEFAULT_TOKEN_NAME: str = "Bootstrap Token"
-    WEB_API_TOKEN_HASH_ALGORITHM: str = "sha256"
-    WEB_API_REQUEST_LOGGING: bool = True
     
     APP_CONFIG_PATH: str = "app-config.json"
     ENABLE_DEEP_LINKS: bool = True
@@ -967,25 +954,7 @@ class Settings(BaseSettings):
 
     def get_server_status_request_timeout(self) -> int:
         return max(1, self.SERVER_STATUS_REQUEST_TIMEOUT)
-
-    def is_web_api_enabled(self) -> bool:
-        return bool(self.WEB_API_ENABLED)
-
-    def get_web_api_allowed_origins(self) -> list[str]:
-        raw = (self.WEB_API_ALLOWED_ORIGINS or "").split(",")
-        origins = [origin.strip() for origin in raw if origin.strip()]
-        return origins or ["*"]
-
-    def get_web_api_docs_config(self) -> Dict[str, Optional[str]]:
-        if self.WEB_API_DOCS_ENABLED:
-            return {
-                "docs_url": "/docs",
-                "redoc_url": "/redoc",
-                "openapi_url": "/openapi.json",
-            }
-
-        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
-
+    
     def get_support_system_mode(self) -> str:
         mode = (self.SUPPORT_SYSTEM_MODE or "both").strip().lower()
         return mode if mode in {"tickets", "contact", "both"} else "both"
