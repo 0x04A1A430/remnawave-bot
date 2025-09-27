@@ -1,11 +1,18 @@
 import logging
+from datetime import datetime
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 from sqlalchemy import select, and_, func, update, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import PromoGroup, ServerSquad, SubscriptionServer, Subscription
+from app.database.models import (
+    PromoGroup,
+    ServerSquad,
+    SubscriptionServer,
+    Subscription,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -232,10 +239,10 @@ async def sync_with_remnawave(
     db: AsyncSession,
     remnawave_squads: List[dict]
 ) -> Tuple[int, int, int]:
-    
+
     created = 0
     updated = 0
-    disabled = 0
+    removed = 0
     
     existing_servers = {}
     result = await db.execute(select(ServerSquad))
@@ -266,14 +273,139 @@ async def sync_with_remnawave(
             created += 1
     
     for uuid, server in existing_servers.items():
-        if uuid not in remnawave_uuids and server.is_available:
-            server.is_available = False
-            disabled += 1
-    
+        if uuid in remnawave_uuids:
+            continue
+
+        subscription_ids_result = await db.execute(
+            select(SubscriptionServer.subscription_id)
+            .where(SubscriptionServer.server_squad_id == server.id)
+        )
+        subscription_ids = [row[0] for row in subscription_ids_result.fetchall()]
+
+        if subscription_ids:
+            subscriptions_result = await db.execute(
+                select(Subscription)
+                .where(Subscription.id.in_(subscription_ids))
+            )
+
+            for subscription in subscriptions_result.scalars().all():
+                if not subscription.connected_squads:
+                    continue
+
+                updated_squads = [
+                    squad for squad in subscription.connected_squads
+                    if squad != server.squad_uuid
+                ]
+
+                if len(updated_squads) != len(subscription.connected_squads):
+                    subscription.connected_squads = updated_squads
+                    subscription.updated_at = datetime.utcnow()
+
+            await db.execute(
+                delete(SubscriptionServer)
+                .where(SubscriptionServer.server_squad_id == server.id)
+            )
+
+        await db.delete(server)
+        removed += 1
+
     await db.commit()
-    
-    logger.info(f"🔄 Синхронизация завершена: +{created} ~{updated} -{disabled}")
-    return created, updated, disabled
+
+    logger.info(f"🔄 Синхронизация завершена: +{created} ~{updated} 🗑️{removed}")
+    return created, updated, removed
+
+
+async def get_server_users(
+    db: AsyncSession,
+    server_id: int,
+    *,
+    page: int = 1,
+    limit: int = 10,
+) -> Tuple[List[dict], int]:
+
+    count_stmt = (
+        select(func.count())
+        .select_from(
+            select(Subscription.user_id)
+            .distinct()
+            .join(SubscriptionServer, SubscriptionServer.subscription_id == Subscription.id)
+            .where(SubscriptionServer.server_squad_id == server_id)
+            .subquery()
+        )
+    )
+    total_result = await db.execute(count_stmt)
+    total_users = total_result.scalar() or 0
+
+    if total_users == 0:
+        return [], 0
+
+    offset = max(0, (page - 1) * limit)
+
+    user_ids_stmt = (
+        select(Subscription.user_id)
+        .distinct()
+        .join(SubscriptionServer, SubscriptionServer.subscription_id == Subscription.id)
+        .where(SubscriptionServer.server_squad_id == server_id)
+        .order_by(Subscription.user_id)
+        .offset(offset)
+        .limit(limit)
+    )
+    user_ids_result = await db.execute(user_ids_stmt)
+    user_ids = [row[0] for row in user_ids_result.fetchall()]
+
+    if not user_ids:
+        return [], total_users
+
+    data_stmt = (
+        select(SubscriptionServer, Subscription, User)
+        .join(Subscription, Subscription.id == SubscriptionServer.subscription_id)
+        .join(User, User.id == Subscription.user_id)
+        .where(SubscriptionServer.server_squad_id == server_id)
+        .where(User.id.in_(user_ids))
+    )
+    data_result = await db.execute(data_stmt)
+
+    def _status_priority(status: Optional[str]) -> int:
+        order = {
+            "active": 4,
+            "trial": 3,
+            "paused": 2,
+            "expired": 1,
+        }
+        return order.get(status or "", 0)
+
+    user_map: dict[int, dict] = {}
+
+    for sub_server, subscription, user in data_result.fetchall():
+        priority = _status_priority(subscription.status)
+        existing = user_map.get(user.id)
+
+        if not existing or priority > existing["priority"]:
+            user_map[user.id] = {
+                "user_id": user.id,
+                "telegram_id": user.telegram_id,
+                "telegram_username": user.telegram_username,
+                "full_name": user.full_name,
+                "subscription_id": subscription.id,
+                "subscription_status": subscription.status,
+                "connected_at": sub_server.connected_at,
+                "priority": priority,
+            }
+        elif priority == existing["priority"] and sub_server.connected_at and (
+            not existing.get("connected_at")
+            or sub_server.connected_at > existing["connected_at"]
+        ):
+            existing.update({
+                "subscription_id": subscription.id,
+                "subscription_status": subscription.status,
+                "connected_at": sub_server.connected_at,
+            })
+
+    users = [user_map[user_id] for user_id in user_ids if user_id in user_map]
+    for user in users:
+        user.pop("priority", None)
+
+    return users, total_users
 
 
 def _generate_display_name(original_name: str) -> str:
