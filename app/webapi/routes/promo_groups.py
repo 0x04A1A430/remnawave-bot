@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.promo_group import (
@@ -122,12 +122,16 @@ async def update_promo_group_endpoint(
     return _serialize(group, members_count=members_count)
 
 
-@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{group_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 async def delete_promo_group_endpoint(
     group_id: int,
     _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
-) -> None:
+) -> Response:
     group = await get_promo_group_by_id(db, group_id)
     if not group:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo group not found")
@@ -136,4 +140,4 @@ async def delete_promo_group_endpoint(
     if not success:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot delete default promo group")
 
-    return None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

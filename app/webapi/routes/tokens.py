@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.web_api_token import (
@@ -92,16 +92,20 @@ async def activate_token(
     return _serialize(token)
 
 
-@router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{token_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 async def delete_token_endpoint(
     token_id: int,
     _: WebApiToken = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
-) -> None:
+) -> Response:
     token = await get_token_by_id(db, token_id)
     if not token:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Token not found")
 
     await delete_token(db, token)
     await db.commit()
-    return None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
