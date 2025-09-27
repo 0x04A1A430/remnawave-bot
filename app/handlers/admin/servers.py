@@ -1,3 +1,4 @@
+import html
 import logging
 from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
@@ -15,6 +16,7 @@ from app.database.crud.server_squad import (
     create_server_squad,
     get_available_server_squads,
     update_server_squad_promo_groups,
+    get_server_connected_users,
 )
 from app.database.crud.promo_group import get_promo_groups_with_counts
 from app.services.remnawave_service import RemnaWaveService
@@ -71,6 +73,11 @@ def _build_server_edit_view(server):
             ),
             types.InlineKeyboardButton(
                 text="👥 Лимит", callback_data=f"admin_server_edit_limit_{server.id}"
+            ),
+        ],
+        [
+            types.InlineKeyboardButton(
+                text="👥 Юзеры", callback_data=f"admin_server_users_{server.id}"
             ),
         ],
         [
@@ -276,7 +283,7 @@ async def sync_servers_with_remnawave(
             )
             return
         
-        created, updated, disabled = await sync_with_remnawave(db, squads)
+        created, updated, removed = await sync_with_remnawave(db, squads)
         
         await cache.delete_pattern("available_countries*")
         
@@ -286,7 +293,7 @@ async def sync_servers_with_remnawave(
 📊 <b>Результаты:</b>
 • Создано новых серверов: {created}
 • Обновлено существующих: {updated}
-• Отключено неактивных: {disabled}
+• Удалено отсутствующих: {removed}
 • Всего обработано: {len(squads)}
 
 ℹ️ Новые серверы созданы как недоступные.
@@ -314,7 +321,7 @@ async def sync_servers_with_remnawave(
                 [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_servers")]
             ])
         )
-    
+
     await callback.answer()
 
 
@@ -340,6 +347,89 @@ async def show_server_edit_menu(
         reply_markup=keyboard,
         parse_mode="HTML"
     )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_server_users(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+
+    server_id = int(callback.data.split('_')[-1])
+    server = await get_server_squad_by_id(db, server_id)
+
+    if not server:
+        await callback.answer("❌ Сервер не найден!", show_alert=True)
+        return
+
+    users = await get_server_connected_users(db, server_id)
+
+    safe_name = html.escape(server.display_name or "—")
+    safe_uuid = html.escape(server.squad_uuid or "—")
+
+    header = [
+        "🌐 <b>Пользователи сервера</b>",
+        "",
+        f"• Сервер: {safe_name}",
+        f"• UUID: <code>{safe_uuid}</code>",
+        f"• Подключений: {len(users)}",
+        "",
+    ]
+
+    text = "\n".join(header)
+
+    if users:
+        lines = []
+        for index, user in enumerate(users, 1):
+            subscription_status = (
+                user.subscription.status_display
+                if user.subscription
+                else "❌ Нет подписки"
+            )
+            safe_user_name = html.escape(user.full_name)
+            safe_status = html.escape(subscription_status)
+            lines.append(
+                f"{index}. {safe_user_name} — {safe_status}"
+            )
+
+        text += "\n" + "\n".join(lines)
+    else:
+        text += "Пользователи не найдены."
+
+    keyboard: list[list[types.InlineKeyboardButton]] = []
+
+    for user in users:
+        display_name = user.full_name
+        if len(display_name) > 30:
+            display_name = display_name[:27] + "..."
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=f"👤 {display_name}",
+                callback_data=f"admin_user_manage_{user.id}",
+            )
+        ])
+
+    keyboard.append([
+        types.InlineKeyboardButton(
+            text="⬅️ К серверу", callback_data=f"admin_server_edit_{server_id}"
+        )
+    ])
+
+    keyboard.append([
+        types.InlineKeyboardButton(
+            text="⬅️ К списку", callback_data="admin_servers_list"
+        )
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML",
+    )
+
     await callback.answer()
 
 
@@ -1105,6 +1195,7 @@ def register_handlers(dp: Dispatcher):
         & ~F.data.contains("promo"),
     )
     dp.callback_query.register(toggle_server_availability, F.data.startswith("admin_server_toggle_"))
+    dp.callback_query.register(show_server_users, F.data.startswith("admin_server_users_"))
 
     dp.callback_query.register(start_server_edit_name, F.data.startswith("admin_server_edit_name_"))
     dp.callback_query.register(start_server_edit_price, F.data.startswith("admin_server_edit_price_"))
