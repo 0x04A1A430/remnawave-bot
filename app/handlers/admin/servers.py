@@ -1,6 +1,4 @@
 import logging
-from html import escape
-
 from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,13 +15,11 @@ from app.database.crud.server_squad import (
     create_server_squad,
     get_available_server_squads,
     update_server_squad_promo_groups,
-    get_server_users,
 )
 from app.database.crud.promo_group import get_promo_groups_with_counts
 from app.services.remnawave_service import RemnaWaveService
 from app.utils.decorators import admin_required, error_handler
 from app.utils.cache import cache
-from app.utils.formatters import format_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -84,11 +80,6 @@ def _build_server_edit_view(server):
             types.InlineKeyboardButton(
                 text="📝 Описание", callback_data=f"admin_server_edit_desc_{server.id}"
             ),
-        ],
-        [
-            types.InlineKeyboardButton(
-                text="👥 Пользователи", callback_data=f"admin_server_users_{server.id}"
-            )
         ],
         [
             types.InlineKeyboardButton(
@@ -285,7 +276,7 @@ async def sync_servers_with_remnawave(
             )
             return
         
-        created, updated, removed = await sync_with_remnawave(db, squads)
+        created, updated, disabled = await sync_with_remnawave(db, squads)
         
         await cache.delete_pattern("available_countries*")
         
@@ -295,7 +286,7 @@ async def sync_servers_with_remnawave(
 📊 <b>Результаты:</b>
 • Создано новых серверов: {created}
 • Обновлено существующих: {updated}
-• Удалено отсутствующих: {removed}
+• Отключено неактивных: {disabled}
 • Всего обработано: {len(squads)}
 
 ℹ️ Новые серверы созданы как недоступные.
@@ -323,126 +314,7 @@ async def sync_servers_with_remnawave(
                 [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_servers")]
             ])
         )
-
-    await callback.answer()
-
-
-@admin_required
-@error_handler
-async def show_server_users(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-
-    parts = callback.data.split('_')
-    if len(parts) < 4:
-        await callback.answer("❌ Некорректные данные", show_alert=True)
-        return
-
-    try:
-        server_id = int(parts[3])
-    except ValueError:
-        await callback.answer("❌ Некорректный идентификатор сервера", show_alert=True)
-        return
-
-    page = 1
-    if len(parts) >= 6 and parts[4] == "page":
-        try:
-            page = max(1, int(parts[5]))
-        except ValueError:
-            page = 1
-
-    server = await get_server_squad_by_id(db, server_id)
-    if not server:
-        await callback.answer("❌ Сервер не найден", show_alert=True)
-        return
-
-    limit = 10
-    users, total_count = await get_server_users(db, server_id, page=page, limit=limit)
-    total_pages = max(1, (total_count + limit - 1) // limit)
-
-    if total_count > 0 and page > total_pages:
-        page = total_pages
-        users, _ = await get_server_users(db, server_id, page=page, limit=limit)
-
-    text = "👥 <b>Пользователи сервера</b>"
-
-    text += f"\n<b>Сервер:</b> {escape(server.display_name)}"
-    text += f"\n<b>Всего пользователей:</b> {total_count}"
-    text += f"\n<b>Страница:</b> {page}/{total_pages}\n"
-
-    if not users:
-        text += "\n❌ Пользователи не найдены."
-    else:
-        start_index = 1 + (page - 1) * limit
-        for idx, user in enumerate(users, start=start_index):
-            full_name = (
-                user.get("full_name")
-                or user.get("telegram_username")
-                or str(user.get("telegram_id"))
-            )
-            user_link = f"<a href='tg://user?id={user['telegram_id']}'>{escape(full_name)}</a>"
-            text += f"\n{idx}. 👤 {user_link}"
-            status = user.get("subscription_status") or "неизвестно"
-            text += f"\n   Статус подписки: {escape(status)}"
-            if user.get("connected_at"):
-                text += f"\n   Подключен: {format_datetime(user['connected_at'])}"
-            text += "\n"
-
-    keyboard: list[list[types.InlineKeyboardButton]] = []
-
-    for user in users:
-        full_name = (
-            user.get("full_name")
-            or user.get("telegram_username")
-            or str(user.get("telegram_id"))
-        )
-        short_name = full_name.replace("<", "‹").replace(">", "›")[:32]
-        keyboard.append([
-            types.InlineKeyboardButton(
-                text=f"👤 {short_name}",
-                callback_data=f"admin_user_manage_{user['user_id']}"
-            )
-        ])
-
-    if total_pages > 1:
-        nav_row = []
-        if page > 1:
-            nav_row.append(
-                types.InlineKeyboardButton(
-                    text="⬅️", callback_data=f"admin_server_users_{server_id}_page_{page-1}"
-                )
-            )
-
-        nav_row.append(
-            types.InlineKeyboardButton(
-                text=f"{page}/{total_pages}", callback_data="current_page"
-            )
-        )
-
-        if page < total_pages:
-            nav_row.append(
-                types.InlineKeyboardButton(
-                    text="➡️", callback_data=f"admin_server_users_{server_id}_page_{page+1}"
-                )
-            )
-
-        keyboard.append(nav_row)
-
-    keyboard.append([
-        types.InlineKeyboardButton(text="⬅️ К серверу", callback_data=f"admin_server_edit_{server_id}")
-    ])
-    keyboard.append([
-        types.InlineKeyboardButton(text="⬅️ Список серверов", callback_data="admin_servers_list")
-    ])
-
-    await callback.message.edit_text(
-        text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-        parse_mode="HTML",
-        disable_web_page_preview=True,
-    )
+    
     await callback.answer()
 
 
@@ -1221,7 +1093,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(sync_servers_with_remnawave, F.data == "admin_servers_sync")
     dp.callback_query.register(sync_server_user_counts_handler, F.data == "admin_servers_sync_counts")
     dp.callback_query.register(show_server_detailed_stats, F.data == "admin_servers_stats")
-    dp.callback_query.register(show_server_users, F.data.startswith("admin_server_users_"))
     
     dp.callback_query.register(
         show_server_edit_menu,
