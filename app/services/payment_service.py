@@ -857,6 +857,7 @@ class PaymentService:
                 ttl_seconds=ttl_seconds,
                 custom_payload=custom_payload,
                 payer_email=payer_email,
+                payment_method="SBP",
             )
         except Pal24APIError as error:
             logger.error("Ошибка Pal24 API при создании счета: %s", error)
@@ -873,6 +874,7 @@ class PaymentService:
 
         link_url = response.get("link_url")
         link_page_url = response.get("link_page_url")
+        primary_link = link_page_url or link_url
 
         payment = await create_pal24_payment(
             db,
@@ -884,8 +886,8 @@ class PaymentService:
             status=response.get("status", "NEW"),
             type_=response.get("type", "normal"),
             currency=response.get("currency", "RUB"),
-            link_url=link_url,
-            link_page_url=link_page_url,
+            link_url=primary_link,
+            link_page_url=link_page_url or link_url,
             ttl=ttl_seconds,
             metadata={
                 "raw_response": response,
@@ -896,8 +898,8 @@ class PaymentService:
         payment_info = {
             "bill_id": bill_id,
             "order_id": order_id,
-            "link_url": link_url or link_page_url,
-            "link_page_url": link_page_url,
+            "link_url": primary_link,
+            "link_page_url": link_page_url or link_url,
             "local_payment_id": payment.id,
             "amount_kopeks": amount_kopeks,
         }

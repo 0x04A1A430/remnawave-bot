@@ -862,7 +862,7 @@ async def test_payment_provider(
             await _refresh_markup()
             return
 
-        payment_url = payment_result.get("link_url") or payment_result.get("link_page_url")
+        payment_url = payment_result.get("link_page_url") or payment_result.get("link_url")
         message_text = (
             "🧪 <b>Тестовый платеж PayPalych</b>\n\n"
             f"💰 Сумма: {texts.format_price(amount_kopeks)}\n"
@@ -872,7 +872,7 @@ async def test_payment_provider(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text="💳 Перейти к оплате",
+                        text="🏦 Перейти к оплате (СБП)",
                         url=payment_url,
                     )
                 ],
