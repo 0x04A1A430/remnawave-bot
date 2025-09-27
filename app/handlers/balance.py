@@ -386,9 +386,9 @@ async def start_pal24_payment(
     message_text = texts.t(
         "PAL24_TOPUP_PROMPT",
         (
-            "💳 <b>Оплата через PayPalych</b>\n\n"
+            "🏦 <b>Оплата через PayPalych (СБП)</b>\n\n"
             "Введите сумму для пополнения от 100 до 1 000 000 ₽.\n"
-            "Оплата проходит через защищенную платформу PayPalych."
+            "Оплата проходит через систему быстрых платежей PayPalych."
         ),
     )
 
@@ -1002,7 +1002,9 @@ async def process_pal24_payment_amount(
             language=db_user.language,
         )
 
-        if not payment_result or not payment_result.get("link_url"):
+        if not payment_result or not (
+            payment_result.get("link_url") or payment_result.get("link_page_url")
+        ):
             await message.answer(
                 texts.t(
                     "PAL24_PAYMENT_ERROR",
@@ -1012,7 +1014,10 @@ async def process_pal24_payment_amount(
             await state.clear()
             return
 
-        link_url = payment_result.get("link_url")
+        payment_url = (
+            payment_result.get("link_page_url")
+            or payment_result.get("link_url")
+        )
         bill_id = payment_result.get("bill_id")
         local_payment_id = payment_result.get("local_payment_id")
 
@@ -1020,8 +1025,8 @@ async def process_pal24_payment_amount(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t("PAL24_PAY_BUTTON", "💳 Оплатить через PayPalych"),
-                        url=link_url,
+                        text=texts.t("PAL24_PAY_BUTTON", "🏦 Оплатить через PayPalych (СБП)"),
+                        url=payment_url,
                     )
                 ],
                 [
@@ -1037,11 +1042,11 @@ async def process_pal24_payment_amount(
         message_template = texts.t(
             "PAL24_PAYMENT_INSTRUCTIONS",
             (
-                "💳 <b>Оплата через PayPalych</b>\n\n"
+                "🏦 <b>Оплата через PayPalych (СБП)</b>\n\n"
                 "💰 Сумма: {amount}\n"
                 "🆔 ID счета: {bill_id}\n\n"
                 "📱 <b>Инструкция:</b>\n"
-                "1. Нажмите кнопку ‘Оплатить через PayPalych’\n"
+                "1. Нажмите кнопку ‘Оплатить через PayPalych (СБП)’\n"
                 "2. Следуйте подсказкам платежной системы\n"
                 "3. Подтвердите перевод\n"
                 "4. Средства зачислятся автоматически\n\n"
@@ -1226,8 +1231,10 @@ async def check_pal24_payment_status(
 
         emoji, status_text = status_labels.get(payment.status, ("❓", "Неизвестно"))
 
+        payment_link = payment.link_page_url or payment.link_url
+
         message_lines = [
-            "💳 Статус платежа PayPalych:\n\n",
+            "🏦 Статус платежа PayPalych (СБП):\n\n",
             f"🆔 ID счета: {payment.bill_id}\n",
             f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n",
             f"📊 Статус: {emoji} {status_text}\n",
@@ -1238,8 +1245,8 @@ async def check_pal24_payment_status(
             message_lines.append("\n✅ Платеж успешно завершен! Средства уже на балансе.")
         elif payment.status in {"NEW", "PROCESS"}:
             message_lines.append("\n⏳ Платеж еще не завершен. Оплатите счет и проверьте статус позже.")
-            if payment.link_url:
-                message_lines.append(f"\n🔗 Ссылка на оплату: {payment.link_url}")
+            if payment_link:
+                message_lines.append(f"\n🔗 Ссылка на оплату: {payment_link}")
         elif payment.status in {"FAIL", "UNDERPAID", "OVERPAID"}:
             message_lines.append(
                 f"\n❌ Платеж не завершен корректно. Обратитесь в {settings.get_support_contact_display()}"
@@ -1526,6 +1533,12 @@ async def handle_quick_amount_selection(
             from app.database.database import AsyncSessionLocal
             async with AsyncSessionLocal() as db:
                 await process_mulenpay_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif payment_method == "pal24":
+            from app.database.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
+                await process_pal24_payment_amount(
                     callback.message, db_user, db, amount_kopeks, state
                 )
         else:

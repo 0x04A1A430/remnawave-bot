@@ -37,6 +37,7 @@ class Pal24Service:
         ttl_seconds: Optional[int] = None,
         custom_payload: Optional[Dict[str, Any]] = None,
         payer_email: Optional[str] = None,
+        payment_method: Optional[str] = None,
     ) -> Dict[str, Any]:
         if not self.is_configured:
             raise Pal24APIError("Pal24 service is not configured")
@@ -49,6 +50,8 @@ class Pal24Service:
 
         if payer_email:
             extra_payload["payer_email"] = payer_email
+        if payment_method:
+            extra_payload["payment_method"] = payment_method
 
         filtered_payload = {k: v for k, v in extra_payload.items() if v not in (None, {})}
 

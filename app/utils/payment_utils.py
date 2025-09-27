@@ -48,8 +48,8 @@ def get_available_payment_methods() -> List[Dict[str, str]]:
     if settings.is_pal24_enabled():
         methods.append({
             "id": "pal24",
-            "name": "Банковская карта",
-            "icon": "💳",
+            "name": "СБП",
+            "icon": "🏦",
             "description": "через PayPalych",
             "callback": "topup_pal24"
         })
