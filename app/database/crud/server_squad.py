@@ -1,11 +1,12 @@
 import logging
+from datetime import datetime
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 from sqlalchemy import select, and_, func, update, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import PromoGroup, ServerSquad, SubscriptionServer, Subscription
+from app.database.models import PromoGroup, ServerSquad, SubscriptionServer, Subscription, User
 
 logger = logging.getLogger(__name__)
 
@@ -232,10 +233,10 @@ async def sync_with_remnawave(
     db: AsyncSession,
     remnawave_squads: List[dict]
 ) -> Tuple[int, int, int]:
-    
+
     created = 0
     updated = 0
-    disabled = 0
+    removed = 0
     
     existing_servers = {}
     result = await db.execute(select(ServerSquad))
@@ -265,15 +266,101 @@ async def sync_with_remnawave(
             )
             created += 1
     
-    for uuid, server in existing_servers.items():
-        if uuid not in remnawave_uuids and server.is_available:
-            server.is_available = False
-            disabled += 1
-    
+    removed_servers = [
+        server for uuid, server in existing_servers.items()
+        if uuid not in remnawave_uuids
+    ]
+
+    if removed_servers:
+        removed_ids = [server.id for server in removed_servers]
+        removed_uuids = {server.squad_uuid for server in removed_servers}
+
+        subscription_ids_result = await db.execute(
+            select(SubscriptionServer.subscription_id)
+            .where(SubscriptionServer.server_squad_id.in_(removed_ids))
+        )
+        subscription_ids = {row[0] for row in subscription_ids_result.fetchall()}
+
+        for server in removed_servers:
+            logger.info(
+                "🗑️ Удаляется сервер %s (UUID: %s)",
+                server.display_name,
+                server.squad_uuid,
+            )
+
+        await db.execute(
+            delete(SubscriptionServer).where(SubscriptionServer.server_squad_id.in_(removed_ids))
+        )
+
+        subscriptions_to_update: dict[int, Subscription] = {}
+
+        if subscription_ids:
+            subscriptions_result = await db.execute(
+                select(Subscription).where(Subscription.id.in_(subscription_ids))
+            )
+            for subscription in subscriptions_result.scalars().unique().all():
+                subscriptions_to_update[subscription.id] = subscription
+
+        for squad_uuid in removed_uuids:
+            if not squad_uuid:
+                continue
+
+            extra_result = await db.execute(
+                select(Subscription).where(
+                    text("connected_squads::text LIKE :uuid_pattern")
+                ),
+                {"uuid_pattern": f'%"{squad_uuid}"%'}
+            )
+
+            for subscription in extra_result.scalars().unique().all():
+                subscriptions_to_update[subscription.id] = subscription
+
+        cleaned_subscriptions = 0
+
+        for subscription in subscriptions_to_update.values():
+            current_squads = list(subscription.connected_squads or [])
+            if not current_squads:
+                continue
+
+            filtered_squads = [
+                squad_uuid for squad_uuid in current_squads if squad_uuid not in removed_uuids
+            ]
+
+            if len(filtered_squads) != len(current_squads):
+                subscription.connected_squads = filtered_squads
+                subscription.updated_at = datetime.utcnow()
+                cleaned_subscriptions += 1
+
+        await db.execute(delete(ServerSquad).where(ServerSquad.id.in_(removed_ids)))
+        removed = len(removed_servers)
+
+        if cleaned_subscriptions:
+            logger.info(
+                "🧹 Обновлены подписки после удаления серверов: %s",
+                cleaned_subscriptions,
+            )
+
     await db.commit()
-    
-    logger.info(f"🔄 Синхронизация завершена: +{created} ~{updated} -{disabled}")
-    return created, updated, disabled
+
+    logger.info(f"🔄 Синхронизация завершена: +{created} ~{updated} -{removed}")
+    return created, updated, removed
+
+
+async def get_server_connected_users(
+    db: AsyncSession,
+    server_id: int
+) -> List[User]:
+
+    result = await db.execute(
+        select(User)
+        .join(Subscription, Subscription.user_id == User.id)
+        .join(SubscriptionServer, SubscriptionServer.subscription_id == Subscription.id)
+        .where(SubscriptionServer.server_squad_id == server_id)
+        .options(selectinload(User.subscription))
+        .order_by(User.id)
+    )
+
+    return result.scalars().unique().all()
 
 
 def _generate_display_name(original_name: str) -> str:
