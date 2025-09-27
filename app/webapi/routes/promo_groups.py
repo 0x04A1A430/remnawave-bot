@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.promo_group import (
@@ -56,7 +56,7 @@ def _serialize(group: PromoGroup, members_count: int = 0) -> PromoGroupResponse:
 
 @router.get("", response_model=list[PromoGroupResponse])
 async def list_promo_groups(
-    _: Any = Depends(require_api_token),
+    _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> list[PromoGroupResponse]:
     groups_with_counts = await get_promo_groups_with_counts(db)
@@ -66,7 +66,7 @@ async def list_promo_groups(
 @router.get("/{group_id}", response_model=PromoGroupResponse)
 async def get_promo_group(
     group_id: int,
-    _: Any = Depends(require_api_token),
+    _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> PromoGroupResponse:
     group = await get_promo_group_by_id(db, group_id)
@@ -80,7 +80,7 @@ async def get_promo_group(
 @router.post("", response_model=PromoGroupResponse, status_code=status.HTTP_201_CREATED)
 async def create_promo_group_endpoint(
     payload: PromoGroupCreateRequest,
-    _: Any = Depends(require_api_token),
+    _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> PromoGroupResponse:
     group = await create_promo_group(
@@ -100,7 +100,7 @@ async def create_promo_group_endpoint(
 async def update_promo_group_endpoint(
     group_id: int,
     payload: PromoGroupUpdateRequest,
-    _: Any = Depends(require_api_token),
+    _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> PromoGroupResponse:
     group = await get_promo_group_by_id(db, group_id)
@@ -125,7 +125,7 @@ async def update_promo_group_endpoint(
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_promo_group_endpoint(
     group_id: int,
-    _: Any = Depends(require_api_token),
+    _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> Response:
     group = await get_promo_group_by_id(db, group_id)
