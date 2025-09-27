@@ -15,7 +15,6 @@ from app.database.crud.server_squad import (
     create_server_squad,
     get_available_server_squads,
     update_server_squad_promo_groups,
-    get_server_users,
 )
 from app.database.crud.promo_group import get_promo_groups_with_counts
 from app.services.remnawave_service import RemnaWaveService
@@ -80,11 +79,6 @@ def _build_server_edit_view(server):
             ),
             types.InlineKeyboardButton(
                 text="📝 Описание", callback_data=f"admin_server_edit_desc_{server.id}"
-            ),
-        ],
-        [
-            types.InlineKeyboardButton(
-                text="👥 Пользователи", callback_data=f"admin_server_users_{server.id}"
             ),
         ],
         [
@@ -282,7 +276,7 @@ async def sync_servers_with_remnawave(
             )
             return
         
-        created, updated, removed = await sync_with_remnawave(db, squads)
+        created, updated, disabled = await sync_with_remnawave(db, squads)
         
         await cache.delete_pattern("available_countries*")
         
@@ -292,7 +286,7 @@ async def sync_servers_with_remnawave(
 📊 <b>Результаты:</b>
 • Создано новых серверов: {created}
 • Обновлено существующих: {updated}
-• Удалено отсутствующих: {removed}
+• Отключено неактивных: {disabled}
 • Всего обработано: {len(squads)}
 
 ℹ️ Новые серверы созданы как недоступные.
@@ -1025,117 +1019,7 @@ async def save_server_promo_groups(
         reply_markup=keyboard,
         parse_mode="HTML",
     )
-
     await callback.answer("✅ Промогруппы обновлены!")
-
-
-@admin_required
-@error_handler
-async def show_server_users(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-
-    server_id = int(callback.data.split('_')[-1])
-    server = await get_server_squad_by_id(db, server_id)
-
-    if not server:
-        await callback.answer("❌ Сервер не найден!", show_alert=True)
-        return
-
-    users = await get_server_users(db, server_id)
-
-    status_emojis = {
-        "active": "✅",
-        "trial": "🧪",
-        "expired": "⏰",
-        "disabled": "⛔",
-    }
-    status_labels = {
-        "active": "АКТИВНА",
-        "trial": "TRIAL",
-        "expired": "ИСТЕКЛА",
-        "disabled": "ОТКЛЮЧЕНА",
-    }
-
-    text_lines = [
-        "👥 <b>Пользователи сервера</b>",
-        "",
-        f"Сервер: {server.display_name}",
-        f"UUID: <code>{server.squad_uuid}</code>",
-        "",
-    ]
-
-    keyboard_rows = []
-    max_buttons = 50
-
-    if not users:
-        text_lines.append("На этот сервер пока никто не подключен.")
-    else:
-        text_lines.append(f"Всего пользователей: {len(users)}")
-        text_lines.append("Нажмите на пользователя ниже, чтобы открыть управление.")
-        text_lines.append("")
-
-        preview_limit = 10
-        for user_info in users[:preview_limit]:
-            name_parts = []
-            if user_info.get("username"):
-                name_parts.append(f"@{user_info['username']}")
-            if user_info.get("first_name"):
-                name_parts.append(user_info["first_name"])
-            display_name = " ".join(name_parts) or str(user_info["telegram_id"])
-
-            status = (user_info.get("subscription_status") or "unknown").lower()
-            status_text = status_labels.get(status, status.upper())
-            emoji = status_emojis.get(status, "ℹ️")
-
-            text_lines.append(f"• {display_name} — {emoji} {status_text}")
-
-        if len(users) > preview_limit:
-            remaining = len(users) - preview_limit
-            text_lines.append(f"… и ещё {remaining} пользователей")
-
-        for user_info in users[:max_buttons]:
-            if user_info.get("username"):
-                label = f"@{user_info['username']}"
-            elif user_info.get("first_name"):
-                label = user_info["first_name"]
-            else:
-                label = str(user_info["telegram_id"])
-
-            status = (user_info.get("subscription_status") or "unknown").lower()
-            emoji = status_emojis.get(status, "ℹ️")
-            button_text = f"{emoji} {label}"[:64]
-
-            keyboard_rows.append(
-                [
-                    types.InlineKeyboardButton(
-                        text=button_text,
-                        callback_data=f"admin_user_manage_{user_info['user_id']}",
-                    )
-                ]
-            )
-
-        if len(users) > max_buttons:
-            text_lines.append(
-                f"⚠️ Показаны первые {max_buttons} пользователей. Используйте фильтры в разделе пользователей для подробностей."
-            )
-
-    keyboard_rows.append(
-        [
-            types.InlineKeyboardButton(
-                text="⬅️ Назад", callback_data=f"admin_server_edit_{server.id}"
-            )
-        ]
-    )
-
-    await callback.message.edit_text(
-        "\n".join(text_lines),
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
-        parse_mode="HTML",
-    )
-    await callback.answer()
 
 
 @admin_required
@@ -1221,7 +1105,6 @@ def register_handlers(dp: Dispatcher):
         & ~F.data.contains("promo"),
     )
     dp.callback_query.register(toggle_server_availability, F.data.startswith("admin_server_toggle_"))
-    dp.callback_query.register(show_server_users, F.data.startswith("admin_server_users_"))
 
     dp.callback_query.register(start_server_edit_name, F.data.startswith("admin_server_edit_name_"))
     dp.callback_query.register(start_server_edit_price, F.data.startswith("admin_server_edit_price_"))

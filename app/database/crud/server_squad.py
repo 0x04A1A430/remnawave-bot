@@ -1,17 +1,11 @@
 import logging
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-from sqlalchemy import select, func, update, delete, text
+from sqlalchemy import select, and_, func, update, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import (
-    PromoGroup,
-    ServerSquad,
-    SubscriptionServer,
-    Subscription,
-    User,
-)
+from app.database.models import PromoGroup, ServerSquad, SubscriptionServer, Subscription
 
 logger = logging.getLogger(__name__)
 
@@ -234,48 +228,14 @@ async def delete_server_squad(db: AsyncSession, server_id: int) -> bool:
     return True
 
 
-async def get_server_users(
-    db: AsyncSession,
-    server_id: int,
-) -> List[dict]:
-
-    result = await db.execute(
-        select(User, Subscription, SubscriptionServer)
-        .join(Subscription, Subscription.user_id == User.id)
-        .join(
-            SubscriptionServer,
-            SubscriptionServer.subscription_id == Subscription.id,
-        )
-        .where(SubscriptionServer.server_squad_id == server_id)
-        .order_by(User.id)
-    )
-
-    users_info: List[dict] = []
-    for user, subscription, link in result.all():
-        users_info.append(
-            {
-                "user_id": user.id,
-                "telegram_id": user.telegram_id,
-                "username": user.username,
-                "first_name": user.first_name,
-                "subscription_id": subscription.id,
-                "subscription_status": subscription.status,
-                "subscription_end_date": subscription.end_date,
-                "connected_at": link.connected_at,
-            }
-        )
-
-    return users_info
-
-
 async def sync_with_remnawave(
     db: AsyncSession,
     remnawave_squads: List[dict]
 ) -> Tuple[int, int, int]:
-
+    
     created = 0
     updated = 0
-    removed = 0
+    disabled = 0
     
     existing_servers = {}
     result = await db.execute(select(ServerSquad))
@@ -305,64 +265,15 @@ async def sync_with_remnawave(
             )
             created += 1
     
-    missing_servers = [
-        server for uuid, server in existing_servers.items()
-        if uuid not in remnawave_uuids
-    ]
-
-    if missing_servers:
-        missing_ids = [server.id for server in missing_servers]
-        missing_uuids = [server.squad_uuid for server in missing_servers]
-
-        connections_count_result = await db.execute(
-            select(func.count(SubscriptionServer.id)).where(
-                SubscriptionServer.server_squad_id.in_(missing_ids)
-            )
-        )
-        removed_connections = connections_count_result.scalar() or 0
-
-        await db.execute(
-            delete(SubscriptionServer).where(
-                SubscriptionServer.server_squad_id.in_(missing_ids)
-            )
-        )
-
-        if removed_connections:
-            logger.info(
-                "🔁 Удалено %s привязок подписок к отсутствующим серверам",
-                removed_connections,
-            )
-
-        subscriptions_result = await db.execute(
-            select(Subscription).where(Subscription.connected_squads.isnot(None))
-        )
-
-        for subscription in subscriptions_result.scalars().all():
-            current_squads = list(subscription.connected_squads or [])
-            if not current_squads:
-                continue
-
-            updated_squads = [
-                squad_uuid for squad_uuid in current_squads
-                if squad_uuid not in missing_uuids
-            ]
-
-            if updated_squads != current_squads:
-                subscription.connected_squads = updated_squads
-
-        for server in missing_servers:
-            logger.info(
-                "🗑️ Удаляем сервер %s (UUID: %s) — отсутствует в RemnaWave",
-                server.display_name,
-                server.squad_uuid,
-            )
-            await db.delete(server)
-            removed += 1
-
+    for uuid, server in existing_servers.items():
+        if uuid not in remnawave_uuids and server.is_available:
+            server.is_available = False
+            disabled += 1
+    
     await db.commit()
-
-    logger.info(f"🔄 Синхронизация завершена: +{created} ~{updated} -{removed}")
-    return created, updated, removed
+    
+    logger.info(f"🔄 Синхронизация завершена: +{created} ~{updated} -{disabled}")
+    return created, updated, disabled
 
 
 def _generate_display_name(original_name: str) -> str:
