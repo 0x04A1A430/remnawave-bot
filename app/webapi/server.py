@@ -53,7 +53,19 @@ class WebAPIServer:
             settings.WEB_API_PORT,
         )
         self._task = asyncio.create_task(_serve(), name="web-api-server")
-        await self._server.started.wait()
+
+        started_attr = getattr(self._server, "started", None)
+        started_event = getattr(self._server, "started_event", None)
+
+        if isinstance(started_attr, asyncio.Event):
+            await started_attr.wait()
+        elif isinstance(started_event, asyncio.Event):
+            await started_event.wait()
+        else:
+            while not getattr(self._server, "started", False):
+                if self._task.done():
+                    break
+                await asyncio.sleep(0.1)
 
         if self._task.done() and self._task.exception():
             raise self._task.exception()
