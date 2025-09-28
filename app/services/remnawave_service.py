@@ -254,7 +254,7 @@ class RemnaWaveService:
             try:
                 if not bandwidth_str or bandwidth_str == '0 B' or bandwidth_str == '0':
                     return 0
-            
+
                 bandwidth_str = bandwidth_str.replace(' ', '').upper()
             
                 units = {
@@ -291,9 +291,74 @@ class RemnaWaveService:
             except Exception as e:
                 logger.error(f"Ошибка парсинга строки трафика '{bandwidth_str}': {e}")
                 return 0
-    
+
+    def _normalize_component(self, component: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(component, dict):
+            return {}
+
+        metadata = dict(component)
+
+        component_uuid = (
+            metadata.get("uuid")
+            or metadata.get("id")
+            or metadata.get("slug")
+            or metadata.get("name")
+        )
+
+        installed_version = (
+            metadata.get("installedVersion")
+            or metadata.get("installed_version")
+            or metadata.get("version")
+        )
+        latest_version = (
+            metadata.get("latestVersion")
+            or metadata.get("latest_version")
+            or metadata.get("availableVersion")
+        )
+
+        status = metadata.get("status") or metadata.get("state")
+
+        is_installed = metadata.get("isInstalled")
+        if is_installed is None:
+            for key in ("installed", "is_installed"):
+                if key in metadata:
+                    is_installed = metadata[key]
+                    break
+
+        is_enabled = metadata.get("isEnabled")
+        if is_enabled is None:
+            for key in ("enabled", "is_enabled"):
+                if key in metadata:
+                    is_enabled = metadata[key]
+                    break
+
+        tags = metadata.get("tags") or metadata.get("labels") or metadata.get("keywords")
+        if isinstance(tags, str):
+            tags = [tags]
+        elif isinstance(tags, list):
+            tags = [str(tag) for tag in tags]
+        else:
+            tags = []
+
+        return {
+            "uuid": component_uuid,
+            "name": metadata.get("name") or metadata.get("title") or component_uuid,
+            "slug": metadata.get("slug") or metadata.get("id"),
+            "status": status,
+            "installed_version": installed_version,
+            "latest_version": latest_version,
+            "category": metadata.get("category") or metadata.get("type"),
+            "description": metadata.get("description") or metadata.get("details"),
+            "is_installed": is_installed,
+            "is_enabled": is_enabled,
+            "installed_at": metadata.get("installedAt") or metadata.get("installed_at"),
+            "updated_at": metadata.get("updatedAt") or metadata.get("updated_at"),
+            "tags": tags,
+            "metadata": metadata,
+        }
+
     async def get_all_nodes(self) -> List[Dict[str, Any]]:
-        
+
         try:
             async with self.get_api_client() as api:
                 nodes = await api.get_all_nodes()
@@ -337,7 +402,7 @@ class RemnaWaveService:
         try:
             async with self.get_api_client() as api:
                 node = await api.get_node_by_uuid(node_uuid)
-                
+
                 if not node:
                     return None
                 
@@ -358,7 +423,163 @@ class RemnaWaveService:
         except Exception as e:
             logger.error(f"Ошибка получения информации о ноде {node_uuid}: {e}")
             return None
-    
+
+    async def list_components(self) -> List[Dict[str, Any]]:
+        try:
+            async with self.get_api_client() as api:
+                raw_components = await api.list_components()
+
+            normalized = [
+                self._normalize_component(component)
+                for component in raw_components
+                if isinstance(component, dict)
+            ]
+
+            logger.info(f"✅ Получено {len(normalized)} компонентов из Remnawave")
+            return normalized
+
+        except RemnaWaveConfigurationError:
+            raise
+        except RemnaWaveAPIError:
+            raise
+        except Exception as error:
+            logger.error(f"Ошибка получения списка компонентов Remnawave: {error}")
+            raise RemnaWaveAPIError(
+                "Не удалось получить список компонентов",
+                response_data={"details": str(error)},
+            )
+
+    async def get_component_details(self, component_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            async with self.get_api_client() as api:
+                raw_component = await api.get_component(component_id)
+
+            if not raw_component:
+                return None
+
+            return self._normalize_component(raw_component)
+
+        except RemnaWaveConfigurationError:
+            raise
+        except RemnaWaveAPIError as error:
+            if error.status_code == 404:
+                logger.info(f"Компонент Remnawave {component_id} не найден")
+                return None
+            raise
+        except Exception as err:
+            logger.error(f"Ошибка получения компонента Remnawave {component_id}: {err}")
+            raise RemnaWaveAPIError(
+                "Не удалось получить данные компонента",
+                response_data={"details": str(err)},
+            )
+
+    async def perform_component_action(
+        self,
+        component_id: str,
+        action: str,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        if not action or not re.fullmatch(r"[A-Za-z0-9_-]+", action):
+            raise ValueError("Недопустимое действие для компонента")
+
+        try:
+            async with self.get_api_client() as api:
+                raw_result = await api.perform_component_action(component_id, action, payload)
+
+        except RemnaWaveConfigurationError:
+            raise
+        except RemnaWaveAPIError:
+            raise
+        except Exception as err:
+            logger.error(
+                f"Ошибка выполнения действия '{action}' для компонента {component_id}: {err}"
+            )
+            raise RemnaWaveAPIError(
+                "Не удалось выполнить действие с компонентом",
+                response_data={"details": str(err)},
+            )
+
+        details: Dict[str, Any]
+        if isinstance(raw_result, dict):
+            details = raw_result
+        elif raw_result is None:
+            details = {}
+        else:
+            details = {"response": raw_result}
+
+        component_data = details.get("component") or details.get("data") or details.get("response")
+        normalized_component = (
+            self._normalize_component(component_data)
+            if isinstance(component_data, dict)
+            else None
+        )
+
+        success = details.get("success") if isinstance(details.get("success"), bool) else None
+        if success is None:
+            success = True
+
+        message = details.get("message") if isinstance(details.get("message"), str) else None
+        if not message:
+            message = f"Действие '{action}' выполнено"
+
+        return {
+            "success": bool(success),
+            "message": message,
+            "details": details,
+            "component": normalized_component,
+        }
+
+    async def update_component_settings(
+        self, component_id: str, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if not payload:
+            raise ValueError("Данные для обновления компонента не могут быть пустыми")
+
+        try:
+            async with self.get_api_client() as api:
+                raw_result = await api.update_component(component_id, payload)
+
+        except RemnaWaveConfigurationError:
+            raise
+        except RemnaWaveAPIError:
+            raise
+        except Exception as err:
+            logger.error(f"Ошибка обновления компонента Remnawave {component_id}: {err}")
+            raise RemnaWaveAPIError(
+                "Не удалось обновить компонент",
+                response_data={"details": str(err)},
+            )
+
+        details: Dict[str, Any]
+        if isinstance(raw_result, dict):
+            details = raw_result
+        elif raw_result is None:
+            details = {}
+        else:
+            details = {"response": raw_result}
+
+        component_data = details.get("component") or details.get("response")
+        normalized_component = (
+            self._normalize_component(component_data)
+            if isinstance(component_data, dict)
+            else None
+        )
+
+        success = details.get("success") if isinstance(details.get("success"), bool) else None
+        if success is None:
+            success = True
+
+        message = details.get("message") if isinstance(details.get("message"), str) else None
+        if not message:
+            message = "Настройки компонента обновлены"
+
+        return {
+            "success": bool(success),
+            "message": message,
+            "details": details,
+            "component": normalized_component,
+        }
+
     async def manage_node(self, node_uuid: str, action: str) -> bool:
         try:
             async with self.get_api_client() as api:
