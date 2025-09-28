@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.web_api_token import (
@@ -35,7 +35,7 @@ def _serialize(token: WebApiToken) -> TokenResponse:
 
 @router.get("", response_model=list[TokenResponse])
 async def get_tokens(
-    _: WebApiToken = Security(require_api_token),
+    _: WebApiToken = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> list[TokenResponse]:
     tokens = await list_tokens(db, include_inactive=True)
@@ -45,7 +45,7 @@ async def get_tokens(
 @router.post("", response_model=TokenCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_token(
     payload: TokenCreateRequest,
-    actor: WebApiToken = Security(require_api_token),
+    actor: WebApiToken = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> TokenCreateResponse:
     token_value, token = await web_api_token_service.create_token(
@@ -65,7 +65,7 @@ async def create_token(
 @router.post("/{token_id}/revoke", response_model=TokenResponse)
 async def revoke_token(
     token_id: int,
-    _: WebApiToken = Security(require_api_token),
+    _: WebApiToken = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> TokenResponse:
     token = await get_token_by_id(db, token_id)
@@ -80,7 +80,7 @@ async def revoke_token(
 @router.post("/{token_id}/activate", response_model=TokenResponse)
 async def activate_token(
     token_id: int,
-    _: WebApiToken = Security(require_api_token),
+    _: WebApiToken = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> TokenResponse:
     token = await get_token_by_id(db, token_id)
@@ -95,7 +95,7 @@ async def activate_token(
 @router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_token_endpoint(
     token_id: int,
-    _: WebApiToken = Security(require_api_token),
+    _: WebApiToken = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> Response:
     token = await get_token_by_id(db, token_id)

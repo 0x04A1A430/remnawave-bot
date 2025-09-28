@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Query, Security
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,7 +33,7 @@ def _serialize(transaction: Transaction) -> TransactionResponse:
 
 @router.get("", response_model=TransactionListResponse)
 async def list_transactions(
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
