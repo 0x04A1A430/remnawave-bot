@@ -169,9 +169,13 @@ async def view_admin_ticket(
     }.get(ticket.status, ticket.status)
     
     user_name = ticket.user.full_name if ticket.user else "Unknown"
-    
+    telegram_id_display = ticket.user.telegram_id if ticket.user else "—"
+    username_display = (ticket.user.username or "отсутствует") if ticket.user else "отсутствует"
+
     ticket_text = f"🎫 Тикет #{ticket.id}\n\n"
     ticket_text += f"👤 Пользователь: {user_name}\n"
+    ticket_text += f"🆔 Telegram ID: <code>{telegram_id_display}</code>\n"
+    ticket_text += f"📱 Username: @{username_display}\n"
     ticket_text += f"📝 Заголовок: {ticket.title}\n"
     ticket_text += f"📊 Статус: {ticket.status_emoji} {status_text}\n"
     ticket_text += f"📅 Создан: {ticket.created_at.strftime('%d.%m.%Y %H:%M')}\n"

@@ -1325,10 +1325,17 @@ class MonitoringService:
                     if len(title) > 60:
                         title = title[:57] + '...'
 
+                    # Детали пользователя: имя, Telegram ID и username
+                    full_name = ticket.user.full_name if ticket.user else "Unknown"
+                    telegram_id_display = ticket.user.telegram_id if ticket.user else "—"
+                    username_display = (ticket.user.username or "отсутствует") if ticket.user else "отсутствует"
+
                     text = (
                         f"⏰ <b>Ожидание ответа на тикет превышено</b>\n\n"
                         f"🆔 <b>ID:</b> <code>{ticket.id}</code>\n"
-                        f"👤 <b>User ID:</b> <code>{ticket.user_id}</code>\n"
+                        f"👤 <b>Пользователь:</b> {full_name}\n"
+                        f"🆔 <b>Telegram ID:</b> <code>{telegram_id_display}</code>\n"
+                        f"📱 <b>Username:</b> @{username_display}\n"
                         f"📝 <b>Заголовок:</b> {title or '—'}\n"
                         f"⏱️ <b>Ожидает ответа:</b> {waited_minutes} мин\n"
                     )
