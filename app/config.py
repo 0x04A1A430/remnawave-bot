@@ -53,8 +53,8 @@ class Settings(BaseSettings):
     
     REDIS_URL: str = "redis://localhost:6379/0"
     
-    REMNAWAVE_API_URL: str = ""
-    REMNAWAVE_API_KEY: str = ""
+    REMNAWAVE_API_URL: Optional[str] = Field(default=None)
+    REMNAWAVE_API_KEY: Optional[str] = Field(default=None)
     REMNAWAVE_SECRET_KEY: Optional[str] = None
 
     REMNAWAVE_USERNAME: Optional[str] = None
@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     TRIAL_DEVICE_LIMIT: int = 2
     DEFAULT_TRAFFIC_LIMIT_GB: int = 100
     DEFAULT_DEVICE_LIMIT: int = 1
-    TRIAL_SQUAD_UUID: str = ""
+    TRIAL_SQUAD_UUID: Optional[str] = Field(default=None)
     DEFAULT_TRAFFIC_RESET_STRATEGY: str = "MONTH"
     MAX_DEVICES_LIMIT: int = 20
     
@@ -389,8 +389,8 @@ class Settings(BaseSettings):
 
     def get_remnawave_auth_params(self) -> Dict[str, Optional[str]]:
         return {
-            "base_url": self.REMNAWAVE_API_URL,
-            "api_key": self.REMNAWAVE_API_KEY,
+            "base_url": (self.REMNAWAVE_API_URL or "").strip(),
+            "api_key": (self.REMNAWAVE_API_KEY or "").strip(),
             "secret_key": self.REMNAWAVE_SECRET_KEY,
             "username": self.REMNAWAVE_USERNAME,
             "password": self.REMNAWAVE_PASSWORD,
