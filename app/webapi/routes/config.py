@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.system_settings_service import bot_configuration_service
@@ -100,7 +100,7 @@ def _serialize_definition(definition, include_choices: bool = True) -> SettingDe
 
 @router.get("/categories", response_model=list[SettingCategorySummary])
 async def list_categories(
-    _: object = Security(require_api_token),
+    _: object = Depends(require_api_token),
 ) -> list[SettingCategorySummary]:
     categories = bot_configuration_service.get_categories()
     return [
@@ -111,7 +111,7 @@ async def list_categories(
 
 @router.get("", response_model=list[SettingDefinition])
 async def list_settings(
-    _: object = Security(require_api_token),
+    _: object = Depends(require_api_token),
     category: Optional[str] = Query(default=None, alias="category_key"),
 ) -> list[SettingDefinition]:
     items: list[SettingDefinition] = []
@@ -130,7 +130,7 @@ async def list_settings(
 @router.get("/{key}", response_model=SettingDefinition)
 async def get_setting(
     key: str,
-    _: object = Security(require_api_token),
+    _: object = Depends(require_api_token),
 ) -> SettingDefinition:
     try:
         definition = bot_configuration_service.get_definition(key)
@@ -144,7 +144,7 @@ async def get_setting(
 async def update_setting(
     key: str,
     payload: SettingUpdateRequest,
-    _: object = Security(require_api_token),
+    _: object = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> SettingDefinition:
     try:
@@ -162,7 +162,7 @@ async def update_setting(
 @router.delete("/{key}", response_model=SettingDefinition)
 async def reset_setting(
     key: str,
-    _: object = Security(require_api_token),
+    _: object = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> SettingDefinition:
     try:

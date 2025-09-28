@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -111,7 +111,7 @@ def _apply_search_filter(query, search: str):
 
 @router.get("", response_model=UserListResponse)
 async def list_users(
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -155,7 +155,7 @@ async def list_users(
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
     user = await get_user_by_id(db, user_id)
@@ -168,7 +168,7 @@ async def get_user(
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user_endpoint(
     payload: UserCreateRequest,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
     existing = await get_user_by_telegram_id(db, payload.telegram_id)
@@ -199,7 +199,7 @@ async def create_user_endpoint(
 async def update_user_endpoint(
     user_id: int,
     payload: UserUpdateRequest,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
     user = await get_user_by_id(db, user_id)
@@ -252,7 +252,7 @@ async def update_user_endpoint(
 async def update_balance(
     user_id: int,
     payload: BalanceUpdateRequest,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
     if payload.amount_kopeks == 0:

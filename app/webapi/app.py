@@ -28,7 +28,6 @@ def create_web_api_app() -> FastAPI:
         docs_url=docs_config.get("docs_url"),
         redoc_url=docs_config.get("redoc_url"),
         openapi_url=docs_config.get("openapi_url"),
-        swagger_ui_parameters={"persistAuthorization": True},
     )
 
     allowed_origins = settings.get_web_api_allowed_origins()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -69,7 +69,7 @@ async def _get_subscription(db: AsyncSession, subscription_id: int) -> Subscript
 
 @router.get("", response_model=list[SubscriptionResponse])
 async def list_subscriptions(
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -95,7 +95,7 @@ async def list_subscriptions(
 @router.get("/{subscription_id}", response_model=SubscriptionResponse)
 async def get_subscription(
     subscription_id: int,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> SubscriptionResponse:
     subscription = await _get_subscription(db, subscription_id)
@@ -105,7 +105,7 @@ async def get_subscription(
 @router.post("", response_model=SubscriptionResponse, status_code=status.HTTP_201_CREATED)
 async def create_subscription(
     payload: SubscriptionCreateRequest,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> SubscriptionResponse:
     existing = await get_subscription_by_user_id(db, payload.user_id)
@@ -141,7 +141,7 @@ async def create_subscription(
 async def extend_subscription_endpoint(
     subscription_id: int,
     payload: SubscriptionExtendRequest,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> SubscriptionResponse:
     subscription = await _get_subscription(db, subscription_id)
@@ -154,7 +154,7 @@ async def extend_subscription_endpoint(
 async def add_subscription_traffic_endpoint(
     subscription_id: int,
     payload: SubscriptionTrafficRequest,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> SubscriptionResponse:
     subscription = await _get_subscription(db, subscription_id)
@@ -167,7 +167,7 @@ async def add_subscription_traffic_endpoint(
 async def add_subscription_devices_endpoint(
     subscription_id: int,
     payload: SubscriptionDevicesRequest,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> SubscriptionResponse:
     subscription = await _get_subscription(db, subscription_id)
@@ -180,7 +180,7 @@ async def add_subscription_devices_endpoint(
 async def add_subscription_squad_endpoint(
     subscription_id: int,
     payload: SubscriptionSquadRequest,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> SubscriptionResponse:
     if not payload.squad_uuid:
@@ -196,7 +196,7 @@ async def add_subscription_squad_endpoint(
 async def remove_subscription_squad_endpoint(
     subscription_id: int,
     squad_uuid: str,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> SubscriptionResponse:
     subscription = await _get_subscription(db, subscription_id)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.ticket import TicketCRUD
@@ -56,7 +56,7 @@ def _serialize_ticket(ticket: Ticket, include_messages: bool = False) -> TicketR
 
 @router.get("", response_model=list[TicketResponse])
 async def list_tickets(
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -89,7 +89,7 @@ async def list_tickets(
 @router.get("/{ticket_id}", response_model=TicketResponse)
 async def get_ticket(
     ticket_id: int,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> TicketResponse:
     ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True, load_user=False)
@@ -102,7 +102,7 @@ async def get_ticket(
 async def update_ticket_status(
     ticket_id: int,
     payload: TicketStatusUpdateRequest,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> TicketResponse:
     try:
@@ -123,7 +123,7 @@ async def update_ticket_status(
 async def update_ticket_priority(
     ticket_id: int,
     payload: TicketPriorityUpdateRequest,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> TicketResponse:
     allowed_priorities = {"low", "normal", "high", "urgent"}
@@ -146,7 +146,7 @@ async def update_ticket_priority(
 async def update_reply_block(
     ticket_id: int,
     payload: TicketReplyBlockRequest,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> TicketResponse:
     until = payload.until
@@ -169,7 +169,7 @@ async def update_reply_block(
 @router.delete("/{ticket_id}/reply-block", response_model=TicketResponse)
 async def clear_reply_block(
     ticket_id: int,
-    _: Any = Security(require_api_token),
+    _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> TicketResponse:
     success = await TicketCRUD.set_user_reply_block(
