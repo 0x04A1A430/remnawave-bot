@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
  
 from app.database.models import User, Ticket, TicketStatus
 from app.database.crud.ticket import TicketCRUD, TicketMessageCRUD
+from app.database.crud.user import get_user_by_id
 from app.keyboards.inline import (
     get_ticket_cancel_keyboard,
     get_my_tickets_keyboard,
@@ -937,10 +938,21 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
         if len(title) > 60:
             title = title[:57] + "..."
 
+        # Загрузим пользователя, чтобы отобразить реальный Telegram ID и username
+        try:
+            user = await get_user_by_id(db, ticket.user_id)
+        except Exception:
+            user = None
+        full_name = user.full_name if user else "Unknown"
+        telegram_id_display = user.telegram_id if user else "—"
+        username_display = (user.username or "отсутствует") if user else "отсутствует"
+
         notification_text = (
             f"🎫 <b>НОВЫЙ ТИКЕТ</b>\n\n"
             f"🆔 <b>ID:</b> <code>{ticket.id}</code>\n"
-            f"👤 <b>User ID:</b> <code>{ticket.user_id}</code>\n"
+            f"👤 <b>Пользователь:</b> {full_name}\n"
+            f"🆔 <b>Telegram ID:</b> <code>{telegram_id_display}</code>\n"
+            f"📱 <b>Username:</b> @{username_display}\n"
             f"📝 <b>Заголовок:</b> {title or '—'}\n"
             f"📅 <b>Создан:</b> {ticket.created_at.strftime('%d.%m.%Y %H:%M')}\n"
         )
