@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.promo_group import (
     count_promo_group_members,
+    count_promo_groups,
     create_promo_group,
     delete_promo_group,
     get_promo_group_by_id,
@@ -18,6 +20,7 @@ from app.database.models import PromoGroup
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.promo_groups import (
     PromoGroupCreateRequest,
+    PromoGroupListResponse,
     PromoGroupResponse,
     PromoGroupUpdateRequest,
 )
@@ -54,13 +57,26 @@ def _serialize(group: PromoGroup, members_count: int = 0) -> PromoGroupResponse:
     )
 
 
-@router.get("", response_model=list[PromoGroupResponse])
+@router.get("", response_model=PromoGroupListResponse)
 async def list_promo_groups(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
-) -> list[PromoGroupResponse]:
-    groups_with_counts = await get_promo_groups_with_counts(db)
-    return [_serialize(group, members_count=count) for group, count in groups_with_counts]
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> PromoGroupListResponse:
+    total = await count_promo_groups(db)
+    groups_with_counts = await get_promo_groups_with_counts(
+        db,
+        offset=offset,
+        limit=limit,
+    )
+
+    return PromoGroupListResponse(
+        items=[_serialize(group, members_count=count) for group, count in groups_with_counts],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/{group_id}", response_model=PromoGroupResponse)
@@ -83,16 +99,24 @@ async def create_promo_group_endpoint(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> PromoGroupResponse:
-    group = await create_promo_group(
-        db,
-        name=payload.name,
-        server_discount_percent=payload.server_discount_percent,
-        traffic_discount_percent=payload.traffic_discount_percent,
+    try:
+        group = await create_promo_group(
+            db,
+            name=payload.name,
+            server_discount_percent=payload.server_discount_percent,
+            traffic_discount_percent=payload.traffic_discount_percent,
         device_discount_percent=payload.device_discount_percent,
         period_discounts=payload.period_discounts,
         auto_assign_total_spent_kopeks=payload.auto_assign_total_spent_kopeks,
         apply_discounts_to_addons=payload.apply_discounts_to_addons,
+        is_default=payload.is_default,
     )
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Promo group with this name already exists",
+        ) from exc
     return _serialize(group, members_count=0)
 
 
@@ -107,17 +131,25 @@ async def update_promo_group_endpoint(
     if not group:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo group not found")
 
-    group = await update_promo_group(
-        db,
-        group,
-        name=payload.name,
-        server_discount_percent=payload.server_discount_percent,
-        traffic_discount_percent=payload.traffic_discount_percent,
+    try:
+        group = await update_promo_group(
+            db,
+            group,
+            name=payload.name,
+            server_discount_percent=payload.server_discount_percent,
+            traffic_discount_percent=payload.traffic_discount_percent,
         device_discount_percent=payload.device_discount_percent,
         period_discounts=payload.period_discounts,
         auto_assign_total_spent_kopeks=payload.auto_assign_total_spent_kopeks,
         apply_discounts_to_addons=payload.apply_discounts_to_addons,
+        is_default=payload.is_default,
     )
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Promo group with this name already exists",
+        ) from exc
     members_count = await count_promo_group_members(db, group_id)
     return _serialize(group, members_count=members_count)
 
