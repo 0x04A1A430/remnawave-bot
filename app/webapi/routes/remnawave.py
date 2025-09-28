@@ -6,17 +6,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-try:
-    from app.services.remnawave_service import (
-        RemnaWaveConfigurationError,
-        RemnaWaveService,
-    )
-except Exception as import_error:  # pragma: no cover - defensive import guard
-    RemnaWaveConfigurationError = None  # type: ignore[assignment]
-    RemnaWaveService = None  # type: ignore[assignment]
-    _IMPORT_ERROR: Exception | None = import_error
-else:
-    _IMPORT_ERROR = None
+from app.services.remnawave_service import RemnaWaveConfigurationError, RemnaWaveService
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.remnawave import (
@@ -45,32 +35,12 @@ from ..schemas.remnawave import (
 router = APIRouter()
 
 
-def _raise_import_error() -> None:
-    if _IMPORT_ERROR is not None or RemnaWaveService is None:
-        detail = "Интеграция с RemnaWave недоступна"
-        if _IMPORT_ERROR is not None:
-            detail += f": {_IMPORT_ERROR}"
-
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=detail,
-        )
-
-
 def _ensure_service_configured(service: RemnaWaveService) -> None:
     if not service.is_configured:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=service.configuration_error or "RemnaWave API не настроен",
         )
-
-
-def _get_service() -> RemnaWaveService:
-    if RemnaWaveService is None:
-        _raise_import_error()
-
-    service = RemnaWaveService()
-    return service
 
 
 def _serialize_node(node_data: Dict[str, Any]) -> RemnaWaveNode:
@@ -104,18 +74,7 @@ def _parse_last_updated(value: Any) -> Optional[datetime]:
 async def get_remnawave_status(
     _: Any = Security(require_api_token),
 ) -> RemnaWaveStatusResponse:
-    if RemnaWaveService is None:
-        error_message = "RemnaWave сервис недоступен"
-        if _IMPORT_ERROR is not None:
-            error_message = str(_IMPORT_ERROR)
-
-        return RemnaWaveStatusResponse(
-            is_configured=False,
-            configuration_error=error_message,
-            connection=None,
-        )
-
-    service = _get_service()
+    service = RemnaWaveService()
 
     connection_info: Optional[RemnaWaveConnectionStatus] = None
     connection_result = await service.test_api_connection()
@@ -134,7 +93,7 @@ async def get_remnawave_status(
 async def get_system_statistics(
     _: Any = Security(require_api_token),
 ) -> RemnaWaveSystemStatsResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     stats = await service.get_system_statistics()
@@ -149,7 +108,7 @@ async def get_system_statistics(
 async def list_nodes(
     _: Any = Security(require_api_token),
 ) -> RemnaWaveNodeListResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     nodes = await service.get_all_nodes()
@@ -161,7 +120,7 @@ async def list_nodes(
 async def get_nodes_realtime_usage(
     _: Any = Security(require_api_token),
 ) -> List[Dict[str, Any]]:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
     return await service.get_nodes_realtime_usage()
 
@@ -171,7 +130,7 @@ async def get_node_details(
     node_uuid: str,
     _: Any = Security(require_api_token),
 ) -> RemnaWaveNode:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     node = await service.get_node_details(node_uuid)
@@ -185,7 +144,7 @@ async def get_node_statistics(
     node_uuid: str,
     _: Any = Security(require_api_token),
 ) -> RemnaWaveNodeStatisticsResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     stats = await service.get_node_statistics(node_uuid)
@@ -212,7 +171,7 @@ async def get_node_usage_range(
     end: Optional[datetime] = Query(default=None),
     _: Any = Security(require_api_token),
 ) -> RemnaWaveNodeUsageResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     end_dt = end or datetime.utcnow()
@@ -231,7 +190,7 @@ async def manage_node(
     payload: RemnaWaveNodeActionRequest,
     _: Any = Security(require_api_token),
 ) -> RemnaWaveNodeActionResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     success = await service.manage_node(node_uuid, payload.action)
@@ -253,7 +212,7 @@ async def manage_node(
 async def restart_all_nodes(
     _: Any = Security(require_api_token),
 ) -> RemnaWaveNodeActionResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     success = await service.restart_all_nodes()
@@ -265,7 +224,7 @@ async def restart_all_nodes(
 async def list_squads(
     _: Any = Security(require_api_token),
 ) -> RemnaWaveSquadListResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     squads = await service.get_all_squads()
@@ -278,7 +237,7 @@ async def get_squad_details(
     squad_uuid: str,
     _: Any = Security(require_api_token),
 ) -> RemnaWaveSquad:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     squad = await service.get_squad_details(squad_uuid)
@@ -292,7 +251,7 @@ async def create_squad(
     payload: RemnaWaveSquadCreateRequest,
     _: Any = Security(require_api_token),
 ) -> RemnaWaveOperationResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     success = await service.create_squad(payload.name, payload.inbound_uuids)
@@ -306,7 +265,7 @@ async def update_squad(
     payload: RemnaWaveSquadUpdateRequest,
     _: Any = Security(require_api_token),
 ) -> RemnaWaveOperationResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     success = False
@@ -329,7 +288,7 @@ async def squad_actions(
     payload: RemnaWaveSquadActionRequest,
     _: Any = Security(require_api_token),
 ) -> RemnaWaveOperationResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     action = payload.action
@@ -363,7 +322,7 @@ async def squad_actions(
 async def list_inbounds(
     _: Any = Security(require_api_token),
 ) -> RemnaWaveInboundsResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     inbounds = await service.get_all_inbounds()
@@ -375,7 +334,7 @@ async def get_user_traffic(
     telegram_id: int,
     _: Any = Security(require_api_token),
 ) -> RemnaWaveUserTrafficResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     stats = await service.get_user_traffic_stats(telegram_id)
@@ -391,17 +350,15 @@ async def sync_from_panel(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> RemnaWaveGenericSyncResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     try:
         stats = await service.sync_users_from_panel(db, payload.mode)
         detail = "Синхронизация из панели выполнена"
         return RemnaWaveGenericSyncResponse(success=True, detail=detail, data=stats)
-    except Exception as exc:  # noqa: BLE001
-        if RemnaWaveConfigurationError and isinstance(exc, RemnaWaveConfigurationError):
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
-        raise
+    except RemnaWaveConfigurationError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
 
 
 @router.post("/sync/to-panel", response_model=RemnaWaveGenericSyncResponse)
@@ -409,7 +366,7 @@ async def sync_to_panel(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> RemnaWaveGenericSyncResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     stats = await service.sync_users_to_panel(db)
@@ -422,7 +379,7 @@ async def validate_and_fix_subscriptions(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> RemnaWaveGenericSyncResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     stats = await service.validate_and_fix_subscriptions(db)
@@ -435,7 +392,7 @@ async def cleanup_orphaned_subscriptions(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> RemnaWaveGenericSyncResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     stats = await service.cleanup_orphaned_subscriptions(db)
@@ -448,7 +405,7 @@ async def sync_subscription_statuses(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> RemnaWaveGenericSyncResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     stats = await service.sync_subscription_statuses(db)
@@ -461,7 +418,7 @@ async def get_sync_recommendations(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> RemnaWaveGenericSyncResponse:
-    service = _get_service()
+    service = RemnaWaveService()
     _ensure_service_configured(service)
 
     data = await service.get_sync_recommendations(db)
