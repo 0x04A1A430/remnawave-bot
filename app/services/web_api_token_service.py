@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from datetime import datetime
 from typing import Optional, Tuple
 
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud import web_api_token as crud
 from app.database.models import WebApiToken
+from app.database.universal_migration import ensure_default_web_api_token
 from app.utils.security import generate_api_token, hash_api_token
 
 
@@ -27,8 +29,21 @@ class WebApiTokenService:
         *,
         remote_ip: Optional[str] = None,
     ) -> Optional[WebApiToken]:
-        token_hash = self.hash_token(token_value)
-        token = await crud.get_token_by_hash(db, token_hash)
+        normalized_value = token_value.strip()
+        if not normalized_value:
+            return None
+
+        async def _load_token(value: str) -> Optional[WebApiToken]:
+            token_hash = self.hash_token(value)
+            return await crud.get_token_by_hash(db, token_hash)
+
+        token = await _load_token(normalized_value)
+
+        if not token:
+            default_token = (settings.WEB_API_DEFAULT_TOKEN or "").strip()
+            if default_token and secrets.compare_digest(default_token, normalized_value):
+                await ensure_default_web_api_token()
+                token = await _load_token(default_token)
 
         if not token or not token.is_active:
             return None
