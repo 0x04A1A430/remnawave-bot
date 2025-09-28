@@ -1,4 +1,6 @@
 import logging
+from datetime import datetime
+
 from sqlalchemy import inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1986,9 +1988,18 @@ async def ensure_default_web_api_token() -> bool:
             existing = result.scalar_one_or_none()
 
             if existing:
+                updated = False
+
                 if not existing.is_active:
                     existing.is_active = True
-                    existing.updated_at = existing.updated_at or existing.created_at
+                    updated = True
+
+                if token_name and existing.name != token_name:
+                    existing.name = token_name
+                    updated = True
+
+                if updated:
+                    existing.updated_at = datetime.utcnow()
                     await session.commit()
                 return True
 

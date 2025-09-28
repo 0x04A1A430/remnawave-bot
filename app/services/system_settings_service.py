@@ -4,6 +4,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, get_args, get_origin
 
+from app.database.universal_migration import ensure_default_web_api_token
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -541,6 +543,8 @@ class BotConfigurationService:
             cls._overrides_raw[key] = raw_value
             cls._apply_to_settings(key, parsed_value)
 
+        await cls._sync_default_web_api_token()
+
     @classmethod
     async def reload(cls) -> None:
         cls._overrides_raw.clear()
@@ -642,6 +646,9 @@ class BotConfigurationService:
         cls._overrides_raw[key] = raw_value
         cls._apply_to_settings(key, value)
 
+        if key in {"WEB_API_DEFAULT_TOKEN", "WEB_API_DEFAULT_TOKEN_NAME"}:
+            await cls._sync_default_web_api_token()
+
     @classmethod
     async def reset_value(cls, db: AsyncSession, key: str) -> None:
         await delete_system_setting(db, key)
@@ -649,12 +656,27 @@ class BotConfigurationService:
         original = cls.get_original_value(key)
         cls._apply_to_settings(key, original)
 
+        if key in {"WEB_API_DEFAULT_TOKEN", "WEB_API_DEFAULT_TOKEN_NAME"}:
+            await cls._sync_default_web_api_token()
+
     @classmethod
     def _apply_to_settings(cls, key: str, value: Any) -> None:
         try:
             setattr(settings, key, value)
         except Exception as error:
             logger.error("Не удалось применить значение %s=%s: %s", key, value, error)
+
+    @staticmethod
+    async def _sync_default_web_api_token() -> None:
+        default_token = (settings.WEB_API_DEFAULT_TOKEN or "").strip()
+        if not default_token:
+            return
+
+        success = await ensure_default_web_api_token()
+        if not success:
+            logger.warning(
+                "Не удалось синхронизировать бутстрап токен веб-API после обновления настроек",
+            )
 
     @classmethod
     def get_setting_summary(cls, key: str) -> Dict[str, Any]:
