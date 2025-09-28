@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Security
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +24,7 @@ router = APIRouter()
 
 @router.get("/overview")
 async def stats_overview(
-    _: object = Depends(require_api_token),
+    _: object = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict[str, object]:
     total_users = await db.scalar(select(func.count()).select_from(User)) or 0
