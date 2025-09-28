@@ -126,10 +126,6 @@ curl -X POST "http://127.0.0.1:8080/tokens" \
 | `POST` | `/promo-groups` | Создать промо-группу.
 | `PATCH` | `/promo-groups/{id}` | Обновить промо-группу.
 | `DELETE` | `/promo-groups/{id}` | Удалить промо-группу.
-| `GET` | `/remnawave/components` | Список компонентов Remnawave.
-| `GET` | `/remnawave/components/{id}` | Детали конкретного компонента.
-| `POST` | `/remnawave/components/{id}/actions/{action}` | Выполнить действие над компонентом (install, update, restart и т.д.).
-| `PATCH` | `/remnawave/components/{id}` | Обновить настройки компонента.
 | `GET` | `/tokens` | Управление токенами доступа.
 
 > Все списковые эндпоинты поддерживают пагинацию (`limit`, `offset`) и фильтры, описанные в OpenAPI спецификации. Если `WEB_API_DOCS_ENABLED=true`, документация доступна по `/docs`. В ответах `/settings` поле `choices` всегда массив: пустой список означает отсутствие предопределённых значений.

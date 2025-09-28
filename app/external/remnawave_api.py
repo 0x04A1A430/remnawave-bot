@@ -477,47 +477,6 @@ class RemnaWaveAPI:
         return response['response']['eventSent']
     
     
-    async def list_components(self) -> List[Dict[str, Any]]:
-        response = await self._make_request('GET', '/api/components')
-        components = response.get('response')
-
-        if isinstance(components, dict):
-            if 'components' in components:
-                components = components['components']
-            elif 'items' in components:
-                components = components['items']
-
-        if not components:
-            return []
-
-        if isinstance(components, list):
-            return components
-
-        return [components]
-
-    async def get_component(self, component_id: str) -> Dict[str, Any]:
-        response = await self._make_request('GET', f'/api/components/{component_id}')
-        component = response.get('response')
-
-        if isinstance(component, dict):
-            return component
-
-        return {}
-
-    async def perform_component_action(
-        self,
-        component_id: str,
-        action: str,
-        payload: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        endpoint = f'/api/components/{component_id}/actions/{action}'
-        response = await self._make_request('POST', endpoint, data=payload)
-        return response.get('response') or {}
-
-    async def update_component(self, component_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        response = await self._make_request('PATCH', f'/api/components/{component_id}', payload)
-        return response.get('response') or {}
-
     async def get_subscription_info(self, short_uuid: str) -> SubscriptionInfo:
         response = await self._make_request('GET', f'/api/sub/{short_uuid}/info')
         return self._parse_subscription_info(response['response'])
