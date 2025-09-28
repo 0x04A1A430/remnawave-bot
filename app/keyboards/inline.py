@@ -1925,10 +1925,22 @@ def get_admin_tickets_keyboard(
         status_emoji = ticket.get('status_emoji', '❓')
         if ticket.get('is_closed', False):
             status_emoji = '✅'
-        user_name = ticket.get('user_name', 'Unknown')[:15]
+        user_name = ticket.get('user_name', 'Unknown')
+        username = ticket.get('username')
+        telegram_id = ticket.get('telegram_id')
+        # Сформируем компактное отображение: Имя (@username | ID)
+        name_parts = [user_name[:15]]
+        contact_parts = []
+        if username:
+            contact_parts.append(f"@{username}")
+        if telegram_id:
+            contact_parts.append(str(telegram_id))
+        if contact_parts:
+            name_parts.append(f"({' | '.join(contact_parts)})")
+        name_display = ' '.join(name_parts)
         title = ticket.get('title', 'Без названия')[:20]
         locked_emoji = ticket.get('locked_emoji', '')
-        button_text = f"{status_emoji} #{ticket['id']} {locked_emoji} {user_name}: {title}".replace("  ", " ")
+        button_text = f"{status_emoji} #{ticket['id']} {locked_emoji} {name_display}: {title}".replace("  ", " ")
         row = [InlineKeyboardButton(text=button_text, callback_data=f"admin_view_ticket_{ticket['id']}")]
         if ticket.get('is_closed', False):
             closed_rows.append(row)

@@ -766,7 +766,32 @@ async def show_user_management(
     state: FSMContext
 ):
     
-    user_id = int(callback.data.split('_')[-1])
+    # Поддерживаем переход "из тикета": admin_user_manage_{userId}_from_ticket_{ticketId}
+    parts = callback.data.split('_')
+    try:
+        user_id = int(parts[3])  # admin_user_manage_{userId}
+    except Exception:
+        user_id = int(callback.data.split('_')[-1])
+    origin_ticket_id = None
+    if "from" in parts and "ticket" in parts:
+        try:
+            origin_ticket_id = int(parts[-1])
+        except Exception:
+            origin_ticket_id = None
+    # Если пришли из тикета — запомним в состоянии, чтобы сохранять кнопку возврата
+    try:
+        if origin_ticket_id:
+            await state.update_data(origin_ticket_id=origin_ticket_id, origin_ticket_user_id=user_id)
+    except Exception:
+        pass
+    # Если не пришло в колбэке — попробуем достать из состояния
+    if origin_ticket_id is None:
+        try:
+            data_state = await state.get_data()
+            if data_state.get("origin_ticket_user_id") == user_id:
+                origin_ticket_id = data_state.get("origin_ticket_id")
+        except Exception:
+            pass
     
     # Проверяем, откуда пришел пользователь
     back_callback = "admin_users_list"
@@ -844,9 +869,22 @@ async def show_user_management(
     if current_state == AdminStates.viewing_user_from_balance_list:
         back_callback = "admin_users_balance_filter"
     
+    # Базовая клавиатура профиля
+    kb = get_user_management_keyboard(user.id, user.status, db_user.language, back_callback)
+    # Если пришли из тикета — добавим в начало кнопку возврата к тикету
+    try:
+        if origin_ticket_id:
+            back_to_ticket_btn = types.InlineKeyboardButton(
+                text="🎫 Вернуться к тикету",
+                callback_data=f"admin_view_ticket_{origin_ticket_id}"
+            )
+            kb.inline_keyboard.insert(0, [back_to_ticket_btn])
+    except Exception:
+        pass
+
     await callback.message.edit_text(
         text,
-        reply_markup=get_user_management_keyboard(user.id, user.status, db_user.language, back_callback)
+        reply_markup=kb
     )
     await callback.answer()
 
