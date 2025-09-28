@@ -32,7 +32,7 @@ from ..schemas.remnawave import (
 )
 
 
-router = APIRouter()
+router = APIRouter(prefix="/remnawave", tags=["remnawave"])
 
 
 def _ensure_service_configured(service: RemnaWaveService) -> None:

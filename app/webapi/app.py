@@ -53,6 +53,6 @@ def create_web_api_app() -> FastAPI:
     app.include_router(transactions.router, prefix="/transactions", tags=["transactions"])
     app.include_router(promo_groups.router, prefix="/promo-groups", tags=["promo-groups"])
     app.include_router(tokens.router, prefix="/tokens", tags=["auth"])
-    app.include_router(remnawave.router, prefix="/remnawave", tags=["remnawave"])
+    app.include_router(remnawave.router)
 
     return app
