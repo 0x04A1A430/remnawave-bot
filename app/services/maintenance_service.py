@@ -443,12 +443,10 @@ API снова отвечает на запросы.""", "success")
             
             emoji = status_emojis.get(status, "ℹ️")
             
-            api_url_display = settings.REMNAWAVE_API_URL or "—"
-
             message = f"""Статус панели Remnawave изменился
 
 {emoji} <b>Статус:</b> {status.upper()}
-🔗 <b>URL:</b> {api_url_display}
+🔗 <b>URL:</b> {settings.REMNAWAVE_API_URL}
 {details}"""
             
             alert_type = "error" if status in ["offline", "error"] else "info"
