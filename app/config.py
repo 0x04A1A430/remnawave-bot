@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     CHANNEL_LINK: Optional[str] = None
     CHANNEL_IS_REQUIRED_SUB: bool = False
     
-    DATABASE_URL: Optional[str] = None
+    DATABASE_URL: str = ""
     
     POSTGRES_HOST: str = "postgres"
     POSTGRES_PORT: int = 5432
