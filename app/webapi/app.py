@@ -20,6 +20,53 @@ from .routes import (
 )
 
 
+OPENAPI_TAGS = [
+    {
+        "name": "health",
+        "description": "Мониторинг состояния административного API и связанных сервисов.",
+    },
+    {
+        "name": "stats",
+        "description": "Сводные показатели по пользователям, подпискам и платежам.",
+    },
+    {
+        "name": "settings",
+        "description": "Получение и изменение конфигурации бота из административной панели.",
+    },
+    {
+        "name": "users",
+        "description": "Управление пользователями, балансом и статусами подписок.",
+    },
+    {
+        "name": "subscriptions",
+        "description": "Создание, продление и настройка подписок бота.",
+    },
+    {
+        "name": "support",
+        "description": "Работа с тикетами поддержки, приоритетами и ограничениями на ответы.",
+    },
+    {
+        "name": "transactions",
+        "description": "История финансовых операций и пополнений баланса.",
+    },
+    {
+        "name": "promo-groups",
+        "description": "Создание и управление промо-группами и их участниками.",
+    },
+    {
+        "name": "auth",
+        "description": "Управление токенами доступа к административному API.",
+    },
+    {
+        "name": "remnawave",
+        "description": (
+            "Интеграция с RemnaWave: статус панели, управление нодами, сквадами и синхронизацией "
+            "данных между ботом и панелью."
+        ),
+    },
+]
+
+
 def create_web_api_app() -> FastAPI:
     docs_config = settings.get_web_api_docs_config()
 
@@ -29,6 +76,7 @@ def create_web_api_app() -> FastAPI:
         docs_url=docs_config.get("docs_url"),
         redoc_url=docs_config.get("redoc_url"),
         openapi_url=docs_config.get("openapi_url"),
+        openapi_tags=OPENAPI_TAGS,
         swagger_ui_parameters={"persistAuthorization": True},
     )
 
