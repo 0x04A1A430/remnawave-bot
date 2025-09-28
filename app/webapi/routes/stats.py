@@ -22,7 +22,39 @@ from ..dependencies import get_db_session, require_api_token
 router = APIRouter()
 
 
-@router.get("/overview")
+@router.get(
+    "/overview",
+    summary="Общая статистика",
+    response_description="Агрегированные показатели пользователей, подписок, саппорта и платежей",
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "users": {
+                            "total": 12345,
+                            "active": 9876,
+                            "blocked": 321,
+                            "balance_kopeks": 1234567,
+                            "balance_rubles": 12345.67,
+                        },
+                        "subscriptions": {
+                            "active": 4321,
+                            "expired": 210,
+                        },
+                        "support": {
+                            "open_tickets": 42,
+                        },
+                        "payments": {
+                            "today_kopeks": 654321,
+                            "today_rubles": 6543.21,
+                        },
+                    }
+                }
+            }
+        }
+    },
+)
 async def stats_overview(
     _: object = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),

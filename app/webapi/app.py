@@ -8,6 +8,7 @@ from app.config import settings
 from .middleware import RequestLoggingMiddleware
 from .routes import (
     broadcasts,
+    backups,
     config,
     health,
     promocodes,
@@ -104,6 +105,7 @@ def create_web_api_app() -> FastAPI:
     app.include_router(promo_groups.router, prefix="/promo-groups", tags=["promo-groups"])
     app.include_router(promocodes.router, prefix="/promo-codes", tags=["promo-codes"])
     app.include_router(broadcasts.router, prefix="/broadcasts", tags=["broadcasts"])
+    app.include_router(backups.router, prefix="/backups", tags=["backups"])
     app.include_router(tokens.router, prefix="/tokens", tags=["auth"])
     app.include_router(remnawave.router, prefix="/remnawave", tags=["remnawave"])
 
