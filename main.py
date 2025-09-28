@@ -22,6 +22,7 @@ from app.services.backup_service import backup_service
 from app.services.reporting_service import reporting_service
 from app.localization.loader import ensure_locale_templates
 from app.services.system_settings_service import bot_configuration_service
+from app.services.broadcast_service import broadcast_service
 
 
 class GracefulExit:
@@ -96,10 +97,11 @@ async def main():
 
         logger.info("🤖 Настройка бота...")
         bot, dp = await setup_bot()
-        
+
         monitoring_service.bot = bot
         maintenance_service.set_bot(bot)
-        
+        broadcast_service.set_bot(bot)
+
         from app.services.admin_notification_service import AdminNotificationService
         admin_notification_service = AdminNotificationService(bot)
         version_service.bot = bot
