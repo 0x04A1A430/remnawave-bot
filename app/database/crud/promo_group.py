@@ -208,6 +208,7 @@ async def delete_promo_group(db: AsyncSession, group: PromoGroup) -> bool:
         logger.error("Не найдена базовая промогруппа для reassignment")
         return False
 
+
     await db.execute(
         update(User)
         .where(User.promo_group_id == group.id)
