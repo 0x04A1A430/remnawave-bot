@@ -26,7 +26,7 @@ def create_web_api_app() -> FastAPI:
         title=settings.WEB_API_TITLE,
         version=settings.WEB_API_VERSION,
         docs_url=docs_config.get("docs_url"),
-        redoc_url=docs_config.get("redoc_url"),
+        scalar_url=docs_config.get("scalar_url"),
         openapi_url=docs_config.get("openapi_url"),
         swagger_ui_parameters={"persistAuthorization": True},
     )
