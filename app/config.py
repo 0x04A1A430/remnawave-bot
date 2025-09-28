@@ -980,11 +980,11 @@ class Settings(BaseSettings):
         if self.WEB_API_DOCS_ENABLED:
             return {
                 "docs_url": "/docs",
-                "scalar_url": "/scalar",
+                "redoc_url": "/redoc",
                 "openapi_url": "/openapi.json",
             }
 
-        return {"docs_url": None, "scalar_url": None, "openapi_url": None}
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
 
     def get_support_system_mode(self) -> str:
         mode = (self.SUPPORT_SYSTEM_MODE or "both").strip().lower()
