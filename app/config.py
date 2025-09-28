@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import time
 from typing import List, Optional, Union, Dict
 from pydantic_settings import BaseSettings
-from pydantic import field_validator, Field, ValidationError
+from pydantic import field_validator, Field
 from pathlib import Path
 
 
@@ -999,46 +999,11 @@ class Settings(BaseSettings):
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
-        "extra": "ignore"
+        "extra": "ignore"  
     }
 
 
-def _load_settings() -> "Settings":
-    try:
-        return Settings()
-    except ValidationError as exc:
-        optional_defaults = {
-            "REMNAWAVE_API_URL": None,
-            "REMNAWAVE_API_KEY": None,
-            "TRIAL_SQUAD_UUID": None,
-        }
-        missing_fields = {
-            error.get("loc", [None])[0]
-            for error in exc.errors()
-            if error.get("type") == "missing"
-        }
-
-        missing_optionals = {
-            field for field in missing_fields if field in optional_defaults
-        }
-
-        if missing_optionals and missing_optionals == missing_fields:
-            logging.getLogger(__name__).warning(
-                "Отсутствуют опциональные переменные окружения: %s. Используются значения по умолчанию.",
-                ", ".join(sorted(missing_optionals)),
-            )
-            overrides = {
-                field: optional_defaults[field] for field in missing_optionals
-            }
-            try:
-                return Settings(**overrides)
-            except ValidationError:
-                pass
-
-        raise
-
-
-settings = _load_settings()
+settings = Settings()
 
 PERIOD_PRICES = {
     14: settings.PRICE_14_DAYS,
