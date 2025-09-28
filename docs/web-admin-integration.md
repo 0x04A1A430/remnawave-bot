@@ -69,7 +69,8 @@ python main.py
 
 ## 5. Аутентификация и токены
 
-- Первый токен удобно задать через `WEB_API_DEFAULT_TOKEN`. Он появится в таблице при запуске миграции.
+- Первый токен удобно задать через `WEB_API_DEFAULT_TOKEN`. Он появится в таблице при запуске миграции и будет автоматически
+  пересоздан/активирован после изменения значения через интерфейс настроек.
 - Для управления токенами используйте эндпоинты `/tokens`:
   - `GET /tokens` — список токенов.
   - `POST /tokens` — создать новый токен. Возвращает открытое значение один раз.
@@ -137,13 +138,25 @@ curl -X POST "http://127.0.0.1:8080/tokens" \
 | `GET` | `/remnawave/status` | Проверка конфигурации и доступности RemnaWave API. |
 | `GET` | `/remnawave/system` | Агрегированная статистика по пользователям, нодам и трафику. |
 | `GET` | `/remnawave/nodes` | Список нод и их текущее состояние. |
+| `GET` | `/remnawave/nodes/realtime` | Текущая загрузка нод (realtime-метрики RemnaWave). |
+| `GET` | `/remnawave/nodes/{uuid}` | Детальная информация по конкретной ноде. |
+| `GET` | `/remnawave/nodes/{uuid}/statistics` | Агрегированная статистика и история нагрузок по ноде. |
+| `GET` | `/remnawave/nodes/{uuid}/usage` | История использования ноды пользователями за выбранный период. |
 | `POST` | `/remnawave/nodes/{uuid}/actions` | Включение, отключение или перезапуск ноды. |
-| `GET` | `/remnawave/squads` | Управление сквадами и их инбаундами. |
+| `POST` | `/remnawave/nodes/restart` | Массовый перезапуск всех нод в RemnaWave. |
+| `GET` | `/remnawave/squads` | Список внутренних сквадов с составом и статистикой. |
+| `GET` | `/remnawave/squads/{uuid}` | Детали выбранного сквада. |
+| `POST` | `/remnawave/squads` | Создание нового сквада и привязка inbounds. |
+| `PATCH` | `/remnawave/squads/{uuid}` | Обновление имени или состава inbounds сквада. |
+| `POST` | `/remnawave/squads/{uuid}/actions` | Массовые операции: добавить/удалить всех, переименовать, обновить inbounds, удалить. |
+| `GET` | `/remnawave/inbounds` | Список доступных inbounds в панели RemnaWave. |
+| `GET` | `/remnawave/users/{telegram_id}/traffic` | Использование трафика конкретного пользователя RemnaWave. |
 | `POST` | `/remnawave/sync/from-panel` | Синхронизация пользователей и подписок из панели в бота. |
 | `POST` | `/remnawave/sync/to-panel` | Обратная синхронизация данных бота в панель. |
 | `POST` | `/remnawave/sync/subscriptions/validate` | Проверка и восстановление подписок в RemnaWave. |
-
-> Остальные операции (история трафика, рекомендации по синхронизации, очистка подписок и т. д.) также доступны в этом разделе Swagger UI.
+| `POST` | `/remnawave/sync/subscriptions/cleanup` | Очистка «осиротевших» подписок и пользователей в RemnaWave. |
+| `POST` | `/remnawave/sync/subscriptions/statuses` | Приведение статусов подписок в боте и панели к единому виду. |
+| `GET` | `/remnawave/sync/recommendations` | Рекомендации по синхронизации: что добавить, обновить или удалить. |
 
 
 > Все списковые эндпоинты поддерживают пагинацию (`limit`, `offset`) и фильтры, описанные в OpenAPI спецификации. Если `WEB_API_DOCS_ENABLED=true`, документация доступна по `/docs`. В ответах `/settings` поле `choices` всегда массив: пустой список означает отсутствие предопределённых значений.
