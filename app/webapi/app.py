@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 
 from app.config import settings
 
@@ -18,6 +19,8 @@ from .routes import (
     users,
 )
 
+from .docs import build_scalar_docs_html
+
 
 def create_web_api_app() -> FastAPI:
     docs_config = settings.get_web_api_docs_config()
@@ -26,7 +29,7 @@ def create_web_api_app() -> FastAPI:
         title=settings.WEB_API_TITLE,
         version=settings.WEB_API_VERSION,
         docs_url=docs_config.get("docs_url"),
-        redoc_url=docs_config.get("redoc_url"),
+        redoc_url=None,
         openapi_url=docs_config.get("openapi_url"),
         swagger_ui_parameters={"persistAuthorization": True},
     )
@@ -52,5 +55,16 @@ def create_web_api_app() -> FastAPI:
     app.include_router(transactions.router, prefix="/transactions", tags=["transactions"])
     app.include_router(promo_groups.router, prefix="/promo-groups", tags=["promo-groups"])
     app.include_router(tokens.router, prefix="/tokens", tags=["auth"])
+
+    scalar_url = docs_config.get("scalar_url")
+    if scalar_url and app.openapi_url:
+
+        @app.get(scalar_url, include_in_schema=False)
+        async def scalar_docs() -> HTMLResponse:
+            html_content = build_scalar_docs_html(
+                title=settings.WEB_API_TITLE,
+                openapi_url=app.openapi_url,
+            )
+            return HTMLResponse(content=html_content)
 
     return app
