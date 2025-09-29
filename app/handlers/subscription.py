@@ -2596,9 +2596,11 @@ async def confirm_extend_subscription(
         current_time = datetime.utcnow()
 
         if subscription.end_date > current_time:
-            subscription.end_date = subscription.end_date + timedelta(days=days)
+            new_end_date = subscription.end_date + timedelta(days=days)
         else:
-            subscription.end_date = current_time + timedelta(days=days)
+            new_end_date = current_time + timedelta(days=days)
+
+        subscription.end_date = new_end_date
 
         subscription.status = SubscriptionStatus.ACTIVE.value
         subscription.updated_at = current_time
@@ -2606,6 +2608,11 @@ async def confirm_extend_subscription(
         await db.commit()
         await db.refresh(subscription)
         await db.refresh(db_user)
+
+        # ensure freshly loaded values are available even if SQLAlchemy expires
+        # attributes on subsequent access
+        refreshed_end_date = subscription.end_date
+        refreshed_balance = db_user.balance_kopeks
 
         from app.database.crud.server_squad import get_server_ids_by_uuids
         from app.database.crud.subscription import add_subscription_servers
@@ -2651,7 +2658,14 @@ async def confirm_extend_subscription(
         try:
             notification_service = AdminNotificationService(callback.bot)
             await notification_service.send_subscription_extension_notification(
-                db, db_user, subscription, transaction, days, old_end_date
+                db,
+                db_user,
+                subscription,
+                transaction,
+                days,
+                old_end_date,
+                new_end_date=refreshed_end_date,
+                balance_after=refreshed_balance,
             )
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о продлении: {e}")
@@ -2659,7 +2673,7 @@ async def confirm_extend_subscription(
         success_message = (
             "✅ Подписка успешно продлена!\n\n"
             f"⏰ Добавлено: {days} дней\n"
-            f"Действует до: {subscription.end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"Действует до: {refreshed_end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
             f"💰 Списано: {texts.format_price(price)}"
         )
 

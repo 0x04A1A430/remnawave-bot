@@ -413,7 +413,10 @@ class AdminNotificationService:
         subscription: Subscription,
         transaction: Transaction,
         extended_days: int,
-        old_end_date: datetime
+        old_end_date: datetime,
+        *,
+        new_end_date: datetime | None = None,
+        balance_after: int | None = None,
     ) -> bool:
         if not self._is_enabled():
             return False
@@ -423,6 +426,9 @@ class AdminNotificationService:
             servers_info = await self._get_servers_info(subscription.connected_squads)
             promo_group = await self._get_user_promo_group(db, user)
             promo_block = self._format_promo_group_block(promo_group)
+
+            current_end_date = new_end_date or subscription.end_date
+            current_balance = balance_after if balance_after is not None else user.balance_kopeks
 
             message = f"""⏰ <b>ПРОДЛЕНИЕ ПОДПИСКИ</b>
 
@@ -440,14 +446,14 @@ class AdminNotificationService:
 📅 <b>Продление:</b>
 ➕ Добавлено дней: {extended_days}
 📆 Было до: {old_end_date.strftime('%d.%m.%Y %H:%M')}
-📆 Стало до: {subscription.end_date.strftime('%d.%m.%Y %H:%M')}
+📆 Стало до: {current_end_date.strftime('%d.%m.%Y %H:%M')}
 
 📱 <b>Текущие параметры:</b>
 📊 Трафик: {self._format_traffic(subscription.traffic_limit_gb)}
 📱 Устройства: {subscription.device_limit}
 🌐 Серверы: {servers_info}
 
-💰 <b>Баланс после операции:</b> {settings.format_price(user.balance_kopeks)}
+💰 <b>Баланс после операции:</b> {settings.format_price(current_balance)}
 
 ⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
 
