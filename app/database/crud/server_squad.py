@@ -2,11 +2,18 @@ import logging
 from datetime import datetime
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-from sqlalchemy import select, and_, func, update, delete, text
+from sqlalchemy import select, func, update, delete, text, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import PromoGroup, ServerSquad, SubscriptionServer, Subscription, User
+from app.database.models import (
+    PromoGroup,
+    ServerSquad,
+    SubscriptionServer,
+    Subscription,
+    SubscriptionStatus,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -351,11 +358,33 @@ async def get_server_connected_users(
     server_id: int
 ) -> List[User]:
 
+    server_uuid_result = await db.execute(
+        select(ServerSquad.squad_uuid).where(ServerSquad.id == server_id)
+    )
+    server_uuid = server_uuid_result.scalar_one_or_none()
+
+    if not server_uuid:
+        return []
+
+    active_statuses = [
+        SubscriptionStatus.ACTIVE.value,
+        SubscriptionStatus.TRIAL.value,
+    ]
+
     result = await db.execute(
         select(User)
         .join(Subscription, Subscription.user_id == User.id)
-        .join(SubscriptionServer, SubscriptionServer.subscription_id == Subscription.id)
-        .where(SubscriptionServer.server_squad_id == server_id)
+        .outerjoin(
+            SubscriptionServer,
+            SubscriptionServer.subscription_id == Subscription.id,
+        )
+        .where(
+            or_(
+                SubscriptionServer.server_squad_id == server_id,
+                Subscription.connected_squads.contains([server_uuid]),
+            )
+        )
+        .where(Subscription.status.in_(active_statuses))
         .options(selectinload(User.subscription))
         .order_by(User.id)
     )
