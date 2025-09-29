@@ -273,9 +273,10 @@ def get_main_menu_keyboard(
     support_row.append(InlineKeyboardButton(text=texts.MENU_RULES, callback_data="menu_rules"))
     keyboard.append(support_row)
 
-    keyboard.append([
-        InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data="menu_language")
-    ])
+    if settings.is_language_selection_enabled():
+        keyboard.append([
+            InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data="menu_language")
+        ])
     if settings.DEBUG:
         print(f"DEBUG KEYBOARD: is_admin={is_admin}, добавляем админ кнопку: {is_admin}")
 

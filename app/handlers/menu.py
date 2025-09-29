@@ -105,6 +105,16 @@ async def show_language_menu(
 ):
     texts = get_texts(db_user.language)
 
+    if not settings.is_language_selection_enabled():
+        await callback.answer(
+            texts.t(
+                "LANGUAGE_SELECTION_DISABLED",
+                "⚙️ Выбор языка временно недоступен.",
+            ),
+            show_alert=True,
+        )
+        return
+
     await edit_or_answer_photo(
         callback=callback,
         caption=texts.t("LANGUAGE_PROMPT", "🌐 Выберите язык интерфейса:"),
@@ -123,6 +133,18 @@ async def process_language_change(
     db_user: User,
     db: AsyncSession,
 ):
+    texts = get_texts(db_user.language)
+
+    if not settings.is_language_selection_enabled():
+        await callback.answer(
+            texts.t(
+                "LANGUAGE_SELECTION_DISABLED",
+                "⚙️ Выбор языка временно недоступен.",
+            ),
+            show_alert=True,
+        )
+        return
+
     selected_raw = (callback.data or "").split(":", 1)[-1]
     normalized_selected = selected_raw.strip().lower()
 
@@ -139,7 +161,6 @@ async def process_language_change(
     resolved_language = available_map[normalized_selected].lower()
 
     if db_user.language.lower() == normalized_selected:
-        texts = get_texts(db_user.language)
         await show_main_menu(
             callback,
             db_user,

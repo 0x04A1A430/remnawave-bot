@@ -226,6 +226,7 @@ class Settings(BaseSettings):
 
     DEFAULT_LANGUAGE: str = "ru"
     AVAILABLE_LANGUAGES: str = "ru,en"
+    LANGUAGE_SELECTION_ENABLED: bool = True
     
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "logs/bot.log"
@@ -452,7 +453,10 @@ class Settings(BaseSettings):
             return ["ru", "en"]
         except AttributeError:
             return ["ru", "en"]
-    
+
+    def is_language_selection_enabled(self) -> bool:
+        return bool(getattr(self, "LANGUAGE_SELECTION_ENABLED", True))
+
     def format_price(self, price_kopeks: int) -> str:
         rubles = price_kopeks // 100
         return f"{rubles} ₽"
