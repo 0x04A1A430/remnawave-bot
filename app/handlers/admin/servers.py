@@ -365,7 +365,7 @@ async def show_server_users(
         await callback.answer("❌ Сервер не найден!", show_alert=True)
         return
 
-    users = await get_server_connected_users(db, server_id, server.squad_uuid)
+    users = await get_server_connected_users(db, server_id)
 
     safe_name = html.escape(server.display_name or "—")
     safe_uuid = html.escape(server.squad_uuid or "—")
