@@ -984,6 +984,7 @@ async def ensure_promo_groups_setup():
                 logger.info(
                     "Добавлена колонка promo_groups.apply_discounts_to_addons"
                 )
+                addon_discount_column_exists = True
 
             column_exists = await check_column_exists("users", "promo_group_id")
 
@@ -1116,9 +1117,25 @@ async def ensure_promo_groups_setup():
                 if existing_default:
                     default_group_id = existing_default[0]
                 else:
-                    await conn.execute(
-                        text(
-                            """
+                    insert_params = {
+                        "name": default_group_name,
+                        "is_default": True,
+                    }
+
+                    if addon_discount_column_exists:
+                        insert_sql = """
+                            INSERT INTO promo_groups (
+                                name,
+                                server_discount_percent,
+                                traffic_discount_percent,
+                                device_discount_percent,
+                                apply_discounts_to_addons,
+                                is_default
+                            ) VALUES (:name, 0, 0, 0, :apply_discounts_to_addons, :is_default)
+                        """
+                        insert_params["apply_discounts_to_addons"] = True
+                    else:
+                        insert_sql = """
                             INSERT INTO promo_groups (
                                 name,
                                 server_discount_percent,
@@ -1127,9 +1144,8 @@ async def ensure_promo_groups_setup():
                                 is_default
                             ) VALUES (:name, 0, 0, 0, :is_default)
                         """
-                        ),
-                        {"name": default_group_name, "is_default": True},
-                    )
+
+                    await conn.execute(text(insert_sql), insert_params)
 
                     result = await conn.execute(
                         text(
