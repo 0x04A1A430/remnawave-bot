@@ -27,6 +27,7 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
         pass
     if LOGO_PATH.exists():
         try:
+            # Отправляем caption как есть; при ошибке парсинга ниже сработает фоллбек
             return await self.answer_photo(FSInputFile(LOGO_PATH), caption=text, **kwargs)
         except Exception:
             # Фоллбек, если Telegram ругается на caption: отправим как текст

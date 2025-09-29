@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.database.models import User, UserStatus, Subscription, Transaction, PromoGroup
 from app.config import settings
 from app.database.crud.promo_group import get_default_promo_group
+from app.utils.validators import sanitize_telegram_name
 
 logger = logging.getLogger(__name__)
 
@@ -104,11 +105,13 @@ async def create_user(
 
     promo_group_id = default_group.id
 
+    safe_first = sanitize_telegram_name(first_name)
+    safe_last = sanitize_telegram_name(last_name)
     user = User(
         telegram_id=telegram_id,
         username=username,
-        first_name=first_name,
-        last_name=last_name,
+        first_name=safe_first,
+        last_name=safe_last,
         language=language,
         referred_by_id=referred_by_id,
         referral_code=referral_code,
@@ -136,7 +139,10 @@ async def update_user(
     **kwargs
 ) -> User:
     
+    from app.utils.validators import sanitize_telegram_name
     for field, value in kwargs.items():
+        if field in ("first_name", "last_name"):
+            value = sanitize_telegram_name(value)
         if hasattr(user, field):
             setattr(user, field, value)
     
