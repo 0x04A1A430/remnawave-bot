@@ -569,6 +569,13 @@ class Settings(BaseSettings):
     def is_happ_download_button_enabled(self) -> bool:
         return self.is_happ_cryptolink_mode() and self.CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED
 
+    def should_hide_subscription_link(self) -> bool:
+        """Returns True when subscription links must be hidden from the interface."""
+
+        if self.is_happ_cryptolink_mode():
+            return False
+        return self.HIDE_SUBSCRIPTION_LINK
+
     def get_happ_cryptolink_redirect_template(self) -> Optional[str]:
         template = (self.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE or "").strip()
         return template or None
