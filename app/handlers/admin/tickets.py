@@ -219,15 +219,19 @@ async def view_admin_ticket(
             keyboard.inline_keyboard.insert(0, [admin_profile_btn])
     except Exception:
         pass
-    # Кнопки профиля и быстрого ЛС
+    # Кнопки ЛС и профиль
     try:
         if ticket.user and ticket.user.telegram_id:
             buttons_row = []
+            # DM: при наличии username используем tg://resolve, иначе fallback по ID
             if ticket.user.username:
-                profile_url = f"https://t.me/{ticket.user.username}"
-                buttons_row.append(types.InlineKeyboardButton(text="👤 Профиль", url=profile_url))
-            pm_url = f"tg://user?id={ticket.user.telegram_id}"
+                pm_url = f"tg://resolve?domain={ticket.user.username}"
+            else:
+                pm_url = f"tg://user?id={ticket.user.telegram_id}"
             buttons_row.append(types.InlineKeyboardButton(text="✉ Написать в ЛС", url=pm_url))
+            # Профиль: по ID
+            profile_url = f"tg://user?id={ticket.user.telegram_id}"
+            buttons_row.append(types.InlineKeyboardButton(text="👤 Профиль", url=profile_url))
             if buttons_row:
                 keyboard.inline_keyboard.insert(0, buttons_row)
     except Exception:
@@ -697,15 +701,17 @@ async def handle_admin_block_duration_input(
                     kb.inline_keyboard.insert(0, [admin_profile_btn])
             except Exception:
                 pass
-            # Кнопки профиля и ЛС при обновлении карточки
+            # Кнопки ЛС и профиль при обновлении карточки
             try:
                 if updated.user and updated.user.telegram_id:
                     buttons_row = []
                     if updated.user.username:
-                        profile_url = f"https://t.me/{updated.user.username}"
-                        buttons_row.append(types.InlineKeyboardButton(text="👤 Профиль", url=profile_url))
-                    pm_url = f"tg://user?id={updated.user.telegram_id}"
+                        pm_url = f"tg://resolve?domain={updated.user.username}"
+                    else:
+                        pm_url = f"tg://user?id={updated.user.telegram_id}"
                     buttons_row.append(types.InlineKeyboardButton(text="✉ Написать в ЛС", url=pm_url))
+                    profile_url = f"tg://user?id={updated.user.telegram_id}"
+                    buttons_row.append(types.InlineKeyboardButton(text="👤 Профиль", url=profile_url))
                     if buttons_row:
                         kb.inline_keyboard.insert(0, buttons_row)
             except Exception:

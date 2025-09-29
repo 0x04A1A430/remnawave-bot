@@ -12,6 +12,7 @@ from app.database.crud.user import get_user_by_telegram_id, create_user
 from app.services.remnawave_service import RemnaWaveService
 from app.states import RegistrationStates
 from app.utils.check_reg_process import is_registration_process
+from app.utils.validators import sanitize_telegram_name
 
 logger = logging.getLogger(__name__)
 
@@ -158,15 +159,17 @@ class AuthMiddleware(BaseMiddleware):
                         logger.info(f"🔄 [Middleware] Username обновлен для {user.id}: '{old_username}' → '{db_user.username}'")
                         profile_updated = True
                     
-                    if db_user.first_name != user.first_name:
+                    safe_first = sanitize_telegram_name(user.first_name)
+                    safe_last = sanitize_telegram_name(user.last_name)
+                    if db_user.first_name != safe_first:
                         old_first_name = db_user.first_name
-                        db_user.first_name = user.first_name
+                        db_user.first_name = safe_first
                         logger.info(f"🔄 [Middleware] Имя обновлено для {user.id}: '{old_first_name}' → '{db_user.first_name}'")
                         profile_updated = True
                     
-                    if db_user.last_name != user.last_name:
+                    if db_user.last_name != safe_last:
                         old_last_name = db_user.last_name
-                        db_user.last_name = user.last_name
+                        db_user.last_name = safe_last
                         logger.info(f"🔄 [Middleware] Фамилия обновлена для {user.id}: '{old_last_name}' → '{db_user.last_name}'")
                         profile_updated = True
                     
