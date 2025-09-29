@@ -404,8 +404,22 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     
     data = await state.get_data() or {}
     if not data.get('language'):
-        await _prompt_language_selection(message, state)
-        return
+        if settings.is_language_selection_enabled():
+            await _prompt_language_selection(message, state)
+            return
+
+        default_language = (
+            (settings.DEFAULT_LANGUAGE or DEFAULT_LANGUAGE)
+            if isinstance(settings.DEFAULT_LANGUAGE, str)
+            else DEFAULT_LANGUAGE
+        )
+        normalized_default = default_language.split("-")[0].lower()
+        data['language'] = normalized_default
+        await state.set_data(data)
+        logger.info(
+            "🌐 LANGUAGE: выбор языка отключен, устанавливаем язык по умолчанию '%s'",
+            normalized_default,
+        )
 
     await _continue_registration_after_language(
         message=message,
@@ -423,6 +437,44 @@ async def process_language_selection(
     logger.info(
         f"🌐 LANGUAGE: Пользователь {callback.from_user.id} выбрал язык ({callback.data})"
     )
+
+    if not settings.is_language_selection_enabled():
+        data = await state.get_data() or {}
+        default_language = (
+            (settings.DEFAULT_LANGUAGE or DEFAULT_LANGUAGE)
+            if isinstance(settings.DEFAULT_LANGUAGE, str)
+            else DEFAULT_LANGUAGE
+        )
+        normalized_default = default_language.split("-")[0].lower()
+        data['language'] = normalized_default
+        await state.set_data(data)
+
+        texts = get_texts(normalized_default)
+
+        try:
+            await callback.message.edit_text(
+                texts.t(
+                    "LANGUAGE_SELECTION_DISABLED",
+                    "⚙️ Выбор языка временно недоступен. Используем язык по умолчанию.",
+                )
+            )
+        except Exception:
+            await callback.message.answer(
+                texts.t(
+                    "LANGUAGE_SELECTION_DISABLED",
+                    "⚙️ Выбор языка временно недоступен. Используем язык по умолчанию.",
+                )
+            )
+
+        await callback.answer()
+
+        await _continue_registration_after_language(
+            message=None,
+            callback=callback,
+            state=state,
+            db=db,
+        )
+        return
 
     selected_raw = (callback.data or "").split(":", 1)[-1]
     normalized_selected = selected_raw.strip().lower()
