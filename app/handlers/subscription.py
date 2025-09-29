@@ -292,13 +292,15 @@ async def _prepare_subscription_summary(
         else:
             traffic_display = f"{summary_data.get('traffic_gb', 0)} ГБ"
 
-    base_line = f"- Базовый период: {texts.format_price(base_price_original)}"
     if base_discount_total > 0:
-        base_line += (
-            f" → {texts.format_price(base_price)}"
+        base_line = (
+            f"- Базовый период: <s>{texts.format_price(base_price_original)}</s> "
+            f"{texts.format_price(base_price)}"
             f" (скидка {period_discount_percent}%:"
             f" -{texts.format_price(base_discount_total)})"
         )
+    else:
+        base_line = f"- Базовый период: {texts.format_price(base_price_original)}"
 
     details_lines = [base_line]
 
