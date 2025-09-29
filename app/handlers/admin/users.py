@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timedelta
+from typing import Optional
 from aiogram import Dispatcher, types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
@@ -25,7 +26,13 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
 from app.services.remnawave_service import RemnaWaveService
 from app.external.remnawave_api import TrafficLimitStrategy
-from app.database.crud.server_squad import get_all_server_squads, get_server_squad_by_uuid, get_server_squad_by_id
+from app.database.crud.server_squad import (
+    get_all_server_squads,
+    get_server_squad_by_uuid,
+    get_server_squad_by_id,
+    get_server_ids_by_uuids,
+)
+from app.services.subscription_service import SubscriptionService
 
 logger = logging.getLogger(__name__)
 
@@ -2637,6 +2644,56 @@ async def _grant_paid_subscription(db: AsyncSession, user_id: int, days: int, ad
         logger.error(f"Ошибка выдачи платной подписки: {e}")
         return False
 
+
+async def _calculate_subscription_period_price(
+    db: AsyncSession,
+    target_user: User,
+    subscription: Subscription,
+    period_days: int,
+    subscription_service: Optional[SubscriptionService] = None,
+) -> int:
+    """Рассчитывает стоимость подписки для администратора с учётом всех параметров."""
+
+    service = subscription_service or SubscriptionService()
+
+    connected_squads = list(subscription.connected_squads or [])
+    server_ids = []
+
+    if connected_squads:
+        try:
+            server_ids = await get_server_ids_by_uuids(db, connected_squads)
+            if len(server_ids) != len(connected_squads):
+                logger.warning(
+                    "Не удалось сопоставить все сервера подписки пользователя %s для расчёта цены",
+                    target_user.telegram_id,
+                )
+        except Exception as e:
+            logger.error(
+                "Не удалось получить идентификаторы серверов для расчёта цены подписки пользователя %s: %s",
+                target_user.telegram_id,
+                e,
+            )
+            server_ids = []
+    traffic_limit_gb = subscription.traffic_limit_gb
+    if traffic_limit_gb is None:
+        traffic_limit_gb = settings.DEFAULT_TRAFFIC_LIMIT_GB
+
+    device_limit = subscription.device_limit
+    if not device_limit or device_limit < 0:
+        device_limit = settings.DEFAULT_DEVICE_LIMIT
+
+    total_price, _ = await service.calculate_subscription_price(
+        period_days=period_days,
+        traffic_gb=traffic_limit_gb,
+        server_squad_ids=server_ids,
+        devices=device_limit,
+        db=db,
+        user=target_user,
+        promo_group=target_user.promo_group,
+    )
+
+    return total_price
+
 @admin_required
 @error_handler
 async def cleanup_inactive_users(
@@ -2735,30 +2792,55 @@ async def admin_buy_subscription(
         return
     
     available_periods = settings.get_available_subscription_periods()
-    
+
+    subscription_service = SubscriptionService()
     period_buttons = []
+
     for period in available_periods:
-        price_attr = f"PRICE_{period}_DAYS"
-        if hasattr(settings, price_attr):
-            price_kopeks = getattr(settings, price_attr)
-            price_rubles = price_kopeks // 100
-            period_buttons.append([
-                types.InlineKeyboardButton(
-                    text=f"{period} дней ({price_rubles} ₽)",
-                    callback_data=f"admin_buy_sub_confirm_{user_id}_{period}_{price_kopeks}"
-                )
-            ])
-    
+        try:
+            price_kopeks = await _calculate_subscription_period_price(
+                db,
+                target_user,
+                subscription,
+                period,
+                subscription_service=subscription_service,
+            )
+        except Exception as e:
+            logger.error(
+                "Ошибка расчёта стоимости подписки для пользователя %s и периода %s дней: %s",
+                target_user.telegram_id,
+                period,
+                e,
+            )
+            continue
+
+        period_buttons.append([
+            types.InlineKeyboardButton(
+                text=f"{period} дней ({settings.format_price(price_kopeks)})",
+                callback_data=f"admin_buy_sub_confirm_{user_id}_{period}_{price_kopeks}"
+            )
+        ])
+
+    if not period_buttons:
+        await callback.answer("❌ Не удалось рассчитать стоимость подписки", show_alert=True)
+        return
+
     period_buttons.append([
         types.InlineKeyboardButton(
             text="❌ Отмена",
             callback_data=f"admin_user_subscription_{user_id}"
         )
     ])
-    
+
     text = f"💳 <b>Покупка подписки для пользователя</b>\n\n"
     text += f"👤 {target_user.full_name} (ID: {target_user.telegram_id})\n"
     text += f"💰 Баланс пользователя: {settings.format_price(target_user.balance_kopeks)}\n\n"
+    traffic_text = "Безлимит" if (subscription.traffic_limit_gb or 0) <= 0 else f"{subscription.traffic_limit_gb} ГБ"
+    devices_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
+    servers_count = len(subscription.connected_squads or [])
+    text += f"📶 Трафик: {traffic_text}\n"
+    text += f"📱 Устройства: {devices_limit}\n"
+    text += f"🌐 Серверов: {servers_count}\n\n"
     text += "Выберите период подписки:\n"
     
     await callback.message.edit_text(
@@ -2778,7 +2860,7 @@ async def admin_buy_subscription_confirm(
     parts = callback.data.split('_')
     user_id = int(parts[4])
     period_days = int(parts[5])
-    price_kopeks = int(parts[6])
+    price_kopeks_from_callback = int(parts[6]) if len(parts) > 6 else None
     
     user_service = UserService()
     profile = await user_service.get_user_profile(db, user_id)
@@ -2789,7 +2871,38 @@ async def admin_buy_subscription_confirm(
     
     target_user = profile["user"]
     subscription = profile["subscription"]
-    
+
+    if not subscription:
+        await callback.answer("❌ У пользователя нет подписки", show_alert=True)
+        return
+
+    subscription_service = SubscriptionService()
+
+    try:
+        price_kopeks = await _calculate_subscription_period_price(
+            db,
+            target_user,
+            subscription,
+            period_days,
+            subscription_service=subscription_service,
+        )
+    except Exception as e:
+        logger.error(
+            "Ошибка расчёта стоимости подписки при подтверждении админом для пользователя %s: %s",
+            target_user.telegram_id,
+            e,
+        )
+        await callback.answer("❌ Не удалось рассчитать стоимость подписки", show_alert=True)
+        return
+
+    if price_kopeks_from_callback is not None and price_kopeks_from_callback != price_kopeks:
+        logger.info(
+            "Стоимость подписки для пользователя %s изменилась с %s до %s при подтверждении",
+            target_user.telegram_id,
+            price_kopeks_from_callback,
+            price_kopeks,
+        )
+
     if target_user.balance_kopeks < price_kopeks:
         missing_kopeks = price_kopeks - target_user.balance_kopeks
         await callback.message.edit_text(
@@ -2808,12 +2921,17 @@ async def admin_buy_subscription_confirm(
         await callback.answer()
         return
     
-    price_rubles = price_kopeks // 100
     text = f"💳 <b>Подтверждение покупки подписки</b>\n\n"
     text += f"👤 {target_user.full_name} (ID: {target_user.telegram_id})\n"
     text += f"📅 Период подписки: {period_days} дней\n"
     text += f"💰 Стоимость: {settings.format_price(price_kopeks)}\n"
     text += f"💰 Баланс пользователя: {settings.format_price(target_user.balance_kopeks)}\n\n"
+    traffic_text = "Безлимит" if (subscription.traffic_limit_gb or 0) <= 0 else f"{subscription.traffic_limit_gb} ГБ"
+    devices_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
+    servers_count = len(subscription.connected_squads or [])
+    text += f"📶 Трафик: {traffic_text}\n"
+    text += f"📱 Устройства: {devices_limit}\n"
+    text += f"🌐 Серверов: {servers_count}\n\n"
     text += "Вы уверены, что хотите купить подписку для этого пользователя?"
     
     keyboard = [
@@ -2848,7 +2966,7 @@ async def admin_buy_subscription_execute(
     parts = callback.data.split('_')
     user_id = int(parts[4])
     period_days = int(parts[5])
-    price_kopeks = int(parts[6])
+    price_kopeks_from_callback = int(parts[6]) if len(parts) > 6 else None
     
     user_service = UserService()
     profile = await user_service.get_user_profile(db, user_id)
@@ -2859,7 +2977,38 @@ async def admin_buy_subscription_execute(
     
     target_user = profile["user"]
     subscription = profile["subscription"]
-    
+
+    if not subscription:
+        await callback.answer("❌ У пользователя нет подписки", show_alert=True)
+        return
+
+    subscription_service = SubscriptionService()
+
+    try:
+        price_kopeks = await _calculate_subscription_period_price(
+            db,
+            target_user,
+            subscription,
+            period_days,
+            subscription_service=subscription_service,
+        )
+    except Exception as e:
+        logger.error(
+            "Ошибка расчёта стоимости подписки при списании средств админом для пользователя %s: %s",
+            target_user.telegram_id,
+            e,
+        )
+        await callback.answer("❌ Не удалось рассчитать стоимость подписки", show_alert=True)
+        return
+
+    if price_kopeks_from_callback is not None and price_kopeks_from_callback != price_kopeks:
+        logger.info(
+            "Стоимость подписки для пользователя %s изменилась с %s до %s перед списанием",
+            target_user.telegram_id,
+            price_kopeks_from_callback,
+            price_kopeks,
+        )
+
     if target_user.balance_kopeks < price_kopeks:
         await callback.answer("❌ Недостаточно средств на балансе пользователя", show_alert=True)
         return
