@@ -2,7 +2,17 @@ import logging
 from datetime import datetime
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-from sqlalchemy import select, and_, func, update, delete, text
+from sqlalchemy import (
+    select,
+    and_,
+    func,
+    update,
+    delete,
+    text,
+    or_,
+    cast,
+    String,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -351,11 +361,31 @@ async def get_server_connected_users(
     server_id: int
 ) -> List[User]:
 
+    server_uuid_result = await db.execute(
+        select(ServerSquad.squad_uuid).where(ServerSquad.id == server_id)
+    )
+    server_uuid = server_uuid_result.scalar_one_or_none()
+
+    connection_filters = [SubscriptionServer.id.isnot(None)]
+
+    if server_uuid:
+        connection_filters.append(
+            cast(Subscription.connected_squads, String).like(
+                f'%"{server_uuid}"%'
+            )
+        )
+
     result = await db.execute(
         select(User)
         .join(Subscription, Subscription.user_id == User.id)
-        .join(SubscriptionServer, SubscriptionServer.subscription_id == Subscription.id)
-        .where(SubscriptionServer.server_squad_id == server_id)
+        .outerjoin(
+            SubscriptionServer,
+            and_(
+                SubscriptionServer.subscription_id == Subscription.id,
+                SubscriptionServer.server_squad_id == server_id,
+            ),
+        )
+        .where(or_(*connection_filters))
         .options(selectinload(User.subscription))
         .order_by(User.id)
     )
