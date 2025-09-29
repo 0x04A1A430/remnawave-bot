@@ -7,7 +7,15 @@ from sqlalchemy import select, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import User, UserStatus, Subscription, Transaction, PromoGroup
+from app.database.models import (
+    User,
+    UserStatus,
+    Subscription,
+    Transaction,
+    PromoGroup,
+    PaymentMethod,
+    TransactionType,
+)
 from app.config import settings
 from app.database.crud.promo_group import get_default_promo_group
 from app.utils.validators import sanitize_telegram_name
@@ -211,10 +219,12 @@ async def add_user_balance_by_id(
 
 
 async def subtract_user_balance(
-    db: AsyncSession, 
-    user: User, 
-    amount_kopeks: int, 
-    description: str
+    db: AsyncSession,
+    user: User,
+    amount_kopeks: int,
+    description: str,
+    create_transaction: bool = False,
+    payment_method: Optional[PaymentMethod] = None,
 ) -> bool:
     logger.error(f"💸 ОТЛАДКА subtract_user_balance:")
     logger.error(f"   👤 User ID: {user.id} (TG: {user.telegram_id})")
@@ -233,7 +243,21 @@ async def subtract_user_balance(
         
         await db.commit()
         await db.refresh(user)
-        
+
+        if create_transaction:
+            from app.database.crud.transaction import (
+                create_transaction as create_trans,
+            )
+
+            await create_trans(
+                db=db,
+                user_id=user.id,
+                type=TransactionType.WITHDRAWAL,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                payment_method=payment_method,
+            )
+
         logger.error(f"   ✅ Средства списаны: {old_balance} → {user.balance_kopeks}")
         return True
         
