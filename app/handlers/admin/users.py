@@ -2877,16 +2877,31 @@ async def admin_buy_subscription_execute(
         
         if subscription:
             current_time = datetime.utcnow()
-            
+            bonus_period = timedelta()
+
+            if (
+                subscription.is_trial
+                and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID
+                and subscription.end_date
+            ):
+                remaining_trial_delta = subscription.end_date - current_time
+                if remaining_trial_delta.total_seconds() > 0:
+                    bonus_period = remaining_trial_delta
+                    logger.info(
+                        "Админ продлевает подписку: добавляем оставшееся время триала (%s) пользователю %s",
+                        bonus_period,
+                        target_user.telegram_id,
+                    )
+
             if subscription.end_date <= current_time:
                 subscription.start_date = current_time
-                
-            subscription.end_date = current_time + timedelta(days=period_days)
+
+            subscription.end_date = current_time + timedelta(days=period_days) + bonus_period
             subscription.status = SubscriptionStatus.ACTIVE.value
             subscription.updated_at = current_time
-            
+
             if subscription.is_trial or not subscription.is_active:
-                subscription.is_trial = False  
+                subscription.is_trial = False
                 if subscription.traffic_limit_gb != 0: 
                     subscription.traffic_limit_gb = 0
                 subscription.device_limit = settings.DEFAULT_DEVICE_LIMIT

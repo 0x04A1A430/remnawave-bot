@@ -3433,16 +3433,29 @@ async def confirm_purchase(
         
         existing_subscription = db_user.subscription
         was_trial_conversion = False
-        
+        current_time = datetime.utcnow()
+
         if existing_subscription:
             logger.info(f"Обновляем существующую подписку пользователя {db_user.telegram_id}")
-            
+
+            bonus_period = timedelta()
+
             if existing_subscription.is_trial:
                 logger.info(f"Конверсия из триала в платную для пользователя {db_user.telegram_id}")
                 was_trial_conversion = True
-                
-                trial_duration = (datetime.utcnow() - existing_subscription.start_date).days
-                
+
+                trial_duration = (current_time - existing_subscription.start_date).days
+
+                if settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID and existing_subscription.end_date:
+                    remaining_trial_delta = existing_subscription.end_date - current_time
+                    if remaining_trial_delta.total_seconds() > 0:
+                        bonus_period = remaining_trial_delta
+                        logger.info(
+                            "Добавляем оставшееся время триала (%s) к новой подписке пользователя %s",
+                            bonus_period,
+                            db_user.telegram_id,
+                        )
+
                 try:
                     from app.database.crud.subscription_conversion import create_subscription_conversion
                     await create_subscription_conversion(
@@ -3462,13 +3475,13 @@ async def confirm_purchase(
             existing_subscription.traffic_limit_gb = final_traffic_gb
             existing_subscription.device_limit = data['devices']
             existing_subscription.connected_squads = data['countries']
-            
-            existing_subscription.start_date = datetime.utcnow()
-            existing_subscription.end_date = datetime.utcnow() + timedelta(days=data['period_days'])
-            existing_subscription.updated_at = datetime.utcnow()
-            
+
+            existing_subscription.start_date = current_time
+            existing_subscription.end_date = current_time + timedelta(days=data['period_days']) + bonus_period
+            existing_subscription.updated_at = current_time
+
             existing_subscription.traffic_used_gb = 0.0
-            
+
             await db.commit()
             await db.refresh(existing_subscription)
             subscription = existing_subscription
