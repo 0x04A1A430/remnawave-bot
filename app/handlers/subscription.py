@@ -2625,7 +2625,12 @@ async def confirm_extend_subscription(
             await add_subscription_servers(db, subscription, server_ids, server_prices_for_period)
 
         try:
-            remnawave_result = await subscription_service.update_remnawave_user(db, subscription)
+            remnawave_result = await subscription_service.update_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason="продление подписки",
+            )
             if remnawave_result:
                 logger.info("✅ RemnaWave обновлен успешно")
             else:
@@ -3516,13 +3521,28 @@ async def confirm_purchase(
         subscription_service = SubscriptionService()
         
         if db_user.remnawave_uuid:
-            remnawave_user = await subscription_service.update_remnawave_user(db, subscription)
+            remnawave_user = await subscription_service.update_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason="покупка подписки",
+            )
         else:
-            remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
+            remnawave_user = await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason="покупка подписки",
+            )
             
         if not remnawave_user:
             logger.error(f"Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}")
-            remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
+            remnawave_user = await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason="покупка подписки (повторная попытка)",
+            )
         
         transaction = await create_transaction(
             db=db,

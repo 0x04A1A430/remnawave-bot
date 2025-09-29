@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     DEFAULT_DEVICE_LIMIT: int = 1
     TRIAL_SQUAD_UUID: str = ""
     DEFAULT_TRAFFIC_RESET_STRATEGY: str = "MONTH"
+    RESET_TRAFFIC_ON_PAYMENT: bool = False
     MAX_DEVICES_LIMIT: int = 20
     
     TRIAL_WARNING_HOURS: int = 2 

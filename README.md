@@ -335,6 +335,8 @@ DEFAULT_TRAFFIC_LIMIT_GB=100
 
 # ===== ГЛОБАЛЬНЫЙ ПАРАМЕТР ДЛЯ ВСЕХ ПОДПИСОК =====
 DEFAULT_TRAFFIC_RESET_STRATEGY=MONTH
+# Сбрасывать трафик при каждой оплате подписки
+RESET_TRAFFIC_ON_PAYMENT=false
 
 # ===== НАСТРОЙКИ ТРАФИКА =====
 # Режим выбора трафика:
