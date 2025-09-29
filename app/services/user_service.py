@@ -18,7 +18,7 @@ from app.database.models import (
     ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory,
     CryptoBotPayment, SubscriptionConversion, UserMessage, WelcomeText,
     SentNotification, PromoGroup, MulenPayPayment, Pal24Payment,
-    AdvertisingCampaign
+    AdvertisingCampaign, PaymentMethod
 )
 from app.config import settings
 
@@ -203,7 +203,14 @@ class UserService:
                 logger.info(f"Админ {admin_id} пополнил баланс пользователя {user_id} на {amount_kopeks/100}₽")
                 success = True
             else:
-                success = await subtract_user_balance(db, user, abs(amount_kopeks), description)
+                success = await subtract_user_balance(
+                    db,
+                    user,
+                    abs(amount_kopeks),
+                    description,
+                    create_transaction=True,
+                    payment_method=PaymentMethod.MANUAL,
+                )
                 if success:
                     logger.info(f"Админ {admin_id} списал с баланса пользователя {user_id} {abs(amount_kopeks)/100}₽")
 
