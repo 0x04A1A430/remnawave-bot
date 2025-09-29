@@ -19,7 +19,10 @@ from app.database.crud.campaign import (
 )
 from app.database.models import UserStatus, SubscriptionStatus
 from app.keyboards.inline import (
-    get_rules_keyboard, get_main_menu_keyboard, get_post_registration_keyboard
+    get_rules_keyboard,
+    get_main_menu_keyboard,
+    get_post_registration_keyboard,
+    get_language_selection_keyboard,
 )
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts, get_rules
@@ -73,8 +76,8 @@ async def _apply_campaign_bonus_if_needed(
 
 
 async def handle_potential_referral_code(
-    message: types.Message, 
-    state: FSMContext, 
+    message: types.Message,
+    state: FSMContext,
     db: AsyncSession
 ):
     current_state = await state.get_state()
@@ -134,7 +137,80 @@ async def handle_potential_referral_code(
     else:
         await complete_registration(message, state, db)
     
-    return True 
+    return True
+
+
+def _get_language_prompt_text() -> str:
+    return "🌐 Выберите язык / Choose your language:"
+
+
+async def _prompt_language_selection(message: types.Message, state: FSMContext) -> None:
+    logger.info(f"🌐 LANGUAGE: Запрос выбора языка для пользователя {message.from_user.id}")
+
+    await state.set_state(RegistrationStates.waiting_for_language)
+    await message.answer(
+        _get_language_prompt_text(),
+        reply_markup=get_language_selection_keyboard(),
+    )
+
+
+async def _continue_registration_after_language(
+    *,
+    message: types.Message | None,
+    callback: types.CallbackQuery | None,
+    state: FSMContext,
+    db: AsyncSession,
+) -> None:
+    data = await state.get_data() or {}
+    language = data.get('language', DEFAULT_LANGUAGE)
+    texts = get_texts(language)
+
+    target_message = callback.message if callback else message
+    if not target_message:
+        logger.warning("⚠️ LANGUAGE: Нет доступного сообщения для продолжения регистрации")
+        return
+
+    async def _complete_registration_wrapper():
+        if callback:
+            await complete_registration_from_callback(callback, state, db)
+        else:
+            await complete_registration(message, state, db)
+
+    if settings.SKIP_RULES_ACCEPT:
+        logger.info("⚙️ LANGUAGE: SKIP_RULES_ACCEPT включен - пропускаем правила")
+
+        if data.get('referral_code'):
+            referrer = await get_user_by_referral_code(db, data['referral_code'])
+            if referrer:
+                data['referrer_id'] = referrer.id
+                await state.set_data(data)
+                logger.info(f"✅ LANGUAGE: Реферер найден: {referrer.id}")
+
+        if settings.SKIP_REFERRAL_CODE or data.get('referral_code'):
+            await _complete_registration_wrapper()
+        else:
+            try:
+                await target_message.answer(
+                    texts.t(
+                        "REFERRAL_CODE_QUESTION",
+                        "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
+                    ),
+                    reply_markup=get_referral_code_keyboard(language)
+                )
+                await state.set_state(RegistrationStates.waiting_for_referral_code)
+                logger.info("🔍 LANGUAGE: Ожидание ввода реферального кода")
+            except Exception as error:
+                logger.error(f"Ошибка при показе вопроса о реферальном коде после выбора языка: {error}")
+                await _complete_registration_wrapper()
+        return
+
+    rules_text = await get_rules(language)
+    await target_message.answer(
+        rules_text,
+        reply_markup=get_rules_keyboard(language)
+    )
+    await state.set_state(RegistrationStates.waiting_for_rules_accept)
+    logger.info("📋 LANGUAGE: Правила отправлены после выбора языка")
 
 
 async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession, db_user=None):
@@ -326,55 +402,76 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     else:
         logger.info(f"🆕 Новый пользователь, начинаем регистрацию")
     
-    language = DEFAULT_LANGUAGE
-    texts = get_texts(language)
-    
     data = await state.get_data() or {}
-    data['language'] = language
-    await state.set_data(data)
-    logger.info(f"💾 Установлен язык по умолчанию: {language}")
-    if settings.SKIP_RULES_ACCEPT:
-        logger.info("⚙️ SKIP_RULES_ACCEPT включен - пропускаем принятие правил")
-        if data.get('referral_code'):
-            referrer = await get_user_by_referral_code(db, data['referral_code'])
-            if referrer:
-                data['referrer_id'] = referrer.id
-                await state.set_data(data)
-                logger.info(f"✅ Реферер найден: {referrer.id}")
-
-        if settings.SKIP_REFERRAL_CODE or data.get('referral_code'):
-            await complete_registration(message, state, db)
-        else:
-            try:
-                await message.answer(
-                    texts.t(
-                        "REFERRAL_CODE_QUESTION",
-                        "У вас есть реферальный код? Введите его или нажмите 'Пропустить'",
-                    ),
-                    reply_markup=get_referral_code_keyboard(language)
-                )
-                await state.set_state(RegistrationStates.waiting_for_referral_code)
-                logger.info("🔍 Ожидание ввода реферального кода")
-            except Exception as e:
-                logger.error(f"Ошибка при показе вопроса о реферальном коде: {e}")
-                await complete_registration(message, state, db)
+    if not data.get('language'):
+        await _prompt_language_selection(message, state)
         return
 
-    rules_text = await get_rules(language)
-    await message.answer(
-        rules_text,
-        reply_markup=get_rules_keyboard(language)
+    await _continue_registration_after_language(
+        message=message,
+        callback=None,
+        state=state,
+        db=db,
     )
-    logger.info(f"📋 Правила отправлены")
 
-    await state.set_state(RegistrationStates.waiting_for_rules_accept)
-    current_state = await state.get_state()
-    logger.info(f"📊 Установлено состояние: {current_state}")
+
+async def process_language_selection(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    logger.info(
+        f"🌐 LANGUAGE: Пользователь {callback.from_user.id} выбрал язык ({callback.data})"
+    )
+
+    selected_raw = (callback.data or "").split(":", 1)[-1]
+    normalized_selected = selected_raw.strip().lower()
+
+    available_map = {
+        lang.strip().lower(): lang.strip()
+        for lang in settings.get_available_languages()
+        if isinstance(lang, str) and lang.strip()
+    }
+
+    if normalized_selected not in available_map:
+        logger.warning(
+            f"⚠️ LANGUAGE: Выбран недоступный язык '{normalized_selected}' пользователем {callback.from_user.id}"
+        )
+        await callback.answer("❌ Unsupported language", show_alert=True)
+        return
+
+    resolved_language = available_map[normalized_selected].lower()
+
+    data = await state.get_data() or {}
+    data['language'] = resolved_language
+    await state.set_data(data)
+
+    texts = get_texts(resolved_language)
+
+    try:
+        await callback.message.edit_text(
+            texts.t("LANGUAGE_SELECTED", "🌐 Язык интерфейса обновлен."),
+        )
+    except Exception as error:
+        logger.warning(
+            f"⚠️ LANGUAGE: Не удалось обновить сообщение выбора языка: {error}")
+        await callback.message.answer(
+            texts.t("LANGUAGE_SELECTED", "🌐 Язык интерфейса обновлен."),
+        )
+
+    await callback.answer()
+
+    await _continue_registration_after_language(
+        message=None,
+        callback=callback,
+        state=state,
+        db=db,
+    )
 
 
 async def process_rules_accept(
-    callback: types.CallbackQuery, 
-    state: FSMContext, 
+    callback: types.CallbackQuery,
+    state: FSMContext,
     db: AsyncSession
 ):
     
@@ -1310,7 +1407,14 @@ def register_handlers(dp: Dispatcher):
         StateFilter(RegistrationStates.waiting_for_rules_accept)
     )
     logger.info("✅ Зарегистрирован process_rules_accept")
-    
+
+    dp.callback_query.register(
+        process_language_selection,
+        F.data.startswith("language_select:"),
+        StateFilter(RegistrationStates.waiting_for_language)
+    )
+    logger.info("✅ Зарегистрирован process_language_selection")
+
     dp.callback_query.register(
         process_referral_code_skip,
         F.data == "referral_skip",
