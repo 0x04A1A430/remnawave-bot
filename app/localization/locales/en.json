@@ -48,6 +48,7 @@
   "RETURN_TO_SUBSCRIPTION_CHECKOUT": "⬅️ Return to subscription checkout",
   "INSUFFICIENT_BALANCE": "❌ Insufficient balance.\n\nTop up {amount} and try again.",
   "ADDON_INSUFFICIENT_FUNDS_MESSAGE": "⚠️ <b>Insufficient funds</b>\n\nService price: {required}\nBalance: {balance}\nMissing: {missing}\n\nChoose a top-up method. The amount will be filled in automatically.",
+  "LANGUAGE_PROMPT": "🌐 Choose the interface language:",
   "LANGUAGE_SELECTED": "🌐 Interface language set: <b>English</b>",
   "LOADING": "⏳ Loading...",
   "MAIN_MENU": "👤 <b>{user_name}</b>\n\n📱 <b>Subscription:</b> {subscription_status}\n\nChoose an option:\n",

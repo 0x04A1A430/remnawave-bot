@@ -116,6 +116,7 @@ class AuthMiddleware(BaseMiddleware):
                             current_state = await state.get_state()
                         
                         registration_states = [
+                            RegistrationStates.waiting_for_language.state,
                             RegistrationStates.waiting_for_rules_accept.state,
                             RegistrationStates.waiting_for_referral_code.state
                         ]
@@ -126,7 +127,10 @@ class AuthMiddleware(BaseMiddleware):
                             or (
                                 isinstance(event, CallbackQuery)
                                 and event.data
-                                and (event.data in ['rules_accept', 'rules_decline', 'referral_skip'])
+                                and (
+                                    event.data in ['rules_accept', 'rules_decline', 'referral_skip']
+                                    or event.data.startswith('language_select:')
+                                )
                             )
                         )
                         
