@@ -358,7 +358,12 @@ async def show_server_users(
     db: AsyncSession
 ):
 
-    server_id = int(callback.data.split('_')[-1])
+    payload = callback.data.split("admin_server_users_", 1)[-1]
+    payload_parts = payload.split("_")
+
+    server_id = int(payload_parts[0])
+    page = int(payload_parts[1]) if len(payload_parts) > 1 else 1
+    page = max(page, 1)
     server = await get_server_squad_by_id(db, server_id)
 
     if not server:
@@ -366,6 +371,17 @@ async def show_server_users(
         return
 
     users = await get_server_connected_users(db, server_id)
+    total_users = len(users)
+
+    page_size = 10
+    total_pages = max((total_users + page_size - 1) // page_size, 1)
+
+    if page > total_pages:
+        page = total_pages
+
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+    page_users = users[start_index:end_index]
 
     safe_name = html.escape(server.display_name or "—")
     safe_uuid = html.escape(server.squad_uuid or "—")
@@ -375,15 +391,19 @@ async def show_server_users(
         "",
         f"• Сервер: {safe_name}",
         f"• UUID: <code>{safe_uuid}</code>",
-        f"• Подключений: {len(users)}",
-        "",
+        f"• Подключений: {total_users}",
     ]
+
+    if total_pages > 1:
+        header.append(f"• Страница: {page}/{total_pages}")
+
+    header.append("")
 
     text = "\n".join(header)
 
     if users:
         lines = []
-        for index, user in enumerate(users, 1):
+        for index, user in enumerate(page_users, start=start_index + 1):
             subscription_status = (
                 user.subscription.status_display
                 if user.subscription
@@ -401,7 +421,7 @@ async def show_server_users(
 
     keyboard: list[list[types.InlineKeyboardButton]] = []
 
-    for user in users:
+    for user in page_users:
         display_name = user.full_name
         if len(display_name) > 30:
             display_name = display_name[:27] + "..."
@@ -411,6 +431,34 @@ async def show_server_users(
                 callback_data=f"admin_user_manage_{user.id}",
             )
         ])
+
+    if total_pages > 1:
+        navigation_buttons: list[types.InlineKeyboardButton] = []
+
+        if page > 1:
+            navigation_buttons.append(
+                types.InlineKeyboardButton(
+                    text="⬅️ Предыдущая",
+                    callback_data=f"admin_server_users_{server_id}_{page - 1}",
+                )
+            )
+
+        navigation_buttons.append(
+            types.InlineKeyboardButton(
+                text=f"Стр. {page}/{total_pages}",
+                callback_data=f"admin_server_users_{server_id}_{page}",
+            )
+        )
+
+        if page < total_pages:
+            navigation_buttons.append(
+                types.InlineKeyboardButton(
+                    text="Следующая ➡️",
+                    callback_data=f"admin_server_users_{server_id}_{page + 1}",
+                )
+            )
+
+        keyboard.append(navigation_buttons)
 
     keyboard.append([
         types.InlineKeyboardButton(
