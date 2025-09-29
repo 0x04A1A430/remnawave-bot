@@ -20,6 +20,7 @@ from app.keyboards.admin import (
     get_admin_users_filters_keyboard, get_user_promo_group_keyboard
 )
 from app.localization.texts import get_texts
+from app.services.admin_notification_service import AdminNotificationService
 from app.services.user_service import UserService
 from app.database.crud.promo_group import get_promo_groups_with_counts
 from app.utils.decorators import admin_required, error_handler
@@ -999,6 +1000,13 @@ async def set_user_promo_group(
         await callback.answer(texts.ADMIN_USER_PROMO_GROUP_ALREADY, show_alert=True)
         return
 
+    try:
+        await db.refresh(user, ["promo_group"])
+    except Exception:
+        pass
+
+    previous_group = getattr(user, "promo_group", None)
+
     user_service = UserService()
     success, updated_user, new_group = await user_service.update_user_promo_group(
         db,
@@ -1009,6 +1017,23 @@ async def set_user_promo_group(
     if not success or not updated_user or not new_group:
         await callback.answer(texts.ADMIN_USER_PROMO_GROUP_ERROR, show_alert=True)
         return
+
+    try:
+        notification_service = AdminNotificationService(callback.bot)
+        await notification_service.send_promo_group_change_notification(
+            db,
+            updated_user,
+            previous_group,
+            new_group,
+            changed_by=db_user,
+            change_source="manual",
+        )
+    except Exception as notification_error:
+        logger.error(
+            "Ошибка отправки админ-уведомления о смене промогруппы пользователя %s: %s",
+            user_id,
+            notification_error,
+        )
 
     promo_groups = await get_promo_groups_with_counts(db)
 
