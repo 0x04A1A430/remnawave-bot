@@ -87,9 +87,12 @@ class SubscriptionService:
         )
     
     async def create_remnawave_user(
-        self, 
-        db: AsyncSession, 
-        subscription: Subscription
+        self,
+        db: AsyncSession,
+        subscription: Subscription,
+        *,
+        reset_traffic: bool = False,
+        reset_reason: Optional[str] = None,
     ) -> Optional[RemnaWaveUser]:
         
         try:
@@ -130,6 +133,14 @@ class SubscriptionService:
                         active_internal_squads=subscription.connected_squads
                     )
                     
+                    if reset_traffic:
+                        await self._reset_user_traffic(
+                            api,
+                            updated_user.uuid,
+                            user.telegram_id,
+                            reset_reason,
+                        )
+
                 else:
                     logger.info(f"🆕 Создаем нового пользователя в панели для {user.telegram_id}")
                     username = f"user_{user.telegram_id}"
@@ -148,7 +159,15 @@ class SubscriptionService:
                         ),
                         active_internal_squads=subscription.connected_squads
                     )
-                
+
+                    if reset_traffic:
+                        await self._reset_user_traffic(
+                            api,
+                            updated_user.uuid,
+                            user.telegram_id,
+                            reset_reason,
+                        )
+
                 subscription.remnawave_short_uuid = updated_user.short_uuid
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
@@ -172,7 +191,10 @@ class SubscriptionService:
     async def update_remnawave_user(
         self,
         db: AsyncSession,
-        subscription: Subscription
+        subscription: Subscription,
+        *,
+        reset_traffic: bool = False,
+        reset_reason: Optional[str] = None,
     ) -> Optional[RemnaWaveUser]:
         
         try:
@@ -210,6 +232,14 @@ class SubscriptionService:
                     active_internal_squads=subscription.connected_squads
                 )
                 
+                if reset_traffic:
+                    await self._reset_user_traffic(
+                        api,
+                        user.remnawave_uuid,
+                        user.telegram_id,
+                        reset_reason,
+                    )
+
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
                 await db.commit()
@@ -219,16 +249,37 @@ class SubscriptionService:
                 strategy_name = settings.DEFAULT_TRAFFIC_RESET_STRATEGY
                 logger.info(f"📊 Стратегия сброса трафика: {strategy_name}")
                 return updated_user
-                
+
         except RemnaWaveAPIError as e:
             logger.error(f"Ошибка RemnaWave API: {e}")
             return None
         except Exception as e:
             logger.error(f"Ошибка обновления RemnaWave пользователя: {e}")
             return None
-    
+
+    async def _reset_user_traffic(
+        self,
+        api: RemnaWaveAPI,
+        user_uuid: str,
+        telegram_id: int,
+        reset_reason: Optional[str] = None,
+    ) -> None:
+        if not user_uuid:
+            return
+
+        try:
+            await api.reset_user_traffic(user_uuid)
+            reason_text = f" ({reset_reason})" if reset_reason else ""
+            logger.info(
+                f"🔄 Сброшен трафик RemnaWave для пользователя {telegram_id}{reason_text}"
+            )
+        except Exception as exc:
+            logger.warning(
+                f"⚠️ Не удалось сбросить трафик RemnaWave для пользователя {telegram_id}: {exc}"
+            )
+
     async def disable_remnawave_user(self, user_uuid: str) -> bool:
-        
+
         try:
             async with self.api as api:
                 await api.disable_user(user_uuid)

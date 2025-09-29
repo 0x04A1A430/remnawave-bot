@@ -120,9 +120,13 @@ async def extend_subscription(
     if subscription.status == SubscriptionStatus.EXPIRED.value:
         subscription.status = SubscriptionStatus.ACTIVE.value
         logger.info(f"🔄 Статус изменён с EXPIRED на ACTIVE")
-    
+
+    if settings.RESET_TRAFFIC_ON_PAYMENT:
+        subscription.traffic_used_gb = 0.0
+        logger.info("🔄 Сбрасываем использованный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT")
+
     subscription.updated_at = current_time
-    
+
     await db.commit()
     await db.refresh(subscription)
     await clear_notifications(db, subscription.id)
