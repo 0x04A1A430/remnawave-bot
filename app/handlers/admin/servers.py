@@ -401,19 +401,18 @@ async def show_server_users(
 
     text = "\n".join(header)
 
+    def _get_status_icon(status_text: str) -> str:
+        if not status_text:
+            return ""
+
+        parts = status_text.split(" ", 1)
+        return parts[0] if parts else status_text
+
     if users:
         lines = []
         for index, user in enumerate(page_users, start=start_index + 1):
-            subscription_status = (
-                user.subscription.status_display
-                if user.subscription
-                else "❌ Нет подписки"
-            )
             safe_user_name = html.escape(user.full_name)
-            safe_status = html.escape(subscription_status)
-            lines.append(
-                f"{index}. {safe_user_name} — {safe_status}"
-            )
+            lines.append(f"{index}. {safe_user_name}")
 
         text += "\n" + "\n".join(lines)
     else:
@@ -425,9 +424,22 @@ async def show_server_users(
         display_name = user.full_name
         if len(display_name) > 30:
             display_name = display_name[:27] + "..."
+
+        subscription_status = (
+            user.subscription.status_display
+            if user.subscription
+            else "❌ Нет подписки"
+        )
+        status_icon = _get_status_icon(subscription_status)
+
+        if status_icon:
+            button_text = f"{status_icon} {display_name}"
+        else:
+            button_text = display_name
+
         keyboard.append([
             types.InlineKeyboardButton(
-                text=f"👤 {display_name}",
+                text=button_text,
                 callback_data=f"admin_user_manage_{user.id}",
             )
         ])
