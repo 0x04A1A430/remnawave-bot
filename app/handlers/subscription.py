@@ -894,6 +894,8 @@ async def activate_trial(
         
         subscription_link = get_display_subscription_link(subscription)
         if remnawave_user and subscription_link:
+            hide_subscription_link = settings.HIDE_SUBSCRIPTION_LINK
+
             if settings.is_happ_cryptolink_mode():
                 trial_success_text = (
                     f"{texts.TRIAL_ACTIVATED}\n\n"
@@ -908,16 +910,27 @@ async def activate_trial(
                     )
                 )
             else:
-                subscription_import_link = texts.t(
-                    "SUBSCRIPTION_IMPORT_LINK_SECTION",
-                    "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>",
-                ).format(subscription_url=subscription_link)
-
-                trial_success_text = (
-                    f"{texts.TRIAL_ACTIVATED}\n\n"
-                    f"{subscription_import_link}\n\n"
-                    f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
+                instruction_prompt = texts.t(
+                    'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
+                    '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве'
                 )
+
+                if hide_subscription_link:
+                    trial_success_text = (
+                        f"{texts.TRIAL_ACTIVATED}\n\n"
+                        f"{instruction_prompt}"
+                    )
+                else:
+                    subscription_import_link = texts.t(
+                        "SUBSCRIPTION_IMPORT_LINK_SECTION",
+                        "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>",
+                    ).format(subscription_url=subscription_link)
+
+                    trial_success_text = (
+                        f"{texts.TRIAL_ACTIVATED}\n\n"
+                        f"{subscription_import_link}\n\n"
+                        f"{instruction_prompt}"
+                    )
 
             connect_mode = settings.CONNECT_BUTTON_MODE
 
@@ -3512,6 +3525,8 @@ async def confirm_purchase(
         
         subscription_link = get_display_subscription_link(subscription)
         if remnawave_user and subscription_link:
+            hide_subscription_link = settings.HIDE_SUBSCRIPTION_LINK
+
             if settings.is_happ_cryptolink_mode():
                 success_text = (
                     f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
@@ -3526,16 +3541,27 @@ async def confirm_purchase(
                     )
                 )
             else:
-                import_link_section = texts.t(
-                    "SUBSCRIPTION_IMPORT_LINK_SECTION",
-                    "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\\n<code>{subscription_url}</code>",
-                ).format(subscription_url=subscription_link)
-
-                success_text = (
-                    f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
-                    f"{import_link_section}\n\n"
-                    f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
+                instruction_prompt = texts.t(
+                    'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
+                    '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве'
                 )
+
+                if hide_subscription_link:
+                    success_text = (
+                        f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
+                        f"{instruction_prompt}"
+                    )
+                else:
+                    import_link_section = texts.t(
+                        "SUBSCRIPTION_IMPORT_LINK_SECTION",
+                        "🔗 <b>Ваша ссылка для импорта в VPN приложение:</b>\n<code>{subscription_url}</code>",
+                    ).format(subscription_url=subscription_link)
+
+                    success_text = (
+                        f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
+                        f"{import_link_section}\n\n"
+                        f"{instruction_prompt}"
+                    )
 
             connect_mode = settings.CONNECT_BUTTON_MODE
 
