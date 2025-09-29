@@ -355,32 +355,46 @@ async def show_users_statistics(
     user_service = UserService()
     stats = await user_service.get_user_statistics(db)
     
-    from sqlalchemy import select, func, and_
-    
-    with_sub_result = await db.execute(
-        select(func.count(User.id))
-        .join(Subscription)
+    from sqlalchemy import select, func, or_
+
+    current_time = datetime.utcnow()
+
+    active_subscription_query = (
+        select(func.count(Subscription.id))
+        .join(User, Subscription.user_id == User.id)
         .where(
-            and_(
-                User.status == UserStatus.ACTIVE.value,
-                Subscription.is_active == True
-            )
+            User.status == UserStatus.ACTIVE.value,
+            Subscription.status.in_(
+                [
+                    SubscriptionStatus.ACTIVE.value,
+                    SubscriptionStatus.TRIAL.value,
+                ]
+            ),
+            Subscription.end_date > current_time,
         )
     )
-    users_with_subscription = with_sub_result.scalar() or 0
-    
-    trial_result = await db.execute(
-        select(func.count(User.id))
-        .join(Subscription)
+    users_with_subscription = (
+        await db.execute(active_subscription_query)
+    ).scalar() or 0
+
+    trial_subscription_query = (
+        select(func.count(Subscription.id))
+        .join(User, Subscription.user_id == User.id)
         .where(
-            and_(
-                User.status == UserStatus.ACTIVE.value,
-                Subscription.is_trial == True,
-                Subscription.is_active == True
-            )
+            User.status == UserStatus.ACTIVE.value,
+            Subscription.end_date > current_time,
+            or_(
+                Subscription.status == SubscriptionStatus.TRIAL.value,
+                Subscription.is_trial.is_(True),
+            ),
         )
     )
-    trial_users = trial_result.scalar() or 0
+    trial_users = (await db.execute(trial_subscription_query)).scalar() or 0
+
+    users_without_subscription = max(
+        stats["active_users"] - users_with_subscription,
+        0,
+    )
     
     avg_balance_result = await db.execute(
         select(func.avg(User.balance_kopeks))
@@ -399,7 +413,7 @@ async def show_users_statistics(
 📱 <b>Подписки:</b>
 • С активной подпиской: {users_with_subscription}
 • На триале: {trial_users}
-• Без подписки: {stats['active_users'] - users_with_subscription}
+• Без подписки: {users_without_subscription}
 
 💰 <b>Финансы:</b>
 • Средний баланс: {settings.format_price(int(avg_balance))}
