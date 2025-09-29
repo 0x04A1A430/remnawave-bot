@@ -348,14 +348,16 @@ async def sync_with_remnawave(
 
 async def get_server_connected_users(
     db: AsyncSession,
-    server_id: int
+    server: ServerSquad
 ) -> List[User]:
+
+    if server is None or not server.squad_uuid:
+        return []
 
     result = await db.execute(
         select(User)
         .join(Subscription, Subscription.user_id == User.id)
-        .join(SubscriptionServer, SubscriptionServer.subscription_id == Subscription.id)
-        .where(SubscriptionServer.server_squad_id == server_id)
+        .where(Subscription.connected_squads.contains([server.squad_uuid]))
         .options(selectinload(User.subscription))
         .order_by(User.id)
     )
