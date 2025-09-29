@@ -65,8 +65,7 @@ class PromoCodeService:
             
             return {
                 "success": True,
-                "description": result_description,
-                "promocode": promocode,
+                "description": result_description
             }
             
         except Exception as e:

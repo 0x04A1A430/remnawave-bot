@@ -25,7 +25,6 @@ from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts, get_rules
 from app.services.referral_service import process_referral_registration
 from app.services.campaign_service import AdvertisingCampaignService
-from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_service import SubscriptionService
 from app.utils.user_utils import generate_unique_referral_code
 from app.database.crud.user_message import get_random_active_message
@@ -166,22 +165,6 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         await state.update_data(referral_code=referral_code)
     
     user = db_user if db_user else await get_user_by_telegram_id(db, message.from_user.id)
-
-    if campaign:
-        try:
-            notification_service = AdminNotificationService(message.bot)
-            await notification_service.send_campaign_click_notification(
-                db,
-                campaign,
-                message.from_user,
-                user,
-            )
-        except Exception as notification_error:
-            logger.error(
-                "Ошибка отправки уведомления о переходе по кампании %s: %s",
-                campaign.id if campaign else 'unknown',
-                notification_error,
-            )
     
     if user and user.status != UserStatus.DELETED.value:
         logger.info(f"✅ Активный пользователь найден: {user.telegram_id}")
