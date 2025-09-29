@@ -238,15 +238,17 @@ class UserService:
         db: AsyncSession,
         user_id: int,
         promo_group_id: int
-    ) -> Tuple[bool, Optional[User], Optional[PromoGroup]]:
+    ) -> Tuple[bool, Optional[User], Optional[PromoGroup], Optional[PromoGroup]]:
         try:
             user = await get_user_by_id(db, user_id)
             if not user:
-                return False, None, None
+                return False, None, None, None
+
+            old_group = user.promo_group
 
             promo_group = await get_promo_group_by_id(db, promo_group_id)
             if not promo_group:
-                return False, None, None
+                return False, None, None, old_group
 
             user.promo_group_id = promo_group.id
             user.promo_group = promo_group
@@ -261,12 +263,12 @@ class UserService:
                 promo_group.name,
             )
 
-            return True, user, promo_group
+            return True, user, promo_group, old_group
 
         except Exception as e:
             await db.rollback()
             logger.error(f"Ошибка обновления промогруппы пользователя {user_id}: {e}")
-            return False, None, None
+            return False, None, None, None
 
     async def block_user(
         self,

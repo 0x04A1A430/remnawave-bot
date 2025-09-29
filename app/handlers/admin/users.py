@@ -21,6 +21,7 @@ from app.keyboards.admin import (
 )
 from app.localization.texts import get_texts
 from app.services.user_service import UserService
+from app.services.admin_notification_service import AdminNotificationService
 from app.database.crud.promo_group import get_promo_groups_with_counts
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
@@ -1000,7 +1001,7 @@ async def set_user_promo_group(
         return
 
     user_service = UserService()
-    success, updated_user, new_group = await user_service.update_user_promo_group(
+    success, updated_user, new_group, old_group = await user_service.update_user_promo_group(
         db,
         user_id,
         group_id
@@ -1017,6 +1018,27 @@ async def set_user_promo_group(
         texts.ADMIN_USER_PROMO_GROUP_UPDATED.format(name=new_group.name),
         show_alert=True
     )
+
+    try:
+        notification_service = AdminNotificationService(callback.bot)
+        reason = (
+            f"Назначено администратором {db_user.full_name} (ID: {db_user.telegram_id})"
+        )
+        await notification_service.send_user_promo_group_change_notification(
+            db,
+            updated_user,
+            old_group,
+            new_group,
+            reason=reason,
+            initiator=db_user,
+            automatic=False,
+        )
+    except Exception as notify_error:
+        logger.error(
+            "Ошибка отправки уведомления о смене промогруппы пользователя %s: %s",
+            updated_user.telegram_id,
+            notify_error,
+        )
 
 
 
