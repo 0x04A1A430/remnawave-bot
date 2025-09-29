@@ -8,6 +8,7 @@ from app.states import PromoCodeStates
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
 from app.localization.texts import get_texts
+from app.services.admin_notification_service import AdminNotificationService
 from app.services.promocode_service import PromoCodeService
 from app.utils.decorators import error_handler
 
@@ -61,6 +62,23 @@ async def process_promocode(
             reply_markup=get_back_keyboard(db_user.language)
         )
         logger.info(f"✅ Пользователь {db_user.telegram_id} активировал промокод {code}")
+
+        promocode_obj = result.get("promocode")
+        if promocode_obj:
+            try:
+                notification_service = AdminNotificationService(message.bot)
+                await notification_service.send_promocode_activation_notification(
+                    db,
+                    db_user,
+                    promocode_obj,
+                    result.get("description", ""),
+                )
+            except Exception as notification_error:
+                logger.error(
+                    "Ошибка отправки админ-уведомления об активации промокода %s: %s",
+                    code,
+                    notification_error,
+                )
     else:
         error_messages = {
             "not_found": texts.PROMOCODE_INVALID,
