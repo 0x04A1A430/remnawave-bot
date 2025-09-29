@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-from sqlalchemy import select, and_, func, update, delete, text, or_
+from sqlalchemy import select, and_, func, update, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -348,20 +348,14 @@ async def sync_with_remnawave(
 
 async def get_server_connected_users(
     db: AsyncSession,
-    server_id: int,
-    server_uuid: Optional[str] = None,
+    server_id: int
 ) -> List[User]:
-
-    filters = [SubscriptionServer.server_squad_id == server_id]
-
-    if server_uuid:
-        filters.append(Subscription.connected_squads.contains([server_uuid]))
 
     result = await db.execute(
         select(User)
         .join(Subscription, Subscription.user_id == User.id)
-        .outerjoin(SubscriptionServer, SubscriptionServer.subscription_id == Subscription.id)
-        .where(or_(*filters))
+        .join(SubscriptionServer, SubscriptionServer.subscription_id == Subscription.id)
+        .where(SubscriptionServer.server_squad_id == server_id)
         .options(selectinload(User.subscription))
         .order_by(User.id)
     )
