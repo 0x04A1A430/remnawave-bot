@@ -616,20 +616,21 @@ async def show_subscription_info(
         message += texts.t("SUBSCRIPTION_CONNECTED_DEVICES_FOOTER", "</blockquote>")
     
     subscription_link = get_display_subscription_link(subscription)
-    if subscription_link:
-        if (
-            actual_status in ['trial_active', 'paid_active']
-            and not settings.HIDE_SUBSCRIPTION_LINK
-            and not settings.is_happ_cryptolink_mode()
-        ):
-            message += "\n\n" + texts.t(
-                "SUBSCRIPTION_CONNECT_LINK_SECTION",
-                "🔗 <b>Ссылка для подключения:</b>\n<code>{subscription_url}</code>",
-            ).format(subscription_url=subscription_link)
-            message += "\n\n" + texts.t(
-                "SUBSCRIPTION_CONNECT_LINK_PROMPT",
-                "📱 Скопируйте ссылку и добавьте в ваше VPN приложение",
-            )
+    hide_subscription_link = settings.should_hide_subscription_link()
+
+    if (
+        subscription_link
+        and actual_status in ["trial_active", "paid_active"]
+        and not hide_subscription_link
+    ):
+        message += "\n\n" + texts.t(
+            "SUBSCRIPTION_CONNECT_LINK_SECTION",
+            "🔗 <b>Ссылка для подключения:</b>\n<code>{subscription_url}</code>",
+        ).format(subscription_url=subscription_link)
+        message += "\n\n" + texts.t(
+            "SUBSCRIPTION_CONNECT_LINK_PROMPT",
+            "📱 Скопируйте ссылку и добавьте в ваше VPN приложение",
+        )
     
     await callback.message.edit_text(
         message,
@@ -893,6 +894,8 @@ async def activate_trial(
             logger.error(f"Ошибка отправки уведомления о триале: {e}")
         
         subscription_link = get_display_subscription_link(subscription)
+        hide_subscription_link = settings.should_hide_subscription_link()
+
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
                 trial_success_text = (
@@ -903,8 +906,21 @@ async def activate_trial(
                     )
                     + "\n\n"
                     + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
+                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
+                        "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
+                    )
+                )
+            elif hide_subscription_link:
+                trial_success_text = (
+                    f"{texts.TRIAL_ACTIVATED}\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                        "ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе \"Моя подписка\".",
+                    )
+                    + "\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
+                        "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
                     )
                 )
             else:
@@ -2909,9 +2925,13 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
     if subscription_cost > 0:
         info_text += f"\n💰 <b>Стоимость подписки в месяц:</b> {texts.format_price(subscription_cost)}"
     
-    if subscription_url and subscription_url != "Генерируется...":
+    if (
+        subscription_url
+        and subscription_url != "Генерируется..."
+        and not settings.should_hide_subscription_link()
+    ):
         info_text += f"\n\n🔗 <b>Ваша ссылка для импорта в VPN приложениe:</b>\n<code>{subscription_url}</code>"
-    
+
     return info_text
 
 def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None) -> str:
@@ -3511,6 +3531,8 @@ async def confirm_purchase(
         await db.refresh(subscription)
         
         subscription_link = get_display_subscription_link(subscription)
+        hide_subscription_link = settings.should_hide_subscription_link()
+
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
                 success_text = (
@@ -3521,8 +3543,21 @@ async def confirm_purchase(
                     )
                     + "\n\n"
                     + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
+                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
+                        "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
+                    )
+                )
+            elif hide_subscription_link:
+                success_text = (
+                    f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                        "ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе \"Моя подписка\".",
+                    )
+                    + "\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
+                        "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
                     )
                 )
             else:
@@ -4489,6 +4524,7 @@ async def handle_connect_subscription(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     subscription_link = get_display_subscription_link(subscription)
+    hide_subscription_link = settings.should_hide_subscription_link()
 
     if not subscription_link:
         await callback.answer(
@@ -4617,15 +4653,25 @@ async def handle_connect_subscription(
             parse_mode="HTML"
         )
     else:
-        device_text = texts.t(
-            "SUBSCRIPTION_CONNECT_DEVICE_MESSAGE",
-            """📱 <b>Подключить подписку</b>
+        if hide_subscription_link:
+            device_text = texts.t(
+                "SUBSCRIPTION_CONNECT_DEVICE_MESSAGE_HIDDEN",
+                """📱 <b>Подключить подписку</b>
+
+ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".
+
+💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
+            )
+        else:
+            device_text = texts.t(
+                "SUBSCRIPTION_CONNECT_DEVICE_MESSAGE",
+                """📱 <b>Подключить подписку</b>
 
 🔗 <b>Ссылка подписки:</b>
 <code>{subscription_url}</code>
 
 💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
-        ).format(subscription_url=subscription_link)
+            ).format(subscription_url=subscription_link)
 
         await callback.message.edit_text(
             device_text,
@@ -4724,13 +4770,7 @@ async def handle_device_guide(
         return
 
     apps = get_apps_for_device(device_type, db_user.language)
-    subscription_link = get_display_subscription_link(subscription)
-    if not subscription_link:
-        await callback.answer(
-            texts.t("SUBSCRIPTION_LINK_UNAVAILABLE", "❌ Ссылка подписки недоступна"),
-            show_alert=True,
-        )
-        return
+    hide_subscription_link = settings.should_hide_subscription_link()
 
     if not apps:
         await callback.answer(
@@ -4741,14 +4781,29 @@ async def handle_device_guide(
 
     featured_app = next((app for app in apps if app.get('isFeatured', False)), apps[0])
 
+    if hide_subscription_link:
+        link_section = (
+            texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
+            + "\n"
+            + texts.t(
+                "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                "ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе \"Моя подписка\".",
+            )
+            + "\n\n"
+        )
+    else:
+        link_section = (
+            texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
+            + f"\n<code>{subscription_link}</code>\n\n"
+        )
+
     guide_text = (
         texts.t(
             "SUBSCRIPTION_DEVICE_GUIDE_TITLE",
             "📱 <b>Настройка для {device_name}</b>",
         ).format(device_name=get_device_name(device_type, db_user.language))
         + "\n\n"
-        + texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
-        + f"\n<code>{subscription_link}</code>\n\n"
+        + link_section
         + texts.t(
             "SUBSCRIPTION_DEVICE_FEATURED_APP",
             "📋 <b>Рекомендуемое приложение:</b> {app_name}",
@@ -4840,6 +4895,15 @@ async def handle_specific_app_guide(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
+    subscription_link = get_display_subscription_link(subscription)
+
+    if not subscription_link:
+        await callback.answer(
+            texts.t("SUBSCRIPTION_LINK_UNAVAILABLE", "❌ Ссылка подписки недоступна"),
+            show_alert=True,
+        )
+        return
+
     apps = get_apps_for_device(device_type, db_user.language)
     app = next((a for a in apps if a['id'] == app_id), None)
     
@@ -4850,14 +4914,31 @@ async def handle_specific_app_guide(
         )
         return
 
+    hide_subscription_link = settings.should_hide_subscription_link()
+
+    if hide_subscription_link:
+        link_section = (
+            texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
+            + "\n"
+            + texts.t(
+                "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                "ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе \"Моя подписка\".",
+            )
+            + "\n\n"
+        )
+    else:
+        link_section = (
+            texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
+            + f"\n<code>{subscription_link}</code>\n\n"
+        )
+
     guide_text = (
         texts.t(
             "SUBSCRIPTION_SPECIFIC_APP_TITLE",
             "📱 <b>{app_name} - {device_name}</b>",
         ).format(app_name=app['name'], device_name=get_device_name(device_type, db_user.language))
         + "\n\n"
-        + texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
-        + f"\n<code>{subscription_link}</code>\n\n"
+        + link_section
         + texts.t("SUBSCRIPTION_DEVICE_STEP_INSTALL_TITLE", "<b>Шаг 1 - Установка:</b>")
         + f"\n{app['installationStep']['description'][db_user.language]}\n\n"
         + texts.t("SUBSCRIPTION_DEVICE_STEP_ADD_TITLE", "<b>Шаг 2 - Добавление подписки:</b>")
