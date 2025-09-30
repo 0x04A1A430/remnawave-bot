@@ -43,42 +43,6 @@ server_squad_promo_groups = Table(
 )
 
 
-subscription_tariff_promo_groups = Table(
-    "subscription_tariff_promo_groups",
-    Base.metadata,
-    Column(
-        "tariff_id",
-        Integer,
-        ForeignKey("subscription_tariffs.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-    Column(
-        "promo_group_id",
-        Integer,
-        ForeignKey("promo_groups.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-)
-
-
-subscription_tariff_server_squads = Table(
-    "subscription_tariff_server_squads",
-    Base.metadata,
-    Column(
-        "tariff_id",
-        Integer,
-        ForeignKey("subscription_tariffs.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-    Column(
-        "server_squad_id",
-        Integer,
-        ForeignKey("server_squads.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-)
-
-
 class UserStatus(Enum):
     ACTIVE = "active"
     BLOCKED = "blocked"
@@ -341,13 +305,6 @@ class PromoGroup(Base):
         lazy="selectin",
     )
 
-    tariffs = relationship(
-        "SubscriptionTariff",
-        secondary=subscription_tariff_promo_groups,
-        back_populates="promo_groups",
-        lazy="selectin",
-    )
-
     def _get_period_discounts_map(self) -> Dict[int, int]:
         raw_discounts = self.period_discounts or {}
 
@@ -483,14 +440,12 @@ class Subscription(Base):
     subscription_crypto_link = Column(String, nullable=True)
 
     device_limit = Column(Integer, default=1)
-
+    
     connected_squads = Column(JSON, default=list)
-
-    tariff_id = Column(Integer, ForeignKey("subscription_tariffs.id", ondelete="SET NULL"), nullable=True)
-
+    
     autopay_enabled = Column(Boolean, default=False)
     autopay_days_before = Column(Integer, default=3)
-
+    
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     
@@ -498,7 +453,6 @@ class Subscription(Base):
 
     user = relationship("User", back_populates="subscription")
     discount_offers = relationship("DiscountOffer", back_populates="subscription")
-    tariff = relationship("SubscriptionTariff", back_populates="subscriptions")
     
     @property
     def is_active(self) -> bool:
@@ -916,13 +870,6 @@ class ServerSquad(Base):
         back_populates="server_squads",
         lazy="selectin",
     )
-
-    tariffs = relationship(
-        "SubscriptionTariff",
-        secondary=subscription_tariff_server_squads,
-        back_populates="server_squads",
-        lazy="selectin",
-    )
     
     @property
     def price_rubles(self) -> float:
@@ -944,75 +891,9 @@ class ServerSquad(Base):
             return "Доступен"
 
 
-class SubscriptionTariff(Base):
-    __tablename__ = "subscription_tariffs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), unique=True, nullable=False)
-    description = Column(Text, nullable=True)
-    traffic_limit_gb = Column(Integer, nullable=False, default=0)
-    device_limit = Column(Integer, nullable=False, default=1)
-    is_active = Column(Boolean, nullable=False, default=True)
-    sort_order = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-
-    promo_groups = relationship(
-        "PromoGroup",
-        secondary=subscription_tariff_promo_groups,
-        back_populates="tariffs",
-        lazy="selectin",
-    )
-    server_squads = relationship(
-        "ServerSquad",
-        secondary=subscription_tariff_server_squads,
-        back_populates="tariffs",
-        lazy="selectin",
-    )
-    prices = relationship(
-        "SubscriptionTariffPrice",
-        back_populates="tariff",
-        cascade="all, delete-orphan",
-        order_by="SubscriptionTariffPrice.period_days",
-    )
-    subscriptions = relationship("Subscription", back_populates="tariff")
-
-    def is_available_for_promo_group(self, promo_group_id: Optional[int]) -> bool:
-        if not self.promo_groups:
-            return True
-        if promo_group_id is None:
-            return False
-        return any(pg.id == promo_group_id for pg in self.promo_groups if pg is not None)
-
-    def get_price_for_period(self, period_days: int) -> Optional[int]:
-        for price in self.prices:
-            if price.period_days == period_days:
-                return price.price_kopeks
-        return None
-
-    def get_server_uuids(self) -> List[str]:
-        return [server.squad_uuid for server in self.server_squads if server and server.squad_uuid]
-
-
-class SubscriptionTariffPrice(Base):
-    __tablename__ = "subscription_tariff_prices"
-    __table_args__ = (
-        UniqueConstraint("tariff_id", "period_days", name="uq_tariff_period_price"),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    tariff_id = Column(Integer, ForeignKey("subscription_tariffs.id", ondelete="CASCADE"), nullable=False)
-    period_days = Column(Integer, nullable=False)
-    price_kopeks = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-
-    tariff = relationship("SubscriptionTariff", back_populates="prices")
-
-
 class SubscriptionServer(Base):
     __tablename__ = "subscription_servers"
-
+    
     id = Column(Integer, primary_key=True, index=True)
     subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=False)
     server_squad_id = Column(Integer, ForeignKey("server_squads.id"), nullable=False)

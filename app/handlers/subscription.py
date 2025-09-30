@@ -40,9 +40,7 @@ from app.keyboards.inline import (
     get_happ_download_button_row,
     get_payment_methods_keyboard_with_cart,
     get_subscription_confirm_keyboard_with_cart,
-    get_insufficient_balance_keyboard_with_cart,
-    get_tariff_selection_keyboard,
-    get_tariff_period_keyboard,
+    get_insufficient_balance_keyboard_with_cart
 )
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
@@ -54,7 +52,6 @@ from app.services.subscription_checkout_service import (
     should_offer_checkout_resume,
 )
 from app.services.subscription_service import SubscriptionService
-from app.services.tariff_service import TariffService
 from app.states import SubscriptionStates
 from app.utils.pagination import paginate_list
 from app.utils.pricing_utils import (
@@ -444,68 +441,6 @@ def _build_subscription_period_prompt(db_user: User, texts) -> str:
     return f"{base_text}\n\n{promo_text}\n"
 
 
-def _build_tariff_selection_prompt(texts) -> str:
-    return texts.t(
-        "TARIFF_SELECTION_PROMPT",
-        (
-            "<b>Выберите тариф</b>\n\n"
-            "Доступные тарифы ниже зависят от вашей промогруппы и доступных серверов."
-        ),
-    )
-
-
-def _build_tariff_details_text(tariff, texts, language: str) -> str:
-    description = tariff.description or texts.t("TARIFF_NO_DESCRIPTION", "Описание отсутствует")
-    server_names = [server.display_name for server in tariff.server_squads]
-    servers_text = "\n".join(f"• {name}" for name in server_names) if server_names else texts.t(
-        "TARIFF_NO_SERVERS", "Нет доступных серверов"
-    )
-    traffic_text = texts.format_traffic(tariff.traffic_limit_gb)
-    devices_text = texts.t("TARIFF_DEVICE_LIMIT", "{count} устройств").format(count=tariff.device_limit)
-
-    return texts.t(
-        "TARIFF_DETAILS_TEMPLATE",
-        (
-            "<b>{name}</b>\n\n"
-            "{description}\n\n"
-            "🌐 <b>Серверы:</b>\n{servers}\n\n"
-            "📊 <b>Трафик:</b> {traffic}\n"
-            "📱 <b>Устройства:</b> {devices}\n\n"
-            "Выберите срок действия тарифа:""
-        ),
-    ).format(
-        name=tariff.name,
-        description=description,
-        servers=servers_text,
-        traffic=traffic_text,
-        devices=devices_text,
-    )
-
-
-def _build_tariff_summary_text(tariff, period_days: int, price_kopeks: int, texts, language: str) -> str:
-    period_text = format_period_description(period_days, language)
-    traffic_text = texts.format_traffic(tariff.traffic_limit_gb)
-    devices_text = texts.t("TARIFF_DEVICE_LIMIT", "{count} устройств").format(count=tariff.device_limit)
-
-    return texts.t(
-        "TARIFF_CONFIRMATION_TEMPLATE",
-        (
-            "<b>{name}</b>\n\n"
-            "📅 <b>Период:</b> {period}\n"
-            "📊 <b>Трафик:</b> {traffic}\n"
-            "📱 <b>Устройства:</b> {devices}\n"
-            "💰 <b>Стоимость:</b> {price}\n\n"
-            "Подтвердить покупку тарифа?"
-        ),
-    ).format(
-        name=tariff.name,
-        period=period_text,
-        traffic=traffic_text,
-        devices=devices_text,
-        price=texts.format_price(price_kopeks),
-    )
-
-
 async def show_subscription_info(
         callback: types.CallbackQuery,
         db_user: User,
@@ -514,17 +449,6 @@ async def show_subscription_info(
     await db.refresh(db_user)
 
     texts = get_texts(db_user.language)
-
-    if settings.is_subscription_tariff_mode():
-        await callback.answer(
-            texts.t(
-                "TARIFF_DEVICE_MANAGEMENT_DISABLED",
-                "ℹ️ Изменение количества устройств недоступно при использовании тарифов",
-            ),
-            show_alert=True,
-        )
-        return
-
     subscription = db_user.subscription
 
     if not subscription:
@@ -1108,37 +1032,9 @@ async def activate_trial(
 async def start_subscription_purchase(
         callback: types.CallbackQuery,
         state: FSMContext,
-        db_user: User,
-        db: AsyncSession
+        db_user: User
 ):
     texts = get_texts(db_user.language)
-
-    if settings.is_subscription_tariff_mode():
-        service = TariffService()
-        tariffs = await service.get_available_tariffs(db, db_user)
-
-        await state.clear()
-
-        if not tariffs:
-            await callback.message.edit_text(
-                texts.t(
-                    "NO_TARIFFS_AVAILABLE",
-                    "❌ Доступных тарифов не найдено. Пожалуйста, обратитесь в поддержку.",
-                ),
-                reply_markup=get_back_keyboard(db_user.language),
-                parse_mode="HTML",
-            )
-        else:
-            await state.set_state(SubscriptionStates.selecting_tariff)
-            await state.update_data({'tariff_mode': True})
-            await callback.message.edit_text(
-                _build_tariff_selection_prompt(texts),
-                reply_markup=get_tariff_selection_keyboard(tariffs, db_user.language),
-                parse_mode="HTML",
-            )
-
-        await callback.answer()
-        return
 
     await callback.message.edit_text(
         _build_subscription_period_prompt(db_user, texts),
@@ -1166,187 +1062,6 @@ async def start_subscription_purchase(
     await state.set_data(initial_data)
     await state.set_state(SubscriptionStates.selecting_period)
     await callback.answer()
-
-
-async def handle_tariff_selection(
-        callback: types.CallbackQuery,
-        state: FSMContext,
-        db_user: User,
-        db: AsyncSession
-):
-    if not settings.is_subscription_tariff_mode():
-        await callback.answer()
-        return
-
-    try:
-        tariff_id = int(callback.data.split('_')[2])
-    except (IndexError, ValueError):
-        await callback.answer("❌ Некорректный тариф", show_alert=True)
-        return
-
-    texts = get_texts(db_user.language)
-    service = TariffService()
-    tariff = await service.get_tariff_for_user(db, tariff_id, db_user)
-
-    if not tariff or not getattr(tariff, "prices", None):
-        await callback.answer(
-            texts.t("TARIFF_UNAVAILABLE", "⚠️ Этот тариф сейчас недоступен"),
-            show_alert=True,
-        )
-        return
-
-    await state.update_data({
-        'tariff_mode': True,
-        'selected_tariff_id': tariff.id,
-    })
-
-    await state.set_state(SubscriptionStates.selecting_tariff_period)
-    await callback.message.edit_text(
-        _build_tariff_details_text(tariff, texts, db_user.language),
-        reply_markup=get_tariff_period_keyboard(tariff, db_user.language),
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-
-async def handle_tariff_back(
-        callback: types.CallbackQuery,
-        state: FSMContext,
-        db_user: User,
-        db: AsyncSession
-):
-    if not settings.is_subscription_tariff_mode():
-        await callback.answer()
-        return
-
-    texts = get_texts(db_user.language)
-    service = TariffService()
-    tariffs = await service.get_available_tariffs(db, db_user)
-
-    if not tariffs:
-        await callback.message.edit_text(
-            texts.t(
-                "NO_TARIFFS_AVAILABLE",
-                "❌ Доступных тарифов не найдено. Пожалуйста, обратитесь в поддержку.",
-            ),
-            reply_markup=get_back_keyboard(db_user.language),
-            parse_mode="HTML",
-        )
-        await state.clear()
-        await callback.answer()
-        return
-
-    await state.set_state(SubscriptionStates.selecting_tariff)
-    await state.update_data({'tariff_mode': True})
-    await callback.message.edit_text(
-        _build_tariff_selection_prompt(texts),
-        reply_markup=get_tariff_selection_keyboard(tariffs, db_user.language),
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-
-async def handle_tariff_period_selection(
-        callback: types.CallbackQuery,
-        state: FSMContext,
-        db_user: User,
-        db: AsyncSession
-):
-    if not settings.is_subscription_tariff_mode():
-        await callback.answer()
-        return
-
-    try:
-        _, _, tariff_id_str, period_str = callback.data.split('_')
-        tariff_id = int(tariff_id_str)
-        period_days = int(period_str)
-    except (ValueError, IndexError):
-        await callback.answer("❌ Некорректный срок тарифа", show_alert=True)
-        return
-
-    texts = get_texts(db_user.language)
-    service = TariffService()
-    tariff = await service.get_tariff_for_user(db, tariff_id, db_user)
-
-    if not tariff:
-        await callback.answer(
-            texts.t("TARIFF_UNAVAILABLE", "⚠️ Этот тариф сейчас недоступен"),
-            show_alert=True,
-        )
-        return
-
-    price_kopeks = tariff.get_price_for_period(period_days)
-    if price_kopeks is None:
-        await callback.answer(
-            texts.t("TARIFF_PERIOD_UNAVAILABLE", "⚠️ Для этого тарифа нет указанного периода"),
-            show_alert=True,
-        )
-        return
-
-    server_uuids = tariff.get_server_uuids()
-    summary_text = _build_tariff_summary_text(tariff, period_days, price_kopeks, texts, db_user.language)
-
-    months_in_period = calculate_months_from_days(period_days)
-
-    state_payload = {
-        'tariff_mode': True,
-        'tariff_id': tariff.id,
-        'tariff_name': tariff.name,
-        'period_days': period_days,
-        'total_price': price_kopeks,
-        'base_price': price_kopeks,
-        'base_price_original': price_kopeks,
-        'base_discount_percent': 0,
-        'base_discount_total': 0,
-        'traffic_gb': tariff.traffic_limit_gb,
-        'traffic_price_per_month': 0,
-        'traffic_discount_percent': 0,
-        'traffic_discount_total': 0,
-        'traffic_discounted_price_per_month': 0,
-        'total_traffic_price': 0,
-        'devices': tariff.device_limit,
-        'devices_price_per_month': 0,
-        'devices_discount_percent': 0,
-        'devices_discount_total': 0,
-        'devices_discounted_price_per_month': 0,
-        'total_devices_price': 0,
-        'countries': server_uuids,
-        'servers_price_per_month': 0,
-        'servers_discount_percent': 0,
-        'servers_discount_total': 0,
-        'servers_discounted_price_per_month': 0,
-        'server_prices_for_period': [0 for _ in server_uuids],
-        'total_servers_price': 0,
-        'discounted_monthly_additions': 0,
-        'months_in_period': months_in_period,
-    }
-
-    await state.set_data(state_payload)
-    await state.set_state(SubscriptionStates.confirming_purchase)
-
-    await callback.message.edit_text(
-        summary_text,
-        reply_markup=get_subscription_confirm_keyboard(db_user.language),
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-
-async def handle_change_tariff(
-        callback: types.CallbackQuery,
-        state: FSMContext,
-        db_user: User,
-        db: AsyncSession
-):
-    if not settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("TARIFF_MODE_DISABLED", "ℹ️ Смена тарифа недоступна в текущем режиме"),
-            show_alert=True,
-        )
-        return
-
-    await start_subscription_purchase(callback, state, db_user, db)
 
 
 async def save_cart_and_redirect_to_topup(
@@ -1451,14 +1166,6 @@ async def handle_add_countries(
         db: AsyncSession,
         state: FSMContext
 ):
-    if settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("TARIFF_COUNTRY_MANAGEMENT_DISABLED", "ℹ️ Смена серверов недоступна при использовании тарифов"),
-            show_alert=True,
-        )
-        return
-
     if not await _should_show_countries_management(db_user):
         texts = get_texts(db_user.language)
         await callback.answer(
@@ -2018,17 +1725,6 @@ async def confirm_change_devices(
         db_user: User,
         db: AsyncSession
 ):
-    if settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t(
-                "TARIFF_DEVICE_MANAGEMENT_DISABLED",
-                "ℹ️ Изменение количества устройств недоступно при использовании тарифов",
-            ),
-            show_alert=True,
-        )
-        return
-
     new_devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
@@ -2172,17 +1868,6 @@ async def execute_change_devices(
         db_user: User,
         db: AsyncSession
 ):
-    if settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t(
-                "TARIFF_DEVICE_MANAGEMENT_DISABLED",
-                "ℹ️ Изменение количества устройств недоступно при использовании тарифов",
-            ),
-            show_alert=True,
-        )
-        return
-
     callback_parts = callback.data.split('_')
     new_devices_count = int(callback_parts[3])
     price = int(callback_parts[4])
@@ -2788,14 +2473,6 @@ async def handle_reset_traffic(
 ):
     from app.config import settings
 
-    if settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("TARIFF_TRAFFIC_MANAGEMENT_DISABLED", "ℹ️ Управление трафиком недоступно при использовании тарифов"),
-            show_alert=True,
-        )
-        return
-
     if settings.is_traffic_fixed():
         await callback.answer("⚠️ В текущем режиме трафик фиксированный и не может быть сброшен", show_alert=True)
         return
@@ -3253,14 +2930,6 @@ async def confirm_reset_traffic(
 ):
     from app.config import settings
 
-    if settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("TARIFF_TRAFFIC_MANAGEMENT_DISABLED", "ℹ️ Управление трафиком недоступно при использовании тарифов"),
-            show_alert=True,
-        )
-        return
-
     if settings.is_traffic_fixed():
         await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
         return
@@ -3465,17 +3134,6 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
 
     subscription_url = getattr(subscription, 'subscription_url', None) or "Генерируется..."
 
-    tariff_name = None
-    if getattr(subscription, 'tariff_id', None):
-        try:
-            await db.refresh(subscription, attribute_names=["tariff"])
-        except Exception:
-            pass
-
-        tariff = getattr(subscription, "tariff", None)
-        if tariff:
-            tariff_name = tariff.name
-
     if subscription.is_trial:
         status_text = "🎁 Тестовая"
         type_text = "Триал"
@@ -3514,9 +3172,6 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
 
     if subscription_cost > 0:
         info_text += f"\n💰 <b>Стоимость подписки в месяц:</b> {texts.format_price(subscription_cost)}"
-
-    if tariff_name:
-        info_text += f"\n📦 <b>Тариф:</b> {tariff_name}"
 
     if (
             subscription_url
@@ -3590,14 +3245,6 @@ async def select_country(
         db_user: User,
         db: AsyncSession
 ):
-    if settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("TARIFF_COUNTRY_MANAGEMENT_DISABLED", "ℹ️ Смена серверов недоступна при использовании тарифов"),
-            show_alert=True,
-        )
-        return
-
     country_uuid = callback.data.split('_')[1]
     data = await state.get_data()
 
@@ -3653,14 +3300,6 @@ async def countries_continue(
         state: FSMContext,
         db_user: User
 ):
-    if settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("TARIFF_COUNTRY_MANAGEMENT_DISABLED", "ℹ️ Смена серверов недоступна при использовании тарифов"),
-            show_alert=True,
-        )
-        return
-
     data = await state.get_data()
     texts = get_texts(db_user.language)
 
@@ -4085,7 +3724,6 @@ async def confirm_purchase(
             existing_subscription.traffic_limit_gb = final_traffic_gb
             existing_subscription.device_limit = data['devices']
             existing_subscription.connected_squads = data['countries']
-            existing_subscription.tariff_id = data.get('tariff_id')
 
             existing_subscription.start_date = current_time
             existing_subscription.end_date = current_time + timedelta(days=data['period_days']) + bonus_period
@@ -4105,8 +3743,7 @@ async def confirm_purchase(
                 duration_days=data['period_days'],
                 device_limit=data['devices'],
                 connected_squads=data['countries'],
-                traffic_gb=final_traffic_gb,
-                tariff_id=data.get('tariff_id'),
+                traffic_gb=final_traffic_gb
             )
 
         from app.utils.user_utils import mark_user_as_had_paid_subscription
@@ -4352,14 +3989,6 @@ async def add_traffic(
         db_user: User,
         db: AsyncSession
 ):
-    if settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("TARIFF_TRAFFIC_MANAGEMENT_DISABLED", "ℹ️ Управление трафиком недоступно при использовании тарифов"),
-            show_alert=True,
-        )
-        return
-
     if settings.is_traffic_fixed():
         await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
         return
@@ -4493,8 +4122,7 @@ async def create_paid_subscription_with_traffic_mode(
         duration_days: int,
         device_limit: int,
         connected_squads: List[str],
-        traffic_gb: Optional[int] = None,
-        tariff_id: Optional[int] = None,
+        traffic_gb: Optional[int] = None
 ):
     from app.config import settings
 
@@ -4512,8 +4140,7 @@ async def create_paid_subscription_with_traffic_mode(
         duration_days=duration_days,
         traffic_limit_gb=traffic_limit_gb,
         device_limit=device_limit,
-        connected_squads=connected_squads,
-        tariff_id=tariff_id,
+        connected_squads=connected_squads
     )
 
     logger.info(f"📋 Создана подписка с трафиком: {traffic_limit_gb} ГБ (режим: {settings.TRAFFIC_SELECTION_MODE})")
@@ -4551,39 +4178,11 @@ async def handle_subscription_settings(
 
     devices_used = await get_current_devices_count(db_user)
 
-    tariff_line = ""
-    if settings.is_subscription_tariff_mode():
-        tariff_name = None
-        try:
-            await db.refresh(subscription, attribute_names=["tariff"])
-        except Exception:
-            pass
-
-        tariff = getattr(subscription, "tariff", None)
-        if tariff:
-            tariff_name = tariff.name
-        elif getattr(subscription, "tariff_id", None):
-            try:
-                from app.database.crud.tariff import get_tariff_by_id
-
-                tariff_model = await get_tariff_by_id(db, subscription.tariff_id, include_inactive=True)
-                if tariff_model:
-                    tariff_name = tariff_model.name
-            except Exception:
-                tariff_name = None
-
-        if tariff_name:
-            tariff_line = texts.t(
-                "SUBSCRIPTION_SETTINGS_TARIFF_LINE",
-                "📦 Тариф: {tariff}\n",
-            ).format(tariff=tariff_name)
-
     settings_text = texts.t(
         "SUBSCRIPTION_SETTINGS_OVERVIEW",
         (
             "⚙️ <b>Настройки подписки</b>\n\n"
             "📊 <b>Текущие параметры:</b>\n"
-            "{tariff_line}"
             "🌐 Стран: {countries_count}\n"
             "📈 Трафик: {traffic_used} / {traffic_limit}\n"
             "📱 Устройства: {devices_used} / {devices_limit}\n\n"
@@ -4595,7 +4194,6 @@ async def handle_subscription_settings(
         traffic_limit=texts.format_traffic(subscription.traffic_limit_gb),
         devices_used=devices_used,
         devices_limit=subscription.device_limit,
-        tariff_line=tariff_line,
     )
 
     show_countries = await _should_show_countries_management(db_user)
@@ -4958,9 +4556,6 @@ async def handle_add_country_to_subscription(
 
 
 async def _should_show_countries_management(user: Optional[User] = None) -> bool:
-    if settings.is_subscription_tariff_mode():
-        return False
-
     try:
         promo_group_id = user.promo_group_id if user else None
 
@@ -5002,14 +4597,6 @@ async def confirm_add_countries_to_subscription(
         db: AsyncSession,
         state: FSMContext
 ):
-    if settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("TARIFF_COUNTRY_MANAGEMENT_DISABLED", "ℹ️ Смена серверов недоступна при использовании тарифов"),
-            show_alert=True,
-        )
-        return
-
     data = await state.get_data()
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
@@ -6005,14 +5592,6 @@ async def handle_switch_traffic(
 ):
     from app.config import settings
 
-    if settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("TARIFF_TRAFFIC_MANAGEMENT_DISABLED", "ℹ️ Управление трафиком недоступно при использовании тарифов"),
-            show_alert=True,
-        )
-        return
-
     if settings.is_traffic_fixed():
         await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
         return
@@ -6056,14 +5635,6 @@ async def confirm_switch_traffic(
         db_user: User,
         db: AsyncSession
 ):
-    if settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("TARIFF_TRAFFIC_MANAGEMENT_DISABLED", "ℹ️ Управление трафиком недоступно при использовании тарифов"),
-            show_alert=True,
-        )
-        return
-
     new_traffic_gb = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
@@ -6177,14 +5748,6 @@ async def execute_switch_traffic(
         db_user: User,
         db: AsyncSession
 ):
-    if settings.is_subscription_tariff_mode():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t("TARIFF_TRAFFIC_MANAGEMENT_DISABLED", "ℹ️ Управление трафиком недоступно при использовании тарифов"),
-            show_alert=True,
-        )
-        return
-
     callback_parts = callback.data.split('_')
     new_traffic_gb = int(callback_parts[3])
     price_difference = int(callback_parts[4])
@@ -6387,26 +5950,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         start_subscription_purchase,
         F.data.in_(["menu_buy", "subscription_upgrade"])
-    )
-
-    dp.callback_query.register(
-        handle_tariff_selection,
-        F.data.startswith("tariff_select_")
-    )
-
-    dp.callback_query.register(
-        handle_tariff_period_selection,
-        F.data.startswith("tariff_period_")
-    )
-
-    dp.callback_query.register(
-        handle_tariff_back,
-        F.data == "tariff_back"
-    )
-
-    dp.callback_query.register(
-        handle_change_tariff,
-        F.data == "subscription_change_tariff"
     )
 
     dp.callback_query.register(
