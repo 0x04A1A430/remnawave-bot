@@ -36,6 +36,7 @@ from app.handlers.admin import (
     user_messages as admin_user_messages,
     updates as admin_updates,
     backup as admin_backup,
+    system_logs as admin_system_logs,
     welcome_text as admin_welcome_text,
     tickets as admin_tickets,
     reports as admin_reports,
@@ -139,6 +140,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_user_messages.register_handlers(dp)
     admin_updates.register_handlers(dp)
     admin_backup.register_handlers(dp)
+    admin_system_logs.register_handlers(dp)
     admin_welcome_text.register_welcome_text_handlers(dp)
     admin_tickets.register_handlers(dp)
     admin_reports.register_handlers(dp)
