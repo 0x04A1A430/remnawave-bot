@@ -5063,8 +5063,8 @@ async def handle_open_subscription_link(
             + "\n\n"
             + texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_HINT",
-                "💡 Если ссылка не открывается автоматически, скопируйте её вручную: <code>{subscription_link}</code>",
-            ).format(subscription_link=happ_scheme_link)
+                "💡 Если ссылка не открывается автоматически, скопируйте её вручную:",
+            )
         )
 
         if redirect_link:
@@ -5075,7 +5075,7 @@ async def handle_open_subscription_link(
 
         happ_message += "\n\n" + texts.t(
             "SUBSCRIPTION_HAPP_CRYPTOLINK_BLOCK",
-            "<blockquote expandable>🪙 CryptoLink: <code>{crypto_link}</code></blockquote>",
+            "<blockquote expandable><code>{crypto_link}</code></blockquote>",
         ).format(crypto_link=subscription_link)
 
         keyboard = get_happ_cryptolink_keyboard(
