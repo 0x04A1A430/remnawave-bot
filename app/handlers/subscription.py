@@ -68,6 +68,7 @@ from app.utils.pagination import paginate_list
 from app.utils.subscription_utils import (
     get_display_subscription_link,
     get_happ_cryptolink_redirect_link,
+    convert_subscription_link_to_happ_scheme,
 )
 
 logger = logging.getLogger(__name__)
@@ -5048,6 +5049,7 @@ async def handle_open_subscription_link(
 
     if settings.is_happ_cryptolink_mode():
         redirect_link = get_happ_cryptolink_redirect_link(subscription_link)
+        happ_scheme_link = convert_subscription_link_to_happ_scheme(subscription_link)
         happ_message = (
             texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_TITLE",
@@ -5057,12 +5059,12 @@ async def handle_open_subscription_link(
             + texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_LINK",
                 "<a href=\"{subscription_link}\">🔓 Открыть ссылку в Happ</a>",
-            ).format(subscription_link=subscription_link)
+            ).format(subscription_link=happ_scheme_link)
             + "\n\n"
             + texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_HINT",
                 "💡 Если ссылка не открывается автоматически, скопируйте её вручную: <code>{subscription_link}</code>",
-            ).format(subscription_link=subscription_link)
+            ).format(subscription_link=happ_scheme_link)
         )
 
         if redirect_link:
@@ -5070,6 +5072,11 @@ async def handle_open_subscription_link(
                 "SUBSCRIPTION_HAPP_OPEN_BUTTON_HINT",
                 "▶️ Нажмите кнопку \"Подключиться\" ниже, чтобы открыть Happ и добавить подписку автоматически.",
             )
+
+        happ_message += "\n\n" + texts.t(
+            "SUBSCRIPTION_HAPP_CRYPTOLINK_BLOCK",
+            "<blockquote expandable>🪙 CryptoLink: <code>{crypto_link}</code></blockquote>",
+        ).format(crypto_link=subscription_link)
 
         keyboard = get_happ_cryptolink_keyboard(
             subscription_link,
