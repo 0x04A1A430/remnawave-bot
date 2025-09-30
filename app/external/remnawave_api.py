@@ -4,6 +4,7 @@ import ssl
 import base64 
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union, Any
+from urllib.parse import urlparse
 import aiohttp
 import logging
 from dataclasses import dataclass
