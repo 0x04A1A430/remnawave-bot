@@ -80,7 +80,7 @@ async def show_users_filters(
     state: FSMContext
 ):
     
-    text = "⚙️ <b>Фильтры пользователей</b>\n\nВыберите фильтр для отображения пользователей:"
+    text = ("⚙️ <b>Фильтры пользователей</b>\n\nВыберите фильтр для отображения пользователей:\n")
     
     await callback.message.edit_text(
         text,
@@ -142,7 +142,7 @@ async def show_users_list(
         if user.balance_kopeks > 0:
             button_text += f" | 💰 {settings.format_price(user.balance_kopeks)}"
         
-        button_text += f" | 📅 {format_time_ago(user.created_at)}"
+        button_text += f" | 📅 {format_time_ago(user.created_at, db_user.language)}"
         
         if len(button_text) > 60:
             short_name = user.full_name
@@ -290,6 +290,464 @@ async def show_users_list_by_balance(
 
 @admin_required
 @error_handler
+async def show_users_list_by_traffic(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+    page: int = 1
+):
+    
+    await state.set_state(AdminStates.viewing_user_from_traffic_list)
+
+    user_service = UserService()
+    users_data = await user_service.get_users_page(
+        db, page=page, limit=10, order_by_traffic=True
+    )
+
+    if not users_data["users"]:
+        await callback.message.edit_text(
+            "📶 Пользователи с трафиком не найдены",
+            reply_markup=get_admin_users_keyboard(db_user.language)
+        )
+        await callback.answer()
+        return
+
+    text = f"👥 <b>Список пользователей по использованному трафику</b> (стр. {page}/{users_data['total_pages']})\n\n"
+    text += "Нажмите на пользователя для управления:"
+
+    keyboard = []
+
+    for user in users_data["users"]:
+        if user.status == UserStatus.ACTIVE.value:
+            status_emoji = "✅"
+        elif user.status == UserStatus.BLOCKED.value:
+            status_emoji = "🚫"
+        else:
+            status_emoji = "🗑️"
+
+        if user.subscription:
+            sub = user.subscription
+            if sub.is_trial:
+                subscription_emoji = "🎁"
+            elif sub.is_active:
+                subscription_emoji = "💎"
+            else:
+                subscription_emoji = "⏰"
+            used = sub.traffic_used_gb or 0.0
+            if sub.traffic_limit_gb and sub.traffic_limit_gb > 0:
+                limit_display = f"{sub.traffic_limit_gb}"
+            else:
+                limit_display = "♾️"
+            traffic_display = f"{used:.1f}/{limit_display} ГБ"
+        else:
+            subscription_emoji = "❌"
+            traffic_display = "нет подписки"
+
+        button_text = f"{status_emoji} {subscription_emoji} {user.full_name}"
+        button_text += f" | 📶 {traffic_display}"
+
+        if user.balance_kopeks > 0:
+            button_text += f" | 💰 {settings.format_price(user.balance_kopeks)}"
+
+        if len(button_text) > 60:
+            short_name = user.full_name
+            if len(short_name) > 20:
+                short_name = short_name[:17] + "..."
+            button_text = f"{status_emoji} {subscription_emoji} {short_name}"
+            button_text += f" | 📶 {traffic_display}"
+
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"admin_user_manage_{user.id}"
+            )
+        ])
+
+    if users_data["total_pages"] > 1:
+        pagination_row = get_admin_pagination_keyboard(
+            users_data["current_page"],
+            users_data["total_pages"],
+            "admin_users_traffic_list",
+            "admin_users",
+            db_user.language
+        ).inline_keyboard[0]
+        keyboard.append(pagination_row)
+
+    keyboard.extend([
+        [
+            types.InlineKeyboardButton(text="🔍 Поиск", callback_data="admin_users_search"),
+            types.InlineKeyboardButton(text="📊 Статистика", callback_data="admin_users_stats")
+        ],
+        [
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_users")
+        ]
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_users_list_by_last_activity(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+    page: int = 1
+):
+    
+    await state.set_state(AdminStates.viewing_user_from_last_activity_list)
+
+    user_service = UserService()
+    users_data = await user_service.get_users_page(
+        db,
+        page=page,
+        limit=10,
+        order_by_last_activity=True,
+    )
+
+    if not users_data["users"]:
+        await callback.message.edit_text(
+            "🕒 Пользователи с активностью не найдены",
+            reply_markup=get_admin_users_keyboard(db_user.language)
+        )
+        await callback.answer()
+        return
+
+    text = f"👥 <b>Пользователи по активности</b> (стр. {page}/{users_data['total_pages']})\n\n"
+    text += "Нажмите на пользователя для управления:"
+
+    keyboard = []
+
+    for user in users_data["users"]:
+        if user.status == UserStatus.ACTIVE.value:
+            status_emoji = "✅"
+        elif user.status == UserStatus.BLOCKED.value:
+            status_emoji = "🚫"
+        else:
+            status_emoji = "🗑️"
+
+        activity_display = (
+            format_time_ago(user.last_activity, db_user.language)
+            if user.last_activity
+            else "неизвестно"
+        )
+
+        subscription_emoji = "❌"
+        if user.subscription:
+            if user.subscription.is_trial:
+                subscription_emoji = "🎁"
+            elif user.subscription.is_active:
+                subscription_emoji = "💎"
+            else:
+                subscription_emoji = "⏰"
+
+        button_text = f"{status_emoji} {subscription_emoji} {user.full_name}"
+        button_text += f" | 🕒 {activity_display}"
+
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"admin_user_manage_{user.id}"
+            )
+        ])
+
+    if users_data["total_pages"] > 1:
+        pagination_row = get_admin_pagination_keyboard(
+            users_data["current_page"],
+            users_data["total_pages"],
+            "admin_users_activity_list",
+            "admin_users",
+            db_user.language
+        ).inline_keyboard[0]
+        keyboard.append(pagination_row)
+
+    keyboard.extend([
+        [
+            types.InlineKeyboardButton(text="🔍 Поиск", callback_data="admin_users_search"),
+            types.InlineKeyboardButton(text="📊 Статистика", callback_data="admin_users_stats")
+        ],
+        [
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_users")
+        ]
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_users_list_by_spending(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+    page: int = 1
+):
+    
+    await state.set_state(AdminStates.viewing_user_from_spending_list)
+
+    user_service = UserService()
+    users_data = await user_service.get_users_page(
+        db,
+        page=page,
+        limit=10,
+        order_by_total_spent=True,
+    )
+
+    users = users_data["users"]
+    if not users:
+        await callback.message.edit_text(
+            "💳 Пользователи с тратами не найдены",
+            reply_markup=get_admin_users_keyboard(db_user.language)
+        )
+        await callback.answer()
+        return
+
+    spending_map = await user_service.get_user_spending_stats_map(
+        db,
+        [user.id for user in users],
+    )
+
+    text = f"👥 <b>Пользователи по сумме трат</b> (стр. {page}/{users_data['total_pages']})\n\n"
+    text += "Нажмите на пользователя для управления:"
+
+    keyboard = []
+
+    for user in users:
+        stats = spending_map.get(
+            user.id,
+            {"total_spent": 0, "purchase_count": 0},
+        )
+        total_spent = stats.get("total_spent", 0)
+        purchases = stats.get("purchase_count", 0)
+
+        status_emoji = "✅" if user.status == UserStatus.ACTIVE.value else "🚫" if user.status == UserStatus.BLOCKED.value else "🗑️"
+
+        button_text = (
+            f"{status_emoji} {user.full_name}"
+            f" | 💳 {settings.format_price(total_spent)}"
+            f" | 🛒 {purchases}"
+        )
+
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"admin_user_manage_{user.id}"
+            )
+        ])
+
+    if users_data["total_pages"] > 1:
+        pagination_row = get_admin_pagination_keyboard(
+            users_data["current_page"],
+            users_data["total_pages"],
+            "admin_users_spending_list",
+            "admin_users",
+            db_user.language
+        ).inline_keyboard[0]
+        keyboard.append(pagination_row)
+
+    keyboard.extend([
+        [
+            types.InlineKeyboardButton(text="🔍 Поиск", callback_data="admin_users_search"),
+            types.InlineKeyboardButton(text="📊 Статистика", callback_data="admin_users_stats")
+        ],
+        [
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_users")
+        ]
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_users_list_by_purchases(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+    page: int = 1
+):
+    
+    await state.set_state(AdminStates.viewing_user_from_purchases_list)
+
+    user_service = UserService()
+    users_data = await user_service.get_users_page(
+        db,
+        page=page,
+        limit=10,
+        order_by_purchase_count=True,
+    )
+
+    users = users_data["users"]
+    if not users:
+        await callback.message.edit_text(
+            "🛒 Пользователи с покупками не найдены",
+            reply_markup=get_admin_users_keyboard(db_user.language)
+        )
+        await callback.answer()
+        return
+
+    spending_map = await user_service.get_user_spending_stats_map(
+        db,
+        [user.id for user in users],
+    )
+
+    text = f"👥 <b>Пользователи по количеству покупок</b> (стр. {page}/{users_data['total_pages']})\n\n"
+    text += "Нажмите на пользователя для управления:"
+
+    keyboard = []
+
+    for user in users:
+        stats = spending_map.get(
+            user.id,
+            {"total_spent": 0, "purchase_count": 0},
+        )
+        total_spent = stats.get("total_spent", 0)
+        purchases = stats.get("purchase_count", 0)
+
+        status_emoji = "✅" if user.status == UserStatus.ACTIVE.value else "🚫" if user.status == UserStatus.BLOCKED.value else "🗑️"
+
+        button_text = (
+            f"{status_emoji} {user.full_name}"
+            f" | 🛒 {purchases}"
+            f" | 💳 {settings.format_price(total_spent)}"
+        )
+
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"admin_user_manage_{user.id}"
+            )
+        ])
+
+    if users_data["total_pages"] > 1:
+        pagination_row = get_admin_pagination_keyboard(
+            users_data["current_page"],
+            users_data["total_pages"],
+            "admin_users_purchases_list",
+            "admin_users",
+            db_user.language
+        ).inline_keyboard[0]
+        keyboard.append(pagination_row)
+
+    keyboard.extend([
+        [
+            types.InlineKeyboardButton(text="🔍 Поиск", callback_data="admin_users_search"),
+            types.InlineKeyboardButton(text="📊 Статистика", callback_data="admin_users_stats")
+        ],
+        [
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_users")
+        ]
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_users_list_by_campaign(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+    page: int = 1
+):
+    
+    await state.set_state(AdminStates.viewing_user_from_campaign_list)
+
+    user_service = UserService()
+    users_data = await user_service.get_users_by_campaign_page(
+        db,
+        page=page,
+        limit=10,
+    )
+
+    users = users_data.get("users", [])
+    campaign_map = users_data.get("campaigns", {})
+
+    if not users:
+        await callback.message.edit_text(
+            "📢 Пользователи с кампанией не найдены",
+            reply_markup=get_admin_users_keyboard(db_user.language)
+        )
+        await callback.answer()
+        return
+
+    text = f"👥 <b>Пользователи по кампании регистрации</b> (стр. {page}/{users_data['total_pages']})\n\n"
+    text += "Нажмите на пользователя для управления:"
+
+    keyboard = []
+
+    for user in users:
+        info = campaign_map.get(user.id, {})
+        campaign_name = info.get("campaign_name") or "Без кампании"
+        registered_at = info.get("registered_at")
+        registered_display = format_datetime(registered_at) if registered_at else "неизвестно"
+
+        status_emoji = "✅" if user.status == UserStatus.ACTIVE.value else "🚫" if user.status == UserStatus.BLOCKED.value else "🗑️"
+
+        button_text = (
+            f"{status_emoji} {user.full_name}"
+            f" | 📢 {campaign_name}"
+            f" | 📅 {registered_display}"
+        )
+
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"admin_user_manage_{user.id}"
+            )
+        ])
+
+    if users_data["total_pages"] > 1:
+        pagination_row = get_admin_pagination_keyboard(
+            users_data["current_page"],
+            users_data["total_pages"],
+            "admin_users_campaign_list",
+            "admin_users",
+            db_user.language
+        ).inline_keyboard[0]
+        keyboard.append(pagination_row)
+
+    keyboard.extend([
+        [
+            types.InlineKeyboardButton(text="🔍 Поиск", callback_data="admin_users_search"),
+            types.InlineKeyboardButton(text="📊 Статистика", callback_data="admin_users_stats")
+        ],
+        [
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_users")
+        ]
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    await callback.answer()
+
+
+
+@admin_required
+@error_handler
 async def handle_users_list_pagination_fixed(
     callback: types.CallbackQuery,
     db_user: User,
@@ -320,6 +778,91 @@ async def handle_users_balance_list_pagination(
     except (ValueError, IndexError) as e:
         logger.error(f"Ошибка парсинга номера страницы: {e}")
         await show_users_list_by_balance(callback, db_user, db, state, 1)
+
+
+@admin_required
+@error_handler
+async def handle_users_traffic_list_pagination(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    try:
+        callback_parts = callback.data.split('_')
+        page = int(callback_parts[-1]) 
+        await show_users_list_by_traffic(callback, db_user, db, state, page)
+    except (ValueError, IndexError) as e:
+        logger.error(f"Ошибка парсинга номера страницы: {e}")
+        await show_users_list_by_traffic(callback, db_user, db, state, 1)
+
+
+@admin_required
+@error_handler
+async def handle_users_activity_list_pagination(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    try:
+        callback_parts = callback.data.split('_')
+        page = int(callback_parts[-1]) 
+        await show_users_list_by_last_activity(callback, db_user, db, state, page)
+    except (ValueError, IndexError) as e:
+        logger.error(f"Ошибка парсинга номера страницы: {e}")
+        await show_users_list_by_last_activity(callback, db_user, db, state, 1)
+
+
+@admin_required
+@error_handler
+async def handle_users_spending_list_pagination(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    try:
+        callback_parts = callback.data.split('_')
+        page = int(callback_parts[-1]) 
+        await show_users_list_by_spending(callback, db_user, db, state, page)
+    except (ValueError, IndexError) as e:
+        logger.error(f"Ошибка парсинга номера страницы: {e}")
+        await show_users_list_by_spending(callback, db_user, db, state, 1)
+
+
+@admin_required
+@error_handler
+async def handle_users_purchases_list_pagination(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    try:
+        callback_parts = callback.data.split('_')
+        page = int(callback_parts[-1]) 
+        await show_users_list_by_purchases(callback, db_user, db, state, page)
+    except (ValueError, IndexError) as e:
+        logger.error(f"Ошибка парсинга номера страницы: {e}")
+        await show_users_list_by_purchases(callback, db_user, db, state, 1)
+
+
+@admin_required
+@error_handler
+async def handle_users_campaign_list_pagination(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext
+):
+    try:
+        callback_parts = callback.data.split('_')
+        page = int(callback_parts[-1]) 
+        await show_users_list_by_campaign(callback, db_user, db, state, page)
+    except (ValueError, IndexError) as e:
+        logger.error(f"Ошибка парсинга номера страницы: {e}")
+        await show_users_list_by_campaign(callback, db_user, db, state, 1)
 
 
 @admin_required
@@ -830,66 +1373,97 @@ async def show_user_management(
     
     user = profile["user"]
     subscription = profile["subscription"]
-    
-    if user.status == UserStatus.ACTIVE.value:
-        status_text = "✅ Активен"
-    elif user.status == UserStatus.BLOCKED.value:
-        status_text = "🚫 Заблокирован"
-    elif user.status == UserStatus.DELETED.value:
-        status_text = "🗑️ Удален"
-    else:
-        status_text = "❓ Неизвестно"
-    
-    text = f"""
-👤 <b>Управление пользователем</b>
 
-<b>Основная информация:</b>
-• Имя: {user.full_name}
-• ID: <code>{user.telegram_id}</code>
-• Username: @{user.username or 'не указан'}
-• Статус: {status_text}
-• Язык: {user.language}
+    texts = get_texts(db_user.language)
 
-<b>Финансы:</b>
-• Баланс: {settings.format_price(user.balance_kopeks)}
-• Транзакций: {profile['transactions_count']}
+    status_map = {
+        UserStatus.ACTIVE.value: texts.ADMIN_USER_STATUS_ACTIVE,
+        UserStatus.BLOCKED.value: texts.ADMIN_USER_STATUS_BLOCKED,
+        UserStatus.DELETED.value: texts.ADMIN_USER_STATUS_DELETED,
+    }
+    status_text = status_map.get(user.status, texts.ADMIN_USER_STATUS_UNKNOWN)
 
-<b>Активность:</b>
-• Регистрация: {format_datetime(user.created_at)}
-• Последняя активность: {format_time_ago(user.last_activity) if user.last_activity else 'Неизвестно'}
-• Дней с регистрации: {profile['registration_days']}
-"""
-    
+    username_display = (
+        f"@{user.username}" if user.username else texts.ADMIN_USER_USERNAME_NOT_SET
+    )
+    last_activity = (
+        format_time_ago(user.last_activity, db_user.language)
+        if user.last_activity
+        else texts.ADMIN_USER_LAST_ACTIVITY_UNKNOWN
+    )
+
+    sections = [
+        texts.ADMIN_USER_MANAGEMENT_PROFILE.format(
+            name=user.full_name,
+            telegram_id=user.telegram_id,
+            username=username_display,
+            status=status_text,
+            language=user.language,
+            balance=settings.format_price(user.balance_kopeks),
+            transactions=profile["transactions_count"],
+            registration=format_datetime(user.created_at),
+            last_activity=last_activity,
+            registration_days=profile["registration_days"],
+        )
+    ]
+
     if subscription:
-        text += f"""
-<b>Подписка:</b>
-• Тип: {'🎁 Триал' if subscription.is_trial else '💎 Платная'}
-• Статус: {'✅ Активна' if subscription.is_active else '❌ Неактивна'}
-• До: {format_datetime(subscription.end_date)}
-• Трафик: {subscription.traffic_used_gb:.1f}/{subscription.traffic_limit_gb} ГБ
-• Устройства: {subscription.device_limit}
-• Стран: {len(subscription.connected_squads)}
-"""
+        subscription_type = (
+            texts.ADMIN_USER_SUBSCRIPTION_TYPE_TRIAL
+            if subscription.is_trial
+            else texts.ADMIN_USER_SUBSCRIPTION_TYPE_PAID
+        )
+        subscription_status = (
+            texts.ADMIN_USER_SUBSCRIPTION_STATUS_ACTIVE
+            if subscription.is_active
+            else texts.ADMIN_USER_SUBSCRIPTION_STATUS_INACTIVE
+        )
+        traffic_usage = texts.ADMIN_USER_TRAFFIC_USAGE.format(
+            used=f"{subscription.traffic_used_gb:.1f}",
+            limit=subscription.traffic_limit_gb,
+        )
+        sections.append(
+            texts.ADMIN_USER_MANAGEMENT_SUBSCRIPTION.format(
+                type=subscription_type,
+                status=subscription_status,
+                end_date=format_datetime(subscription.end_date),
+                traffic=traffic_usage,
+                devices=subscription.device_limit,
+                countries=len(subscription.connected_squads),
+            )
+        )
     else:
-        text += "\n<b>Подписка:</b> Отсутствует"
+        sections.append(texts.ADMIN_USER_MANAGEMENT_SUBSCRIPTION_NONE)
 
     if user.promo_group:
         promo_group = user.promo_group
-        text += f"""
-
-<b>Промогруппа:</b>
-• Название: {promo_group.name}
-• Скидка на сервера: {promo_group.server_discount_percent}%
-• Скидка на трафик: {promo_group.traffic_discount_percent}%
-• Скидка на устройства: {promo_group.device_discount_percent}%
-"""
+        sections.append(
+            texts.ADMIN_USER_MANAGEMENT_PROMO_GROUP.format(
+                name=promo_group.name,
+                server_discount=promo_group.server_discount_percent,
+                traffic_discount=promo_group.traffic_discount_percent,
+                device_discount=promo_group.device_discount_percent,
+            )
+        )
     else:
-        text += "\n<b>Промогруппа:</b> Не назначена"
+        sections.append(texts.ADMIN_USER_MANAGEMENT_PROMO_GROUP_NONE)
+
+    text = "\n\n".join(sections)
 
     # Проверяем состояние, чтобы определить, откуда пришел пользователь
     current_state = await state.get_state()
     if current_state == AdminStates.viewing_user_from_balance_list:
         back_callback = "admin_users_balance_filter"
+    elif current_state == AdminStates.viewing_user_from_traffic_list:
+        back_callback = "admin_users_traffic_filter"
+    elif current_state == AdminStates.viewing_user_from_last_activity_list:
+        back_callback = "admin_users_activity_filter"
+    elif current_state == AdminStates.viewing_user_from_spending_list:
+        back_callback = "admin_users_spending_filter"
+    elif current_state == AdminStates.viewing_user_from_purchases_list:
+        back_callback = "admin_users_purchases_filter"
+    elif current_state == AdminStates.viewing_user_from_campaign_list:
+        back_callback = "admin_users_campaign_filter"
     
     # Базовая клавиатура профиля
     kb = get_user_management_keyboard(user.id, user.status, db_user.language, back_callback)
@@ -1210,7 +1784,12 @@ async def show_inactive_users(
     for user in inactive_users[:10]: 
         text += f"👤 {user.full_name}\n"
         text += f"🆔 <code>{user.telegram_id}</code>\n"
-        text += f"📅 {format_time_ago(user.last_activity) if user.last_activity else 'Никогда'}\n\n"
+        last_activity_display = (
+            format_time_ago(user.last_activity, db_user.language)
+            if user.last_activity
+            else "Никогда"
+        )
+        text += f"📅 {last_activity_display}\n\n"
     
     if len(inactive_users) > 10:
         text += f"... и еще {len(inactive_users) - 10} пользователей"
@@ -3341,6 +3920,31 @@ def register_handlers(dp: Dispatcher):
     )
     
     dp.callback_query.register(
+        handle_users_traffic_list_pagination,
+        F.data.startswith("admin_users_traffic_list_page_")
+    )
+
+    dp.callback_query.register(
+        handle_users_activity_list_pagination,
+        F.data.startswith("admin_users_activity_list_page_")
+    )
+
+    dp.callback_query.register(
+        handle_users_spending_list_pagination,
+        F.data.startswith("admin_users_spending_list_page_")
+    )
+
+    dp.callback_query.register(
+        handle_users_purchases_list_pagination,
+        F.data.startswith("admin_users_purchases_list_page_")
+    )
+
+    dp.callback_query.register(
+        handle_users_campaign_list_pagination,
+        F.data.startswith("admin_users_campaign_list_page_")
+    )
+    
+    dp.callback_query.register(
         start_user_search,
         F.data == "admin_users_search"
     )
@@ -3545,9 +4149,27 @@ def register_handlers(dp: Dispatcher):
     )
     
     dp.callback_query.register(
-        show_users_list_by_balance,
-        F.data.startswith("admin_users_balance_list_page_")
+        show_users_list_by_traffic,
+        F.data == "admin_users_traffic_filter"
     )
 
+    dp.callback_query.register(
+        show_users_list_by_last_activity,
+        F.data == "admin_users_activity_filter"
+    )
 
+    dp.callback_query.register(
+        show_users_list_by_spending,
+        F.data == "admin_users_spending_filter"
+    )
 
+    dp.callback_query.register(
+        show_users_list_by_purchases,
+        F.data == "admin_users_purchases_filter"
+    )
+
+    dp.callback_query.register(
+        show_users_list_by_campaign,
+        F.data == "admin_users_campaign_filter"
+    )
+    
