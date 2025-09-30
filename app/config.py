@@ -208,6 +208,8 @@ class Settings(BaseSettings):
     PAL24_MIN_AMOUNT_KOPEKS: int = 10000
     PAL24_MAX_AMOUNT_KOPEKS: int = 100000000
     PAL24_REQUEST_TIMEOUT: int = 30
+    PAL24_SBP_BUTTON_TEXT: Optional[str] = None
+    PAL24_CARD_BUTTON_TEXT: Optional[str] = None
 
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
@@ -399,6 +401,14 @@ class Settings(BaseSettings):
             "password": self.REMNAWAVE_PASSWORD,
             "auth_type": self.REMNAWAVE_AUTH_TYPE
         }
+
+    def get_pal24_sbp_button_text(self, fallback: str) -> str:
+        value = (self.PAL24_SBP_BUTTON_TEXT or "").strip()
+        return value or fallback
+
+    def get_pal24_card_button_text(self, fallback: str) -> str:
+        value = (self.PAL24_CARD_BUTTON_TEXT or "").strip()
+        return value or fallback
     
     def get_remnawave_user_delete_mode(self) -> str:
         """Возвращает режим удаления пользователей: 'delete' или 'disable'"""
