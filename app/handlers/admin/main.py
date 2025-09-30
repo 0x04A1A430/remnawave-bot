@@ -128,7 +128,6 @@ async def show_support_submenu(
     # Moderators have access only to tickets and not to settings
     is_moderator_only = (not settings.is_admin(callback.from_user.id) and SupportSettingsService.is_moderator(callback.from_user.id))
     
-    from app.keyboards.admin import get_admin_support_submenu_keyboard
     kb = get_admin_support_submenu_keyboard(db_user.language)
     if is_moderator_only:
         # Rebuild keyboard to include only tickets and back to main menu

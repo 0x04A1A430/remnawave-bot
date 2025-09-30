@@ -146,12 +146,6 @@ async def _prepare_subscription_summary(
     data: Dict[str, Any],
     texts,
 ) -> Tuple[str, Dict[str, Any]]:
-    from app.utils.pricing_utils import (
-        calculate_months_from_days,
-        format_period_description,
-        validate_pricing_calculation,
-        apply_percentage_discount,
-    )
 
     summary_data = dict(data)
     countries = await _get_available_countries(db_user.promo_group_id)
@@ -1128,7 +1122,6 @@ async def return_to_saved_cart(
         )
         return
     
-    from app.utils.pricing_utils import calculate_months_from_days, format_period_description
     
     countries = await _get_available_countries(db_user.promo_group_id)
     selected_countries_names = []
@@ -1333,7 +1326,6 @@ async def apply_countries_changes(
     db: AsyncSession,
     state: FSMContext
 ):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
     
     logger.info(f"🔧 Применение изменений стран")
     
@@ -1634,7 +1626,6 @@ async def confirm_change_devices(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
     
     new_devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
@@ -1748,7 +1739,6 @@ async def execute_change_devices(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
     
     callback_parts = callback.data.split('_')
     new_devices_count = int(callback_parts[3])
@@ -1879,7 +1869,6 @@ async def show_devices_page(
     page: int = 1
 ):
     
-    from app.utils.pagination import paginate_list
     
     texts = get_texts(db_user.language)
     devices_per_page = 5
@@ -1978,7 +1967,6 @@ async def handle_single_device_reset(
             if response and 'response' in response:
                 devices_list = response['response'].get('devices', [])
                 
-                from app.utils.pagination import paginate_list
                 devices_per_page = 5
                 pagination = paginate_list(devices_list, page=page, per_page=devices_per_page)
                 
@@ -2284,7 +2272,6 @@ async def confirm_add_devices(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
     
     devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
@@ -2420,11 +2407,6 @@ async def confirm_extend_subscription(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import (
-        calculate_months_from_days,
-        validate_pricing_calculation,
-        apply_percentage_discount,
-    )
     from app.services.admin_notification_service import AdminNotificationService
 
     days = int(callback.data.split('_')[2])
@@ -3034,7 +3016,6 @@ async def select_country(
         return
     
     period_base_price = PERIOD_PRICES[data['period_days']]
-    from app.utils.pricing_utils import apply_percentage_discount
 
     discounted_base_price, _ = apply_percentage_discount(
         period_base_price,
@@ -3170,7 +3151,6 @@ async def confirm_purchase(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import calculate_months_from_days, validate_pricing_calculation
     from app.services.admin_notification_service import AdminNotificationService
     
     data = await state.get_data()
@@ -3890,7 +3870,6 @@ async def create_paid_subscription_with_traffic_mode(
     traffic_gb: Optional[int] = None 
 ):
     from app.config import settings
-    from app.database.crud.subscription import create_paid_subscription
     
     if traffic_gb is None:
         if settings.is_traffic_fixed():
@@ -5351,7 +5330,6 @@ async def confirm_switch_traffic(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import get_remaining_months, calculate_prorated_price
     
     new_traffic_gb = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
@@ -5465,7 +5443,6 @@ async def execute_switch_traffic(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.pricing_utils import get_remaining_months
     
     callback_parts = callback.data.split('_')
     new_traffic_gb = int(callback_parts[3])
@@ -5550,7 +5527,6 @@ def get_traffic_switch_keyboard(
     subscription_end_date: datetime = None,
     discount_percent: int = 0,
 ) -> InlineKeyboardMarkup:
-    from app.utils.pricing_utils import get_remaining_months
     from app.config import settings
     
     months_multiplier = 1

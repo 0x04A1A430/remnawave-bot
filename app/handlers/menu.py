@@ -10,7 +10,6 @@ from app.database.crud.user import get_user_by_telegram_id, update_user
 from app.keyboards.inline import get_main_menu_keyboard, get_language_selection_keyboard
 from app.localization.texts import get_texts, get_rules
 from app.database.models import User
-from app.utils.user_utils import mark_user_as_had_paid_subscription
 from app.database.crud.user_message import get_random_active_message
 from app.services.subscription_checkout_service import (
     has_subscription_checkout_draft,
@@ -63,17 +62,6 @@ async def show_main_menu(
     )
     if not skip_callback_answer:
         await callback.answer()
-
-
-async def mark_user_as_had_paid_subscription(
-    db: AsyncSession,
-    user: User
-) -> None:
-    if not user.has_had_paid_subscription:
-        user.has_had_paid_subscription = True
-        user.updated_at = datetime.utcnow()
-        await db.commit()
-        logger.info(f"🎯 Пользователь {user.telegram_id} отмечен как имевший платную подписку")
 
 
 async def show_service_rules(
