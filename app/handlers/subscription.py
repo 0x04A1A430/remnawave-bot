@@ -68,6 +68,7 @@ from app.utils.pagination import paginate_list
 from app.utils.subscription_utils import (
     get_display_subscription_link,
     get_happ_cryptolink_redirect_link,
+    build_happ_subscription_link,
 )
 
 logger = logging.getLogger(__name__)
@@ -5048,6 +5049,16 @@ async def handle_open_subscription_link(
 
     if settings.is_happ_cryptolink_mode():
         redirect_link = get_happ_cryptolink_redirect_link(subscription_link)
+        base_subscription_link = getattr(subscription, "subscription_url", None)
+        raw_crypto_link = getattr(subscription, "subscription_crypto_link", None)
+        crypto_link = raw_crypto_link or subscription_link
+        happ_subscription_link = (
+            build_happ_subscription_link(base_subscription_link)
+            or build_happ_subscription_link(subscription_link)
+        )
+
+        link_for_display = happ_subscription_link or crypto_link
+
         happ_message = (
             texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_TITLE",
@@ -5057,13 +5068,19 @@ async def handle_open_subscription_link(
             + texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_LINK",
                 "<a href=\"{subscription_link}\">🔓 Открыть ссылку в Happ</a>",
-            ).format(subscription_link=subscription_link)
+            ).format(subscription_link=link_for_display)
             + "\n\n"
             + texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_HINT",
                 "💡 Если ссылка не открывается автоматически, скопируйте её вручную: <code>{subscription_link}</code>",
-            ).format(subscription_link=subscription_link)
+            ).format(subscription_link=link_for_display)
         )
+
+        if raw_crypto_link:
+            happ_message += "\n\n" + texts.t(
+                "SUBSCRIPTION_HAPP_OPEN_CRYPTOLINK",
+                "<blockquote expandable>🔐 CryptoLink: <code>{crypto_link}</code></blockquote>",
+            ).format(crypto_link=raw_crypto_link)
 
         if redirect_link:
             happ_message += "\n\n" + texts.t(
