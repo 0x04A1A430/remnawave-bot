@@ -117,7 +117,8 @@ class Settings(BaseSettings):
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED: bool = False
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS: str = ""
 
-    TRAFFIC_SELECTION_MODE: str = "selectable" 
+    TRAFFIC_SELECTION_MODE: str = "selectable"
+    SUBSCRIPTION_PURCHASE_MODE: str = "custom"
     FIXED_TRAFFIC_LIMIT_GB: int = 100 
     
     REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 10000 
@@ -527,7 +528,20 @@ class Settings(BaseSettings):
     
     def is_traffic_fixed(self) -> bool:
         return self.TRAFFIC_SELECTION_MODE.lower() == "fixed"
-    
+
+    def get_subscription_purchase_mode(self) -> str:
+        mode = (self.SUBSCRIPTION_PURCHASE_MODE or "custom").strip().lower()
+        return mode or "custom"
+
+    def is_subscription_tariff_mode(self) -> bool:
+        return self.get_subscription_purchase_mode() == "tariff"
+
+    def is_subscription_custom_mode(self) -> bool:
+        return self.get_subscription_purchase_mode() == "custom"
+
+    def is_subscription_fixed_mode(self) -> bool:
+        return self.get_subscription_purchase_mode() == "fixed"
+
     def get_fixed_traffic_limit(self) -> int:
         return self.FIXED_TRAFFIC_LIMIT_GB
     
