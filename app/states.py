@@ -6,6 +6,8 @@ class RegistrationStates(StatesGroup):
     waiting_for_referral_code = State()
 
 class SubscriptionStates(StatesGroup):
+    selecting_tariff = State()
+    selecting_tariff_period = State()
     selecting_period = State()
     selecting_traffic = State()
     selecting_countries = State()

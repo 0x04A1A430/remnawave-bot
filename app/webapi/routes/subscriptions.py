@@ -50,6 +50,7 @@ def _serialize_subscription(subscription: Subscription) -> SubscriptionResponse:
         subscription_url=subscription.subscription_url,
         subscription_crypto_link=subscription.subscription_crypto_link,
         connected_squads=list(subscription.connected_squads or []),
+        tariff_id=subscription.tariff_id,
         created_at=subscription.created_at,
         updated_at=subscription.updated_at,
     )
@@ -58,7 +59,10 @@ def _serialize_subscription(subscription: Subscription) -> SubscriptionResponse:
 async def _get_subscription(db: AsyncSession, subscription_id: int) -> Subscription:
     result = await db.execute(
         select(Subscription)
-        .options(selectinload(Subscription.user))
+        .options(
+            selectinload(Subscription.user),
+            selectinload(Subscription.tariff),
+        )
         .where(Subscription.id == subscription_id)
     )
     subscription = result.scalar_one_or_none()
@@ -77,7 +81,10 @@ async def list_subscriptions(
     user_id: Optional[int] = Query(default=None),
     is_trial: Optional[bool] = Query(default=None),
 ) -> list[SubscriptionResponse]:
-    query = select(Subscription).options(selectinload(Subscription.user))
+    query = select(Subscription).options(
+        selectinload(Subscription.user),
+        selectinload(Subscription.tariff),
+    )
 
     if status_filter:
         query = query.where(Subscription.status == status_filter.value)
@@ -131,6 +138,7 @@ async def create_subscription(
             traffic_limit_gb=payload.traffic_limit_gb or settings.DEFAULT_TRAFFIC_LIMIT_GB,
             device_limit=payload.device_limit or settings.DEFAULT_DEVICE_LIMIT,
             connected_squads=payload.connected_squads or [],
+            tariff_id=payload.tariff_id,
         )
 
     subscription = await _get_subscription(db, subscription.id)
