@@ -2,8 +2,8 @@ import logging
 import secrets
 import string
 from datetime import datetime, timedelta
-from typing import Optional, List
-from sqlalchemy import select, and_, or_, func
+from typing import Optional, List, Dict
+from sqlalchemy import select, and_, or_, func, case, nullslast
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -273,7 +273,11 @@ async def get_users_list(
     limit: int = 50,
     search: Optional[str] = None,
     status: Optional[UserStatus] = None,
-    order_by_balance: bool = False
+    order_by_balance: bool = False,
+    order_by_traffic: bool = False,
+    order_by_last_activity: bool = False,
+    order_by_total_spent: bool = False,
+    order_by_purchase_count: bool = False
 ) -> List[User]:
     
     query = select(User).options(selectinload(User.subscription))
@@ -293,10 +297,71 @@ async def get_users_list(
             conditions.append(User.telegram_id == int(search))
         
         query = query.where(or_(*conditions))
-    
-    # Сортировка по балансу в порядке убывания, если order_by_balance=True
-    if order_by_balance:
-        query = query.order_by(User.balance_kopeks.desc())
+
+    sort_flags = [
+        order_by_balance,
+        order_by_traffic,
+        order_by_last_activity,
+        order_by_total_spent,
+        order_by_purchase_count,
+    ]
+    if sum(int(flag) for flag in sort_flags) > 1:
+        logger.debug(
+            "Выбрано несколько сортировок пользователей — применяется приоритет: трафик > траты > покупки > баланс > активность"
+        )
+
+    transactions_stats = None
+    if order_by_total_spent or order_by_purchase_count:
+        from app.database.models import Transaction
+
+        transactions_stats = (
+            select(
+                Transaction.user_id.label("user_id"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                                Transaction.amount_kopeks,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("total_spent"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("purchase_count"),
+            )
+            .where(Transaction.is_completed.is_(True))
+            .group_by(Transaction.user_id)
+            .subquery()
+        )
+        query = query.outerjoin(transactions_stats, transactions_stats.c.user_id == User.id)
+
+    if order_by_traffic:
+        traffic_sort = func.coalesce(Subscription.traffic_used_gb, 0.0)
+        query = query.outerjoin(Subscription, Subscription.user_id == User.id)
+        query = query.order_by(traffic_sort.desc(), User.created_at.desc())
+    elif order_by_total_spent:
+        order_column = func.coalesce(transactions_stats.c.total_spent, 0)
+        query = query.order_by(order_column.desc(), User.created_at.desc())
+    elif order_by_purchase_count:
+        order_column = func.coalesce(transactions_stats.c.purchase_count, 0)
+        query = query.order_by(order_column.desc(), User.created_at.desc())
+    elif order_by_balance:
+        query = query.order_by(User.balance_kopeks.desc(), User.created_at.desc())
+    elif order_by_last_activity:
+        query = query.order_by(nullslast(User.last_activity.desc()), User.created_at.desc())
     else:
         query = query.order_by(User.created_at.desc())
     
@@ -332,6 +397,62 @@ async def get_users_count(
     
     result = await db.execute(query)
     return result.scalar()
+
+
+async def get_users_spending_stats(
+    db: AsyncSession,
+    user_ids: List[int]
+) -> Dict[int, Dict[str, int]]:
+    if not user_ids:
+        return {}
+
+    from app.database.models import Transaction
+
+    stats_query = (
+        select(
+            Transaction.user_id,
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                            Transaction.amount_kopeks,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("total_spent"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("purchase_count"),
+        )
+        .where(
+            Transaction.user_id.in_(user_ids),
+            Transaction.is_completed.is_(True),
+        )
+        .group_by(Transaction.user_id)
+    )
+
+    result = await db.execute(stats_query)
+    rows = result.all()
+
+    return {
+        row.user_id: {
+            "total_spent": int(row.total_spent or 0),
+            "purchase_count": int(row.purchase_count or 0),
+        }
+        for row in rows
+    }
 
 
 async def get_referrals(db: AsyncSession, user_id: int) -> List[User]:
