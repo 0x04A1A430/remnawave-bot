@@ -4,6 +4,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, get_args, get_origin
 
+from app.database.universal_migration import ensure_default_web_api_token
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,48 +60,48 @@ class BotConfigurationService:
     EXCLUDED_KEYS: set[str] = {"BOT_TOKEN", "ADMIN_IDS"}
 
     CATEGORY_TITLES: Dict[str, str] = {
-        "SUPPORT": "Поддержка",
-        "ADMIN_NOTIFICATIONS": "Уведомления администраторов",
-        "ADMIN_REPORTS": "Автоотчеты",
-        "CHANNEL": "Обязательная подписка на канал",
-        "DATABASE": "База данных",
-        "POSTGRES": "PostgreSQL",
-        "SQLITE": "SQLite",
-        "REDIS": "Redis",
-        "REMNAWAVE": "Remnawave API",
-        "TRIAL": "Триал подписка",
-        "PAID_SUBSCRIPTION": "Платная подписка",
-        "SUBSCRIPTIONS_GLOBAL": "Глобальные параметры подписок",
-        "TRAFFIC": "Настройки трафика",
-        "PERIODS": "Периоды подписки",
-        "SUBSCRIPTION_PRICES": "Цены подписки",
-        "TRAFFIC_PACKAGES": "Пакеты трафика",
-        "DISCOUNTS": "Скидки промогрупп",
-        "REFERRAL": "Реферальная система",
-        "AUTOPAY": "Автопродление",
-        "TELEGRAM": "Telegram Stars",
-        "TRIBUTE": "Tribute",
-        "YOOKASSA": "YooKassa",
-        "CRYPTOBOT": "CryptoBot",
-        "MULENPAY": "MulenPay",
-        "PAL24": "PayPalych / Pal24",
-        "PAYMENT": "Описания платежей",
-        "INTERFACE_BRANDING": "Брендинг и логотип",
-        "INTERFACE_SUBSCRIPTION": "Блок подписки",
-        "CONNECT_BUTTON": "Кнопка «Подключиться»",
-        "HAPP": "Happ CryptoLink",
-        "SKIP": "Пропуски onboarding",
-        "MONITORING": "Мониторинг",
-        "NOTIFICATIONS": "Уведомления",
-        "SERVER": "Статус серверов",
-        "MAINTENANCE": "Технические работы",
-        "LOCALIZATION": "Локализация",
-        "ADDITIONAL": "Дополнительные настройки",
-        "BACKUP": "Бекапы",
-        "VERSION": "Проверка обновлений",
-        "LOG": "Логирование",
-        "WEBHOOK": "Вебхуки",
-        "DEBUG": "Режим разработки",
+        "SUPPORT": "💬 Ссылка на поддержку",
+        "LOCALIZATION": "🌍 Языковые настройки",
+        "MAINTENANCE": "🛠️ Режим обслуживания",
+        "CHANNEL": "📣 Обязательная подписка",
+        "ADMIN_NOTIFICATIONS": "🔔 Уведомления админам",
+        "ADMIN_REPORTS": "📊 Автоматические отчеты",
+        "TRIAL": "🎁 Триальная подписка",
+        "PAID_SUBSCRIPTION": "💰 Платные подписки",
+        "PERIODS": "📅 Периоды подписки",
+        "SUBSCRIPTION_PRICES": "💵 Цены за периоды",
+        "TRAFFIC": "🚦 Настройки трафика",
+        "TRAFFIC_PACKAGES": "📦 Пакеты трафика",
+        "DISCOUNTS": "🎯 Промо и скидки",
+        "PAYMENT": "⚙️ Общие настройки платежей",
+        "TELEGRAM": "⭐ Telegram Stars",
+        "CRYPTOBOT": "💎 CryptoBot",
+        "YOOKASSA": "💸 YooKassa",
+        "TRIBUTE": "🎁 Tribute",
+        "MULENPAY": "💰 MulenPay",
+        "PAL24": "🏦 Pal24/PayPalych",
+        "REMNAWAVE": "🔗 RemnaWave API",
+        "REFERRAL": "🤝 Реферальная система",
+        "AUTOPAY": "🔄 Автопродление",
+        "INTERFACE_BRANDING": "🖼️ Визуальные настройки",
+        "INTERFACE_SUBSCRIPTION": "🔗 Скрыть ссылку подписки",
+        "CONNECT_BUTTON": "🚀 Кнопка «Подключиться»",
+        "HAPP": "🅷 Happ настройки",
+        "SKIP": "⚡ Быстрый старт",
+        "ADDITIONAL": "📱 Приложения и DeepLinks",
+        "DATABASE": "🗄️ Режим БД",
+        "POSTGRES": "🐘 PostgreSQL",
+        "SQLITE": "💾 SQLite",
+        "REDIS": "🧠 Redis",
+        "MONITORING": "📈 Общий мониторинг",
+        "NOTIFICATIONS": "🔔 Уведомления пользователям",
+        "SERVER": "🖥️ Статус серверов",
+        "BACKUP": "💾 Система бэкапов",
+        "VERSION": "🔄 Обновления",
+        "LOG": "📝 Логирование",
+        "WEBHOOK": "🌐 Webhook",
+        "WEB_API": "🌐 Web API",
+        "DEBUG": "🔧 Режим разработки",
     }
 
     CATEGORY_KEY_OVERRIDES: Dict[str, str] = {
@@ -110,7 +112,8 @@ class BotConfigurationService:
         "DEFAULT_TRAFFIC_LIMIT_GB": "PAID_SUBSCRIPTION",
         "MAX_DEVICES_LIMIT": "PAID_SUBSCRIPTION",
         "PRICE_PER_DEVICE": "PAID_SUBSCRIPTION",
-        "DEFAULT_TRAFFIC_RESET_STRATEGY": "SUBSCRIPTIONS_GLOBAL",
+        "DEFAULT_TRAFFIC_RESET_STRATEGY": "TRAFFIC",
+        "RESET_TRAFFIC_ON_PAYMENT": "TRAFFIC",
         "TRAFFIC_SELECTION_MODE": "TRAFFIC",
         "FIXED_TRAFFIC_LIMIT_GB": "TRAFFIC",
         "AVAILABLE_SUBSCRIPTION_PERIODS": "PERIODS",
@@ -158,6 +161,7 @@ class BotConfigurationService:
         "PAYMENT_BALANCE_TEMPLATE": "PAYMENT",
         "PAYMENT_SUBSCRIPTION_TEMPLATE": "PAYMENT",
         "INACTIVE_USER_DELETE_MONTHS": "MONITORING",
+        "LANGUAGE_SELECTION_ENABLED": "LOCALIZATION",
     }
 
     CATEGORY_PREFIX_OVERRIDES: Dict[str, str] = {
@@ -193,6 +197,7 @@ class BotConfigurationService:
         "BACKUP_": "BACKUP",
         "WEBHOOK_": "WEBHOOK",
         "LOG_": "LOG",
+        "WEB_API_": "WEB_API",
         "DEBUG": "DEBUG",
     }
 
@@ -541,6 +546,8 @@ class BotConfigurationService:
             cls._overrides_raw[key] = raw_value
             cls._apply_to_settings(key, parsed_value)
 
+        await cls._sync_default_web_api_token()
+
     @classmethod
     async def reload(cls) -> None:
         cls._overrides_raw.clear()
@@ -642,6 +649,9 @@ class BotConfigurationService:
         cls._overrides_raw[key] = raw_value
         cls._apply_to_settings(key, value)
 
+        if key in {"WEB_API_DEFAULT_TOKEN", "WEB_API_DEFAULT_TOKEN_NAME"}:
+            await cls._sync_default_web_api_token()
+
     @classmethod
     async def reset_value(cls, db: AsyncSession, key: str) -> None:
         await delete_system_setting(db, key)
@@ -649,12 +659,27 @@ class BotConfigurationService:
         original = cls.get_original_value(key)
         cls._apply_to_settings(key, original)
 
+        if key in {"WEB_API_DEFAULT_TOKEN", "WEB_API_DEFAULT_TOKEN_NAME"}:
+            await cls._sync_default_web_api_token()
+
     @classmethod
     def _apply_to_settings(cls, key: str, value: Any) -> None:
         try:
             setattr(settings, key, value)
         except Exception as error:
             logger.error("Не удалось применить значение %s=%s: %s", key, value, error)
+
+    @staticmethod
+    async def _sync_default_web_api_token() -> None:
+        default_token = (settings.WEB_API_DEFAULT_TOKEN or "").strip()
+        if not default_token:
+            return
+
+        success = await ensure_default_web_api_token()
+        if not success:
+            logger.warning(
+                "Не удалось синхронизировать бутстрап токен веб-API после обновления настроек",
+            )
 
     @classmethod
     def get_setting_summary(cls, key: str) -> Dict[str, Any]:

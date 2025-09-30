@@ -18,7 +18,7 @@ from app.database.models import (
     ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory,
     CryptoBotPayment, SubscriptionConversion, UserMessage, WelcomeText,
     SentNotification, PromoGroup, MulenPayPayment, Pal24Payment,
-    AdvertisingCampaign
+    AdvertisingCampaign, PaymentMethod
 )
 from app.config import settings
 
@@ -203,7 +203,14 @@ class UserService:
                 logger.info(f"Админ {admin_id} пополнил баланс пользователя {user_id} на {amount_kopeks/100}₽")
                 success = True
             else:
-                success = await subtract_user_balance(db, user, abs(amount_kopeks), description)
+                success = await subtract_user_balance(
+                    db,
+                    user,
+                    abs(amount_kopeks),
+                    description,
+                    create_transaction=True,
+                    payment_method=PaymentMethod.MANUAL,
+                )
                 if success:
                     logger.info(f"Админ {admin_id} списал с баланса пользователя {user_id} {abs(amount_kopeks)/100}₽")
 
@@ -231,15 +238,17 @@ class UserService:
         db: AsyncSession,
         user_id: int,
         promo_group_id: int
-    ) -> Tuple[bool, Optional[User], Optional[PromoGroup]]:
+    ) -> Tuple[bool, Optional[User], Optional[PromoGroup], Optional[PromoGroup]]:
         try:
             user = await get_user_by_id(db, user_id)
             if not user:
-                return False, None, None
+                return False, None, None, None
+
+            old_group = user.promo_group
 
             promo_group = await get_promo_group_by_id(db, promo_group_id)
             if not promo_group:
-                return False, None, None
+                return False, None, None, old_group
 
             user.promo_group_id = promo_group.id
             user.promo_group = promo_group
@@ -254,12 +263,12 @@ class UserService:
                 promo_group.name,
             )
 
-            return True, user, promo_group
+            return True, user, promo_group, old_group
 
         except Exception as e:
             await db.rollback()
             logger.error(f"Ошибка обновления промогруппы пользователя {user_id}: {e}")
-            return False, None, None
+            return False, None, None, None
 
     async def block_user(
         self,

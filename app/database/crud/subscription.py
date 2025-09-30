@@ -116,13 +116,33 @@ async def extend_subscription(
     else:
         subscription.end_date = current_time + timedelta(days=days)
         logger.info(f"📅 Подписка истекла, устанавливаем новую дату окончания")
-    
+
+    if subscription.is_trial:
+        start_date = subscription.start_date or current_time
+        total_duration = subscription.end_date - start_date
+        max_trial_duration = timedelta(days=settings.TRIAL_DURATION_DAYS)
+
+        if total_duration > max_trial_duration:
+            subscription.is_trial = False
+            logger.info(
+                "🎯 Подписка %s автоматически переведена из триальной в платную после продления"
+                ", итоговая длительность: %s дней",
+                subscription.id,
+                total_duration.days,
+            )
+            if subscription.user:
+                subscription.user.has_had_paid_subscription = True
+
     if subscription.status == SubscriptionStatus.EXPIRED.value:
         subscription.status = SubscriptionStatus.ACTIVE.value
         logger.info(f"🔄 Статус изменён с EXPIRED на ACTIVE")
-    
+
+    if settings.RESET_TRAFFIC_ON_PAYMENT:
+        subscription.traffic_used_gb = 0.0
+        logger.info("🔄 Сбрасываем использованный трафик согласно настройке RESET_TRAFFIC_ON_PAYMENT")
+
     subscription.updated_at = current_time
-    
+
     await db.commit()
     await db.refresh(subscription)
     await clear_notifications(db, subscription.id)

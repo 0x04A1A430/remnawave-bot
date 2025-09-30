@@ -7,8 +7,17 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.models import User, Subscription, Transaction, TransactionType
+from app.database.crud.promo_group import get_promo_group_by_id
 from app.database.crud.user import get_user_by_id
+from app.database.models import (
+    AdvertisingCampaign,
+    PromoCodeType,
+    PromoGroup,
+    Subscription,
+    Transaction,
+    TransactionType,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,20 +34,141 @@ class AdminNotificationService:
     async def _get_referrer_info(self, db: AsyncSession, referred_by_id: Optional[int]) -> str:
         if not referred_by_id:
             return "Нет"
-        
+
         try:
             referrer = await get_user_by_id(db, referred_by_id)
             if not referrer:
                 return f"ID {referred_by_id} (не найден)"
-            
+
             if referrer.username:
                 return f"@{referrer.username} (ID: {referred_by_id})"
             else:
                 return f"ID {referrer.telegram_id}"
-                
+
         except Exception as e:
             logger.error(f"Ошибка получения данных рефера {referred_by_id}: {e}")
             return f"ID {referred_by_id}"
+
+    async def _get_user_promo_group(self, db: AsyncSession, user: User) -> Optional[PromoGroup]:
+        if getattr(user, "promo_group", None):
+            return user.promo_group
+
+        if not user.promo_group_id:
+            return None
+
+        try:
+            await db.refresh(user, attribute_names=["promo_group"])
+        except Exception:
+            # relationship might not be available — fallback to direct fetch
+            pass
+
+        if getattr(user, "promo_group", None):
+            return user.promo_group
+
+        try:
+            return await get_promo_group_by_id(db, user.promo_group_id)
+        except Exception as e:
+            logger.error(
+                "Ошибка загрузки промогруппы %s пользователя %s: %s",
+                user.promo_group_id,
+                user.telegram_id,
+                e,
+            )
+            return None
+
+    def _format_promo_group_discounts(self, promo_group: PromoGroup) -> List[str]:
+        discount_lines: List[str] = []
+
+        discount_map = {
+            "servers": ("Серверы", promo_group.server_discount_percent),
+            "traffic": ("Трафик", promo_group.traffic_discount_percent),
+            "devices": ("Устройства", promo_group.device_discount_percent),
+        }
+
+        for _, (title, percent) in discount_map.items():
+            if percent and percent > 0:
+                discount_lines.append(f"• {title}: -{percent}%")
+
+        period_discounts_raw = promo_group.period_discounts or {}
+        period_items: List[tuple[int, int]] = []
+
+        if isinstance(period_discounts_raw, dict):
+            for raw_days, raw_percent in period_discounts_raw.items():
+                try:
+                    days = int(raw_days)
+                    percent = int(raw_percent)
+                except (TypeError, ValueError):
+                    continue
+
+                if percent > 0:
+                    period_items.append((days, percent))
+
+        period_items.sort(key=lambda item: item[0])
+
+        if period_items:
+            formatted_periods = ", ".join(
+                f"{days} д. — -{percent}%" for days, percent in period_items
+            )
+            discount_lines.append(f"• Периоды: {formatted_periods}")
+
+        if promo_group.apply_discounts_to_addons:
+            discount_lines.append("• Доп. услуги: ✅ скидка действует")
+        else:
+            discount_lines.append("• Доп. услуги: ❌ без скидки")
+
+        return discount_lines
+
+    def _format_promo_group_block(
+        self,
+        promo_group: Optional[PromoGroup],
+        *,
+        title: str = "Промогруппа",
+        icon: str = "🏷️",
+    ) -> str:
+        if not promo_group:
+            return f"{icon} <b>{title}:</b> —"
+
+        lines = [f"{icon} <b>{title}:</b> {promo_group.name}"]
+
+        discount_lines = self._format_promo_group_discounts(promo_group)
+        if discount_lines:
+            lines.append("💸 <b>Скидки:</b>")
+            lines.extend(discount_lines)
+        else:
+            lines.append("💸 <b>Скидки:</b> отсутствуют")
+
+        return "\n".join(lines)
+
+    def _get_promocode_type_display(self, promo_type: Optional[str]) -> str:
+        mapping = {
+            PromoCodeType.BALANCE.value: "💰 Бонус на баланс",
+            PromoCodeType.SUBSCRIPTION_DAYS.value: "⏰ Доп. дни подписки",
+            PromoCodeType.TRIAL_SUBSCRIPTION.value: "🎁 Триал подписка",
+        }
+
+        if not promo_type:
+            return "ℹ️ Не указан"
+
+        return mapping.get(promo_type, f"ℹ️ {promo_type}")
+
+    def _format_campaign_bonus(self, campaign: AdvertisingCampaign) -> List[str]:
+        if campaign.is_balance_bonus:
+            return [
+                f"💰 Баланс: {settings.format_price(campaign.balance_bonus_kopeks or 0)}",
+            ]
+
+        if campaign.is_subscription_bonus:
+            default_devices = getattr(settings, "DEFAULT_DEVICE_LIMIT", 1)
+            details = [
+                f"📅 Дней подписки: {campaign.subscription_duration_days or 0}",
+                f"📊 Трафик: {campaign.subscription_traffic_gb or 0} ГБ",
+                f"📱 Устройства: {campaign.subscription_device_limit or default_devices}",
+            ]
+            if campaign.subscription_squads:
+                details.append(f"🌐 Сквады: {len(campaign.subscription_squads)} шт.")
+            return details
+
+        return ["ℹ️ Бонусы не предусмотрены"]
     
     async def send_trial_activation_notification(
         self,
@@ -52,13 +182,17 @@ class AdminNotificationService:
         try:
             user_status = "🆕 Новый" if not user.has_had_paid_subscription else "🔄 Существующий"
             referrer_info = await self._get_referrer_info(db, user.referred_by_id)
-            
+            promo_group = await self._get_user_promo_group(db, user)
+            promo_block = self._format_promo_group_block(promo_group)
+
             message = f"""🎯 <b>АКТИВАЦИЯ ТРИАЛА</b>
 
 👤 <b>Пользователь:</b> {user.full_name}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
 📱 <b>Username:</b> @{user.username or 'отсутствует'}
 👥 <b>Статус:</b> {user_status}
+
+{promo_block}
 
 ⏰ <b>Параметры триала:</b>
 📅 Период: {settings.TRIAL_DURATION_DAYS} дней
@@ -102,13 +236,17 @@ class AdminNotificationService:
             servers_info = await self._get_servers_info(subscription.connected_squads)
             payment_method = self._get_payment_method_display(transaction.payment_method)
             referrer_info = await self._get_referrer_info(db, user.referred_by_id)
-            
+            promo_group = await self._get_user_promo_group(db, user)
+            promo_block = self._format_promo_group_block(promo_group)
+
             message = f"""💎 <b>{event_type}</b>
 
 👤 <b>Пользователь:</b> {user.full_name}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
 📱 <b>Username:</b> @{user.username or 'отсутствует'}
 👥 <b>Статус:</b> {user_status}
+
+{promo_block}
 
 💰 <b>Платеж:</b>
 💵 Сумма: {settings.format_price(transaction.amount_kopeks)}
@@ -235,6 +373,8 @@ class AdminNotificationService:
             )
             subscription = subscription_result.scalar_one_or_none()
             subscription_status = self._get_subscription_status(subscription)
+            promo_group = await self._get_user_promo_group(db, user)
+            promo_block = self._format_promo_group_block(promo_group)
 
             message = f"""💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>
 
@@ -242,6 +382,8 @@ class AdminNotificationService:
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
 📱 <b>Username:</b> @{user.username or 'отсутствует'}
 💳 <b>Статус:</b> {topup_status}
+
+{promo_block}
 
 💰 <b>Детали пополнения:</b>
 💵 Сумма: {settings.format_price(transaction.amount_kopeks)}
@@ -271,20 +413,30 @@ class AdminNotificationService:
         subscription: Subscription,
         transaction: Transaction,
         extended_days: int,
-        old_end_date: datetime
+        old_end_date: datetime,
+        *,
+        new_end_date: datetime | None = None,
+        balance_after: int | None = None,
     ) -> bool:
         if not self._is_enabled():
             return False
-        
+
         try:
             payment_method = self._get_payment_method_display(transaction.payment_method)
             servers_info = await self._get_servers_info(subscription.connected_squads)
-            
+            promo_group = await self._get_user_promo_group(db, user)
+            promo_block = self._format_promo_group_block(promo_group)
+
+            current_end_date = new_end_date or subscription.end_date
+            current_balance = balance_after if balance_after is not None else user.balance_kopeks
+
             message = f"""⏰ <b>ПРОДЛЕНИЕ ПОДПИСКИ</b>
 
 👤 <b>Пользователь:</b> {user.full_name}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
 📱 <b>Username:</b> @{user.username or 'отсутствует'}
+
+{promo_block}
 
 💰 <b>Платеж:</b>
 💵 Сумма: {settings.format_price(transaction.amount_kopeks)}
@@ -294,23 +446,206 @@ class AdminNotificationService:
 📅 <b>Продление:</b>
 ➕ Добавлено дней: {extended_days}
 📆 Было до: {old_end_date.strftime('%d.%m.%Y %H:%M')}
-📆 Стало до: {subscription.end_date.strftime('%d.%m.%Y %H:%M')}
+📆 Стало до: {current_end_date.strftime('%d.%m.%Y %H:%M')}
 
 📱 <b>Текущие параметры:</b>
 📊 Трафик: {self._format_traffic(subscription.traffic_limit_gb)}
 📱 Устройства: {subscription.device_limit}
 🌐 Серверы: {servers_info}
 
-💰 <b>Баланс после операции:</b> {settings.format_price(user.balance_kopeks)}
+💰 <b>Баланс после операции:</b> {settings.format_price(current_balance)}
 
 ⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
-            
+
             return await self._send_message(message)
-            
+
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о продлении: {e}")
             return False
-    
+
+    async def send_promocode_activation_notification(
+        self,
+        db: AsyncSession,
+        user: User,
+        promocode_data: Dict[str, Any],
+        effect_description: str,
+    ) -> bool:
+        if not self._is_enabled():
+            return False
+
+        try:
+            promo_group = await self._get_user_promo_group(db, user)
+            promo_block = self._format_promo_group_block(promo_group)
+            type_display = self._get_promocode_type_display(promocode_data.get("type"))
+            usage_info = f"{promocode_data.get('current_uses', 0)}/{promocode_data.get('max_uses', 0)}"
+
+            message_lines = [
+                "🎫 <b>АКТИВАЦИЯ ПРОМОКОДА</b>",
+                "",
+                f"👤 <b>Пользователь:</b> {user.full_name}",
+                f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>",
+                f"📱 <b>Username:</b> @{user.username or 'отсутствует'}",
+                "",
+                promo_block,
+                "",
+                "🎟️ <b>Промокод:</b>",
+                f"🔖 Код: <code>{promocode_data.get('code')}</code>",
+                f"🧾 Тип: {type_display}",
+                f"📊 Использования: {usage_info}",
+            ]
+
+            balance_bonus = promocode_data.get("balance_bonus_kopeks", 0)
+            if balance_bonus:
+                message_lines.append(
+                    f"💰 Бонус на баланс: {settings.format_price(balance_bonus)}"
+                )
+
+            subscription_days = promocode_data.get("subscription_days", 0)
+            if subscription_days:
+                message_lines.append(f"📅 Доп. дни подписки: {subscription_days}")
+
+            valid_until = promocode_data.get("valid_until")
+            if valid_until:
+                message_lines.append(
+                    f"⏳ Действует до: {valid_until.strftime('%d.%m.%Y %H:%M')}"
+                    if isinstance(valid_until, datetime)
+                    else f"⏳ Действует до: {valid_until}"
+                )
+
+            message_lines.extend(
+                [
+                    "",
+                    "📝 <b>Эффект:</b>",
+                    effect_description.strip() or "✅ Промокод активирован",
+                    "",
+                    f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>",
+                ]
+            )
+
+            return await self._send_message("\n".join(message_lines))
+
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления об активации промокода: {e}")
+            return False
+
+    async def send_campaign_link_visit_notification(
+        self,
+        db: AsyncSession,
+        telegram_user: types.User,
+        campaign: AdvertisingCampaign,
+        user: Optional[User] = None,
+    ) -> bool:
+        if not self._is_enabled():
+            return False
+
+        try:
+            user_status = "🆕 Новый пользователь" if not user else "👥 Уже зарегистрирован"
+            promo_block = (
+                self._format_promo_group_block(await self._get_user_promo_group(db, user))
+                if user
+                else self._format_promo_group_block(None)
+            )
+
+            full_name = telegram_user.full_name or telegram_user.username or str(telegram_user.id)
+            username = f"@{telegram_user.username}" if telegram_user.username else "отсутствует"
+
+            message_lines = [
+                "📣 <b>ПЕРЕХОД ПО РЕКЛАМНОЙ КАМПАНИИ</b>",
+                "",
+                f"🧾 <b>Кампания:</b> {campaign.name}",
+                f"🆔 ID кампании: {campaign.id}",
+                f"🔗 Start-параметр: <code>{campaign.start_parameter}</code>",
+                "",
+                f"👤 <b>Пользователь:</b> {full_name}",
+                f"🆔 <b>Telegram ID:</b> <code>{telegram_user.id}</code>",
+                f"📱 <b>Username:</b> {username}",
+                user_status,
+                "",
+                promo_block,
+                "",
+                "🎯 <b>Бонус кампании:</b>",
+            ]
+
+            bonus_lines = self._format_campaign_bonus(campaign)
+            message_lines.extend(bonus_lines)
+
+            message_lines.extend(
+                [
+                    "",
+                    f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>",
+                ]
+            )
+
+            return await self._send_message("\n".join(message_lines))
+
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о переходе по кампании: {e}")
+            return False
+
+    async def send_user_promo_group_change_notification(
+        self,
+        db: AsyncSession,
+        user: User,
+        old_group: Optional[PromoGroup],
+        new_group: PromoGroup,
+        *,
+        reason: Optional[str] = None,
+        initiator: Optional[User] = None,
+        automatic: bool = False,
+    ) -> bool:
+        if not self._is_enabled():
+            return False
+
+        try:
+            title = "🤖 АВТОМАТИЧЕСКАЯ СМЕНА ПРОМОГРУППЫ" if automatic else "👥 СМЕНА ПРОМОГРУППЫ"
+            initiator_line = None
+            if initiator:
+                initiator_line = (
+                    f"👮 <b>Инициатор:</b> {initiator.full_name} (ID: {initiator.telegram_id})"
+                )
+            elif automatic:
+                initiator_line = "🤖 Автоматическое назначение"
+
+            message_lines = [
+                f"{title}",
+                "",
+                f"👤 <b>Пользователь:</b> {user.full_name}",
+                f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>",
+                f"📱 <b>Username:</b> @{user.username or 'отсутствует'}",
+                "",
+                self._format_promo_group_block(new_group, title="Новая промогруппа", icon="🏆"),
+            ]
+
+            if old_group and old_group.id != new_group.id:
+                message_lines.extend(
+                    [
+                        "",
+                        self._format_promo_group_block(
+                            old_group, title="Предыдущая промогруппа", icon="♻️"
+                        ),
+                    ]
+                )
+
+            if initiator_line:
+                message_lines.extend(["", initiator_line])
+
+            if reason:
+                message_lines.extend(["", f"📝 Причина: {reason}"])
+
+            message_lines.extend(
+                [
+                    "",
+                    f"💰 Баланс пользователя: {settings.format_price(user.balance_kopeks)}",
+                    f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>",
+                ]
+            )
+
+            return await self._send_message("\n".join(message_lines))
+
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о смене промогруппы: {e}")
+            return False
+
     async def _send_message(self, text: str, reply_markup: types.InlineKeyboardMarkup | None = None, *, ticket_event: bool = False) -> bool:
         if not self.chat_id:
             logger.warning("ADMIN_NOTIFICATIONS_CHAT_ID не настроен")
@@ -748,50 +1083,64 @@ class AdminNotificationService:
         
         try:
             referrer_info = await self._get_referrer_info(db, user.referred_by_id)
-            
+            promo_group = await self._get_user_promo_group(db, user)
+            promo_block = self._format_promo_group_block(promo_group)
+
             update_types = {
                 "traffic": ("📊 ИЗМЕНЕНИЕ ТРАФИКА", "трафик"),
-                "devices": ("📱 ИЗМЕНЕНИЕ УСТРОЙСТВ", "количество устройств"), 
+                "devices": ("📱 ИЗМЕНЕНИЕ УСТРОЙСТВ", "количество устройств"),
                 "servers": ("🌐 ИЗМЕНЕНИЕ СЕРВЕРОВ", "серверы")
             }
-            
+
             title, param_name = update_types.get(update_type, ("⚙️ ИЗМЕНЕНИЕ ПОДПИСКИ", "параметры"))
-            
-            message = f"""{title}
 
-    👤 <b>Пользователь:</b> {user.full_name}
-    🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
-    📱 <b>Username:</b> @{user.username or 'отсутствует'}
-
-    🔧 <b>Изменение:</b>
-    📋 Параметр: {param_name}"""
+            message_lines = [
+                f"{title}",
+                "",
+                f"👤 <b>Пользователь:</b> {user.full_name}",
+                f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>",
+                f"📱 <b>Username:</b> @{user.username or 'отсутствует'}",
+                "",
+                promo_block,
+                "",
+                "🔧 <b>Изменение:</b>",
+                f"📋 Параметр: {param_name}",
+            ]
 
             if update_type == "servers":
                 old_servers_info = await self._format_servers_detailed(old_value)
                 new_servers_info = await self._format_servers_detailed(new_value)
-                
-                message += f"""
-    📉 Было: {old_servers_info}
-    📈 Стало: {new_servers_info}"""
+                message_lines.extend(
+                    [
+                        f"📉 Было: {old_servers_info}",
+                        f"📈 Стало: {new_servers_info}",
+                    ]
+                )
             else:
-                message += f"""
-    📉 Было: {self._format_update_value(old_value, update_type)}
-    📈 Стало: {self._format_update_value(new_value, update_type)}"""
+                message_lines.extend(
+                    [
+                        f"📉 Было: {self._format_update_value(old_value, update_type)}",
+                        f"📈 Стало: {self._format_update_value(new_value, update_type)}",
+                    ]
+                )
 
             if price_paid > 0:
-                message += f"\n💰 Доплачено: {settings.format_price(price_paid)}"
+                message_lines.append(f"💰 Доплачено: {settings.format_price(price_paid)}")
             else:
-                message += f"\n💸 Бесплатно"
+                message_lines.append("💸 Бесплатно")
 
-            message += f"""
+            message_lines.extend(
+                [
+                    "",
+                    f"📅 <b>Подписка действует до:</b> {subscription.end_date.strftime('%d.%m.%Y %H:%M')}",
+                    f"💰 <b>Баланс после операции:</b> {settings.format_price(user.balance_kopeks)}",
+                    f"🔗 <b>Рефер:</b> {referrer_info}",
+                    "",
+                    f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>",
+                ]
+            )
 
-    📅 <b>Подписка действует до:</b> {subscription.end_date.strftime('%d.%m.%Y %H:%M')}
-    💰 <b>Баланс после операции:</b> {settings.format_price(user.balance_kopeks)}
-    🔗 <b>Рефер:</b> {referrer_info}
-
-    ⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
-            
-            return await self._send_message(message)
+            return await self._send_message("\n".join(message_lines))
             
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об изменении подписки: {e}")

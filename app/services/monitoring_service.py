@@ -795,7 +795,12 @@ class MonitoringService:
                     
                     if success:
                         await extend_subscription(db, subscription, 30)
-                        await self.subscription_service.update_remnawave_user(db, subscription)
+                        await self.subscription_service.update_remnawave_user(
+                            db,
+                            subscription,
+                            reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                            reset_reason="автопродление подписки",
+                        )
                         
                         if self.bot:
                             await self._send_autopay_success_notification(user, renewal_cost, 30)

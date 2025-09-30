@@ -17,6 +17,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+_LANGUAGE_DISPLAY_NAMES = {
+    "ru": "🇷🇺 Русский",
+    "en": "🇬🇧 English",
+}
+
 def get_rules_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -60,6 +65,49 @@ def get_post_registration_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKe
         ],
         [InlineKeyboardButton(text=texts.t("SKIP_BUTTON", "Пропустить ➡️"), callback_data="back_to_menu")],
     ])
+
+
+def get_language_selection_keyboard(
+    current_language: Optional[str] = None,
+    *,
+    include_back: bool = False,
+    language: str = DEFAULT_LANGUAGE,
+) -> InlineKeyboardMarkup:
+    available_languages = settings.get_available_languages()
+
+    buttons: List[List[InlineKeyboardButton]] = []
+    row: List[InlineKeyboardButton] = []
+
+    normalized_current = (current_language or "").lower()
+
+    for index, lang_code in enumerate(available_languages, start=1):
+        normalized_code = lang_code.lower()
+        display_name = _LANGUAGE_DISPLAY_NAMES.get(
+            normalized_code,
+            normalized_code.upper(),
+        )
+
+        prefix = "✅ " if normalized_code == normalized_current and normalized_current else ""
+
+        row.append(
+            InlineKeyboardButton(
+                text=f"{prefix}{display_name}",
+                callback_data=f"language_select:{normalized_code}",
+            )
+        )
+
+        if len(row) == 2:
+            buttons.append(row)
+            row = []
+
+    if row:
+        buttons.append(row)
+
+    if include_back:
+        texts = get_texts(language)
+        buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_main_menu_keyboard(
@@ -224,6 +272,11 @@ def get_main_menu_keyboard(
         support_row.append(InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data="menu_support"))
     support_row.append(InlineKeyboardButton(text=texts.MENU_RULES, callback_data="menu_rules"))
     keyboard.append(support_row)
+
+    if settings.is_language_selection_enabled():
+        keyboard.append([
+            InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data="menu_language")
+        ])
     if settings.DEBUG:
         print(f"DEBUG KEYBOARD: is_admin={is_admin}, добавляем админ кнопку: {is_admin}")
 

@@ -68,6 +68,7 @@ from app.utils.pagination import paginate_list
 from app.utils.subscription_utils import (
     get_display_subscription_link,
     get_happ_cryptolink_redirect_link,
+    convert_subscription_link_to_happ_scheme,
 )
 
 logger = logging.getLogger(__name__)
@@ -292,13 +293,15 @@ async def _prepare_subscription_summary(
         else:
             traffic_display = f"{summary_data.get('traffic_gb', 0)} ГБ"
 
-    base_line = f"- Базовый период: {texts.format_price(base_price_original)}"
     if base_discount_total > 0:
-        base_line += (
-            f" → {texts.format_price(base_price)}"
+        base_line = (
+            f"- Базовый период: <s>{texts.format_price(base_price_original)}</s> "
+            f"{texts.format_price(base_price)}"
             f" (скидка {period_discount_percent}%:"
             f" -{texts.format_price(base_discount_total)})"
         )
+    else:
+        base_line = f"- Базовый период: {texts.format_price(base_price_original)}"
 
     details_lines = [base_line]
 
@@ -616,20 +619,21 @@ async def show_subscription_info(
         message += texts.t("SUBSCRIPTION_CONNECTED_DEVICES_FOOTER", "</blockquote>")
     
     subscription_link = get_display_subscription_link(subscription)
-    if subscription_link:
-        if (
-            actual_status in ['trial_active', 'paid_active']
-            and not settings.HIDE_SUBSCRIPTION_LINK
-            and not settings.is_happ_cryptolink_mode()
-        ):
-            message += "\n\n" + texts.t(
-                "SUBSCRIPTION_CONNECT_LINK_SECTION",
-                "🔗 <b>Ссылка для подключения:</b>\n<code>{subscription_url}</code>",
-            ).format(subscription_url=subscription_link)
-            message += "\n\n" + texts.t(
-                "SUBSCRIPTION_CONNECT_LINK_PROMPT",
-                "📱 Скопируйте ссылку и добавьте в ваше VPN приложение",
-            )
+    hide_subscription_link = settings.should_hide_subscription_link()
+
+    if (
+        subscription_link
+        and actual_status in ["trial_active", "paid_active"]
+        and not hide_subscription_link
+    ):
+        message += "\n\n" + texts.t(
+            "SUBSCRIPTION_CONNECT_LINK_SECTION",
+            "🔗 <b>Ссылка для подключения:</b>\n<code>{subscription_url}</code>",
+        ).format(subscription_url=subscription_link)
+        message += "\n\n" + texts.t(
+            "SUBSCRIPTION_CONNECT_LINK_PROMPT",
+            "📱 Скопируйте ссылку и добавьте в ваше VPN приложение",
+        )
     
     await callback.message.edit_text(
         message,
@@ -893,6 +897,8 @@ async def activate_trial(
             logger.error(f"Ошибка отправки уведомления о триале: {e}")
         
         subscription_link = get_display_subscription_link(subscription)
+        hide_subscription_link = settings.should_hide_subscription_link()
+
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
                 trial_success_text = (
@@ -903,8 +909,21 @@ async def activate_trial(
                     )
                     + "\n\n"
                     + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
+                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
+                        "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
+                    )
+                )
+            elif hide_subscription_link:
+                trial_success_text = (
+                    f"{texts.TRIAL_ACTIVATED}\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                        "ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе \"Моя подписка\".",
+                    )
+                    + "\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
+                        "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
                     )
                 )
             else:
@@ -2578,9 +2597,11 @@ async def confirm_extend_subscription(
         current_time = datetime.utcnow()
 
         if subscription.end_date > current_time:
-            subscription.end_date = subscription.end_date + timedelta(days=days)
+            new_end_date = subscription.end_date + timedelta(days=days)
         else:
-            subscription.end_date = current_time + timedelta(days=days)
+            new_end_date = current_time + timedelta(days=days)
+
+        subscription.end_date = new_end_date
 
         subscription.status = SubscriptionStatus.ACTIVE.value
         subscription.updated_at = current_time
@@ -2588,6 +2609,11 @@ async def confirm_extend_subscription(
         await db.commit()
         await db.refresh(subscription)
         await db.refresh(db_user)
+
+        # ensure freshly loaded values are available even if SQLAlchemy expires
+        # attributes on subsequent access
+        refreshed_end_date = subscription.end_date
+        refreshed_balance = db_user.balance_kopeks
 
         from app.database.crud.server_squad import get_server_ids_by_uuids
         from app.database.crud.subscription import add_subscription_servers
@@ -2609,7 +2635,12 @@ async def confirm_extend_subscription(
             await add_subscription_servers(db, subscription, server_ids, server_prices_for_period)
 
         try:
-            remnawave_result = await subscription_service.update_remnawave_user(db, subscription)
+            remnawave_result = await subscription_service.update_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason="продление подписки",
+            )
             if remnawave_result:
                 logger.info("✅ RemnaWave обновлен успешно")
             else:
@@ -2628,7 +2659,14 @@ async def confirm_extend_subscription(
         try:
             notification_service = AdminNotificationService(callback.bot)
             await notification_service.send_subscription_extension_notification(
-                db, db_user, subscription, transaction, days, old_end_date
+                db,
+                db_user,
+                subscription,
+                transaction,
+                days,
+                old_end_date,
+                new_end_date=refreshed_end_date,
+                balance_after=refreshed_balance,
             )
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о продлении: {e}")
@@ -2636,7 +2674,7 @@ async def confirm_extend_subscription(
         success_message = (
             "✅ Подписка успешно продлена!\n\n"
             f"⏰ Добавлено: {days} дней\n"
-            f"Действует до: {subscription.end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"Действует до: {refreshed_end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
             f"💰 Списано: {texts.format_price(price)}"
         )
 
@@ -2909,9 +2947,13 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
     if subscription_cost > 0:
         info_text += f"\n💰 <b>Стоимость подписки в месяц:</b> {texts.format_price(subscription_cost)}"
     
-    if subscription_url and subscription_url != "Генерируется...":
+    if (
+        subscription_url
+        and subscription_url != "Генерируется..."
+        and not settings.should_hide_subscription_link()
+    ):
         info_text += f"\n\n🔗 <b>Ваша ссылка для импорта в VPN приложениe:</b>\n<code>{subscription_url}</code>"
-    
+
     return info_text
 
 def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None) -> str:
@@ -3413,16 +3455,29 @@ async def confirm_purchase(
         
         existing_subscription = db_user.subscription
         was_trial_conversion = False
-        
+        current_time = datetime.utcnow()
+
         if existing_subscription:
             logger.info(f"Обновляем существующую подписку пользователя {db_user.telegram_id}")
-            
+
+            bonus_period = timedelta()
+
             if existing_subscription.is_trial:
                 logger.info(f"Конверсия из триала в платную для пользователя {db_user.telegram_id}")
                 was_trial_conversion = True
-                
-                trial_duration = (datetime.utcnow() - existing_subscription.start_date).days
-                
+
+                trial_duration = (current_time - existing_subscription.start_date).days
+
+                if settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID and existing_subscription.end_date:
+                    remaining_trial_delta = existing_subscription.end_date - current_time
+                    if remaining_trial_delta.total_seconds() > 0:
+                        bonus_period = remaining_trial_delta
+                        logger.info(
+                            "Добавляем оставшееся время триала (%s) к новой подписке пользователя %s",
+                            bonus_period,
+                            db_user.telegram_id,
+                        )
+
                 try:
                     from app.database.crud.subscription_conversion import create_subscription_conversion
                     await create_subscription_conversion(
@@ -3442,13 +3497,13 @@ async def confirm_purchase(
             existing_subscription.traffic_limit_gb = final_traffic_gb
             existing_subscription.device_limit = data['devices']
             existing_subscription.connected_squads = data['countries']
-            
-            existing_subscription.start_date = datetime.utcnow()
-            existing_subscription.end_date = datetime.utcnow() + timedelta(days=data['period_days'])
-            existing_subscription.updated_at = datetime.utcnow()
-            
+
+            existing_subscription.start_date = current_time
+            existing_subscription.end_date = current_time + timedelta(days=data['period_days']) + bonus_period
+            existing_subscription.updated_at = current_time
+
             existing_subscription.traffic_used_gb = 0.0
-            
+
             await db.commit()
             await db.refresh(existing_subscription)
             subscription = existing_subscription
@@ -3483,13 +3538,28 @@ async def confirm_purchase(
         subscription_service = SubscriptionService()
         
         if db_user.remnawave_uuid:
-            remnawave_user = await subscription_service.update_remnawave_user(db, subscription)
+            remnawave_user = await subscription_service.update_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason="покупка подписки",
+            )
         else:
-            remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
+            remnawave_user = await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason="покупка подписки",
+            )
             
         if not remnawave_user:
             logger.error(f"Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}")
-            remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
+            remnawave_user = await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+                reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                reset_reason="покупка подписки (повторная попытка)",
+            )
         
         transaction = await create_transaction(
             db=db,
@@ -3511,6 +3581,8 @@ async def confirm_purchase(
         await db.refresh(subscription)
         
         subscription_link = get_display_subscription_link(subscription)
+        hide_subscription_link = settings.should_hide_subscription_link()
+
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
                 success_text = (
@@ -3521,8 +3593,21 @@ async def confirm_purchase(
                     )
                     + "\n\n"
                     + texts.t(
-                        'SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT',
-                        '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве',
+                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
+                        "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
+                    )
+                )
+            elif hide_subscription_link:
+                success_text = (
+                    f"{texts.SUBSCRIPTION_PURCHASED}\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                        "ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе \"Моя подписка\".",
+                    )
+                    + "\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
+                        "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
                     )
                 )
             else:
@@ -4489,6 +4574,7 @@ async def handle_connect_subscription(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     subscription_link = get_display_subscription_link(subscription)
+    hide_subscription_link = settings.should_hide_subscription_link()
 
     if not subscription_link:
         await callback.answer(
@@ -4617,15 +4703,25 @@ async def handle_connect_subscription(
             parse_mode="HTML"
         )
     else:
-        device_text = texts.t(
-            "SUBSCRIPTION_CONNECT_DEVICE_MESSAGE",
-            """📱 <b>Подключить подписку</b>
+        if hide_subscription_link:
+            device_text = texts.t(
+                "SUBSCRIPTION_CONNECT_DEVICE_MESSAGE_HIDDEN",
+                """📱 <b>Подключить подписку</b>
+
+ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе "Моя подписка".
+
+💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
+            )
+        else:
+            device_text = texts.t(
+                "SUBSCRIPTION_CONNECT_DEVICE_MESSAGE",
+                """📱 <b>Подключить подписку</b>
 
 🔗 <b>Ссылка подписки:</b>
 <code>{subscription_url}</code>
 
 💡 <b>Выберите ваше устройство</b> для получения подробной инструкции по настройке:""",
-        ).format(subscription_url=subscription_link)
+            ).format(subscription_url=subscription_link)
 
         await callback.message.edit_text(
             device_text,
@@ -4724,13 +4820,7 @@ async def handle_device_guide(
         return
 
     apps = get_apps_for_device(device_type, db_user.language)
-    subscription_link = get_display_subscription_link(subscription)
-    if not subscription_link:
-        await callback.answer(
-            texts.t("SUBSCRIPTION_LINK_UNAVAILABLE", "❌ Ссылка подписки недоступна"),
-            show_alert=True,
-        )
-        return
+    hide_subscription_link = settings.should_hide_subscription_link()
 
     if not apps:
         await callback.answer(
@@ -4741,14 +4831,29 @@ async def handle_device_guide(
 
     featured_app = next((app for app in apps if app.get('isFeatured', False)), apps[0])
 
+    if hide_subscription_link:
+        link_section = (
+            texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
+            + "\n"
+            + texts.t(
+                "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                "ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе \"Моя подписка\".",
+            )
+            + "\n\n"
+        )
+    else:
+        link_section = (
+            texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
+            + f"\n<code>{subscription_link}</code>\n\n"
+        )
+
     guide_text = (
         texts.t(
             "SUBSCRIPTION_DEVICE_GUIDE_TITLE",
             "📱 <b>Настройка для {device_name}</b>",
         ).format(device_name=get_device_name(device_type, db_user.language))
         + "\n\n"
-        + texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
-        + f"\n<code>{subscription_link}</code>\n\n"
+        + link_section
         + texts.t(
             "SUBSCRIPTION_DEVICE_FEATURED_APP",
             "📋 <b>Рекомендуемое приложение:</b> {app_name}",
@@ -4840,6 +4945,15 @@ async def handle_specific_app_guide(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     
+    subscription_link = get_display_subscription_link(subscription)
+
+    if not subscription_link:
+        await callback.answer(
+            texts.t("SUBSCRIPTION_LINK_UNAVAILABLE", "❌ Ссылка подписки недоступна"),
+            show_alert=True,
+        )
+        return
+
     apps = get_apps_for_device(device_type, db_user.language)
     app = next((a for a in apps if a['id'] == app_id), None)
     
@@ -4850,14 +4964,31 @@ async def handle_specific_app_guide(
         )
         return
 
+    hide_subscription_link = settings.should_hide_subscription_link()
+
+    if hide_subscription_link:
+        link_section = (
+            texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
+            + "\n"
+            + texts.t(
+                "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                "ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе \"Моя подписка\".",
+            )
+            + "\n\n"
+        )
+    else:
+        link_section = (
+            texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
+            + f"\n<code>{subscription_link}</code>\n\n"
+        )
+
     guide_text = (
         texts.t(
             "SUBSCRIPTION_SPECIFIC_APP_TITLE",
             "📱 <b>{app_name} - {device_name}</b>",
         ).format(app_name=app['name'], device_name=get_device_name(device_type, db_user.language))
         + "\n\n"
-        + texts.t("SUBSCRIPTION_DEVICE_LINK_TITLE", "🔗 <b>Ссылка подписки:</b>")
-        + f"\n<code>{subscription_link}</code>\n\n"
+        + link_section
         + texts.t("SUBSCRIPTION_DEVICE_STEP_INSTALL_TITLE", "<b>Шаг 1 - Установка:</b>")
         + f"\n{app['installationStep']['description'][db_user.language]}\n\n"
         + texts.t("SUBSCRIPTION_DEVICE_STEP_ADD_TITLE", "<b>Шаг 2 - Добавление подписки:</b>")
@@ -4918,6 +5049,7 @@ async def handle_open_subscription_link(
 
     if settings.is_happ_cryptolink_mode():
         redirect_link = get_happ_cryptolink_redirect_link(subscription_link)
+        happ_scheme_link = convert_subscription_link_to_happ_scheme(subscription_link)
         happ_message = (
             texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_TITLE",
@@ -4927,12 +5059,12 @@ async def handle_open_subscription_link(
             + texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_LINK",
                 "<a href=\"{subscription_link}\">🔓 Открыть ссылку в Happ</a>",
-            ).format(subscription_link=subscription_link)
+            ).format(subscription_link=happ_scheme_link)
             + "\n\n"
             + texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_HINT",
-                "💡 Если ссылка не открывается автоматически, скопируйте её вручную: <code>{subscription_link}</code>",
-            ).format(subscription_link=subscription_link)
+                "💡 Если ссылка не открывается автоматически, скопируйте её вручную:",
+            )
         )
 
         if redirect_link:
@@ -4940,6 +5072,11 @@ async def handle_open_subscription_link(
                 "SUBSCRIPTION_HAPP_OPEN_BUTTON_HINT",
                 "▶️ Нажмите кнопку \"Подключиться\" ниже, чтобы открыть Happ и добавить подписку автоматически.",
             )
+
+        happ_message += "\n\n" + texts.t(
+            "SUBSCRIPTION_HAPP_CRYPTOLINK_BLOCK",
+            "<blockquote expandable><code>{crypto_link}</code></blockquote>",
+        ).format(crypto_link=subscription_link)
 
         keyboard = get_happ_cryptolink_keyboard(
             subscription_link,
