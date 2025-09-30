@@ -23,6 +23,7 @@ from app.localization.texts import get_texts
 from app.services.user_service import UserService
 from app.services.admin_notification_service import AdminNotificationService
 from app.database.crud.promo_group import get_promo_groups_with_counts
+from app.database.crud.subscription import get_subscriptions_statistics
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime, format_time_ago
 from app.services.remnawave_service import RemnaWaveService
@@ -355,54 +356,30 @@ async def show_users_statistics(
     
     user_service = UserService()
     stats = await user_service.get_user_statistics(db)
-    
-    from sqlalchemy import select, func, or_
 
-    current_time = datetime.utcnow()
+    from sqlalchemy import select, func
 
-    active_subscription_query = (
-        select(func.count(Subscription.id))
-        .join(User, Subscription.user_id == User.id)
-        .where(
-            User.status == UserStatus.ACTIVE.value,
-            Subscription.status.in_(
-                [
-                    SubscriptionStatus.ACTIVE.value,
-                    SubscriptionStatus.TRIAL.value,
-                ]
-            ),
-            Subscription.end_date > current_time,
-        )
-    )
-    users_with_subscription = (
-        await db.execute(active_subscription_query)
-    ).scalar() or 0
+    sub_stats = await get_subscriptions_statistics(db)
 
-    trial_subscription_query = (
-        select(func.count(Subscription.id))
-        .join(User, Subscription.user_id == User.id)
-        .where(
-            User.status == UserStatus.ACTIVE.value,
-            Subscription.end_date > current_time,
-            or_(
-                Subscription.status == SubscriptionStatus.TRIAL.value,
-                Subscription.is_trial.is_(True),
-            ),
-        )
-    )
-    trial_users = (await db.execute(trial_subscription_query)).scalar() or 0
+    users_with_subscription = int(sub_stats.get("active_subscriptions", 0) or 0)
+    trial_users = int(sub_stats.get("trial_subscriptions", 0) or 0)
+    paid_users = max(users_with_subscription - trial_users, 0)
 
     users_without_subscription = max(
         stats["active_users"] - users_with_subscription,
         0,
     )
-    
+
     avg_balance_result = await db.execute(
         select(func.avg(User.balance_kopeks))
         .where(User.status == UserStatus.ACTIVE.value)
     )
     avg_balance = avg_balance_result.scalar() or 0
-    
+    avg_balance_kopeks = int(round(avg_balance))
+
+    conversion_percent = (paid_users / max(stats["active_users"], 1) * 100)
+    trial_share_percent = (trial_users / max(users_with_subscription, 1) * 100)
+
     text = f"""
 📊 <b>Детальная статистика пользователей</b>
 
@@ -417,7 +394,7 @@ async def show_users_statistics(
 • Без подписки: {users_without_subscription}
 
 💰 <b>Финансы:</b>
-• Средний баланс: {settings.format_price(int(avg_balance))}
+• Средний баланс: {settings.format_price(avg_balance_kopeks)}
 
 📈 <b>Регистрации:</b>
 • Сегодня: {stats['new_today']}
@@ -425,8 +402,8 @@ async def show_users_statistics(
 • За месяц: {stats['new_month']}
 
 📊 <b>Активность:</b>
-• Конверсия в подписку: {(users_with_subscription / max(stats['active_users'], 1) * 100):.1f}%
-• Доля триальных: {(trial_users / max(users_with_subscription, 1) * 100):.1f}%
+• Конверсия в подписку: {conversion_percent:.1f}%
+• Доля триальных: {trial_share_percent:.1f}%
 """
     
     await callback.message.edit_text(
