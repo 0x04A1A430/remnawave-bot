@@ -126,6 +126,7 @@ def get_admin_system_submenu_keyboard(language: str = "ru") -> InlineKeyboardMar
             InlineKeyboardButton(text="📄 Обновления", callback_data="admin_updates"),
             InlineKeyboardButton(text="🗄️ Бекапы", callback_data="backup_panel")
         ],
+        [InlineKeyboardButton(text="🧾 Логи", callback_data="admin_system_logs")],
         [InlineKeyboardButton(text=texts.t("ADMIN_REPORTS", "📊 Отчеты"), callback_data="admin_reports")],
         [
             InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")
