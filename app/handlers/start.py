@@ -30,6 +30,7 @@ from app.services.referral_service import process_referral_registration
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_service import SubscriptionService
+from app.services.support_settings_service import SupportSettingsService
 from app.utils.user_utils import generate_unique_referral_code
 from app.database.crud.user_message import get_random_active_message
 
@@ -322,17 +323,23 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             subscription_is_active = user.subscription.is_active
         
         menu_text = await get_main_menu_text(user, texts, db)
-        
+
+        is_admin = settings.is_admin(user.telegram_id)
+        is_moderator = (not is_admin) and SupportSettingsService.is_moderator(
+            user.telegram_id
+        )
+
         await message.answer(
             menu_text,
             reply_markup=get_main_menu_keyboard(
                 language=user.language,
-                is_admin=settings.is_admin(user.telegram_id),
+                is_admin=is_admin,
                 has_had_paid_subscription=user.has_had_paid_subscription,
                 has_active_subscription=has_active_subscription,
                 subscription_is_active=subscription_is_active,
                 balance_kopeks=user.balance_kopeks,
-                subscription=user.subscription
+                subscription=user.subscription,
+                is_moderator=is_moderator,
             ),
             parse_mode="HTML"
         )
@@ -728,18 +735,25 @@ async def complete_registration_from_callback(
             subscription_is_active = existing_user.subscription.is_active
         
         menu_text = await get_main_menu_text(existing_user, texts, db)
-        
+
+        is_admin = settings.is_admin(existing_user.telegram_id)
+        is_moderator = (
+            (not is_admin)
+            and SupportSettingsService.is_moderator(existing_user.telegram_id)
+        )
+
         try:
             await callback.message.answer(
                 menu_text,
                 reply_markup=get_main_menu_keyboard(
                     language=existing_user.language,
-                    is_admin=settings.is_admin(existing_user.telegram_id),
+                    is_admin=is_admin,
                     has_had_paid_subscription=existing_user.has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
                     subscription_is_active=subscription_is_active,
                     balance_kopeks=existing_user.balance_kopeks,
-                    subscription=existing_user.subscription
+                    subscription=existing_user.subscription,
+                    is_moderator=is_moderator,
                 ),
                 parse_mode="HTML"
             )
@@ -893,18 +907,25 @@ async def complete_registration_from_callback(
             subscription_is_active = user.subscription.is_active
         
         menu_text = await get_main_menu_text(user, texts, db)
-        
+
+        is_admin = settings.is_admin(user.telegram_id)
+        is_moderator = (
+            (not is_admin)
+            and SupportSettingsService.is_moderator(user.telegram_id)
+        )
+
         try:
             await callback.message.answer(
                 menu_text,
                 reply_markup=get_main_menu_keyboard(
                     language=user.language,
-                    is_admin=settings.is_admin(user.telegram_id),
+                    is_admin=is_admin,
                     has_had_paid_subscription=user.has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
                     subscription_is_active=subscription_is_active,
                     balance_kopeks=user.balance_kopeks,
-                    subscription=user.subscription
+                    subscription=user.subscription,
+                    is_moderator=is_moderator,
                 ),
                 parse_mode="HTML"
             )
@@ -952,18 +973,25 @@ async def complete_registration(
             subscription_is_active = existing_user.subscription.is_active
         
         menu_text = await get_main_menu_text(existing_user, texts, db)
-        
+
+        is_admin = settings.is_admin(existing_user.telegram_id)
+        is_moderator = (
+            (not is_admin)
+            and SupportSettingsService.is_moderator(existing_user.telegram_id)
+        )
+
         try:
             await message.answer(
                 menu_text,
                 reply_markup=get_main_menu_keyboard(
                     language=existing_user.language,
-                    is_admin=settings.is_admin(existing_user.telegram_id),
+                    is_admin=is_admin,
                     has_had_paid_subscription=existing_user.has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
                     subscription_is_active=subscription_is_active,
                     balance_kopeks=existing_user.balance_kopeks,
-                    subscription=existing_user.subscription
+                    subscription=existing_user.subscription,
+                    is_moderator=is_moderator,
                 ),
                 parse_mode="HTML"
             )
@@ -1117,18 +1145,25 @@ async def complete_registration(
             subscription_is_active = user.subscription.is_active
         
         menu_text = await get_main_menu_text(user, texts, db)
-        
+
+        is_admin = settings.is_admin(user.telegram_id)
+        is_moderator = (
+            (not is_admin)
+            and SupportSettingsService.is_moderator(user.telegram_id)
+        )
+
         try:
             await message.answer(
                 menu_text,
                 reply_markup=get_main_menu_keyboard(
                     language=user.language,
-                    is_admin=settings.is_admin(user.telegram_id),
+                    is_admin=is_admin,
                     has_had_paid_subscription=user.has_had_paid_subscription,
                     has_active_subscription=has_active_subscription,
                     subscription_is_active=subscription_is_active,
                     balance_kopeks=user.balance_kopeks,
-                    subscription=user.subscription
+                    subscription=user.subscription,
+                    is_moderator=is_moderator,
                 ),
                 parse_mode="HTML"
             )
@@ -1357,14 +1392,21 @@ async def required_sub_channel_check(
             from app.utils.message_patch import LOGO_PATH
             from aiogram.types import FSInputFile
 
+            is_admin = settings.is_admin(user.telegram_id)
+            is_moderator = (
+                (not is_admin)
+                and SupportSettingsService.is_moderator(user.telegram_id)
+            )
+
             keyboard = get_main_menu_keyboard(
                 language=user.language,
-                is_admin=settings.is_admin(user.telegram_id),
+                is_admin=is_admin,
                 has_had_paid_subscription=user.has_had_paid_subscription,
                 has_active_subscription=has_active_subscription,
                 subscription_is_active=subscription_is_active,
                 balance_kopeks=user.balance_kopeks,
                 subscription=user.subscription,
+                is_moderator=is_moderator,
             )
 
             if settings.ENABLE_LOGO_MODE:

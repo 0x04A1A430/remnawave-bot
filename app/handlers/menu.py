@@ -44,13 +44,18 @@ async def show_main_menu(
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
 
+    is_admin = settings.is_admin(db_user.telegram_id)
+    is_moderator = (not is_admin) and SupportSettingsService.is_moderator(
+        db_user.telegram_id
+    )
+
     await edit_or_answer_photo(
         callback=callback,
         caption=menu_text,
         keyboard=get_main_menu_keyboard(
             language=db_user.language,
-            is_admin=settings.is_admin(db_user.telegram_id),
-                is_moderator=(not settings.is_admin(db_user.telegram_id) and SupportSettingsService.is_moderator(db_user.telegram_id)),
+            is_admin=is_admin,
+            is_moderator=is_moderator,
             has_had_paid_subscription=db_user.has_had_paid_subscription,
             has_active_subscription=has_active_subscription,
             subscription_is_active=subscription_is_active,
@@ -191,13 +196,18 @@ async def handle_back_to_menu(
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
 
+    is_admin = settings.is_admin(db_user.telegram_id)
+    is_moderator = (not is_admin) and SupportSettingsService.is_moderator(
+        db_user.telegram_id
+    )
+
     await edit_or_answer_photo(
         callback=callback,
         caption=menu_text,
         keyboard=get_main_menu_keyboard(
             language=db_user.language,
-            is_admin=settings.is_admin(db_user.telegram_id),
-                is_moderator=(not settings.is_admin(db_user.telegram_id) and SupportSettingsService.is_moderator(db_user.telegram_id)),
+            is_admin=is_admin,
+            is_moderator=is_moderator,
             has_had_paid_subscription=db_user.has_had_paid_subscription,
             has_active_subscription=has_active_subscription,
             subscription_is_active=subscription_is_active,
