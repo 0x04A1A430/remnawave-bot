@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlparse, urlunparse
 from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import Subscription, User
@@ -110,6 +110,31 @@ def get_display_subscription_link(subscription: Optional[Subscription]) -> Optio
         return crypto_link or base_link
 
     return base_link
+
+
+def build_happ_subscription_link(link: Optional[str]) -> Optional[str]:
+    if not link:
+        return None
+
+    if link.startswith("happ://"):
+        return link
+
+    parsed = urlparse(link)
+
+    if not parsed.scheme:
+        return f"happ://{link}"
+
+    if parsed.scheme == "happ":
+        return link
+
+    return urlunparse((
+        "happ",
+        parsed.netloc,
+        parsed.path,
+        parsed.params,
+        parsed.query,
+        parsed.fragment,
+    ))
 
 
 def get_happ_cryptolink_redirect_link(subscription_link: Optional[str]) -> Optional[str]:
