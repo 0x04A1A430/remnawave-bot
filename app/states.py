@@ -108,6 +108,11 @@ class AdminStates(StatesGroup):
     
     # Состояния для отслеживания источника перехода
     viewing_user_from_balance_list = State()
+    viewing_user_from_traffic_list = State()
+    viewing_user_from_last_activity_list = State()
+    viewing_user_from_spending_list = State()
+    viewing_user_from_purchases_list = State()
+    viewing_user_from_campaign_list = State()
 
 class SupportStates(StatesGroup):
     waiting_for_message = State()

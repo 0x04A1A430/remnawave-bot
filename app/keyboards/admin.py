@@ -176,6 +176,21 @@ def get_admin_users_filters_keyboard(language: str = "ru") -> InlineKeyboardMark
             InlineKeyboardButton(text="💰 По балансу", callback_data="admin_users_balance_filter")
         ],
         [
+            InlineKeyboardButton(text="📶 По трафику", callback_data="admin_users_traffic_filter")
+        ],
+        [
+            InlineKeyboardButton(text="🕒 По активности", callback_data="admin_users_activity_filter")
+        ],
+        [
+            InlineKeyboardButton(text="💳 По сумме трат", callback_data="admin_users_spending_filter")
+        ],
+        [
+            InlineKeyboardButton(text="🛒 По количеству покупок", callback_data="admin_users_purchases_filter")
+        ],
+        [
+            InlineKeyboardButton(text="📢 По кампании", callback_data="admin_users_campaign_filter")
+        ],
+        [
             InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_users")
         ]
     ])
