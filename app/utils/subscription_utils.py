@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import Subscription, User
@@ -141,3 +141,36 @@ def get_happ_cryptolink_redirect_link(subscription_link: Optional[str]) -> Optio
         return f"{template}{encoded_link}"
 
     return f"{template}{encoded_link}"
+
+
+def build_happ_scheme_link(subscription_link: Optional[str]) -> Optional[str]:
+    """Convert a crypto link into the happ:// URL scheme if possible."""
+
+    if not subscription_link:
+        return None
+
+    if subscription_link.startswith("happ://"):
+        return subscription_link
+
+    parsed = urlparse(subscription_link)
+
+    if parsed.scheme not in {"http", "https"}:
+        return None
+
+    path_parts = []
+
+    if parsed.netloc:
+        path_parts.append(parsed.netloc)
+
+    if parsed.path:
+        path_parts.append(parsed.path.lstrip("/"))
+
+    path = "/".join(part for part in path_parts if part)
+
+    if not path and not parsed.query and not parsed.fragment:
+        return None
+
+    query = f"?{parsed.query}" if parsed.query else ""
+    fragment = f"#{parsed.fragment}" if parsed.fragment else ""
+
+    return f"happ://{path}{query}{fragment}"

@@ -68,6 +68,7 @@ from app.utils.pagination import paginate_list
 from app.utils.subscription_utils import (
     get_display_subscription_link,
     get_happ_cryptolink_redirect_link,
+    build_happ_scheme_link,
 )
 
 logger = logging.getLogger(__name__)
@@ -5048,22 +5049,44 @@ async def handle_open_subscription_link(
 
     if settings.is_happ_cryptolink_mode():
         redirect_link = get_happ_cryptolink_redirect_link(subscription_link)
-        happ_message = (
+        subscription_crypto_link = getattr(subscription, "subscription_crypto_link", None)
+        subscription_base_link = getattr(subscription, "subscription_url", None)
+        happ_scheme_link = (
+            build_happ_scheme_link(subscription_crypto_link or subscription_link)
+            or subscription_link
+        )
+        crypto_link_to_hide = subscription_crypto_link or subscription_link
+
+        if crypto_link_to_hide == happ_scheme_link:
+            crypto_link_to_hide = subscription_base_link or crypto_link_to_hide
+
+        message_parts = [
             texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_TITLE",
                 "🔗 <b>Подключение через Happ</b>",
-            )
-            + "\n\n"
-            + texts.t(
+            ),
+            texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_LINK",
-                "<a href=\"{subscription_link}\">🔓 Открыть ссылку в Happ</a>",
-            ).format(subscription_link=subscription_link)
-            + "\n\n"
-            + texts.t(
+                "🔓 Ссылка для Happ:\n<code>{happ_link}</code>",
+            ).format(happ_link=happ_scheme_link),
+        ]
+
+        if crypto_link_to_hide and crypto_link_to_hide != happ_scheme_link:
+            message_parts.append(
+                texts.t(
+                    "SUBSCRIPTION_HAPP_OPEN_CRYPTO_BLOCK",
+                    "<blockquote expandable>🪙 CryptoLink:\n<code>{crypto_link}</code>\n</blockquote>",
+                ).format(crypto_link=crypto_link_to_hide)
+            )
+
+        message_parts.append(
+            texts.t(
                 "SUBSCRIPTION_HAPP_OPEN_HINT",
-                "💡 Если ссылка не открывается автоматически, скопируйте её вручную: <code>{subscription_link}</code>",
-            ).format(subscription_link=subscription_link)
+                "💡 Скопируйте ссылку и вставьте её в приложение Happ: <code>{happ_link}</code>",
+            ).format(happ_link=happ_scheme_link)
         )
+
+        happ_message = "\n\n".join(message_parts)
 
         if redirect_link:
             happ_message += "\n\n" + texts.t(
