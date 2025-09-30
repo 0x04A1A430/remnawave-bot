@@ -571,8 +571,7 @@ class Subscription(Base):
         return 0.0
     
     def extend_subscription(self, days: int):
-        from datetime import timedelta, datetime
-    
+
         if self.end_date > datetime.utcnow():
             self.end_date = self.end_date + timedelta(days=days)
         else:
