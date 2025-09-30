@@ -422,7 +422,6 @@
   "SUBSCRIPTION_HAPP_OPEN_TITLE": "🔗 <b>Подключение через Happ</b>",
   "SUBSCRIPTION_HAPP_OPEN_LINK": "<a href=\"{subscription_link}\">🔓 Открыть ссылку в Happ</a>",
   "SUBSCRIPTION_HAPP_OPEN_HINT": "💡 Если ссылка не открывается автоматически, скопируйте её вручную: <code>{subscription_link}</code>",
-  "SUBSCRIPTION_HAPP_OPEN_CRYPTOLINK": "<blockquote expandable>🔐 CryptoLink: <code>{crypto_link}</code></blockquote>",
   "SUBSCRIPTION_HAPP_OPEN_BUTTON_HINT": "▶️ Нажмите кнопку \"Подключиться\" ниже, чтобы открыть Happ и добавить подписку автоматически.",
   "SUBSCRIPTION_DEVICE_LINK_TITLE": "🔗 <b>Ссылка подписки:</b>",
   "SUBSCRIPTION_DEVICE_FEATURED_APP": "📋 <b>Рекомендуемое приложение:</b> {app_name}",
