@@ -404,7 +404,8 @@ async def admin_monitoring_menu(callback: CallbackQuery):
 🔧 Выберите действие:
 """
             
-            keyboard = get_monitoring_keyboard()
+            language = callback.from_user.language_code or settings.DEFAULT_LANGUAGE
+            keyboard = get_monitoring_keyboard(language)
             await callback.message.edit_text(text, parse_mode="HTML", reply_markup=keyboard)
             break
             
