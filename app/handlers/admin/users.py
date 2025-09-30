@@ -142,7 +142,7 @@ async def show_users_list(
         if user.balance_kopeks > 0:
             button_text += f" | 💰 {settings.format_price(user.balance_kopeks)}"
         
-        button_text += f" | 📅 {format_time_ago(user.created_at)}"
+        button_text += f" | 📅 {format_time_ago(user.created_at, db_user.language)}"
         
         if len(button_text) > 60:
             short_name = user.full_name
@@ -433,7 +433,7 @@ async def show_users_list_by_last_activity(
             status_emoji = "🗑️"
 
         activity_display = (
-            format_time_ago(user.last_activity)
+            format_time_ago(user.last_activity, db_user.language)
             if user.last_activity
             else "неизвестно"
         )
@@ -1373,61 +1373,82 @@ async def show_user_management(
     
     user = profile["user"]
     subscription = profile["subscription"]
-    
-    if user.status == UserStatus.ACTIVE.value:
-        status_text = "✅ Активен"
-    elif user.status == UserStatus.BLOCKED.value:
-        status_text = "🚫 Заблокирован"
-    elif user.status == UserStatus.DELETED.value:
-        status_text = "🗑️ Удален"
-    else:
-        status_text = "❓ Неизвестно"
-    
-    text = f"""
-👤 <b>Управление пользователем</b>
 
-<b>Основная информация:</b>
-• Имя: {user.full_name}
-• ID: <code>{user.telegram_id}</code>
-• Username: @{user.username or 'не указан'}
-• Статус: {status_text}
-• Язык: {user.language}
+    texts = get_texts(db_user.language)
 
-<b>Финансы:</b>
-• Баланс: {settings.format_price(user.balance_kopeks)}
-• Транзакций: {profile['transactions_count']}
+    status_map = {
+        UserStatus.ACTIVE.value: texts.ADMIN_USER_STATUS_ACTIVE,
+        UserStatus.BLOCKED.value: texts.ADMIN_USER_STATUS_BLOCKED,
+        UserStatus.DELETED.value: texts.ADMIN_USER_STATUS_DELETED,
+    }
+    status_text = status_map.get(user.status, texts.ADMIN_USER_STATUS_UNKNOWN)
 
-<b>Активность:</b>
-• Регистрация: {format_datetime(user.created_at)}
-• Последняя активность: {format_time_ago(user.last_activity) if user.last_activity else 'Неизвестно'}
-• Дней с регистрации: {profile['registration_days']}
-"""
-    
+    username_display = (
+        f"@{user.username}" if user.username else texts.ADMIN_USER_USERNAME_NOT_SET
+    )
+    last_activity = (
+        format_time_ago(user.last_activity, db_user.language)
+        if user.last_activity
+        else texts.ADMIN_USER_LAST_ACTIVITY_UNKNOWN
+    )
+
+    sections = [
+        texts.ADMIN_USER_MANAGEMENT_PROFILE.format(
+            name=user.full_name,
+            telegram_id=user.telegram_id,
+            username=username_display,
+            status=status_text,
+            language=user.language,
+            balance=settings.format_price(user.balance_kopeks),
+            transactions=profile["transactions_count"],
+            registration=format_datetime(user.created_at),
+            last_activity=last_activity,
+            registration_days=profile["registration_days"],
+        )
+    ]
+
     if subscription:
-        text += f"""
-<b>Подписка:</b>
-• Тип: {'🎁 Триал' if subscription.is_trial else '💎 Платная'}
-• Статус: {'✅ Активна' if subscription.is_active else '❌ Неактивна'}
-• До: {format_datetime(subscription.end_date)}
-• Трафик: {subscription.traffic_used_gb:.1f}/{subscription.traffic_limit_gb} ГБ
-• Устройства: {subscription.device_limit}
-• Стран: {len(subscription.connected_squads)}
-"""
+        subscription_type = (
+            texts.ADMIN_USER_SUBSCRIPTION_TYPE_TRIAL
+            if subscription.is_trial
+            else texts.ADMIN_USER_SUBSCRIPTION_TYPE_PAID
+        )
+        subscription_status = (
+            texts.ADMIN_USER_SUBSCRIPTION_STATUS_ACTIVE
+            if subscription.is_active
+            else texts.ADMIN_USER_SUBSCRIPTION_STATUS_INACTIVE
+        )
+        traffic_usage = texts.ADMIN_USER_TRAFFIC_USAGE.format(
+            used=f"{subscription.traffic_used_gb:.1f}",
+            limit=subscription.traffic_limit_gb,
+        )
+        sections.append(
+            texts.ADMIN_USER_MANAGEMENT_SUBSCRIPTION.format(
+                type=subscription_type,
+                status=subscription_status,
+                end_date=format_datetime(subscription.end_date),
+                traffic=traffic_usage,
+                devices=subscription.device_limit,
+                countries=len(subscription.connected_squads),
+            )
+        )
     else:
-        text += "\n<b>Подписка:</b> Отсутствует"
+        sections.append(texts.ADMIN_USER_MANAGEMENT_SUBSCRIPTION_NONE)
 
     if user.promo_group:
         promo_group = user.promo_group
-        text += f"""
-
-<b>Промогруппа:</b>
-• Название: {promo_group.name}
-• Скидка на сервера: {promo_group.server_discount_percent}%
-• Скидка на трафик: {promo_group.traffic_discount_percent}%
-• Скидка на устройства: {promo_group.device_discount_percent}%
-"""
+        sections.append(
+            texts.ADMIN_USER_MANAGEMENT_PROMO_GROUP.format(
+                name=promo_group.name,
+                server_discount=promo_group.server_discount_percent,
+                traffic_discount=promo_group.traffic_discount_percent,
+                device_discount=promo_group.device_discount_percent,
+            )
+        )
     else:
-        text += "\n<b>Промогруппа:</b> Не назначена"
+        sections.append(texts.ADMIN_USER_MANAGEMENT_PROMO_GROUP_NONE)
+
+    text = "\n\n".join(sections)
 
     # Проверяем состояние, чтобы определить, откуда пришел пользователь
     current_state = await state.get_state()
@@ -1763,7 +1784,12 @@ async def show_inactive_users(
     for user in inactive_users[:10]: 
         text += f"👤 {user.full_name}\n"
         text += f"🆔 <code>{user.telegram_id}</code>\n"
-        text += f"📅 {format_time_ago(user.last_activity) if user.last_activity else 'Никогда'}\n\n"
+        last_activity_display = (
+            format_time_ago(user.last_activity, db_user.language)
+            if user.last_activity
+            else "Никогда"
+        )
+        text += f"📅 {last_activity_display}\n\n"
     
     if len(inactive_users) > 10:
         text += f"... и еще {len(inactive_users) - 10} пользователей"
