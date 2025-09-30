@@ -26,9 +26,44 @@ SETTINGS_PAGE_SIZE = 8
 
 CATEGORY_GROUP_DEFINITIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
     (
-        "telegram_bot",
-        "🤖 Telegram бот",
-        ("SUPPORT", "ADMIN_NOTIFICATIONS", "ADMIN_REPORTS", "CHANNEL"),
+        "core",
+        "⚙️ Основные настройки",
+        ("SUPPORT", "LOCALIZATION", "MAINTENANCE"),
+    ),
+    (
+        "channels_notifications",
+        "📢 Каналы и уведомления",
+        ("CHANNEL", "ADMIN_NOTIFICATIONS", "ADMIN_REPORTS"),
+    ),
+    (
+        "subscriptions",
+        "💎 Подписки и тарифы",
+        ("TRIAL", "PAID_SUBSCRIPTION", "PERIODS", "SUBSCRIPTION_PRICES", "TRAFFIC", "TRAFFIC_PACKAGES", "DISCOUNTS"),
+    ),
+    (
+        "payments",
+        "💳 Платежные системы",
+        ("PAYMENT", "TELEGRAM", "CRYPTOBOT", "YOOKASSA", "TRIBUTE", "MULENPAY", "PAL24"),
+    ),
+    (
+        "remnawave",
+        "🔗 RemnaWave API",
+        ("REMNAWAVE",),
+    ),
+    (
+        "referral",
+        "🤝 Реферальная система",
+        ("REFERRAL",),
+    ),
+    (
+        "autopay",
+        "🔄 Автопродление",
+        ("AUTOPAY",),
+    ),
+    (
+        "interface",
+        "🎨 Интерфейс и UX",
+        ("INTERFACE_BRANDING", "INTERFACE_SUBSCRIPTION", "CONNECT_BUTTON", "HAPP", "SKIP", "ADDITIONAL"),
     ),
     (
         "database",
@@ -36,65 +71,24 @@ CATEGORY_GROUP_DEFINITIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
         ("DATABASE", "POSTGRES", "SQLITE", "REDIS"),
     ),
     (
-        "remnawave",
-        "🌊 Remnawave API",
-        ("REMNAWAVE",),
-    ),
-    (
-        "subscriptions",
-        "🪙 Подписки и тарифы",
-        (
-            "TRIAL",
-            "PAID_SUBSCRIPTION",
-            "SUBSCRIPTIONS_GLOBAL",
-            "TRAFFIC",
-            "PERIODS",
-            "SUBSCRIPTION_PRICES",
-            "TRAFFIC_PACKAGES",
-            "DISCOUNTS",
-            "REFERRAL",
-            "AUTOPAY",
-        ),
-    ),
-    (
-        "payments",
-        "💳 Платежные системы",
-        ("TELEGRAM", "TRIBUTE", "YOOKASSA", "CRYPTOBOT", "MULENPAY", "PAL24", "PAYMENT"),
-    ),
-    (
-        "interface",
-        "🎨 Интерфейс и UX",
-        ("INTERFACE_BRANDING", "INTERFACE_SUBSCRIPTION", "CONNECT_BUTTON", "HAPP", "SKIP"),
-    ),
-    (
         "monitoring",
-        "📣 Мониторинг и уведомления",
-        ("MONITORING", "NOTIFICATIONS"),
+        "📊 Мониторинг",
+        ("MONITORING", "NOTIFICATIONS", "SERVER"),
     ),
     (
-        "operations",
-        "🛠️ Статусы и обслуживание",
-        ("SERVER", "MAINTENANCE"),
+        "backup",
+        "💾 Система бэкапов",
+        ("BACKUP",),
     ),
     (
-        "localization",
-        "🈯 Локализация",
-        ("LOCALIZATION",),
+        "updates",
+        "🔄 Обновления",
+        ("VERSION",),
     ),
     (
-        "extras",
-        "🧩 Дополнительные настройки",
-        ("ADDITIONAL",),
-    ),
-    (
-        "reliability",
-        "💾 Бекапы и обновления",
-        ("BACKUP", "VERSION"),
-    ),
-    (
-        "technical",
-        "🧰 Технические",
-        ("LOG", "WEBHOOK", "DEBUG"),
+        "development",
+        "🔧 Разработка",
+        ("LOG", "WEBHOOK", "WEB_API", "DEBUG"),
     ),
 )
 
