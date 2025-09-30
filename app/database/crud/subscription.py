@@ -22,13 +22,10 @@ logger = logging.getLogger(__name__)
 async def get_subscription_by_user_id(db: AsyncSession, user_id: int) -> Optional[Subscription]:
     result = await db.execute(
         select(Subscription)
-        .options(
-            selectinload(Subscription.user),
-            selectinload(Subscription.tariff),
-        )
+        .options(selectinload(Subscription.user))
         .where(Subscription.user_id == user_id)
         .order_by(Subscription.created_at.desc())
-        .limit(1)
+        .limit(1) 
     )
     subscription = result.scalar_one_or_none()
     
@@ -77,14 +74,13 @@ async def create_paid_subscription(
     db: AsyncSession,
     user_id: int,
     duration_days: int,
-    traffic_limit_gb: int = 0,
+    traffic_limit_gb: int = 0, 
     device_limit: int = 1,
-    connected_squads: List[str] = None,
-    tariff_id: Optional[int] = None,
+    connected_squads: List[str] = None
 ) -> Subscription:
-
+    
     end_date = datetime.utcnow() + timedelta(days=duration_days)
-
+    
     subscription = Subscription(
         user_id=user_id,
         status=SubscriptionStatus.ACTIVE.value,
@@ -93,8 +89,7 @@ async def create_paid_subscription(
         end_date=end_date,
         traffic_limit_gb=traffic_limit_gb,
         device_limit=device_limit,
-        connected_squads=connected_squads or [],
-        tariff_id=tariff_id,
+        connected_squads=connected_squads or []
     )
     
     db.add(subscription)
@@ -271,10 +266,7 @@ async def get_expiring_subscriptions(
     
     result = await db.execute(
         select(Subscription)
-        .options(
-            selectinload(Subscription.user),
-            selectinload(Subscription.tariff),
-        )
+        .options(selectinload(Subscription.user))
         .where(
             and_(
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
@@ -290,10 +282,7 @@ async def get_expired_subscriptions(db: AsyncSession) -> List[Subscription]:
     
     result = await db.execute(
         select(Subscription)
-        .options(
-            selectinload(Subscription.user),
-            selectinload(Subscription.tariff),
-        )
+        .options(selectinload(Subscription.user))
         .where(
             and_(
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
@@ -309,15 +298,12 @@ async def get_subscriptions_for_autopay(db: AsyncSession) -> List[Subscription]:
     
     result = await db.execute(
         select(Subscription)
-        .options(
-            selectinload(Subscription.user),
-            selectinload(Subscription.tariff),
-        )
+        .options(selectinload(Subscription.user))
         .where(
             and_(
                 Subscription.status == SubscriptionStatus.ACTIVE.value,
                 Subscription.autopay_enabled == True,
-                Subscription.is_trial == False
+                Subscription.is_trial == False 
             )
         )
     )
@@ -463,10 +449,7 @@ async def get_all_subscriptions(
     
     result = await db.execute(
         select(Subscription)
-        .options(
-            selectinload(Subscription.user),
-            selectinload(Subscription.tariff),
-        )
+        .options(selectinload(Subscription.user))
         .order_by(Subscription.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -762,7 +745,6 @@ async def get_subscription_renewal_cost(
             select(Subscription)
             .options(
                 selectinload(Subscription.user).selectinload(User.promo_group),
-                selectinload(Subscription.tariff),
             )
             .where(Subscription.id == subscription_id)
         )

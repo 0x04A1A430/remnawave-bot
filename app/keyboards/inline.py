@@ -1,4 +1,4 @@
-from typing import Iterable, List, Optional, Sequence
+from typing import List, Optional
 from aiogram import types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
@@ -635,7 +635,7 @@ def get_trial_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
 def get_subscription_period_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
-
+    
     available_periods = settings.get_available_subscription_periods()
     
     period_texts = {
@@ -659,91 +659,14 @@ def get_subscription_period_keyboard(language: str = DEFAULT_LANGUAGE) -> Inline
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
     ])
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
-def get_tariff_selection_keyboard(
-        tariffs: Sequence["SubscriptionTariff"],
-        language: str = DEFAULT_LANGUAGE,
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard: List[List[InlineKeyboardButton]] = []
-
-    for tariff in tariffs:
-        if not getattr(tariff, "prices", None):
-            continue
-
-        price_values = [price.price_kopeks for price in tariff.prices if price.price_kopeks is not None]
-        if price_values:
-            min_price = min(price_values)
-            button_text = texts.t(
-                "TARIFF_SELECT_BUTTON",
-                "{name} • от {price}",
-            ).format(name=tariff.name, price=texts.format_price(min_price))
-        else:
-            button_text = tariff.name
-
-        keyboard.append([
-            InlineKeyboardButton(
-                text=button_text,
-                callback_data=f"tariff_select_{tariff.id}",
-            )
-        ])
-
-    if not keyboard:
-        keyboard.append([
-            InlineKeyboardButton(
-                text=texts.t("NO_TARIFFS_AVAILABLE", "❌ Тарифы недоступны"),
-                callback_data="no_tariffs",
-            )
-        ])
-
-    keyboard.append([
-        InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
-    ])
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
-def get_tariff_period_keyboard(
-        tariff: "SubscriptionTariff",
-        language: str = DEFAULT_LANGUAGE,
-) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard: List[List[InlineKeyboardButton]] = []
-
-    sorted_prices = sorted(
-        getattr(tariff, "prices", []),
-        key=lambda price: price.period_days,
-    )
-
-    for price in sorted_prices:
-        period_text = format_period_description(price.period_days, language)
-        button_text = texts.t(
-            "TARIFF_PERIOD_BUTTON",
-            "{period} • {price}",
-        ).format(period=period_text, price=texts.format_price(price.price_kopeks))
-
-        keyboard.append([
-            InlineKeyboardButton(
-                text=button_text,
-                callback_data=f"tariff_period_{tariff.id}_{price.period_days}",
-            )
-        ])
-
-    keyboard.append([
-        InlineKeyboardButton(text=texts.BACK, callback_data="tariff_back"),
-        InlineKeyboardButton(text=texts.CANCEL, callback_data="subscription_cancel"),
-    ])
-
+    
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def get_traffic_packages_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     import logging
     logger = logging.getLogger(__name__)
-
+    
     from app.config import settings
     
     if settings.is_traffic_fixed():
@@ -1839,34 +1762,10 @@ def get_devices_management_keyboard(
 
 def get_updated_subscription_settings_keyboard(language: str = DEFAULT_LANGUAGE, show_countries_management: bool = True) -> InlineKeyboardMarkup:
     from app.config import settings
-
+    
     texts = get_texts(language)
-    if settings.is_subscription_tariff_mode():
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    text=texts.t("CHANGE_TARIFF_BUTTON", "🔁 Сменить тариф"),
-                    callback_data="subscription_change_tariff",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.t("MANAGE_DEVICES_BUTTON", "🔧 Управление устройствами"),
-                    callback_data="subscription_manage_devices",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.t("RESET_ALL_DEVICES_BUTTON", "🔄 Сбросить все устройства"),
-                    callback_data="reset_all_devices",
-                )
-            ],
-            [InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")],
-        ]
-        return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
     keyboard = []
-
+    
     if show_countries_management:
         keyboard.append([
             InlineKeyboardButton(text=texts.t("ADD_COUNTRIES_BUTTON", "🌐 Добавить страны"), callback_data="subscription_add_countries")
@@ -1874,7 +1773,7 @@ def get_updated_subscription_settings_keyboard(language: str = DEFAULT_LANGUAGE,
 
     keyboard.extend([
         [
-            InlineKeyboardButton(text=texts.t("CHANGE_DEVICES_BUTTON", "📱 Изменить устройства"), callback_data="subscription_change_devices")
+            InlineKeyboardButton(text=texts.t("CHANGE_DEVICES_BUTTON", "📱 Изменить устройства"), callback_data="subscription_change_devices") 
         ],
         [
             InlineKeyboardButton(text=texts.t("MANAGE_DEVICES_BUTTON", "🔧 Управление устройствами"), callback_data="subscription_manage_devices")
@@ -1888,11 +1787,11 @@ def get_updated_subscription_settings_keyboard(language: str = DEFAULT_LANGUAGE,
         keyboard.insert(-2, [
             InlineKeyboardButton(text=texts.t("RESET_TRAFFIC_BUTTON", "🔄 Сбросить трафик"), callback_data="subscription_reset_traffic")
         ])
-
+    
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
     ])
-
+    
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 

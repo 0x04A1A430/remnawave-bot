@@ -22,7 +22,6 @@ class SubscriptionResponse(BaseModel):
     subscription_url: Optional[str] = None
     subscription_crypto_link: Optional[str] = None
     connected_squads: List[str] = Field(default_factory=list)
-    tariff_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
@@ -35,7 +34,6 @@ class SubscriptionCreateRequest(BaseModel):
     device_limit: Optional[int] = None
     squad_uuid: Optional[str] = None
     connected_squads: Optional[List[str]] = None
-    tariff_id: Optional[int] = None
 
 
 class SubscriptionExtendRequest(BaseModel):
