@@ -13,7 +13,7 @@ from app.utils.decorators import admin_required, error_handler
 
 logger = logging.getLogger(__name__)
 
-LOG_PREVIEW_LIMIT = 1500
+LOG_PREVIEW_LIMIT = 2300
 
 
 def _resolve_log_path() -> Path:
