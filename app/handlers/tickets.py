@@ -412,7 +412,6 @@ async def show_my_tickets(
     # Добавим кнопку перехода к закрытым
     keyboard.inline_keyboard.insert(0, [types.InlineKeyboardButton(text=texts.t("VIEW_CLOSED_TICKETS", "🟢 Закрытые тикеты"), callback_data="my_tickets_closed")])
     # Всегда используем фото-рендер с логотипом (утилита сама сделает фоллбек при необходимости)
-    from app.utils.photo_message import edit_or_answer_photo
     await edit_or_answer_photo(
         callback=callback,
         caption=texts.t("MY_TICKETS_TITLE", "📋 Ваши тикеты:"),
@@ -456,7 +455,6 @@ async def show_my_tickets_closed(
     data = [{'id': t.id, 'title': t.title, 'status_emoji': t.status_emoji} for t in tickets]
     kb = get_my_tickets_keyboard(data, current_page=current_page, total_pages=total_pages, language=db_user.language, page_prefix="my_tickets_closed_page_")
     kb.inline_keyboard.insert(0, [types.InlineKeyboardButton(text=texts.t("BACK_TO_OPEN_TICKETS", "🔴 Открытые тикеты"), callback_data="my_tickets")])
-    from app.utils.photo_message import edit_or_answer_photo
     await edit_or_answer_photo(
         callback=callback,
         caption=texts.t("CLOSED_TICKETS_TITLE", "🟢 Закрытые тикеты:"),
