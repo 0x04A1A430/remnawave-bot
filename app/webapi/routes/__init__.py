@@ -1,6 +1,7 @@
 from . import (
     config,
     health,
+    miniapp,
     promo_groups,
     remnawave,
     stats,
@@ -14,6 +15,7 @@ from . import (
 __all__ = [
     "config",
     "health",
+    "miniapp",
     "promo_groups",
     "remnawave",
     "stats",

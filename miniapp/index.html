@@ -158,6 +158,21 @@
             color: #842029;
         }
 
+        .status-trial {
+            background: #fff3cd;
+            color: #664d03;
+        }
+
+        .status-disabled {
+            background: #e2e3e5;
+            color: #41464b;
+        }
+
+        .status-unknown {
+            background: #e7eaf3;
+            color: #495057;
+        }
+
         /* Stats Grid */
         .stats-grid {
             display: grid;
@@ -240,6 +255,12 @@
             background: white;
             color: var(--primary);
             border: 1px solid var(--border-color);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            pointer-events: none;
         }
 
         .btn-icon {
@@ -427,8 +448,8 @@
         <!-- Error State -->
         <div id="errorState" class="error hidden">
             <div class="error-icon">⚠️</div>
-            <div class="error-title">Subscription Not Found</div>
-            <div class="error-text">Please contact support to activate your subscription</div>
+            <div class="error-title" id="errorTitle">Subscription Not Found</div>
+            <div class="error-text" id="errorText">Please contact support to activate your subscription</div>
         </div>
 
         <!-- Main Content -->
@@ -504,92 +525,160 @@
     </div>
 
     <script>
-        // Initialize Telegram WebApp
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.ready();
+        const tg = window.Telegram?.WebApp || {
+            initData: '',
+            initDataUnsafe: {},
+            expand: () => {},
+            ready: () => {},
+            themeParams: {},
+            showPopup: null,
+        };
 
-        // Apply Telegram theme
+        if (typeof tg.expand === 'function') {
+            tg.expand();
+        }
+        if (typeof tg.ready === 'function') {
+            tg.ready();
+        }
+
         if (tg.themeParams) {
             Object.keys(tg.themeParams).forEach(key => {
                 document.documentElement.style.setProperty(`--tg-theme-${key.replace(/_/g, '-')}`, tg.themeParams[key]);
             });
         }
 
-        // State
         let userData = null;
-        let appsConfig = null;
+        let appsConfig = {};
         let currentPlatform = 'android';
+        let preferredLanguage = 'en';
 
-        // Initialize
+        function createError(title, message, status) {
+            const error = new Error(message || title);
+            if (title) {
+                error.title = title;
+            }
+            if (status) {
+                error.status = status;
+            }
+            return error;
+        }
+
         async function init() {
             try {
-                // Get user data from Telegram
                 const telegramUser = tg.initDataUnsafe?.user;
-                if (!telegramUser) {
-                    throw new Error('No Telegram user data');
+                if (telegramUser?.language_code) {
+                    preferredLanguage = telegramUser.language_code.split('-')[0];
                 }
 
-                // Load apps config
                 await loadAppsConfig();
 
-                // Fetch user subscription data from your API
-                // Replace this URL with your actual API endpoint
-                const response = await fetch(`/api/subscription/${telegramUser.id}`);
-                
+                const initData = tg.initData || '';
+                if (!initData) {
+                    throw createError('Authorization Error', 'Missing Telegram init data');
+                }
+
+                const response = await fetch('/miniapp/subscription', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ initData })
+                });
+
                 if (!response.ok) {
-                    throw new Error('Subscription not found');
+                    let detail = response.status === 401
+                        ? 'Authorization failed. Please open the mini app from Telegram.'
+                        : 'Subscription not found';
+                    let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
+
+                    try {
+                        const errorPayload = await response.json();
+                        if (errorPayload?.detail) {
+                            detail = errorPayload.detail;
+                        }
+                    } catch (parseError) {
+                        // ignore
+                    }
+
+                    throw createError(title, detail, response.status);
                 }
 
                 userData = await response.json();
-                
-                // Render UI
+                userData.subscriptionUrl = userData.subscription_url || null;
+                userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
+
+                if (userData?.user?.language) {
+                    preferredLanguage = userData.user.language;
+                }
+
                 renderUserData();
                 detectPlatform();
+                setActivePlatformButton();
                 renderApps();
-                
+
                 document.getElementById('loadingState').classList.add('hidden');
                 document.getElementById('mainContent').classList.remove('hidden');
-                
             } catch (error) {
                 console.error('Initialization error:', error);
-                document.getElementById('loadingState').classList.add('hidden');
-                document.getElementById('errorState').classList.remove('hidden');
+                showError(error);
             }
         }
 
         async function loadAppsConfig() {
-            const response = await fetch('/assets/app-config.json');
-            appsConfig = await response.json();
+            try {
+                const response = await fetch('/app-config.json', { cache: 'no-cache' });
+                if (!response.ok) {
+                    throw new Error('Failed to load app config');
+                }
+
+                const data = await response.json();
+                appsConfig = data?.platforms || {};
+            } catch (error) {
+                console.warn('Unable to load apps configuration:', error);
+                appsConfig = {};
+            }
         }
 
         function renderUserData() {
-            if (!userData?.response) return;
+            if (!userData?.user) {
+                return;
+            }
 
-            const { user } = userData.response;
-            
-            // User info
-            const avatar = user.username?.[0]?.toUpperCase() || 'U';
-            document.getElementById('userAvatar').textContent = avatar;
-            document.getElementById('userName').textContent = user.username || 'User';
-            
-            // Status
+            const user = userData.user;
+            const rawName = user.display_name || user.username || '';
+            const fallbackName = rawName || [user.first_name, user.last_name].filter(Boolean).join(' ') || `User ${user.telegram_id || ''}`.trim();
+            const avatarChar = (fallbackName.replace(/^@/, '')[0] || 'U').toUpperCase();
+
+            document.getElementById('userAvatar').textContent = avatarChar;
+            document.getElementById('userName').textContent = fallbackName;
+
+            const statusValueRaw = (user.subscription_actual_status || user.subscription_status || 'active').toLowerCase();
+            const knownStatuses = ['active', 'expired', 'trial', 'disabled'];
+            const statusClass = knownStatuses.includes(statusValueRaw) ? statusValueRaw : 'unknown';
             const statusBadge = document.getElementById('statusBadge');
-            statusBadge.textContent = user.userStatus;
-            statusBadge.className = `status-badge status-${user.userStatus.toLowerCase()}`;
-            
-            // Stats
-            const expiresDate = new Date(user.expiresAt);
-            const daysLeft = Math.ceil((expiresDate - new Date()) / (1000 * 60 * 60 * 24));
-            document.getElementById('daysLeft').textContent = daysLeft > 0 ? daysLeft : '0';
-            
-            const serversCount = userData.response.links?.length || 0;
+            statusBadge.textContent = user.status_label || statusClass.charAt(0).toUpperCase() + statusClass.slice(1);
+            statusBadge.className = `status-badge status-${statusClass}`;
+
+            const expiresAt = user.expires_at ? new Date(user.expires_at) : null;
+            let daysLeft = '—';
+            if (expiresAt && !Number.isNaN(expiresAt.getTime())) {
+                const diffDays = Math.ceil((expiresAt - new Date()) / (1000 * 60 * 60 * 24));
+                daysLeft = diffDays > 0 ? diffDays : '0';
+            }
+            document.getElementById('daysLeft').textContent = daysLeft;
+            document.getElementById('expiresAt').textContent = expiresAt && !Number.isNaN(expiresAt.getTime())
+                ? expiresAt.toLocaleDateString()
+                : '—';
+
+            const serversCount = userData.links?.length ?? userData.connected_squads?.length ?? 0;
             document.getElementById('serversCount').textContent = serversCount;
-            
-            // Details
-            document.getElementById('expiresAt').textContent = expiresDate.toLocaleDateString();
-            document.getElementById('trafficUsed').textContent = user.trafficUsed || '0 GB';
-            document.getElementById('trafficLimit').textContent = user.trafficLimit === '0' ? 'Unlimited' : user.trafficLimit;
+
+            document.getElementById('trafficUsed').textContent =
+                user.traffic_used_label || formatTraffic(user.traffic_used_gb);
+            document.getElementById('trafficLimit').textContent =
+                user.traffic_limit_label || formatTrafficLimit(user.traffic_limit_gb);
+
+            updateActionButtons();
         }
 
         function detectPlatform() {
@@ -601,28 +690,61 @@
             } else {
                 currentPlatform = 'pc';
             }
-            
-            document.querySelector(`.platform-btn[data-platform="${currentPlatform}"]`)?.classList.add('active');
+        }
+
+        function setActivePlatformButton() {
+            document.querySelectorAll('.platform-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.platform === currentPlatform);
+            });
+        }
+
+        function getPlatformKey(platform) {
+            const mapping = {
+                ios: 'ios',
+                android: 'android',
+                pc: 'windows',
+                tv: 'androidTV',
+                mac: 'macos'
+            };
+            return mapping[platform] || platform;
+        }
+
+        function getAppsForCurrentPlatform() {
+            const platformKey = getPlatformKey(currentPlatform);
+            return appsConfig?.[platformKey] || [];
         }
 
         function renderApps() {
-            const apps = appsConfig?.[currentPlatform] || [];
             const container = document.getElementById('appsContainer');
-            
-            container.innerHTML = apps.map(app => `
-                <div class="app-card ${app.isFeatured ? 'featured' : ''}">
-                    <div class="app-header">
-                        <div class="app-icon">${app.name[0]}</div>
-                        <div>
-                            <div class="app-name">${app.name}</div>
-                            ${app.isFeatured ? '<span class="featured-badge">Recommended</span>' : ''}
+            if (!container) {
+                return;
+            }
+
+            const apps = getAppsForCurrentPlatform();
+
+            if (!apps.length) {
+                container.innerHTML = '<div class="step-description">No installation guide available for this platform yet.</div>';
+                return;
+            }
+
+            container.innerHTML = apps.map(app => {
+                const iconChar = (app.name?.[0] || 'A').toUpperCase();
+                const featuredBadge = app.isFeatured ? '<span class="featured-badge">Recommended</span>' : '';
+                return `
+                    <div class="app-card ${app.isFeatured ? 'featured' : ''}">
+                        <div class="app-header">
+                            <div class="app-icon">${iconChar}</div>
+                            <div>
+                                <div class="app-name">${app.name || 'App'}</div>
+                                ${featuredBadge}
+                            </div>
+                        </div>
+                        <div class="app-steps">
+                            ${renderAppSteps(app)}
                         </div>
                     </div>
-                    <div class="app-steps">
-                        ${renderAppSteps(app)}
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function renderAppSteps(app) {
@@ -633,14 +755,14 @@
                 html += `
                     <div class="step">
                         <div class="step-title">
-                            <span class="step-number">${stepNum}</span>
+                            <span class="step-number">${stepNum++}</span>
                             Download & Install
                         </div>
                         ${app.installationStep.description ? `<div class="step-description">${getLocalizedText(app.installationStep.description)}</div>` : ''}
-                        ${app.installationStep.buttons ? `
+                        ${Array.isArray(app.installationStep.buttons) && app.installationStep.buttons.length ? `
                             <div class="step-buttons">
                                 ${app.installationStep.buttons.map(btn => `
-                                    <a href="${btn.buttonLink}" class="step-btn" target="_blank">
+                                    <a href="${btn.buttonLink}" class="step-btn" target="_blank" rel="noopener">
                                         ${getLocalizedText(btn.buttonText)}
                                     </a>
                                 `).join('')}
@@ -648,27 +770,25 @@
                         ` : ''}
                     </div>
                 `;
-                stepNum++;
             }
 
             if (app.addSubscriptionStep) {
                 html += `
                     <div class="step">
                         <div class="step-title">
-                            <span class="step-number">${stepNum}</span>
+                            <span class="step-number">${stepNum++}</span>
                             Add Subscription
                         </div>
                         <div class="step-description">${getLocalizedText(app.addSubscriptionStep.description)}</div>
                     </div>
                 `;
-                stepNum++;
             }
 
             if (app.connectAndUseStep) {
                 html += `
                     <div class="step">
                         <div class="step-title">
-                            <span class="step-number">${stepNum}</span>
+                            <span class="step-number">${stepNum++}</span>
                             Connect & Use
                         </div>
                         <div class="step-description">${getLocalizedText(app.connectAndUseStep.description)}</div>
@@ -680,44 +800,148 @@
         }
 
         function getLocalizedText(textObj) {
-            if (typeof textObj === 'string') return textObj;
-            return textObj.ru || textObj.en || '';
+            if (!textObj) {
+                return '';
+            }
+            if (typeof textObj === 'string') {
+                return textObj;
+            }
+
+            const telegramLang = tg.initDataUnsafe?.user?.language_code;
+            const preferenceOrder = [
+                preferredLanguage,
+                preferredLanguage?.split('-')[0],
+                userData?.user?.language,
+                telegramLang,
+                telegramLang?.split('-')[0],
+                'en',
+                'ru'
+            ].filter(Boolean).map(lang => lang.toLowerCase());
+
+            const seen = new Set();
+            for (const lang of preferenceOrder) {
+                if (seen.has(lang)) {
+                    continue;
+                }
+                seen.add(lang);
+                if (textObj[lang]) {
+                    return textObj[lang];
+                }
+            }
+
+            const fallback = Object.values(textObj).find(value => typeof value === 'string' && value.trim().length);
+            return fallback || '';
         }
 
-        // Event Listeners
+        function formatTraffic(value) {
+            const numeric = typeof value === 'number' ? value : Number.parseFloat(value ?? '0');
+            if (!Number.isFinite(numeric)) {
+                return '0 GB';
+            }
+            if (numeric >= 100) {
+                return `${numeric.toFixed(0)} GB`;
+            }
+            if (numeric >= 10) {
+                return `${numeric.toFixed(1)} GB`;
+            }
+            return `${numeric.toFixed(2)} GB`;
+        }
+
+        function formatTrafficLimit(limit) {
+            const numeric = typeof limit === 'number' ? limit : Number.parseFloat(limit ?? '0');
+            if (!Number.isFinite(numeric) || numeric <= 0) {
+                return 'Unlimited';
+            }
+            return `${numeric.toFixed(0)} GB`;
+        }
+
+        function getCurrentSubscriptionUrl() {
+            return userData?.subscription_url || userData?.subscriptionUrl || '';
+        }
+
+        function updateActionButtons() {
+            const connectBtn = document.getElementById('connectBtn');
+            const copyBtn = document.getElementById('copyBtn');
+            const hasUrl = Boolean(getCurrentSubscriptionUrl());
+
+            if (connectBtn) {
+                connectBtn.disabled = !hasUrl;
+            }
+            if (copyBtn) {
+                copyBtn.disabled = !hasUrl || !navigator.clipboard;
+            }
+        }
+
+        function showPopup(message, title = 'Info') {
+            if (typeof tg.showPopup === 'function') {
+                tg.showPopup({
+                    title,
+                    message,
+                    buttons: [{ type: 'ok' }]
+                });
+            } else {
+                alert(message);
+            }
+        }
+
         document.querySelectorAll('.platform-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('.platform-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
                 currentPlatform = btn.dataset.platform;
+                setActivePlatformButton();
                 renderApps();
             });
         });
 
         document.getElementById('connectBtn')?.addEventListener('click', () => {
-            if (userData?.response?.subscriptionUrl) {
-                const app = appsConfig?.[currentPlatform]?.find(a => a.isFeatured) || appsConfig?.[currentPlatform]?.[0];
-                if (app?.urlScheme) {
-                    window.location.href = app.urlScheme + userData.response.subscriptionUrl;
-                } else {
-                    window.location.href = userData.response.subscriptionUrl;
-                }
+            const subscriptionUrl = getCurrentSubscriptionUrl();
+            if (!subscriptionUrl) {
+                return;
+            }
+
+            const apps = getAppsForCurrentPlatform();
+            const featuredApp = apps.find(app => app.isFeatured) || apps[0];
+
+            if (featuredApp?.urlScheme) {
+                window.location.href = `${featuredApp.urlScheme}${subscriptionUrl}`;
+            } else if (userData?.happ_link && featuredApp?.id === 'happ') {
+                window.location.href = userData.happ_link;
+            } else {
+                window.location.href = subscriptionUrl;
             }
         });
 
-        document.getElementById('copyBtn')?.addEventListener('click', () => {
-            if (userData?.response?.subscriptionUrl) {
-                navigator.clipboard.writeText(userData.response.subscriptionUrl).then(() => {
-                    tg.showPopup({
-                        title: 'Copied!',
-                        message: 'Subscription link copied to clipboard',
-                        buttons: [{type: 'ok'}]
-                    });
-                });
+        document.getElementById('copyBtn')?.addEventListener('click', async () => {
+            const subscriptionUrl = getCurrentSubscriptionUrl();
+            if (!subscriptionUrl || !navigator.clipboard) {
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(subscriptionUrl);
+                showPopup('Subscription link copied to clipboard', 'Copied');
+            } catch (error) {
+                console.warn('Clipboard copy failed:', error);
+                showPopup('Unable to copy the subscription link automatically. Please copy it manually.', 'Copy failed');
             }
         });
 
-        // Start
+        function showError(error) {
+            document.getElementById('loadingState').classList.add('hidden');
+
+            const titleElement = document.getElementById('errorTitle');
+            const textElement = document.getElementById('errorText');
+
+            if (titleElement) {
+                titleElement.textContent = error?.title || 'Subscription Not Found';
+            }
+            if (textElement) {
+                textElement.textContent = error?.message || 'Please contact support to activate your subscription';
+            }
+
+            document.getElementById('errorState').classList.remove('hidden');
+            updateActionButtons();
+        }
+
         init();
     </script>
 </body>

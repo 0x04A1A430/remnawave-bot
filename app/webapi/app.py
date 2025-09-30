@@ -13,6 +13,7 @@ from .routes import (
     config,
     health,
     promocodes,
+    miniapp,
     promo_groups,
     remnawave,
     stats,
@@ -68,6 +69,10 @@ OPENAPI_TAGS = [
             "данных между ботом и панелью."
         ),
     },
+    {
+        "name": "miniapp",
+        "description": "Endpoint для Telegram Mini App с информацией о подписке пользователя.",
+    },
 ]
 
 
@@ -110,5 +115,6 @@ def create_web_api_app() -> FastAPI:
     app.include_router(campaigns.router, prefix="/campaigns", tags=["campaigns"])
     app.include_router(tokens.router, prefix="/tokens", tags=["auth"])
     app.include_router(remnawave.router, prefix="/remnawave", tags=["remnawave"])
+    app.include_router(miniapp.router, prefix="/miniapp", tags=["miniapp"])
 
     return app
