@@ -1174,7 +1174,10 @@ async def handle_add_countries(
     subscription = db_user.subscription
 
     if not subscription or subscription.is_trial:
-        await callback.answer("⚠ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_FEATURE_PAID_ONLY", "⚠ Эта функция доступна только для платных подписок"),
+            show_alert=True,
+        )
         return
 
     countries = await _get_available_countries(db_user.promo_group_id)
@@ -1192,19 +1195,34 @@ async def handle_add_countries(
         if country['uuid'] in current_countries:
             current_countries_names.append(country['name'])
 
-    text = "🌍 <b>Управление странами подписки</b>\n\n"
-    text += f"📋 <b>Текущие страны ({len(current_countries)}):</b>\n"
-    if current_countries_names:
-        text += "\n".join(f"• {name}" for name in current_countries_names)
-    else:
-        text += "Нет подключенных стран"
+    countries_list = "\n".join(f"• {name}" for name in current_countries_names)
+    if not countries_list:
+        countries_list = texts.t("SUBSCRIPTION_COUNTRIES_NONE", "Нет подключенных стран")
 
-    text += "\n\n💡 <b>Инструкция:</b>\n"
-    text += "✅ - страна подключена\n"
-    text += "➕ - будет добавлена (платно)\n"
-    text += "➖ - будет отключена (бесплатно)\n"
-    text += "⚪ - не выбрана\n\n"
-    text += "⚠️ <b>Важно:</b> Повторное подключение отключенных стран будет платным!"
+    text = "\n\n".join(
+        [
+            texts.t(
+                "SUBSCRIPTION_COUNTRIES_MANAGEMENT_TITLE",
+                "🌍 <b>Управление странами подписки</b>",
+            ),
+            texts.t(
+                "SUBSCRIPTION_COUNTRIES_CURRENT",
+                "📋 <b>Текущие страны ({count}):</b>\n{countries}",
+            ).format(count=len(current_countries), countries=countries_list),
+            texts.t(
+                "SUBSCRIPTION_COUNTRIES_INSTRUCTIONS",
+                "💡 <b>Инструкция:</b>\n"
+                "✅ - страна подключена\n"
+                "➕ - будет добавлена (платно)\n"
+                "➖ - будет отключена (бесплатно)\n"
+                "⚪ - не выбрана",
+            ),
+            texts.t(
+                "SUBSCRIPTION_COUNTRIES_NOTICE",
+                "⚠️ <b>Важно:</b> Повторное подключение отключенных стран будет платным!",
+            ),
+        ]
+    )
 
     await state.update_data(countries=current_countries.copy())
 
@@ -1274,9 +1292,13 @@ async def handle_manage_country(
 
     country_uuid = callback.data.split('_')[2]
 
+    texts = get_texts(db_user.language)
     subscription = db_user.subscription
     if not subscription or subscription.is_trial:
-        await callback.answer("⚠ Только для платных подписок", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_FEATURE_PAID_ONLY", "⚠ Только для платных подписок"),
+            show_alert=True,
+        )
         return
 
     data = await state.get_data()
@@ -1286,7 +1308,13 @@ async def handle_manage_country(
     allowed_country_ids = {country['uuid'] for country in countries}
 
     if country_uuid not in allowed_country_ids and country_uuid not in current_selected:
-        await callback.answer("❌ Сервер недоступен для вашей промогруппы", show_alert=True)
+        await callback.answer(
+            texts.t(
+                "SUBSCRIPTION_COUNTRY_NOT_AVAILABLE",
+                "❌ Сервер недоступен для вашей промогруппы",
+            ),
+            show_alert=True,
+        )
         return
 
     if country_uuid in current_selected:
@@ -1598,7 +1626,10 @@ async def handle_change_devices(
     subscription = db_user.subscription
 
     if not subscription or subscription.is_trial:
-        await callback.answer("⚠️ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_FEATURE_PAID_ONLY", "⚠️ Эта функция доступна только для платных подписок"),
+            show_alert=True,
+        )
         return
 
     current_devices = subscription.device_limit
@@ -1610,13 +1641,32 @@ async def handle_change_devices(
         period_hint_days,
     )
 
+    texts = get_texts(db_user.language)
+
     await callback.message.edit_text(
-        f"📱 <b>Изменение количества устройств</b>\n\n"
-        f"Текущий лимит: {current_devices} устройств\n"
-        f"Выберите новое количество устройств:\n\n"
-        f"💡 <b>Важно:</b>\n"
-        f"• При увеличении - доплата пропорционально оставшемуся времени\n"
-        f"• При уменьшении - возврат средств не производится",
+        "\n".join(
+            [
+                texts.t(
+                    "SUBSCRIPTION_CHANGE_DEVICES_TITLE",
+                    "📱 <b>Изменение количества устройств</b>",
+                ),
+                texts.t(
+                    "SUBSCRIPTION_CHANGE_DEVICES_CURRENT",
+                    "Текущий лимит: {count} устройств",
+                ).format(count=current_devices),
+                texts.t(
+                    "SUBSCRIPTION_CHANGE_DEVICES_PROMPT",
+                    "Выберите новое количество устройств:",
+                ),
+                "",
+                texts.t(
+                    "SUBSCRIPTION_CHANGE_DEVICES_IMPORTANT",
+                    "💡 <b>Важно:</b>\n"
+                    "• При увеличении - доплата пропорционально оставшемуся времени\n"
+                    "• При уменьшении - возврат средств не производится",
+                ),
+            ]
+        ),
         reply_markup=get_change_devices_keyboard(
             current_devices,
             db_user.language,
@@ -1641,13 +1691,22 @@ async def confirm_change_devices(
     current_devices = subscription.device_limit
 
     if new_devices_count == current_devices:
-        await callback.answer("ℹ️ Количество устройств не изменилось", show_alert=True)
+        await callback.answer(
+            texts.t(
+                "SUBSCRIPTION_CHANGE_DEVICES_NO_CHANGE",
+                "ℹ️ Количество устройств не изменилось",
+            ),
+            show_alert=True,
+        )
         return
 
     if settings.MAX_DEVICES_LIMIT > 0 and new_devices_count > settings.MAX_DEVICES_LIMIT:
         await callback.answer(
-            f"⚠️ Превышен максимальный лимит устройств ({settings.MAX_DEVICES_LIMIT})",
-            show_alert=True
+            texts.t(
+                "SUBSCRIPTION_CHANGE_DEVICES_MAX_LIMIT",
+                "⚠️ Превышен максимальный лимит устройств ({limit})",
+            ).format(limit=settings.MAX_DEVICES_LIMIT),
+            show_alert=True,
         )
         return
 
@@ -1831,11 +1890,17 @@ async def handle_device_management(
     subscription = db_user.subscription
 
     if not subscription or subscription.is_trial:
-        await callback.answer("⚠️ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_FEATURE_PAID_ONLY", "⚠️ Эта функция доступна только для платных подписок"),
+            show_alert=True,
+        )
         return
 
     if not db_user.remnawave_uuid:
-        await callback.answer("❌ UUID пользователя не найден", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_DEVICES_UUID_NOT_FOUND", "❌ UUID пользователя не найден"),
+            show_alert=True,
+        )
         return
 
     try:
@@ -1852,7 +1917,10 @@ async def handle_device_management(
 
                 if total_devices == 0:
                     await callback.message.edit_text(
-                        "ℹ️ У вас нет подключенных устройств",
+                        texts.t(
+                            "SUBSCRIPTION_DEVICES_NONE",
+                            "ℹ️ У вас нет подключенных устройств",
+                        ),
                         reply_markup=get_back_keyboard(db_user.language)
                     )
                     await callback.answer()
@@ -1860,11 +1928,23 @@ async def handle_device_management(
 
                 await show_devices_page(callback, db_user, devices_list, page=1)
             else:
-                await callback.answer("❌ Ошибка получения информации об устройствах", show_alert=True)
+                await callback.answer(
+                    texts.t(
+                        "SUBSCRIPTION_DEVICES_FETCH_ERROR",
+                        "❌ Ошибка получения информации об устройствах",
+                    ),
+                    show_alert=True,
+                )
 
     except Exception as e:
         logger.error(f"Ошибка получения списка устройств: {e}")
-        await callback.answer("❌ Ошибка получения информации об устройствах", show_alert=True)
+        await callback.answer(
+            texts.t(
+                "SUBSCRIPTION_DEVICES_FETCH_ERROR",
+                "❌ Ошибка получения информации об устройствах",
+            ),
+            show_alert=True,
+        )
 
     await callback.answer()
 
@@ -1880,15 +1960,32 @@ async def show_devices_page(
 
     pagination = paginate_list(devices_list, page=page, per_page=devices_per_page)
 
-    devices_text = f"🔄 <b>Управление устройствами</b>\n\n"
-    devices_text += f"📊 Всего подключено: {len(devices_list)} устройств\n"
-    devices_text += f"📄 Страница {pagination.page} из {pagination.total_pages}\n\n"
+    devices_text = "\n".join(
+        [
+            texts.t(
+                "SUBSCRIPTION_DEVICES_MANAGEMENT_TITLE",
+                "🔄 <b>Управление устройствами</b>",
+            ),
+            texts.t(
+                "SUBSCRIPTION_DEVICES_MANAGEMENT_TOTAL",
+                "📊 Всего подключено: {count} устройств",
+            ).format(count=len(devices_list)),
+            texts.t(
+                "SUBSCRIPTION_DEVICES_MANAGEMENT_PAGE",
+                "📄 Страница {current} из {total}",
+            ).format(current=pagination.page, total=pagination.total_pages),
+            "",
+        ]
+    )
 
     if pagination.items:
-        devices_text += "<b>Подключенные устройства:</b>\n"
+        devices_text += texts.t(
+            "SUBSCRIPTION_DEVICES_MANAGEMENT_LIST_HEADER",
+            "<b>Подключенные устройства:</b>",
+        ) + "\n"
         for i, device in enumerate(pagination.items, 1):
-            platform = device.get('platform', 'Unknown')
-            device_model = device.get('deviceModel', 'Unknown')
+            platform = device.get('platform', texts.t("SUBSCRIPTION_DEVICES_UNKNOWN_PLATFORM", "Unknown"))
+            device_model = device.get('deviceModel', texts.t("SUBSCRIPTION_DEVICES_UNKNOWN_MODEL", "Unknown"))
             device_info = f"{platform} - {device_model}"
 
             if len(device_info) > 35:
@@ -1896,9 +1993,12 @@ async def show_devices_page(
 
             devices_text += f"• {device_info}\n"
 
-    devices_text += "\n💡 <b>Действия:</b>\n"
-    devices_text += "• Выберите устройство для сброса\n"
-    devices_text += "• Или сбросьте все устройства сразу"
+    devices_text += "\n" + texts.t(
+        "SUBSCRIPTION_DEVICES_MANAGEMENT_ACTIONS",
+        "💡 <b>Действия:</b>\n"
+        "• Выберите устройство для сброса\n"
+        "• Или сбросьте все устройства сразу",
+    )
 
     await callback.message.edit_text(
         devices_text,
@@ -3926,21 +4026,31 @@ async def handle_subscription_settings(
     subscription = db_user.subscription
 
     if not subscription or subscription.is_trial:
-        await callback.answer("⚠️ Настройки доступны только для платных подписок", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_SETTINGS_PAID_ONLY_ALERT", "⚠️ Настройки доступны только для платных подписок"),
+            show_alert=True,
+        )
         return
 
     devices_used = await get_current_devices_count(db_user)
 
-    settings_text = f"""
-⚙️ <b>Настройки подписки</b>
-
-📊 <b>Текущие параметры:</b>
-🌐 Стран: {len(subscription.connected_squads)}
-📈 Трафик: {texts.format_traffic(subscription.traffic_used_gb)} / {texts.format_traffic(subscription.traffic_limit_gb)}
-📱 Устройства: {devices_used} / {subscription.device_limit}
-
-Выберите что хотите изменить:
-"""
+    traffic_usage = (
+        f"{texts.format_traffic(subscription.traffic_used_gb)} / "
+        f"{texts.format_traffic(subscription.traffic_limit_gb)}"
+    )
+    settings_text = texts.t(
+        "SUBSCRIPTION_SETTINGS_OVERVIEW",
+        "⚙️ <b>Настройки подписки</b>\n\n"
+        "📊 <b>Текущие параметры:</b>\n"
+        "🌐 Стран: {countries}\n"
+        "📈 Трафик: {traffic}\n"
+        "📱 Устройства: {devices}\n\n"
+        "Выберите что хотите изменить:",
+    ).format(
+        countries=len(subscription.connected_squads),
+        traffic=traffic_usage,
+        devices=f"{devices_used} / {subscription.device_limit}",
+    )
 
     show_countries = await _should_show_countries_management(db_user)
 
@@ -3957,18 +4067,28 @@ async def handle_autopay_menu(
         db_user: User,
         db: AsyncSession
 ):
+    texts = get_texts(db_user.language)
     subscription = db_user.subscription
     if not subscription:
-        await callback.answer("⚠️ У вас нет активной подписки!", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_AUTOPAY_NO_SUBSCRIPTION", "⚠️ У вас нет активной подписки!"),
+            show_alert=True,
+        )
         return
 
-    status = "включен" if subscription.autopay_enabled else "выключен"
+    status = texts.t(
+        "SUBSCRIPTION_AUTOPAY_STATUS_ENABLED" if subscription.autopay_enabled else "SUBSCRIPTION_AUTOPAY_STATUS_DISABLED",
+        "включен" if subscription.autopay_enabled else "выключен",
+    )
     days = subscription.autopay_days_before
 
-    text = f"💳 <b>Автоплатеж</b>\n\n"
-    text += f"📊 <b>Статус:</b> {status}\n"
-    text += f"⏰ <b>Списание за:</b> {days} дн. до окончания\n\n"
-    text += "Выберите действие:"
+    text = texts.t(
+        "SUBSCRIPTION_AUTOPAY_MENU",
+        "💳 <b>Автоплатеж</b>\n\n"
+        "📊 <b>Статус:</b> {status}\n"
+        "⏰ <b>Списание за:</b> {days} дн. до окончания\n\n"
+        "Выберите действие:",
+    ).format(status=status, days=days)
 
     await callback.message.edit_text(
         text,
@@ -3982,13 +4102,19 @@ async def toggle_autopay(
         db_user: User,
         db: AsyncSession
 ):
+    texts = get_texts(db_user.language)
     subscription = db_user.subscription
     enable = callback.data == "autopay_enable"
 
     await update_subscription_autopay(db, subscription, enable)
 
-    status = "включен" if enable else "выключен"
-    await callback.answer(f"✅ Автоплатеж {status}!")
+    status = texts.t(
+        "SUBSCRIPTION_AUTOPAY_STATUS_ENABLED" if enable else "SUBSCRIPTION_AUTOPAY_STATUS_DISABLED",
+        "включен" if enable else "выключен",
+    )
+    await callback.answer(
+        texts.t("SUBSCRIPTION_AUTOPAY_TOGGLED", "✅ Автоплатеж {status}!").format(status=status)
+    )
 
     await handle_autopay_menu(callback, db_user, db)
 
@@ -3997,8 +4123,12 @@ async def show_autopay_days(
         callback: types.CallbackQuery,
         db_user: User
 ):
+    texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        "⏰ Выберите за сколько дней до окончания списывать средства:",
+        texts.t(
+            "SUBSCRIPTION_AUTOPAY_SELECT_DAYS",
+            "⏰ Выберите за сколько дней до окончания списывать средства:",
+        ),
         reply_markup=get_autopay_days_keyboard(db_user.language)
     )
     await callback.answer()
@@ -4012,11 +4142,15 @@ async def set_autopay_days(
     days = int(callback.data.split('_')[2])
     subscription = db_user.subscription
 
+    texts = get_texts(db_user.language)
+
     await update_subscription_autopay(
         db, subscription, subscription.autopay_enabled, days
     )
 
-    await callback.answer(f"✅ Установлено {days} дней!")
+    await callback.answer(
+        texts.t("SUBSCRIPTION_AUTOPAY_DAYS_SET", "✅ Установлено {days} дней!").format(days=days)
+    )
 
     await handle_autopay_menu(callback, db_user, db)
 
@@ -5310,15 +5444,22 @@ async def handle_switch_traffic(
 ):
     from app.config import settings
 
+    texts = get_texts(db_user.language)
+
     if settings.is_traffic_fixed():
-        await callback.answer("⚠️ В текущем режиме трафик фиксированный", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_TRAFFIC_FIXED_ALERT", "⚠️ В текущем режиме трафик фиксированный"),
+            show_alert=True,
+        )
         return
 
-    texts = get_texts(db_user.language)
     subscription = db_user.subscription
 
     if not subscription or subscription.is_trial:
-        await callback.answer("⚠️ Эта функция доступна только для платных подписок", show_alert=True)
+        await callback.answer(
+            texts.t("SUBSCRIPTION_FEATURE_PAID_ONLY", "⚠️ Эта функция доступна только для платных подписок"),
+            show_alert=True,
+        )
         return
 
     current_traffic = subscription.traffic_limit_gb
@@ -5330,12 +5471,29 @@ async def handle_switch_traffic(
     )
 
     await callback.message.edit_text(
-        f"🔄 <b>Переключение лимита трафика</b>\n\n"
-        f"Текущий лимит: {texts.format_traffic(current_traffic)}\n"
-        f"Выберите новый лимит трафика:\n\n"
-        f"💡 <b>Важно:</b>\n"
-        f"• При увеличении - доплата за разницу\n"
-        f"• При уменьшении - возврат средств не производится",
+        "\n".join(
+            [
+                texts.t(
+                    "SUBSCRIPTION_SWITCH_TRAFFIC_TITLE",
+                    "🔄 <b>Переключение лимита трафика</b>",
+                ),
+                texts.t(
+                    "SUBSCRIPTION_SWITCH_TRAFFIC_CURRENT",
+                    "Текущий лимит: {traffic}",
+                ).format(traffic=texts.format_traffic(current_traffic)),
+                texts.t(
+                    "SUBSCRIPTION_SWITCH_TRAFFIC_PROMPT",
+                    "Выберите новый лимит трафика:",
+                ),
+                "",
+                texts.t(
+                    "SUBSCRIPTION_SWITCH_TRAFFIC_IMPORTANT",
+                    "💡 <b>Важно:</b>\n"
+                    "• При увеличении - доплата за разницу\n"
+                    "• При уменьшении - возврат средств не производится",
+                ),
+            ]
+        ),
         reply_markup=get_traffic_switch_keyboard(
             current_traffic,
             db_user.language,
@@ -5360,7 +5518,13 @@ async def confirm_switch_traffic(
     current_traffic = subscription.traffic_limit_gb
 
     if new_traffic_gb == current_traffic:
-        await callback.answer("ℹ️ Лимит трафика не изменился", show_alert=True)
+        await callback.answer(
+            texts.t(
+                "SUBSCRIPTION_SWITCH_TRAFFIC_NO_CHANGE",
+                "ℹ️ Лимит трафика не изменился",
+            ),
+            show_alert=True,
+        )
         return
 
     old_price_per_month = settings.get_traffic_price(current_traffic)
@@ -5482,7 +5646,13 @@ async def execute_switch_traffic(
             )
 
             if not success:
-                await callback.answer("⚠️ Ошибка списания средств", show_alert=True)
+                await callback.answer(
+                    texts.t(
+                        "SUBSCRIPTION_SWITCH_TRAFFIC_CHARGE_ERROR",
+                        "⚠️ Ошибка списания средств",
+                    ),
+                    show_alert=True,
+                )
                 return
 
             months_remaining = get_remaining_months(subscription.end_date)
@@ -5514,17 +5684,49 @@ async def execute_switch_traffic(
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об изменении трафика: {e}")
 
+        change_line = texts.t(
+            "SUBSCRIPTION_SWITCH_TRAFFIC_CHANGE_LINE",
+            "📊 Было: {old} → Стало: {new}",
+        ).format(
+            old=texts.format_traffic(current_traffic),
+            new=texts.format_traffic(new_traffic_gb),
+        )
+
         if new_traffic_gb > current_traffic:
-            success_text = f"✅ Лимит трафика увеличен!\n\n"
-            success_text += f"📊 Было: {texts.format_traffic(current_traffic)} → "
-            success_text += f"Стало: {texts.format_traffic(new_traffic_gb)}\n"
+            success_parts = [
+                texts.t(
+                    "SUBSCRIPTION_SWITCH_TRAFFIC_INCREASE_TITLE",
+                    "✅ Лимит трафика увеличен!",
+                ),
+                "",
+                change_line,
+            ]
             if price_difference > 0:
-                success_text += f"💰 Списано: {texts.format_price(price_difference)}"
-        elif new_traffic_gb < current_traffic:
-            success_text = f"✅ Лимит трафика уменьшен!\n\n"
-            success_text += f"📊 Было: {texts.format_traffic(current_traffic)} → "
-            success_text += f"Стало: {texts.format_traffic(new_traffic_gb)}\n"
-            success_text += f"ℹ️ Возврат средств не производится"
+                success_parts.extend(
+                    [
+                        "",
+                        texts.t(
+                            "SUBSCRIPTION_SWITCH_TRAFFIC_CHARGED",
+                            "💰 Списано: {amount}",
+                        ).format(amount=texts.format_price(price_difference)),
+                    ]
+                )
+        else:
+            success_parts = [
+                texts.t(
+                    "SUBSCRIPTION_SWITCH_TRAFFIC_DECREASE_TITLE",
+                    "✅ Лимит трафика уменьшен!",
+                ),
+                "",
+                change_line,
+                "",
+                texts.t(
+                    "SUBSCRIPTION_SWITCH_TRAFFIC_NO_REFUND",
+                    "ℹ️ Возврат средств не производится",
+                ),
+            ]
+
+        success_text = "\n".join(part for part in success_parts if part is not None)
 
         await callback.message.edit_text(
             success_text,
@@ -5552,12 +5754,16 @@ def get_traffic_switch_keyboard(
 ) -> InlineKeyboardMarkup:
     from app.config import settings
 
+    texts = get_texts(language)
     months_multiplier = 1
     period_text = ""
     if subscription_end_date:
         months_multiplier = get_remaining_months(subscription_end_date)
         if months_multiplier > 1:
-            period_text = f" (за {months_multiplier} мес)"
+            period_text = texts.t(
+                "SUBSCRIPTION_TRAFFIC_PERIOD_SUFFIX",
+                " за {months} мес",
+            ).format(months=months_multiplier)
 
     packages = settings.get_traffic_packages()
     enabled_packages = [pkg for pkg in packages if pkg['enabled']]
@@ -5583,34 +5789,57 @@ def get_traffic_switch_keyboard(
 
         if gb == current_traffic_gb:
             emoji = "✅"
-            action_text = " (текущий)"
-            price_text = ""
+            suffix = texts.t(
+                "SUBSCRIPTION_TRAFFIC_OPTION_CURRENT",
+                " (текущий)",
+            )
         elif total_price_diff > 0:
             emoji = "⬆️"
-            action_text = ""
-            price_text = f" (+{total_price_diff // 100}₽{period_text})"
+            suffix = texts.t(
+                "SUBSCRIPTION_TRAFFIC_OPTION_PRICE_UP",
+                " (+{amount}{period})",
+            ).format(
+                amount=texts.format_price(total_price_diff),
+                period=period_text,
+            )
             if discount_percent > 0:
                 discount_total = (
-                        (price_per_month - current_price_per_month) * months_multiplier
-                        - total_price_diff
+                    (price_per_month - current_price_per_month) * months_multiplier
+                    - total_price_diff
                 )
                 if discount_total > 0:
-                    price_text += f" (скидка {discount_percent}%: -{discount_total // 100}₽)"
+                    suffix += texts.t(
+                        "SUBSCRIPTION_TRAFFIC_OPTION_DISCOUNT",
+                        " (скидка {percent}%: -{amount})",
+                    ).format(
+                        percent=discount_percent,
+                        amount=texts.format_price(discount_total),
+                    )
         elif total_price_diff < 0:
             emoji = "⬇️"
-            action_text = ""
-            price_text = " (без возврата)"
+            suffix = texts.t(
+                "SUBSCRIPTION_TRAFFIC_OPTION_NO_REFUND",
+                " (без возврата)",
+            )
         else:
             emoji = "🔄"
-            action_text = ""
-            price_text = " (бесплатно)"
+            suffix = texts.t(
+                "SUBSCRIPTION_TRAFFIC_OPTION_FREE",
+                " (бесплатно)",
+            )
 
         if gb == 0:
-            traffic_text = "Безлимит"
+            traffic_text = texts.t(
+                "SUBSCRIPTION_TRAFFIC_OPTION_UNLIMITED",
+                "Безлимит",
+            )
         else:
-            traffic_text = f"{gb} ГБ"
+            traffic_text = texts.t(
+                "SUBSCRIPTION_TRAFFIC_OPTION_LIMITED",
+                "{gb} ГБ",
+            ).format(gb=gb)
 
-        button_text = f"{emoji} {traffic_text}{action_text}{price_text}"
+        button_text = f"{emoji} {traffic_text}{suffix}"
 
         buttons.append([
             InlineKeyboardButton(text=button_text, callback_data=f"switch_traffic_{gb}")
@@ -5618,7 +5847,7 @@ def get_traffic_switch_keyboard(
 
     buttons.append([
         InlineKeyboardButton(
-            text="⬅️ Назад" if language == "ru" else "⬅️ Back",
+            text=texts.BACK,
             callback_data="subscription_settings"
         )
     ])
@@ -5631,16 +5860,17 @@ def get_confirm_switch_traffic_keyboard(
         price_difference: int,
         language: str = "ru"
 ) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="✅ Подтвердить переключение",
+                text=texts.CONFIRM_CHANGE_BUTTON,
                 callback_data=f"confirm_switch_traffic_{new_traffic_gb}_{price_difference}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="❌ Отмена",
+                text=texts.CANCEL,
                 callback_data="subscription_settings"
             )
         ]
