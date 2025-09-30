@@ -4,6 +4,7 @@ import html
 import contextlib
 from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
@@ -151,24 +152,6 @@ async def toggle_sla(callback: types.CallbackQuery, db_user: User, db: AsyncSess
     SupportSettingsService.set_sla_enabled(not current)
     await show_support_settings(callback, db_user, db)
 
-
-from app.states import SupportSettingsStates
-
-@admin_required
-@error_handler
-async def start_set_sla_minutes(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    await callback.message.edit_text(
-        "⏳ <b>Настройка SLA</b>\n\nВведите количество минут ожидания ответа (целое число > 0):",
-        parse_mode="HTML",
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_support_settings")]]
-        )
-    )
-    await state.set_state(SupportSettingsStates.waiting_for_desc)  # temporary reuse replaced below
-    # we'll manage separate state below
-
-
-from aiogram.fsm.state import State, StatesGroup
 
 class SupportAdvancedStates(StatesGroup):
     waiting_for_sla_minutes = State()

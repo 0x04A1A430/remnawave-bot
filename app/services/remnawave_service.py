@@ -987,15 +987,6 @@ class RemnaWaveService:
             logger.error(f"Error removing users from squad: {e}")
             return False
 
-    async def delete_squad(self, squad_uuid: str) -> bool:
-        try:
-            async with self.get_api_client() as api:
-                response = await api.delete_internal_squad(squad_uuid)
-                return response
-        except Exception as e:
-            logger.error(f"Error deleting squad: {e}")
-            return False
-
     async def get_all_inbounds(self) -> List[Dict]:
         try:
             async with self.get_api_client() as api:
@@ -1028,15 +1019,6 @@ class RemnaWaveService:
                 return True
         except Exception as e:
             logger.error(f"Error renaming squad: {e}")
-            return False
-
-    async def create_squad(self, name: str, inbound_uuids: List[str]) -> bool:
-        try:
-            async with self.get_api_client() as api:
-                squad = await api.create_internal_squad(name, inbound_uuids)
-                return squad is not None
-        except Exception as e:
-            logger.error(f"Error creating squad: {e}")
             return False
 
     async def get_node_user_usage_by_range(self, node_uuid: str, start_date, end_date) -> List[Dict[str, Any]]:
