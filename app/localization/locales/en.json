@@ -14,6 +14,7 @@
   "CHANNEL_SUBSCRIBE_BUTTON": "🔗 Subscribe",
   "CHANNEL_SUBSCRIBE_REQUIRED_ALERT": "❌ You haven't joined the channel!",
   "CHANNEL_SUBSCRIBE_THANKS": "✅ Thanks for subscribing",
+  "TRIAL_CHANNEL_UNSUBSCRIBED": "\n🚫 <b>Access paused</b>\n\nWe couldn't find your subscription to our channel, so the trial plan has been disabled.\n\nJoin the channel and tap “{check_button}” to restore access.",
   "CHECK_STATUS_BUTTON": "📊 Check status",
   "CHOOSE_ANOTHER_DEVICE": "📱 Choose another device",
   "CONFIRM": "✅ Confirm",
