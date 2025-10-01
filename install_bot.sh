@@ -502,40 +502,134 @@ $miniapp_domain {
 EOF
 }
 
+upsert_caddy_block() {
+  local caddy_file=$1
+  local config=$2
+  local label=$3
+
+  # Убираем лишние пробелы для проверки пустоты
+  local stripped
+  stripped=$(echo "$config" | tr -d ' \t\n\r')
+  if [[ -z "$stripped" ]]; then
+    return 0
+  fi
+
+  local first_line
+  first_line=$(echo "$config" | sed -n '1p')
+  local domain=${first_line%% *}
+
+  if [[ -z "$domain" ]]; then
+    print_warning "Не удалось определить домен для секции $label"
+    return 1
+  fi
+
+  local domain_marker="$domain {"
+
+  if [[ -f "$caddy_file" ]] && grep -Fq "$domain_marker" "$caddy_file"; then
+    if ! command -v python3 >/dev/null 2>&1; then
+      print_error "Python3 не найден, не могу обновить существующую конфигурацию домена $domain"
+      return 1
+    fi
+    print_info "Обновляем конфигурацию домена $domain"
+    python3 - "$caddy_file" "$domain" <<'PY'
+import os
+import sys
+
+path, domain = sys.argv[1:]
+if not os.path.exists(path):
+    sys.exit(0)
+
+with open(path, encoding="utf-8") as fh:
+    lines = fh.read().splitlines()
+
+result = []
+skip = False
+brace_level = 0
+
+for line in lines:
+    stripped = line.lstrip()
+    if not skip:
+        if stripped.startswith(domain) and stripped[len(domain):].lstrip().startswith('{'):
+            skip = True
+            brace_level = line.count('{') - line.count('}')
+            continue
+        result.append(line)
+        continue
+
+    brace_level += line.count('{') - line.count('}')
+    if brace_level <= 0:
+        skip = False
+    # Не добавляем строки из удаляемого блока
+
+text = "\n".join(result)
+if text and not text.endswith("\n"):
+    text += "\n"
+
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(text)
+PY
+  else
+    print_info "Добавляем новый домен $domain"
+  fi
+
+  # Обеспечиваем перевод строки в конце файла
+  if [[ -s "$caddy_file" ]]; then
+    if [[ $(tail -c1 "$caddy_file" 2>/dev/null || echo '') != $'\n' ]]; then
+      echo >> "$caddy_file"
+    fi
+    # Добавляем пустую строку для отделения блоков, если файл не пуст
+    local last_line
+    last_line=$(tail -n1 "$caddy_file" 2>/dev/null || echo '')
+    if [[ -n "$last_line" ]]; then
+      echo >> "$caddy_file"
+    fi
+  fi
+
+  printf '%s\n' "$config" >> "$caddy_file"
+  print_success "Конфигурация для домена $domain обновлена"
+}
+
 # Применение конфигурации Caddy
 apply_caddy_config() {
   local caddy_dir=$1
   local webhook_config=$2
   local miniapp_config=$3
-  
+  local caddy_file="$caddy_dir/Caddyfile"
+
+  mkdir -p "$caddy_dir"
+
   # Создаем резервную копию
-  if [[ -f "$caddy_dir/Caddyfile" ]]; then
-    cp "$caddy_dir/Caddyfile" "$caddy_dir/Caddyfile.backup.$(date +%Y%m%d_%H%M%S)"
+  if [[ -f "$caddy_file" ]]; then
+    cp "$caddy_file" "$caddy_dir/Caddyfile.backup.$(date +%Y%m%d_%H%M%S)"
     print_info "Резервная копия создана"
+  else
+    print_info "Создаем новый Caddyfile"
   fi
-  
-  # Записываем новую конфигурацию
-  cat > "$caddy_dir/Caddyfile" <<EOF
+
+  # Инициализируем файл, если он пустой
+  if [[ ! -s "$caddy_file" ]]; then
+    cat > "$caddy_file" <<EOF
 # Caddy configuration for Remnawave Bot
-# Generated: $(date)
+# Managed by install_bot.sh
 
-$webhook_config
-
-$miniapp_config
 EOF
-  
-  print_success "Конфигурация записана в $caddy_dir/Caddyfile"
-  
+  fi
+
+  upsert_caddy_block "$caddy_file" "$webhook_config" "webhook"
+  upsert_caddy_block "$caddy_file" "$miniapp_config" "miniapp"
+
+  print_success "Конфигурация записана в $caddy_file"
+
   # Перезагружаем Caddy
   print_info "Перезагружаем Caddy..."
   local caddy_container
   caddy_container=$(docker ps --filter "name=caddy" --format "{{.Names}}" | head -n1)
-  
+
   if [[ -n "$caddy_container" ]]; then
     # Сначала проверяем конфигурацию
     if docker exec "$caddy_container" caddy validate --config /etc/caddy/Caddyfile 2>/dev/null; then
       print_success "Конфигурация валидна"
-      
+
       # Перезагружаем
       if docker exec "$caddy_container" caddy reload --config /etc/caddy/Caddyfile 2>/dev/null; then
         print_success "Caddy перезагружен успешно"
@@ -548,7 +642,7 @@ EOF
     else
       print_error "Ошибка валидации конфигурации Caddy"
       print_warning "Восстанавливаем предыдущую конфигурацию..."
-      
+
       # Находим последний бэкап
       local last_backup
       last_backup=$(ls -t "$caddy_dir"/Caddyfile.backup.* 2>/dev/null | head -n1)
@@ -560,7 +654,7 @@ EOF
     fi
   else
     print_error "Caddy контейнер не найден или не запущен"
-    print_info "Попробуйте запустить: docker start $caddy_container"
+    print_info "Попробуйте запустить: docker start caddy"
     return 1
   fi
 }
