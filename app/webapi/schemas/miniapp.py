@@ -31,6 +31,19 @@ class MiniAppSubscriptionUser(BaseModel):
     has_active_subscription: bool = False
 
 
+class MiniAppTransaction(BaseModel):
+    id: int
+    type: str
+    amount_kopeks: int
+    amount_rubles: float
+    description: Optional[str] = None
+    payment_method: Optional[str] = None
+    external_id: Optional[str] = None
+    is_completed: bool
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: int
@@ -44,4 +57,9 @@ class MiniAppSubscriptionResponse(BaseModel):
     happ: Optional[Dict[str, Any]] = None
     happ_link: Optional[str] = None
     happ_crypto_link: Optional[str] = None
+    happ_cryptolink_redirect_link: Optional[str] = None
+    balance_kopeks: int = 0
+    balance_rubles: float = 0.0
+    balance_currency: Optional[str] = None
+    transactions: List[MiniAppTransaction] = Field(default_factory=list)
 
