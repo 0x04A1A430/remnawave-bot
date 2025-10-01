@@ -230,6 +230,39 @@
             margin-bottom: 0;
         }
 
+        .device-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .device-item {
+            padding: 12px;
+            background: white;
+            border-radius: 10px;
+            font-size: 13px;
+            color: var(--text-primary);
+            box-shadow: inset 0 0 0 1px var(--border-color);
+            margin-bottom: 8px;
+        }
+
+        .device-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .device-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .device-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
         /* User Info */
         .user-header {
             display: flex;
@@ -302,7 +335,7 @@
         /* Stats Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
             gap: 12px;
             margin-bottom: 12px;
         }
@@ -606,6 +639,10 @@
                         <div class="stat-value" id="serversCount">-</div>
                         <div class="stat-label" data-i18n="stats.servers">Servers</div>
                     </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="devicesCount">-</div>
+                        <div class="stat-label" data-i18n="stats.devices">Devices</div>
+                    </div>
                 </div>
 
                 <div class="info-item">
@@ -619,6 +656,22 @@
                 <div class="info-item">
                     <span class="info-label" data-i18n="info.traffic_limit">Traffic Limit</span>
                     <span class="info-value" id="trafficLimit">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label" data-i18n="info.subscription_type">Subscription Type</span>
+                    <span class="info-value" id="subscriptionType">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label" data-i18n="info.promo_group">Promo Group</span>
+                    <span class="info-value" id="promoGroup">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label" data-i18n="info.device_limit">Device Limit</span>
+                    <span class="info-value" id="deviceLimit">-</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label" data-i18n="info.autopay">Auto-Pay</span>
+                    <span class="info-value" id="autopayStatus">-</span>
                 </div>
             </div>
 
@@ -658,6 +711,12 @@
                 <div class="card-title" data-i18n="card.servers.title">Connected Servers</div>
                 <ul class="server-list" id="serversList"></ul>
                 <div class="empty-state hidden" id="serversEmpty" data-i18n="servers.empty">No servers connected yet</div>
+            </div>
+
+            <div class="card" id="devicesCard">
+                <div class="card-title" data-i18n="card.devices.title">Connected Devices</div>
+                <ul class="device-list" id="devicesList"></ul>
+                <div class="empty-state hidden" id="devicesEmpty" data-i18n="devices.empty">No devices connected yet</div>
             </div>
 
             <!-- App Installation Section -->
@@ -716,15 +775,21 @@
                 'error.default.message': 'Please contact support to activate your subscription.',
                 'stats.days_left': 'Days left',
                 'stats.servers': 'Servers',
+                'stats.devices': 'Devices',
                 'info.expires': 'Expires',
                 'info.traffic_used': 'Traffic used',
                 'info.traffic_limit': 'Traffic limit',
+                'info.subscription_type': 'Subscription type',
+                'info.promo_group': 'Promo group',
+                'info.device_limit': 'Device limit',
+                'info.autopay': 'Auto-pay',
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
                 'card.balance.title': 'Balance',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
+                'card.devices.title': 'Connected Devices',
                 'apps.title': 'Installation guide',
                 'apps.no_data': 'No installation guide available for this platform yet.',
                 'apps.featured': 'Recommended',
@@ -740,6 +805,7 @@
                 'history.type.refund': 'Refund',
                 'history.type.referral_reward': 'Referral reward',
                 'servers.empty': 'No servers connected yet',
+                'devices.empty': 'No devices connected yet',
                 'language.ariaLabel': 'Select interface language',
                 'notifications.copy.success': 'Subscription link copied to clipboard.',
                 'notifications.copy.failure': 'Unable to copy the subscription link automatically. Please copy it manually.',
@@ -750,12 +816,17 @@
                 'status.expired': 'Expired',
                 'status.disabled': 'Disabled',
                 'status.unknown': 'Unknown',
+                'subscription.type.trial': 'Trial',
+                'subscription.type.paid': 'Paid',
+                'autopay.enabled': 'Enabled',
+                'autopay.disabled': 'Disabled',
                 'platform.ios': 'iOS',
                 'platform.android': 'Android',
                 'platform.pc': 'PC',
                 'platform.tv': 'TV',
                 'units.gb': 'GB',
-                'values.unlimited': 'Unlimited'
+                'values.unlimited': 'Unlimited',
+                'values.not_available': 'Not available'
             },
             ru: {
                 'app.title': 'Подписка VPN',
@@ -766,15 +837,21 @@
                 'error.default.message': 'Свяжитесь с поддержкой, чтобы активировать подписку.',
                 'stats.days_left': 'Осталось дней',
                 'stats.servers': 'Серверы',
+                'stats.devices': 'Устройства',
                 'info.expires': 'Действует до',
                 'info.traffic_used': 'Использовано трафика',
                 'info.traffic_limit': 'Лимит трафика',
+                'info.subscription_type': 'Тип подписки',
+                'info.promo_group': 'Промогруппа',
+                'info.device_limit': 'Лимит устройств',
+                'info.autopay': 'Автоплатеж',
                 'button.connect.default': 'Подключиться к VPN',
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
                 'card.balance.title': 'Баланс',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
+                'card.devices.title': 'Подключенные устройства',
                 'apps.title': 'Инструкция по установке',
                 'apps.no_data': 'Для этой платформы инструкция пока недоступна.',
                 'apps.featured': 'Рекомендуем',
@@ -790,6 +867,7 @@
                 'history.type.refund': 'Возврат',
                 'history.type.referral_reward': 'Реферальное вознаграждение',
                 'servers.empty': 'Подключённых серверов пока нет',
+                'devices.empty': 'Подключённых устройств пока нет',
                 'language.ariaLabel': 'Выберите язык интерфейса',
                 'notifications.copy.success': 'Ссылка подписки скопирована.',
                 'notifications.copy.failure': 'Не удалось автоматически скопировать ссылку. Пожалуйста, сделайте это вручную.',
@@ -800,12 +878,17 @@
                 'status.expired': 'Истекла',
                 'status.disabled': 'Отключена',
                 'status.unknown': 'Неизвестно',
+                'subscription.type.trial': 'Триал',
+                'subscription.type.paid': 'Платная',
+                'autopay.enabled': 'Включен',
+                'autopay.disabled': 'Выключен',
                 'platform.ios': 'iOS',
                 'platform.android': 'Android',
                 'platform.pc': 'ПК',
-                'platform.tv': 'TV',
+                'platform.tv': 'ТВ',
                 'units.gb': 'ГБ',
-                'values.unlimited': 'Безлимит'
+                'values.unlimited': 'Безлимит',
+                'values.not_available': 'Недоступно'
             }
         };
 
@@ -1087,19 +1170,74 @@
 
             const serversCount = Array.isArray(userData.connected_squads)
                 ? userData.connected_squads.length
-                : Array.isArray(userData.links)
-                    ? userData.links.length
-                    : 0;
+                : Array.isArray(userData.connected_servers)
+                    ? userData.connected_servers.length
+                    : Array.isArray(userData.links)
+                        ? userData.links.length
+                        : 0;
             document.getElementById('serversCount').textContent = serversCount;
+
+            const devicesCountRaw = Number(userData?.connected_devices_count);
+            const devicesCount = Number.isFinite(devicesCountRaw)
+                ? devicesCountRaw
+                : Array.isArray(userData?.connected_devices)
+                    ? userData.connected_devices.length
+                    : 0;
+            const devicesCountElement = document.getElementById('devicesCount');
+            if (devicesCountElement) {
+                devicesCountElement.textContent = devicesCount;
+            }
 
             document.getElementById('trafficUsed').textContent =
                 user.traffic_used_label || formatTraffic(user.traffic_used_gb);
             document.getElementById('trafficLimit').textContent =
                 user.traffic_limit_label || formatTrafficLimit(user.traffic_limit_gb);
 
+            const deviceLimitElement = document.getElementById('deviceLimit');
+            if (deviceLimitElement) {
+                const limitValue = typeof user.device_limit === 'number'
+                    ? user.device_limit
+                    : Number.parseInt(user.device_limit ?? '', 10);
+                deviceLimitElement.textContent = Number.isFinite(limitValue)
+                    ? String(limitValue)
+                    : t('values.not_available');
+            }
+
+            const subscriptionTypeElement = document.getElementById('subscriptionType');
+            if (subscriptionTypeElement) {
+                const fallbackSubscriptionType = (user?.subscription_status || '').toLowerCase() === 'trial'
+                    ? 'trial'
+                    : 'paid';
+                const subscriptionTypeRaw = String(
+                    userData?.subscription_type
+                    || fallbackSubscriptionType
+                ).toLowerCase();
+                const subscriptionTypeKey = `subscription.type.${subscriptionTypeRaw}`;
+                const subscriptionTypeLabel = t(subscriptionTypeKey);
+                subscriptionTypeElement.textContent = subscriptionTypeLabel === subscriptionTypeKey
+                    ? subscriptionTypeRaw
+                    : subscriptionTypeLabel;
+            }
+
+            const promoGroupElement = document.getElementById('promoGroup');
+            if (promoGroupElement) {
+                const promoGroupName = userData?.promo_group?.name || user?.promo_group?.name;
+                promoGroupElement.textContent = promoGroupName || t('values.not_available');
+            }
+
+            const autopayElement = document.getElementById('autopayStatus');
+            if (autopayElement) {
+                const autopayKey = userData?.autopay_enabled ? 'autopay.enabled' : 'autopay.disabled';
+                const autopayLabel = t(autopayKey);
+                autopayElement.textContent = autopayLabel === autopayKey
+                    ? (userData?.autopay_enabled ? 'On' : 'Off')
+                    : autopayLabel;
+            }
+
             renderBalanceSection();
             renderTransactionHistory();
             renderServersList();
+            renderDevicesList();
             updateConnectButtonLabel();
             updateActionButtons();
         }
@@ -1432,7 +1570,16 @@
                 return;
             }
 
-            const servers = Array.isArray(userData?.connected_squads) ? userData.connected_squads : [];
+            let servers = [];
+            if (Array.isArray(userData?.connected_servers) && userData.connected_servers.length) {
+                servers = userData.connected_servers.map(server => ({
+                    uuid: server?.uuid || '',
+                    name: server?.name || server?.uuid || '',
+                }));
+            } else if (Array.isArray(userData?.connected_squads)) {
+                servers = userData.connected_squads.map(uuid => ({ uuid, name: uuid }));
+            }
+
             if (!servers.length) {
                 list.innerHTML = '';
                 emptyState.textContent = t('servers.empty');
@@ -1441,7 +1588,63 @@
             }
 
             emptyState.classList.add('hidden');
-            list.innerHTML = servers.map(server => `<li class="server-item">${escapeHtml(server)}</li>`).join('');
+            list.innerHTML = servers
+                .map(server => `<li class="server-item">${escapeHtml(server.name || server.uuid || '')}</li>`)
+                .join('');
+        }
+
+        function renderDevicesList() {
+            const list = document.getElementById('devicesList');
+            const emptyState = document.getElementById('devicesEmpty');
+            if (!list || !emptyState) {
+                return;
+            }
+
+            const devices = Array.isArray(userData?.connected_devices)
+                ? userData.connected_devices
+                : [];
+
+            if (!devices.length) {
+                list.innerHTML = '';
+                emptyState.textContent = t('devices.empty');
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            list.innerHTML = devices.map(device => {
+                const platform = device?.platform ? String(device.platform) : '';
+                const model = device?.device_model ? String(device.device_model) : '';
+                const titleParts = [platform, model].filter(Boolean);
+                const title = titleParts.length
+                    ? titleParts.join(' — ')
+                    : t('values.not_available');
+
+                const metaParts = [];
+                if (device?.app_version) {
+                    metaParts.push(String(device.app_version));
+                }
+                if (device?.last_seen) {
+                    const formatted = formatDateTime(device.last_seen);
+                    if (formatted) {
+                        metaParts.push(formatted);
+                    }
+                }
+                if (device?.last_ip) {
+                    metaParts.push(String(device.last_ip));
+                }
+
+                const metaHtml = metaParts.length
+                    ? `<div class="device-meta">${metaParts.map(part => `<span>${escapeHtml(part)}</span>`).join('')}</div>`
+                    : '';
+
+                return `
+                    <li class="device-item">
+                        <div class="device-title">${escapeHtml(title)}</div>
+                        ${metaHtml}
+                    </li>
+                `;
+            }).join('');
         }
 
         function getCurrentSubscriptionUrl() {
