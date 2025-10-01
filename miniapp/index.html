@@ -1203,7 +1203,7 @@
                     class="btn btn-primary hidden"
                     type="button"
                     data-i18n="button.buy_subscription"
-                >Buy Subscription</button>
+                >Buy subscription</button>
             </div>
         </div>
 
@@ -1541,7 +1541,7 @@
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
-                'button.buy_subscription': 'Buy Subscription',
+                'button.buy_subscription': 'Buy subscription',
                 'card.balance.title': 'Balance',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
@@ -1604,7 +1604,7 @@
                 'button.connect.default': 'Подключиться к VPN',
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
-                'button.buy_subscription': 'Buy Subscription',
+                'button.buy_subscription': 'Купить подписку',
                 'card.balance.title': 'Баланс',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
@@ -2621,23 +2621,6 @@
             window.location.href = link;
         }
 
-        function openInMiniApp(link) {
-            if (!link) {
-                return;
-            }
-
-            if (typeof tg.openLink === 'function') {
-                try {
-                    tg.openLink(link, { try_instant_view: false });
-                    return;
-                } catch (error) {
-                    console.warn('tg.openLink failed:', error);
-                }
-            }
-
-            window.location.href = link;
-        }
-
         function updateActionButtons() {
             const connectBtn = document.getElementById('connectBtn');
             const copyBtn = document.getElementById('copyBtn');
@@ -2715,7 +2698,7 @@
             if (!link) {
                 return;
             }
-            openInMiniApp(link);
+            openExternalLink(link);
         });
 
         init();
