@@ -314,6 +314,17 @@
             line-height: 1.6;
         }
 
+        .error-actions {
+            margin-top: 24px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .error-actions .btn {
+            width: auto;
+            min-width: 220px;
+        }
+
         /* Cards */
         .card {
             background: var(--bg-secondary);
@@ -1186,6 +1197,14 @@
             <div class="error-icon">⚠️</div>
             <div class="error-title" id="errorTitle" data-i18n="error.default.title">Subscription Not Found</div>
             <div class="error-text" id="errorText" data-i18n="error.default.message">Please contact support to activate your subscription</div>
+            <div class="error-actions">
+                <button
+                    id="purchaseBtn"
+                    class="btn btn-primary hidden"
+                    type="button"
+                    data-i18n="button.buy_subscription"
+                >Buy subscription</button>
+            </div>
         </div>
 
         <!-- Main Content -->
@@ -1522,6 +1541,7 @@
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
+                'button.buy_subscription': 'Buy subscription',
                 'card.balance.title': 'Balance',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
@@ -1584,6 +1604,7 @@
                 'button.connect.default': 'Подключиться к VPN',
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
+                'button.buy_subscription': 'Купить подписку',
                 'card.balance.title': 'Баланс',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
@@ -1698,6 +1719,8 @@
         let userData = null;
         let appsConfig = {};
         let currentPlatform = 'android';
+        let configPurchaseUrl = null;
+        let subscriptionPurchaseUrl = null;
         let preferredLanguage = 'en';
         let languageLockedByUser = false;
         let currentErrorState = null;
@@ -1761,6 +1784,31 @@
             return div.innerHTML;
         }
 
+        function normalizeUrl(value) {
+            if (typeof value !== 'string') {
+                return null;
+            }
+            const trimmed = value.trim();
+            return trimmed.length ? trimmed : null;
+        }
+
+        function getEffectivePurchaseUrl() {
+            const candidates = [
+                currentErrorState?.purchaseUrl,
+                subscriptionPurchaseUrl,
+                configPurchaseUrl,
+            ];
+
+            for (const candidate of candidates) {
+                const normalized = normalizeUrl(candidate);
+                if (normalized) {
+                    return normalized;
+                }
+            }
+
+            return null;
+        }
+
         function updateErrorTexts() {
             const titleElement = document.getElementById('errorTitle');
             const textElement = document.getElementById('errorText');
@@ -1771,6 +1819,13 @@
             const message = currentErrorState?.message || t('error.default.message');
             titleElement.textContent = title;
             textElement.textContent = message;
+
+            const purchaseButton = document.getElementById('purchaseBtn');
+            if (purchaseButton) {
+                const link = getEffectivePurchaseUrl();
+                purchaseButton.classList.toggle('hidden', !link);
+                purchaseButton.disabled = !link;
+            }
         }
 
         function applyTranslations() {
@@ -1887,22 +1942,55 @@
                         ? 'Authorization failed. Please open the mini app from Telegram.'
                         : 'Subscription not found';
                     let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
+                    let purchaseUrl = null;
 
                     try {
                         const errorPayload = await response.json();
                         if (errorPayload?.detail) {
-                            detail = errorPayload.detail;
+                            if (typeof errorPayload.detail === 'string') {
+                                detail = errorPayload.detail;
+                            } else if (typeof errorPayload.detail === 'object') {
+                                if (typeof errorPayload.detail.message === 'string') {
+                                    detail = errorPayload.detail.message;
+                                }
+                                purchaseUrl = errorPayload.detail.purchase_url
+                                    || errorPayload.detail.purchaseUrl
+                                    || purchaseUrl;
+                            }
+                        } else if (typeof errorPayload?.message === 'string') {
+                            detail = errorPayload.message;
                         }
+
+                        if (typeof errorPayload?.title === 'string') {
+                            title = errorPayload.title;
+                        }
+
+                        purchaseUrl = purchaseUrl
+                            || errorPayload?.purchase_url
+                            || errorPayload?.purchaseUrl
+                            || null;
                     } catch (parseError) {
                         // ignore
                     }
 
-                    throw createError(title, detail, response.status);
+                    const errorObject = createError(title, detail, response.status);
+                    const normalizedPurchaseUrl = normalizeUrl(purchaseUrl);
+                    if (normalizedPurchaseUrl) {
+                        errorObject.purchaseUrl = normalizedPurchaseUrl;
+                    }
+                    throw errorObject;
                 }
 
                 userData = await response.json();
                 userData.subscriptionUrl = userData.subscription_url || null;
                 userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
+                subscriptionPurchaseUrl = normalizeUrl(
+                    userData.subscription_purchase_url
+                    || userData.subscriptionPurchaseUrl
+                );
+                if (subscriptionPurchaseUrl) {
+                    userData.subscriptionPurchaseUrl = subscriptionPurchaseUrl;
+                }
                 if (userData.branding) {
                     applyBrandingOverrides(userData.branding);
                 }
@@ -1940,6 +2028,21 @@
 
                 const data = await response.json();
                 appsConfig = data?.platforms || {};
+
+                const configData = data?.config || {};
+                const configUrl = normalizeUrl(
+                    configData.subscriptionPurchaseUrl
+                    || configData.subscription_purchase_url
+                    || configData.purchaseUrl
+                    || configData.purchase_url
+                    || configData.miniappPurchaseUrl
+                    || configData.miniapp_purchase_url
+                    || data?.subscriptionPurchaseUrl
+                    || data?.subscription_purchase_url
+                );
+                if (configUrl) {
+                    configPurchaseUrl = configUrl;
+                }
             } catch (error) {
                 console.warn('Unable to load apps configuration:', error);
                 appsConfig = {};
@@ -2554,6 +2657,7 @@
             currentErrorState = {
                 title: error?.title,
                 message: error?.message,
+                purchaseUrl: normalizeUrl(error?.purchaseUrl) || null,
             };
             updateErrorTexts();
             document.getElementById('errorState').classList.remove('hidden');
@@ -2587,6 +2691,14 @@
                 console.warn('Clipboard copy failed:', error);
                 showPopup(t('notifications.copy.failure'), t('notifications.copy.title.failure'));
             }
+        });
+
+        document.getElementById('purchaseBtn')?.addEventListener('click', () => {
+            const link = getEffectivePurchaseUrl();
+            if (!link) {
+                return;
+            }
+            openExternalLink(link);
         });
 
         init();
