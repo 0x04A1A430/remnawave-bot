@@ -24,8 +24,6 @@ from app.utils.telegram_webapp import (
 
 from ..dependencies import get_db_session
 from ..schemas.miniapp import (
-    MiniAppBranding,
-    MiniAppConfigResponse,
     MiniAppConnectedServer,
     MiniAppDevice,
     MiniAppPromoGroup,
@@ -260,16 +258,6 @@ async def _load_subscription_links(
     return payload
 
 
-@router.get("/config", response_model=MiniAppConfigResponse)
-async def get_miniapp_config() -> MiniAppConfigResponse:
-    branding_data = settings.get_miniapp_branding()
-    branding = MiniAppBranding(**branding_data) if branding_data else None
-    return MiniAppConfigResponse(
-        branding=branding,
-        subscription_purchase_url=settings.get_miniapp_purchase_url(),
-    )
-
-
 @router.post("/subscription", response_model=MiniAppSubscriptionResponse)
 async def get_subscription_details(
     payload: MiniAppSubscriptionRequest,
@@ -395,7 +383,6 @@ async def get_subscription_details(
         else None,
         subscription_type="trial" if subscription.is_trial else "paid",
         autopay_enabled=bool(subscription.autopay_enabled),
-        subscription_purchase_url=settings.get_miniapp_purchase_url(),
         branding=settings.get_miniapp_branding(),
     )
 
