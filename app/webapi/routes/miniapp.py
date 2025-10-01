@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.models import Subscription, Transaction
 from app.services.subscription_service import SubscriptionService
@@ -19,6 +20,7 @@ from app.utils.telegram_webapp import (
 
 from ..dependencies import get_db_session
 from ..schemas.miniapp import (
+    MiniAppConnectedDevices,
     MiniAppSubscriptionRequest,
     MiniAppSubscriptionResponse,
     MiniAppSubscriptionUser,
@@ -134,6 +136,88 @@ async def _load_subscription_links(
     return payload
 
 
+async def _load_connected_servers(
+    db: AsyncSession,
+    squad_uuids: List[str],
+) -> List[Dict[str, str]]:
+    if not squad_uuids:
+        return []
+
+    servers: List[Dict[str, str]] = []
+    seen: Set[str] = set()
+
+    for raw_uuid in squad_uuids:
+        if not isinstance(raw_uuid, str):
+            continue
+
+        uuid = raw_uuid.strip()
+        if not uuid or uuid in seen:
+            continue
+        seen.add(uuid)
+
+        display_name = uuid
+
+        try:
+            server = await get_server_squad_by_uuid(db, uuid)
+        except Exception as error:  # pragma: no cover - defensive logging
+            logger.warning("Failed to load server squad %s: %s", uuid, error)
+            server = None
+
+        if server:
+            display_name = (
+                getattr(server, "display_name", None)
+                or getattr(server, "original_name", None)
+                or uuid
+            )
+
+        servers.append({"uuid": uuid, "display_name": display_name})
+
+    return servers
+
+
+async def _load_connected_devices_info(user) -> MiniAppConnectedDevices:
+    connected = MiniAppConnectedDevices(count=None, limit=None)
+
+    subscription = getattr(user, "subscription", None)
+    if subscription is not None:
+        connected.limit = getattr(subscription, "device_limit", None)
+
+    if not getattr(user, "remnawave_uuid", None):
+        return connected
+
+    if not _is_remnawave_configured():
+        return connected
+
+    try:
+        service = SubscriptionService()
+        async with service.api as api:
+            devices_info = await api.get_user_devices(user.remnawave_uuid)
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.warning(
+            "Failed to load connected devices for user %s: %s",
+            getattr(user, "telegram_id", "unknown"),
+            error,
+        )
+        return connected
+
+    if not devices_info:
+        connected.count = 0
+        return connected
+
+    total = devices_info.get("total")
+    if total is None:
+        devices = devices_info.get("devices")
+        if isinstance(devices, list):
+            total = len(devices)
+
+    try:
+        connected.count = int(total) if total is not None else None
+    except (TypeError, ValueError):  # pragma: no cover - defensive logging
+        connected.count = None
+
+    return connected
+
+
 @router.post("/subscription", response_model=MiniAppSubscriptionResponse)
 async def get_subscription_details(
     payload: MiniAppSubscriptionRequest,
@@ -186,6 +270,10 @@ async def get_subscription_details(
     happ_redirect_link = get_happ_cryptolink_redirect_link(subscription_crypto_link)
 
     connected_squads: List[str] = list(subscription.connected_squads or [])
+    connected_servers = await _load_connected_servers(db, connected_squads)
+    connected_devices = await _load_connected_devices_info(user)
+    if connected_devices.limit is None:
+        connected_devices.limit = subscription.device_limit
     links: List[str] = links_payload.get("links") or connected_squads
     ss_conf_links: Dict[str, str] = links_payload.get("ss_conf_links") or {}
 
@@ -201,6 +289,21 @@ async def get_subscription_details(
     balance_currency = getattr(user, "balance_currency", None)
     if isinstance(balance_currency, str):
         balance_currency = balance_currency.upper()
+
+    promo_group_payload = None
+    if user.promo_group:
+        promo_group_payload = {
+            "id": user.promo_group.id,
+            "name": user.promo_group.name,
+            "server_discount_percent": user.promo_group.server_discount_percent,
+            "traffic_discount_percent": user.promo_group.traffic_discount_percent,
+            "device_discount_percent": user.promo_group.device_discount_percent,
+            "apply_discounts_to_addons": getattr(
+                user.promo_group,
+                "apply_discounts_to_addons",
+                True,
+            ),
+        }
 
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
@@ -228,6 +331,9 @@ async def get_subscription_details(
         traffic_limit_label=_format_limit_label(traffic_limit),
         lifetime_used_traffic_gb=lifetime_used,
         has_active_subscription=status_actual in {"active", "trial"},
+        is_trial=bool(subscription.is_trial),
+        subscription_type="trial" if subscription.is_trial else "paid",
+        promo_group=promo_group_payload,
     )
 
     return MiniAppSubscriptionResponse(
@@ -239,6 +345,8 @@ async def get_subscription_details(
         links=links,
         ss_conf_links=ss_conf_links,
         connected_squads=connected_squads,
+        connected_servers=connected_servers,
+        connected_devices=connected_devices,
         happ=links_payload.get("happ"),
         happ_link=links_payload.get("happ_link"),
         happ_crypto_link=links_payload.get("happ_crypto_link"),
@@ -247,5 +355,7 @@ async def get_subscription_details(
         balance_rubles=round(user.balance_rubles, 2),
         balance_currency=balance_currency,
         transactions=[_serialize_transaction(tx) for tx in transactions],
+        autopay_enabled=bool(subscription.autopay_enabled),
+        autopay_days_before=subscription.autopay_days_before,
     )
 
