@@ -892,6 +892,72 @@
             }
         };
 
+        function applyBrandingOverrides(branding) {
+            if (!branding || typeof branding !== 'object') {
+                return;
+            }
+
+            const {
+                service_name: rawServiceName = {},
+                service_description: rawServiceDescription = {}
+            } = branding;
+
+            function normalizeMap(map) {
+                const normalized = {};
+                Object.entries(map || {}).forEach(([lang, value]) => {
+                    if (typeof value !== 'string') {
+                        return;
+                    }
+                    const trimmed = value.trim();
+                    if (!trimmed) {
+                        return;
+                    }
+                    normalized[lang.toLowerCase()] = trimmed;
+                });
+                return normalized;
+            }
+
+            function applyKey(key, map) {
+                const normalized = normalizeMap(map);
+                if (!Object.keys(normalized).length) {
+                    return;
+                }
+
+                const defaultValue = normalized.default
+                    || normalized.en
+                    || normalized.ru
+                    || null;
+
+                const languages = new Set(
+                    Object.keys(translations).map(lang => lang.toLowerCase())
+                );
+
+                Object.keys(normalized).forEach(lang => {
+                    if (lang !== 'default') {
+                        languages.add(lang);
+                    }
+                });
+
+                languages.forEach(lang => {
+                    const value = Object.prototype.hasOwnProperty.call(normalized, lang)
+                        ? normalized[lang]
+                        : defaultValue;
+                    if (!value) {
+                        return;
+                    }
+                    const targetLang = lang.toLowerCase();
+                    if (!translations[targetLang]) {
+                        translations[targetLang] = {};
+                    }
+                    translations[targetLang][key] = value;
+                });
+            }
+
+            applyKey('app.name', rawServiceName);
+            applyKey('app.title', rawServiceName);
+            applyKey('app.subtitle', rawServiceDescription);
+        }
+
         let userData = null;
         let appsConfig = {};
         let currentPlatform = 'android';
@@ -1100,6 +1166,9 @@
                 userData = await response.json();
                 userData.subscriptionUrl = userData.subscription_url || null;
                 userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
+                if (userData.branding) {
+                    applyBrandingOverrides(userData.branding);
+                }
 
                 const responseLanguage = resolveLanguage(userData?.user?.language);
                 if (responseLanguage && !languageLockedByUser) {
