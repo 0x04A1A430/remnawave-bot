@@ -22,14 +22,9 @@
    ```
    - `WEB_API_ALLOWED_ORIGINS` должен содержать домен, с которого будет открываться мини-приложение.
    - `WEB_API_DEFAULT_TOKEN` создаёт bootstrap-токен для запросов от страницы. Его можно заменить на токен, созданный через `POST /tokens`.
-3. Если используете RemnaWave, убедитесь, что заданы `REMNAWAVE_API_URL` и `REMNAWAVE_API_KEY`, чтобы в мини-приложении отображались дополнительные ссылки подписки.
 
 ## 3. Запуск административного API
 
-API можно запускать вместе с ботом (`python main.py`) или отдельно для тестов:
-```bash
-uvicorn app.webapi.app:create_web_api_app --host 0.0.0.0 --port 8080
-```
 После старта проверьте доступность:
 ```bash
 curl -H "X-API-Key: super-secret-token" https://miniapp.example.com/miniapp/health || \
@@ -38,20 +33,14 @@ curl -H "X-API-Key: super-secret-token" http://127.0.0.1:8080/health
 
 ## 4. Подготовка статических файлов
 
-1. Скопируйте `miniapp/index.html` и `miniapp/app-config.json` на сервер, из которого nginx/Caddy будет отдавать статический контент. Например:
-   ```bash
-   sudo mkdir -p /var/www/remnawave-miniapp
-   sudo cp miniapp/index.html /var/www/remnawave-miniapp/
-   sudo cp app-config.json /var/www/remnawave-miniapp/
-   ```
-2. При необходимости отредактируйте `app-config.json`, чтобы настроить инструкции и ссылки на нужные клиенты.
-3. Убедитесь, что файлы доступны для чтения пользователем веб-сервера.
+1. При необходимости отредактируйте `miniapp/app-config.json`, чтобы настроить инструкции и ссылки на нужные клиенты.
+2. Убедитесь, что файлы доступны для чтения пользователем веб-сервера.
 
 ## 5. Настройка кнопки в Telegram
 
-1. В `.env` уже выставлен `SERVER_STATUS_MODE=external_link_miniapp` и `SERVER_STATUS_EXTERNAL_URL=https://miniapp.example.com`.
-2. Перезапустите бота. В главном меню появится кнопка «Статус серверов», открывающая веб-приложение внутри Telegram.
-3. При необходимости задайте кастомную кнопку через `@BotFather` (команда `/setmenu` -> Web App URL).
+1. В дминке бота настраиваем параметры - Конфигурации бота - Прочее - Miniapp
+2. Перезапустите бота. 
+3. При необходимости задайте кастомную кнопку на миниапп через `@BotFather` (команда `/setmenu` -> Web App URL).
 
 ## 6. Конфигурация nginx
 
