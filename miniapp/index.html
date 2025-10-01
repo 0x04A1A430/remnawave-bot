@@ -1541,7 +1541,7 @@
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
-                'button.buy_subscription': 'Buy subscription',
+                'button.buy_subscription': 'Buy Subscription',
                 'card.balance.title': 'Balance',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
@@ -2598,8 +2598,15 @@
             return subscriptionUrl;
         }
 
-        function openExternalLink(link) {
+        function openExternalLink(link, options = {}) {
             if (!link) {
+                return;
+            }
+
+            const { openInMiniApp = false } = options;
+
+            if (openInMiniApp) {
+                window.location.href = link;
                 return;
             }
 
@@ -2698,7 +2705,7 @@
             if (!link) {
                 return;
             }
-            openExternalLink(link);
+            openExternalLink(link, { openInMiniApp: true });
         });
 
         init();
