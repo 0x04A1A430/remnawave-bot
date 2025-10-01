@@ -16,8 +16,6 @@
 !app/**
 !locales/
 !locales/**
-!scripts/
-!scripts/**
 
 # Дополнительно разрешаем README и лицензию (опционально)
 !README.md
