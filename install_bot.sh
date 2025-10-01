@@ -180,8 +180,382 @@ load_state() {
     initialize_state missing
   fi
 
+  # Проверяем наличие .env файла
+  if [[ ! -f "$INSTALL_PATH/.env" ]]; then
+    print_warning ".env файл не найден!"
+    read -rp "Выполнить первичную настройку .env? [Y/n]: " setup_env_confirm
+    if [[ "${setup_env_confirm,,}" != "n" ]]; then
+      setup_env
+    else
+      print_error "Бот не может работать без .env файла!"
+      print_info "Вы можете настроить его позже через пункт меню [9]"
+    fi
+  fi
+
   BACKUP_DIR="$INSTALL_PATH/backups"
   mkdir -p "$BACKUP_DIR"
+}
+
+# Функция проверки существования .env
+check_env_exists() {
+  [[ -f "$INSTALL_PATH/.env" ]]
+}
+
+# Функция первичной настройки .env
+setup_env() {
+  print_header "ПЕРВИЧНАЯ НАСТРОЙКА КОНФИГУРАЦИИ (.env)"
+  
+  local env_file="$INSTALL_PATH/.env"
+  
+  # Создаем резервную копию если файл существует
+  if [[ -f "$env_file" ]]; then
+    cp "$env_file" "$env_file.backup.$(date +%Y%m%d_%H%M%S)"
+    print_info "Создана резервная копия существующего .env"
+  fi
+  
+  print_section "Обязательные параметры"
+  
+  # BOT_TOKEN
+  local bot_token=""
+  while [[ -z "$bot_token" ]]; do
+    read -rp "Введите токен бота (BOT_TOKEN): " bot_token
+    if [[ -z "$bot_token" ]]; then
+      print_error "Токен бота обязателен!"
+    fi
+  done
+  
+  # ADMIN_IDS
+  local admin_ids=""
+  while [[ -z "$admin_ids" ]]; do
+    read -rp "Введите ID администраторов через запятую (ADMIN_IDS): " admin_ids
+    if [[ -z "$admin_ids" ]]; then
+      print_error "Хотя бы один ID администратора обязателен!"
+    fi
+  done
+  
+  # WEB_API_DEFAULT_TOKEN
+  local web_api_token=""
+  read -rp "Введите токен для Web API (WEB_API_DEFAULT_TOKEN, Enter для автогенерации): " web_api_token
+  if [[ -z "$web_api_token" ]]; then
+    print_warning "Токен Web API не указан, будет сгенерирован случайный"
+    web_api_token=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 64)
+    print_success "Сгенерирован токен: ${web_api_token:0:16}..."
+  fi
+  
+  # REMNAWAVE_API_URL
+  local remnawave_url=""
+  while [[ -z "$remnawave_url" ]]; do
+    read -rp "Введите URL API Remnawave (REMNAWAVE_API_URL): " remnawave_url
+    if [[ -z "$remnawave_url" ]]; then
+      print_error "URL API Remnawave обязателен!"
+    fi
+  done
+  
+  # REMNAWAVE_API_KEY
+  local remnawave_key=""
+  while [[ -z "$remnawave_key" ]]; do
+    read -rp "Введите ключ API Remnawave (REMNAWAVE_API_KEY): " remnawave_key
+    if [[ -z "$remnawave_key" ]]; then
+      print_error "Ключ API Remnawave обязателен!"
+    fi
+  done
+  
+  print_section "Дополнительные параметры авторизации"
+  
+  # Спрашиваем про тип авторизации
+  echo -e "${CYAN}[1]${NC} API Key (по умолчанию)"
+  echo -e "${CYAN}[2]${NC} Basic Auth"
+  echo ""
+  read -rp "Выберите тип авторизации [1]: " auth_choice
+  auth_choice=${auth_choice:-1}
+  
+  local auth_type="api_key"
+  local remnawave_username=""
+  local remnawave_password=""
+  local remnawave_secret=""
+  
+  if [[ "$auth_choice" == "2" ]]; then
+    auth_type="basic_auth"
+    read -rp "Введите имя пользователя для Basic Auth (REMNAWAVE_USERNAME): " remnawave_username
+    read -rsp "Введите пароль для Basic Auth (REMNAWAVE_PASSWORD): " remnawave_password
+    echo ""
+  fi
+  
+  # Secret key для панелей eGames
+  echo ""
+  read -rp "Используете панель, установленную скриптом eGames? [y/N]: " use_egames
+  if [[ "${use_egames,,}" == "y" ]]; then
+    read -rp "Введите секретный ключ в формате XXXXXXX:DDDDDDDD (REMNAWAVE_SECRET_KEY): " remnawave_secret
+  fi
+  
+  # Пароль PostgreSQL
+  local postgres_password=""
+  read -rp "Введите пароль для PostgreSQL (Enter для генерации): " postgres_password
+  if [[ -z "$postgres_password" ]]; then
+    postgres_password=$(openssl rand -base64 24 2>/dev/null || head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    print_success "Сгенерирован пароль PostgreSQL"
+  fi
+  
+  # Создаем .env файл
+  print_section "Создание .env файла"
+  
+  cat > "$env_file" <<EOF
+# Telegram Bot Configuration
+BOT_TOKEN=$bot_token
+ADMIN_IDS=$admin_ids
+
+# Web API Configuration
+WEB_API_DEFAULT_TOKEN=$web_api_token
+
+# Remnawave API Configuration
+REMNAWAVE_API_URL=$remnawave_url
+REMNAWAVE_API_KEY=$remnawave_key
+
+# Authentication Type: "api_key" or "basic_auth"
+REMNAWAVE_AUTH_TYPE=$auth_type
+EOF
+
+  if [[ "$auth_type" == "basic_auth" ]]; then
+    cat >> "$env_file" <<EOF
+
+# Basic Auth Credentials (for panels with Basic Auth)
+REMNAWAVE_USERNAME=$remnawave_username
+REMNAWAVE_PASSWORD=$remnawave_password
+EOF
+  fi
+  
+  if [[ -n "$remnawave_secret" ]]; then
+    cat >> "$env_file" <<EOF
+
+# Secret Key for eGames panels (format: XXXXXXX:DDDDDDDD)
+REMNAWAVE_SECRET_KEY=$remnawave_secret
+EOF
+  fi
+  
+  # Добавляем остальные стандартные параметры
+  cat >> "$env_file" <<EOF
+
+# Database Configuration
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=$postgres_password
+POSTGRES_DB=remnawave_bot
+
+# Redis Configuration
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# Application Settings
+NODE_ENV=production
+LOG_LEVEL=info
+EOF
+  
+  chmod 600 "$env_file"
+  print_success ".env файл создан: $env_file"
+  print_info "Конфигурация сохранена, файл защищён (права 600)"
+}
+
+# Функция редактирования .env
+edit_env() {
+  print_header "РЕДАКТИРОВАНИЕ КОНФИГУРАЦИИ (.env)"
+  
+  local env_file="$INSTALL_PATH/.env"
+  
+  if [[ ! -f "$env_file" ]]; then
+    print_error ".env файл не найден!"
+    read -rp "Создать новый .env файл? [Y/n]: " create_new
+    if [[ "${create_new,,}" != "n" ]]; then
+      setup_env
+    fi
+    return
+  fi
+  
+  echo -e "${CYAN}[1]${NC} Редактировать в текстовом редакторе"
+  echo -e "${CYAN}[2]${NC} Изменить конкретные параметры"
+  echo -e "${CYAN}[3]${NC} Показать текущую конфигурацию"
+  echo -e "${CYAN}[4]${NC} Пересоздать .env с нуля"
+  echo -e "${CYAN}[0]${NC} Вернуться назад"
+  
+  echo ""
+  read -rp "Выберите опцию: " choice
+  
+  case $choice in
+    1)
+      # Создаем резервную копию
+      cp "$env_file" "$env_file.backup.$(date +%Y%m%d_%H%M%S)"
+      print_info "Создана резервная копия"
+      
+      # Открываем в редакторе
+      ${EDITOR:-nano} "$env_file"
+      
+      print_success "Файл сохранен"
+      print_warning "Необходимо перезапустить сервисы для применения изменений"
+      
+      read -rp "Перезапустить сервисы сейчас? [Y/n]: " restart_now
+      if [[ "${restart_now,,}" != "n" ]]; then
+        run_compose restart
+        print_success "Сервисы перезапущены"
+      fi
+      ;;
+      
+    2)
+      edit_specific_env_params
+      ;;
+      
+    3)
+      print_section "Текущая конфигурация"
+      # Показываем .env с маскировкой чувствительных данных
+      cat "$env_file" | while IFS='=' read -r key value; do
+        if [[ "$key" =~ (TOKEN|PASSWORD|SECRET|KEY)$ ]] && [[ ! "$key" =~ ^# ]]; then
+          echo -e "${CYAN}$key${NC}=${YELLOW}****${NC}"
+        elif [[ ! "$key" =~ ^# ]] && [[ -n "$key" ]]; then
+          echo -e "${CYAN}$key${NC}=${GREEN}$value${NC}"
+        else
+          echo -e "${PURPLE}$key${NC}"
+        fi
+      done
+      ;;
+      
+    4)
+      print_warning "Текущий .env будет перезаписан!"
+      read -rp "Продолжить? [y/N]: " confirm
+      if [[ "${confirm,,}" == "y" ]]; then
+        setup_env
+      fi
+      ;;
+      
+    0)
+      return
+      ;;
+      
+    *)
+      print_error "Неверный выбор"
+      ;;
+  esac
+}
+
+# Функция изменения конкретных параметров
+edit_specific_env_params() {
+  local env_file="$INSTALL_PATH/.env"
+  
+  print_section "Изменение параметров"
+  
+  echo -e "${CYAN}[1]${NC} BOT_TOKEN"
+  echo -e "${CYAN}[2]${NC} ADMIN_IDS"
+  echo -e "${CYAN}[3]${NC} WEB_API_DEFAULT_TOKEN"
+  echo -e "${CYAN}[4]${NC} REMNAWAVE_API_URL"
+  echo -e "${CYAN}[5]${NC} REMNAWAVE_API_KEY"
+  echo -e "${CYAN}[6]${NC} REMNAWAVE_AUTH_TYPE"
+  echo -e "${CYAN}[7]${NC} REMNAWAVE_USERNAME (Basic Auth)"
+  echo -e "${CYAN}[8]${NC} REMNAWAVE_PASSWORD (Basic Auth)"
+  echo -e "${CYAN}[9]${NC} REMNAWAVE_SECRET_KEY (eGames)"
+  echo -e "${CYAN}[10]${NC} Пароль PostgreSQL"
+  echo -e "${CYAN}[0]${NC} Назад"
+  
+  echo ""
+  read -rp "Выберите параметр для изменения: " param_choice
+  
+  local param_name=""
+  local param_prompt=""
+  local param_value=""
+  local is_secret=false
+  
+  case $param_choice in
+    1)
+      param_name="BOT_TOKEN"
+      param_prompt="Введите новый токен бота"
+      is_secret=true
+      ;;
+    2)
+      param_name="ADMIN_IDS"
+      param_prompt="Введите ID администраторов через запятую"
+      ;;
+    3)
+      param_name="WEB_API_DEFAULT_TOKEN"
+      param_prompt="Введите новый токен Web API"
+      is_secret=true
+      ;;
+    4)
+      param_name="REMNAWAVE_API_URL"
+      param_prompt="Введите URL API Remnawave"
+      ;;
+    5)
+      param_name="REMNAWAVE_API_KEY"
+      param_prompt="Введите ключ API Remnawave"
+      is_secret=true
+      ;;
+    6)
+      param_name="REMNAWAVE_AUTH_TYPE"
+      echo -e "${CYAN}[1]${NC} api_key"
+      echo -e "${CYAN}[2]${NC} basic_auth"
+      read -rp "Выберите тип авторизации: " auth_choice
+      if [[ "$auth_choice" == "1" ]]; then
+        param_value="api_key"
+      else
+        param_value="basic_auth"
+      fi
+      ;;
+    7)
+      param_name="REMNAWAVE_USERNAME"
+      param_prompt="Введите имя пользователя для Basic Auth"
+      ;;
+    8)
+      param_name="REMNAWAVE_PASSWORD"
+      param_prompt="Введите пароль для Basic Auth"
+      is_secret=true
+      ;;
+    9)
+      param_name="REMNAWAVE_SECRET_KEY"
+      param_prompt="Введите секретный ключ (формат: XXXXXXX:DDDDDDDD)"
+      is_secret=true
+      ;;
+    10)
+      param_name="POSTGRES_PASSWORD"
+      param_prompt="Введите новый пароль PostgreSQL"
+      is_secret=true
+      ;;
+    0)
+      return
+      ;;
+    *)
+      print_error "Неверный выбор"
+      return
+      ;;
+  esac
+  
+  if [[ -z "$param_value" ]]; then
+    if $is_secret; then
+      read -rsp "$param_prompt: " param_value
+      echo ""
+    else
+      read -rp "$param_prompt: " param_value
+    fi
+  fi
+  
+  if [[ -z "$param_value" ]]; then
+    print_warning "Значение не указано, изменения не внесены"
+    return
+  fi
+  
+  # Создаем резервную копию
+  cp "$env_file" "$env_file.backup.$(date +%Y%m%d_%H%M%S)"
+  
+  # Обновляем параметр
+  if grep -q "^$param_name=" "$env_file"; then
+    # Параметр существует - обновляем
+    sed -i "s|^$param_name=.*|$param_name=$param_value|" "$env_file"
+    print_success "Параметр $param_name обновлен"
+  else
+    # Параметр не существует - добавляем
+    echo "$param_name=$param_value" >> "$env_file"
+    print_success "Параметр $param_name добавлен"
+  fi
+  
+  print_warning "Необходимо перезапустить сервисы для применения изменений"
+  read -rp "Перезапустить сервисы сейчас? [Y/n]: " restart_now
+  if [[ "${restart_now,,}" != "n" ]]; then
+    run_compose restart
+    print_success "Сервисы перезапущены"
+  fi
 }
 
 # Определение команды docker compose
@@ -683,7 +1057,7 @@ PY
 
   # Обеспечиваем перевод строки в конце файла
   if [[ -s "$caddy_file" ]]; then
-    if [[ $(tail -c1 "$caddy_file" 2>/dev/null || echo '') != $'\n' ]]; then
+    if [[ $(tail -c1 "$caddy_file" 2>/dev/null | od -An -tx1) != "0a" ]]; then
       echo >> "$caddy_file"
     fi
     # Добавляем пустую строку для отделения блоков, если файл не пуст
@@ -1183,7 +1557,7 @@ show_monitoring() {
   
   if [[ -n "$stats" ]]; then
     echo -e "${WHITE}${BOLD}КОНТЕЙНЕР          CPU       ПАМЯТЬ${NC}"
-    echo "$stats" | tail -n+2 | while IFS=$'\t' read -r name cpu mem; do
+    echo "$stats" | tail -n+2 | while IFS="$(printf '\t')" read -r name cpu mem; do
       echo -e "${CYAN}${name}${NC}  ${YELLOW}${cpu}${NC}  ${PURPLE}${mem}${NC}"
     done
   else
@@ -1613,6 +1987,7 @@ EOF
   echo -e "${YELLOW}${BOLD}[6]${NC} 📦 Восстановить из резервной копии"
   echo -e "${RED}${BOLD}[7]${NC} 🧹 Очистка системы"
   echo -e "${PURPLE}${BOLD}[8]${NC} 🌐 Настройка обратного прокси (Caddy/Nginx)"
+  echo -e "${GREEN}${BOLD}[9]${NC} ⚙️  Настройка конфигурации (.env)"
   echo -e "${WHITE}${BOLD}[0]${NC} 🚪 Выход"
   
   echo ""
@@ -1650,6 +2025,13 @@ main() {
         ;;
       8)
         configure_reverse_proxy
+        ;;
+      9)
+        if check_env_exists; then
+          edit_env
+        else
+          setup_env
+        fi
         ;;
       0)
         print_success "До свидания!"
