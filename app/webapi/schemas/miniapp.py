@@ -29,19 +29,6 @@ class MiniAppSubscriptionUser(BaseModel):
     traffic_limit_label: str
     lifetime_used_traffic_gb: float = 0.0
     has_active_subscription: bool = False
-    balance_kopeks: int = 0
-    balance_rubles: float = 0.0
-
-
-class MiniAppTransaction(BaseModel):
-    id: int
-    type: str
-    amount_kopeks: int
-    amount_rubles: float
-    description: Optional[str] = None
-    is_completed: bool = True
-    created_at: datetime
-    payment_method: Optional[str] = None
 
 
 class MiniAppSubscriptionResponse(BaseModel):
@@ -57,10 +44,4 @@ class MiniAppSubscriptionResponse(BaseModel):
     happ: Optional[Dict[str, Any]] = None
     happ_link: Optional[str] = None
     happ_crypto_link: Optional[str] = None
-    happ_cryptolink_redirect_template: Optional[str] = None
-    transactions: List[MiniAppTransaction] = Field(default_factory=list)
-    balance_kopeks: int = 0
-    balance_rubles: float = 0.0
-
-
 
