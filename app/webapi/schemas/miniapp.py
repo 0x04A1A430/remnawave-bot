@@ -64,6 +64,8 @@ class MiniAppTransaction(BaseModel):
 
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
+    service_name: Optional[str] = None
+    service_description: Optional[str] = None
     subscription_id: int
     remnawave_short_uuid: Optional[str] = None
     user: MiniAppSubscriptionUser

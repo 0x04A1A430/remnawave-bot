@@ -892,12 +892,40 @@
             }
         };
 
+        const DEFAULT_BRANDING = {
+            name: translations.en?.['app.name'] || 'RemnaWave VPN',
+            description: translations.en?.['app.subtitle'] || 'Secure & Fast Connection'
+        };
+
         let userData = null;
         let appsConfig = {};
         let currentPlatform = 'android';
         let preferredLanguage = 'en';
         let languageLockedByUser = false;
         let currentErrorState = null;
+        let branding = { ...DEFAULT_BRANDING };
+
+        function applyBrandingConfig(payload) {
+            const nameRaw = typeof payload?.service_name === 'string'
+                ? payload.service_name.trim()
+                : '';
+            const descriptionRaw = typeof payload?.service_description === 'string'
+                ? payload.service_description.trim()
+                : '';
+
+            branding = {
+                name: nameRaw || DEFAULT_BRANDING.name,
+                description: descriptionRaw || DEFAULT_BRANDING.description
+            };
+
+            SUPPORTED_LANGUAGES.forEach(lang => {
+                if (!translations[lang]) {
+                    translations[lang] = {};
+                }
+                translations[lang]['app.name'] = branding.name;
+                translations[lang]['app.subtitle'] = branding.description;
+            });
+        }
 
         function resolveLanguage(lang) {
             if (!lang) {
@@ -971,7 +999,8 @@
         }
 
         function applyTranslations() {
-            document.title = t('app.title');
+            const baseTitle = t('app.title');
+            document.title = branding?.name ? `${branding.name} — ${baseTitle}` : baseTitle;
             document.documentElement.setAttribute('lang', preferredLanguage);
             document.querySelectorAll('[data-i18n]').forEach(element => {
                 const key = element.getAttribute('data-i18n');
@@ -1100,6 +1129,8 @@
                 userData = await response.json();
                 userData.subscriptionUrl = userData.subscription_url || null;
                 userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
+
+                applyBrandingConfig(userData);
 
                 const responseLanguage = resolveLanguage(userData?.user?.language);
                 if (responseLanguage && !languageLockedByUser) {
