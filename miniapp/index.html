@@ -689,50 +689,174 @@
             list-style: none;
             padding: 0;
             margin: 0;
+            display: grid;
+            gap: 12px;
         }
 
-        .server-item,
-        .device-item {
-            padding: 14px;
-            background: var(--bg-primary);
-            border-radius: var(--radius);
-            font-size: 14px;
-            color: var(--text-primary);
-            margin-bottom: 10px;
+        .server-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px;
+            background: linear-gradient(135deg, var(--bg-primary), rgba(var(--primary-rgb), 0.02));
+            border-radius: var(--radius-lg);
             border: 2px solid var(--border-color);
             transition: all 0.3s ease;
             cursor: pointer;
+            position: relative;
+            overflow: hidden;
         }
 
-        .server-item:hover,
-        .device-item:hover {
+        .server-item::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 60px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(var(--primary-rgb), 0.05));
+            transform: translateX(100%);
+            transition: transform 0.5s ease;
+        }
+
+        .server-item:hover {
             border-color: var(--primary);
-            transform: translateX(4px);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            background: linear-gradient(135deg, var(--bg-primary), rgba(var(--primary-rgb), 0.05));
+        }
+
+        .server-item:hover::after {
+            transform: translateX(0);
+        }
+
+        .server-flag {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.15), rgba(var(--primary-rgb), 0.05));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            flex-shrink: 0;
             box-shadow: var(--shadow-sm);
         }
 
-        .server-item::before,
-        .device-item::before {
-            content: '🌎';
-            margin-right: 8px;
+        .server-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .server-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .server-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .server-status::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        .device-item {
+            padding: 18px;
+            background: linear-gradient(135deg, var(--bg-primary), rgba(var(--primary-rgb), 0.02));
+            border-radius: var(--radius-lg);
+            border: 2px solid var(--border-color);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
         }
 
         .device-item::before {
-            content: '🔗';
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(180deg, var(--primary), rgba(var(--primary-rgb), 0.3));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .device-item:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            background: linear-gradient(135deg, var(--bg-primary), rgba(var(--primary-rgb), 0.05));
+        }
+
+        .device-item:hover::before {
+            opacity: 1;
+        }
+
+        .device-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
         }
 
         .device-title {
+            font-size: 16px;
             font-weight: 600;
-            margin-bottom: 6px;
             color: var(--text-primary);
         }
 
+        .device-type-badge {
+            padding: 4px 10px;
+            background: rgba(var(--primary-rgb), 0.1);
+            color: var(--primary);
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         .device-meta {
-            font-size: 12px;
-            color: var(--text-secondary);
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
             gap: 12px;
-            flex-wrap: wrap;
+        }
+
+        .device-meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .device-meta-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.7;
+        }
+
+        .device-meta-value {
+            font-size: 13px;
+            color: var(--text-primary);
+            font-weight: 500;
         }
 
         /* Empty States */
