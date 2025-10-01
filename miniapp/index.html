@@ -314,6 +314,16 @@
             line-height: 1.6;
         }
 
+        .error-actions {
+            margin-top: 24px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .error-actions .btn {
+            min-width: 200px;
+        }
+
         /* Cards */
         .card {
             background: var(--bg-secondary);
@@ -1186,6 +1196,9 @@
             <div class="error-icon">⚠️</div>
             <div class="error-title" id="errorTitle" data-i18n="error.default.title">Subscription Not Found</div>
             <div class="error-text" id="errorText" data-i18n="error.default.message">Please contact support to activate your subscription</div>
+            <div class="error-actions">
+                <button class="btn btn-primary hidden" id="purchaseBtn" type="button" data-i18n="button.purchase">Купить подписку</button>
+            </div>
         </div>
 
         <!-- Main Content -->
@@ -1522,6 +1535,7 @@
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
+                'button.purchase': 'Buy subscription',
                 'card.balance.title': 'Balance',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
@@ -1584,6 +1598,7 @@
                 'button.connect.default': 'Подключиться к VPN',
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
+                'button.purchase': 'Купить подписку',
                 'card.balance.title': 'Баланс',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
@@ -1696,6 +1711,10 @@
         }
 
         let userData = null;
+        let miniAppConfig = {
+            subscriptionPurchaseUrl: null,
+            branding: null,
+        };
         let appsConfig = {};
         let currentPlatform = 'android';
         let preferredLanguage = 'en';
@@ -1771,6 +1790,18 @@
             const message = currentErrorState?.message || t('error.default.message');
             titleElement.textContent = title;
             textElement.textContent = message;
+            updatePurchaseButton();
+        }
+
+        function updatePurchaseButton() {
+            const purchaseBtn = document.getElementById('purchaseBtn');
+            if (!purchaseBtn) {
+                return;
+            }
+            const link = getPurchaseLink();
+            const hasLink = Boolean(link);
+            purchaseBtn.classList.toggle('hidden', !hasLink);
+            purchaseBtn.disabled = !hasLink;
         }
 
         function applyTranslations() {
@@ -1867,6 +1898,7 @@
                     }
                 }
 
+                await loadMiniAppConfig();
                 await loadAppsConfig();
 
                 const initData = tg.initData || '';
@@ -1903,9 +1935,14 @@
                 userData = await response.json();
                 userData.subscriptionUrl = userData.subscription_url || null;
                 userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
+                userData.subscriptionPurchaseUrl =
+                    (userData.subscription_purchase_url
+                        || miniAppConfig.subscriptionPurchaseUrl
+                        || '').trim() || null;
                 if (userData.branding) {
                     applyBrandingOverrides(userData.branding);
                 }
+                updatePurchaseButton();
 
                 const responseLanguage = resolveLanguage(userData?.user?.language);
                 if (responseLanguage && !languageLockedByUser) {
@@ -1928,6 +1965,36 @@
             } catch (error) {
                 console.error('Initialization error:', error);
                 showError(error);
+            }
+        }
+
+        async function loadMiniAppConfig() {
+            try {
+                const response = await fetch('/miniapp/config', { cache: 'no-cache' });
+                if (!response.ok) {
+                    throw new Error('Failed to load mini app config');
+                }
+
+                const data = await response.json();
+                miniAppConfig = {
+                    subscriptionPurchaseUrl:
+                        (data?.subscription_purchase_url
+                            || data?.subscriptionPurchaseUrl
+                            || '').trim() || null,
+                    branding: data?.branding || null,
+                };
+
+                if (miniAppConfig.branding) {
+                    applyBrandingOverrides(miniAppConfig.branding);
+                }
+            } catch (error) {
+                console.warn('Unable to load mini app config:', error);
+                miniAppConfig = {
+                    subscriptionPurchaseUrl: null,
+                    branding: null,
+                };
+            } finally {
+                updatePurchaseButton();
             }
         }
 
@@ -2464,6 +2531,16 @@
             );
         }
 
+        function getPurchaseLink() {
+            if (userData?.subscriptionPurchaseUrl) {
+                return userData.subscriptionPurchaseUrl;
+            }
+            if (miniAppConfig?.subscriptionPurchaseUrl) {
+                return miniAppConfig.subscriptionPurchaseUrl;
+            }
+            return null;
+        }
+
         function getConnectLink() {
             if (!userData) {
                 return null;
@@ -2587,6 +2664,11 @@
                 console.warn('Clipboard copy failed:', error);
                 showPopup(t('notifications.copy.failure'), t('notifications.copy.title.failure'));
             }
+        });
+
+        document.getElementById('purchaseBtn')?.addEventListener('click', () => {
+            const link = getPurchaseLink();
+            openExternalLink(link);
         });
 
         init();

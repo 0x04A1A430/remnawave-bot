@@ -11,6 +11,11 @@ class MiniAppBranding(BaseModel):
     service_description: Dict[str, Optional[str]] = Field(default_factory=dict)
 
 
+class MiniAppConfigResponse(BaseModel):
+    branding: Optional[MiniAppBranding] = None
+    subscription_purchase_url: Optional[str] = None
+
+
 class MiniAppSubscriptionRequest(BaseModel):
     init_data: str = Field(..., alias="initData")
 
@@ -74,6 +79,7 @@ class MiniAppSubscriptionResponse(BaseModel):
     user: MiniAppSubscriptionUser
     subscription_url: Optional[str] = None
     subscription_crypto_link: Optional[str] = None
+    subscription_purchase_url: Optional[str] = None
     links: List[str] = Field(default_factory=list)
     ss_conf_links: Dict[str, str] = Field(default_factory=dict)
     connected_squads: List[str] = Field(default_factory=list)
