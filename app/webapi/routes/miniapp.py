@@ -3,12 +3,13 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import select
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
-from app.database.models import Subscription
+from app.database.models import Subscription, Transaction
 from app.services.subscription_service import SubscriptionService
 from app.utils.telegram_webapp import (
     TelegramWebAppAuthError,
@@ -195,7 +196,31 @@ async def get_subscription_details(
         traffic_limit_label=_format_limit_label(traffic_limit),
         lifetime_used_traffic_gb=lifetime_used,
         has_active_subscription=status_actual in {"active", "trial"},
+        balance_kopeks=user.balance_kopeks,
+        balance_rubles=round((user.balance_kopeks or 0) / 100, 2),
     )
+
+    transactions_result = await db.execute(
+        select(Transaction)
+        .where(Transaction.user_id == user.id)
+        .order_by(Transaction.created_at.desc())
+        .limit(20)
+    )
+    transactions = transactions_result.scalars().all()
+
+    serialized_transactions = [
+        {
+            "id": transaction.id,
+            "type": transaction.type,
+            "amount_kopeks": transaction.amount_kopeks,
+            "amount_rubles": round(transaction.amount_kopeks / 100, 2),
+            "description": transaction.description,
+            "is_completed": transaction.is_completed,
+            "created_at": transaction.created_at,
+            "payment_method": transaction.payment_method,
+        }
+        for transaction in transactions
+    ]
 
     return MiniAppSubscriptionResponse(
         subscription_id=subscription.id,
@@ -209,5 +234,9 @@ async def get_subscription_details(
         happ=links_payload.get("happ"),
         happ_link=links_payload.get("happ_link"),
         happ_crypto_link=links_payload.get("happ_crypto_link"),
+        happ_cryptolink_redirect_template=settings.get_happ_cryptolink_redirect_template(),
+        transactions=serialized_transactions,
+        balance_kopeks=user.balance_kopeks,
+        balance_rubles=round((user.balance_kopeks or 0) / 100, 2),
     )
 
