@@ -213,7 +213,6 @@ class Settings(BaseSettings):
 
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
-    MINIAPP_SUBSCRIPTION_PURCHASE_URL: str = ""
     MINIAPP_SERVICE_NAME_EN: str = "Bedolaga VPN"
     MINIAPP_SERVICE_NAME_RU: str = "Bedolaga VPN"
     MINIAPP_SERVICE_DESCRIPTION_EN: str = "Secure & Fast Connection"
@@ -551,13 +550,6 @@ class Settings(BaseSettings):
                 "ru": desc_ru,
             },
         }
-
-    def get_miniapp_purchase_url(self) -> Optional[str]:
-        value = getattr(self, "MINIAPP_SUBSCRIPTION_PURCHASE_URL", "")
-        if value is None:
-            return None
-        purchase_url = str(value).strip()
-        return purchase_url or None
     
     def get_app_config_cache_ttl(self) -> int:
         return self.APP_CONFIG_CACHE_TTL
