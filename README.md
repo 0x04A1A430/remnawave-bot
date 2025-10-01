@@ -112,6 +112,10 @@ docker compose logs
 
 Подробное пошаговое руководство по запуску административного веб-API и подключению внешней панели находится в [docs/web-admin-integration.md](docs/web-admin-integration.md).
 
+### 📱 Telegram Mini App с подпиской
+
+Инструкция по развёртыванию мини-приложения, публикации статической страницы и настройке reverse-proxy доступна в [docs/miniapp-setup.md](docs/miniapp-setup.md).
+
 ### 📊 Статус серверов в главном меню
 
 | Переменная | Описание | Пример |
@@ -531,6 +535,10 @@ CONNECT_BUTTON_MODE=guide
 
 # URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
 MINIAPP_CUSTOM_URL=
+MINIAPP_SERVICE_NAME_EN=Bedolaga VPN
+MINIAPP_SERVICE_NAME_RU=Bedolaga VPN
+MINIAPP_SERVICE_DESCRIPTION_EN=Secure & Fast Connection
+MINIAPP_SERVICE_DESCRIPTION_RU=Безопасное и быстрое подключение
 
 # Параметры режима happ_cryptolink
 CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED=false
