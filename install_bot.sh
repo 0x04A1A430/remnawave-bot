@@ -1,9 +1,66 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+canonicalize_path() {
+  local input_path=${1:-}
+
+  if [[ -z "$input_path" ]]; then
+    return 1
+  fi
+
+  if command -v realpath >/dev/null 2>&1; then
+    realpath -m "$input_path"
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$input_path" <<'PY'
+import os
+import sys
+
+path = os.path.expanduser(sys.argv[1])
+print(os.path.realpath(path))
+PY
+    return 0
+  fi
+
+  local dir_part
+  local base_part
+
+  dir_part=$(dirname -- "$input_path") || dir_part="."
+  base_part=$(basename -- "$input_path") || base_part="$input_path"
+
+  local dir_resolved
+  if dir_resolved=$(cd "$dir_part" 2>/dev/null && pwd); then
+    printf '%s/%s\n' "$dir_resolved" "$base_part"
+    return 0
+  fi
+
+  printf '%s\n' "$input_path"
+}
+
+SCRIPT_PATH=$(canonicalize_path "${BASH_SOURCE[0]}")
+SCRIPT_DIR=$(cd "$(dirname "$SCRIPT_PATH")" && pwd)
 STATE_FILE="$SCRIPT_DIR/.bot_install_state"
 BACKUP_DIR="$SCRIPT_DIR/backups"
+
+save_state() {
+  local state_dir
+  state_dir=$(dirname -- "$STATE_FILE")
+  mkdir -p "$state_dir"
+
+  local tmp_file
+  if ! tmp_file=$(mktemp "$state_dir/.bot_install_state.XXXXXX" 2>/dev/null); then
+    tmp_file="$STATE_FILE.tmp.$$"
+  fi
+
+  {
+    printf 'INSTALL_PATH=%q\n' "$INSTALL_PATH"
+  } >"$tmp_file"
+
+  chmod 600 "$tmp_file"
+  mv "$tmp_file" "$STATE_FILE"
+}
 
 # Цвета для красивого вывода
 RED='\033[0;31m'
@@ -64,15 +121,67 @@ print_status() {
 }
 
 # Загрузка состояния
+initialize_state() {
+  local reason=${1:-missing}
+
+  case "$reason" in
+    missing)
+      print_warning "Файл состояния установки не найден. Выполняем начальную настройку."
+      ;;
+    unreadable)
+      print_warning "Не удалось прочитать файл состояния $STATE_FILE. Требуется повторная настройка."
+      ;;
+    invalid)
+      print_warning "Файл состояния $STATE_FILE повреждён или не содержит путь установки."
+      ;;
+    *)
+      print_warning "$reason"
+      ;;
+  esac
+
+  local default_path
+  default_path=${INSTALL_PATH:-$SCRIPT_DIR}
+
+  local install_path_input=""
+
+  if [[ -t 0 ]]; then
+    read -rp "Укажите путь установки [${default_path}]: " install_path_input
+  elif read -r -t 1 install_path_input; then
+    print_info "Путь установки получен из стандартного ввода"
+  else
+    print_info "Используем путь по умолчанию: ${default_path}"
+  fi
+
+  install_path_input=${install_path_input:-$default_path}
+
+  local resolved_path
+  resolved_path=$(canonicalize_path "$install_path_input") || resolved_path="$install_path_input"
+  INSTALL_PATH="$resolved_path"
+
+  save_state
+  print_success "Путь установки сохранён: $INSTALL_PATH"
+}
+
 load_state() {
   if [[ -f "$STATE_FILE" ]]; then
-    # shellcheck disable=SC1090
-    source "$STATE_FILE"
-    return 0
+    if source "$STATE_FILE" 2>/dev/null; then
+      if [[ -n "${INSTALL_PATH:-}" ]]; then
+        local resolved_path
+        resolved_path=$(canonicalize_path "$INSTALL_PATH") || resolved_path="$INSTALL_PATH"
+        INSTALL_PATH="$resolved_path"
+        print_info "Используем сохранённый путь установки: $INSTALL_PATH"
+      else
+        initialize_state invalid
+      fi
+    else
+      initialize_state unreadable
+    fi
   else
-    print_error "Установка бота не найдена. Запустите ./install.sh сначала."
-    exit 1
+    initialize_state missing
   fi
+
+  BACKUP_DIR="$INSTALL_PATH/backups"
+  mkdir -p "$BACKUP_DIR"
 }
 
 # Определение команды docker compose
