@@ -212,6 +212,8 @@ class Settings(BaseSettings):
     PAL24_CARD_BUTTON_TEXT: Optional[str] = None
 
     CONNECT_BUTTON_MODE: str = "guide"
+    MINIAPP_SERVICE_NAME: str = "Bedolaga VPN"
+    MINIAPP_SERVICE_DESCRIPTION: str = "Secure & Fast Connection"
     MINIAPP_CUSTOM_URL: str = ""
     CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
     HAPP_CRYPTOLINK_REDIRECT_TEMPLATE: Optional[str] = None
