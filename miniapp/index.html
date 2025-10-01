@@ -1796,7 +1796,13 @@
             if (!label) {
                 return;
             }
-            const useHappLabel = Boolean(userData?.happ_cryptolink_redirect_link);
+            const useHappLabel = Boolean(
+                userData?.happ_cryptolink_redirect_link
+                || userData?.happ_crypto_link
+                || userData?.happCryptoLink
+                || userData?.subscription_crypto_link
+                || userData?.subscriptionCryptoLink
+            );
             const key = useHappLabel ? 'button.connect.happ' : 'button.connect.default';
             label.textContent = t(key);
         }
@@ -2458,6 +2464,14 @@
 
             if (userData.happ_cryptolink_redirect_link) {
                 return userData.happ_cryptolink_redirect_link;
+            }
+
+            if (userData.happ_crypto_link || userData.happCryptoLink) {
+                return userData.happ_crypto_link || userData.happCryptoLink;
+            }
+
+            if (userData.subscription_crypto_link || userData.subscriptionCryptoLink) {
+                return userData.subscription_crypto_link || userData.subscriptionCryptoLink;
             }
 
             const subscriptionUrl = getCurrentSubscriptionUrl();
