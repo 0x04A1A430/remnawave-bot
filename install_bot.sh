@@ -165,9 +165,94 @@ create_bot_network() {
   else
     print_info "Сеть bot_network уже существует"
   fi
-  
+
   # Проверяем и обновляем docker-compose.yml
   fix_bot_compose_network
+}
+
+# Очистка конфликтующих docker сетей
+cleanup_conflicting_networks() {
+  print_section "Очистка конфликтующих сетей Docker"
+
+  if ! command -v docker &>/dev/null; then
+    print_error "Docker не установлен"
+    return 1
+  fi
+
+  local target_subnet="172.20.0.0/16"
+  local networks=()
+
+  while IFS= read -r network; do
+    [[ -z "$network" ]] && continue
+
+    local subnet
+    subnet=$(docker network inspect "$network" -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null | tr -d '\n')
+
+    if [[ "$subnet" == "$target_subnet" ]]; then
+      networks+=("$network")
+    fi
+  done < <(docker network ls --format '{{.Name}}')
+
+  if [[ ${#networks[@]} -eq 0 ]]; then
+    print_success "Конфликтующих сетей не обнаружено"
+    return 0
+  fi
+
+  print_info "Найдены сети с подсетью $target_subnet:"
+  for network in "${networks[@]}"; do
+    if [[ "$network" == "bot_network" ]]; then
+      echo -e "   ${GREEN}→${NC} $network ${CYAN}(основная сеть)${NC}"
+    else
+      echo -e "   ${YELLOW}→${NC} $network"
+    fi
+  done
+
+  local removable_networks=()
+  for network in "${networks[@]}"; do
+    local attached
+    attached=$(docker network inspect "$network" -f '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null | xargs)
+
+    if [[ -n "$attached" ]]; then
+      print_warning "Сеть $network используется контейнерами: $attached"
+      continue
+    fi
+
+    removable_networks+=("$network")
+  done
+
+  if [[ ${#removable_networks[@]} -eq 0 ]]; then
+    print_warning "Нет сетей, которые можно удалить автоматически"
+    return 0
+  fi
+
+  echo ""
+  print_warning "Будут удалены следующие сети:"
+  for network in "${removable_networks[@]}"; do
+    echo -e "   ${RED}→${NC} $network"
+  done
+
+  read -rp "Подтвердите удаление [y/N]: " confirm
+  if [[ "${confirm,,}" != "y" ]]; then
+    print_info "Удаление отменено"
+    return 0
+  fi
+
+  for network in "${removable_networks[@]}"; do
+    if docker network rm "$network" >/dev/null 2>&1; then
+      print_success "Сеть $network удалена"
+    else
+      print_error "Не удалось удалить сеть $network"
+    fi
+  done
+
+  if docker network ls | grep -q "bot_network"; then
+    print_success "Очистка завершена"
+  else
+    read -rp "Сеть bot_network отсутствует. Создать заново? [Y/n]: " recreate
+    if [[ "${recreate,,}" != "n" ]]; then
+      create_bot_network
+    fi
+  fi
 }
 
 # Исправление docker-compose.yml для использования внешней сети
@@ -844,6 +929,9 @@ configure_reverse_proxy() {
             print_success "Nginx перезагружен успешно"
           fi
         fi
+        ;;
+      8)
+        cleanup_conflicting_networks
         ;;
       0)
         return 0
