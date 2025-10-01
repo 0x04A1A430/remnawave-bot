@@ -24,7 +24,6 @@ from app.utils.telegram_webapp import (
 
 from ..dependencies import get_db_session
 from ..schemas.miniapp import (
-    MiniAppConfigResponse,
     MiniAppConnectedServer,
     MiniAppDevice,
     MiniAppPromoGroup,
@@ -62,11 +61,6 @@ def _format_limit_label(limit: Optional[int]) -> str:
     if not limit:
         return "Unlimited"
     return f"{limit} GB"
-
-
-def _get_purchase_url() -> Optional[str]:
-    value = (settings.MINIAPP_PURCHASE_URL or "").strip()
-    return value or None
 
 
 def _bytes_to_gb(bytes_value: Optional[int]) -> float:
@@ -264,11 +258,6 @@ async def _load_subscription_links(
     return payload
 
 
-@router.get("/config", response_model=MiniAppConfigResponse)
-async def get_miniapp_config() -> MiniAppConfigResponse:
-    return MiniAppConfigResponse(purchase_url=_get_purchase_url())
-
-
 @router.post("/subscription", response_model=MiniAppSubscriptionResponse)
 async def get_subscription_details(
     payload: MiniAppSubscriptionRequest,
@@ -375,7 +364,6 @@ async def get_subscription_details(
         user=response_user,
         subscription_url=subscription_url,
         subscription_crypto_link=subscription_crypto_link,
-        purchase_url=_get_purchase_url(),
         links=links,
         ss_conf_links=ss_conf_links,
         connected_squads=connected_squads,
