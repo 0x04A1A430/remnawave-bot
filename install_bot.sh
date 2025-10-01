@@ -99,6 +99,765 @@ get_service_status() {
   echo "$status"
 }
 
+# Проверка установки веб-сервера
+check_webserver() {
+  local caddy_installed=false
+  local nginx_installed=false
+  local caddy_path=""
+  local nginx_path=""
+  
+  # Проверка Caddy
+  if docker ps -a --format '{{.Names}}' | grep -q "caddy"; then
+    caddy_installed=true
+    # Попытка найти путь к Caddyfile через docker inspect
+    local caddy_container
+    caddy_container=$(docker ps -a --format '{{.Names}}' | grep "caddy" | head -n1)
+    
+    # Извлекаем путь из Source и убираем имя файла
+    caddy_path=$(docker inspect "$caddy_container" 2>/dev/null | \
+      grep -A 1 'Caddyfile' | \
+      grep 'Source' | \
+      sed 's/.*"Source": "\(.*\)".*/\1/' | \
+      sed 's/\/Caddyfile$//')
+    
+    # Если не нашли через inspect, проверяем стандартные пути
+    if [[ -z "$caddy_path" ]] || [[ ! -d "$caddy_path" ]]; then
+      if [[ -f "/opt/caddy/Caddyfile" ]]; then
+        caddy_path="/opt/caddy"
+      elif [[ -f "$INSTALL_PATH/caddy/Caddyfile" ]]; then
+        caddy_path="$INSTALL_PATH/caddy"
+      fi
+    fi
+  fi
+  
+  # Проверка Nginx
+  if docker ps -a --format '{{.Names}}' | grep -q "nginx"; then
+    nginx_installed=true
+    local nginx_container
+    nginx_container=$(docker ps -a --format '{{.Names}}' | grep "nginx" | head -n1)
+    
+    # Извлекаем путь из Source и убираем имя файла
+    nginx_path=$(docker inspect "$nginx_container" 2>/dev/null | \
+      grep -A 1 'nginx.conf' | \
+      grep 'Source' | \
+      sed 's/.*"Source": "\(.*\)".*/\1/' | \
+      sed 's/\/nginx.conf$//')
+    
+    # Если не нашли через inspect, проверяем стандартные пути
+    if [[ -z "$nginx_path" ]] || [[ ! -d "$nginx_path" ]]; then
+      if [[ -f "/etc/nginx/nginx.conf" ]]; then
+        nginx_path="/etc/nginx"
+      elif [[ -f "$INSTALL_PATH/nginx/nginx.conf" ]]; then
+        nginx_path="$INSTALL_PATH/nginx"
+      fi
+    fi
+  fi
+  
+  echo "$caddy_installed|$nginx_installed|$caddy_path|$nginx_path"
+}
+
+# Создание docker network
+create_bot_network() {
+  if ! docker network ls | grep -q "bot_network"; then
+    print_info "Создаем Docker сеть bot_network..."
+    docker network create bot_network
+    print_success "Сеть bot_network создана"
+  else
+    print_info "Сеть bot_network уже существует"
+  fi
+  
+  # Проверяем и обновляем docker-compose.yml
+  fix_bot_compose_network
+}
+
+# Исправление docker-compose.yml для использования внешней сети
+fix_bot_compose_network() {
+  local compose_file="$INSTALL_PATH/docker-compose.yml"
+  
+  if [[ ! -f "$compose_file" ]]; then
+    print_warning "docker-compose.yml не найден в $INSTALL_PATH"
+    return 1
+  fi
+  
+  print_info "Проверяем конфигурацию сети в docker-compose.yml..."
+  
+  # Проверяем, нужно ли обновление
+  if grep -q "external: true" "$compose_file" && grep -q "name: bot_network" "$compose_file"; then
+    print_success "docker-compose.yml уже настроен правильно"
+    return 0
+  fi
+  
+  # Создаем резервную копию
+  cp "$compose_file" "$compose_file.backup.$(date +%Y%m%d_%H%M%S)"
+  print_info "Резервная копия создана"
+  
+  # Проверяем, есть ли секция networks в конце файла
+  if grep -q "^networks:" "$compose_file"; then
+    print_info "Обновляем существующую секцию networks..."
+    
+    # Удаляем старую секцию networks и добавляем новую
+    sed -i '/^networks:/,$d' "$compose_file"
+    cat >> "$compose_file" <<'EOF'
+networks:
+  default:
+    name: bot_network
+    external: true
+EOF
+  else
+    print_info "Добавляем секцию networks..."
+    cat >> "$compose_file" <<'EOF'
+
+networks:
+  default:
+    name: bot_network
+    external: true
+EOF
+  fi
+  
+  # Также нужно убедиться, что сервисы не определяют свои networks явно
+  # Удаляем строки с networks внутри сервисов, если они есть
+  if grep -q "    networks:" "$compose_file"; then
+    print_info "Удаляем явные определения networks из сервисов..."
+    sed -i '/^  [a-z_]*:/,/^  [a-z_]*:/ { /    networks:/d; /      - bot_network/d; /      - .*_bot_network/d }' "$compose_file"
+  fi
+  
+  print_success "docker-compose.yml обновлен для использования внешней сети bot_network"
+  print_warning "Необходимо пересоздать контейнеры командой:"
+  echo -e "${YELLOW}cd $INSTALL_PATH && docker compose down && docker compose up -d${NC}"
+  
+  read -rp "$(echo -e ${YELLOW}Пересоздать контейнеры сейчас? [Y/n]: ${NC})" recreate
+  if [[ "${recreate,,}" != "n" ]]; then
+    print_info "Останавливаем контейнеры..."
+    run_compose down
+    
+    print_info "Запускаем контейнеры с новой конфигурацией..."
+    run_compose up -d
+    
+    print_success "Контейнеры пересозданы"
+  fi
+}
+
+# Подключение бота к сети
+connect_bot_to_network() {
+  local bot_container
+  bot_container=$(docker ps --filter "name=bot" --format "{{.Names}}" | head -n1)
+  
+  if [[ -n "$bot_container" ]]; then
+    if ! docker inspect "$bot_container" 2>/dev/null | grep -q '"bot_network"'; then
+      print_info "Подключаем бот к сети bot_network..."
+      docker network connect bot_network "$bot_container" 2>/dev/null || true
+      print_success "Бот подключен к сети"
+    else
+      print_info "Бот уже подключен к сети bot_network"
+    fi
+  fi
+}
+
+# Установка и настройка Caddy
+install_caddy() {
+  print_section "Установка Caddy"
+  
+  local caddy_dir="$INSTALL_PATH/caddy"
+  mkdir -p "$caddy_dir/logs"
+  mkdir -p "/opt/caddy/html"
+  
+  # Создаем начальный Caddyfile
+  cat > "$caddy_dir/Caddyfile" <<'EOF'
+# Caddy configuration
+# Webhook и miniapp будут добавлены через меню настройки
+EOF
+  
+  # Создаем docker-compose для Caddy
+  cat > "$caddy_dir/docker-compose.yml" <<EOF
+services:
+  caddy:
+    image: caddy:2.9.1
+    container_name: caddy-bot-proxy
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - /opt/caddy/html:/var/www/html
+      - ./logs:/var/log/caddy
+      - caddy_data:/data
+      - caddy_config:/config
+      - $INSTALL_PATH/miniapp:/var/www/remnawave-miniapp:ro
+    network_mode: "host"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  default:
+    name: bot_network
+    external: true
+EOF
+  
+  # Создаем сеть
+  create_bot_network
+  
+  # Запускаем Caddy
+  print_info "Запускаем Caddy..."
+  (cd "$caddy_dir" && docker compose up -d)
+  
+  sleep 2
+  
+  if docker ps | grep -q "caddy-bot-proxy"; then
+    print_success "Caddy успешно установлен и запущен"
+    print_info "Путь к конфигурации: $caddy_dir"
+    return 0
+  else
+    print_error "Не удалось запустить Caddy"
+    return 1
+  fi
+}
+
+# Настройка webhook прокси
+configure_webhook_proxy() {
+  echo -e "\n${BLUE}${BOLD}${ARROW} Настройка прокси для webhook${NC}" >&2
+  echo -e "${BLUE}─────────────────────────────────────────────────────${NC}" >&2
+  
+  local webhook_domain
+  read -rp "Введите домен для webhook (например, webhook.example.com): " webhook_domain
+  
+  # Очищаем от невидимых символов и пробелов
+  webhook_domain=$(echo "$webhook_domain" | tr -d '\r\n\t' | xargs | LC_ALL=C sed 's/[^a-zA-Z0-9.-]//g')
+  
+  if [[ -z "$webhook_domain" ]]; then
+    echo -e "${RED}${CROSS} Домен не указан${NC}" >&2
+    return 1
+  fi
+  
+  # Проверяем валидность домена
+  if ! [[ "$webhook_domain" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$ ]]; then
+    echo -e "${RED}${CROSS} Невалидный домен: $webhook_domain${NC}" >&2
+    return 1
+  fi
+  
+  echo -e "${CYAN}ℹ Используем домен: ${YELLOW}$webhook_domain${NC}" >&2
+  
+  # Возвращаем чистый текст БЕЗ echo -e
+  cat <<EOF
+$webhook_domain {
+    handle /tribute-webhook* {
+        reverse_proxy localhost:8081
+    }
+    
+    handle /cryptobot-webhook* {
+        reverse_proxy localhost:8081
+    }
+    
+    handle /mulenpay-webhook* {
+        reverse_proxy localhost:8081
+    }
+    
+    handle /pal24-webhook* {
+        reverse_proxy localhost:8084
+    }
+    
+    handle /yookassa-webhook* {
+        reverse_proxy localhost:8082
+    }
+    
+    handle /health {
+        reverse_proxy localhost:8081/health
+    }
+}
+EOF
+}
+
+# Настройка miniapp прокси
+configure_miniapp_proxy() {
+  echo -e "\n${BLUE}${BOLD}${ARROW} Настройка прокси для miniapp${NC}" >&2
+  echo -e "${BLUE}─────────────────────────────────────────────────────${NC}" >&2
+  
+  local miniapp_domain
+  read -rp "Введите домен для miniapp (например, miniapp.example.com): " miniapp_domain
+  
+  # Очищаем от невидимых символов и пробелов
+  miniapp_domain=$(echo "$miniapp_domain" | tr -d '\r\n\t' | xargs | LC_ALL=C sed 's/[^a-zA-Z0-9.-]//g')
+  
+  if [[ -z "$miniapp_domain" ]]; then
+    echo -e "${RED}${CROSS} Домен не указан${NC}" >&2
+    return 1
+  fi
+  
+  # Проверяем валидность домена
+  if ! [[ "$miniapp_domain" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$ ]]; then
+    echo -e "${RED}${CROSS} Невалидный домен: $miniapp_domain${NC}" >&2
+    return 1
+  fi
+  
+  echo -e "${CYAN}ℹ Используем домен: ${YELLOW}$miniapp_domain${NC}" >&2
+  
+  # Возвращаем чистый текст БЕЗ echo -e
+  cat <<EOF
+$miniapp_domain {
+    encode gzip zstd
+    root * /var/www/remnawave-miniapp
+    file_server
+    
+    @config path /app-config.json
+    header @config Access-Control-Allow-Origin "*"
+    
+    # Redirect for /miniapp/redirect/index.html
+    @redirect path /miniapp/redirect/index.html
+    redir @redirect /miniapp/redirect/index.html permanent
+    
+    reverse_proxy /miniapp/* 127.0.0.1:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+    }
+}
+EOF
+}
+
+# Применение конфигурации Caddy
+apply_caddy_config() {
+  local caddy_dir=$1
+  local webhook_config=$2
+  local miniapp_config=$3
+  
+  # Создаем резервную копию
+  if [[ -f "$caddy_dir/Caddyfile" ]]; then
+    cp "$caddy_dir/Caddyfile" "$caddy_dir/Caddyfile.backup.$(date +%Y%m%d_%H%M%S)"
+    print_info "Резервная копия создана"
+  fi
+  
+  # Записываем новую конфигурацию
+  cat > "$caddy_dir/Caddyfile" <<EOF
+# Caddy configuration for Remnawave Bot
+# Generated: $(date)
+
+$webhook_config
+
+$miniapp_config
+EOF
+  
+  print_success "Конфигурация записана в $caddy_dir/Caddyfile"
+  
+  # Перезагружаем Caddy
+  print_info "Перезагружаем Caddy..."
+  local caddy_container
+  caddy_container=$(docker ps --filter "name=caddy" --format "{{.Names}}" | head -n1)
+  
+  if [[ -n "$caddy_container" ]]; then
+    # Сначала проверяем конфигурацию
+    if docker exec "$caddy_container" caddy validate --config /etc/caddy/Caddyfile 2>/dev/null; then
+      print_success "Конфигурация валидна"
+      
+      # Перезагружаем
+      if docker exec "$caddy_container" caddy reload --config /etc/caddy/Caddyfile 2>/dev/null; then
+        print_success "Caddy перезагружен успешно"
+      else
+        print_warning "Перезагрузка через reload не удалась, перезапускаем контейнер..."
+        docker restart "$caddy_container"
+        sleep 3
+        print_success "Контейнер перезапущен"
+      fi
+    else
+      print_error "Ошибка валидации конфигурации Caddy"
+      print_warning "Восстанавливаем предыдущую конфигурацию..."
+      
+      # Находим последний бэкап
+      local last_backup
+      last_backup=$(ls -t "$caddy_dir"/Caddyfile.backup.* 2>/dev/null | head -n1)
+      if [[ -n "$last_backup" ]]; then
+        cp "$last_backup" "$caddy_dir/Caddyfile"
+        print_info "Предыдущая конфигурация восстановлена"
+      fi
+      return 1
+    fi
+  else
+    print_error "Caddy контейнер не найден или не запущен"
+    print_info "Попробуйте запустить: docker start $caddy_container"
+    return 1
+  fi
+}
+
+# Применение конфигурации Nginx
+apply_nginx_config() {
+  local nginx_dir=$1
+  local webhook_domain=$2
+  local miniapp_domain=$3
+  
+  # Создаем резервную копию
+  cp "$nginx_dir/nginx.conf" "$nginx_dir/nginx.conf.backup.$(date +%Y%m%d_%H%M%S)" 2>/dev/null || true
+  
+  local nginx_config="
+# Webhook proxy
+server {
+    listen 80;
+    server_name $webhook_domain;
+
+    location /tribute-webhook {
+        proxy_pass http://localhost:8081;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+    
+    location /cryptobot-webhook {
+        proxy_pass http://localhost:8081;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+    
+    location /mulenpay-webhook {
+        proxy_pass http://localhost:8081;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+    
+    location /pal24-webhook {
+        proxy_pass http://localhost:8084;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+    
+    location /yookassa-webhook {
+        proxy_pass http://localhost:8082;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+    
+    location /health {
+        proxy_pass http://localhost:8081/health;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+}
+
+# Miniapp proxy
+server {
+    listen 80;
+    server_name $miniapp_domain;
+
+    root /var/www/remnawave-miniapp;
+    index index.html;
+
+    gzip on;
+    gzip_types text/plain application/json text/css application/javascript;
+
+    location /app-config.json {
+        add_header Access-Control-Allow-Origin *;
+    }
+
+    location /miniapp/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+}
+"
+  
+  echo "$nginx_config" > "$nginx_dir/nginx.conf"
+  
+  # Перезагружаем Nginx
+  print_info "Перезагружаем Nginx..."
+  local nginx_container
+  nginx_container=$(docker ps --filter "name=nginx" --format "{{.Names}}" | head -n1)
+  
+  if [[ -n "$nginx_container" ]]; then
+    docker exec "$nginx_container" nginx -t && docker exec "$nginx_container" nginx -s reload
+    print_success "Конфигурация Nginx применена"
+  else
+    print_error "Nginx контейнер не найден"
+    return 1
+  fi
+}
+
+# Показать текущую конфигурацию прокси
+show_proxy_status() {
+  print_header "СТАТУС ОБРАТНОГО ПРОКСИ"
+  
+  local webserver_info
+  webserver_info=$(check_webserver)
+  IFS='|' read -r caddy_installed nginx_installed caddy_path nginx_path <<< "$webserver_info"
+  
+  print_section "Установленные веб-серверы"
+  
+  if [[ "$caddy_installed" == "true" ]]; then
+    local caddy_container
+    caddy_container=$(docker ps --filter "name=caddy" --format "{{.Names}}" | head -n1)
+    local caddy_status
+    caddy_status=$(docker inspect -f '{{.State.Status}}' "$caddy_container" 2>/dev/null || echo "not_found")
+    
+    print_status "$caddy_status" "Caddy: $caddy_status"
+    if [[ -n "$caddy_path" ]]; then
+      echo -e "   ${CYAN}Путь к конфигурации: ${YELLOW}$caddy_path${NC}"
+    fi
+    
+    # Показываем домены из Caddyfile
+    if [[ -f "$caddy_path/Caddyfile" ]]; then
+      print_info "Настроенные домены в Caddy:"
+      grep -E "^[a-zA-Z0-9\.-]+ \{" "$caddy_path/Caddyfile" | sed 's/ {//' | while read -r domain; do
+        echo -e "   ${GREEN}→${NC} $domain"
+      done
+    fi
+  else
+    print_warning "Caddy не установлен"
+  fi
+  
+  echo ""
+  
+  if [[ "$nginx_installed" == "true" ]]; then
+    local nginx_container
+    nginx_container=$(docker ps --filter "name=nginx" --format "{{.Names}}" | head -n1)
+    local nginx_status
+    nginx_status=$(docker inspect -f '{{.State.Status}}' "$nginx_container" 2>/dev/null || echo "not_found")
+    
+    print_status "$nginx_status" "Nginx: $nginx_status"
+    if [[ -n "$nginx_path" ]]; then
+      echo -e "   ${CYAN}Путь к конфигурации: ${YELLOW}$nginx_path${NC}"
+    fi
+  else
+    print_warning "Nginx не установлен"
+  fi
+  
+  # Проверка сети bot_network
+  print_section "Docker сеть"
+  if docker network ls | grep -q "bot_network"; then
+    print_success "Сеть bot_network существует"
+    local connected_containers
+    connected_containers=$(docker network inspect bot_network -f '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null || echo "")
+    if [[ -n "$connected_containers" ]]; then
+      echo -e "   ${CYAN}Подключенные контейнеры:${NC}"
+      for container in $connected_containers; do
+        echo -e "   ${GREEN}→${NC} $container"
+      done
+    fi
+  else
+    print_warning "Сеть bot_network не создана"
+  fi
+}
+
+# Главное меню настройки прокси
+configure_reverse_proxy() {
+  while true; do
+    print_header "НАСТРОЙКА ОБРАТНОГО ПРОКСИ"
+    
+    local webserver_info
+    webserver_info=$(check_webserver)
+    IFS='|' read -r caddy_installed nginx_installed caddy_path nginx_path <<< "$webserver_info"
+    
+    echo -e "${CYAN}[1]${NC} 📊 Показать статус прокси"
+    echo -e "${CYAN}[2]${NC} ⚙️  Настроить Caddy (webhook + miniapp)"
+    
+    if [[ "$nginx_installed" == "true" ]]; then
+      echo -e "${CYAN}[3]${NC} ⚙️  Настроить Nginx (webhook + miniapp)"
+    fi
+    
+    if [[ "$caddy_installed" == "false" ]]; then
+      echo -e "${CYAN}[4]${NC} 📦 Установить Caddy"
+    else
+      echo -e "${CYAN}[4]${NC} 📝 Редактировать Caddyfile вручную"
+    fi
+    
+    echo -e "${CYAN}[5]${NC} 🔗 Создать/проверить Docker сеть"
+    echo -e "${CYAN}[6]${NC} 🔌 Подключить бот к сети"
+    echo -e "${CYAN}[7]${NC} 🔄 Перезагрузить Caddy/Nginx"
+    echo -e "${CYAN}[8]${NC} 🧹 Очистить конфликтующие сети Docker"
+    echo -e "${CYAN}[0]${NC} 🔙 Вернуться в главное меню"
+    
+    echo ""
+    read -rp "$(echo -e ${WHITE}${BOLD}Выберите опцию: ${NC})" choice
+    
+    case $choice in
+      1)
+        show_proxy_status
+        ;;
+      2)
+        if [[ "$caddy_installed" == "false" ]]; then
+          print_warning "Caddy не установлен"
+          read -rp "Установить Caddy сейчас? [y/N]: " install_confirm
+          if [[ "${install_confirm,,}" == "y" ]]; then
+            install_caddy
+            caddy_path="$INSTALL_PATH/caddy"
+          else
+            continue
+          fi
+        fi
+        
+        # Проверяем и запрашиваем путь к Caddyfile
+        if [[ -z "$caddy_path" ]] || [[ ! -d "$caddy_path" ]]; then
+          print_warning "Автоматически определить путь не удалось"
+          echo -e "${CYAN}Обнаруженные пути с Caddyfile:${NC}"
+          
+          # Ищем все возможные Caddyfile
+          local found_paths=()
+          while IFS= read -r caddyfile; do
+            local dir_path
+            dir_path=$(dirname "$caddyfile")
+            echo -e "  ${GREEN}→${NC} $dir_path"
+            found_paths+=("$dir_path")
+          done < <(find /opt /root "$INSTALL_PATH" -name "Caddyfile" 2>/dev/null | head -n 5)
+          
+          if [[ ${#found_paths[@]} -eq 1 ]]; then
+            caddy_path="${found_paths[0]}"
+            print_info "Используем найденный путь: $caddy_path"
+          else
+            read -rp "Введите путь к директории с Caddyfile: " caddy_path
+          fi
+        fi
+        
+        if [[ ! -d "$caddy_path" ]]; then
+          print_error "Директория не найдена: $caddy_path"
+          continue
+        fi
+        
+        if [[ ! -f "$caddy_path/Caddyfile" ]]; then
+          print_error "Файл Caddyfile не найден в $caddy_path"
+          read -rp "Создать новый Caddyfile? [y/N]: " create_new
+          if [[ "${create_new,,}" != "y" ]]; then
+            continue
+          fi
+          touch "$caddy_path/Caddyfile"
+        fi
+        
+        local webhook_config
+        local miniapp_config
+        webhook_config=$(configure_webhook_proxy)
+        miniapp_config=$(configure_miniapp_proxy)
+        
+        echo ""
+        print_info "Предпросмотр конфигурации:"
+        echo -e "${YELLOW}$webhook_config${NC}"
+        echo -e "${YELLOW}$miniapp_config${NC}"
+        
+        read -rp "Применить эту конфигурацию? [y/N]: " confirm
+        if [[ "${confirm,,}" == "y" ]]; then
+          apply_caddy_config "$caddy_path" "$webhook_config" "$miniapp_config"
+          connect_bot_to_network
+        fi
+        ;;
+      3)
+        if [[ "$nginx_installed" == "true" ]]; then
+          if [[ -z "$nginx_path" ]]; then
+            read -rp "Введите путь к директории с nginx.conf: " nginx_path
+          fi
+          
+          if [[ ! -d "$nginx_path" ]]; then
+            print_error "Директория не найдена: $nginx_path"
+            continue
+          fi
+          
+          read -rp "Введите домен для webhook: " webhook_domain
+          read -rp "Введите домен для miniapp: " miniapp_domain
+          
+          if [[ -n "$webhook_domain" ]] && [[ -n "$miniapp_domain" ]]; then
+            apply_nginx_config "$nginx_path" "$webhook_domain" "$miniapp_domain"
+            connect_bot_to_network
+          fi
+        fi
+        ;;
+      4)
+        if [[ "$caddy_installed" == "false" ]]; then
+          install_caddy
+        else
+          # Редактирование существующего Caddyfile
+          if [[ -z "$caddy_path" ]]; then
+            read -rp "Введите путь к директории с Caddyfile: " caddy_path
+          fi
+          
+          if [[ ! -f "$caddy_path/Caddyfile" ]]; then
+            print_error "Caddyfile не найден в $caddy_path"
+            continue
+          fi
+          
+          print_info "Открываем Caddyfile для редактирования..."
+          print_warning "Будет создана резервная копия"
+          
+          # Создаем резервную копию
+          cp "$caddy_path/Caddyfile" "$caddy_path/Caddyfile.backup.$(date +%Y%m%d_%H%M%S)"
+          
+          # Открываем в редакторе
+          ${EDITOR:-nano} "$caddy_path/Caddyfile"
+          
+          print_info "Проверяем конфигурацию..."
+          local caddy_container
+          caddy_container=$(docker ps --filter "name=caddy" --format "{{.Names}}" | head -n1)
+          
+          if [[ -n "$caddy_container" ]]; then
+            if docker exec "$caddy_container" caddy validate --config /etc/caddy/Caddyfile 2>&1; then
+              print_success "Конфигурация валидна"
+              read -rp "Перезагрузить Caddy? [Y/n]: " reload_confirm
+              if [[ "${reload_confirm,,}" != "n" ]]; then
+                docker exec "$caddy_container" caddy reload --config /etc/caddy/Caddyfile
+                print_success "Caddy перезагружен"
+              fi
+            else
+              print_error "Конфигурация содержит ошибки!"
+              read -rp "Восстановить из резервной копии? [Y/n]: " restore_confirm
+              if [[ "${restore_confirm,,}" != "n" ]]; then
+                local last_backup
+                last_backup=$(ls -t "$caddy_path"/Caddyfile.backup.* 2>/dev/null | head -n1)
+                if [[ -n "$last_backup" ]]; then
+                  cp "$last_backup" "$caddy_path/Caddyfile"
+                  print_success "Конфигурация восстановлена"
+                fi
+              fi
+            fi
+          fi
+        fi
+        ;;
+      5)
+        create_bot_network
+        print_success "Сеть проверена/создана"
+        ;;
+      6)
+        connect_bot_to_network
+        ;;
+      7)
+        # Перезагрузка веб-серверов
+        print_section "Перезагрузка веб-серверов"
+        
+        if [[ "$caddy_installed" == "true" ]]; then
+          local caddy_container
+          caddy_container=$(docker ps --filter "name=caddy" --format "{{.Names}}" | head -n1)
+          if [[ -n "$caddy_container" ]]; then
+            print_info "Перезагружаем Caddy..."
+            docker restart "$caddy_container"
+            sleep 2
+            if docker ps --filter "name=caddy" --filter "status=running" | grep -q caddy; then
+              print_success "Caddy перезапущен успешно"
+            else
+              print_error "Ошибка при перезапуске Caddy"
+            fi
+          fi
+        fi
+        
+        if [[ "$nginx_installed" == "true" ]]; then
+          local nginx_container
+          nginx_container=$(docker ps --filter "name=nginx" --format "{{.Names}}" | head -n1)
+          if [[ -n "$nginx_container" ]]; then
+            print_info "Перезагружаем Nginx..."
+            docker exec "$nginx_container" nginx -s reload 2>/dev/null || docker restart "$nginx_container"
+            print_success "Nginx перезагружен успешно"
+          fi
+        fi
+        ;;
+      0)
+        return 0
+        ;;
+      *)
+        print_error "Неверный выбор"
+        ;;
+    esac
+    
+    echo ""
+    read -rp "$(echo -e ${CYAN}Нажмите Enter для продолжения...${NC})"
+  done
+}
+
 # Мониторинг сервисов
 show_monitoring() {
   print_header "МОНИТОРИНГ СЕРВИСОВ БОТА"
@@ -562,6 +1321,7 @@ EOF
   echo -e "${CYAN}${BOLD}[5]${NC} 💾 Создать резервную копию"
   echo -e "${YELLOW}${BOLD}[6]${NC} 📦 Восстановить из резервной копии"
   echo -e "${RED}${BOLD}[7]${NC} 🧹 Очистка системы"
+  echo -e "${PURPLE}${BOLD}[8]${NC} 🌐 Настройка обратного прокси (Caddy/Nginx)"
   echo -e "${WHITE}${BOLD}[0]${NC} 🚪 Выход"
   
   echo ""
@@ -596,6 +1356,9 @@ main() {
         ;;
       7)
         cleanup_system
+        ;;
+      8)
+        configure_reverse_proxy
         ;;
       0)
         print_success "До свидания!"
