@@ -302,7 +302,7 @@
         /* Stats Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 12px;
             margin-bottom: 12px;
         }
@@ -606,10 +606,6 @@
                         <div class="stat-value" id="serversCount">-</div>
                         <div class="stat-label" data-i18n="stats.servers">Servers</div>
                     </div>
-                    <div class="stat-item">
-                        <div class="stat-value" id="devicesUsage">-</div>
-                        <div class="stat-label" data-i18n="stats.devices">Devices</div>
-                    </div>
                 </div>
 
                 <div class="info-item">
@@ -623,18 +619,6 @@
                 <div class="info-item">
                     <span class="info-label" data-i18n="info.traffic_limit">Traffic Limit</span>
                     <span class="info-value" id="trafficLimit">-</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label" data-i18n="info.subscription_type">Subscription Type</span>
-                    <span class="info-value" id="subscriptionType">-</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label" data-i18n="info.autopay_status">Autopay</span>
-                    <span class="info-value" id="autopayStatus">-</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label" data-i18n="info.promo_group">Promo Group</span>
-                    <span class="info-value" id="promoGroup">-</span>
                 </div>
             </div>
 
@@ -732,13 +716,9 @@
                 'error.default.message': 'Please contact support to activate your subscription.',
                 'stats.days_left': 'Days left',
                 'stats.servers': 'Servers',
-                'stats.devices': 'Devices',
                 'info.expires': 'Expires',
                 'info.traffic_used': 'Traffic used',
                 'info.traffic_limit': 'Traffic limit',
-                'info.subscription_type': 'Subscription type',
-                'info.autopay_status': 'Autopay',
-                'info.promo_group': 'Promo group',
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
@@ -770,11 +750,6 @@
                 'status.expired': 'Expired',
                 'status.disabled': 'Disabled',
                 'status.unknown': 'Unknown',
-                'subscriptions.type.trial': 'Trial',
-                'subscriptions.type.paid': 'Paid',
-                'autopay.enabled': 'Enabled',
-                'autopay.disabled': 'Disabled',
-                'autopay.days_before_suffix': 'days before renewal',
                 'platform.ios': 'iOS',
                 'platform.android': 'Android',
                 'platform.pc': 'PC',
@@ -791,13 +766,9 @@
                 'error.default.message': 'Свяжитесь с поддержкой, чтобы активировать подписку.',
                 'stats.days_left': 'Осталось дней',
                 'stats.servers': 'Серверы',
-                'stats.devices': 'Устройства',
                 'info.expires': 'Действует до',
                 'info.traffic_used': 'Использовано трафика',
                 'info.traffic_limit': 'Лимит трафика',
-                'info.subscription_type': 'Тип подписки',
-                'info.autopay_status': 'Автоплатеж',
-                'info.promo_group': 'Промогруппа',
                 'button.connect.default': 'Подключиться к VPN',
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
@@ -829,11 +800,6 @@
                 'status.expired': 'Истекла',
                 'status.disabled': 'Отключена',
                 'status.unknown': 'Неизвестно',
-                'subscriptions.type.trial': 'Триал',
-                'subscriptions.type.paid': 'Платная',
-                'autopay.enabled': 'Включен',
-                'autopay.disabled': 'Выключен',
-                'autopay.days_before_suffix': 'дн. до списания',
                 'platform.ios': 'iOS',
                 'platform.android': 'Android',
                 'platform.pc': 'ПК',
@@ -1119,71 +1085,17 @@
             document.getElementById('daysLeft').textContent = daysLeft;
             document.getElementById('expiresAt').textContent = formatDate(user.expires_at);
 
-            const connectedServers = Array.isArray(userData.connected_servers)
-                ? userData.connected_servers
-                : [];
-            const serversCount = connectedServers.length
-                || (Array.isArray(userData.connected_squads)
-                    ? userData.connected_squads.length
-                    : Array.isArray(userData.links)
-                        ? userData.links.length
-                        : 0);
+            const serversCount = Array.isArray(userData.connected_squads)
+                ? userData.connected_squads.length
+                : Array.isArray(userData.links)
+                    ? userData.links.length
+                    : 0;
             document.getElementById('serversCount').textContent = serversCount;
-
-            const connectedDevices = userData.connected_devices || {};
-            const deviceLimitRaw = connectedDevices.limit ?? user.device_limit;
-            const deviceLimit = Number.isFinite(Number(deviceLimitRaw))
-                ? Number(deviceLimitRaw)
-                : null;
-            const devicesCount = Number.isFinite(Number(connectedDevices.count))
-                ? Number(connectedDevices.count)
-                : null;
-            let devicesText = '—';
-            if (devicesCount !== null && deviceLimit !== null) {
-                devicesText = `${devicesCount}/${deviceLimit}`;
-            } else if (devicesCount !== null) {
-                devicesText = String(devicesCount);
-            } else if (deviceLimit !== null) {
-                devicesText = `—/${deviceLimit}`;
-            }
-            document.getElementById('devicesUsage').textContent = devicesText;
 
             document.getElementById('trafficUsed').textContent =
                 user.traffic_used_label || formatTraffic(user.traffic_used_gb);
             document.getElementById('trafficLimit').textContent =
                 user.traffic_limit_label || formatTrafficLimit(user.traffic_limit_gb);
-
-            const subscriptionTypeElement = document.getElementById('subscriptionType');
-            if (subscriptionTypeElement) {
-                const typeKey = user.subscription_type
-                    ? `subscriptions.type.${user.subscription_type}`
-                    : user.is_trial
-                        ? 'subscriptions.type.trial'
-                        : 'subscriptions.type.paid';
-                const typeLabel = t(typeKey);
-                subscriptionTypeElement.textContent =
-                    typeLabel === typeKey
-                        ? (user.subscription_type || (user.is_trial ? t('subscriptions.type.trial') : t('subscriptions.type.paid')))
-                        : typeLabel;
-            }
-
-            const autopayStatusElement = document.getElementById('autopayStatus');
-            if (autopayStatusElement) {
-                const autopayEnabled = userData.autopay_enabled === true;
-                const baseLabel = t(autopayEnabled ? 'autopay.enabled' : 'autopay.disabled');
-                const autopayDaysRaw = Number(userData.autopay_days_before);
-                const hasAutopayDays = autopayEnabled && Number.isFinite(autopayDaysRaw) && autopayDaysRaw > 0;
-                autopayStatusElement.textContent = hasAutopayDays
-                    ? `${baseLabel} • ${autopayDaysRaw} ${t('autopay.days_before_suffix')}`
-                    : baseLabel;
-            }
-
-            const promoGroupElement = document.getElementById('promoGroup');
-            if (promoGroupElement) {
-                promoGroupElement.textContent = (user.promo_group && user.promo_group.name)
-                    ? user.promo_group.name
-                    : '—';
-            }
 
             renderBalanceSection();
             renderTransactionHistory();
@@ -1520,13 +1432,7 @@
                 return;
             }
 
-            const fallbackServers = Array.isArray(userData?.connected_squads)
-                ? userData.connected_squads.map(uuid => ({ uuid, display_name: uuid }))
-                : [];
-            const servers = Array.isArray(userData?.connected_servers) && userData.connected_servers.length
-                ? userData.connected_servers
-                : fallbackServers;
-
+            const servers = Array.isArray(userData?.connected_squads) ? userData.connected_squads : [];
             if (!servers.length) {
                 list.innerHTML = '';
                 emptyState.textContent = t('servers.empty');
@@ -1535,14 +1441,7 @@
             }
 
             emptyState.classList.add('hidden');
-            list.innerHTML = servers
-                .map(server => {
-                    const name = typeof server === 'string'
-                        ? server
-                        : server?.display_name || server?.uuid || '';
-                    return `<li class="server-item">${escapeHtml(name)}</li>`;
-                })
-                .join('');
+            list.innerHTML = servers.map(server => `<li class="server-item">${escapeHtml(server)}</li>`).join('');
         }
 
         function getCurrentSubscriptionUrl() {
