@@ -1,4 +1,4 @@
-# Настройка мини-приложения Telegram
+# Настройка мини-приложения Telegram подписки
 
 Эта инструкция описывает, как запустить статическую страницу из каталога `miniapp/index.html`, подключить её к административному API бота и опубликовать через reverse-proxy (nginx или Caddy). Страница отображает текущую подписку пользователя и использует Telegram WebApp init data для авторизации.
 
@@ -7,25 +7,18 @@
 - Развёрнутый бот Bedolaga c актуальной базой данных.
 - Включённое административное API (`WEB_API_ENABLED=true`).
 - Доменное имя с действующим TLS-сертификатом (Telegram открывает веб-приложения только по HTTPS).
-- Возможность разместить статические файлы (`miniapp/index.html` и `app-config.json`) и проксировать запросы `/miniapp/*` к боту.
+- Возможность разместить статические файлы (`miniapp/index.html` и `miniapp/app-config.json`) и проксировать запросы `/miniapp/*` к боту.
 
 ## 2. Настройка окружения
 
 1. Скопируйте пример конфигурации и включите веб-API:
-   ```bash
-   cp .env.example .env
-   nano .env
-   ```
 2. Задайте как минимум следующие переменные:
    ```env
-   BOT_TOKEN=123456:ABCDEF               # токен вашего бота
    WEB_API_ENABLED=true                  # включает FastAPI
    WEB_API_HOST=0.0.0.0
    WEB_API_PORT=8080
    WEB_API_ALLOWED_ORIGINS=https://miniapp.example.com
    WEB_API_DEFAULT_TOKEN=super-secret-token
-   SERVER_STATUS_MODE=external_link_miniapp
-   SERVER_STATUS_EXTERNAL_URL=https://miniapp.example.com
    ```
    - `WEB_API_ALLOWED_ORIGINS` должен содержать домен, с которого будет открываться мини-приложение.
    - `WEB_API_DEFAULT_TOKEN` создаёт bootstrap-токен для запросов от страницы. Его можно заменить на токен, созданный через `POST /tokens`.
@@ -45,7 +38,7 @@ curl -H "X-API-Key: super-secret-token" http://127.0.0.1:8080/health
 
 ## 4. Подготовка статических файлов
 
-1. Скопируйте `miniapp/index.html` и `app-config.json` на сервер, из которого nginx/Caddy будет отдавать статический контент. Например:
+1. Скопируйте `miniapp/index.html` и `miniapp/app-config.json` на сервер, из которого nginx/Caddy будет отдавать статический контент. Например:
    ```bash
    sudo mkdir -p /var/www/remnawave-miniapp
    sudo cp miniapp/index.html /var/www/remnawave-miniapp/
@@ -75,7 +68,7 @@ server {
     root /var/www/remnawave-miniapp;
     index index.html;
 
-    location = /app-config.json {
+    location = /miniapp/app-config.json {
         add_header Access-Control-Allow-Origin "*";
         try_files $uri =404;
     }
@@ -111,8 +104,6 @@ miniapp.example.com {
     reverse_proxy /miniapp/* 127.0.0.1:8080 {
         header_up Host {host}
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
     }
 }
 ```
