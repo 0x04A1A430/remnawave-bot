@@ -2598,6 +2598,49 @@
             return subscriptionUrl;
         }
 
+        function isCustomProtocol(link) {
+            if (!link || typeof link !== 'string') {
+                return false;
+            }
+
+            const normalized = link.trim().toLowerCase();
+            if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+                return false;
+            }
+
+            return /^[a-z][a-z0-9+\-.]*:/i.test(normalized);
+        }
+
+        function isDesktopEnvironment() {
+            const ua = navigator.userAgent || '';
+            return !/android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
+        }
+
+        function openCustomProtocol(link) {
+            if (!link) {
+                return;
+            }
+
+            if (isDesktopEnvironment()) {
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = link;
+                document.body.appendChild(iframe);
+
+                setTimeout(() => {
+                    if (iframe.parentNode) {
+                        iframe.parentNode.removeChild(iframe);
+                    }
+                }, 2000);
+
+                setTimeout(() => {
+                    window.location.href = link;
+                }, 100);
+            } else {
+                window.location.href = link;
+            }
+        }
+
         function openExternalLink(link, options = {}) {
             if (!link) {
                 return;
@@ -2610,13 +2653,27 @@
                 return;
             }
 
-            if (typeof tg.openLink === 'function') {
+            const customProtocol = isCustomProtocol(link);
+
+            if (customProtocol && !openInMiniApp && isDesktopEnvironment()) {
+                openCustomProtocol(link);
+                return;
+            }
+
+            if (typeof tg.openLink === 'function' && (!customProtocol || !isDesktopEnvironment())) {
                 try {
                     tg.openLink(link, { try_instant_view: false });
-                    return;
+                    if (!customProtocol) {
+                        return;
+                    }
                 } catch (error) {
                     console.warn('tg.openLink failed:', error);
                 }
+            }
+
+            if (customProtocol) {
+                openCustomProtocol(link);
+                return;
             }
 
             const newWindow = window.open(link, '_blank', 'noopener,noreferrer');
