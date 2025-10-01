@@ -50,17 +50,8 @@
 
         /* Header */
         .header {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
+            text-align: center;
             margin-bottom: 24px;
-        }
-
-        .header-text {
-            flex: 1 1 auto;
-            min-width: 0;
         }
 
         .logo {
@@ -73,28 +64,6 @@
         .subtitle {
             font-size: 14px;
             color: var(--text-secondary);
-            white-space: nowrap;
-        }
-
-        .language-selector {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .language-selector label {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .language-selector select {
-            padding: 6px 10px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background: white;
-            color: var(--text-primary);
-            font-size: 13px;
-            font-weight: 600;
         }
 
         /* Loading State */
@@ -229,103 +198,6 @@
         .stat-label {
             font-size: 12px;
             color: var(--text-secondary);
-        }
-
-        .balance-amount {
-            font-size: 28px;
-            font-weight: 700;
-            color: var(--primary);
-        }
-
-        .balance-meta {
-            margin-top: 4px;
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
-        .section-subtitle {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            margin: 16px 0 8px;
-        }
-
-        .transaction-list,
-        .server-list {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-        }
-
-        .transaction-item,
-        .server-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 12px;
-            padding: 12px 0;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .transaction-item:last-child,
-        .server-item:last-child {
-            border-bottom: none;
-        }
-
-        .transaction-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .transaction-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 4px;
-        }
-
-        .transaction-meta {
-            font-size: 12px;
-            color: var(--text-secondary);
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
-        .transaction-amount {
-            font-size: 15px;
-            font-weight: 700;
-            white-space: nowrap;
-        }
-
-        .transaction-amount.positive {
-            color: #13854f;
-        }
-
-        .transaction-amount.negative {
-            color: #b42318;
-        }
-
-        .server-item {
-            font-size: 14px;
-            color: var(--text-primary);
-        }
-
-        .server-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .server-description {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .empty-placeholder {
-            font-size: 13px;
-            color: var(--text-secondary);
-            padding: 8px 0;
         }
 
         /* Info Items */
@@ -563,30 +435,21 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <div class="header-text">
-                <div class="logo" data-i18n="title">RemnaWave VPN</div>
-                <div class="subtitle" data-i18n="subtitle">Secure & Fast Connection</div>
-            </div>
-            <div class="language-selector">
-                <label for="languageSelect" data-i18n="language.label">Language</label>
-                <select id="languageSelect" aria-label="Language selector">
-                    <option value="en" data-i18n="language.options.en">English</option>
-                    <option value="ru" data-i18n="language.options.ru">Русский</option>
-                </select>
-            </div>
+            <div class="logo">RemnaWave VPN</div>
+            <div class="subtitle">Secure & Fast Connection</div>
         </div>
 
         <!-- Loading State -->
         <div id="loadingState" class="loading">
             <div class="spinner"></div>
-            <div id="loadingText" data-i18n="loading.message">Loading your subscription...</div>
+            <div>Loading your subscription...</div>
         </div>
 
         <!-- Error State -->
         <div id="errorState" class="error hidden">
             <div class="error-icon">⚠️</div>
-            <div class="error-title" id="errorTitle" data-i18n="errors.defaultTitle">Subscription Not Found</div>
-            <div class="error-text" id="errorText" data-i18n="errors.defaultMessage">Please contact support to activate your subscription</div>
+            <div class="error-title" id="errorTitle">Subscription Not Found</div>
+            <div class="error-text" id="errorText">Please contact support to activate your subscription</div>
         </div>
 
         <!-- Main Content -->
@@ -597,31 +460,31 @@
                     <div class="user-avatar" id="userAvatar">U</div>
                     <div class="user-info">
                         <div class="user-name" id="userName">Loading...</div>
-                        <span class="status-badge status-active" id="statusBadge" data-i18n="status.active">Active</span>
+                        <span class="status-badge status-active" id="statusBadge">Active</span>
                     </div>
                 </div>
 
                 <div class="stats-grid">
                     <div class="stat-item">
                         <div class="stat-value" id="daysLeft">-</div>
-                        <div class="stat-label" data-i18n="stats.daysLeft">Days Left</div>
+                        <div class="stat-label">Days Left</div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-value" id="serversCount">-</div>
-                        <div class="stat-label" data-i18n="stats.servers">Servers</div>
+                        <div class="stat-label">Servers</div>
                     </div>
                 </div>
 
                 <div class="info-item">
-                    <span class="info-label" data-i18n="info.expires">Expires</span>
+                    <span class="info-label">Expires</span>
                     <span class="info-value" id="expiresAt">-</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label" data-i18n="info.trafficUsed">Traffic Used</span>
+                    <span class="info-label">Traffic Used</span>
                     <span class="info-value" id="trafficUsed">-</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label" data-i18n="info.trafficLimit">Traffic Limit</span>
+                    <span class="info-label">Traffic Limit</span>
                     <span class="info-value" id="trafficLimit">-</span>
                 </div>
             </div>
@@ -631,39 +494,21 @@
                 <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                 </svg>
-                <span data-i18n="buttons.connect">Connect to VPN</span>
+                Connect to VPN
             </button>
 
             <button class="btn btn-secondary" id="copyBtn" style="margin-top: 8px;">
                 <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
                 </svg>
-                <span data-i18n="buttons.copy">Copy Subscription Link</span>
+                Copy Subscription Link
             </button>
-
-            <!-- Balance and Transactions -->
-            <div class="card">
-                <div class="card-title" data-i18n="balance.title">Balance</div>
-                <div class="balance-amount" id="balanceAmount">—</div>
-                <div class="balance-meta" id="balanceMeta"></div>
-
-                <div class="section-subtitle" data-i18n="transactions.title">Recent Transactions</div>
-                <ul class="transaction-list" id="transactionsList"></ul>
-                <div class="empty-placeholder" id="transactionsEmpty" data-i18n="transactions.empty">No transactions yet</div>
-            </div>
-
-            <!-- Connected Servers -->
-            <div class="card">
-                <div class="card-title" data-i18n="servers.title">Connected Servers</div>
-                <ul class="server-list" id="serversList"></ul>
-                <div class="empty-placeholder" id="serversEmpty" data-i18n="servers.empty">No servers connected yet</div>
-            </div>
 
             <!-- App Installation Section -->
             <div class="app-section">
                 <div class="card">
-                    <div class="card-title" data-i18n="installation.title">Installation Guide</div>
-
+                    <div class="card-title">Installation Guide</div>
+                    
                     <div class="platform-selector">
                         <button class="platform-btn" data-platform="ios">iOS</button>
                         <button class="platform-btn active" data-platform="android">Android</button>
@@ -706,264 +551,6 @@
         let appsConfig = {};
         let currentPlatform = 'android';
         let preferredLanguage = 'en';
-        const supportedLanguages = ['en', 'ru'];
-        let currentLanguage = 'en';
-
-        const translations = {
-            en: {
-                title: 'RemnaWave VPN',
-                subtitle: 'Secure & Fast Connection',
-                language: {
-                    label: 'Language',
-                    options: {
-                        en: 'English',
-                        ru: 'Russian',
-                    },
-                },
-                loading: {
-                    message: 'Loading your subscription...',
-                },
-                errors: {
-                    defaultTitle: 'Subscription Not Found',
-                    defaultMessage: 'Please contact support to activate your subscription',
-                    authorizationTitle: 'Authorization Error',
-                    authorizationMessage: 'Authorization failed. Please open the mini app from Telegram.',
-                    missingInitData: 'Missing Telegram init data',
-                },
-                buttons: {
-                    connect: 'Connect to VPN',
-                    copy: 'Copy Subscription Link',
-                },
-                stats: {
-                    daysLeft: 'Days Left',
-                    servers: 'Servers',
-                },
-                info: {
-                    expires: 'Expires',
-                    trafficUsed: 'Traffic Used',
-                    trafficLimit: 'Traffic Limit',
-                    unlimited: 'Unlimited',
-                },
-                balance: {
-                    title: 'Balance',
-                    currencyLabel: 'Currency:',
-                },
-                transactions: {
-                    title: 'Recent Transactions',
-                    empty: 'No transactions yet',
-                    completed: 'Completed',
-                    pending: 'Pending',
-                    meta: {
-                        status: 'Status:',
-                        payment: 'Payment method:',
-                        date: 'Date:',
-                    },
-                    types: {
-                        topup: 'Top up',
-                        purchase: 'Purchase',
-                        refund: 'Refund',
-                        adjustment: 'Adjustment',
-                    },
-                    fallbackTitle: 'Payment',
-                },
-                servers: {
-                    title: 'Connected Servers',
-                    empty: 'No servers connected yet',
-                },
-                installation: {
-                    title: 'Installation Guide',
-                    recommended: 'Recommended',
-                    noApps: 'No installation guide available for this platform yet.',
-                    defaultAppName: 'App',
-                    steps: {
-                        download: 'Download & Install',
-                        add: 'Add Subscription',
-                        connect: 'Connect & Use',
-                    },
-                },
-                status: {
-                    active: 'Active',
-                    expired: 'Expired',
-                    trial: 'Trial',
-                    disabled: 'Disabled',
-                    unknown: 'Unknown',
-                },
-                copy: {
-                    success: 'Subscription link copied to clipboard',
-                    error: 'Unable to copy the subscription link automatically. Please copy it manually.',
-                    successTitle: 'Copied',
-                    errorTitle: 'Copy failed',
-                },
-                popup: {
-                    defaultTitle: 'Info',
-                },
-            },
-            ru: {
-                title: 'RemnaWave VPN',
-                subtitle: 'Безопасное и быстрое подключение',
-                language: {
-                    label: 'Язык',
-                    options: {
-                        en: 'Английский',
-                        ru: 'Русский',
-                    },
-                },
-                loading: {
-                    message: 'Загружаем вашу подписку…',
-                },
-                errors: {
-                    defaultTitle: 'Подписка не найдена',
-                    defaultMessage: 'Свяжитесь с поддержкой для активации подписки',
-                    authorizationTitle: 'Ошибка авторизации',
-                    authorizationMessage: 'Авторизация не удалась. Откройте мини-приложение из Telegram.',
-                    missingInitData: 'Отсутствуют данные авторизации Telegram',
-                },
-                buttons: {
-                    connect: 'Подключиться',
-                    copy: 'Скопировать ссылку',
-                },
-                stats: {
-                    daysLeft: 'Осталось дней',
-                    servers: 'Серверы',
-                },
-                info: {
-                    expires: 'Действует до',
-                    trafficUsed: 'Использовано трафика',
-                    trafficLimit: 'Лимит трафика',
-                    unlimited: 'Безлимит',
-                },
-                balance: {
-                    title: 'Баланс',
-                    currencyLabel: 'Валюта:',
-                },
-                transactions: {
-                    title: 'История операций',
-                    empty: 'Операций пока нет',
-                    completed: 'Завершено',
-                    pending: 'В обработке',
-                    meta: {
-                        status: 'Статус:',
-                        payment: 'Способ оплаты:',
-                        date: 'Дата:',
-                    },
-                    types: {
-                        topup: 'Пополнение',
-                        purchase: 'Покупка',
-                        refund: 'Возврат',
-                        adjustment: 'Корректировка',
-                    },
-                    fallbackTitle: 'Платёж',
-                },
-                servers: {
-                    title: 'Подключённые серверы',
-                    empty: 'Нет подключённых серверов',
-                },
-                installation: {
-                    title: 'Инструкция по установке',
-                    recommended: 'Рекомендуем',
-                    noApps: 'Пока нет инструкции для этой платформы.',
-                    defaultAppName: 'Приложение',
-                    steps: {
-                        download: 'Скачать и установить',
-                        add: 'Добавить подписку',
-                        connect: 'Подключиться и пользоваться',
-                    },
-                },
-                status: {
-                    active: 'Активна',
-                    expired: 'Истекла',
-                    trial: 'Пробный период',
-                    disabled: 'Отключена',
-                    unknown: 'Неизвестно',
-                },
-                copy: {
-                    success: 'Ссылка на подписку скопирована',
-                    error: 'Не удалось скопировать ссылку автоматически. Скопируйте её вручную.',
-                    successTitle: 'Скопировано',
-                    errorTitle: 'Ошибка копирования',
-                },
-                popup: {
-                    defaultTitle: 'Информация',
-                },
-            },
-        };
-
-        function normalizeLanguage(lang) {
-            if (!lang) {
-                return 'en';
-            }
-            const lower = String(lang).toLowerCase();
-            if (supportedLanguages.includes(lower)) {
-                return lower;
-            }
-            const match = supportedLanguages.find(code => lower.startsWith(code));
-            return match || 'en';
-        }
-
-        function getTranslationValue(lang, keyPath) {
-            const segments = keyPath.split('.');
-            let cursor = translations[lang];
-            for (const segment of segments) {
-                if (cursor && Object.prototype.hasOwnProperty.call(cursor, segment)) {
-                    cursor = cursor[segment];
-                } else {
-                    return null;
-                }
-            }
-            return typeof cursor === 'string' ? cursor : null;
-        }
-
-        function t(key) {
-            const normalized = normalizeLanguage(currentLanguage);
-            const primary = getTranslationValue(normalized, key);
-            if (primary) {
-                return primary;
-            }
-            return getTranslationValue('en', key) || key;
-        }
-
-        function updateStaticTexts() {
-            document.querySelectorAll('[data-i18n]').forEach(element => {
-                const key = element.getAttribute('data-i18n');
-                if (!key) {
-                    return;
-                }
-                const translation = t(key);
-                if (translation) {
-                    element.textContent = translation;
-                }
-            });
-        }
-
-        function applyLanguage(lang) {
-            const normalized = normalizeLanguage(lang);
-            currentLanguage = normalized;
-            preferredLanguage = normalized;
-            document.documentElement.lang = normalized;
-            const select = document.getElementById('languageSelect');
-            if (select && select.value !== normalized) {
-                select.value = normalized;
-            }
-            updateStaticTexts();
-            if (userData?.user) {
-                renderUserData();
-            } else {
-                renderTransactions();
-                renderServerList();
-            }
-            renderApps();
-            updateActionButtons();
-        }
-
-        function setupLanguageSelector() {
-            const select = document.getElementById('languageSelect');
-            if (!select) {
-                return;
-            }
-            select.addEventListener('change', event => {
-                applyLanguage(event.target.value);
-            });
-        }
 
         function createError(title, message, status) {
             const error = new Error(message || title);
@@ -980,17 +567,14 @@
             try {
                 const telegramUser = tg.initDataUnsafe?.user;
                 if (telegramUser?.language_code) {
-                    preferredLanguage = normalizeLanguage(telegramUser.language_code);
-                    applyLanguage(preferredLanguage);
-                } else {
-                    applyLanguage(currentLanguage);
+                    preferredLanguage = telegramUser.language_code.split('-')[0];
                 }
 
                 await loadAppsConfig();
 
                 const initData = tg.initData || '';
                 if (!initData) {
-                    throw createError(t('errors.authorizationTitle'), t('errors.missingInitData'));
+                    throw createError('Authorization Error', 'Missing Telegram init data');
                 }
 
                 const response = await fetch('/miniapp/subscription', {
@@ -1003,9 +587,9 @@
 
                 if (!response.ok) {
                     let detail = response.status === 401
-                        ? t('errors.authorizationMessage')
-                        : t('errors.defaultMessage');
-                    let title = response.status === 401 ? t('errors.authorizationTitle') : t('errors.defaultTitle');
+                        ? 'Authorization failed. Please open the mini app from Telegram.'
+                        : 'Subscription not found';
+                    let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
 
                     try {
                         const errorPayload = await response.json();
@@ -1021,24 +605,19 @@
 
                 userData = await response.json();
                 userData.subscriptionUrl = userData.subscription_url || null;
-                userData.subscriptionCryptoLink = userData.subscription_crypto_link || userData.subscriptionCryptoLink || null;
+                userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
 
                 if (userData?.user?.language) {
-                    preferredLanguage = normalizeLanguage(userData.user.language);
-                    applyLanguage(preferredLanguage);
-                } else {
-                    applyLanguage(currentLanguage);
+                    preferredLanguage = userData.user.language;
                 }
-
-                document.getElementById('errorState')?.classList.add('hidden');
 
                 renderUserData();
                 detectPlatform();
                 setActivePlatformButton();
                 renderApps();
 
-                document.getElementById('loadingState')?.classList.add('hidden');
-                document.getElementById('mainContent')?.classList.remove('hidden');
+                document.getElementById('loadingState').classList.add('hidden');
+                document.getElementById('mainContent').classList.remove('hidden');
             } catch (error) {
                 console.error('Initialization error:', error);
                 showError(error);
@@ -1070,279 +649,36 @@
             const fallbackName = rawName || [user.first_name, user.last_name].filter(Boolean).join(' ') || `User ${user.telegram_id || ''}`.trim();
             const avatarChar = (fallbackName.replace(/^@/, '')[0] || 'U').toUpperCase();
 
-            const avatarEl = document.getElementById('userAvatar');
-            const nameEl = document.getElementById('userName');
-            if (avatarEl) {
-                avatarEl.textContent = avatarChar;
-            }
-            if (nameEl) {
-                nameEl.textContent = fallbackName;
-            }
+            document.getElementById('userAvatar').textContent = avatarChar;
+            document.getElementById('userName').textContent = fallbackName;
 
             const statusValueRaw = (user.subscription_actual_status || user.subscription_status || 'active').toLowerCase();
             const knownStatuses = ['active', 'expired', 'trial', 'disabled'];
             const statusClass = knownStatuses.includes(statusValueRaw) ? statusValueRaw : 'unknown';
             const statusBadge = document.getElementById('statusBadge');
-            if (statusBadge) {
-                const translatedStatus = t(`status.${statusClass}`);
-                statusBadge.textContent = translatedStatus || statusClass.charAt(0).toUpperCase() + statusClass.slice(1);
-                statusBadge.className = `status-badge status-${statusClass}`;
-            }
+            statusBadge.textContent = user.status_label || statusClass.charAt(0).toUpperCase() + statusClass.slice(1);
+            statusBadge.className = `status-badge status-${statusClass}`;
 
             const expiresAt = user.expires_at ? new Date(user.expires_at) : null;
             let daysLeft = '—';
             if (expiresAt && !Number.isNaN(expiresAt.getTime())) {
                 const diffDays = Math.ceil((expiresAt - new Date()) / (1000 * 60 * 60 * 24));
-                daysLeft = diffDays > 0 ? String(diffDays) : '0';
+                daysLeft = diffDays > 0 ? diffDays : '0';
             }
-            const daysLeftEl = document.getElementById('daysLeft');
-            if (daysLeftEl) {
-                daysLeftEl.textContent = daysLeft;
-            }
+            document.getElementById('daysLeft').textContent = daysLeft;
+            document.getElementById('expiresAt').textContent = expiresAt && !Number.isNaN(expiresAt.getTime())
+                ? expiresAt.toLocaleDateString()
+                : '—';
 
-            const expiresEl = document.getElementById('expiresAt');
-            if (expiresEl) {
-                expiresEl.textContent = formatDate(expiresAt);
-            }
+            const serversCount = userData.links?.length ?? userData.connected_squads?.length ?? 0;
+            document.getElementById('serversCount').textContent = serversCount;
 
-            const trafficUsedEl = document.getElementById('trafficUsed');
-            if (trafficUsedEl) {
-                trafficUsedEl.textContent = user.traffic_used_label || formatTraffic(user.traffic_used_gb);
-            }
+            document.getElementById('trafficUsed').textContent =
+                user.traffic_used_label || formatTraffic(user.traffic_used_gb);
+            document.getElementById('trafficLimit').textContent =
+                user.traffic_limit_label || formatTrafficLimit(user.traffic_limit_gb);
 
-            const trafficLimitEl = document.getElementById('trafficLimit');
-            if (trafficLimitEl) {
-                trafficLimitEl.textContent = user.traffic_limit_label || formatTrafficLimit(user.traffic_limit_gb);
-            }
-
-            updateServerCount();
-            renderBalance();
-            renderTransactions();
-            renderServerList();
             updateActionButtons();
-        }
-
-        function renderBalance() {
-            const amountEl = document.getElementById('balanceAmount');
-            const metaEl = document.getElementById('balanceMeta');
-            if (!amountEl || !metaEl || !userData?.user) {
-                return;
-            }
-            const currency = getCurrencyCode(userData.user.balance_currency);
-            const balanceValue = getAmountInRubles(userData.user.balance_rubles, userData.user.balance_kopeks);
-            amountEl.textContent = formatCurrencyAmount(balanceValue, currency, { withSign: false });
-            metaEl.textContent = `${t('balance.currencyLabel')} ${currency}`;
-        }
-
-        function getAmountInRubles(amountRubles, amountKopeks) {
-            if (typeof amountRubles === 'number' && Number.isFinite(amountRubles)) {
-                return amountRubles;
-            }
-            const numericRubles = Number.parseFloat(amountRubles);
-            if (Number.isFinite(numericRubles)) {
-                return numericRubles;
-            }
-            const kopeks = Number.parseInt(amountKopeks ?? 0, 10);
-            if (Number.isFinite(kopeks)) {
-                return kopeks / 100;
-            }
-            return 0;
-        }
-
-        function renderTransactions() {
-            const listEl = document.getElementById('transactionsList');
-            const emptyEl = document.getElementById('transactionsEmpty');
-            if (!listEl || !emptyEl) {
-                return;
-            }
-
-            const transactions = Array.isArray(userData?.transactions) ? userData.transactions : [];
-            if (!transactions.length) {
-                listEl.innerHTML = '';
-                emptyEl.classList.remove('hidden');
-                return;
-            }
-
-            emptyEl.classList.add('hidden');
-            const currency = getCurrencyCode(userData?.user?.balance_currency);
-
-            listEl.innerHTML = transactions.map(tx => {
-                const title = escapeHtml(getTransactionTitle(tx));
-                const statusLabel = tx?.is_completed ? t('transactions.completed') : t('transactions.pending');
-                const amountValue = getTransactionAmountValue(tx);
-                const amountClass = amountValue >= 0 ? 'positive' : 'negative';
-                const amountText = escapeHtml(formatCurrencyAmount(amountValue, currency, { withSign: true }));
-                const metaParts = [];
-                const dateLabel = formatDateTime(tx?.created_at);
-                if (dateLabel) {
-                    metaParts.push(`${t('transactions.meta.date')} ${dateLabel}`);
-                }
-                if (tx?.payment_method) {
-                    metaParts.push(`${t('transactions.meta.payment')} ${tx.payment_method}`);
-                }
-                metaParts.push(`${t('transactions.meta.status')} ${statusLabel}`);
-                const metaHtml = metaParts.map(part => `<span>${escapeHtml(part)}</span>`).join(' • ');
-
-                return `
-                    <li class="transaction-item">
-                        <div class="transaction-info">
-                            <div class="transaction-title">${title}</div>
-                            <div class="transaction-meta">${metaHtml}</div>
-                        </div>
-                        <div class="transaction-amount ${amountClass}">${amountText}</div>
-                    </li>
-                `;
-            }).join('');
-        }
-
-        function getTransactionAmountValue(tx) {
-            if (!tx) {
-                return 0;
-            }
-            return getAmountInRubles(tx.amount_rubles, tx.amount_kopeks);
-        }
-
-        function getTransactionTitle(tx) {
-            if (!tx) {
-                return t('transactions.fallbackTitle');
-            }
-            const description = typeof tx.description === 'string' ? tx.description.trim() : '';
-            if (description) {
-                return description;
-            }
-            const type = typeof tx.type === 'string' ? tx.type.toLowerCase() : '';
-            const translated = t(`transactions.types.${type}`);
-            if (translated && translated !== `transactions.types.${type}`) {
-                return translated;
-            }
-            return t('transactions.fallbackTitle');
-        }
-
-        function formatDateTime(value) {
-            if (!value) {
-                return '';
-            }
-            const date = new Date(value);
-            if (Number.isNaN(date.getTime())) {
-                return '';
-            }
-            try {
-                return date.toLocaleString(currentLanguage, {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                });
-            } catch (error) {
-                return date.toISOString().replace('T', ' ').split('.')[0];
-            }
-        }
-
-        function renderServerList() {
-            const listEl = document.getElementById('serversList');
-            const emptyEl = document.getElementById('serversEmpty');
-            if (!listEl || !emptyEl) {
-                return;
-            }
-
-            const servers = getServerList();
-            if (!servers.length) {
-                listEl.innerHTML = '';
-                emptyEl.classList.remove('hidden');
-                updateServerCount();
-                return;
-            }
-
-            emptyEl.classList.add('hidden');
-            updateServerCount();
-
-            listEl.innerHTML = servers.map(server => {
-                const description = server.description ? `<div class="server-description">${escapeHtml(server.description)}</div>` : '';
-                return `
-                    <li class="server-item">
-                        <div>
-                            <div class="server-name">${escapeHtml(server.name)}</div>
-                            ${description}
-                        </div>
-                    </li>
-                `;
-            }).join('');
-        }
-
-        function getServerList() {
-            if (!userData) {
-                return [];
-            }
-            const items = [];
-            if (Array.isArray(userData.connected_squads) && userData.connected_squads.length) {
-                userData.connected_squads.forEach(item => {
-                    const normalized = normalizeServer(item);
-                    if (normalized) {
-                        items.push(normalized);
-                    }
-                });
-            }
-            if (!items.length && Array.isArray(userData.links)) {
-                userData.links.forEach(link => {
-                    const name = extractServerName(link);
-                    if (name) {
-                        items.push({ name, description: '' });
-                    }
-                });
-            }
-            const seen = new Set();
-            return items.filter(item => {
-                const key = `${item.name}|${item.description}`;
-                if (seen.has(key)) {
-                    return false;
-                }
-                seen.add(key);
-                return true;
-            });
-        }
-
-        function normalizeServer(item) {
-            if (!item) {
-                return null;
-            }
-            if (typeof item === 'string') {
-                const trimmed = item.trim();
-                if (!trimmed) {
-                    return null;
-                }
-                return { name: trimmed, description: '' };
-            }
-            if (typeof item === 'object') {
-                const name = item.name || item.title || item.id || item.slug || '';
-                const description = item.description || item.location || '';
-                if (!name) {
-                    return null;
-                }
-                return { name: String(name), description: description ? String(description) : '' };
-            }
-            return null;
-        }
-
-        function extractServerName(link) {
-            if (typeof link !== 'string') {
-                return '';
-            }
-            try {
-                const url = new URL(link);
-                return url.hostname || link;
-            } catch (error) {
-                return link;
-            }
-        }
-
-        function updateServerCount() {
-            const countEl = document.getElementById('serversCount');
-            if (!countEl) {
-                return;
-            }
-            const count = getServerList().length;
-            countEl.textContent = String(count);
         }
 
         function detectPlatform() {
@@ -1387,20 +723,19 @@
             const apps = getAppsForCurrentPlatform();
 
             if (!apps.length) {
-                container.innerHTML = `<div class="step-description">${escapeHtml(t('installation.noApps'))}</div>`;
+                container.innerHTML = '<div class="step-description">No installation guide available for this platform yet.</div>';
                 return;
             }
 
             container.innerHTML = apps.map(app => {
                 const iconChar = (app.name?.[0] || 'A').toUpperCase();
-                const featuredBadge = app.isFeatured ? `<span class="featured-badge">${escapeHtml(t('installation.recommended'))}</span>` : '';
-                const appName = escapeHtml(app.name || t('installation.defaultAppName'));
+                const featuredBadge = app.isFeatured ? '<span class="featured-badge">Recommended</span>' : '';
                 return `
                     <div class="app-card ${app.isFeatured ? 'featured' : ''}">
                         <div class="app-header">
-                            <div class="app-icon">${escapeHtml(iconChar)}</div>
+                            <div class="app-icon">${iconChar}</div>
                             <div>
-                                <div class="app-name">${appName}</div>
+                                <div class="app-name">${app.name || 'App'}</div>
                                 ${featuredBadge}
                             </div>
                         </div>
@@ -1421,7 +756,7 @@
                     <div class="step">
                         <div class="step-title">
                             <span class="step-number">${stepNum++}</span>
-                            ${escapeHtml(t('installation.steps.download'))}
+                            Download & Install
                         </div>
                         ${app.installationStep.description ? `<div class="step-description">${getLocalizedText(app.installationStep.description)}</div>` : ''}
                         ${Array.isArray(app.installationStep.buttons) && app.installationStep.buttons.length ? `
@@ -1442,7 +777,7 @@
                     <div class="step">
                         <div class="step-title">
                             <span class="step-number">${stepNum++}</span>
-                            ${escapeHtml(t('installation.steps.add'))}
+                            Add Subscription
                         </div>
                         <div class="step-description">${getLocalizedText(app.addSubscriptionStep.description)}</div>
                     </div>
@@ -1454,7 +789,7 @@
                     <div class="step">
                         <div class="step-title">
                             <span class="step-number">${stepNum++}</span>
-                            ${escapeHtml(t('installation.steps.connect'))}
+                            Connect & Use
                         </div>
                         <div class="step-description">${getLocalizedText(app.connectAndUseStep.description)}</div>
                     </div>
@@ -1474,12 +809,9 @@
 
             const telegramLang = tg.initDataUnsafe?.user?.language_code;
             const preferenceOrder = [
-                currentLanguage,
-                currentLanguage?.split('-')[0],
                 preferredLanguage,
                 preferredLanguage?.split('-')[0],
                 userData?.user?.language,
-                userData?.user?.language?.split('-')[0],
                 telegramLang,
                 telegramLang?.split('-')[0],
                 'en',
@@ -1506,208 +838,110 @@
             if (!Number.isFinite(numeric)) {
                 return '0 GB';
             }
-            const digits = numeric >= 100 ? 0 : numeric >= 10 ? 1 : 2;
-            try {
-                return `${new Intl.NumberFormat(currentLanguage, {
-                    minimumFractionDigits: digits,
-                    maximumFractionDigits: digits,
-                }).format(numeric)} GB`;
-            } catch (error) {
-                return `${numeric.toFixed(digits)} GB`;
+            if (numeric >= 100) {
+                return `${numeric.toFixed(0)} GB`;
             }
+            if (numeric >= 10) {
+                return `${numeric.toFixed(1)} GB`;
+            }
+            return `${numeric.toFixed(2)} GB`;
         }
 
         function formatTrafficLimit(limit) {
             const numeric = typeof limit === 'number' ? limit : Number.parseFloat(limit ?? '0');
             if (!Number.isFinite(numeric) || numeric <= 0) {
-                return t('info.unlimited');
+                return 'Unlimited';
             }
-            try {
-                return `${new Intl.NumberFormat(currentLanguage, {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
-                }).format(numeric)} GB`;
-            } catch (error) {
-                return `${numeric.toFixed(0)} GB`;
-            }
+            return `${numeric.toFixed(0)} GB`;
         }
 
-        function formatCurrencyAmount(amount, currency, options = {}) {
-            const normalizedCurrency = getCurrencyCode(currency);
-            const value = typeof amount === 'number' ? amount : Number.parseFloat(amount ?? '0');
-            const withSign = Boolean(options.withSign);
-            if (!Number.isFinite(value)) {
-                return withSign ? `+0.00 ${normalizedCurrency}` : `0.00 ${normalizedCurrency}`;
-            }
-            try {
-                return new Intl.NumberFormat(currentLanguage, {
-                    style: 'currency',
-                    currency: normalizedCurrency,
-                    signDisplay: withSign ? 'always' : 'auto',
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                }).format(value);
-            } catch (error) {
-                const sign = withSign && value >= 0 ? '+' : '';
-                return `${sign}${value.toFixed(2)} ${normalizedCurrency}`;
-            }
-        }
-
-        function getCurrencyCode(currency) {
-            const fallback = 'RUB';
-            if (!currency || typeof currency !== 'string') {
-                return fallback;
-            }
-            const trimmed = currency.trim();
-            return trimmed ? trimmed.toUpperCase() : fallback;
-        }
-
-        function getCryptolinkRedirectUrl() {
-            if (!userData) {
-                return null;
-            }
-            const template = userData.happ_cryptolink_redirect_template || userData.happCryptolinkRedirectTemplate;
-            const cryptoLink = userData.subscriptionCryptoLink || userData.happ_crypto_link;
-            return buildRedirectUrl(template, cryptoLink);
-        }
-
-        function buildRedirectUrl(template, target) {
-            if (!template || !target) {
-                return null;
-            }
-            const trimmed = template.trim();
-            if (!trimmed) {
-                return null;
-            }
-            const encodedTarget = encodeURIComponent(target);
-            if (trimmed.includes('{url}')) {
-                return trimmed.replace('{url}', encodedTarget);
-            }
-            if (/[?&]$/.test(trimmed) || trimmed.endsWith('=')) {
-                return `${trimmed}${encodedTarget}`;
-            }
-            if (trimmed.includes('?')) {
-                return `${trimmed}&redirect_to=${encodedTarget}`;
-            }
-            return `${trimmed}?redirect_to=${encodedTarget}`;
-        }
-
-        function getSubscriptionCopyLink() {
-            if (!userData) {
-                return '';
-            }
-            return userData.subscriptionUrl
-                || userData.subscription_url
-                || userData.subscriptionCryptoLink
-                || userData.subscription_crypto_link
-                || '';
+        function getCurrentSubscriptionUrl() {
+            return userData?.subscription_url || userData?.subscriptionUrl || '';
         }
 
         function updateActionButtons() {
             const connectBtn = document.getElementById('connectBtn');
             const copyBtn = document.getElementById('copyBtn');
-            const redirectUrl = getCryptolinkRedirectUrl();
-            const copyLink = getSubscriptionCopyLink();
+            const hasUrl = Boolean(getCurrentSubscriptionUrl());
 
             if (connectBtn) {
-                connectBtn.disabled = !redirectUrl;
-                connectBtn.classList.toggle('hidden', !redirectUrl);
+                connectBtn.disabled = !hasUrl;
             }
             if (copyBtn) {
-                copyBtn.disabled = !copyLink || !navigator.clipboard;
+                copyBtn.disabled = !hasUrl || !navigator.clipboard;
             }
         }
 
-        function showPopup(message, title) {
-            const popupTitle = title || t('popup.defaultTitle');
+        function showPopup(message, title = 'Info') {
             if (typeof tg.showPopup === 'function') {
                 tg.showPopup({
-                    title: popupTitle,
+                    title,
                     message,
                     buttons: [{ type: 'ok' }]
                 });
             } else {
-                alert(`${popupTitle}\n\n${message}`);
+                alert(message);
             }
         }
 
+        document.querySelectorAll('.platform-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentPlatform = btn.dataset.platform;
+                setActivePlatformButton();
+                renderApps();
+            });
+        });
+
+        document.getElementById('connectBtn')?.addEventListener('click', () => {
+            const subscriptionUrl = getCurrentSubscriptionUrl();
+            if (!subscriptionUrl) {
+                return;
+            }
+
+            const apps = getAppsForCurrentPlatform();
+            const featuredApp = apps.find(app => app.isFeatured) || apps[0];
+
+            if (featuredApp?.urlScheme) {
+                window.location.href = `${featuredApp.urlScheme}${subscriptionUrl}`;
+            } else if (userData?.happ_link && featuredApp?.id === 'happ') {
+                window.location.href = userData.happ_link;
+            } else {
+                window.location.href = subscriptionUrl;
+            }
+        });
+
+        document.getElementById('copyBtn')?.addEventListener('click', async () => {
+            const subscriptionUrl = getCurrentSubscriptionUrl();
+            if (!subscriptionUrl || !navigator.clipboard) {
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(subscriptionUrl);
+                showPopup('Subscription link copied to clipboard', 'Copied');
+            } catch (error) {
+                console.warn('Clipboard copy failed:', error);
+                showPopup('Unable to copy the subscription link automatically. Please copy it manually.', 'Copy failed');
+            }
+        });
+
         function showError(error) {
-            document.getElementById('loadingState')?.classList.add('hidden');
-            document.getElementById('mainContent')?.classList.add('hidden');
+            document.getElementById('loadingState').classList.add('hidden');
 
             const titleElement = document.getElementById('errorTitle');
             const textElement = document.getElementById('errorText');
 
             if (titleElement) {
-                titleElement.textContent = error?.title || t('errors.defaultTitle');
+                titleElement.textContent = error?.title || 'Subscription Not Found';
             }
             if (textElement) {
-                textElement.textContent = error?.message || t('errors.defaultMessage');
+                textElement.textContent = error?.message || 'Please contact support to activate your subscription';
             }
 
-            document.getElementById('errorState')?.classList.remove('hidden');
+            document.getElementById('errorState').classList.remove('hidden');
             updateActionButtons();
         }
 
-        function setupPlatformButtons() {
-            document.querySelectorAll('.platform-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    currentPlatform = btn.dataset.platform;
-                    setActivePlatformButton();
-                    renderApps();
-                });
-            });
-        }
-
-        document.getElementById('connectBtn')?.addEventListener('click', () => {
-            const redirectUrl = getCryptolinkRedirectUrl();
-            if (!redirectUrl) {
-                return;
-            }
-            window.location.href = redirectUrl;
-        });
-
-        document.getElementById('copyBtn')?.addEventListener('click', async () => {
-            const copyLink = getSubscriptionCopyLink();
-            if (!copyLink || !navigator.clipboard) {
-                return;
-            }
-
-            try {
-                await navigator.clipboard.writeText(copyLink);
-                showPopup(t('copy.success'), t('copy.successTitle'));
-            } catch (error) {
-                console.warn('Clipboard copy failed:', error);
-                showPopup(t('copy.error'), t('copy.errorTitle'));
-            }
-        });
-
-        function escapeHtml(value) {
-            return String(value ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
-
-        function formatDate(date) {
-            if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-                return '—';
-            }
-            try {
-                return date.toLocaleDateString(currentLanguage, {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                });
-            } catch (error) {
-                return date.toISOString().split('T')[0];
-            }
-        }
-
-        setupLanguageSelector();
-        setupPlatformButtons();
         init();
     </script>
 </body>
