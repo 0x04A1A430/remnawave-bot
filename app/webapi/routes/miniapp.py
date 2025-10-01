@@ -4,12 +4,14 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
-from app.database.models import Subscription
+from app.database.models import Subscription, Transaction
 from app.services.subscription_service import SubscriptionService
+from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
 from app.utils.telegram_webapp import (
     TelegramWebAppAuthError,
     parse_webapp_init_data,
@@ -20,6 +22,7 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionRequest,
     MiniAppSubscriptionResponse,
     MiniAppSubscriptionUser,
+    MiniAppTransaction,
 )
 
 
@@ -86,6 +89,21 @@ def _resolve_display_name(user_data: Dict[str, Any]) -> str:
 def _is_remnawave_configured() -> bool:
     params = settings.get_remnawave_auth_params()
     return bool(params.get("base_url") and params.get("api_key"))
+
+
+def _serialize_transaction(transaction: Transaction) -> MiniAppTransaction:
+    return MiniAppTransaction(
+        id=transaction.id,
+        type=transaction.type,
+        amount_kopeks=transaction.amount_kopeks,
+        amount_rubles=round(transaction.amount_kopeks / 100, 2),
+        description=transaction.description,
+        payment_method=transaction.payment_method,
+        external_id=transaction.external_id,
+        is_completed=transaction.is_completed,
+        created_at=transaction.created_at,
+        completed_at=transaction.completed_at,
+    )
 
 
 async def _load_subscription_links(
@@ -165,9 +183,24 @@ async def get_subscription_details(
         or subscription.subscription_crypto_link
     )
 
+    happ_redirect_link = get_happ_cryptolink_redirect_link(subscription_crypto_link)
+
     connected_squads: List[str] = list(subscription.connected_squads or [])
     links: List[str] = links_payload.get("links") or connected_squads
     ss_conf_links: Dict[str, str] = links_payload.get("ss_conf_links") or {}
+
+    transactions_query = (
+        select(Transaction)
+        .where(Transaction.user_id == user.id)
+        .order_by(Transaction.created_at.desc())
+        .limit(10)
+    )
+    transactions_result = await db.execute(transactions_query)
+    transactions = list(transactions_result.scalars().all())
+
+    balance_currency = getattr(user, "balance_currency", None)
+    if isinstance(balance_currency, str):
+        balance_currency = balance_currency.upper()
 
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
@@ -209,5 +242,10 @@ async def get_subscription_details(
         happ=links_payload.get("happ"),
         happ_link=links_payload.get("happ_link"),
         happ_crypto_link=links_payload.get("happ_crypto_link"),
+        happ_cryptolink_redirect_link=happ_redirect_link,
+        balance_kopeks=user.balance_kopeks,
+        balance_rubles=round(user.balance_rubles, 2),
+        balance_currency=balance_currency,
+        transactions=[_serialize_transaction(tx) for tx in transactions],
     )
 
