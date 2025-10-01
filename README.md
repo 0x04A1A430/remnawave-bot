@@ -535,7 +535,7 @@ CONNECT_BUTTON_MODE=guide
 
 # URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
 MINIAPP_CUSTOM_URL=
-MINIAPP_SERVICE_NAME=RemnaWave VPN
+MINIAPP_SERVICE_NAME=Bedolaga VPN
 MINIAPP_SERVICE_DESCRIPTION=Secure & Fast Connection
 
 # Параметры режима happ_cryptolink
