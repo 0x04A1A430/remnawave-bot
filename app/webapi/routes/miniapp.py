@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.crud.user import get_user_by_telegram_id
-from app.database.models import Subscription, Transaction
+from app.database.models import Subscription, Transaction, User
+from app.services.remnawave_service import (
+    RemnaWaveConfigurationError,
+    RemnaWaveService,
+)
 from app.services.subscription_service import SubscriptionService
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
 from app.utils.telegram_webapp import (
@@ -19,6 +24,9 @@ from app.utils.telegram_webapp import (
 
 from ..dependencies import get_db_session
 from ..schemas.miniapp import (
+    MiniAppConnectedServer,
+    MiniAppDevice,
+    MiniAppPromoGroup,
     MiniAppSubscriptionRequest,
     MiniAppSubscriptionResponse,
     MiniAppSubscriptionUser,
@@ -69,6 +77,122 @@ def _status_label(status: str) -> str:
         "disabled": "Disabled",
     }
     return mapping.get(status, status.title())
+
+
+def _parse_datetime_string(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+
+    try:
+        cleaned = value.strip()
+        if cleaned.endswith("Z"):
+            cleaned = f"{cleaned[:-1]}+00:00"
+        # Normalize duplicated timezone suffixes like +00:00+00:00
+        if "+00:00+00:00" in cleaned:
+            cleaned = cleaned.replace("+00:00+00:00", "+00:00")
+
+        datetime.fromisoformat(cleaned)
+        return cleaned
+    except Exception:  # pragma: no cover - defensive
+        return value
+
+
+async def _resolve_connected_servers(
+    db: AsyncSession,
+    squad_uuids: List[str],
+) -> List[MiniAppConnectedServer]:
+    if not squad_uuids:
+        return []
+
+    resolved: Dict[str, str] = {}
+    missing: List[str] = []
+
+    for squad_uuid in squad_uuids:
+        if squad_uuid in resolved:
+            continue
+        server = await get_server_squad_by_uuid(db, squad_uuid)
+        if server and server.display_name:
+            resolved[squad_uuid] = server.display_name
+        else:
+            missing.append(squad_uuid)
+
+    if missing:
+        try:
+            service = RemnaWaveService()
+            if service.is_configured:
+                squads = await service.get_all_squads()
+                for squad in squads:
+                    uuid = squad.get("uuid")
+                    name = squad.get("name")
+                    if uuid in missing and name:
+                        resolved[uuid] = name
+        except RemnaWaveConfigurationError:
+            logger.debug("RemnaWave is not configured; skipping server name enrichment")
+        except Exception as error:  # pragma: no cover - defensive logging
+            logger.warning("Failed to resolve server names from RemnaWave: %s", error)
+
+    connected_servers: List[MiniAppConnectedServer] = []
+    for squad_uuid in squad_uuids:
+        name = resolved.get(squad_uuid, squad_uuid)
+        connected_servers.append(MiniAppConnectedServer(uuid=squad_uuid, name=name))
+
+    return connected_servers
+
+
+async def _load_devices_info(user: User) -> Tuple[int, List[MiniAppDevice]]:
+    remnawave_uuid = getattr(user, "remnawave_uuid", None)
+    if not remnawave_uuid:
+        return 0, []
+
+    try:
+        service = RemnaWaveService()
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.warning("Failed to initialise RemnaWave service: %s", error)
+        return 0, []
+
+    if not service.is_configured:
+        return 0, []
+
+    try:
+        async with service.get_api_client() as api:
+            response = await api.get_user_devices(remnawave_uuid)
+    except RemnaWaveConfigurationError:
+        logger.debug("RemnaWave configuration missing while loading devices")
+        return 0, []
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.warning("Failed to load devices from RemnaWave: %s", error)
+        return 0, []
+
+    total_devices = int(response.get("total") or 0)
+    devices_payload = response.get("devices") or []
+
+    devices: List[MiniAppDevice] = []
+    for device in devices_payload:
+        platform = device.get("platform") or device.get("platformType")
+        model = device.get("deviceModel") or device.get("model") or device.get("name")
+        app_version = device.get("appVersion") or device.get("version")
+        last_seen_raw = (
+            device.get("updatedAt")
+            or device.get("lastSeen")
+            or device.get("lastActiveAt")
+            or device.get("createdAt")
+        )
+        last_ip = device.get("ip") or device.get("ipAddress")
+
+        devices.append(
+            MiniAppDevice(
+                platform=platform,
+                device_model=model,
+                app_version=app_version,
+                last_seen=_parse_datetime_string(last_seen_raw),
+                last_ip=last_ip,
+            )
+        )
+
+    if total_devices == 0:
+        total_devices = len(devices)
+
+    return total_devices, devices
 
 
 def _resolve_display_name(user_data: Dict[str, Any]) -> str:
@@ -186,6 +310,8 @@ async def get_subscription_details(
     happ_redirect_link = get_happ_cryptolink_redirect_link(subscription_crypto_link)
 
     connected_squads: List[str] = list(subscription.connected_squads or [])
+    connected_servers = await _resolve_connected_servers(db, connected_squads)
+    devices_count, devices = await _load_devices_info(user)
     links: List[str] = links_payload.get("links") or connected_squads
     ss_conf_links: Dict[str, str] = links_payload.get("ss_conf_links") or {}
 
@@ -201,6 +327,8 @@ async def get_subscription_details(
     balance_currency = getattr(user, "balance_currency", None)
     if isinstance(balance_currency, str):
         balance_currency = balance_currency.upper()
+
+    promo_group = getattr(user, "promo_group", None)
 
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
@@ -239,6 +367,9 @@ async def get_subscription_details(
         links=links,
         ss_conf_links=ss_conf_links,
         connected_squads=connected_squads,
+        connected_servers=connected_servers,
+        connected_devices_count=devices_count,
+        connected_devices=devices,
         happ=links_payload.get("happ"),
         happ_link=links_payload.get("happ_link"),
         happ_crypto_link=links_payload.get("happ_crypto_link"),
@@ -247,5 +378,10 @@ async def get_subscription_details(
         balance_rubles=round(user.balance_rubles, 2),
         balance_currency=balance_currency,
         transactions=[_serialize_transaction(tx) for tx in transactions],
+        promo_group=MiniAppPromoGroup(id=promo_group.id, name=promo_group.name)
+        if promo_group
+        else None,
+        subscription_type="trial" if subscription.is_trial else "paid",
+        autopay_enabled=bool(subscription.autopay_enabled),
     )
 

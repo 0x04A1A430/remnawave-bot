@@ -31,6 +31,24 @@ class MiniAppSubscriptionUser(BaseModel):
     has_active_subscription: bool = False
 
 
+class MiniAppPromoGroup(BaseModel):
+    id: int
+    name: str
+
+
+class MiniAppConnectedServer(BaseModel):
+    uuid: str
+    name: str
+
+
+class MiniAppDevice(BaseModel):
+    platform: Optional[str] = None
+    device_model: Optional[str] = None
+    app_version: Optional[str] = None
+    last_seen: Optional[str] = None
+    last_ip: Optional[str] = None
+
+
 class MiniAppTransaction(BaseModel):
     id: int
     type: str
@@ -54,6 +72,9 @@ class MiniAppSubscriptionResponse(BaseModel):
     links: List[str] = Field(default_factory=list)
     ss_conf_links: Dict[str, str] = Field(default_factory=dict)
     connected_squads: List[str] = Field(default_factory=list)
+    connected_servers: List[MiniAppConnectedServer] = Field(default_factory=list)
+    connected_devices_count: int = 0
+    connected_devices: List[MiniAppDevice] = Field(default_factory=list)
     happ: Optional[Dict[str, Any]] = None
     happ_link: Optional[str] = None
     happ_crypto_link: Optional[str] = None
@@ -62,4 +83,7 @@ class MiniAppSubscriptionResponse(BaseModel):
     balance_rubles: float = 0.0
     balance_currency: Optional[str] = None
     transactions: List[MiniAppTransaction] = Field(default_factory=list)
+    promo_group: Optional[MiniAppPromoGroup] = None
+    subscription_type: str
+    autopay_enabled: bool = False
 
