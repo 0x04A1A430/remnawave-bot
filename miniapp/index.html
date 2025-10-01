@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#2481cc">
+    <meta name="happ-cryptolink-redirect-template" content="">
     <title>VPN Subscription</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
@@ -50,20 +51,67 @@
 
         /* Header */
         .header {
-            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
             margin-bottom: 24px;
+        }
+
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
         .logo {
             font-size: 28px;
             font-weight: 700;
             color: var(--primary);
-            margin-bottom: 4px;
         }
 
         .subtitle {
             font-size: 14px;
             color: var(--text-secondary);
+        }
+
+        .locale-indicator {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .language-switcher {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px;
+            background: var(--bg-secondary);
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+        }
+
+        .lang-btn {
+            padding: 6px 10px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+
+        .lang-btn.active {
+            background: var(--primary);
+            color: var(--tg-theme-button-text-color, #ffffff);
+        }
+
+        .lang-btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(36, 129, 204, 0.25);
         }
 
         /* Loading State */
@@ -102,6 +150,13 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 12px;
+        }
+
+        .card-title.with-action {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
         }
 
         /* User Info */
@@ -223,6 +278,12 @@
             font-weight: 600;
             color: var(--text-primary);
             text-align: right;
+        }
+
+        .info-note {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
         }
 
         /* Buttons */
@@ -403,6 +464,98 @@
             display: inline-block;
         }
 
+        .list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .list-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 12px;
+            background: white;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+
+        .list-item-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .list-item-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .list-item-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .list-item-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(36, 129, 204, 0.12);
+            color: var(--primary);
+        }
+
+        .transaction-amount {
+            font-weight: 700;
+            color: var(--primary);
+            font-size: 14px;
+        }
+
+        .list-empty {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .balance-amount {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .balance-currency {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-left: 4px;
+        }
+
+        @media (max-width: 400px) {
+            .header-top {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .language-switcher {
+                align-self: flex-start;
+            }
+        }
+
         /* Error State */
         .error {
             text-align: center;
@@ -431,25 +584,35 @@
         }
     </style>
 </head>
-<body>
+<body data-happ-cryptolink-redirect-template="">
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <div class="logo">RemnaWave VPN</div>
-            <div class="subtitle">Secure & Fast Connection</div>
+            <div class="header-top">
+                <div class="logo" data-i18n="header.title">RemnaWave VPN</div>
+                <div class="language-switcher" role="group" aria-label="Language selector">
+                    <button class="lang-btn" data-lang="en" type="button">EN</button>
+                    <button class="lang-btn" data-lang="ru" type="button">RU</button>
+                </div>
+            </div>
+            <div class="subtitle" data-i18n="header.subtitle">Secure & Fast Connection</div>
+            <div class="locale-indicator">
+                <span data-i18n="language.locale">Locale:</span>
+                <span id="localeDisplay">en-US</span>
+            </div>
         </div>
 
         <!-- Loading State -->
         <div id="loadingState" class="loading">
             <div class="spinner"></div>
-            <div>Loading your subscription...</div>
+            <div data-i18n="loading.text">Loading your subscription...</div>
         </div>
 
         <!-- Error State -->
         <div id="errorState" class="error hidden">
             <div class="error-icon">⚠️</div>
-            <div class="error-title" id="errorTitle">Subscription Not Found</div>
-            <div class="error-text" id="errorText">Please contact support to activate your subscription</div>
+            <div class="error-title" id="errorTitle" data-i18n="errors.subscriptionNotFound">Subscription Not Found</div>
+            <div class="error-text" id="errorText" data-i18n="errors.subscriptionNotFoundDescription">Please contact support to activate your subscription</div>
         </div>
 
         <!-- Main Content -->
@@ -467,26 +630,50 @@
                 <div class="stats-grid">
                     <div class="stat-item">
                         <div class="stat-value" id="daysLeft">-</div>
-                        <div class="stat-label">Days Left</div>
+                        <div class="stat-label" data-i18n="stats.daysLeft">Days Left</div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-value" id="serversCount">-</div>
-                        <div class="stat-label">Servers</div>
+                        <div class="stat-label" data-i18n="stats.servers">Servers</div>
                     </div>
                 </div>
 
                 <div class="info-item">
-                    <span class="info-label">Expires</span>
+                    <span class="info-label" data-i18n="info.expires">Expires</span>
                     <span class="info-value" id="expiresAt">-</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">Traffic Used</span>
+                    <span class="info-label" data-i18n="info.trafficUsed">Traffic Used</span>
                     <span class="info-value" id="trafficUsed">-</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">Traffic Limit</span>
+                    <span class="info-label" data-i18n="info.trafficLimit">Traffic Limit</span>
                     <span class="info-value" id="trafficLimit">-</span>
                 </div>
+            </div>
+
+            <div class="card" id="balanceCard" hidden>
+                <div class="card-title" data-i18n="balance.title">Balance</div>
+                <div id="balanceContent">
+                    <div class="balance-amount">
+                        <span id="balanceAmountValue">—</span>
+                        <span class="balance-currency" id="balanceCurrency"></span>
+                    </div>
+                    <div class="info-note" id="balanceNote" data-i18n="balance.label">Current balance</div>
+                </div>
+                <div class="info-note" id="balanceUnavailable" hidden data-i18n="balance.unavailable">Balance information is unavailable.</div>
+            </div>
+
+            <div class="card" id="transactionsCard" hidden>
+                <div class="card-title" data-i18n="transactions.title">Transaction History</div>
+                <ul class="list" id="transactionsList"></ul>
+                <div class="list-empty" id="transactionsEmpty" hidden data-i18n="transactions.empty">No transactions yet.</div>
+            </div>
+
+            <div class="card" id="serversCard" hidden>
+                <div class="card-title" data-i18n="servers.title">Connected Servers</div>
+                <ul class="list" id="serversList"></ul>
+                <div class="list-empty" id="serversEmpty" hidden data-i18n="servers.empty">No servers connected yet.</div>
             </div>
 
             <!-- Action Buttons -->
@@ -494,20 +681,20 @@
                 <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                 </svg>
-                Connect to VPN
+                <span data-i18n="actions.connect">Connect to VPN</span>
             </button>
 
             <button class="btn btn-secondary" id="copyBtn" style="margin-top: 8px;">
                 <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
                 </svg>
-                Copy Subscription Link
+                <span data-i18n="actions.copy">Copy Subscription Link</span>
             </button>
 
             <!-- App Installation Section -->
             <div class="app-section">
                 <div class="card">
-                    <div class="card-title">Installation Guide</div>
+                    <div class="card-title" data-i18n="apps.title">Installation Guide</div>
                     
                     <div class="platform-selector">
                         <button class="platform-btn" data-platform="ios">iOS</button>
@@ -524,7 +711,7 @@
         </div>
     </div>
 
-    <script>
+        <script>
         const tg = window.Telegram?.WebApp || {
             initData: '',
             initDataUnsafe: {},
@@ -547,10 +734,213 @@
             });
         }
 
+        const SUPPORTED_LANGUAGES = ['en', 'ru'];
+        const LANGUAGE_STORAGE_KEY = 'remnawave:miniapp:language';
+        const LANGUAGE_FALLBACK = 'en';
+
+        const translations = {
+            en: {
+                header: {
+                    title: 'RemnaWave VPN',
+                    subtitle: 'Secure & Fast Connection',
+                },
+                language: {
+                    locale: 'Locale:',
+                },
+                loading: {
+                    text: 'Loading your subscription...',
+                },
+                errors: {
+                    subscriptionNotFound: 'Subscription Not Found',
+                    subscriptionNotFoundDescription: 'Please contact support to activate your subscription',
+                    authorizationTitle: 'Authorization Error',
+                    authorizationDescription: 'Authorization failed. Please open the mini app from Telegram.',
+                    missingInitData: 'Missing Telegram init data',
+                    generic: 'Something went wrong',
+                },
+                stats: {
+                    daysLeft: 'Days Left',
+                    servers: 'Servers',
+                },
+                info: {
+                    expires: 'Expires',
+                    trafficUsed: 'Traffic Used',
+                    trafficLimit: 'Traffic Limit',
+                },
+                balance: {
+                    title: 'Balance',
+                    label: 'Current balance',
+                    unavailable: 'Balance information is unavailable.',
+                    currencyFallback: 'units',
+                },
+                transactions: {
+                    title: 'Transaction History',
+                    empty: 'No transactions yet.',
+                    amount: 'Amount',
+                    date: 'Date',
+                    payment: 'Payment',
+                    refund: 'Refund',
+                    subscription: 'Subscription',
+                    unknown: 'Operation',
+                    status: {
+                        pending: 'Pending',
+                        completed: 'Completed',
+                        failed: 'Failed',
+                    },
+                },
+                servers: {
+                    title: 'Connected Servers',
+                    empty: 'No servers connected yet.',
+                    item: 'Server',
+                    open: 'Open link',
+                },
+                actions: {
+                    connect: 'Connect to VPN',
+                    copy: 'Copy Subscription Link',
+                },
+                apps: {
+                    title: 'Installation Guide',
+                    noData: 'No installation guide available for this platform yet.',
+                    recommended: 'Recommended',
+                },
+                steps: {
+                    download: 'Download & Install',
+                    addSubscription: 'Add Subscription',
+                    connect: 'Connect & Use',
+                },
+                copy: {
+                    success: 'Subscription link copied to clipboard',
+                    successTitle: 'Copied',
+                    failure: 'Unable to copy the subscription link automatically. Please copy it manually.',
+                    failureTitle: 'Copy failed',
+                },
+                popup: {
+                    info: 'Info',
+                },
+                status: {
+                    active: 'Active',
+                    expired: 'Expired',
+                    trial: 'Trial',
+                    disabled: 'Disabled',
+                    unknown: 'Unknown',
+                },
+                traffic: {
+                    unlimited: 'Unlimited',
+                },
+            },
+            ru: {
+                header: {
+                    title: 'RemnaWave VPN',
+                    subtitle: 'Безопасное и быстрое подключение',
+                },
+                language: {
+                    locale: 'Локаль:',
+                },
+                loading: {
+                    text: 'Загружаем вашу подписку...',
+                },
+                errors: {
+                    subscriptionNotFound: 'Подписка не найдена',
+                    subscriptionNotFoundDescription: 'Свяжитесь с поддержкой для активации подписки',
+                    authorizationTitle: 'Ошибка авторизации',
+                    authorizationDescription: 'Не удалось авторизоваться. Откройте мини-приложение из Telegram.',
+                    missingInitData: 'Отсутствуют данные инициализации Telegram',
+                    generic: 'Произошла ошибка',
+                },
+                stats: {
+                    daysLeft: 'Осталось дней',
+                    servers: 'Сервера',
+                },
+                info: {
+                    expires: 'Действует до',
+                    trafficUsed: 'Использовано трафика',
+                    trafficLimit: 'Лимит трафика',
+                },
+                balance: {
+                    title: 'Баланс',
+                    label: 'Текущий баланс',
+                    unavailable: 'Информация о балансе недоступна.',
+                    currencyFallback: 'ед.',
+                },
+                transactions: {
+                    title: 'История операций',
+                    empty: 'Операции ещё не выполнялись.',
+                    amount: 'Сумма',
+                    date: 'Дата',
+                    payment: 'Платёж',
+                    refund: 'Возврат',
+                    subscription: 'Подписка',
+                    unknown: 'Операция',
+                    status: {
+                        pending: 'В обработке',
+                        completed: 'Выполнено',
+                        failed: 'Ошибка',
+                    },
+                },
+                servers: {
+                    title: 'Подключённые сервера',
+                    empty: 'Нет подключённых серверов.',
+                    item: 'Сервер',
+                    open: 'Открыть ссылку',
+                },
+                actions: {
+                    connect: 'Подключиться',
+                    copy: 'Скопировать ссылку подписки',
+                },
+                apps: {
+                    title: 'Инструкция по установке',
+                    noData: 'Для этой платформы ещё нет инструкции.',
+                    recommended: 'Рекомендуем',
+                },
+                steps: {
+                    download: 'Скачать и установить',
+                    addSubscription: 'Добавить подписку',
+                    connect: 'Подключиться и пользоваться',
+                },
+                copy: {
+                    success: 'Ссылка на подписку скопирована',
+                    successTitle: 'Готово',
+                    failure: 'Не удалось автоматически скопировать ссылку. Скопируйте её вручную.',
+                    failureTitle: 'Ошибка копирования',
+                },
+                popup: {
+                    info: 'Информация',
+                },
+                status: {
+                    active: 'Активна',
+                    expired: 'Истекла',
+                    trial: 'Пробный период',
+                    disabled: 'Отключена',
+                    unknown: 'Неизвестно',
+                },
+                traffic: {
+                    unlimited: 'Безлимит',
+                },
+            },
+        };
+
+        const storedLanguage = getStoredLanguage();
         let userData = null;
         let appsConfig = {};
         let currentPlatform = 'android';
-        let preferredLanguage = 'en';
+        let preferredLanguage = storedLanguage || LANGUAGE_FALLBACK;
+        let languageManuallySelected = Boolean(storedLanguage);
+
+        const happRedirectTemplate = getInitialRedirectTemplate();
+
+        applyTranslations();
+        updateLanguageControls();
+
+        document.querySelectorAll('.lang-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const lang = btn.dataset.lang;
+                if (!lang) {
+                    return;
+                }
+                languageManuallySelected = true;
+                setPreferredLanguage(lang, { save: true });
+            });
+        });
 
         function createError(title, message, status) {
             const error = new Error(message || title);
@@ -566,30 +956,32 @@
         async function init() {
             try {
                 const telegramUser = tg.initDataUnsafe?.user;
-                if (telegramUser?.language_code) {
-                    preferredLanguage = telegramUser.language_code.split('-')[0];
+                if (!languageManuallySelected && telegramUser?.language_code) {
+                    setPreferredLanguage(telegramUser.language_code, { save: false });
                 }
 
                 await loadAppsConfig();
 
                 const initData = tg.initData || '';
                 if (!initData) {
-                    throw createError('Authorization Error', 'Missing Telegram init data');
+                    throw createError(t('errors.authorizationTitle'), t('errors.missingInitData'));
                 }
 
                 const response = await fetch('/miniapp/subscription', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ initData })
+                    body: JSON.stringify({ initData }),
                 });
 
                 if (!response.ok) {
                     let detail = response.status === 401
-                        ? 'Authorization failed. Please open the mini app from Telegram.'
-                        : 'Subscription not found';
-                    let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
+                        ? t('errors.authorizationDescription')
+                        : t('errors.subscriptionNotFoundDescription');
+                    let title = response.status === 401
+                        ? t('errors.authorizationTitle')
+                        : t('errors.subscriptionNotFound');
 
                     try {
                         const errorPayload = await response.json();
@@ -597,7 +989,7 @@
                             detail = errorPayload.detail;
                         }
                     } catch (parseError) {
-                        // ignore
+                        // ignore parsing issues
                     }
 
                     throw createError(title, detail, response.status);
@@ -606,9 +998,12 @@
                 userData = await response.json();
                 userData.subscriptionUrl = userData.subscription_url || null;
                 userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
+                userData.happCryptoLink = userData.happ_crypto_link || userData.subscriptionCryptoLink || null;
 
-                if (userData?.user?.language) {
-                    preferredLanguage = userData.user.language;
+                if (!languageManuallySelected && userData?.user?.language) {
+                    setPreferredLanguage(userData.user.language, { save: false });
+                } else {
+                    applyTranslations();
                 }
 
                 renderUserData();
@@ -616,8 +1011,8 @@
                 setActivePlatformButton();
                 renderApps();
 
-                document.getElementById('loadingState').classList.add('hidden');
-                document.getElementById('mainContent').classList.remove('hidden');
+                document.getElementById('loadingState')?.classList.add('hidden');
+                document.getElementById('mainContent')?.classList.remove('hidden');
             } catch (error) {
                 console.error('Initialization error:', error);
                 showError(error);
@@ -649,36 +1044,928 @@
             const fallbackName = rawName || [user.first_name, user.last_name].filter(Boolean).join(' ') || `User ${user.telegram_id || ''}`.trim();
             const avatarChar = (fallbackName.replace(/^@/, '')[0] || 'U').toUpperCase();
 
-            document.getElementById('userAvatar').textContent = avatarChar;
-            document.getElementById('userName').textContent = fallbackName;
+            const avatarElement = document.getElementById('userAvatar');
+            if (avatarElement) {
+                avatarElement.textContent = avatarChar;
+            }
+
+            const nameElement = document.getElementById('userName');
+            if (nameElement) {
+                nameElement.textContent = fallbackName;
+            }
 
             const statusValueRaw = (user.subscription_actual_status || user.subscription_status || 'active').toLowerCase();
             const knownStatuses = ['active', 'expired', 'trial', 'disabled'];
             const statusClass = knownStatuses.includes(statusValueRaw) ? statusValueRaw : 'unknown';
             const statusBadge = document.getElementById('statusBadge');
-            statusBadge.textContent = user.status_label || statusClass.charAt(0).toUpperCase() + statusClass.slice(1);
-            statusBadge.className = `status-badge status-${statusClass}`;
+            if (statusBadge) {
+                statusBadge.textContent = translateStatusLabel(statusValueRaw, user.status_label);
+                statusBadge.className = `status-badge status-${statusClass}`;
+            }
 
             const expiresAt = user.expires_at ? new Date(user.expires_at) : null;
             let daysLeft = '—';
             if (expiresAt && !Number.isNaN(expiresAt.getTime())) {
                 const diffDays = Math.ceil((expiresAt - new Date()) / (1000 * 60 * 60 * 24));
-                daysLeft = diffDays > 0 ? diffDays : '0';
+                daysLeft = diffDays > 0 ? String(diffDays) : '0';
             }
-            document.getElementById('daysLeft').textContent = daysLeft;
-            document.getElementById('expiresAt').textContent = expiresAt && !Number.isNaN(expiresAt.getTime())
-                ? expiresAt.toLocaleDateString()
+
+            const locale = getCurrentLocale();
+            const expiresText = expiresAt && !Number.isNaN(expiresAt.getTime())
+                ? formatDateOnly(expiresAt, locale)
                 : '—';
 
+            const daysLeftElement = document.getElementById('daysLeft');
+            if (daysLeftElement) {
+                daysLeftElement.textContent = daysLeft;
+            }
+
+            const expiresElement = document.getElementById('expiresAt');
+            if (expiresElement) {
+                expiresElement.textContent = expiresText;
+            }
+
             const serversCount = userData.links?.length ?? userData.connected_squads?.length ?? 0;
-            document.getElementById('serversCount').textContent = serversCount;
+            const serversElement = document.getElementById('serversCount');
+            if (serversElement) {
+                serversElement.textContent = serversCount;
+            }
 
-            document.getElementById('trafficUsed').textContent =
-                user.traffic_used_label || formatTraffic(user.traffic_used_gb);
-            document.getElementById('trafficLimit').textContent =
-                user.traffic_limit_label || formatTrafficLimit(user.traffic_limit_gb);
+            const trafficUsedElement = document.getElementById('trafficUsed');
+            if (trafficUsedElement) {
+                trafficUsedElement.textContent = user.traffic_used_label || formatTraffic(user.traffic_used_gb);
+            }
 
+            const trafficLimitElement = document.getElementById('trafficLimit');
+            if (trafficLimitElement) {
+                trafficLimitElement.textContent = user.traffic_limit_label || formatTrafficLimit(user.traffic_limit_gb);
+            }
+
+            renderBalance();
+            renderTransactions();
+            renderServers();
             updateActionButtons();
+        }
+
+        function renderBalance() {
+            const card = document.getElementById('balanceCard');
+            if (!card) {
+                return;
+            }
+
+            const content = document.getElementById('balanceContent');
+            const amountElement = document.getElementById('balanceAmountValue');
+            const currencyElement = document.getElementById('balanceCurrency');
+            const noteElement = document.getElementById('balanceNote');
+            const unavailableElement = document.getElementById('balanceUnavailable');
+
+            const balanceData = resolveBalanceData();
+            card.hidden = false;
+
+            if (!balanceData) {
+                if (content) {
+                    content.hidden = true;
+                }
+                if (unavailableElement) {
+                    unavailableElement.hidden = false;
+                    unavailableElement.textContent = t('balance.unavailable');
+                }
+                return;
+            }
+
+            if (content) {
+                content.hidden = false;
+            }
+            if (unavailableElement) {
+                unavailableElement.hidden = true;
+            }
+
+            const hasAmount = typeof balanceData.amount === 'number' && Number.isFinite(balanceData.amount);
+            if (hasAmount) {
+                const formatted = formatCurrency(balanceData.amount, balanceData.currency);
+                if (amountElement) {
+                    amountElement.textContent = formatted.value;
+                }
+                if (currencyElement) {
+                    currencyElement.textContent = formatted.currency;
+                }
+                if (noteElement) {
+                    noteElement.hidden = false;
+                    noteElement.textContent = balanceData.label || t('balance.label');
+                }
+            } else {
+                if (amountElement) {
+                    amountElement.textContent = balanceData.label || '—';
+                }
+                if (currencyElement) {
+                    currencyElement.textContent = '';
+                }
+                if (noteElement) {
+                    noteElement.hidden = true;
+                }
+            }
+        }
+
+        function resolveBalanceData() {
+            if (!userData) {
+                return null;
+            }
+
+            const candidates = [
+                userData.balance,
+                userData.user?.balance,
+                userData.user?.balance_info,
+            ];
+
+            for (const candidate of candidates) {
+                if (!candidate || typeof candidate !== 'object') {
+                    continue;
+                }
+                const amount = getFirstNumeric([
+                    candidate.amount,
+                    candidate.value,
+                    candidate.balance,
+                    candidate.amount_rubles,
+                    candidate.balance_rubles,
+                ]);
+                const currency = candidate.currency || candidate.currency_code || candidate.code || candidate.unit || null;
+                const label = candidate.label || candidate.text || candidate.title || null;
+
+                if (amount !== null) {
+                    return { amount, currency, label };
+                }
+                if (label) {
+                    return { label, currency };
+                }
+            }
+
+            const amountRubles = getFirstNumeric([
+                userData.balance_rubles,
+                userData.user?.balance_rubles,
+            ]);
+            if (amountRubles !== null) {
+                return { amount: amountRubles, currency: 'RUB' };
+            }
+
+            const amountKopeks = getFirstNumeric([
+                userData.balance_kopeks,
+                userData.user?.balance_kopeks,
+            ]);
+            if (amountKopeks !== null) {
+                return { amount: amountKopeks / 100, currency: 'RUB' };
+            }
+
+            if (typeof userData.balance_label === 'string') {
+                return { label: userData.balance_label };
+            }
+
+            return null;
+        }
+
+        function renderTransactions() {
+            const card = document.getElementById('transactionsCard');
+            const listElement = document.getElementById('transactionsList');
+            const emptyElement = document.getElementById('transactionsEmpty');
+
+            if (!card || !listElement) {
+                return;
+            }
+
+            const transactions = getTransactionsList();
+            card.hidden = false;
+
+            if (!transactions || !transactions.length) {
+                listElement.innerHTML = '';
+                if (emptyElement) {
+                    emptyElement.hidden = false;
+                    emptyElement.textContent = t('transactions.empty');
+                }
+                return;
+            }
+
+            if (emptyElement) {
+                emptyElement.hidden = true;
+            }
+
+            listElement.innerHTML = transactions.map((transaction, index) => renderTransactionItem(transaction, index)).join('');
+        }
+
+        function getTransactionsList() {
+            if (!userData) {
+                return [];
+            }
+
+            const candidates = [
+                userData.transactions,
+                userData.transaction_history,
+                userData.history,
+                userData.operations,
+                userData.payments,
+            ];
+
+            let fallback = [];
+            for (const candidate of candidates) {
+                if (Array.isArray(candidate)) {
+                    if (!fallback.length) {
+                        fallback = candidate;
+                    }
+                    if (candidate.length) {
+                        return candidate;
+                    }
+                }
+            }
+
+            return fallback;
+        }
+
+        function renderTransactionItem(transaction, index) {
+            if (!transaction || typeof transaction !== 'object') {
+                return '';
+            }
+
+            const title = escapeHtml(getTransactionTitle(transaction, index));
+            const subtitleRaw = getTransactionSubtitle(transaction);
+            const subtitle = subtitleRaw ? `<div class="list-item-subtitle">${escapeHtml(subtitleRaw)}</div>` : '';
+
+            const amountInfo = getTransactionAmountInfo(transaction);
+            const amountHtml = amountInfo
+                ? `<div class="transaction-amount">${escapeHtml(amountInfo)}</div>`
+                : '';
+
+            const dateValue = resolveTransactionDate(transaction);
+            const dateText = dateValue ? formatDateTime(dateValue) : '';
+            const metaParts = [];
+            if (dateText) {
+                metaParts.push(`<span>${escapeHtml(`${t('transactions.date')}: ${dateText}`)}</span>`);
+            }
+
+            const statusLabel = getTransactionStatus(transaction);
+            if (statusLabel) {
+                metaParts.push(`<span class="badge">${escapeHtml(statusLabel)}</span>`);
+            }
+
+            const metaSection = metaParts.length
+                ? `<div class="list-item-meta">${metaParts.join('')}</div>`
+                : '';
+
+            return `
+                <li class="list-item">
+                    <div class="list-item-header">
+                        <div>
+                            <div class="list-item-title">${title}</div>
+                            ${subtitle}
+                        </div>
+                        ${amountHtml}
+                    </div>
+                    ${metaSection}
+                </li>
+            `;
+        }
+
+        function getTransactionTitle(transaction, index) {
+            const fallback = `${t('transactions.unknown')} #${(index ?? 0) + 1}`;
+            if (!transaction || typeof transaction !== 'object') {
+                return fallback;
+            }
+            const fields = [transaction.title, transaction.name, transaction.label];
+            for (const field of fields) {
+                if (typeof field === 'string' && field.trim()) {
+                    return field.trim();
+                }
+            }
+            if (typeof transaction.type === 'string' && transaction.type.trim()) {
+                const typeKey = transaction.type.trim().toLowerCase();
+                const translation = t(`transactions.${typeKey}`, '');
+                if (translation && translation !== `transactions.${typeKey}`) {
+                    return translation;
+                }
+            }
+            return fallback;
+        }
+
+        function getTransactionSubtitle(transaction) {
+            if (!transaction || typeof transaction !== 'object') {
+                return '';
+            }
+            const fields = [transaction.description, transaction.comment, transaction.details, transaction.note];
+            for (const field of fields) {
+                if (typeof field === 'string' && field.trim()) {
+                    return field.trim();
+                }
+            }
+            if (typeof transaction.type === 'string' && transaction.type.trim()) {
+                const typeKey = transaction.type.trim().toLowerCase();
+                const translation = t(`transactions.${typeKey}`, '');
+                if (translation && translation !== `transactions.${typeKey}`) {
+                    return translation;
+                }
+            }
+            return '';
+        }
+
+        function getTransactionAmountInfo(transaction) {
+            if (!transaction || typeof transaction !== 'object') {
+                return null;
+            }
+            if (typeof transaction.amount_label === 'string' && transaction.amount_label.trim()) {
+                return transaction.amount_label.trim();
+            }
+            const amount = getFirstNumeric([
+                transaction.amount,
+                transaction.amount_rubles,
+                transaction.value,
+                transaction.total,
+                transaction.price,
+                transaction.sum,
+            ]);
+            if (amount === null) {
+                return null;
+            }
+            const currency = transaction.currency || transaction.currency_code || transaction.asset || transaction.symbol || null;
+            const formatted = formatCurrency(amount, currency);
+            return formatted.currency ? `${formatted.value} ${formatted.currency}` : formatted.value;
+        }
+
+        function resolveTransactionDate(transaction) {
+            if (!transaction || typeof transaction !== 'object') {
+                return null;
+            }
+            const fields = [
+                transaction.created_at,
+                transaction.createdAt,
+                transaction.created,
+                transaction.date,
+                transaction.timestamp,
+                transaction.time,
+            ];
+            return fields.find(value => value !== undefined && value !== null) ?? null;
+        }
+
+        function getTransactionStatus(transaction) {
+            if (!transaction || typeof transaction !== 'object') {
+                return '';
+            }
+            const statusValue = transaction.status || transaction.state;
+            if (typeof statusValue !== 'string') {
+                return '';
+            }
+            const normalized = statusValue.trim().toLowerCase();
+            const translation = t(`transactions.status.${normalized}`, '');
+            if (translation && translation !== `transactions.status.${normalized}`) {
+                return translation;
+            }
+            return statusValue.trim();
+        }
+
+        function renderServers() {
+            const card = document.getElementById('serversCard');
+            const listElement = document.getElementById('serversList');
+            const emptyElement = document.getElementById('serversEmpty');
+
+            if (!card || !listElement) {
+                return;
+            }
+
+            const servers = buildServerEntries();
+            card.hidden = false;
+
+            if (!servers.length) {
+                listElement.innerHTML = '';
+                if (emptyElement) {
+                    emptyElement.hidden = false;
+                    emptyElement.textContent = t('servers.empty');
+                }
+                return;
+            }
+
+            if (emptyElement) {
+                emptyElement.hidden = true;
+            }
+
+            listElement.innerHTML = servers.map((server, index) => renderServerItem(server, index)).join('');
+        }
+
+        function buildServerEntries() {
+            if (!userData) {
+                return [];
+            }
+            const entries = [];
+            const seen = new Set();
+
+            if (Array.isArray(userData.links)) {
+                userData.links.forEach((link, index) => {
+                    if (typeof link !== 'string' || !link.trim()) {
+                        return;
+                    }
+                    const trimmed = link.trim();
+                    if (seen.has(trimmed)) {
+                        return;
+                    }
+                    seen.add(trimmed);
+                    entries.push({
+                        title: `${t('servers.item')} #${index + 1}`,
+                        subtitle: trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed,
+                        value: trimmed,
+                        link: trimmed.startsWith('http') ? trimmed : '',
+                    });
+                });
+            }
+
+            if (Array.isArray(userData.connected_squads)) {
+                userData.connected_squads.forEach((squad, index) => {
+                    if (!squad) {
+                        return;
+                    }
+                    const isObject = typeof squad === 'object';
+                    const identifier = isObject
+                        ? (squad.name || squad.title || squad.id || squad.identifier)
+                        : squad;
+                    const subtitle = isObject
+                        ? (squad.location || squad.region || squad.city || squad.country || '')
+                        : '';
+                    const link = isObject
+                        ? (squad.link || squad.url || squad.connection || '')
+                        : (typeof squad === 'string' && squad.startsWith('http') ? squad : '');
+                    const key = identifier || `squad-${index}`;
+                    if (key && seen.has(key)) {
+                        return;
+                    }
+                    if (key) {
+                        seen.add(key);
+                    }
+                    entries.push({
+                        title: identifier || `${t('servers.item')} #${entries.length + 1}`,
+                        subtitle: subtitle,
+                        value: link && link !== identifier ? link : '',
+                        link: link,
+                    });
+                });
+            }
+
+            if (userData.ss_conf_links && typeof userData.ss_conf_links === 'object') {
+                Object.entries(userData.ss_conf_links).forEach(([name, link]) => {
+                    if (typeof link !== 'string' || !link.trim()) {
+                        return;
+                    }
+                    const trimmed = link.trim();
+                    const key = `${name}:${trimmed}`;
+                    if (seen.has(key)) {
+                        return;
+                    }
+                    seen.add(key);
+                    entries.push({
+                        title: name || `${t('servers.item')} #${entries.length + 1}`,
+                        subtitle: trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed,
+                        value: trimmed,
+                        link: trimmed.startsWith('http') ? trimmed : '',
+                    });
+                });
+            }
+
+            return entries;
+        }
+
+        function renderServerItem(server, index) {
+            if (!server) {
+                return '';
+            }
+            const title = escapeHtml(server.title || `${t('servers.item')} #${index + 1}`);
+            const subtitle = server.subtitle ? `<div class="list-item-subtitle">${escapeHtml(server.subtitle)}</div>` : '';
+            const valueSection = server.value && server.value !== server.subtitle
+                ? `<div class="list-item-subtitle">${escapeHtml(server.value)}</div>`
+                : '';
+            const linkHtml = server.link
+                ? `<a class="badge" href="${escapeAttribute(server.link)}" target="_blank" rel="noopener">${escapeHtml(t('servers.open'))}</a>`
+                : '';
+
+            return `
+                <li class="list-item">
+                    <div class="list-item-header">
+                        <div class="list-item-title">${title}</div>
+                        ${linkHtml}
+                    </div>
+                    ${subtitle}
+                    ${valueSection}
+                </li>
+            `;
+        }
+
+        function getFirstNumeric(values) {
+            for (const value of values) {
+                if (value === null || value === undefined) {
+                    continue;
+                }
+                const numeric = Number.parseFloat(value);
+                if (Number.isFinite(numeric)) {
+                    return numeric;
+                }
+            }
+            return null;
+        }
+
+        function formatCurrency(amount, currency) {
+            const locale = getCurrentLocale();
+            const normalizedCurrency = typeof currency === 'string' ? currency.toUpperCase() : '';
+            if (normalizedCurrency) {
+                try {
+                    const formatter = new Intl.NumberFormat(locale, {
+                        style: 'currency',
+                        currency: normalizedCurrency,
+                        maximumFractionDigits: 2,
+                    });
+                    return { value: formatter.format(amount), currency: '' };
+                } catch (error) {
+                    console.warn('Unable to format currency with code', normalizedCurrency, error);
+                }
+            }
+            const formatter = new Intl.NumberFormat(locale, {
+                minimumFractionDigits: Math.abs(amount % 1) > 0 ? 2 : 0,
+                maximumFractionDigits: 2,
+            });
+            return {
+                value: formatter.format(amount),
+                currency: normalizedCurrency || t('balance.currencyFallback'),
+            };
+        }
+
+        function formatTraffic(value) {
+            const numeric = typeof value === 'number' ? value : Number.parseFloat(value ?? '0');
+            if (!Number.isFinite(numeric)) {
+                return `0 GB`;
+            }
+            const locale = getCurrentLocale();
+            const digits = numeric >= 100 ? 0 : numeric >= 10 ? 1 : 2;
+            const formatter = new Intl.NumberFormat(locale, {
+                minimumFractionDigits: digits,
+                maximumFractionDigits: digits,
+            });
+            return `${formatter.format(numeric)} GB`;
+        }
+
+        function formatTrafficLimit(limit) {
+            const numeric = typeof limit === 'number' ? limit : Number.parseFloat(limit ?? '0');
+            if (!Number.isFinite(numeric) || numeric <= 0) {
+                return t('traffic.unlimited');
+            }
+            const formatter = new Intl.NumberFormat(getCurrentLocale(), {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+            });
+            return `${formatter.format(numeric)} GB`;
+        }
+
+        function formatDateTime(value) {
+            const date = toDate(value);
+            if (!date) {
+                return '';
+            }
+            const locale = getCurrentLocale();
+            try {
+                return new Intl.DateTimeFormat(locale, {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                }).format(date);
+            } catch (error) {
+                return date.toLocaleString();
+            }
+        }
+
+        function formatDateOnly(date, locale) {
+            try {
+                return new Intl.DateTimeFormat(locale, {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                }).format(date);
+            } catch (error) {
+                return date.toLocaleDateString();
+            }
+        }
+
+        function toDate(value) {
+            if (!value) {
+                return null;
+            }
+            if (value instanceof Date) {
+                return Number.isNaN(value.getTime()) ? null : value;
+            }
+            if (typeof value === 'number') {
+                const timestamp = value > 1e12 ? value : value * 1000;
+                const date = new Date(timestamp);
+                return Number.isNaN(date.getTime()) ? null : date;
+            }
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? null : date;
+        }
+
+        function getCurrentLocale() {
+            const map = {
+                en: 'en-US',
+                ru: 'ru-RU',
+            };
+            return map[preferredLanguage] || `${preferredLanguage}-${preferredLanguage.toUpperCase()}`;
+        }
+
+        function normalizeLanguage(lang) {
+            return (lang || '')
+                .toString()
+                .toLowerCase()
+                .split(/[-_]/)[0]
+                .trim();
+        }
+
+        function setPreferredLanguage(lang, options = {}) {
+            const { save = false } = options;
+            const normalized = normalizeLanguage(lang) || LANGUAGE_FALLBACK;
+            preferredLanguage = SUPPORTED_LANGUAGES.includes(normalized) ? normalized : LANGUAGE_FALLBACK;
+
+            if (save && typeof localStorage !== 'undefined') {
+                try {
+                    localStorage.setItem(LANGUAGE_STORAGE_KEY, preferredLanguage);
+                } catch (error) {
+                    console.warn('Unable to store language preference:', error);
+                }
+            }
+
+            applyTranslations();
+            updateLanguageControls();
+
+            if (userData) {
+                renderUserData();
+                renderApps();
+            } else {
+                renderApps();
+            }
+        }
+
+        function getStoredLanguage() {
+            if (typeof localStorage === 'undefined') {
+                return null;
+            }
+            try {
+                const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+                if (!stored) {
+                    return null;
+                }
+                const normalized = normalizeLanguage(stored);
+                return SUPPORTED_LANGUAGES.includes(normalized) ? normalized : null;
+            } catch (error) {
+                console.warn('Unable to read stored language preference:', error);
+                return null;
+            }
+        }
+
+        function applyTranslations() {
+            const localeDisplay = document.getElementById('localeDisplay');
+            if (localeDisplay) {
+                localeDisplay.textContent = getCurrentLocale();
+            }
+
+            document.querySelectorAll('[data-i18n]').forEach(element => {
+                const key = element.dataset.i18n;
+                if (!key) {
+                    return;
+                }
+                const translation = t(key, element.textContent || '');
+                if (translation) {
+                    element.textContent = translation;
+                }
+            });
+
+            document.documentElement.lang = preferredLanguage;
+        }
+
+        function updateLanguageControls() {
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                const lang = normalizeLanguage(btn.dataset.lang);
+                btn.classList.toggle('active', lang === preferredLanguage);
+            });
+        }
+
+        function t(key, fallback = '') {
+            if (!key) {
+                return fallback;
+            }
+            const path = key.split('.');
+            const languages = [preferredLanguage, LANGUAGE_FALLBACK];
+            for (const lang of languages) {
+                let node = translations[lang];
+                if (!node) {
+                    continue;
+                }
+                for (const part of path) {
+                    node = node?.[part];
+                    if (node === undefined) {
+                        break;
+                    }
+                }
+                if (typeof node === 'string') {
+                    return node;
+                }
+            }
+            return fallback || key;
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function escapeAttribute(value) {
+            return escapeHtml(value).replace(/`/g, '&#96;');
+        }
+
+        function escapeRegExp(value) {
+            return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function getInitialRedirectTemplate() {
+            const sources = [
+                window.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE,
+                window.__HAPP_CRYPTOLINK_REDIRECT_TEMPLATE__,
+                window.__ENV__?.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE,
+            ];
+
+            const metaTemplate = document.querySelector('meta[name="happ-cryptolink-redirect-template"]')?.getAttribute('content');
+            if (metaTemplate) {
+                sources.push(metaTemplate);
+            }
+            const bodyTemplate = document.body?.dataset?.happCryptolinkRedirectTemplate;
+            if (bodyTemplate) {
+                sources.push(bodyTemplate);
+            }
+
+            for (const value of sources) {
+                if (typeof value !== 'string') {
+                    continue;
+                }
+                const trimmed = value.trim();
+                if (!trimmed || trimmed.includes('${')) {
+                    continue;
+                }
+                return trimmed;
+            }
+            return '';
+        }
+
+        function buildRedirectUrl(template, link) {
+            if (!template || !link) {
+                return null;
+            }
+            const encodedLink = encodeURIComponent(link);
+            const replacements = {
+                '{subscription_link}': encodedLink,
+                '{link}': encodedLink,
+                '{subscription_link_raw}': link,
+                '{link_raw}': link,
+            };
+
+            let result = template;
+            let replaced = false;
+            for (const [placeholder, value] of Object.entries(replacements)) {
+                if (result.includes(placeholder)) {
+                    result = result.replace(new RegExp(escapeRegExp(placeholder), 'g'), value);
+                    replaced = true;
+                }
+            }
+
+            if (replaced) {
+                return result;
+            }
+
+            if (/[?=&]$/.test(result)) {
+                return `${result}${encodedLink}`;
+            }
+
+            return `${result}${encodedLink}`;
+        }
+
+        function getHappCryptoLink() {
+            return (
+                userData?.happCryptoLink
+                || userData?.happ_crypto_link
+                || userData?.subscriptionCryptoLink
+                || userData?.subscription_crypto_link
+                || userData?.subscriptionUrl
+                || userData?.subscription_url
+                || ''
+            );
+        }
+
+        function getConnectRedirectUrl() {
+            const template = happRedirectTemplate;
+            if (!template) {
+                return null;
+            }
+            const link = getHappCryptoLink();
+            if (!link) {
+                return null;
+            }
+            return buildRedirectUrl(template, link);
+        }
+
+        function getCurrentSubscriptionUrl() {
+            return (
+                userData?.subscriptionUrl
+                || userData?.subscription_url
+                || userData?.subscriptionCryptoLink
+                || userData?.subscription_crypto_link
+                || ''
+            );
+        }
+
+        function updateActionButtons() {
+            const connectBtn = document.getElementById('connectBtn');
+            const copyBtn = document.getElementById('copyBtn');
+
+            const connectUrl = getConnectRedirectUrl();
+            if (connectBtn) {
+                connectBtn.classList.toggle('hidden', !connectUrl);
+                connectBtn.disabled = !connectUrl;
+            }
+
+            const subscriptionUrl = getCurrentSubscriptionUrl();
+            const canCopy = Boolean(subscriptionUrl) && Boolean(navigator.clipboard);
+            if (copyBtn) {
+                copyBtn.disabled = !canCopy;
+            }
+        }
+
+        document.querySelectorAll('.platform-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentPlatform = btn.dataset.platform;
+                setActivePlatformButton();
+                renderApps();
+            });
+        });
+
+        document.getElementById('connectBtn')?.addEventListener('click', () => {
+            const redirectUrl = getConnectRedirectUrl();
+            if (!redirectUrl) {
+                return;
+            }
+            window.location.href = redirectUrl;
+        });
+
+        document.getElementById('copyBtn')?.addEventListener('click', async () => {
+            const subscriptionUrl = getCurrentSubscriptionUrl();
+            if (!subscriptionUrl || !navigator.clipboard) {
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(subscriptionUrl);
+                showPopup(t('copy.success'), t('copy.successTitle'));
+            } catch (error) {
+                console.warn('Clipboard copy failed:', error);
+                showPopup(t('copy.failure'), t('copy.failureTitle'));
+            }
+        });
+
+        function showPopup(message, title = t('popup.info')) {
+            if (typeof tg.showPopup === 'function') {
+                tg.showPopup({
+                    title,
+                    message,
+                    buttons: [{ type: 'ok' }],
+                });
+            } else {
+                alert(`${title}\n${message}`);
+            }
+        }
+
+        function showError(error) {
+            document.getElementById('loadingState')?.classList.add('hidden');
+            document.getElementById('mainContent')?.classList.add('hidden');
+
+            const titleElement = document.getElementById('errorTitle');
+            const textElement = document.getElementById('errorText');
+
+            if (titleElement) {
+                titleElement.textContent = error?.title || t('errors.generic');
+            }
+            if (textElement) {
+                textElement.textContent = error?.message || error?.detail || t('errors.subscriptionNotFoundDescription');
+            }
+
+            document.getElementById('errorState')?.classList.remove('hidden');
+            updateActionButtons();
+        }
+
+        function translateStatusLabel(status, fallback) {
+            const normalized = (status || '').toLowerCase();
+            const translation = t(`status.${normalized}`, '');
+            if (translation && translation !== `status.${normalized}`) {
+                return translation;
+            }
+            return fallback || t('status.unknown');
         }
 
         function detectPlatform() {
@@ -704,7 +1991,7 @@
                 android: 'android',
                 pc: 'windows',
                 tv: 'androidTV',
-                mac: 'macos'
+                mac: 'macos',
             };
             return mapping[platform] || platform;
         }
@@ -723,19 +2010,19 @@
             const apps = getAppsForCurrentPlatform();
 
             if (!apps.length) {
-                container.innerHTML = '<div class="step-description">No installation guide available for this platform yet.</div>';
+                container.innerHTML = `<div class="step-description">${t('apps.noData')}</div>`;
                 return;
             }
 
             container.innerHTML = apps.map(app => {
                 const iconChar = (app.name?.[0] || 'A').toUpperCase();
-                const featuredBadge = app.isFeatured ? '<span class="featured-badge">Recommended</span>' : '';
+                const featuredBadge = app.isFeatured ? `<span class="featured-badge">${t('apps.recommended')}</span>` : '';
                 return `
                     <div class="app-card ${app.isFeatured ? 'featured' : ''}">
                         <div class="app-header">
                             <div class="app-icon">${iconChar}</div>
                             <div>
-                                <div class="app-name">${app.name || 'App'}</div>
+                                <div class="app-name">${escapeHtml(app.name || 'App')}</div>
                                 ${featuredBadge}
                             </div>
                         </div>
@@ -756,14 +2043,14 @@
                     <div class="step">
                         <div class="step-title">
                             <span class="step-number">${stepNum++}</span>
-                            Download & Install
+                            ${escapeHtml(t('steps.download'))}
                         </div>
                         ${app.installationStep.description ? `<div class="step-description">${getLocalizedText(app.installationStep.description)}</div>` : ''}
                         ${Array.isArray(app.installationStep.buttons) && app.installationStep.buttons.length ? `
                             <div class="step-buttons">
                                 ${app.installationStep.buttons.map(btn => `
                                     <a href="${btn.buttonLink}" class="step-btn" target="_blank" rel="noopener">
-                                        ${getLocalizedText(btn.buttonText)}
+                                        ${escapeHtml(getLocalizedText(btn.buttonText))}
                                     </a>
                                 `).join('')}
                             </div>
@@ -777,7 +2064,7 @@
                     <div class="step">
                         <div class="step-title">
                             <span class="step-number">${stepNum++}</span>
-                            Add Subscription
+                            ${escapeHtml(t('steps.addSubscription'))}
                         </div>
                         <div class="step-description">${getLocalizedText(app.addSubscriptionStep.description)}</div>
                     </div>
@@ -789,7 +2076,7 @@
                     <div class="step">
                         <div class="step-title">
                             <span class="step-number">${stepNum++}</span>
-                            Connect & Use
+                            ${escapeHtml(t('steps.connect'))}
                         </div>
                         <div class="step-description">${getLocalizedText(app.connectAndUseStep.description)}</div>
                     </div>
@@ -815,7 +2102,7 @@
                 telegramLang,
                 telegramLang?.split('-')[0],
                 'en',
-                'ru'
+                'ru',
             ].filter(Boolean).map(lang => lang.toLowerCase());
 
             const seen = new Set();
@@ -833,116 +2120,8 @@
             return fallback || '';
         }
 
-        function formatTraffic(value) {
-            const numeric = typeof value === 'number' ? value : Number.parseFloat(value ?? '0');
-            if (!Number.isFinite(numeric)) {
-                return '0 GB';
-            }
-            if (numeric >= 100) {
-                return `${numeric.toFixed(0)} GB`;
-            }
-            if (numeric >= 10) {
-                return `${numeric.toFixed(1)} GB`;
-            }
-            return `${numeric.toFixed(2)} GB`;
-        }
-
-        function formatTrafficLimit(limit) {
-            const numeric = typeof limit === 'number' ? limit : Number.parseFloat(limit ?? '0');
-            if (!Number.isFinite(numeric) || numeric <= 0) {
-                return 'Unlimited';
-            }
-            return `${numeric.toFixed(0)} GB`;
-        }
-
-        function getCurrentSubscriptionUrl() {
-            return userData?.subscription_url || userData?.subscriptionUrl || '';
-        }
-
-        function updateActionButtons() {
-            const connectBtn = document.getElementById('connectBtn');
-            const copyBtn = document.getElementById('copyBtn');
-            const hasUrl = Boolean(getCurrentSubscriptionUrl());
-
-            if (connectBtn) {
-                connectBtn.disabled = !hasUrl;
-            }
-            if (copyBtn) {
-                copyBtn.disabled = !hasUrl || !navigator.clipboard;
-            }
-        }
-
-        function showPopup(message, title = 'Info') {
-            if (typeof tg.showPopup === 'function') {
-                tg.showPopup({
-                    title,
-                    message,
-                    buttons: [{ type: 'ok' }]
-                });
-            } else {
-                alert(message);
-            }
-        }
-
-        document.querySelectorAll('.platform-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                currentPlatform = btn.dataset.platform;
-                setActivePlatformButton();
-                renderApps();
-            });
-        });
-
-        document.getElementById('connectBtn')?.addEventListener('click', () => {
-            const subscriptionUrl = getCurrentSubscriptionUrl();
-            if (!subscriptionUrl) {
-                return;
-            }
-
-            const apps = getAppsForCurrentPlatform();
-            const featuredApp = apps.find(app => app.isFeatured) || apps[0];
-
-            if (featuredApp?.urlScheme) {
-                window.location.href = `${featuredApp.urlScheme}${subscriptionUrl}`;
-            } else if (userData?.happ_link && featuredApp?.id === 'happ') {
-                window.location.href = userData.happ_link;
-            } else {
-                window.location.href = subscriptionUrl;
-            }
-        });
-
-        document.getElementById('copyBtn')?.addEventListener('click', async () => {
-            const subscriptionUrl = getCurrentSubscriptionUrl();
-            if (!subscriptionUrl || !navigator.clipboard) {
-                return;
-            }
-
-            try {
-                await navigator.clipboard.writeText(subscriptionUrl);
-                showPopup('Subscription link copied to clipboard', 'Copied');
-            } catch (error) {
-                console.warn('Clipboard copy failed:', error);
-                showPopup('Unable to copy the subscription link automatically. Please copy it manually.', 'Copy failed');
-            }
-        });
-
-        function showError(error) {
-            document.getElementById('loadingState').classList.add('hidden');
-
-            const titleElement = document.getElementById('errorTitle');
-            const textElement = document.getElementById('errorText');
-
-            if (titleElement) {
-                titleElement.textContent = error?.title || 'Subscription Not Found';
-            }
-            if (textElement) {
-                textElement.textContent = error?.message || 'Please contact support to activate your subscription';
-            }
-
-            document.getElementById('errorState').classList.remove('hidden');
-            updateActionButtons();
-        }
-
         init();
     </script>
+
 </body>
 </html>
