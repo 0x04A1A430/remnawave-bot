@@ -1796,7 +1796,7 @@
             if (!label) {
                 return;
             }
-            const useHappLabel = Boolean(userData?.happ_cryptolink_redirect_link);
+            const useHappLabel = Boolean(getHappCryptoLink() || userData?.happ_cryptolink_redirect_link);
             const key = useHappLabel ? 'button.connect.happ' : 'button.connect.default';
             label.textContent = t(key);
         }
@@ -2451,9 +2451,27 @@
             return userData?.subscription_url || userData?.subscriptionUrl || '';
         }
 
+        function getHappCryptoLink() {
+            if (!userData) {
+                return null;
+            }
+
+            return (
+                userData.happ_crypto_link ||
+                userData.subscriptionCryptoLink ||
+                userData.subscription_crypto_link ||
+                null
+            );
+        }
+
         function getConnectLink() {
             if (!userData) {
                 return null;
+            }
+
+            const happCryptoLink = getHappCryptoLink();
+            if (happCryptoLink) {
+                return happCryptoLink;
             }
 
             if (userData.happ_cryptolink_redirect_link) {
@@ -2475,6 +2493,29 @@
                 return userData.happ_link;
             }
             return subscriptionUrl;
+        }
+
+        function openExternalLink(link) {
+            if (!link) {
+                return;
+            }
+
+            if (typeof tg.openLink === 'function') {
+                try {
+                    tg.openLink(link, { try_instant_view: false });
+                    return;
+                } catch (error) {
+                    console.warn('tg.openLink failed:', error);
+                }
+            }
+
+            const newWindow = window.open(link, '_blank', 'noopener,noreferrer');
+            if (newWindow) {
+                newWindow.opener = null;
+                return;
+            }
+
+            window.location.href = link;
         }
 
         function updateActionButtons() {
@@ -2530,9 +2571,7 @@
 
         document.getElementById('connectBtn')?.addEventListener('click', () => {
             const link = getConnectLink();
-            if (link) {
-                window.location.href = link;
-            }
+            openExternalLink(link);
         });
 
         document.getElementById('copyBtn')?.addEventListener('click', async () => {
