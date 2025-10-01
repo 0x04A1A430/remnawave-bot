@@ -2519,20 +2519,6 @@
             updateActionButtons();
         }
 
-        function openLink(link, { external = false } = {}) {
-            if (!link) {
-                return;
-            }
-
-            if (external && typeof tg.openLink === 'function') {
-                tg.openLink(link, { try_instant_view: false });
-                return;
-            }
-
-            const target = external ? '_blank' : '_self';
-            window.open(link, target, 'noopener,noreferrer');
-        }
-
         document.querySelectorAll('.platform-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 currentPlatform = btn.dataset.platform;
@@ -2544,16 +2530,9 @@
 
         document.getElementById('connectBtn')?.addEventListener('click', () => {
             const link = getConnectLink();
-            if (!link) {
-                return;
+            if (link) {
+                window.location.href = link;
             }
-
-            const shouldOpenExternally = Boolean(
-                userData?.happ_cryptolink_redirect_link &&
-                link === userData.happ_cryptolink_redirect_link
-            );
-
-            openLink(link, { external: shouldOpenExternally });
         });
 
         document.getElementById('copyBtn')?.addEventListener('click', async () => {
