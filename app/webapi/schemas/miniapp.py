@@ -10,6 +10,25 @@ class MiniAppSubscriptionRequest(BaseModel):
     init_data: str = Field(..., alias="initData")
 
 
+class MiniAppPromoGroup(BaseModel):
+    id: int
+    name: str
+    server_discount_percent: int
+    traffic_discount_percent: int
+    device_discount_percent: int
+    apply_discounts_to_addons: bool = True
+
+
+class MiniAppConnectedDevices(BaseModel):
+    count: Optional[int] = None
+    limit: Optional[int] = None
+
+
+class MiniAppServerInfo(BaseModel):
+    uuid: str
+    display_name: str
+
+
 class MiniAppSubscriptionUser(BaseModel):
     telegram_id: int
     username: Optional[str] = None
@@ -29,6 +48,9 @@ class MiniAppSubscriptionUser(BaseModel):
     traffic_limit_label: str
     lifetime_used_traffic_gb: float = 0.0
     has_active_subscription: bool = False
+    is_trial: bool = False
+    subscription_type: str = "paid"
+    promo_group: Optional[MiniAppPromoGroup] = None
 
 
 class MiniAppTransaction(BaseModel):
@@ -54,6 +76,10 @@ class MiniAppSubscriptionResponse(BaseModel):
     links: List[str] = Field(default_factory=list)
     ss_conf_links: Dict[str, str] = Field(default_factory=dict)
     connected_squads: List[str] = Field(default_factory=list)
+    connected_servers: List[MiniAppServerInfo] = Field(default_factory=list)
+    connected_devices: MiniAppConnectedDevices = Field(
+        default_factory=MiniAppConnectedDevices
+    )
     happ: Optional[Dict[str, Any]] = None
     happ_link: Optional[str] = None
     happ_crypto_link: Optional[str] = None
@@ -62,4 +88,6 @@ class MiniAppSubscriptionResponse(BaseModel):
     balance_rubles: float = 0.0
     balance_currency: Optional[str] = None
     transactions: List[MiniAppTransaction] = Field(default_factory=list)
+    autopay_enabled: bool = False
+    autopay_days_before: Optional[int] = None
 
