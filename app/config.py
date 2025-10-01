@@ -213,8 +213,8 @@ class Settings(BaseSettings):
 
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
-    MINIAPP_SERVICE_NAME_EN: str = "RemnaWave VPN"
-    MINIAPP_SERVICE_NAME_RU: str = "RemnaWave VPN"
+    MINIAPP_SERVICE_NAME_EN: str = "Bedolaga VPN"
+    MINIAPP_SERVICE_NAME_RU: str = "Bedolaga VPN"
     MINIAPP_SERVICE_DESCRIPTION_EN: str = "Secure & Fast Connection"
     MINIAPP_SERVICE_DESCRIPTION_RU: str = "Безопасное и быстрое подключение"
     CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
