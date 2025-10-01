@@ -68,11 +68,28 @@ load_state() {
   if [[ -f "$STATE_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$STATE_FILE"
-    return 0
   else
-    print_error "Установка бота не найдена. Запустите ./install.sh сначала."
-    exit 1
+    print_warning "Файл состояния установки не найден. Выполняем начальную настройку."
+
+    local default_path="$SCRIPT_DIR"
+    if [[ -n "${INSTALL_PATH:-}" ]]; then
+      default_path="$INSTALL_PATH"
+    fi
+
+    read -rp "Укажите путь установки [${default_path}]: " install_path_input
+    install_path_input=${install_path_input:-$default_path}
+
+    INSTALL_PATH="$install_path_input"
+
+    cat > "$STATE_FILE" <<EOF
+INSTALL_PATH="$INSTALL_PATH"
+EOF
+
+    print_success "Путь установки сохранён: $INSTALL_PATH"
   fi
+
+  : "${INSTALL_PATH:=$SCRIPT_DIR}"
+  mkdir -p "$BACKUP_DIR"
 }
 
 # Определение команды docker compose
