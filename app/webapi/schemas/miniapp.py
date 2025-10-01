@@ -6,6 +6,11 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
+class MiniAppBranding(BaseModel):
+    service_name: Dict[str, Optional[str]] = Field(default_factory=dict)
+    service_description: Dict[str, Optional[str]] = Field(default_factory=dict)
+
+
 class MiniAppSubscriptionRequest(BaseModel):
     init_data: str = Field(..., alias="initData")
 
@@ -86,4 +91,5 @@ class MiniAppSubscriptionResponse(BaseModel):
     promo_group: Optional[MiniAppPromoGroup] = None
     subscription_type: str
     autopay_enabled: bool = False
+    branding: Optional[MiniAppBranding] = None
 

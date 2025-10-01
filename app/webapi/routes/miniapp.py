@@ -383,5 +383,6 @@ async def get_subscription_details(
         else None,
         subscription_type="trial" if subscription.is_trial else "paid",
         autopay_enabled=bool(subscription.autopay_enabled),
+        branding=settings.get_miniapp_branding(),
     )
 
