@@ -74,6 +74,7 @@ class MiniAppSubscriptionResponse(BaseModel):
     user: MiniAppSubscriptionUser
     subscription_url: Optional[str] = None
     subscription_crypto_link: Optional[str] = None
+    subscription_purchase_url: Optional[str] = None
     links: List[str] = Field(default_factory=list)
     ss_conf_links: Dict[str, str] = Field(default_factory=dict)
     connected_squads: List[str] = Field(default_factory=list)

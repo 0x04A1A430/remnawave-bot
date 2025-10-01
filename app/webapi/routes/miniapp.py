@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -287,10 +287,17 @@ async def get_subscription_details(
         ) from None
 
     user = await get_user_by_telegram_id(db, telegram_id)
+    purchase_url = (settings.MINIAPP_PURCHASE_URL or "").strip()
     if not user or not user.subscription:
+        detail: Union[str, Dict[str, str]] = "Subscription not found"
+        if purchase_url:
+            detail = {
+                "message": "Subscription not found",
+                "purchase_url": purchase_url,
+            }
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Subscription not found",
+            detail=detail,
         )
 
     subscription = user.subscription
@@ -364,6 +371,7 @@ async def get_subscription_details(
         user=response_user,
         subscription_url=subscription_url,
         subscription_crypto_link=subscription_crypto_link,
+        subscription_purchase_url=purchase_url or None,
         links=links,
         ss_conf_links=ss_conf_links,
         connected_squads=connected_squads,
