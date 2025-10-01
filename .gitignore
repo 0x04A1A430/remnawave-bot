@@ -8,8 +8,6 @@
 !app-config.json
 !main.py
 !requirements.txt
-!scripts/
-!scripts/**
 !docs/
 !docs/**
 
