@@ -4,6 +4,7 @@
 # Исключения: разрешаем только нужные файлы
 !.dockerignore
 !.env.example
+!install_bot.sh
 !Dockerfile
 !app-config.json
 !main.py
