@@ -1648,6 +1648,7 @@
             en: {
                 'app.title': 'VPN Subscription',
                 'app.name': 'VPN',
+                'values.not_available': 'Not available',
                 'app.subtitle': 'Secure & Fast Connection',
                 'app.loading': 'Loading your subscription...',
                 'error.default.title': 'Subscription Not Found',
@@ -1711,6 +1712,7 @@
             ru: {
                 'app.title': 'Подписка VPN',
                 'app.name': 'VPN',
+                'values.not_available': 'Недоступно',
                 'app.subtitle': 'Безопасное и быстрое подключение',
                 'app.loading': 'Загружаем вашу подписку...',
                 'error.default.title': 'Подписка не найдена',
@@ -1772,6 +1774,25 @@
                 'values.not_available': 'Недоступно'
             }
         };
+
+        const pcTranslations = {
+            en: {
+                'pc.happ.title': 'Open Subscription',
+                'pc.happ.message': 'The Happ application doesn\'t appear to be installed on your PC. How would you like to proceed?',
+                'pc.happ.copy': 'Copy subscription link',
+                'pc.happ.redirect': 'Open in browser',
+            },
+            ru: {
+                'pc.happ.title': 'Открыть подписку',
+                'pc.happ.message': 'Приложение Happ не установлено на вашем ПК. Как вы хотите продолжить?',
+                'pc.happ.copy': 'Скопировать ссылку подписки',
+                'pc.happ.redirect': 'Открыть в браузере',
+            }
+        };
+
+        Object.keys(pcTranslations).forEach(lang => {
+            Object.assign(translations[lang], pcTranslations[lang]);
+        });
 
         // Include all the original JavaScript functions
         function applyBrandingOverrides(branding) {
@@ -2697,6 +2718,21 @@
             }
 
             const happCryptoLink = getHappCryptoLink();
+            const isPC = currentPlatform === 'pc' || (!['ios', 'android', 'tv'].includes(currentPlatform));
+            
+            // For PC, prefer direct subscription URL if no Happ redirect link
+            if (isPC) {
+                if (userData.happ_cryptolink_redirect_link) {
+                    return userData.happ_cryptolink_redirect_link;
+                }
+                if (happCryptoLink) {
+                    return happCryptoLink;
+                }
+                // Return plain subscription URL for PC
+                return getCurrentSubscriptionUrl();
+            }
+            
+            // Original logic for mobile platforms
             if (happCryptoLink) {
                 return happCryptoLink;
             }
@@ -2729,6 +2765,16 @@
 
             const { openInMiniApp = false } = options;
 
+            // Detect if we're on PC and trying to open a happ:// link
+            const isPC = currentPlatform === 'pc' || (!['ios', 'android', 'tv'].includes(currentPlatform));
+            const isHappLink = link.startsWith('happ://');
+            
+            if (isPC && isHappLink) {
+                // For PC users with happ:// links, provide fallback options
+                handlePCHappLink(link);
+                return;
+            }
+
             if (openInMiniApp) {
                 window.location.href = link;
                 return;
@@ -2750,6 +2796,118 @@
             }
 
             window.location.href = link;
+        }
+
+        function handlePCHappLink(happLink) {
+            // Extract the subscription URL from the happ:// link
+            const subscriptionUrl = happLink.replace('happ://', '');
+            
+            // Try to open the happ:// link first (in case user has the app installed)
+            const testWindow = window.open(happLink, '_blank');
+            
+            // Set a timeout to check if the link opened successfully
+            setTimeout(() => {
+                // If the window is still open and accessible, the app likely isn't installed
+                if (testWindow && !testWindow.closed) {
+                    testWindow.close();
+                    
+                    // Show options to the user
+                    if (typeof tg.showPopup === 'function') {
+                        tg.showPopup({
+                            title: t('pc.happ.title') || 'Open Subscription',
+                            message: t('pc.happ.message') || 'The Happ application doesn\'t appear to be installed. Would you like to:',
+                            buttons: [
+                                {
+                                    id: 'copy',
+                                    type: 'default',
+                                    text: t('pc.happ.copy') || 'Copy subscription link'
+                                },
+                                {
+                                    id: 'redirect',
+                                    type: 'default', 
+                                    text: t('pc.happ.redirect') || 'Open in browser'
+                                },
+                                {
+                                    type: 'cancel'
+                                }
+                            ]
+                        }, (buttonId) => {
+                            if (buttonId === 'copy') {
+                                copySubscriptionUrl(subscriptionUrl);
+                            } else if (buttonId === 'redirect') {
+                                openWithRedirect(subscriptionUrl);
+                            }
+                        });
+                    } else {
+                        // Fallback for environments without showPopup
+                        const choice = confirm(
+                            'The Happ application doesn\'t appear to be installed.\n\n' +
+                            'Click OK to open the subscription in your browser, or Cancel to copy the link.'
+                        );
+                        if (choice) {
+                            openWithRedirect(subscriptionUrl);
+                        } else {
+                            copySubscriptionUrl(subscriptionUrl);
+                        }
+                    }
+                }
+            }, 1500); // Wait 1.5 seconds to see if the app opens
+        }
+
+        // Add function to open with redirect parameter
+        function openWithRedirect(subscriptionUrl) {
+            // Create the redirect URL
+            const currentOrigin = window.location.origin;
+            const redirectUrl = `${currentOrigin}/index.html?redirect_to=${encodeURIComponent(subscriptionUrl)}`;
+            
+            // Open in a new tab/window
+            const newWindow = window.open(redirectUrl, '_blank');
+            if (newWindow) {
+                newWindow.opener = null;
+            } else {
+                window.location.href = redirectUrl;
+            }
+        }
+
+        async function copySubscriptionUrl(url) {
+            if (!url) return;
+            
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(url);
+                    showPopup(
+                        t('notifications.copy.success') || 'Subscription link copied to clipboard.',
+                        t('notifications.copy.title.success') || 'Copied'
+                    );
+                } else {
+                    // Fallback for non-secure contexts
+                    const textArea = document.createElement('textarea');
+                    textArea.value = url;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    
+                    try {
+                        document.execCommand('copy');
+                        showPopup(
+                            t('notifications.copy.success') || 'Subscription link copied to clipboard.',
+                            t('notifications.copy.title.success') || 'Copied'
+                        );
+                    } catch (err) {
+                        throw err;
+                    } finally {
+                        document.body.removeChild(textArea);
+                    }
+                }
+            } catch (error) {
+                console.warn('Clipboard copy failed:', error);
+                showPopup(
+                    t('notifications.copy.failure') || 'Unable to copy. Please copy manually: ' + url,
+                    t('notifications.copy.title.failure') || 'Copy failed'
+                );
+            }
         }
 
         function updateActionButtons() {
