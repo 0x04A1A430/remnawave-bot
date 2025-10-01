@@ -4,11 +4,12 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
-from app.database.models import Subscription
+from app.database.models import Subscription, Transaction
 from app.services.subscription_service import SubscriptionService
 from app.utils.telegram_webapp import (
     TelegramWebAppAuthError,
@@ -20,6 +21,7 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionRequest,
     MiniAppSubscriptionResponse,
     MiniAppSubscriptionUser,
+    MiniAppTransaction,
 )
 
 
@@ -66,6 +68,12 @@ def _status_label(status: str) -> str:
         "disabled": "Disabled",
     }
     return mapping.get(status, status.title())
+
+
+def _format_amount_rubles(amount_kopeks: Optional[int]) -> float:
+    if not amount_kopeks:
+        return 0.0
+    return round(amount_kopeks / 100, 2)
 
 
 def _resolve_display_name(user_data: Dict[str, Any]) -> str:
@@ -169,6 +177,35 @@ async def get_subscription_details(
     links: List[str] = links_payload.get("links") or connected_squads
     ss_conf_links: Dict[str, str] = links_payload.get("ss_conf_links") or {}
 
+    balance_kopeks = int(getattr(user, "balance_kopeks", 0) or 0)
+    balance_rubles = _format_amount_rubles(balance_kopeks)
+    balance_label = f"{balance_rubles:.2f}"
+    balance_currency = getattr(user, "balance_currency", None) or "RUB"
+
+    transactions_result = await db.execute(
+        select(Transaction)
+        .where(Transaction.user_id == user.id)
+        .order_by(Transaction.created_at.desc())
+        .limit(10)
+    )
+    transactions = [
+        MiniAppTransaction(
+            id=tx.id,
+            type=tx.type,
+            amount_kopeks=tx.amount_kopeks or 0,
+            amount_rubles=_format_amount_rubles(tx.amount_kopeks),
+            description=tx.description,
+            payment_method=tx.payment_method,
+            is_completed=bool(tx.is_completed),
+            created_at=tx.created_at,
+            completed_at=tx.completed_at,
+        )
+        for tx in transactions_result.scalars().all()
+        if tx is not None
+    ]
+
+    redirect_template = settings.get_happ_cryptolink_redirect_template()
+
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
         username=user.username,
@@ -195,6 +232,10 @@ async def get_subscription_details(
         traffic_limit_label=_format_limit_label(traffic_limit),
         lifetime_used_traffic_gb=lifetime_used,
         has_active_subscription=status_actual in {"active", "trial"},
+        balance_kopeks=balance_kopeks,
+        balance_rubles=balance_rubles,
+        balance_label=balance_label,
+        balance_currency=balance_currency,
     )
 
     return MiniAppSubscriptionResponse(
@@ -209,5 +250,7 @@ async def get_subscription_details(
         happ=links_payload.get("happ"),
         happ_link=links_payload.get("happ_link"),
         happ_crypto_link=links_payload.get("happ_crypto_link"),
+        happ_cryptolink_redirect_template=redirect_template,
+        transactions=transactions,
     )
 
