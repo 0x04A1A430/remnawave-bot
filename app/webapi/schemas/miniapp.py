@@ -10,6 +10,18 @@ class MiniAppSubscriptionRequest(BaseModel):
     init_data: str = Field(..., alias="initData")
 
 
+class MiniAppTransaction(BaseModel):
+    id: int
+    type: Optional[str] = None
+    amount_kopeks: int = 0
+    amount_rubles: float = 0.0
+    description: Optional[str] = None
+    payment_method: Optional[str] = None
+    is_completed: bool = False
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+
 class MiniAppSubscriptionUser(BaseModel):
     telegram_id: int
     username: Optional[str] = None
@@ -29,6 +41,10 @@ class MiniAppSubscriptionUser(BaseModel):
     traffic_limit_label: str
     lifetime_used_traffic_gb: float = 0.0
     has_active_subscription: bool = False
+    balance_kopeks: int = 0
+    balance_rubles: float = 0.0
+    balance_label: str
+    balance_currency: str = "RUB"
 
 
 class MiniAppSubscriptionResponse(BaseModel):
@@ -44,4 +60,6 @@ class MiniAppSubscriptionResponse(BaseModel):
     happ: Optional[Dict[str, Any]] = None
     happ_link: Optional[str] = None
     happ_crypto_link: Optional[str] = None
+    happ_cryptolink_redirect_template: Optional[str] = None
+    transactions: List[MiniAppTransaction] = Field(default_factory=list)
 
