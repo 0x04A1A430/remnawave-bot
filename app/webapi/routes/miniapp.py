@@ -79,16 +79,6 @@ def _status_label(status: str) -> str:
     return mapping.get(status, status.title())
 
 
-def _miniapp_service_name() -> str:
-    value = (settings.MINIAPP_SERVICE_NAME or "").strip()
-    return value or "RemnaWave VPN"
-
-
-def _miniapp_service_description() -> str:
-    value = (settings.MINIAPP_SERVICE_DESCRIPTION or "").strip()
-    return value or "Secure & Fast Connection"
-
-
 def _parse_datetime_string(value: Optional[str]) -> Optional[str]:
     if not value:
         return None
@@ -369,8 +359,6 @@ async def get_subscription_details(
     )
 
     return MiniAppSubscriptionResponse(
-        service_name=_miniapp_service_name(),
-        service_description=_miniapp_service_description(),
         subscription_id=subscription.id,
         remnawave_short_uuid=subscription.remnawave_short_uuid,
         user=response_user,
