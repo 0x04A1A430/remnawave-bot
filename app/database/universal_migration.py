@@ -14,6 +14,101 @@ logger = logging.getLogger(__name__)
 async def get_database_type():
     return engine.dialect.name
 
+
+async def sync_postgres_sequences() -> bool:
+    """Ensure PostgreSQL sequences match the current max values after restores."""
+
+    db_type = await get_database_type()
+
+    if db_type != "postgresql":
+        logger.debug("Пропускаем синхронизацию последовательностей: тип БД %s", db_type)
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(
+                text(
+                    """
+                    SELECT
+                        cols.table_schema,
+                        cols.table_name,
+                        cols.column_name,
+                        pg_get_serial_sequence(
+                            format('%I.%I', cols.table_schema, cols.table_name),
+                            cols.column_name
+                        ) AS sequence_path
+                    FROM information_schema.columns AS cols
+                    WHERE cols.column_default LIKE 'nextval(%'
+                      AND cols.table_schema NOT IN ('pg_catalog', 'information_schema')
+                    """
+                )
+            )
+
+            sequences = result.fetchall()
+
+            if not sequences:
+                logger.info("ℹ️ Не найдено последовательностей PostgreSQL для синхронизации")
+                return True
+
+            for table_schema, table_name, column_name, sequence_path in sequences:
+                if not sequence_path:
+                    continue
+
+                max_result = await conn.execute(
+                    text(
+                        f'SELECT COALESCE(MAX("{column_name}"), 0) '
+                        f'FROM "{table_schema}"."{table_name}"'
+                    )
+                )
+                max_value = max_result.scalar() or 0
+
+                parts = sequence_path.split('.')
+                if len(parts) == 2:
+                    seq_schema, seq_name = parts
+                else:
+                    seq_schema, seq_name = 'public', parts[-1]
+
+                seq_schema = seq_schema.strip('"')
+                seq_name = seq_name.strip('"')
+                current_result = await conn.execute(
+                    text(
+                        """
+                        SELECT last_value, is_called
+                        FROM pg_sequences
+                        WHERE schemaname = :schema AND sequencename = :sequence
+                        """
+                    ),
+                    {"schema": seq_schema, "sequence": seq_name},
+                )
+                current_row = current_result.fetchone()
+
+                if current_row:
+                    current_last, is_called = current_row
+                    current_next = current_last + 1 if is_called else current_last
+                    if current_next > max_value:
+                        continue
+
+                await conn.execute(
+                    text(
+                        """
+                        SELECT setval(:sequence_name, :new_value, TRUE)
+                        """
+                    ),
+                    {"sequence_name": sequence_path, "new_value": max_value},
+                )
+                logger.info(
+                    "🔄 Последовательность %s синхронизирована: MAX=%s, следующий ID=%s",
+                    sequence_path,
+                    max_value,
+                    max_value + 1,
+                )
+
+        return True
+
+    except Exception as error:
+        logger.error("❌ Ошибка синхронизации последовательностей PostgreSQL: %s", error)
+        return False
+
 async def check_table_exists(table_name: str) -> bool:
     try:
         async with engine.begin() as conn:
@@ -2043,11 +2138,19 @@ async def run_universal_migration():
     try:
         db_type = await get_database_type()
         logger.info(f"Тип базы данных: {db_type}")
-        
+
+        if db_type == 'postgresql':
+            logger.info("=== СИНХРОНИЗАЦИЯ ПОСЛЕДОВАТЕЛЬНОСТЕЙ PostgreSQL ===")
+            sequences_synced = await sync_postgres_sequences()
+            if sequences_synced:
+                logger.info("✅ Последовательности PostgreSQL синхронизированы")
+            else:
+                logger.warning("⚠️ Не удалось синхронизировать последовательности PostgreSQL")
+
         referral_migration_success = await add_referral_system_columns()
         if not referral_migration_success:
             logger.warning("⚠️ Проблемы с миграцией реферальной системы")
-        
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ SYSTEM_SETTINGS ===")
         system_settings_ready = await create_system_settings_table()
         if system_settings_ready:
