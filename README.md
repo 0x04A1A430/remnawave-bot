@@ -212,8 +212,8 @@ networks:
          - caddy_data:/data
          - caddy_config:/config
         # Укажите путь к каталогу miniapp из репозитория бота
-        - /opt/remnawave-bot/miniapp:/miniapp:ro
-        - /opt/remnawave-bot/miniapp/redirect:/miniapp/redirect:ro
+        - /root/remnawave-bedolaga-telegram-bot/miniapp:/miniapp:ro
+        - /root/remnawave-bedolaga-telegram-bot/miniapp/redirect:/miniapp/redirect:ro
        networks:
          - bot_network
 
@@ -288,7 +288,7 @@ networks:
    ```
   - Каталог `miniapp` из репозитория должен быть смонтирован в контейнер Caddy по путям `/miniapp` и `/miniapp/redirect`,
     чтобы статические файлы мини-приложения и страницы редиректа отдавались без дополнительной сборки. Замените
-    `/opt/remnawave-bot` в примере на реальный путь до установленного репозитория.
+    `/root/remnawave-bedolaga-telegram-bot` в примере на реальный путь до установленного репозитория.
    - Caddy автоматически выпустит TLS-сертификаты через ACME, если DNS настроен правильно.
 4. Запустите прокси и убедитесь, что он присоединился к сети бота:
    ```bash
