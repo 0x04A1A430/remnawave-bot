@@ -227,64 +227,49 @@ networks:
    ```
 3. Создайте `Caddyfile` с двумя виртуальными хостами:
    ```caddy
-   hooks.example.com {
-       encode zstd gzip
-
-       @telegram path /webhook
-       reverse_proxy @telegram remnawave_bot:8081
-
-       @tribute path /tribute-webhook*
-       reverse_proxy @tribute remnawave_bot:8081
-
-       @yookassa path /yookassa-webhook*
-       reverse_proxy @yookassa remnawave_bot:8082
-
-       @cryptobot path /cryptobot-webhook*
-       reverse_proxy @cryptobot remnawave_bot:8081
-
-       @mulenpay path /mulenpay-webhook*
-       reverse_proxy @mulenpay remnawave_bot:8081
-
-       @pal24 path /pal24-webhook*
-       reverse_proxy @pal24 remnawave_bot:8084
-
-       log {
-           output file /var/log/caddy/hooks.access.log
+   webhook.domain.com {
+    handle /tribute-webhook* {
+        reverse_proxy localhost:8081
+    }
+    
+    handle /cryptobot-webhook* {
+        reverse_proxy localhost:8081
+    }
+    
+    handle /mulenpay-webhook* {
+        reverse_proxy localhost:8081
+    }
+    
+    handle /pal24-webhook* {
+        reverse_proxy localhost:8084
+    }
+    
+    handle /yookassa-webhook* {
+        reverse_proxy localhost:8082
+    }
+    
+    handle /health {
+        reverse_proxy localhost:8081/health
        }
    }
-
-  miniapp.example.com {
-      encode zstd gzip
-
-      @config path /app-config.json
-      header @config Access-Control-Allow-Origin "*"
-
-      redir / /miniapp/ 308
-
-      handle /app-config.json {
-          root * /miniapp
-          file_server
-      }
-
-      handle_path /miniapp/api/* {
-          reverse_proxy remnawave_bot:8080 {
-              header_up X-Real-IP {remote_host}
-              header_up X-Forwarded-Proto {scheme}
-          }
-      }
-
-      handle_path /miniapp/redirect/* {
-          root * /miniapp/redirect
-          try_files {path} {path}/ index.html
-          file_server
-      }
-
-      handle_path /miniapp/* {
-          root * /miniapp
-          try_files {path} {path}/ index.html
-          file_server
-      }
-  }
+  
+    miniapp.domain.com {
+        encode gzip zstd
+        root * /var/www/remnawave-miniapp
+        file_server
+      
+        @config path /app-config.json
+        header @config Access-Control-Allow-Origin "*"
+        
+        # Redirect for /miniapp/redirect/index.html
+        @redirect path /miniapp/redirect/index.html
+        redir @redirect /miniapp/redirect/index.html permanent
+        
+        reverse_proxy /miniapp/* 127.0.0.1:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
    ```
   - Каталог `miniapp` из репозитория должен быть смонтирован в контейнер Caddy по путям `/miniapp` и `/miniapp/redirect`,
     чтобы статические файлы мини-приложения и страницы редиректа отдавались без дополнительной сборки. Замените
