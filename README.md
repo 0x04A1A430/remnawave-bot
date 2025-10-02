@@ -84,7 +84,12 @@ eGames Cookies | Cookies в формате key:value | Для панелей eGa
 git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot.git
 cd remnawave-bedolaga-telegram-bot
 
-# 2. Запусти мастер установки
+# 2. Создай необходимые директории
+mkdir -p ./logs ./data ./data/backups ./data/referral_qr
+chmod -R 755 ./logs ./data
+sudo chown -R 1000:1000 ./logs ./data
+
+# 3. Запусти мастер установки
 chmod +x install_bot.sh   # один раз, если файл не исполняемый
 ./install_bot.sh
 ```
