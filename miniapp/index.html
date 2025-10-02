@@ -2308,10 +2308,6 @@
             }
         }
 
-        function isDesktopPlatform() {
-            return currentPlatform === 'pc';
-        }
-
         function setActivePlatformButton() {
             document.querySelectorAll('.platform-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.platform === currentPlatform);
@@ -2716,22 +2712,6 @@
             );
         }
 
-        function getDesktopRedirectLink() {
-            if (!userData) {
-                return null;
-            }
-
-            return (
-                userData.happ_cryptolink_redirect_link ||
-                getCurrentSubscriptionUrl() ||
-                null
-            );
-        }
-
-        function isHappScheme(link) {
-            return typeof link === 'string' && link.startsWith('happ://');
-        }
-
         function getConnectLink() {
             if (!userData) {
                 return null;
@@ -2785,13 +2765,6 @@
 
             const { openInMiniApp = false } = options;
 
-            let targetLink = link;
-
-            if (!openInMiniApp && isDesktopPlatform() && isHappScheme(targetLink)) {
-                const redirectLink = getDesktopRedirectLink();
-                if (redirectLink) {
-                    targetLink = redirectLink;
-                }
             // Detect if we're on PC and trying to open a happ:// link
             const isPC = currentPlatform === 'pc' || (!['ios', 'android', 'tv'].includes(currentPlatform));
             const isHappLink = link.startsWith('happ://');
@@ -2803,26 +2776,26 @@
             }
 
             if (openInMiniApp) {
-                window.location.href = targetLink;
+                window.location.href = link;
                 return;
             }
 
             if (typeof tg.openLink === 'function') {
                 try {
-                    tg.openLink(targetLink, { try_instant_view: false });
+                    tg.openLink(link, { try_instant_view: false });
                     return;
                 } catch (error) {
                     console.warn('tg.openLink failed:', error);
                 }
             }
 
-            const newWindow = window.open(targetLink, '_blank', 'noopener,noreferrer');
+            const newWindow = window.open(link, '_blank', 'noopener,noreferrer');
             if (newWindow) {
                 newWindow.opener = null;
                 return;
             }
 
-            window.location.href = targetLink;
+            window.location.href = link;
         }
 
         function handlePCHappLink(happLink) {
