@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     CHANNEL_LINK: Optional[str] = None
     CHANNEL_IS_REQUIRED_SUB: bool = False
     
-    DATABASE_URL: str = ""
+    DATABASE_URL: Optional[str] = None
     
     POSTGRES_HOST: str = "postgres"
     POSTGRES_PORT: int = 5432
@@ -53,8 +53,8 @@ class Settings(BaseSettings):
     
     REDIS_URL: str = "redis://localhost:6379/0"
     
-    REMNAWAVE_API_URL: str = ""
-    REMNAWAVE_API_KEY: str = ""
+    REMNAWAVE_API_URL: Optional[str] = None
+    REMNAWAVE_API_KEY: Optional[str] = None
     REMNAWAVE_SECRET_KEY: Optional[str] = None
 
     REMNAWAVE_USERNAME: Optional[str] = None
@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     TRIAL_ADD_REMAINING_DAYS_TO_PAID: bool = False
     DEFAULT_TRAFFIC_LIMIT_GB: int = 100
     DEFAULT_DEVICE_LIMIT: int = 1
-    TRIAL_SQUAD_UUID: str = ""
+    TRIAL_SQUAD_UUID: Optional[str] = None
     DEFAULT_TRAFFIC_RESET_STRATEGY: str = "MONTH"
     RESET_TRAFFIC_ON_PAYMENT: bool = False
     MAX_DEVICES_LIMIT: int = 20
