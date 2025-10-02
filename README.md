@@ -142,6 +142,278 @@ docker compose logs
 
 ---
 
+## 🌐 Настройка обратного прокси и доменов
+
+> Этот раздел описывает полноценную ручную настройку обратного прокси для **двух разных доменов**: отдельный домен для вебхуков
+> (`hooks.example.com`) и отдельный домен для мини-приложения (`miniapp.example.com`). Оба прокси-сервера (Caddy или nginx) дол
+> жны работать в одной Docker-сети с ботом, чтобы обращаться к сервису по внутреннему имени `remnawave_bot` без проброса порто
+> в наружу.
+
+### 1. Планирование доменов и переменных окружения
+
+1. Добавьте в DNS по **A/AAAA-записи** для обоих доменов на IP сервера, где запущен бот.
+2. Убедитесь, что входящий трафик на **80/tcp и 443/tcp** открыт (брандмауэр, облачный фаервол).
+3. В `.env` пропишите корректные URL, чтобы бот формировал ссылки с HTTPS-доменами:
+   ```env
+   WEBHOOK_URL=https://hooks.example.com/webhook
+   WEB_API_ENABLED=true
+   WEB_API_ALLOWED_ORIGINS=https://miniapp.example.com
+   MINIAPP_CUSTOM_URL=https://miniapp.example.com
+   ```
+   При необходимости добавьте пути для дополнительных провайдеров (`TRIBUTE_WEBHOOK_PATH`, `YOOKASSA_WEBHOOK_PATH` и т. д.) —
+   далее в конфигурациях мы их пробрасываем на соответствующие порты контейнера бота.
+
+### 2. Общая Docker-сеть для бота и прокси
+
+`docker-compose.yml` бота создаёт сеть `bot_network`. Чтобы внешний прокси видел сервис `remnawave_bot`, нужно:
+
+```bash
+# Если бот уже запущен через docker compose up -d
+docker compose ps
+
+# Убедиться, что сеть существует
+docker network ls | grep bot_network || docker network create bot_network
+
+# Подключить прокси (если контейнер уже запущен отдельно)
+docker network connect bot_network <proxy_container_name>
+```
+
+Если прокси запускается через **собственный docker-compose**, в файле нужно объявить ту же сеть как внешнюю:
+
+```yaml
+networks:
+  bot_network:
+    external: true
+```
+
+Именно так поступает мастер `install_bot.sh`: при первичной установке он создаёт `bot_network` и при повторном запуске в меню №
+8 («🌐 Настройка обратного прокси (Caddy)») может автоматически подготовить `docker-compose` и `Caddyfile`, обновить сеть и пер
+езапустить сервис.
+
+### 3. Ручная установка Caddy в Docker
+
+1. Создайте каталог для конфигурации:
+   ```bash
+   mkdir -p ~/caddy
+   cd ~/caddy
+   ```
+2. Сохраните docker-compose-файл `docker-compose.caddy.yml`:
+   ```yaml
+   services:
+     caddy:
+       image: caddy:2-alpine
+       container_name: remnawave_caddy
+       restart: unless-stopped
+       ports:
+         - "80:80"
+         - "443:443"
+       volumes:
+         - ./Caddyfile:/etc/caddy/Caddyfile
+         - caddy_data:/data
+         - caddy_config:/config
+        # Укажите путь к каталогу miniapp из репозитория бота
+        - /opt/remnawave-bot/miniapp:/miniapp:ro
+        - /opt/remnawave-bot/miniapp/redirect:/miniapp/redirect:ro
+       networks:
+         - bot_network
+
+   volumes:
+     caddy_data:
+     caddy_config:
+
+   networks:
+     bot_network:
+       external: true
+   ```
+3. Создайте `Caddyfile` с двумя виртуальными хостами:
+   ```caddy
+   hooks.example.com {
+       encode zstd gzip
+
+       @telegram path /webhook
+       reverse_proxy @telegram remnawave_bot:8081
+
+       @tribute path /tribute-webhook*
+       reverse_proxy @tribute remnawave_bot:8081
+
+       @yookassa path /yookassa-webhook*
+       reverse_proxy @yookassa remnawave_bot:8082
+
+       @cryptobot path /cryptobot-webhook*
+       reverse_proxy @cryptobot remnawave_bot:8081
+
+       @mulenpay path /mulenpay-webhook*
+       reverse_proxy @mulenpay remnawave_bot:8081
+
+       @pal24 path /pal24-webhook*
+       reverse_proxy @pal24 remnawave_bot:8084
+
+       log {
+           output file /var/log/caddy/hooks.access.log
+       }
+   }
+
+  miniapp.example.com {
+      encode zstd gzip
+
+      @config path /app-config.json
+      header @config Access-Control-Allow-Origin "*"
+
+      redir / /miniapp/ 308
+
+      handle /app-config.json {
+          root * /miniapp
+          file_server
+      }
+
+      handle_path /miniapp/api/* {
+          reverse_proxy remnawave_bot:8080 {
+              header_up X-Real-IP {remote_host}
+              header_up X-Forwarded-Proto {scheme}
+          }
+      }
+
+      handle_path /miniapp/redirect/* {
+          root * /miniapp/redirect
+          try_files {path} {path}/ index.html
+          file_server
+      }
+
+      handle_path /miniapp/* {
+          root * /miniapp
+          try_files {path} {path}/ index.html
+          file_server
+      }
+  }
+   ```
+  - Каталог `miniapp` из репозитория должен быть смонтирован в контейнер Caddy по путям `/miniapp` и `/miniapp/redirect`,
+    чтобы статические файлы мини-приложения и страницы редиректа отдавались без дополнительной сборки. Замените
+    `/opt/remnawave-bot` в примере на реальный путь до установленного репозитория.
+   - Caddy автоматически выпустит TLS-сертификаты через ACME, если DNS настроен правильно.
+4. Запустите прокси и убедитесь, что он присоединился к сети бота:
+   ```bash
+   docker compose -f docker-compose.caddy.yml up -d
+   docker network inspect bot_network | grep remnawave_caddy
+   ```
+5. Проверьте журналы Caddy и бота, выполните тестовый запрос `curl https://hooks.example.com/webhook` (должен отвечать 405/200
+   в зависимости от webhook).
+
+### 4. Ручная настройка nginx в Docker
+
+1. Создайте каталог `/opt/nginx-remnawave` и поместите туда `docker-compose.nginx.yml`:
+   ```yaml
+   services:
+     nginx:
+       image: nginx:1.25-alpine
+       container_name: remnawave_nginx
+       restart: unless-stopped
+       ports:
+         - "80:80"
+         - "443:443"
+       volumes:
+         - ./nginx.conf:/etc/nginx/nginx.conf:ro
+         - ./certs:/etc/ssl/private:ro
+         - ./miniapp:/var/www/remnawave-miniapp:ro
+       networks:
+         - bot_network
+
+   networks:
+     bot_network:
+       external: true
+   ```
+   Сертификаты можно выпускать вручную (certbot) и складывать в `./certs` либо использовать внешний контейнер `certbot`.
+2. Пример `nginx.conf` с двумя серверными блоками:
+   ```nginx
+   events {}
+
+   http {
+     include       /etc/nginx/mime.types;
+     sendfile      on;
+     tcp_nopush    on;
+     tcp_nodelay   on;
+     keepalive_timeout 65;
+
+     upstream remnawave_bot_hooks {
+       server remnawave_bot:8081;
+     }
+
+     upstream remnawave_bot_yookassa {
+       server remnawave_bot:8082;
+     }
+
+     upstream remnawave_bot_api {
+       server remnawave_bot:8080;
+     }
+
+     server {
+       listen 80;
+       listen 443 ssl http2;
+       server_name hooks.example.com;
+
+       ssl_certificate     /etc/ssl/private/hooks.fullchain.pem;
+       ssl_certificate_key /etc/ssl/private/hooks.privkey.pem;
+
+       location = /webhook { proxy_pass http://remnawave_bot_hooks; }
+       location /tribute-webhook { proxy_pass http://remnawave_bot_hooks; }
+       location /cryptobot-webhook { proxy_pass http://remnawave_bot_hooks; }
+       location /mulenpay-webhook { proxy_pass http://remnawave_bot_hooks; }
+       location /pal24-webhook { proxy_pass http://remnawave_bot:8084; }
+       location /yookassa-webhook { proxy_pass http://remnawave_bot_yookassa; }
+
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+     }
+
+     server {
+       listen 80;
+       listen 443 ssl http2;
+       server_name miniapp.example.com;
+
+       ssl_certificate     /etc/ssl/private/miniapp.fullchain.pem;
+       ssl_certificate_key /etc/ssl/private/miniapp.privkey.pem;
+
+       root /var/www/remnawave-miniapp;
+       index index.html;
+
+       location = /app-config.json {
+         add_header Access-Control-Allow-Origin "*";
+         try_files $uri =404;
+       }
+
+       location / {
+         try_files $uri /index.html =404;
+       }
+
+       location /miniapp/ {
+         proxy_pass http://remnawave_bot_api/miniapp/;
+         proxy_set_header Host $host;
+         proxy_set_header X-Real-IP $remote_addr;
+         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+         proxy_set_header X-Forwarded-Proto $scheme;
+       }
+     }
+   }
+   ```
+3. Запустите прокси и убедитесь, что он в сети `bot_network`:
+   ```bash
+   docker compose -f docker-compose.nginx.yml up -d
+   docker network inspect bot_network | grep remnawave_nginx
+   ```
+4. После запуска перепроверьте, что `curl -I https://hooks.example.com/webhook` возвращает HTTP-ответ 405/200, а `curl -H "X-AP
+   I-Key: ..." https://miniapp.example.com/miniapp/health` отвечает 200.
+
+### 5. Чек-лист проверки
+
+- [ ] DNS-записи указывают на сервер, сертификаты валидны.
+- [ ] Контейнер прокси присоединён к `bot_network` и видит сервис `remnawave_bot`.
+- [ ] `WEBHOOK_URL` и `MINIAPP_CUSTOM_URL` в `.env` указывают на HTTPS-домены.
+- [ ] В логах бота нет ошибок `connection refused` или `invalid host header` при обращении из прокси.
+- [ ] Триггеры оплаты (Tribute, YooKassa и др.) успешно получают HTTP 200 при тестовых запросах на свои вебхуки.
+
+---
+
 ## ⚙️ Конфигурация
 
 ### 🔧 Основные параметры
