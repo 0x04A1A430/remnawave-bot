@@ -50,27 +50,46 @@ class AdminNotificationService:
             return f"ID {referred_by_id}"
 
     async def _get_user_promo_group(self, db: AsyncSession, user: User) -> Optional[PromoGroup]:
-        if getattr(user, "promo_group", None):
-            return user.promo_group
+        existing_promo_group = getattr(user, "promo_group", None)
+        if existing_promo_group is not None:
+            return existing_promo_group
 
-        if not user.promo_group_id:
+        promo_group_id = getattr(user, "promo_group_id", None)
+        if not promo_group_id:
             return None
 
         try:
-            await db.refresh(user, attribute_names=["promo_group"])
-        except Exception:
-            # relationship might not be available — fallback to direct fetch
-            pass
+            return await get_promo_group_by_id(db, promo_group_id)
+        except RuntimeError as runtime_error:
+            if "greenlet_spawn" in str(runtime_error):
+                logger.warning(
+                    "Не удалось загрузить промогруппу через текущую сессию (greenlet_spawn). "
+                    "Попытка повторной загрузки в новой сессии."
+                )
+                try:
+                    from app.database.database import AsyncSessionLocal
 
-        if getattr(user, "promo_group", None):
-            return user.promo_group
-
-        try:
-            return await get_promo_group_by_id(db, user.promo_group_id)
+                    async with AsyncSessionLocal() as fallback_session:
+                        return await get_promo_group_by_id(fallback_session, promo_group_id)
+                except Exception as fallback_error:
+                    logger.error(
+                        "Повторная загрузка промогруппы %s пользователя %s не удалась: %s",
+                        promo_group_id,
+                        user.telegram_id,
+                        fallback_error,
+                    )
+                    return None
+            logger.error(
+                "Ошибка загрузки промогруппы %s пользователя %s: %s",
+                promo_group_id,
+                user.telegram_id,
+                runtime_error,
+            )
+            return None
         except Exception as e:
             logger.error(
                 "Ошибка загрузки промогруппы %s пользователя %s: %s",
-                user.promo_group_id,
+                promo_group_id,
                 user.telegram_id,
                 e,
             )
@@ -354,29 +373,92 @@ class AdminNotificationService:
             return False
 
         try:
-            deposit_count_result = await db.execute(
-                select(func.count())
-                .select_from(Transaction)
-                .where(
-                    Transaction.user_id == user.id,
-                    Transaction.type == TransactionType.DEPOSIT.value,
-                    Transaction.is_completed.is_(True)
-                )
+            message = await self._build_balance_topup_message(
+                db,
+                user=user,
+                transaction=transaction,
+                old_balance=old_balance,
             )
-            deposit_count = deposit_count_result.scalar_one() or 0
-            topup_status = "🆕 Первое пополнение" if deposit_count <= 1 else "🔄 Пополнение"
-            payment_method = self._get_payment_method_display(transaction.payment_method)
-            balance_change = user.balance_kopeks - old_balance
-            referrer_info = await self._get_referrer_info(db, user.referred_by_id)
-            subscription_result = await db.execute(
-                select(Subscription).where(Subscription.user_id == user.id)
-            )
-            subscription = subscription_result.scalar_one_or_none()
-            subscription_status = self._get_subscription_status(subscription)
-            promo_group = await self._get_user_promo_group(db, user)
-            promo_block = self._format_promo_group_block(promo_group)
+        except RuntimeError as runtime_error:
+            if "greenlet_spawn" not in str(runtime_error):
+                logger.error(f"Ошибка подготовки уведомления о пополнении: {runtime_error}")
+                return False
 
-            message = f"""💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>
+            logger.warning(
+                "Повторная подготовка уведомления о пополнении в новой сессии из-за ошибки greenlet_spawn"
+            )
+            try:
+                from app.database.database import AsyncSessionLocal
+
+                async with AsyncSessionLocal() as fallback_session:
+                    fallback_user = await fallback_session.get(User, user.id) or user
+                    fallback_transaction = await fallback_session.get(Transaction, transaction.id) or transaction
+                    message = await self._build_balance_topup_message(
+                        fallback_session,
+                        user=fallback_user,
+                        transaction=fallback_transaction,
+                        old_balance=old_balance,
+                    )
+            except Exception as fallback_error:
+                logger.error(
+                    "Ошибка повторной подготовки уведомления о пополнении: %s",
+                    fallback_error,
+                    exc_info=True,
+                )
+                return False
+        except Exception as preparation_error:
+            logger.error(
+                "Ошибка подготовки уведомления о пополнении: %s",
+                preparation_error,
+                exc_info=True,
+            )
+            return False
+
+        if not message:
+            logger.error("Не удалось сформировать сообщение о пополнении")
+            return False
+
+        try:
+            return await self._send_message(message)
+        except Exception as send_error:
+            logger.error(
+                "Ошибка отправки уведомления о пополнении: %s",
+                send_error,
+                exc_info=True,
+            )
+            return False
+
+    async def _build_balance_topup_message(
+        self,
+        db: AsyncSession,
+        *,
+        user: User,
+        transaction: Transaction,
+        old_balance: int,
+    ) -> str:
+        deposit_count_result = await db.execute(
+            select(func.count())
+            .select_from(Transaction)
+            .where(
+                Transaction.user_id == user.id,
+                Transaction.type == TransactionType.DEPOSIT.value,
+                Transaction.is_completed.is_(True)
+            )
+        )
+        deposit_count = deposit_count_result.scalar_one() or 0
+        topup_status = "🆕 Первое пополнение" if deposit_count <= 1 else "🔄 Пополнение"
+        payment_method = self._get_payment_method_display(transaction.payment_method)
+        balance_change = user.balance_kopeks - old_balance
+        referrer_info = await self._get_referrer_info(db, user.referred_by_id)
+        subscription_result = await db.execute(
+            select(Subscription).where(Subscription.user_id == user.id)
+        )
+        subscription = subscription_result.scalar_one_or_none()
+        subscription_status = self._get_subscription_status(subscription)
+        promo_group = await self._get_user_promo_group(db, user)
+        promo_block = self._format_promo_group_block(promo_group)
+
+        return f"""💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>
 
 👤 <b>Пользователь:</b> {user.full_name}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
@@ -399,12 +481,6 @@ class AdminNotificationService:
 📱 <b>Подписка:</b> {subscription_status}
 
 ⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
-            
-            return await self._send_message(message)
-            
-        except Exception as e:
-            logger.error(f"Ошибка отправки уведомления о пополнении: {e}")
-            return False
     
     async def send_subscription_extension_notification(
         self,
