@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import Subscription, User, SubscriptionStatus, PromoGroup
 from app.external.remnawave_api import (
-    RemnaWaveAPI, RemnaWaveUser, UserStatus, 
+    RemnaWaveAPI, RemnaWaveUser, UserStatus,
     TrafficLimitStrategy, RemnaWaveAPIError
 )
 from app.database.crud.user import get_user_by_id
@@ -75,16 +76,54 @@ def get_traffic_reset_strategy():
 
 
 class SubscriptionService:
-    
+
     def __init__(self):
         auth_params = settings.get_remnawave_auth_params()
-        self.api = RemnaWaveAPI(
-            base_url=auth_params["base_url"],
-            api_key=auth_params["api_key"],
-            secret_key=auth_params["secret_key"],
-            username=auth_params["username"],
-            password=auth_params["password"]
-        )
+        base_url = (auth_params.get("base_url") or "").strip()
+        api_key = (auth_params.get("api_key") or "").strip()
+
+        self._config_error: Optional[str] = None
+
+        if not base_url:
+            self._config_error = "REMNAWAVE_API_URL не настроен"
+        elif not api_key:
+            self._config_error = "REMNAWAVE_API_KEY не настроен"
+
+        if self._config_error:
+            logger.warning(
+                "RemnaWave API недоступен: %s. Подписочный сервис будет работать в оффлайн-режиме.",
+                self._config_error
+            )
+            self.api = None
+        else:
+            self.api = RemnaWaveAPI(
+                base_url=base_url,
+                api_key=api_key,
+                secret_key=auth_params.get("secret_key"),
+                username=auth_params.get("username"),
+                password=auth_params.get("password")
+            )
+
+    @property
+    def is_configured(self) -> bool:
+        return self._config_error is None
+
+    @property
+    def configuration_error(self) -> Optional[str]:
+        return self._config_error
+
+    def _ensure_configured(self) -> None:
+        if not self.api or not self.is_configured:
+            raise RemnaWaveAPIError(
+                self._config_error or "RemnaWave API не настроен"
+            )
+
+    @asynccontextmanager
+    async def get_api_client(self):
+        self._ensure_configured()
+        assert self.api is not None
+        async with self.api as api:
+            yield api
     
     async def create_remnawave_user(
         self,
@@ -106,7 +145,7 @@ class SubscriptionService:
                 logger.error(f"Ошибка валидации подписки для пользователя {user.telegram_id}")
                 return None
             
-            async with self.api as api:
+            async with self.get_api_client() as api:
                 existing_users = await api.get_user_by_telegram_id(user.telegram_id)
                 if existing_users:
                     logger.info(f"🔄 Найден существующий пользователь в панели для {user.telegram_id}")
@@ -216,7 +255,7 @@ class SubscriptionService:
                 is_actually_active = False
                 logger.info(f"🔔 Статус подписки {subscription.id} автоматически изменен на 'expired'")
             
-            async with self.api as api:
+            async with self.get_api_client() as api:
                 updated_user = await api.update_user(
                     uuid=user.remnawave_uuid,
                     status=UserStatus.ACTIVE if is_actually_active else UserStatus.EXPIRED,
@@ -281,7 +320,7 @@ class SubscriptionService:
     async def disable_remnawave_user(self, user_uuid: str) -> bool:
 
         try:
-            async with self.api as api:
+            async with self.get_api_client() as api:
                 await api.disable_user(user_uuid)
                 logger.info(f"✅ Отключен RemnaWave пользователь {user_uuid}")
                 return True
@@ -301,7 +340,7 @@ class SubscriptionService:
             if not user or not user.remnawave_uuid:
                 return None
             
-            async with self.api as api:
+            async with self.get_api_client() as api:
                 updated_user = await api.revoke_user_subscription(user.remnawave_uuid)
                 
                 subscription.remnawave_short_uuid = updated_user.short_uuid
@@ -319,7 +358,7 @@ class SubscriptionService:
     async def get_subscription_info(self, short_uuid: str) -> Optional[dict]:
         
         try:
-            async with self.api as api:
+            async with self.get_api_client() as api:
                 info = await api.get_subscription_info(short_uuid)
                 return info
                 
@@ -338,7 +377,7 @@ class SubscriptionService:
             if not user or not user.remnawave_uuid:
                 return False
             
-            async with self.api as api:
+            async with self.get_api_client() as api:
                 remnawave_user = await api.get_user_by_uuid(user.remnawave_uuid)
                 if not remnawave_user:
                     return False
@@ -585,7 +624,7 @@ class SubscriptionService:
             
             if user.remnawave_uuid:
                 try:
-                    async with self.api as api:
+                    async with self.get_api_client() as api:
                         remnawave_user = await api.get_user_by_uuid(user.remnawave_uuid)
                         
                         if not remnawave_user:
