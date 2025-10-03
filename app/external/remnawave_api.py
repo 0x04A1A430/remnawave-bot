@@ -106,10 +106,23 @@ class RemnaWaveAPIError(Exception):
 
 
 class RemnaWaveAPI:
-    
-    def __init__(self, base_url: str, api_key: str, secret_key: Optional[str] = None, 
+
+    def __init__(self, base_url: Optional[str], api_key: Optional[str], secret_key: Optional[str] = None,
                  username: Optional[str] = None, password: Optional[str] = None):
-        self.base_url = base_url.rstrip('/')
+        normalized_base_url = (base_url or "").strip()
+        if not normalized_base_url:
+            raise RemnaWaveAPIError(
+                "RemnaWave API base URL is not configured. "
+                "Please set REMNAWAVE_API_URL environment variable or update settings."
+            )
+
+        if not (username and password) and not (api_key or "").strip():
+            raise RemnaWaveAPIError(
+                "RemnaWave API credentials are not configured. "
+                "Provide REMNAWAVE_API_KEY or username/password in settings."
+            )
+
+        self.base_url = normalized_base_url.rstrip('/')
         self.api_key = api_key
         self.secret_key = secret_key
         self.username = username
