@@ -1,3 +1,4 @@
+import html
 import logging
 from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
@@ -15,6 +16,7 @@ from app.database.crud.server_squad import (
     create_server_squad,
     get_available_server_squads,
     update_server_squad_promo_groups,
+    get_server_connected_users,
 )
 from app.database.crud.promo_group import get_promo_groups_with_counts
 from app.services.remnawave_service import RemnaWaveService
@@ -71,6 +73,11 @@ def _build_server_edit_view(server):
             ),
             types.InlineKeyboardButton(
                 text="👥 Лимит", callback_data=f"admin_server_edit_limit_{server.id}"
+            ),
+        ],
+        [
+            types.InlineKeyboardButton(
+                text="👥 Юзеры", callback_data=f"admin_server_users_{server.id}"
             ),
         ],
         [
@@ -276,7 +283,7 @@ async def sync_servers_with_remnawave(
             )
             return
         
-        created, updated, disabled = await sync_with_remnawave(db, squads)
+        created, updated, removed = await sync_with_remnawave(db, squads)
         
         await cache.delete_pattern("available_countries*")
         
@@ -286,7 +293,7 @@ async def sync_servers_with_remnawave(
 📊 <b>Результаты:</b>
 • Создано новых серверов: {created}
 • Обновлено существующих: {updated}
-• Отключено неактивных: {disabled}
+• Удалено отсутствующих: {removed}
 • Всего обработано: {len(squads)}
 
 ℹ️ Новые серверы созданы как недоступные.
@@ -314,7 +321,7 @@ async def sync_servers_with_remnawave(
                 [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_servers")]
             ])
         )
-    
+
     await callback.answer()
 
 
@@ -340,6 +347,149 @@ async def show_server_edit_menu(
         reply_markup=keyboard,
         parse_mode="HTML"
     )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_server_users(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+
+    payload = callback.data.split("admin_server_users_", 1)[-1]
+    payload_parts = payload.split("_")
+
+    server_id = int(payload_parts[0])
+    page = int(payload_parts[1]) if len(payload_parts) > 1 else 1
+    page = max(page, 1)
+    server = await get_server_squad_by_id(db, server_id)
+
+    if not server:
+        await callback.answer("❌ Сервер не найден!", show_alert=True)
+        return
+
+    users = await get_server_connected_users(db, server_id)
+    total_users = len(users)
+
+    page_size = 10
+    total_pages = max((total_users + page_size - 1) // page_size, 1)
+
+    if page > total_pages:
+        page = total_pages
+
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+    page_users = users[start_index:end_index]
+
+    safe_name = html.escape(server.display_name or "—")
+    safe_uuid = html.escape(server.squad_uuid or "—")
+
+    header = [
+        "🌐 <b>Пользователи сервера</b>",
+        "",
+        f"• Сервер: {safe_name}",
+        f"• UUID: <code>{safe_uuid}</code>",
+        f"• Подключений: {total_users}",
+    ]
+
+    if total_pages > 1:
+        header.append(f"• Страница: {page}/{total_pages}")
+
+    header.append("")
+
+    text = "\n".join(header)
+
+    def _get_status_icon(status_text: str) -> str:
+        if not status_text:
+            return ""
+
+        parts = status_text.split(" ", 1)
+        return parts[0] if parts else status_text
+
+    if users:
+        lines = []
+        for index, user in enumerate(page_users, start=start_index + 1):
+            safe_user_name = html.escape(user.full_name)
+            lines.append(f"{index}. {safe_user_name}")
+
+        text += "\n" + "\n".join(lines)
+    else:
+        text += "Пользователи не найдены."
+
+    keyboard: list[list[types.InlineKeyboardButton]] = []
+
+    for user in page_users:
+        display_name = user.full_name
+        if len(display_name) > 30:
+            display_name = display_name[:27] + "..."
+
+        subscription_status = (
+            user.subscription.status_display
+            if user.subscription
+            else "❌ Нет подписки"
+        )
+        status_icon = _get_status_icon(subscription_status)
+
+        if status_icon:
+            button_text = f"{status_icon} {display_name}"
+        else:
+            button_text = display_name
+
+        keyboard.append([
+            types.InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"admin_user_manage_{user.id}",
+            )
+        ])
+
+    if total_pages > 1:
+        navigation_buttons: list[types.InlineKeyboardButton] = []
+
+        if page > 1:
+            navigation_buttons.append(
+                types.InlineKeyboardButton(
+                    text="⬅️ Предыдущая",
+                    callback_data=f"admin_server_users_{server_id}_{page - 1}",
+                )
+            )
+
+        navigation_buttons.append(
+            types.InlineKeyboardButton(
+                text=f"Стр. {page}/{total_pages}",
+                callback_data=f"admin_server_users_{server_id}_{page}",
+            )
+        )
+
+        if page < total_pages:
+            navigation_buttons.append(
+                types.InlineKeyboardButton(
+                    text="Следующая ➡️",
+                    callback_data=f"admin_server_users_{server_id}_{page + 1}",
+                )
+            )
+
+        keyboard.append(navigation_buttons)
+
+    keyboard.append([
+        types.InlineKeyboardButton(
+            text="⬅️ К серверу", callback_data=f"admin_server_edit_{server_id}"
+        )
+    ])
+
+    keyboard.append([
+        types.InlineKeyboardButton(
+            text="⬅️ К списку", callback_data="admin_servers_list"
+        )
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML",
+    )
+
     await callback.answer()
 
 
@@ -1105,6 +1255,7 @@ def register_handlers(dp: Dispatcher):
         & ~F.data.contains("promo"),
     )
     dp.callback_query.register(toggle_server_availability, F.data.startswith("admin_server_toggle_"))
+    dp.callback_query.register(show_server_users, F.data.startswith("admin_server_users_"))
 
     dp.callback_query.register(start_server_edit_name, F.data.startswith("admin_server_edit_name_"))
     dp.callback_query.register(start_server_edit_price, F.data.startswith("admin_server_edit_price_"))

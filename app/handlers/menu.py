@@ -1,15 +1,15 @@
 import logging
 from aiogram import Dispatcher, types, F
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timedelta 
+from datetime import datetime
 
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id, update_user
-from app.keyboards.inline import get_main_menu_keyboard
+from app.keyboards.inline import get_main_menu_keyboard, get_language_selection_keyboard
 from app.localization.texts import get_texts, get_rules
 from app.database.models import User
-from app.utils.user_utils import mark_user_as_had_paid_subscription
 from app.database.crud.user_message import get_random_active_message
 from app.services.subscription_checkout_service import (
     has_subscription_checkout_draft,
@@ -24,11 +24,12 @@ logger = logging.getLogger(__name__)
 async def show_main_menu(
     callback: types.CallbackQuery,
     db_user: User,
-    db: AsyncSession
+    db: AsyncSession,
+    *,
+    skip_callback_answer: bool = False,
 ):
     texts = get_texts(db_user.language)
 
-    from datetime import datetime
     db_user.last_activity = datetime.utcnow()
     await db.commit()
 
@@ -43,13 +44,18 @@ async def show_main_menu(
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
 
+    is_admin = settings.is_admin(db_user.telegram_id)
+    is_moderator = (not is_admin) and SupportSettingsService.is_moderator(
+        db_user.telegram_id
+    )
+
     await edit_or_answer_photo(
         callback=callback,
         caption=menu_text,
         keyboard=get_main_menu_keyboard(
             language=db_user.language,
-            is_admin=settings.is_admin(db_user.telegram_id),
-                is_moderator=(not settings.is_admin(db_user.telegram_id) and SupportSettingsService.is_moderator(db_user.telegram_id)),
+            is_admin=is_admin,
+            is_moderator=is_moderator,
             has_had_paid_subscription=db_user.has_had_paid_subscription,
             has_active_subscription=has_active_subscription,
             subscription_is_active=subscription_is_active,
@@ -59,23 +65,13 @@ async def show_main_menu(
         ),
         parse_mode="HTML",
     )
-    await callback.answer()
-
-
-async def mark_user_as_had_paid_subscription(
-    db: AsyncSession,
-    user: User
-) -> None:
-    if not user.has_had_paid_subscription:
-        user.has_had_paid_subscription = True
-        user.updated_at = datetime.utcnow()
-        await db.commit()
-        logger.info(f"🎯 Пользователь {user.telegram_id} отмечен как имевший платную подписку")
+    if not skip_callback_answer:
+        await callback.answer()
 
 
 async def show_service_rules(
-    callback: types.CallbackQuery, 
-    db_user: User, 
+    callback: types.CallbackQuery,
+    db_user: User,
     db: AsyncSession
 ):
     from app.database.crud.rules import get_current_rules_content
@@ -93,6 +89,90 @@ async def show_service_rules(
         ])
     )
     await callback.answer()
+
+
+async def show_language_menu(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+
+    if not settings.is_language_selection_enabled():
+        await callback.answer(
+            texts.t(
+                "LANGUAGE_SELECTION_DISABLED",
+                "⚙️ Выбор языка временно недоступен.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    await edit_or_answer_photo(
+        callback=callback,
+        caption=texts.t("LANGUAGE_PROMPT", "🌐 Выберите язык интерфейса:"),
+        keyboard=get_language_selection_keyboard(
+            current_language=db_user.language,
+            include_back=True,
+            language=db_user.language,
+        ),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+async def process_language_change(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+
+    if not settings.is_language_selection_enabled():
+        await callback.answer(
+            texts.t(
+                "LANGUAGE_SELECTION_DISABLED",
+                "⚙️ Выбор языка временно недоступен.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    selected_raw = (callback.data or "").split(":", 1)[-1]
+    normalized_selected = selected_raw.strip().lower()
+
+    available_map = {
+        lang.strip().lower(): lang.strip()
+        for lang in settings.get_available_languages()
+        if isinstance(lang, str) and lang.strip()
+    }
+
+    if normalized_selected not in available_map:
+        await callback.answer("❌ Unsupported language", show_alert=True)
+        return
+
+    resolved_language = available_map[normalized_selected].lower()
+
+    if db_user.language.lower() == normalized_selected:
+        await show_main_menu(
+            callback,
+            db_user,
+            db,
+            skip_callback_answer=True,
+        )
+        await callback.answer(texts.t("LANGUAGE_SELECTED", "🌐 Язык интерфейса обновлен."))
+        return
+
+    updated_user = await update_user(db, db_user, language=resolved_language)
+    texts = get_texts(updated_user.language)
+
+    await show_main_menu(
+        callback,
+        updated_user,
+        db,
+        skip_callback_answer=True,
+    )
+    await callback.answer(texts.t("LANGUAGE_SELECTED", "🌐 Язык интерфейса обновлен."))
 
 
 async def handle_back_to_menu(
@@ -116,13 +196,18 @@ async def handle_back_to_menu(
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
 
+    is_admin = settings.is_admin(db_user.telegram_id)
+    is_moderator = (not is_admin) and SupportSettingsService.is_moderator(
+        db_user.telegram_id
+    )
+
     await edit_or_answer_photo(
         callback=callback,
         caption=menu_text,
         keyboard=get_main_menu_keyboard(
             language=db_user.language,
-            is_admin=settings.is_admin(db_user.telegram_id),
-                is_moderator=(not settings.is_admin(db_user.telegram_id) and SupportSettingsService.is_moderator(db_user.telegram_id)),
+            is_admin=is_admin,
+            is_moderator=is_moderator,
             has_had_paid_subscription=db_user.has_had_paid_subscription,
             has_active_subscription=has_active_subscription,
             subscription_is_active=subscription_is_active,
@@ -239,4 +324,15 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_service_rules,
         F.data == "menu_rules"
+    )
+
+    dp.callback_query.register(
+        show_language_menu,
+        F.data == "menu_language"
+    )
+
+    dp.callback_query.register(
+        process_language_change,
+        F.data.startswith("language_select:"),
+        StateFilter(None)
     )

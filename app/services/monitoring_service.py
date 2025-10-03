@@ -18,6 +18,7 @@ from app.database.crud.discount_offer import (
     upsert_discount_offer,
 )
 from app.database.crud.notification import (
+    clear_notification_by_type,
     notification_sent,
     record_notification,
 )
@@ -472,6 +473,10 @@ class MonitoringService:
 
         try:
             now = datetime.utcnow()
+            notifications_allowed = (
+                NotificationSettingsService.are_notifications_globally_enabled()
+                and NotificationSettingsService.is_trial_channel_unsubscribed_enabled()
+            )
             result = await db.execute(
                 select(Subscription)
                 .options(selectinload(Subscription.user))
@@ -550,6 +555,22 @@ class MonitoringService:
                                 user.remnawave_uuid,
                                 api_error,
                             )
+
+                    if notifications_allowed:
+                        if not await notification_sent(
+                            db,
+                            user.id,
+                            subscription.id,
+                            "trial_channel_unsubscribed",
+                        ):
+                            sent = await self._send_trial_channel_unsubscribed_notification(user)
+                            if sent:
+                                await record_notification(
+                                    db,
+                                    user.id,
+                                    subscription.id,
+                                    "trial_channel_unsubscribed",
+                                )
                 elif subscription.status == SubscriptionStatus.DISABLED.value and is_member:
                     subscription.status = SubscriptionStatus.ACTIVE.value
                     subscription.updated_at = datetime.utcnow()
@@ -574,6 +595,12 @@ class MonitoringService:
                             user.telegram_id,
                             api_error,
                         )
+
+                    await clear_notification_by_type(
+                        db,
+                        subscription.id,
+                        "trial_channel_unsubscribed",
+                    )
 
             if disabled_count or restored_count:
                 await self._log_monitoring_event(
@@ -795,7 +822,12 @@ class MonitoringService:
                     
                     if success:
                         await extend_subscription(db, subscription, 30)
-                        await self.subscription_service.update_remnawave_user(db, subscription)
+                        await self.subscription_service.update_remnawave_user(
+                            db,
+                            subscription,
+                            reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+                            reset_reason="автопродление подписки",
+                        )
                         
                         if self.bot:
                             await self._send_autopay_success_notification(user, renewal_cost, 30)
@@ -1032,6 +1064,69 @@ class MonitoringService:
                 "Ошибка отправки уведомления об отсутствии подключения пользователю %s: %s",
                 user.telegram_id,
                 e,
+            )
+            return False
+
+    async def _send_trial_channel_unsubscribed_notification(self, user: User) -> bool:
+        try:
+            texts = get_texts(user.language)
+            template = texts.get(
+                "TRIAL_CHANNEL_UNSUBSCRIBED",
+                (
+                    "🚫 <b>Доступ приостановлен</b>\n\n"
+                    "Мы не нашли вашу подписку на наш канал, поэтому тестовая подписка отключена.\n\n"
+                    "Подпишитесь на канал и нажмите «{check_button}», чтобы вернуть доступ."
+                ),
+            )
+
+            check_button = texts.t("CHANNEL_CHECK_BUTTON", "✅ Я подписался")
+            message = template.format(check_button=check_button)
+
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+            buttons = []
+            if settings.CHANNEL_LINK:
+                buttons.append(
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t("CHANNEL_SUBSCRIBE_BUTTON", "🔗 Подписаться"),
+                            url=settings.CHANNEL_LINK,
+                        )
+                    ]
+                )
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        text=check_button,
+                        callback_data="sub_channel_check",
+                    )
+                ]
+            )
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+            await self._send_message_with_logo(
+                chat_id=user.telegram_id,
+                text=message,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+            return True
+
+        except (TelegramForbiddenError, TelegramBadRequest) as exc:
+            if self._handle_unreachable_user(user, exc, "уведомление об отписке от канала"):
+                return True
+            logger.error(
+                "Ошибка Telegram API при отправке уведомления об отписке от канала пользователю %s: %s",
+                user.telegram_id,
+                exc,
+            )
+            return False
+        except Exception as error:
+            logger.error(
+                "Ошибка отправки уведомления об отписке от канала пользователю %s: %s",
+                user.telegram_id,
+                error,
             )
             return False
 
@@ -1325,10 +1420,17 @@ class MonitoringService:
                     if len(title) > 60:
                         title = title[:57] + '...'
 
+                    # Детали пользователя: имя, Telegram ID и username
+                    full_name = ticket.user.full_name if ticket.user else "Unknown"
+                    telegram_id_display = ticket.user.telegram_id if ticket.user else "—"
+                    username_display = (ticket.user.username or "отсутствует") if ticket.user else "отсутствует"
+
                     text = (
                         f"⏰ <b>Ожидание ответа на тикет превышено</b>\n\n"
                         f"🆔 <b>ID:</b> <code>{ticket.id}</code>\n"
-                        f"👤 <b>User ID:</b> <code>{ticket.user_id}</code>\n"
+                        f"👤 <b>Пользователь:</b> {full_name}\n"
+                        f"🆔 <b>Telegram ID:</b> <code>{telegram_id_display}</code>\n"
+                        f"📱 <b>Username:</b> @{username_display}\n"
                         f"📝 <b>Заголовок:</b> {title or '—'}\n"
                         f"⏱️ <b>Ожидает ответа:</b> {waited_minutes} мин\n"
                     )

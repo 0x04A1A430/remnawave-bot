@@ -49,23 +49,34 @@ class PromoCodeService:
                 return {"success": False, "error": "already_used_by_user"}
             
             result_description = await self._apply_promocode_effects(db, user, promocode)
-            
+
             if promocode.type == PromoCodeType.SUBSCRIPTION_DAYS.value and promocode.subscription_days > 0:
                 from app.utils.user_utils import mark_user_as_had_paid_subscription
                 await mark_user_as_had_paid_subscription(db, user)
-                
+
                 logger.info(f"🎯 Пользователь {user.telegram_id} получил платную подписку через промокод {code}")
-            
+
             await create_promocode_use(db, promocode.id, user_id)
-            
+
             promocode.current_uses += 1
             await db.commit()
-            
+
             logger.info(f"✅ Пользователь {user.telegram_id} активировал промокод {code}")
-            
+
+            promocode_data = {
+                "code": promocode.code,
+                "type": promocode.type,
+                "balance_bonus_kopeks": promocode.balance_bonus_kopeks,
+                "subscription_days": promocode.subscription_days,
+                "max_uses": promocode.max_uses,
+                "current_uses": promocode.current_uses,
+                "valid_until": promocode.valid_until,
+            }
+
             return {
                 "success": True,
-                "description": result_description
+                "description": result_description,
+                "promocode": promocode_data,
             }
             
         except Exception as e:

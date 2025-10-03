@@ -1,12 +1,113 @@
 import logging
-from sqlalchemy import text, inspect
+from datetime import datetime
+
+from sqlalchemy import inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.database.database import engine
+
+from app.config import settings
+from app.database.database import AsyncSessionLocal, engine
+from app.database.models import WebApiToken
+from app.utils.security import hash_api_token
 
 logger = logging.getLogger(__name__)
 
 async def get_database_type():
     return engine.dialect.name
+
+
+async def sync_postgres_sequences() -> bool:
+    """Ensure PostgreSQL sequences match the current max values after restores."""
+
+    db_type = await get_database_type()
+
+    if db_type != "postgresql":
+        logger.debug("Пропускаем синхронизацию последовательностей: тип БД %s", db_type)
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(
+                text(
+                    """
+                    SELECT
+                        cols.table_schema,
+                        cols.table_name,
+                        cols.column_name,
+                        pg_get_serial_sequence(
+                            format('%I.%I', cols.table_schema, cols.table_name),
+                            cols.column_name
+                        ) AS sequence_path
+                    FROM information_schema.columns AS cols
+                    WHERE cols.column_default LIKE 'nextval(%'
+                      AND cols.table_schema NOT IN ('pg_catalog', 'information_schema')
+                    """
+                )
+            )
+
+            sequences = result.fetchall()
+
+            if not sequences:
+                logger.info("ℹ️ Не найдено последовательностей PostgreSQL для синхронизации")
+                return True
+
+            for table_schema, table_name, column_name, sequence_path in sequences:
+                if not sequence_path:
+                    continue
+
+                max_result = await conn.execute(
+                    text(
+                        f'SELECT COALESCE(MAX("{column_name}"), 0) '
+                        f'FROM "{table_schema}"."{table_name}"'
+                    )
+                )
+                max_value = max_result.scalar() or 0
+
+                parts = sequence_path.split('.')
+                if len(parts) == 2:
+                    seq_schema, seq_name = parts
+                else:
+                    seq_schema, seq_name = 'public', parts[-1]
+
+                seq_schema = seq_schema.strip('"')
+                seq_name = seq_name.strip('"')
+                current_result = await conn.execute(
+                    text(
+                        """
+                        SELECT last_value, is_called
+                        FROM pg_sequences
+                        WHERE schemaname = :schema AND sequencename = :sequence
+                        """
+                    ),
+                    {"schema": seq_schema, "sequence": seq_name},
+                )
+                current_row = current_result.fetchone()
+
+                if current_row:
+                    current_last, is_called = current_row
+                    current_next = current_last + 1 if is_called else current_last
+                    if current_next > max_value:
+                        continue
+
+                await conn.execute(
+                    text(
+                        """
+                        SELECT setval(:sequence_name, :new_value, TRUE)
+                        """
+                    ),
+                    {"sequence_name": sequence_path, "new_value": max_value},
+                )
+                logger.info(
+                    "🔄 Последовательность %s синхронизирована: MAX=%s, следующий ID=%s",
+                    sequence_path,
+                    max_value,
+                    max_value + 1,
+                )
+
+        return True
+
+    except Exception as error:
+        logger.error("❌ Ошибка синхронизации последовательностей PostgreSQL: %s", error)
+        return False
 
 async def check_table_exists(table_name: str) -> bool:
     try:
@@ -978,6 +1079,7 @@ async def ensure_promo_groups_setup():
                 logger.info(
                     "Добавлена колонка promo_groups.apply_discounts_to_addons"
                 )
+                addon_discount_column_exists = True
 
             column_exists = await check_column_exists("users", "promo_group_id")
 
@@ -1110,9 +1212,25 @@ async def ensure_promo_groups_setup():
                 if existing_default:
                     default_group_id = existing_default[0]
                 else:
-                    await conn.execute(
-                        text(
-                            """
+                    insert_params = {
+                        "name": default_group_name,
+                        "is_default": True,
+                    }
+
+                    if addon_discount_column_exists:
+                        insert_sql = """
+                            INSERT INTO promo_groups (
+                                name,
+                                server_discount_percent,
+                                traffic_discount_percent,
+                                device_discount_percent,
+                                apply_discounts_to_addons,
+                                is_default
+                            ) VALUES (:name, 0, 0, 0, :apply_discounts_to_addons, :is_default)
+                        """
+                        insert_params["apply_discounts_to_addons"] = True
+                    else:
+                        insert_sql = """
                             INSERT INTO promo_groups (
                                 name,
                                 server_discount_percent,
@@ -1121,9 +1239,8 @@ async def ensure_promo_groups_setup():
                                 is_default
                             ) VALUES (:name, 0, 0, 0, :is_default)
                         """
-                        ),
-                        {"name": default_group_name, "is_default": True},
-                    )
+
+                    await conn.execute(text(insert_sql), insert_params)
 
                     result = await conn.execute(
                         text(
@@ -1886,23 +2003,174 @@ async def create_system_settings_table() -> bool:
         return False
 
 
+async def create_web_api_tokens_table() -> bool:
+    table_exists = await check_table_exists("web_api_tokens")
+    if table_exists:
+        logger.info("ℹ️ Таблица web_api_tokens уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_sql = """
+                CREATE TABLE web_api_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(255) NOT NULL,
+                    token_hash VARCHAR(128) NOT NULL UNIQUE,
+                    token_prefix VARCHAR(32) NOT NULL,
+                    description TEXT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    expires_at DATETIME NULL,
+                    last_used_at DATETIME NULL,
+                    last_used_ip VARCHAR(64) NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    created_by VARCHAR(255) NULL
+                );
+                CREATE INDEX idx_web_api_tokens_active ON web_api_tokens(is_active);
+                CREATE INDEX idx_web_api_tokens_prefix ON web_api_tokens(token_prefix);
+                CREATE INDEX idx_web_api_tokens_last_used ON web_api_tokens(last_used_at);
+                """
+            elif db_type == "postgresql":
+                create_sql = """
+                CREATE TABLE web_api_tokens (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    token_hash VARCHAR(128) NOT NULL UNIQUE,
+                    token_prefix VARCHAR(32) NOT NULL,
+                    description TEXT NULL,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW(),
+                    expires_at TIMESTAMP NULL,
+                    last_used_at TIMESTAMP NULL,
+                    last_used_ip VARCHAR(64) NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_by VARCHAR(255) NULL
+                );
+                CREATE INDEX idx_web_api_tokens_active ON web_api_tokens(is_active);
+                CREATE INDEX idx_web_api_tokens_prefix ON web_api_tokens(token_prefix);
+                CREATE INDEX idx_web_api_tokens_last_used ON web_api_tokens(last_used_at);
+                """
+            else:
+                create_sql = """
+                CREATE TABLE web_api_tokens (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    token_hash VARCHAR(128) NOT NULL UNIQUE,
+                    token_prefix VARCHAR(32) NOT NULL,
+                    description TEXT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NULL,
+                    last_used_at TIMESTAMP NULL,
+                    last_used_ip VARCHAR(64) NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_by VARCHAR(255) NULL
+                ) ENGINE=InnoDB;
+                CREATE INDEX idx_web_api_tokens_active ON web_api_tokens(is_active);
+                CREATE INDEX idx_web_api_tokens_prefix ON web_api_tokens(token_prefix);
+                CREATE INDEX idx_web_api_tokens_last_used ON web_api_tokens(last_used_at);
+                """
+
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица web_api_tokens создана")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы web_api_tokens: {error}")
+        return False
+
+
+async def ensure_default_web_api_token() -> bool:
+    default_token = (settings.WEB_API_DEFAULT_TOKEN or "").strip()
+    if not default_token:
+        return True
+
+    token_name = (settings.WEB_API_DEFAULT_TOKEN_NAME or "Bootstrap Token").strip()
+
+    try:
+        async with AsyncSessionLocal() as session:
+            token_hash = hash_api_token(default_token, settings.WEB_API_TOKEN_HASH_ALGORITHM)
+            result = await session.execute(
+                select(WebApiToken).where(WebApiToken.token_hash == token_hash)
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                updated = False
+
+                if not existing.is_active:
+                    existing.is_active = True
+                    updated = True
+
+                if token_name and existing.name != token_name:
+                    existing.name = token_name
+                    updated = True
+
+                if updated:
+                    existing.updated_at = datetime.utcnow()
+                    await session.commit()
+                return True
+
+            token = WebApiToken(
+                name=token_name or "Bootstrap Token",
+                token_hash=token_hash,
+                token_prefix=default_token[:12],
+                description="Автоматически создан при миграции",
+                created_by="migration",
+                is_active=True,
+            )
+            session.add(token)
+            await session.commit()
+            logger.info("✅ Создан дефолтный токен веб-API из конфигурации")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания дефолтного веб-API токена: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
     try:
         db_type = await get_database_type()
         logger.info(f"Тип базы данных: {db_type}")
-        
+
+        if db_type == 'postgresql':
+            logger.info("=== СИНХРОНИЗАЦИЯ ПОСЛЕДОВАТЕЛЬНОСТЕЙ PostgreSQL ===")
+            sequences_synced = await sync_postgres_sequences()
+            if sequences_synced:
+                logger.info("✅ Последовательности PostgreSQL синхронизированы")
+            else:
+                logger.warning("⚠️ Не удалось синхронизировать последовательности PostgreSQL")
+
         referral_migration_success = await add_referral_system_columns()
         if not referral_migration_success:
             logger.warning("⚠️ Проблемы с миграцией реферальной системы")
-        
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ SYSTEM_SETTINGS ===")
         system_settings_ready = await create_system_settings_table()
         if system_settings_ready:
             logger.info("✅ Таблица system_settings готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей system_settings")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ WEB_API_TOKENS ===")
+        web_api_tokens_ready = await create_web_api_tokens_table()
+        if web_api_tokens_ready:
+            logger.info("✅ Таблица web_api_tokens готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей web_api_tokens")
+
+        logger.info("=== ПРОВЕРКА БАЗОВЫХ ТОКЕНОВ ВЕБ-API ===")
+        default_token_ready = await ensure_default_web_api_token()
+        if default_token_ready:
+            logger.info("✅ Бутстрап токен веб-API готов")
+        else:
+            logger.warning("⚠️ Не удалось создать бутстрап токен веб-API")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ CRYPTOBOT ===")
         cryptobot_created = await create_cryptobot_payments_table()

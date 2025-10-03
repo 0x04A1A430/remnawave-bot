@@ -571,8 +571,7 @@ class Subscription(Base):
         return 0.0
     
     def extend_subscription(self, days: int):
-        from datetime import timedelta, datetime
-    
+
         if self.end_date > datetime.utcnow():
             self.end_date = self.end_date + timedelta(days=days)
         else:
@@ -1091,7 +1090,7 @@ class Ticket(Base):
 
 class TicketMessage(Base):
     __tablename__ = "ticket_messages"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     ticket_id = Column(Integer, ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
@@ -1118,6 +1117,27 @@ class TicketMessage(Base):
     @property
     def is_admin_message(self) -> bool:
         return self.is_from_admin
-    
+
     def __repr__(self):
         return f"<TicketMessage(id={self.id}, ticket_id={self.ticket_id}, is_admin={self.is_from_admin}, text='{self.message_text[:30]}...')>"
+
+
+class WebApiToken(Base):
+    __tablename__ = "web_api_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    token_hash = Column(String(128), nullable=False, unique=True, index=True)
+    token_prefix = Column(String(32), nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    expires_at = Column(DateTime, nullable=True)
+    last_used_at = Column(DateTime, nullable=True)
+    last_used_ip = Column(String(64), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_by = Column(String(255), nullable=True)
+
+    def __repr__(self) -> str:
+        status = "active" if self.is_active else "revoked"
+        return f"<WebApiToken id={self.id} name='{self.name}' status={status}>"

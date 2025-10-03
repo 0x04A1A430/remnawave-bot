@@ -1,6 +1,7 @@
 from aiogram.fsm.state import State, StatesGroup
 
 class RegistrationStates(StatesGroup):
+    waiting_for_language = State()
     waiting_for_rules_accept = State()
     waiting_for_referral_code = State()
 
@@ -107,6 +108,11 @@ class AdminStates(StatesGroup):
     
     # Состояния для отслеживания источника перехода
     viewing_user_from_balance_list = State()
+    viewing_user_from_traffic_list = State()
+    viewing_user_from_last_activity_list = State()
+    viewing_user_from_spending_list = State()
+    viewing_user_from_purchases_list = State()
+    viewing_user_from_campaign_list = State()
 
 class SupportStates(StatesGroup):
     waiting_for_message = State()

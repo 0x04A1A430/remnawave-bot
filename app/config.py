@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     CHANNEL_LINK: Optional[str] = None
     CHANNEL_IS_REQUIRED_SUB: bool = False
     
-    DATABASE_URL: str = ""
+    DATABASE_URL: Optional[str] = None
     
     POSTGRES_HOST: str = "postgres"
     POSTGRES_PORT: int = 5432
@@ -53,8 +53,8 @@ class Settings(BaseSettings):
     
     REDIS_URL: str = "redis://localhost:6379/0"
     
-    REMNAWAVE_API_URL: str = ""
-    REMNAWAVE_API_KEY: str = ""
+    REMNAWAVE_API_URL: Optional[str] = None
+    REMNAWAVE_API_KEY: Optional[str] = None
     REMNAWAVE_SECRET_KEY: Optional[str] = None
 
     REMNAWAVE_USERNAME: Optional[str] = None
@@ -66,10 +66,12 @@ class Settings(BaseSettings):
     TRIAL_DURATION_DAYS: int = 3
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
     TRIAL_DEVICE_LIMIT: int = 2
+    TRIAL_ADD_REMAINING_DAYS_TO_PAID: bool = False
     DEFAULT_TRAFFIC_LIMIT_GB: int = 100
     DEFAULT_DEVICE_LIMIT: int = 1
-    TRIAL_SQUAD_UUID: str = ""
+    TRIAL_SQUAD_UUID: Optional[str] = None
     DEFAULT_TRAFFIC_RESET_STRATEGY: str = "MONTH"
+    RESET_TRAFFIC_ON_PAYMENT: bool = False
     MAX_DEVICES_LIMIT: int = 20
     
     TRIAL_WARNING_HOURS: int = 2 
@@ -206,9 +208,16 @@ class Settings(BaseSettings):
     PAL24_MIN_AMOUNT_KOPEKS: int = 10000
     PAL24_MAX_AMOUNT_KOPEKS: int = 100000000
     PAL24_REQUEST_TIMEOUT: int = 30
+    PAL24_SBP_BUTTON_TEXT: Optional[str] = None
+    PAL24_CARD_BUTTON_TEXT: Optional[str] = None
 
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
+    MINIAPP_PURCHASE_URL: str = ""
+    MINIAPP_SERVICE_NAME_EN: str = "Bedolaga VPN"
+    MINIAPP_SERVICE_NAME_RU: str = "Bedolaga VPN"
+    MINIAPP_SERVICE_DESCRIPTION_EN: str = "Secure & Fast Connection"
+    MINIAPP_SERVICE_DESCRIPTION_RU: str = "Безопасное и быстрое подключение"
     CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED: bool = False
     HAPP_CRYPTOLINK_REDIRECT_TEMPLATE: Optional[str] = None
     HAPP_DOWNLOAD_LINK_IOS: Optional[str] = None
@@ -224,6 +233,7 @@ class Settings(BaseSettings):
 
     DEFAULT_LANGUAGE: str = "ru"
     AVAILABLE_LANGUAGES: str = "ru,en"
+    LANGUAGE_SELECTION_ENABLED: bool = True
     
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "logs/bot.log"
@@ -231,6 +241,19 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     WEBHOOK_URL: Optional[str] = None
     WEBHOOK_PATH: str = "/webhook"
+
+    WEB_API_ENABLED: bool = False
+    WEB_API_HOST: str = "0.0.0.0"
+    WEB_API_PORT: int = 8080
+    WEB_API_WORKERS: int = 1
+    WEB_API_ALLOWED_ORIGINS: str = "*"
+    WEB_API_DOCS_ENABLED: bool = False
+    WEB_API_TITLE: str = "Remnawave Bot Admin API"
+    WEB_API_VERSION: str = "1.0.0"
+    WEB_API_DEFAULT_TOKEN: Optional[str] = None
+    WEB_API_DEFAULT_TOKEN_NAME: str = "Bootstrap Token"
+    WEB_API_TOKEN_HASH_ALGORITHM: str = "sha256"
+    WEB_API_REQUEST_LOGGING: bool = True
     
     APP_CONFIG_PATH: str = "app-config.json"
     ENABLE_DEEP_LINKS: bool = True
@@ -383,6 +406,14 @@ class Settings(BaseSettings):
             "password": self.REMNAWAVE_PASSWORD,
             "auth_type": self.REMNAWAVE_AUTH_TYPE
         }
+
+    def get_pal24_sbp_button_text(self, fallback: str) -> str:
+        value = (self.PAL24_SBP_BUTTON_TEXT or "").strip()
+        return value or fallback
+
+    def get_pal24_card_button_text(self, fallback: str) -> str:
+        value = (self.PAL24_CARD_BUTTON_TEXT or "").strip()
+        return value or fallback
     
     def get_remnawave_user_delete_mode(self) -> str:
         """Возвращает режим удаления пользователей: 'delete' или 'disable'"""
@@ -437,7 +468,10 @@ class Settings(BaseSettings):
             return ["ru", "en"]
         except AttributeError:
             return ["ru", "en"]
-    
+
+    def is_language_selection_enabled(self) -> bool:
+        return bool(getattr(self, "LANGUAGE_SELECTION_ENABLED", True))
+
     def format_price(self, price_kopeks: int) -> str:
         rubles = price_kopeks // 100
         return f"{rubles} ₽"
@@ -489,6 +523,34 @@ class Settings(BaseSettings):
     
     def is_deep_links_enabled(self) -> bool:
         return self.ENABLE_DEEP_LINKS
+
+    def get_miniapp_branding(self) -> Dict[str, Dict[str, Optional[str]]]:
+        def _clean(value: Optional[str]) -> Optional[str]:
+            if value is None:
+                return None
+            value_str = str(value).strip()
+            return value_str or None
+
+        name_en = _clean(self.MINIAPP_SERVICE_NAME_EN)
+        name_ru = _clean(self.MINIAPP_SERVICE_NAME_RU)
+        desc_en = _clean(self.MINIAPP_SERVICE_DESCRIPTION_EN)
+        desc_ru = _clean(self.MINIAPP_SERVICE_DESCRIPTION_RU)
+
+        default_name = name_en or name_ru or "RemnaWave VPN"
+        default_description = desc_en or desc_ru or "Secure & Fast Connection"
+
+        return {
+            "service_name": {
+                "default": default_name,
+                "en": name_en,
+                "ru": name_ru,
+            },
+            "service_description": {
+                "default": default_description,
+                "en": desc_en,
+                "ru": desc_ru,
+            },
+        }
     
     def get_app_config_cache_ttl(self) -> int:
         return self.APP_CONFIG_CACHE_TTL
@@ -555,6 +617,13 @@ class Settings(BaseSettings):
 
     def is_happ_download_button_enabled(self) -> bool:
         return self.is_happ_cryptolink_mode() and self.CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED
+
+    def should_hide_subscription_link(self) -> bool:
+        """Returns True when subscription links must be hidden from the interface."""
+
+        if self.is_happ_cryptolink_mode():
+            return False
+        return self.HIDE_SUBSCRIPTION_LINK
 
     def get_happ_cryptolink_redirect_template(self) -> Optional[str]:
         template = (self.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE or "").strip()
@@ -954,7 +1023,25 @@ class Settings(BaseSettings):
 
     def get_server_status_request_timeout(self) -> int:
         return max(1, self.SERVER_STATUS_REQUEST_TIMEOUT)
-    
+
+    def is_web_api_enabled(self) -> bool:
+        return bool(self.WEB_API_ENABLED)
+
+    def get_web_api_allowed_origins(self) -> list[str]:
+        raw = (self.WEB_API_ALLOWED_ORIGINS or "").split(",")
+        origins = [origin.strip() for origin in raw if origin.strip()]
+        return origins or ["*"]
+
+    def get_web_api_docs_config(self) -> Dict[str, Optional[str]]:
+        if self.WEB_API_DOCS_ENABLED:
+            return {
+                "docs_url": "/docs",
+                "redoc_url": "/redoc",
+                "openapi_url": "/openapi.json",
+            }
+
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+
     def get_support_system_mode(self) -> str:
         mode = (self.SUPPORT_SYSTEM_MODE or "both").strip().lower()
         return mode if mode in {"tickets", "contact", "both"} else "both"

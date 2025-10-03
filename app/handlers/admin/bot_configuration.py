@@ -26,9 +26,44 @@ SETTINGS_PAGE_SIZE = 8
 
 CATEGORY_GROUP_DEFINITIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
     (
-        "telegram_bot",
-        "🤖 Telegram бот",
-        ("SUPPORT", "ADMIN_NOTIFICATIONS", "ADMIN_REPORTS", "CHANNEL"),
+        "core",
+        "⚙️ Основные настройки",
+        ("SUPPORT", "LOCALIZATION", "MAINTENANCE"),
+    ),
+    (
+        "channels_notifications",
+        "📢 Каналы и уведомления",
+        ("CHANNEL", "ADMIN_NOTIFICATIONS", "ADMIN_REPORTS"),
+    ),
+    (
+        "subscriptions",
+        "💎 Подписки и тарифы",
+        ("TRIAL", "PAID_SUBSCRIPTION", "PERIODS", "SUBSCRIPTION_PRICES", "TRAFFIC", "TRAFFIC_PACKAGES", "DISCOUNTS"),
+    ),
+    (
+        "payments",
+        "💳 Платежные системы",
+        ("PAYMENT", "TELEGRAM", "CRYPTOBOT", "YOOKASSA", "TRIBUTE", "MULENPAY", "PAL24"),
+    ),
+    (
+        "remnawave",
+        "🔗 RemnaWave API",
+        ("REMNAWAVE",),
+    ),
+    (
+        "referral",
+        "🤝 Реферальная система",
+        ("REFERRAL",),
+    ),
+    (
+        "autopay",
+        "🔄 Автопродление",
+        ("AUTOPAY",),
+    ),
+    (
+        "interface",
+        "🎨 Интерфейс и UX",
+        ("INTERFACE_BRANDING", "INTERFACE_SUBSCRIPTION", "CONNECT_BUTTON", "HAPP", "SKIP", "ADDITIONAL"),
     ),
     (
         "database",
@@ -36,65 +71,24 @@ CATEGORY_GROUP_DEFINITIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
         ("DATABASE", "POSTGRES", "SQLITE", "REDIS"),
     ),
     (
-        "remnawave",
-        "🌊 Remnawave API",
-        ("REMNAWAVE",),
-    ),
-    (
-        "subscriptions",
-        "🪙 Подписки и тарифы",
-        (
-            "TRIAL",
-            "PAID_SUBSCRIPTION",
-            "SUBSCRIPTIONS_GLOBAL",
-            "TRAFFIC",
-            "PERIODS",
-            "SUBSCRIPTION_PRICES",
-            "TRAFFIC_PACKAGES",
-            "DISCOUNTS",
-            "REFERRAL",
-            "AUTOPAY",
-        ),
-    ),
-    (
-        "payments",
-        "💳 Платежные системы",
-        ("TELEGRAM", "TRIBUTE", "YOOKASSA", "CRYPTOBOT", "MULENPAY", "PAL24", "PAYMENT"),
-    ),
-    (
-        "interface",
-        "🎨 Интерфейс и UX",
-        ("INTERFACE_BRANDING", "INTERFACE_SUBSCRIPTION", "CONNECT_BUTTON", "HAPP", "SKIP"),
-    ),
-    (
         "monitoring",
-        "📣 Мониторинг и уведомления",
-        ("MONITORING", "NOTIFICATIONS"),
+        "📊 Мониторинг",
+        ("MONITORING", "NOTIFICATIONS", "SERVER"),
     ),
     (
-        "operations",
-        "🛠️ Статусы и обслуживание",
-        ("SERVER", "MAINTENANCE"),
+        "backup",
+        "💾 Система бэкапов",
+        ("BACKUP",),
     ),
     (
-        "localization",
-        "🈯 Локализация",
-        ("LOCALIZATION",),
+        "updates",
+        "🔄 Обновления",
+        ("VERSION",),
     ),
     (
-        "extras",
-        "🧩 Дополнительные настройки",
-        ("ADDITIONAL",),
-    ),
-    (
-        "reliability",
-        "💾 Бекапы и обновления",
-        ("BACKUP", "VERSION"),
-    ),
-    (
-        "technical",
-        "🧰 Технические",
-        ("LOG", "WEBHOOK", "DEBUG"),
+        "development",
+        "🔧 Разработка",
+        ("LOG", "WEBHOOK", "WEB_API", "DEBUG"),
     ),
 )
 
@@ -857,33 +851,79 @@ async def test_payment_provider(
             language=language or "ru",
         )
 
-        if not payment_result or not payment_result.get("link_url") and not payment_result.get("link_page_url"):
+        if not payment_result:
             await callback.answer("❌ Не удалось создать платеж PayPalych", show_alert=True)
             await _refresh_markup()
             return
 
-        payment_url = payment_result.get("link_url") or payment_result.get("link_page_url")
+        sbp_url = (
+            payment_result.get("sbp_url")
+            or payment_result.get("transfer_url")
+            or payment_result.get("link_url")
+        )
+        card_url = payment_result.get("card_url")
+        fallback_url = payment_result.get("link_page_url") or payment_result.get("link_url")
+
+        if not (sbp_url or card_url or fallback_url):
+            await callback.answer("❌ Не удалось создать платеж PayPalych", show_alert=True)
+            await _refresh_markup()
+            return
+
+        if not sbp_url:
+            sbp_url = fallback_url
+
+        default_sbp_text = texts.t(
+            "PAL24_SBP_PAY_BUTTON",
+            "🏦 Оплатить через PayPalych (СБП)",
+        )
+        sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
+
+        default_card_text = texts.t(
+            "PAL24_CARD_PAY_BUTTON",
+            "💳 Оплатить банковской картой (PayPalych)",
+        )
+        card_button_text = settings.get_pal24_card_button_text(default_card_text)
+
+        pay_rows: list[list[types.InlineKeyboardButton]] = []
+        if sbp_url:
+            pay_rows.append([
+                types.InlineKeyboardButton(
+                    text=sbp_button_text,
+                    url=sbp_url,
+                )
+            ])
+
+        if card_url and card_url != sbp_url:
+            pay_rows.append([
+                types.InlineKeyboardButton(
+                    text=card_button_text,
+                    url=card_url,
+                )
+            ])
+
+        if not pay_rows and fallback_url:
+            pay_rows.append([
+                types.InlineKeyboardButton(
+                    text=sbp_button_text,
+                    url=fallback_url,
+                )
+            ])
+
         message_text = (
             "🧪 <b>Тестовый платеж PayPalych</b>\n\n"
             f"💰 Сумма: {texts.format_price(amount_kopeks)}\n"
             f"🆔 Bill ID: {payment_result['bill_id']}"
         )
-        reply_markup = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text="💳 Перейти к оплате",
-                        url=payment_url,
-                    )
-                ],
-                [
-                    types.InlineKeyboardButton(
-                        text="📊 Проверить статус",
-                        callback_data=f"check_pal24_{payment_result['local_payment_id']}",
-                    )
-                ],
-            ]
-        )
+        keyboard_rows = pay_rows + [
+            [
+                types.InlineKeyboardButton(
+                    text="📊 Проверить статус",
+                    callback_data=f"check_pal24_{payment_result['local_payment_id']}",
+                )
+            ],
+        ]
+
+        reply_markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
         await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode="HTML")
         await callback.answer("✅ Ссылка на платеж PayPalych отправлена", show_alert=True)
         await _refresh_markup()

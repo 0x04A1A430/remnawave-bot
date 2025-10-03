@@ -17,6 +17,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+_LANGUAGE_DISPLAY_NAMES = {
+    "ru": "🇷🇺 Русский",
+    "en": "🇬🇧 English",
+}
+
 def get_rules_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -60,6 +65,49 @@ def get_post_registration_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKe
         ],
         [InlineKeyboardButton(text=texts.t("SKIP_BUTTON", "Пропустить ➡️"), callback_data="back_to_menu")],
     ])
+
+
+def get_language_selection_keyboard(
+    current_language: Optional[str] = None,
+    *,
+    include_back: bool = False,
+    language: str = DEFAULT_LANGUAGE,
+) -> InlineKeyboardMarkup:
+    available_languages = settings.get_available_languages()
+
+    buttons: List[List[InlineKeyboardButton]] = []
+    row: List[InlineKeyboardButton] = []
+
+    normalized_current = (current_language or "").lower()
+
+    for index, lang_code in enumerate(available_languages, start=1):
+        normalized_code = lang_code.lower()
+        display_name = _LANGUAGE_DISPLAY_NAMES.get(
+            normalized_code,
+            normalized_code.upper(),
+        )
+
+        prefix = "✅ " if normalized_code == normalized_current and normalized_current else ""
+
+        row.append(
+            InlineKeyboardButton(
+                text=f"{prefix}{display_name}",
+                callback_data=f"language_select:{normalized_code}",
+            )
+        )
+
+        if len(row) == 2:
+            buttons.append(row)
+            row = []
+
+    if row:
+        buttons.append(row)
+
+    if include_back:
+        texts = get_texts(language)
+        buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_main_menu_keyboard(
@@ -224,6 +272,11 @@ def get_main_menu_keyboard(
         support_row.append(InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data="menu_support"))
     support_row.append(InlineKeyboardButton(text=texts.MENU_RULES, callback_data="menu_rules"))
     keyboard.append(support_row)
+
+    if settings.is_language_selection_enabled():
+        keyboard.append([
+            InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data="menu_language")
+        ])
     if settings.DEBUG:
         print(f"DEBUG KEYBOARD: is_admin={is_admin}, добавляем админ кнопку: {is_admin}")
 
@@ -392,28 +445,31 @@ def get_insufficient_balance_keyboard(
     texts = get_texts(language)
     keyboard = get_payment_methods_keyboard(amount_kopeks or 0, language)
 
-    if resume_callback:
-        keyboard.inline_keyboard.insert(
-            0,
-            [
-                InlineKeyboardButton(
-                    text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                    callback_data=resume_callback,
-                )
-            ],
-        )
+    back_row_index: int | None = None
 
     if keyboard.inline_keyboard:
         last_row = keyboard.inline_keyboard[-1]
         if (
             len(last_row) == 1
             and isinstance(last_row[0], InlineKeyboardButton)
-            and last_row[0].callback_data == "menu_balance"
+            and last_row[0].callback_data in {"menu_balance", "back_to_menu"}
         ):
             keyboard.inline_keyboard[-1][0] = InlineKeyboardButton(
-                text=last_row[0].text,
+                text=texts.t("PAYMENT_RETURN_HOME_BUTTON", "🏠 На главную"),
                 callback_data="back_to_menu",
             )
+            back_row_index = len(keyboard.inline_keyboard) - 1
+
+    if resume_callback:
+        return_row = [
+            InlineKeyboardButton(
+                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                callback_data=resume_callback,
+            )
+        ]
+
+        insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
+        keyboard.inline_keyboard.insert(insert_index, return_row)
 
     return keyboard
 
@@ -829,7 +885,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
     if settings.is_pal24_enabled():
         keyboard.append([
             InlineKeyboardButton(
-                text=texts.t("PAYMENT_CARD_PAL24", "💳 Банковская карта (PayPalych)"),
+                text=texts.t("PAYMENT_CARD_PAL24", "🏦 СБП (PayPalych)"),
                 callback_data=_build_callback("pal24")
             )
         ])
@@ -1922,10 +1978,22 @@ def get_admin_tickets_keyboard(
         status_emoji = ticket.get('status_emoji', '❓')
         if ticket.get('is_closed', False):
             status_emoji = '✅'
-        user_name = ticket.get('user_name', 'Unknown')[:15]
+        user_name = ticket.get('user_name', 'Unknown')
+        username = ticket.get('username')
+        telegram_id = ticket.get('telegram_id')
+        # Сформируем компактное отображение: Имя (@username | ID)
+        name_parts = [user_name[:15]]
+        contact_parts = []
+        if username:
+            contact_parts.append(f"@{username}")
+        if telegram_id:
+            contact_parts.append(str(telegram_id))
+        if contact_parts:
+            name_parts.append(f"({' | '.join(contact_parts)})")
+        name_display = ' '.join(name_parts)
         title = ticket.get('title', 'Без названия')[:20]
         locked_emoji = ticket.get('locked_emoji', '')
-        button_text = f"{status_emoji} #{ticket['id']} {locked_emoji} {user_name}: {title}".replace("  ", " ")
+        button_text = f"{status_emoji} #{ticket['id']} {locked_emoji} {name_display}: {title}".replace("  ", " ")
         row = [InlineKeyboardButton(text=button_text, callback_data=f"admin_view_ticket_{ticket['id']}")]
         if ticket.get('is_closed', False):
             closed_rows.append(row)
