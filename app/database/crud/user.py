@@ -3,9 +3,10 @@ import secrets
 import string
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
-from sqlalchemy import select, and_, or_, func, case, nullslast
+from sqlalchemy import select, and_, or_, func, case, nullslast, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import IntegrityError
 
 from app.database.models import (
     User,
@@ -85,6 +86,37 @@ async def create_unique_referral_code(db: AsyncSession) -> str:
     return f"ref{timestamp}"
 
 
+async def _sync_users_sequence(db: AsyncSession) -> None:
+    """Ensure the users.id sequence matches the current max ID."""
+    await db.execute(
+        text(
+            "SELECT setval('users_id_seq', "
+            "COALESCE((SELECT MAX(id) FROM users), 0) + 1, false)"
+        )
+    )
+    await db.commit()
+    logger.warning(
+        "🔄 Последовательность users_id_seq была синхронизирована с текущим максимумом id"
+    )
+
+
+async def _get_or_create_default_promo_group(db: AsyncSession) -> PromoGroup:
+    default_group = await get_default_promo_group(db)
+    if default_group:
+        return default_group
+
+    default_group = PromoGroup(
+        name="Базовый юзер",
+        server_discount_percent=0,
+        traffic_discount_percent=0,
+        device_discount_percent=0,
+        is_default=True,
+    )
+    db.add(default_group)
+    await db.flush()
+    return default_group
+
+
 async def create_user(
     db: AsyncSession,
     telegram_id: int,
@@ -99,46 +131,61 @@ async def create_user(
     if not referral_code:
         referral_code = await create_unique_referral_code(db)
     
-    default_group = await get_default_promo_group(db)
-    if not default_group:
-        default_group = PromoGroup(
-            name="Базовый юзер",
-            server_discount_percent=0,
-            traffic_discount_percent=0,
-            device_discount_percent=0,
-            is_default=True,
+    attempts = 3
+
+    for attempt in range(1, attempts + 1):
+        default_group = await _get_or_create_default_promo_group(db)
+        promo_group_id = default_group.id
+
+        safe_first = sanitize_telegram_name(first_name)
+        safe_last = sanitize_telegram_name(last_name)
+        user = User(
+            telegram_id=telegram_id,
+            username=username,
+            first_name=safe_first,
+            last_name=safe_last,
+            language=language,
+            referred_by_id=referred_by_id,
+            referral_code=referral_code,
+            balance_kopeks=0,
+            has_had_paid_subscription=False,
+            has_made_first_topup=False,
+            promo_group_id=promo_group_id,
         )
-        db.add(default_group)
-        await db.flush()
 
-    promo_group_id = default_group.id
+        db.add(user)
 
-    safe_first = sanitize_telegram_name(first_name)
-    safe_last = sanitize_telegram_name(last_name)
-    user = User(
-        telegram_id=telegram_id,
-        username=username,
-        first_name=safe_first,
-        last_name=safe_last,
-        language=language,
-        referred_by_id=referred_by_id,
-        referral_code=referral_code,
-        balance_kopeks=0,
-        has_had_paid_subscription=False,
-        has_made_first_topup=False,
-        promo_group_id=promo_group_id,
-    )
-    
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    
-    if default_group:
-        user.promo_group = default_group
+        try:
+            await db.commit()
+            await db.refresh(user)
 
-    logger.info(f"✅ Создан пользователь {telegram_id} с реферальным кодом {referral_code}")
+            user.promo_group = default_group
+            logger.info(
+                f"✅ Создан пользователь {telegram_id} с реферальным кодом {referral_code}"
+            )
+            return user
 
-    return user
+        except IntegrityError as exc:
+            await db.rollback()
+
+            if (
+                isinstance(getattr(exc, "orig", None), Exception)
+                and "users_pkey" in str(exc.orig)
+                and attempt < attempts
+            ):
+                logger.warning(
+                    "⚠️ Обнаружено несоответствие последовательности users_id_seq при создании пользователя %s. "
+                    "Выполняем повторную синхронизацию (попытка %s/%s)",
+                    telegram_id,
+                    attempt,
+                    attempts,
+                )
+                await _sync_users_sequence(db)
+                continue
+
+            raise
+
+    raise RuntimeError("Не удалось создать пользователя после синхронизации последовательности")
 
 
 async def update_user(
