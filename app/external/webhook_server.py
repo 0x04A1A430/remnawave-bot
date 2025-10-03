@@ -144,6 +144,9 @@ class WebhookServer:
                     return web.json_response({"status": "error", "reason": "internal_error"}, status=500)
                 finally:
                     break
+            
+            # Если не удалось получить соединение с БД
+            return web.json_response({"status": "error", "reason": "database_error"}, status=500)
 
         except Exception as error:
             logger.error(f"Критическая ошибка Mulen Pay webhook: {error}", exc_info=True)
