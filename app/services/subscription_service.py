@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.models import Subscription, User, SubscriptionStatus, PromoGroup
 from app.external.remnawave_api import (
-    RemnaWaveAPI, RemnaWaveUser, UserStatus,
+    RemnaWaveAPI, RemnaWaveUser, UserStatus, 
     TrafficLimitStrategy, RemnaWaveAPIError
 )
 from app.database.crud.user import get_user_by_id
@@ -74,39 +74,17 @@ def get_traffic_reset_strategy():
     return getattr(TrafficLimitStrategy, mapped_strategy)
 
 
-class _DisabledRemnaWaveAPI:
-    """Async context manager that always raises the stored configuration error."""
-
-    def __init__(self, error: RemnaWaveAPIError):
-        self._error = error
-
-    async def __aenter__(self):
-        raise self._error
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-
 class SubscriptionService:
-
+    
     def __init__(self):
         auth_params = settings.get_remnawave_auth_params()
-        try:
-            self.api = RemnaWaveAPI(
-                base_url=auth_params["base_url"],
-                api_key=auth_params["api_key"],
-                secret_key=auth_params["secret_key"],
-                username=auth_params["username"],
-                password=auth_params["password"]
-            )
-            self._init_error: Optional[RemnaWaveAPIError] = None
-        except RemnaWaveAPIError as error:
-            self._init_error = error
-            logger.error(
-                "RemnaWave API configuration error: %s",
-                error
-            )
-            self.api = _DisabledRemnaWaveAPI(error)
+        self.api = RemnaWaveAPI(
+            base_url=auth_params["base_url"],
+            api_key=auth_params["api_key"],
+            secret_key=auth_params["secret_key"],
+            username=auth_params["username"],
+            password=auth_params["password"]
+        )
     
     async def create_remnawave_user(
         self,
@@ -205,8 +183,6 @@ class SubscriptionService:
                 
         except RemnaWaveAPIError as e:
             logger.error(f"Ошибка RemnaWave API: {e}")
-            if self._init_error:
-                logger.error("Текущая конфигурация RemnaWave API некорректна: %s", self._init_error)
             return None
         except Exception as e:
             logger.error(f"Ошибка создания RemnaWave пользователя: {e}")
