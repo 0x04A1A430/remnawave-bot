@@ -26,19 +26,6 @@ async def sync_postgres_sequences() -> bool:
 
     try:
         async with engine.begin() as conn:
-            column_check = await conn.execute(
-                text(
-                    """
-                    SELECT 1
-                    FROM information_schema.columns
-                    WHERE table_schema = 'pg_catalog'
-                      AND table_name = 'pg_sequences'
-                      AND column_name = 'is_called'
-                    """
-                )
-            )
-            has_is_called = column_check.scalar() is not None
-
             result = await conn.execute(
                 text(
                     """
@@ -83,50 +70,23 @@ async def sync_postgres_sequences() -> bool:
 
                 seq_schema = seq_schema.strip('"')
                 seq_name = seq_name.strip('"')
-                params = {"schema": seq_schema, "sequence": seq_name}
+                current_result = await conn.execute(
+                    text(
+                        """
+                        SELECT last_value, is_called
+                        FROM pg_sequences
+                        WHERE schemaname = :schema AND sequencename = :sequence
+                        """
+                    ),
+                    {"schema": seq_schema, "sequence": seq_name},
+                )
+                current_row = current_result.fetchone()
 
-                if has_is_called:
-                    current_result = await conn.execute(
-                        text(
-                            """
-                            SELECT last_value, is_called
-                            FROM pg_sequences
-                            WHERE schemaname = :schema AND sequencename = :sequence
-                            """
-                        ),
-                        params,
-                    )
-                    current_row = current_result.fetchone()
-
-                    if current_row:
-                        current_last, is_called = current_row
-                        current_next = current_last + 1 if is_called else current_last
-                        if current_next > max_value:
-                            continue
-                        new_value = max_value
-                    else:
-                        new_value = max_value
-                else:
-                    current_result = await conn.execute(
-                        text(
-                            """
-                            SELECT start_value, last_value
-                            FROM pg_sequences
-                            WHERE schemaname = :schema AND sequencename = :sequence
-                            """
-                        ),
-                        params,
-                    )
-                    current_row = current_result.fetchone()
-
-                    if current_row:
-                        start_value, current_last = current_row
-                        current_next = current_last + 1
-                        if current_next > max_value:
-                            continue
-                        new_value = max(max_value, start_value)
-                    else:
-                        new_value = max_value
+                if current_row:
+                    current_last, is_called = current_row
+                    current_next = current_last + 1 if is_called else current_last
+                    if current_next > max_value:
+                        continue
 
                 await conn.execute(
                     text(
@@ -134,13 +94,13 @@ async def sync_postgres_sequences() -> bool:
                         SELECT setval(:sequence_name, :new_value, TRUE)
                         """
                     ),
-                    {"sequence_name": sequence_path, "new_value": new_value},
+                    {"sequence_name": sequence_path, "new_value": max_value},
                 )
                 logger.info(
                     "🔄 Последовательность %s синхронизирована: MAX=%s, следующий ID=%s",
                     sequence_path,
                     max_value,
-                    new_value + 1,
+                    max_value + 1,
                 )
 
         return True
