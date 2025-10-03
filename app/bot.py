@@ -33,6 +33,7 @@ from app.handlers.admin import (
     maintenance as admin_maintenance,
     promo_groups as admin_promo_groups,
     campaigns as admin_campaigns,
+    tariffs as admin_tariffs,
     user_messages as admin_user_messages,
     updates as admin_updates,
     backup as admin_backup,
@@ -126,7 +127,8 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_main.register_handlers(dp)
     admin_users.register_handlers(dp)
     admin_subscriptions.register_handlers(dp)
-    admin_servers.register_handlers(dp)  
+    admin_servers.register_handlers(dp)
+    admin_tariffs.register_handlers(dp)
     admin_promocodes.register_handlers(dp)
     admin_messages.register_handlers(dp)
     admin_monitoring.register_handlers(dp)

@@ -15,6 +15,7 @@ def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_USERS_SUBSCRIPTIONS", "👥 Юзеры/Подписки"), callback_data="admin_submenu_users")],
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_PROMO_STATS", "💰 Промокоды/Статистика"), callback_data="admin_submenu_promo")],
+        [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_TARIFFS", "🧾 Тарифы"), callback_data="admin_submenu_tariffs")],
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_SUPPORT", "🛟 Поддержка"), callback_data="admin_submenu_support")],
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_MESSAGES", "📨 Сообщения"), callback_data="admin_submenu_communications")],
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_SETTINGS", "⚙️ Настройки"), callback_data="admin_submenu_settings")],
@@ -103,6 +104,40 @@ def get_admin_support_submenu_keyboard(language: str = "ru") -> InlineKeyboardMa
             InlineKeyboardButton(
                 text=_t(texts, "ADMIN_SUPPORT_SETTINGS", "🛟 Настройки поддержки"),
                 callback_data="admin_support_settings"
+            )
+        ],
+        [
+            InlineKeyboardButton(text=texts.BACK, callback_data="admin_panel")
+        ]
+    ])
+
+
+def get_admin_tariffs_submenu_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_TARIFFS_ACTIVATE_BUTTON", "⚙️ Активировать режим тарифов"),
+                callback_data="admin_tariffs_activate"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_TARIFFS_CREATE_BUTTON", "➕ Создать тариф"),
+                callback_data="admin_tariffs_create"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_TARIFFS_LIST_BUTTON", "📋 Список тарифов"),
+                callback_data="admin_tariffs_list"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_TARIFFS_STATS_BUTTON", "📊 Статистика тарифов"),
+                callback_data="admin_tariffs_stats"
             )
         ],
         [
