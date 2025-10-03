@@ -272,7 +272,7 @@ POSTGRES_DB=remnawave_bot
 REDIS_HOST=redis
 REDIS_PORT=6379
 NODE_ENV=production
-LOG_LEVEL=info
+LOG_LEVEL=INFO
 EOF
   chmod 600 "$env_file"
   print_success ".env файл создан: $env_file"
