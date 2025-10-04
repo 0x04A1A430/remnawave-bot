@@ -78,31 +78,56 @@ def get_traffic_reset_strategy():
 class SubscriptionService:
 
     def __init__(self):
+        self._config_error: Optional[str] = None
+        self.api: Optional[RemnaWaveAPI] = None
+        self._last_config_signature: Optional[Tuple[str, ...]] = None
+
+        self._refresh_configuration()
+
+    def _refresh_configuration(self) -> None:
         auth_params = settings.get_remnawave_auth_params()
         base_url = (auth_params.get("base_url") or "").strip()
         api_key = (auth_params.get("api_key") or "").strip()
+        secret_key = (auth_params.get("secret_key") or "").strip() or None
+        username = (auth_params.get("username") or "").strip() or None
+        password = (auth_params.get("password") or "").strip() or None
+        auth_type = (auth_params.get("auth_type") or "").strip() or None
 
-        self._config_error: Optional[str] = None
+        config_signature = (
+            base_url,
+            api_key,
+            secret_key or "",
+            username or "",
+            password or "",
+            auth_type or "",
+        )
+
+        if config_signature == self._last_config_signature:
+            return
 
         if not base_url:
             self._config_error = "REMNAWAVE_API_URL не настроен"
+            self.api = None
         elif not api_key:
             self._config_error = "REMNAWAVE_API_KEY не настроен"
+            self.api = None
+        else:
+            self._config_error = None
+            self.api = RemnaWaveAPI(
+                base_url=base_url,
+                api_key=api_key,
+                secret_key=secret_key,
+                username=username,
+                password=password,
+            )
 
         if self._config_error:
             logger.warning(
                 "RemnaWave API недоступен: %s. Подписочный сервис будет работать в оффлайн-режиме.",
                 self._config_error
             )
-            self.api = None
-        else:
-            self.api = RemnaWaveAPI(
-                base_url=base_url,
-                api_key=api_key,
-                secret_key=auth_params.get("secret_key"),
-                username=auth_params.get("username"),
-                password=auth_params.get("password")
-            )
+
+        self._last_config_signature = config_signature
 
     @property
     def is_configured(self) -> bool:
@@ -113,6 +138,7 @@ class SubscriptionService:
         return self._config_error
 
     def _ensure_configured(self) -> None:
+        self._refresh_configuration()
         if not self.api or not self.is_configured:
             raise RemnaWaveAPIError(
                 self._config_error or "RemnaWave API не настроен"
