@@ -155,7 +155,7 @@ docker compose logs
 2. Убедитесь, что входящий трафик на **80/tcp и 443/tcp** открыт (брандмауэр, облачный фаервол).
 3. В `.env` пропишите корректные URL, чтобы бот формировал ссылки с HTTPS-доменами:
    ```env
-   WEBHOOK_URL=https://hooks.example.com/webhook
+   WEBHOOK_URL=https://hooks.example.com
    WEB_API_ENABLED=true
    WEB_API_ALLOWED_ORIGINS=https://miniapp.example.com
    MINIAPP_CUSTOM_URL=https://miniapp.example.com
