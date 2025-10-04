@@ -11,6 +11,11 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.discount_offer import upsert_discount_offer
+from app.database.crud.server_squad import (
+    get_all_server_squads,
+    get_server_squad_by_id,
+    get_server_squad_by_uuid,
+)
 from app.database.crud.promo_offer_template import (
     ensure_default_templates,
     get_promo_offer_template_by_id,
@@ -24,6 +29,9 @@ from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 
 logger = logging.getLogger(__name__)
+
+
+SQUADS_PAGE_LIMIT = 10
 
 
 OFFER_TYPE_CONFIG = {
@@ -280,12 +288,154 @@ async def prompt_edit_duration(callback: CallbackQuery, db_user: User, db: Async
 @error_handler
 async def prompt_edit_squads(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     template_id = int(callback.data.split("_")[-1])
-    texts = get_texts(db_user.language)
-    prompt = texts.t(
-        "ADMIN_PROMO_OFFER_PROMPT_SQUADS",
-        "Перечислите UUID сквадов через запятую или пробел. Для очистки отправьте 'clear':",
+    template = await get_promo_offer_template_by_id(db, template_id)
+    if not template:
+        await callback.answer("❌ Предложение не найдено", show_alert=True)
+        return
+
+    await state.update_data(
+        selected_promo_offer=template.id,
+        promo_edit_message_id=callback.message.message_id,
+        promo_edit_chat_id=callback.message.chat.id,
     )
-    await _prompt_edit(callback, state, template_id, prompt, AdminStates.editing_promo_offer_squads)
+
+    await _render_squad_selection(callback, template, db, db_user.language)
+    await callback.answer()
+
+
+async def _render_squad_selection(
+    callback: CallbackQuery,
+    template: PromoOfferTemplate,
+    db: AsyncSession,
+    language: str,
+    page: int = 1,
+):
+    texts = get_texts(language)
+
+    squads, total_count = await get_all_server_squads(
+        db,
+        available_only=False,
+        page=page,
+        limit=SQUADS_PAGE_LIMIT,
+    )
+
+    if total_count == 0:
+        await callback.message.edit_text(
+            texts.t("ADMIN_PROMO_OFFER_NO_SQUADS_AVAILABLE", "❌ Доступные серверы не найдены."),
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text=texts.BACK, callback_data=f"promo_offer_squad_back_{template.id}")]]
+            ),
+        )
+        return
+
+    selected_uuid = None
+    if template.test_squad_uuids:
+        selected_uuid = str(template.test_squad_uuids[0])
+
+    selected_server_name = None
+    if selected_uuid:
+        selected_server = next((srv for srv in squads if srv.squad_uuid == selected_uuid), None)
+        if not selected_server:
+            selected_server = await get_server_squad_by_uuid(db, selected_uuid)
+        if selected_server:
+            selected_server_name = selected_server.display_name
+
+    header = texts.t("ADMIN_PROMO_OFFER_SELECT_SQUAD_TITLE", "🌍 <b>Выберите сквад</b>")
+    if selected_server_name:
+        current = texts.t(
+            "ADMIN_PROMO_OFFER_SELECTED_SQUAD",
+            "Текущий сквад: {name}",
+        ).format(name=selected_server_name)
+    elif selected_uuid:
+        current = texts.t(
+            "ADMIN_PROMO_OFFER_SELECTED_SQUAD_UUID",
+            "Текущий сквад: {uuid}",
+        ).format(uuid=selected_uuid)
+    else:
+        current = texts.t(
+            "ADMIN_PROMO_OFFER_SELECTED_SQUAD_EMPTY",
+            "Текущий сквад: не выбран",
+        )
+
+    hint = texts.t(
+        "ADMIN_PROMO_OFFER_SELECT_SQUAD_HINT",
+        "Выберите сервер для тестового доступа из списка ниже.",
+    )
+
+    total_pages = (total_count + SQUADS_PAGE_LIMIT - 1) // SQUADS_PAGE_LIMIT or 1
+    page = max(1, min(page, total_pages))
+
+    lines = [header, "", current, "", hint]
+    if total_pages > 1:
+        lines.append(
+            texts.t(
+                "ADMIN_PROMO_OFFER_SELECT_SQUAD_PAGE",
+                "Страница {page}/{total}",
+            ).format(page=page, total=total_pages)
+        )
+
+    text = "\n".join(lines)
+
+    keyboard_rows: List[List[InlineKeyboardButton]] = []
+    for server in squads:
+        emoji = "✅" if server.squad_uuid == selected_uuid else ("⚪" if server.is_available else "🔒")
+        label = f"{emoji} {server.display_name}"
+        keyboard_rows.append([
+            InlineKeyboardButton(
+                text=label,
+                callback_data=f"promo_offer_select_squad_{template.id}_{server.id}_{page}",
+            )
+        ])
+
+    if total_pages > 1:
+        nav_row: List[InlineKeyboardButton] = []
+        if page > 1:
+            nav_row.append(
+                InlineKeyboardButton(
+                    text="⬅️",
+                    callback_data=f"promo_offer_squad_page_{template.id}_{page - 1}",
+                )
+            )
+        if page < total_pages:
+            nav_row.append(
+                InlineKeyboardButton(
+                    text="➡️",
+                    callback_data=f"promo_offer_squad_page_{template.id}_{page + 1}",
+                )
+            )
+        if nav_row:
+            keyboard_rows.append(nav_row)
+
+    action_row = [
+        InlineKeyboardButton(
+            text=texts.t("ADMIN_PROMO_OFFER_SELECT_SQUAD_CLEAR", "🗑 Очистить"),
+            callback_data=f"promo_offer_clear_squad_{template.id}_{page}",
+        ),
+        InlineKeyboardButton(
+            text=texts.t("ADMIN_PROMO_OFFER_SELECT_SQUAD_BACK", "↩️ Назад"),
+            callback_data=f"promo_offer_squad_back_{template.id}",
+        ),
+    ]
+    keyboard_rows.append(action_row)
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+        parse_mode="HTML",
+    )
+
+
+async def _render_offer_details(
+    callback: CallbackQuery,
+    template: PromoOfferTemplate,
+    language: str,
+):
+    description = _describe_offer(template, language)
+    await callback.message.edit_text(
+        description,
+        reply_markup=_build_offer_detail_keyboard(template, language),
+        parse_mode="HTML",
+    )
 
 
 async def _handle_edit_field(
@@ -488,8 +638,128 @@ async def process_edit_test_duration(message: Message, state: FSMContext, db: As
     await _handle_edit_field(message, state, db, db_user, "test_duration_hours")
 
 
-async def process_edit_test_squads(message: Message, state: FSMContext, db: AsyncSession, db_user: User):
-    await _handle_edit_field(message, state, db, db_user, "test_squad_uuids")
+@admin_required
+@error_handler
+async def paginate_squad_selection(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    try:
+        prefix = "promo_offer_squad_page_"
+        if not callback.data.startswith(prefix):
+            raise ValueError("invalid prefix")
+        payload = callback.data[len(prefix):]
+        template_id_str, page_str = payload.split("_", 1)
+        template_id = int(template_id_str)
+        page = int(page_str)
+    except (ValueError, AttributeError):
+        await callback.answer("❌ Некорректные данные", show_alert=True)
+        return
+
+    template = await get_promo_offer_template_by_id(db, template_id)
+    if not template:
+        await callback.answer("❌ Предложение не найдено", show_alert=True)
+        return
+
+    await state.update_data(selected_promo_offer=template.id)
+    await _render_squad_selection(callback, template, db, db_user.language, page=page)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def select_squad_for_template(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    try:
+        prefix = "promo_offer_select_squad_"
+        if not callback.data.startswith(prefix):
+            raise ValueError("invalid prefix")
+        payload = callback.data[len(prefix):]
+        template_id_str, server_id_str, page_str = payload.split("_", 2)
+        template_id = int(template_id_str)
+        server_id = int(server_id_str)
+        page = int(page_str)
+    except (ValueError, AttributeError):
+        await callback.answer("❌ Некорректные данные", show_alert=True)
+        return
+
+    template = await get_promo_offer_template_by_id(db, template_id)
+    if not template:
+        await callback.answer("❌ Предложение не найдено", show_alert=True)
+        return
+
+    server = await get_server_squad_by_id(db, server_id)
+    if not server:
+        await callback.answer(
+            get_texts(db_user.language).t(
+                "ADMIN_PROMO_OFFER_SELECT_SQUAD_NOT_FOUND",
+                "❌ Сервер не найден",
+            ),
+            show_alert=True,
+        )
+        return
+
+    await update_promo_offer_template(db, template, test_squad_uuids=[server.squad_uuid])
+    updated = await get_promo_offer_template_by_id(db, template.id)
+    if updated:
+        await state.update_data(selected_promo_offer=updated.id)
+
+    texts = get_texts(db_user.language)
+    await callback.answer(texts.t("ADMIN_PROMO_OFFER_SELECT_SQUAD_UPDATED", "✅ Сквад обновлён"))
+
+    if updated:
+        await _render_offer_details(callback, updated, db_user.language)
+    else:
+        await _render_squad_selection(callback, template, db, db_user.language, page=page)
+
+
+@admin_required
+@error_handler
+async def clear_squad_for_template(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    try:
+        prefix = "promo_offer_clear_squad_"
+        if not callback.data.startswith(prefix):
+            raise ValueError("invalid prefix")
+        payload = callback.data[len(prefix):]
+        template_id_str, page_str = payload.split("_", 1)
+        template_id = int(template_id_str)
+        page = int(page_str)
+    except (ValueError, AttributeError):
+        await callback.answer("❌ Некорректные данные", show_alert=True)
+        return
+
+    template = await get_promo_offer_template_by_id(db, template_id)
+    if not template:
+        await callback.answer("❌ Предложение не найдено", show_alert=True)
+        return
+
+    await update_promo_offer_template(db, template, test_squad_uuids=[])
+    updated = await get_promo_offer_template_by_id(db, template.id)
+    if updated:
+        await state.update_data(selected_promo_offer=updated.id)
+
+    texts = get_texts(db_user.language)
+    await callback.answer(texts.t("ADMIN_PROMO_OFFER_SELECT_SQUAD_CLEARED", "✅ Сквад очищен"))
+
+    if updated:
+        await _render_squad_selection(callback, updated, db, db_user.language, page=page)
+    else:
+        await _render_squad_selection(callback, template, db, db_user.language, page=page)
+
+
+@admin_required
+@error_handler
+async def back_to_offer_from_squads(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    try:
+        template_id = int(callback.data.split("_")[-1])
+    except (ValueError, AttributeError):
+        await callback.answer("❌ Некорректные данные", show_alert=True)
+        return
+
+    template = await get_promo_offer_template_by_id(db, template_id)
+    if not template:
+        await callback.answer("❌ Предложение не найдено", show_alert=True)
+        return
+
+    await state.update_data(selected_promo_offer=template.id)
+    await _render_offer_details(callback, template, db_user.language)
+    await callback.answer()
 
 
 def register_handlers(dp: Dispatcher):
@@ -500,6 +770,10 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(prompt_edit_discount, F.data.startswith("promo_offer_edit_discount_"))
     dp.callback_query.register(prompt_edit_duration, F.data.startswith("promo_offer_edit_duration_"))
     dp.callback_query.register(prompt_edit_squads, F.data.startswith("promo_offer_edit_squads_"))
+    dp.callback_query.register(paginate_squad_selection, F.data.startswith("promo_offer_squad_page_"))
+    dp.callback_query.register(select_squad_for_template, F.data.startswith("promo_offer_select_squad_"))
+    dp.callback_query.register(clear_squad_for_template, F.data.startswith("promo_offer_clear_squad_"))
+    dp.callback_query.register(back_to_offer_from_squads, F.data.startswith("promo_offer_squad_back_"))
     dp.callback_query.register(show_send_segments, F.data.startswith("promo_offer_send_menu_"))
     dp.callback_query.register(send_offer_to_segment, F.data.startswith("promo_offer_send_"))
     dp.callback_query.register(show_promo_offer_details, F.data.startswith("promo_offer_"))
@@ -509,4 +783,3 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(process_edit_valid_hours, AdminStates.editing_promo_offer_valid_hours)
     dp.message.register(process_edit_discount_percent, AdminStates.editing_promo_offer_discount)
     dp.message.register(process_edit_test_duration, AdminStates.editing_promo_offer_test_duration)
-    dp.message.register(process_edit_test_squads, AdminStates.editing_promo_offer_squads)

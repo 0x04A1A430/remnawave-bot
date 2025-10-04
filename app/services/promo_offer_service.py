@@ -34,9 +34,20 @@ class PromoOfferService:
             return False, None, None, "subscription_missing"
 
         payload = offer.extra_data or {}
-        squad_uuids: Sequence[str] = payload.get("test_squad_uuids") or payload.get("squads") or []
+        raw_squads = payload.get("test_squad_uuids") or payload.get("squads") or []
+        if isinstance(raw_squads, str):
+            candidates = [raw_squads]
+        else:
+            try:
+                candidates = list(raw_squads)
+            except TypeError:
+                candidates = []
+
+        squad_uuids: Sequence[str] = [str(item) for item in candidates if item]
         if not squad_uuids:
             return False, None, None, "squads_missing"
+
+        squad_uuids = list(dict.fromkeys(squad_uuids))
 
         try:
             duration_hours = int(payload.get("test_duration_hours") or payload.get("duration_hours") or 24)
@@ -51,6 +62,7 @@ class PromoOfferService:
 
         connected = set(subscription.connected_squads or [])
         newly_added: List[str] = []
+        created_entries: List[SubscriptionTemporaryAccess] = []
 
         for squad_uuid in squad_uuids:
             normalized_uuid = str(squad_uuid)
@@ -81,6 +93,7 @@ class PromoOfferService:
                 was_already_connected=was_already_connected,
             )
             db.add(access_entry)
+            created_entries.append(access_entry)
 
         if newly_added:
             subscription.connected_squads = list(connected)
@@ -89,10 +102,57 @@ class PromoOfferService:
         await db.commit()
         await db.refresh(subscription)
 
-        if newly_added:
-            await self.subscription_service.update_remnawave_user(db, subscription)
+        sync_result = await self.subscription_service.update_remnawave_user(db, subscription)
+        if sync_result is None:
+            logger.error(
+                "Не удалось синхронизировать тестовый доступ подписки %s с Remnawave",
+                subscription.id,
+            )
+            await self._rollback_failed_test_access(
+                db,
+                subscription,
+                created_entries,
+                newly_added,
+            )
+            return False, None, None, "remnawave_sync_failed"
 
         return True, newly_added, expires_at, "ok"
+
+    async def _rollback_failed_test_access(
+        self,
+        db: AsyncSession,
+        subscription: Subscription,
+        created_entries: Sequence[SubscriptionTemporaryAccess],
+        newly_added: Sequence[str],
+    ) -> None:
+        now = datetime.utcnow()
+
+        try:
+            if newly_added:
+                current = list(subscription.connected_squads or [])
+                to_remove = set(newly_added)
+                updated = [uuid for uuid in current if uuid not in to_remove]
+                subscription.connected_squads = updated
+                subscription.updated_at = now
+
+            for entry in created_entries:
+                try:
+                    await db.delete(entry)
+                except Exception as exc:
+                    logger.warning(
+                        "Не удалось удалить запись временного доступа %s при откате: %s",
+                        getattr(entry, "id", "<unsaved>"),
+                        exc,
+                    )
+
+            await db.commit()
+            await db.refresh(subscription)
+        except Exception as exc:  # pragma: no cover - защитный лог
+            logger.error(
+                "Ошибка отката тестового доступа подписки %s: %s",
+                subscription.id,
+                exc,
+            )
 
     async def cleanup_expired_test_access(self, db: AsyncSession) -> int:
         now = datetime.utcnow()
@@ -130,7 +190,12 @@ class PromoOfferService:
                 subscription.connected_squads = list(updated)
                 subscription.updated_at = now
                 try:
-                    await self.subscription_service.update_remnawave_user(db, subscription)
+                    sync_result = await self.subscription_service.update_remnawave_user(db, subscription)
+                    if sync_result is None:
+                        logger.error(
+                            "Не удалось синхронизировать Remnawave при отзыве тестового доступа подписки %s",
+                            subscription.id,
+                        )
                 except Exception as exc:  # pragma: no cover - defensive logging
                     logger.error(
                         "Ошибка обновления Remnawave при отзыве тестового доступа подписки %s: %s",
