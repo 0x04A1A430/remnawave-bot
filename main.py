@@ -23,6 +23,7 @@ from app.services.reporting_service import reporting_service
 from app.localization.loader import ensure_locale_templates
 from app.services.system_settings_service import bot_configuration_service
 from app.services.broadcast_service import broadcast_service
+from app.services.promo_offer_service import promo_offer_service
 from app.utils.startup_timeline import StartupTimeline
 
 
@@ -136,6 +137,7 @@ async def main():
         monitoring_service.bot = bot
         maintenance_service.set_bot(bot)
         broadcast_service.set_bot(bot)
+        promo_offer_service.set_bot(bot)
 
         from app.services.admin_notification_service import AdminNotificationService
 

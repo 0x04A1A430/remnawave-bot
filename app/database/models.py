@@ -79,6 +79,21 @@ class PaymentMethod(Enum):
     PAL24 = "pal24"
     MANUAL = "manual"
 
+
+class PromoOfferType(Enum):
+    TEST_SQUADS = "test_squads"
+    RENEWAL_DISCOUNT = "renewal_discount"
+    PURCHASE_DISCOUNT = "purchase_discount"
+
+
+class PromoOfferTarget(Enum):
+    PAID_ACTIVE = "paid_active"
+    PAID_EXPIRED = "paid_expired"
+    TRIAL_ACTIVE = "trial_active"
+    TRIAL_EXPIRED = "trial_expired"
+    NO_SUBSCRIPTION = "no_subscription"
+
+
 class YooKassaPayment(Base):
     __tablename__ = "yookassa_payments"
     
@@ -816,6 +831,126 @@ class DiscountOffer(Base):
 
     user = relationship("User", back_populates="discount_offers")
     subscription = relationship("Subscription", back_populates="discount_offers")
+
+
+class PromoOffer(Base):
+    __tablename__ = "promo_offers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    message_text = Column(Text, nullable=False)
+    button_text = Column(String(100), nullable=False, default="Активировать")
+    offer_type = Column(String(50), nullable=False)
+    target_segments = Column(JSON, default=list)
+    starts_at = Column(DateTime, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    discount_percent = Column(Integer, nullable=False, default=0)
+    bonus_amount_kopeks = Column(Integer, nullable=False, default=0)
+    discount_valid_hours = Column(Integer, nullable=False, default=0)
+    test_access_hours = Column(Integer, nullable=False, default=0)
+    test_squad_uuids = Column(JSON, default=list)
+    created_by = Column(Integer, nullable=True)
+    is_cancelled = Column(Boolean, nullable=False, default=False)
+    status = Column(String(30), nullable=False, default="scheduled")
+    total_count = Column(Integer, nullable=False, default=0)
+    sent_count = Column(Integer, nullable=False, default=0)
+    failed_count = Column(Integer, nullable=False, default=0)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    deliveries = relationship(
+        "PromoOfferDelivery",
+        back_populates="offer",
+        cascade="all, delete-orphan",
+    )
+    activations = relationship(
+        "PromoOfferActivation",
+        back_populates="offer",
+        cascade="all, delete-orphan",
+    )
+
+
+class PromoOfferDelivery(Base):
+    __tablename__ = "promo_offer_deliveries"
+    __table_args__ = (
+        UniqueConstraint(
+            "offer_id",
+            "user_id",
+            name="uq_promo_offer_deliveries_offer_user",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    offer_id = Column(
+        Integer,
+        ForeignKey("promo_offers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    discount_offer_id = Column(
+        Integer,
+        ForeignKey("discount_offers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    status = Column(String(20), nullable=False, default="sent")
+    error_message = Column(Text, nullable=True)
+    sent_at = Column(DateTime, default=func.now())
+    activated_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+
+    offer = relationship("PromoOffer", back_populates="deliveries")
+    user = relationship("User")
+    discount_offer = relationship("DiscountOffer")
+
+
+class PromoOfferActivation(Base):
+    __tablename__ = "promo_offer_activations"
+    __table_args__ = (
+        UniqueConstraint(
+            "offer_id",
+            "user_id",
+            name="uq_promo_offer_activations_offer_user",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    offer_id = Column(
+        Integer,
+        ForeignKey("promo_offers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    subscription_id = Column(
+        Integer,
+        ForeignKey("subscriptions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    discount_offer_id = Column(
+        Integer,
+        ForeignKey("discount_offers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    payload = Column(JSON, default=dict)
+    expires_at = Column(DateTime, nullable=True)
+    activated_at = Column(DateTime, default=func.now())
+    revoked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+
+    offer = relationship("PromoOffer", back_populates="activations")
+    user = relationship("User")
+    subscription = relationship("Subscription")
+    discount_offer = relationship("DiscountOffer")
+
 
 class BroadcastHistory(Base):
     __tablename__ = "broadcast_history"
