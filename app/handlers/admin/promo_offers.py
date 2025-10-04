@@ -45,7 +45,7 @@ OFFER_TYPE_CONFIG = {
         "allowed_segments": [
             ("paid_active", "🟢 Активные платные"),
         ],
-        "effect_type": "balance_bonus",
+        "effect_type": "percent_discount",
     },
     "purchase_discount": {
         "icon": "🎯",
@@ -55,7 +55,7 @@ OFFER_TYPE_CONFIG = {
             ("paid_expired", "🔴 Истёкшие платные"),
             ("trial_expired", "🥶 Истёкшие триалы"),
         ],
-        "effect_type": "balance_bonus",
+        "effect_type": "percent_discount",
     },
 }
 
