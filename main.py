@@ -4,6 +4,7 @@ import sys
 import os
 import signal
 from pathlib import Path
+from textwrap import wrap
 
 sys.path.append(str(Path(__file__).parent))
 
@@ -23,6 +24,82 @@ from app.services.reporting_service import reporting_service
 from app.localization.loader import ensure_locale_templates
 from app.services.system_settings_service import bot_configuration_service
 from app.services.broadcast_service import broadcast_service
+
+
+LOG_FRAME_WIDTH = 74
+
+
+def _wrap_line(text: str, width: int) -> list[str]:
+    wrapped = wrap(
+        text,
+        width=width,
+        break_long_words=False,
+        replace_whitespace=False,
+        drop_whitespace=True,
+    )
+    return wrapped or [""]
+
+
+def build_banner(title: str, subtitle: str | None = None) -> str:
+    width = LOG_FRAME_WIDTH
+    top = "╔" + "═" * (width - 2) + "╗"
+    empty = f"║{' ' * (width - 2)}║"
+    title_line = f"║ {title.center(width - 4)} ║"
+    lines = [top, empty, title_line]
+
+    if subtitle:
+        subtitle_lines = _wrap_line(subtitle, width - 4)
+        for line in subtitle_lines:
+            lines.append(f"║ {line.center(width - 4)} ║")
+
+    lines.extend([empty, "╚" + "═" * (width - 2) + "╝"])
+    return "\n".join(lines)
+
+
+def build_summary_box(title: str, sections: list[tuple[str, list[str]]]) -> str:
+    width = LOG_FRAME_WIDTH
+    inner_width = width - 4
+    bullet_width = width - 6
+
+    lines = ["╔" + "═" * (width - 2) + "╗"]
+
+    for segment in _wrap_line(f"✨ {title}", inner_width):
+        lines.append(f"║ {segment.ljust(inner_width)} ║")
+
+    if sections:
+        lines.append("╠" + "═" * (width - 2) + "╣")
+
+    for index, (section_title, entries) in enumerate(sections):
+        for section_line in _wrap_line(section_title, inner_width):
+            lines.append(f"║ {section_line.ljust(inner_width)} ║")
+
+        if entries:
+            for entry in entries:
+                wrapped_entry = _wrap_line(entry, bullet_width - 2)
+                for i, part in enumerate(wrapped_entry):
+                    prefix = "• " if i == 0 else "  "
+                    available_width = bullet_width - len(prefix)
+                    lines.append(
+                        f"║   {prefix}{part.ljust(available_width)} ║"
+                    )
+        else:
+            lines.append(f"║   {'— нет данных —'.ljust(bullet_width)} ║")
+
+        if index < len(sections) - 1:
+            lines.append("╟" + "─" * (width - 2) + "╢")
+
+    lines.append("╚" + "═" * (width - 2) + "╝")
+    return "\n".join(lines)
+
+
+def format_status_line(name: str, enabled: bool, detail: str | None = None) -> str:
+    status_icon = "✅" if enabled else "⛔"
+    status_text = "Активен" if enabled else "Отключен"
+
+    if detail:
+        status_text = f"{status_text} — {detail}"
+
+    return f"{status_icon} {name}: {status_text}"
 
 
 class GracefulExit:
@@ -46,7 +123,12 @@ async def main():
     )
     
     logger = logging.getLogger(__name__)
-    logger.info("🚀 Запуск Bedolaga Remnawave Bot...")
+    logger.info(
+        build_banner(
+            "🚀 Bedolaga Remnawave Bot",
+            "Старт последовательности запуска",
+        )
+    )
     
     try:
         ensure_locale_templates()
@@ -65,6 +147,17 @@ async def main():
     version_check_task = None
     polling_task = None
     web_api_server = None
+
+    webhook_endpoints: list[tuple[str, str]] = []
+    webhook_services: list[str] = []
+    web_api_url: str | None = None
+    backup_settings = None
+    auto_backup_enabled: bool | None = None
+    backup_status_detail: str | None = None
+    maintenance_status_detail: str | None = None
+    maintenance_running = False
+    yookassa_started = False
+    pal24_started = False
     
     try:
         logger.info("📊 Инициализация базы данных...")
@@ -114,12 +207,19 @@ async def main():
         logger.info("🗄️ Инициализация сервиса бекапов...")
         try:
             backup_service.bot = bot
-            
-            settings_obj = await backup_service.get_backup_settings()
-            if settings_obj.auto_backup_enabled:
+
+            backup_settings = await backup_service.get_backup_settings()
+            auto_backup_enabled = backup_settings.auto_backup_enabled
+
+            if auto_backup_enabled:
                 await backup_service.start_auto_backup()
                 logger.info("✅ Автобекапы запущены")
-            
+                backup_status_detail = (
+                    f"интервал {backup_settings.backup_interval_hours}ч, время {backup_settings.backup_time}"
+                )
+            else:
+                backup_status_detail = "отключены настройками"
+
             logger.info("✅ Сервис бекапов инициализирован")
         except Exception as e:
             logger.error(f"❌ Ошибка инициализации сервиса бекапов: {e}")
@@ -143,12 +243,33 @@ async def main():
             enabled_services = []
             if settings.TRIBUTE_ENABLED:
                 enabled_services.append("Tribute")
+                webhook_endpoints.append(
+                    (
+                        "Tribute",
+                        f"{settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.TRIBUTE_WEBHOOK_PATH}",
+                    )
+                )
             if settings.is_mulenpay_enabled():
                 enabled_services.append("Mulen Pay")
+                webhook_endpoints.append(
+                    (
+                        "Mulen Pay",
+                        f"{settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.MULENPAY_WEBHOOK_PATH}",
+                    )
+                )
             if settings.is_cryptobot_enabled():
                 enabled_services.append("CryptoBot")
-            
-            logger.info(f"🌐 Запуск webhook сервера для: {', '.join(enabled_services)}...")
+                webhook_endpoints.append(
+                    (
+                        "CryptoBot",
+                        f"{settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.CRYPTOBOT_WEBHOOK_PATH}",
+                    )
+                )
+
+            webhook_services = enabled_services.copy()
+            logger.info(
+                f"🌐 Запуск webhook сервера для: {', '.join(enabled_services)}..."
+            )
             webhook_server = WebhookServer(bot)
             await webhook_server.start()
         else:
@@ -159,12 +280,26 @@ async def main():
             yookassa_server_task = asyncio.create_task(
                 start_yookassa_webhook_server(payment_service)
             )
+            webhook_endpoints.append(
+                (
+                    "YooKassa",
+                    f"{settings.WEBHOOK_URL}:{settings.YOOKASSA_WEBHOOK_PORT}{settings.YOOKASSA_WEBHOOK_PATH}",
+                )
+            )
+            yookassa_started = True
         else:
             logger.info("ℹ️ YooKassa отключена, webhook сервер не запускается")
 
         if settings.is_pal24_enabled():
             logger.info("💳 Запуск PayPalych webhook сервера...")
             pal24_server = await start_pal24_webhook_server(payment_service)
+            webhook_endpoints.append(
+                (
+                    "PayPalych",
+                    f"{settings.WEBHOOK_URL}:{settings.PAL24_WEBHOOK_PORT}{settings.PAL24_WEBHOOK_PATH}",
+                )
+            )
+            pal24_started = True
         else:
             logger.info("ℹ️ PayPalych отключен, webhook сервер не запускается")
 
@@ -172,12 +307,17 @@ async def main():
         monitoring_task = asyncio.create_task(monitoring_service.start_monitoring())
         
         logger.info("🔧 Проверка службы техработ...")
+        maintenance_running = False
         if not maintenance_service._check_task or maintenance_service._check_task.done():
             logger.info("🔧 Запуск службы техработ...")
             maintenance_task = asyncio.create_task(maintenance_service.start_monitoring())
+            maintenance_running = True
+            maintenance_status_detail = "запущена при старте"
         else:
             logger.info("🔧 Служба техработ уже запущена")
             maintenance_task = None
+            maintenance_running = True
+            maintenance_status_detail = "уже активна"
         
         if settings.is_version_check_enabled():
             logger.info("📄 Запуск сервиса проверки версий...")
@@ -191,10 +331,10 @@ async def main():
 
                 web_api_server = WebAPIServer()
                 await web_api_server.start()
+                web_api_url = f"http://{settings.WEB_API_HOST}:{settings.WEB_API_PORT}"
                 logger.info(
-                    "🌐 Административное веб-API запущено: http://%s:%s",
-                    settings.WEB_API_HOST,
-                    settings.WEB_API_PORT,
+                    "🌐 Административное веб-API запущено: %s",
+                    web_api_url,
                 )
             except Exception as error:
                 logger.error(f"❌ Не удалось запустить веб-API: {error}")
@@ -204,30 +344,65 @@ async def main():
         logger.info("📄 Запуск polling...")
         polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=True))
         
-        logger.info("=" * 50)
-        logger.info("🎯 Активные webhook endpoints:")
-        if webhook_needed:
-            if settings.TRIBUTE_ENABLED:
-                logger.info(f"   Tribute: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.TRIBUTE_WEBHOOK_PATH}")
-            if settings.is_mulenpay_enabled():
-                logger.info(f"   Mulen Pay: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.MULENPAY_WEBHOOK_PATH}")
-            if settings.is_cryptobot_enabled():
-                logger.info(f"   CryptoBot: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.CRYPTOBOT_WEBHOOK_PATH}")
-        if settings.is_yookassa_enabled():
-            logger.info(f"   YooKassa: {settings.WEBHOOK_URL}:{settings.YOOKASSA_WEBHOOK_PORT}{settings.YOOKASSA_WEBHOOK_PATH}")
-        if settings.is_pal24_enabled():
-            logger.info(
-                f"   PayPalych: {settings.WEBHOOK_URL}:{settings.PAL24_WEBHOOK_PORT}{settings.PAL24_WEBHOOK_PATH}"
-            )
-        logger.info("📄 Активные фоновые сервисы:")
-        logger.info(f"   Мониторинг: {'Включен' if monitoring_task else 'Отключен'}")
-        logger.info(f"   Техработы: {'Включен' if maintenance_task else 'Отключен'}")
-        logger.info(f"   Проверка версий: {'Включен' if version_check_task else 'Отключен'}")
-        logger.info(
-            "   Отчеты: %s",
-            "Включен" if reporting_service.is_running() else "Отключен",
-        )
-        logger.info("=" * 50)
+        background_services_lines = [
+            format_status_line("Мониторинг", monitoring_task is not None),
+            format_status_line(
+                "Техработы",
+                maintenance_running,
+                maintenance_status_detail,
+            ),
+            format_status_line(
+                "Проверка версий",
+                version_check_task is not None,
+            ),
+            format_status_line(
+                "Отчеты",
+                reporting_service.is_running(),
+            ),
+        ]
+
+        if auto_backup_enabled is not None:
+            backup_lines = [
+                format_status_line(
+                    "Автобекапы",
+                    bool(auto_backup_enabled),
+                    backup_status_detail,
+                )
+            ]
+        else:
+            backup_lines = ["⛔ Автобекапы: не удалось загрузить настройки"]
+
+        admin_services_lines = [
+            f"Версия приложения: {version_service.current_version or 'не определена'}",
+            format_status_line(
+                "Webhook сервер платежей",
+                bool(webhook_services),
+                ", ".join(webhook_services) if webhook_services else None,
+            ),
+            format_status_line(
+                "YooKassa",
+                yookassa_started,
+            ),
+            format_status_line(
+                "PayPalych",
+                pal24_started,
+            ),
+            format_status_line(
+                "Административное API",
+                web_api_url is not None,
+                web_api_url,
+            ),
+        ]
+
+        summary_sections = [
+            ("🌐 Активные webhook endpoints", [f"{name}: {url}" for name, url in webhook_endpoints]),
+            ("🧰 Фоновые сервисы", background_services_lines),
+            ("🛡️ Административные сервисы", admin_services_lines),
+            ("💾 Резервное копирование", backup_lines),
+        ]
+
+        summary_message = build_summary_box("Итоги запуска", summary_sections)
+        logger.info(summary_message)
         
         try:
             while not killer.exit:
