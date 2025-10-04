@@ -681,12 +681,14 @@ class MonitoringService:
                     if not await notification_sent(db, user.id, subscription.id, "expired_discount_wave2"):
                         percent = NotificationSettingsService.get_second_wave_discount_percent()
                         valid_hours = NotificationSettingsService.get_second_wave_valid_hours()
+                        bonus_amount = settings.PRICE_30_DAYS * percent // 100
                         offer = await upsert_discount_offer(
                             db,
                             user_id=user.id,
                             subscription_id=subscription.id,
                             notification_type="expired_discount_wave2",
                             discount_percent=percent,
+                            bonus_amount_kopeks=bonus_amount,
                             valid_hours=valid_hours,
                         )
                         success = await self._send_expired_discount_notification(
@@ -696,6 +698,7 @@ class MonitoringService:
                             offer.expires_at,
                             offer.id,
                             "second",
+                            bonus_amount,
                         )
                         if success:
                             await record_notification(db, user.id, subscription.id, "expired_discount_wave2")
@@ -708,12 +711,14 @@ class MonitoringService:
                         if not await notification_sent(db, user.id, subscription.id, "expired_discount_wave3"):
                             percent = NotificationSettingsService.get_third_wave_discount_percent()
                             valid_hours = NotificationSettingsService.get_third_wave_valid_hours()
+                            bonus_amount = settings.PRICE_30_DAYS * percent // 100
                             offer = await upsert_discount_offer(
                                 db,
                                 user_id=user.id,
                                 subscription_id=subscription.id,
                                 notification_type="expired_discount_wave3",
                                 discount_percent=percent,
+                                bonus_amount_kopeks=bonus_amount,
                                 valid_hours=valid_hours,
                             )
                             success = await self._send_expired_discount_notification(
@@ -723,6 +728,7 @@ class MonitoringService:
                                 offer.expires_at,
                                 offer.id,
                                 "third",
+                                bonus_amount,
                                 trigger_days=trigger_days,
                             )
                             if success:
@@ -1185,6 +1191,7 @@ class MonitoringService:
         expires_at: datetime,
         offer_id: int,
         wave: str,
+        bonus_amount: int,
         trigger_days: int = None,
     ) -> bool:
         try:
@@ -1195,8 +1202,8 @@ class MonitoringService:
                     "SUBSCRIPTION_EXPIRED_SECOND_WAVE",
                     (
                         "🔥 <b>Скидка {percent}% на продление</b>\n\n"
-                        "Нажмите «Получить скидку», и мы автоматически уменьшим стоимость продления. "
-                        "Скидка суммируется с вашей промо-группой и действует до {expires_at}."
+                        "Нажмите «Получить скидку», и мы начислим {bonus} на баланс. "
+                        "Предложение действует до {expires_at}."
                     ),
                 )
             else:
@@ -1204,13 +1211,14 @@ class MonitoringService:
                     "SUBSCRIPTION_EXPIRED_THIRD_WAVE",
                     (
                         "🎁 <b>Индивидуальная скидка {percent}%</b>\n\n"
-                        "Прошло {trigger_days} дней без подписки — возвращайтесь, и скидка уменьшит стоимость новой подписки. "
-                        "Скидка суммируется с вашей промо-группой и действует до {expires_at}."
+                        "Прошло {trigger_days} дней без подписки — возвращайтесь, и мы добавим {bonus} на баланс. "
+                        "Скидка действует до {expires_at}."
                     ),
                 )
 
             message = template.format(
                 percent=percent,
+                bonus=settings.format_price(bonus_amount),
                 expires_at=expires_at.strftime("%d.%m.%Y %H:%M"),
                 trigger_days=trigger_days or "",
             )

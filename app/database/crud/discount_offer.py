@@ -14,9 +14,9 @@ async def upsert_discount_offer(
     subscription_id: Optional[int],
     notification_type: str,
     discount_percent: int,
-    bonus_amount_kopeks: int = 0,
+    bonus_amount_kopeks: int,
     valid_hours: int,
-    effect_type: str = "percent_discount",
+    effect_type: str = "balance_bonus",
     extra_data: Optional[dict] = None,
 ) -> DiscountOffer:
     """Create or refresh a discount offer for a user."""
@@ -67,6 +67,14 @@ async def get_offer_by_id(db: AsyncSession, offer_id: int) -> Optional[DiscountO
     return result.scalar_one_or_none()
 
 
+async def mark_offer_claimed(db: AsyncSession, offer: DiscountOffer) -> DiscountOffer:
+    offer.claimed_at = datetime.utcnow()
+    offer.is_active = False
+    await db.commit()
+    await db.refresh(offer)
+    return offer
+
+
 async def deactivate_expired_offers(db: AsyncSession) -> int:
     now = datetime.utcnow()
     result = await db.execute(
@@ -86,44 +94,3 @@ async def deactivate_expired_offers(db: AsyncSession) -> int:
 
     await db.commit()
     return count
-
-
-async def get_active_percent_discount_offer(
-    db: AsyncSession,
-    user_id: int,
-) -> Optional[DiscountOffer]:
-    now = datetime.utcnow()
-    result = await db.execute(
-        select(DiscountOffer)
-        .where(
-            DiscountOffer.user_id == user_id,
-            DiscountOffer.is_active == True,  # noqa: E712
-            DiscountOffer.effect_type.in_(["percent_discount", "balance_bonus"]),
-            DiscountOffer.claimed_at.isnot(None),
-            DiscountOffer.expires_at > now,
-            DiscountOffer.discount_percent > 0,
-        )
-        .order_by(DiscountOffer.expires_at.asc())
-    )
-    return result.scalars().first()
-
-
-async def mark_offer_claimed(
-    db: AsyncSession,
-    offer: DiscountOffer,
-    *,
-    deactivate: bool = True,
-) -> DiscountOffer:
-    offer.claimed_at = datetime.utcnow()
-    if deactivate:
-        offer.is_active = False
-    await db.commit()
-    await db.refresh(offer)
-    return offer
-
-
-async def consume_discount_offer(db: AsyncSession, offer: DiscountOffer) -> DiscountOffer:
-    offer.is_active = False
-    await db.commit()
-    await db.refresh(offer)
-    return offer
