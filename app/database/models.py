@@ -757,29 +757,15 @@ class ServiceRule(Base):
 
 class SystemSetting(Base):
     __tablename__ = "system_settings"
-
+    
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String(255), unique=True, nullable=False)
     value = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
-
+    
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
-
-class SystemSettingChange(Base):
-    __tablename__ = "system_settings_history"
-
-    id = Column(Integer, primary_key=True, index=True)
-    key = Column(String(255), nullable=False, index=True)
-    old_value = Column(Text, nullable=True)
-    new_value = Column(Text, nullable=True)
-    changed_by = Column(Integer, nullable=True)
-    changed_by_username = Column(String(255), nullable=True)
-    source = Column(String(50), nullable=False, default="bot")
-    reason = Column(String(255), nullable=True)
-
-    created_at = Column(DateTime, default=func.now())
 
 class MonitoringLog(Base):
     __tablename__ = "monitoring_logs"
