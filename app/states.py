@@ -135,10 +135,6 @@ class BotConfigStates(StatesGroup):
     waiting_for_search_query = State()
     waiting_for_import_file = State()
 
-
-class PricingStates(StatesGroup):
-    waiting_for_value = State()
-
 class AutoPayStates(StatesGroup):
     setting_autopay_days = State()
     confirming_autopay_toggle = State()

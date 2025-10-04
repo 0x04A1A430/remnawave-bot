@@ -171,7 +171,7 @@ async def show_servers_menu(
             types.InlineKeyboardButton(text="📈 Подробная статистика", callback_data="admin_servers_stats")
         ],
         [
-            types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")
+            types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_subscriptions")
         ]
     ]
     
