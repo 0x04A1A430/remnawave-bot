@@ -1061,14 +1061,30 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-PERIOD_PRICES = {
-    14: settings.PRICE_14_DAYS,
-    30: settings.PRICE_30_DAYS,
-    60: settings.PRICE_60_DAYS,
-    90: settings.PRICE_90_DAYS,
-    180: settings.PRICE_180_DAYS,
-    360: settings.PRICE_360_DAYS,
+_PERIOD_PRICE_FIELDS: Dict[int, str] = {
+    14: "PRICE_14_DAYS",
+    30: "PRICE_30_DAYS",
+    60: "PRICE_60_DAYS",
+    90: "PRICE_90_DAYS",
+    180: "PRICE_180_DAYS",
+    360: "PRICE_360_DAYS",
 }
+
+
+def refresh_period_prices() -> None:
+    """Rebuild cached period price mapping using the latest settings."""
+
+    PERIOD_PRICES.clear()
+    PERIOD_PRICES.update(
+        {
+            days: getattr(settings, field_name, 0)
+            for days, field_name in _PERIOD_PRICE_FIELDS.items()
+        }
+    )
+
+
+PERIOD_PRICES: Dict[int, int] = {}
+refresh_period_prices()
 
 def get_traffic_prices() -> Dict[int, int]:
     packages = settings.get_traffic_packages()
