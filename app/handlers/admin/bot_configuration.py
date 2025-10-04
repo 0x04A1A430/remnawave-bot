@@ -142,6 +142,28 @@ for _group_key, _title, _category_keys in CATEGORY_GROUP_DEFINITIONS:
 CATEGORY_FALLBACK_KEY = "other"
 CATEGORY_FALLBACK_TITLE = "📦 Прочие настройки"
 
+PRICING_SETTING_KEYS: set[str] = {
+    "BASE_SUBSCRIPTION_PRICE",
+    "PRICE_14_DAYS",
+    "PRICE_30_DAYS",
+    "PRICE_60_DAYS",
+    "PRICE_90_DAYS",
+    "PRICE_180_DAYS",
+    "PRICE_360_DAYS",
+    "PRICE_PER_DEVICE",
+    "PRICE_TRAFFIC_5GB",
+    "PRICE_TRAFFIC_10GB",
+    "PRICE_TRAFFIC_25GB",
+    "PRICE_TRAFFIC_50GB",
+    "PRICE_TRAFFIC_100GB",
+    "PRICE_TRAFFIC_250GB",
+    "PRICE_TRAFFIC_500GB",
+    "PRICE_TRAFFIC_1000GB",
+    "PRICE_TRAFFIC_UNLIMITED",
+}
+
+PRICING_CATEGORY_KEYS: set[str] = {"SUBSCRIPTION_PRICES", "TRAFFIC_PACKAGES"}
+
 PRESET_CONFIGS: Dict[str, Dict[str, object]] = {
     "recommended": {
         "ENABLE_NOTIFICATIONS": True,
@@ -200,6 +222,49 @@ def _get_group_meta(group_key: str) -> Dict[str, object]:
 def _get_group_description(group_key: str) -> str:
     meta = _get_group_meta(group_key)
     return str(meta.get("description", ""))
+
+
+def _is_pricing_setting_key(key: str) -> bool:
+    return key in PRICING_SETTING_KEYS
+
+
+def _filter_pricing_definitions(definitions):
+    return [definition for definition in definitions if not _is_pricing_setting_key(definition.key)]
+
+
+def _get_visible_definitions(category_key: str):
+    definitions = bot_configuration_service.get_settings_for_category(category_key)
+    return _filter_pricing_definitions(definitions)
+
+
+def _is_pricing_category_key(category_key: str) -> bool:
+    if category_key in PRICING_CATEGORY_KEYS:
+        return True
+
+    definitions = bot_configuration_service.get_settings_for_category(category_key)
+    if not definitions:
+        return False
+
+    return not _filter_pricing_definitions(definitions)
+
+
+def _build_pricing_redirect_keyboard(texts) -> types.InlineKeyboardMarkup:
+    return types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t("ADMIN_PRICING_GO_TO_SECTION", "Перейти к управлению ценами"),
+                    callback_data="admin_pricing",
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t("ADMIN_PRICING_BACK_TO_CONFIG", "⬅️ К разделам"),
+                    callback_data="admin_bot_config",
+                )
+            ],
+        ]
+    )
 
 
 def _get_group_icon(group_key: str) -> str:
@@ -337,9 +402,11 @@ def _render_dashboard_overview() -> str:
     for group_key, _title, items in grouped:
         for category_key, _label, count in items:
             total_settings += count
-            definitions = bot_configuration_service.get_settings_for_category(category_key)
+            definitions = _get_visible_definitions(category_key)
             total_overrides += sum(
-                1 for definition in definitions if bot_configuration_service.has_override(definition.key)
+                1
+                for definition in definitions
+                if bot_configuration_service.has_override(definition.key)
             )
 
     lines: List[str] = [
@@ -391,7 +458,13 @@ def _perform_settings_search(query: str) -> List[Dict[str, object]]:
         else:
             category_page = 1
 
-        for definition_index, definition in enumerate(definitions):
+        visible_definitions = [
+            definition
+            for definition in definitions
+            if not _is_pricing_setting_key(definition.key)
+        ]
+
+        for definition_index, definition in enumerate(visible_definitions):
             fields = [definition.key.lower(), definition.display_name.lower()]
             guidance = bot_configuration_service.get_setting_guidance(definition.key)
             fields.extend(
@@ -1054,25 +1127,34 @@ def _parse_group_payload(payload: str) -> Tuple[str, int]:
 
 def _get_grouped_categories() -> List[Tuple[str, str, List[Tuple[str, str, int]]]]:
     categories = bot_configuration_service.get_categories()
-    categories_map = {key: (label, count) for key, label, count in categories}
+    categories_map: Dict[str, Tuple[str, int]] = {}
     used: set[str] = set()
     grouped: List[Tuple[str, str, List[Tuple[str, str, int]]]] = []
+
+    for key, label, _count in categories:
+        if _is_pricing_category_key(key):
+            continue
+        visible = _get_visible_definitions(key)
+        if not visible:
+            continue
+        categories_map[key] = (label, len(visible))
 
     for group_key, title, category_keys in CATEGORY_GROUP_DEFINITIONS:
         items: List[Tuple[str, str, int]] = []
         for category_key in category_keys:
-            if category_key in categories_map:
-                label, count = categories_map[category_key]
-                items.append((category_key, label, count))
-                used.add(category_key)
+            if category_key not in categories_map:
+                continue
+            label, count = categories_map[category_key]
+            items.append((category_key, label, count))
+            used.add(category_key)
         if items:
             grouped.append((group_key, title, items))
 
-    remaining = [
-        (key, label, count)
-        for key, (label, count) in categories_map.items()
-        if key not in used
-    ]
+    remaining: List[Tuple[str, str, int]] = []
+    for key, (label, count) in categories_map.items():
+        if key in used:
+            continue
+        remaining.append((key, label, count))
 
     if remaining:
         remaining.sort(key=lambda item: item[1])
@@ -1179,10 +1261,14 @@ def _build_categories_keyboard(
 
     buttons: List[types.InlineKeyboardButton] = []
     for category_key, label, count in sliced:
-        overrides = 0
-        for definition in bot_configuration_service.get_settings_for_category(category_key):
-            if bot_configuration_service.has_override(definition.key):
-                overrides += 1
+        definitions = _get_visible_definitions(category_key)
+        if not definitions:
+            continue
+        overrides = sum(
+            1
+            for definition in definitions
+            if bot_configuration_service.has_override(definition.key)
+        )
         badge = "✳️" if overrides else "•"
         button_text = f"{badge} {label} ({count})"
         buttons.append(
@@ -1238,7 +1324,26 @@ def _build_settings_keyboard(
     language: str,
     page: int = 1,
 ) -> types.InlineKeyboardMarkup:
-    definitions = bot_configuration_service.get_settings_for_category(category_key)
+    definitions = _get_visible_definitions(category_key)
+    if not definitions:
+        texts = get_texts(language)
+        return types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t("ADMIN_PRICING_GO_TO_SECTION", "Перейти к управлению ценами"),
+                        callback_data="admin_pricing",
+                    )
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t("ADMIN_PRICING_BACK_TO_CONFIG", "⬅️ К разделам"),
+                        callback_data="admin_bot_config",
+                    )
+                ],
+            ]
+        )
+
     total_pages = max(1, math.ceil(len(definitions) / SETTINGS_PAGE_SIZE))
     page = max(1, min(page, total_pages))
 
@@ -1528,10 +1633,17 @@ async def show_bot_config_category(
     group_key, category_key, category_page, settings_page = _parse_category_payload(
         callback.data
     )
-    definitions = bot_configuration_service.get_settings_for_category(category_key)
+    definitions = _get_visible_definitions(category_key)
 
     if not definitions:
-        await callback.answer("В этой категории пока нет настроек", show_alert=True)
+        texts = get_texts(db_user.language)
+        message = texts.t(
+            "ADMIN_PRICING_MOVED_MESSAGE",
+            "💡 Управление ценами переехало в раздел «Цены» на главной странице админ-панели.",
+        )
+        keyboard = _build_pricing_redirect_keyboard(texts)
+        await callback.message.edit_text(message, reply_markup=keyboard, parse_mode="HTML")
+        await callback.answer()
         return
 
     category_label = definitions[0].category_label
@@ -2029,6 +2141,19 @@ async def show_bot_config_setting(
     except KeyError:
         await callback.answer("Эта настройка больше недоступна", show_alert=True)
         return
+    if _is_pricing_setting_key(key):
+        texts = get_texts(db_user.language)
+        message = texts.t(
+            "ADMIN_PRICING_MOVED_MESSAGE",
+            "💡 Управление ценами переехало в раздел «Цены» на главной странице админ-панели.",
+        )
+        await callback.message.edit_text(
+            message,
+            reply_markup=_build_pricing_redirect_keyboard(texts),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
     text = _render_setting_text(key)
     keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
     await callback.message.edit_text(text, reply_markup=keyboard)
@@ -2065,6 +2190,19 @@ async def start_edit_setting(
         key = bot_configuration_service.resolve_callback_token(token)
     except KeyError:
         await callback.answer("Эта настройка больше недоступна", show_alert=True)
+        return
+    if _is_pricing_setting_key(key):
+        texts = get_texts(db_user.language)
+        message = texts.t(
+            "ADMIN_PRICING_MOVED_MESSAGE",
+            "💡 Управление ценами переехало в раздел «Цены» на главной странице админ-панели.",
+        )
+        await callback.message.edit_text(
+            message,
+            reply_markup=_build_pricing_redirect_keyboard(texts),
+            parse_mode="HTML",
+        )
+        await callback.answer()
         return
     definition = bot_configuration_service.get_definition(key)
 
@@ -2220,6 +2358,19 @@ async def reset_setting(
     except KeyError:
         await callback.answer("Эта настройка больше недоступна", show_alert=True)
         return
+    if _is_pricing_setting_key(key):
+        texts = get_texts(db_user.language)
+        message = texts.t(
+            "ADMIN_PRICING_MOVED_MESSAGE",
+            "💡 Управление ценами переехало в раздел «Цены» на главной странице админ-панели.",
+        )
+        await callback.message.edit_text(
+            message,
+            reply_markup=_build_pricing_redirect_keyboard(texts),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
     await bot_configuration_service.reset_value(db, key)
     await db.commit()
 
@@ -2259,6 +2410,19 @@ async def toggle_setting(
         key = bot_configuration_service.resolve_callback_token(token)
     except KeyError:
         await callback.answer("Эта настройка больше недоступна", show_alert=True)
+        return
+    if _is_pricing_setting_key(key):
+        texts = get_texts(db_user.language)
+        message = texts.t(
+            "ADMIN_PRICING_MOVED_MESSAGE",
+            "💡 Управление ценами переехало в раздел «Цены» на главной странице админ-панели.",
+        )
+        await callback.message.edit_text(
+            message,
+            reply_markup=_build_pricing_redirect_keyboard(texts),
+            parse_mode="HTML",
+        )
+        await callback.answer()
         return
     current = bot_configuration_service.get_current_value(key)
     new_value = not bool(current)
@@ -2303,6 +2467,19 @@ async def apply_setting_choice(
         key = bot_configuration_service.resolve_callback_token(token)
     except KeyError:
         await callback.answer("Эта настройка больше недоступна", show_alert=True)
+        return
+    if _is_pricing_setting_key(key):
+        texts = get_texts(db_user.language)
+        message = texts.t(
+            "ADMIN_PRICING_MOVED_MESSAGE",
+            "💡 Управление ценами переехало в раздел «Цены» на главной странице админ-панели.",
+        )
+        await callback.message.edit_text(
+            message,
+            reply_markup=_build_pricing_redirect_keyboard(texts),
+            parse_mode="HTML",
+        )
+        await callback.answer()
         return
 
     try:
