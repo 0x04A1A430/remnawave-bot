@@ -13,7 +13,6 @@ from .routes import (
     config,
     health,
     promocodes,
-    promo_offers,
     miniapp,
     promo_groups,
     remnawave,
@@ -58,10 +57,6 @@ OPENAPI_TAGS = [
     {
         "name": "promo-groups",
         "description": "Создание и управление промо-группами и их участниками.",
-    },
-    {
-        "name": "promo-offers",
-        "description": "Управление рассылкой промо-предложений и их параметрами.",
     },
     {
         "name": "auth",
@@ -115,7 +110,6 @@ def create_web_api_app() -> FastAPI:
     app.include_router(transactions.router, prefix="/transactions", tags=["transactions"])
     app.include_router(promo_groups.router, prefix="/promo-groups", tags=["promo-groups"])
     app.include_router(promocodes.router, prefix="/promo-codes", tags=["promo-codes"])
-    app.include_router(promo_offers.router, prefix="/promo-offers", tags=["promo-offers"])
     app.include_router(broadcasts.router, prefix="/broadcasts", tags=["broadcasts"])
     app.include_router(backups.router, prefix="/backups", tags=["backups"])
     app.include_router(campaigns.router, prefix="/campaigns", tags=["campaigns"])
