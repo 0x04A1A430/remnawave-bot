@@ -32,16 +32,3 @@ RULES_TEXT: |
     2. Do not distribute spam or malicious content.
     3. Respect other community members.
 
-ADMIN_MAIN_TARIFFS: "🧾 Tariffs"
-ADMIN_TARIFFS_SUBMENU_TITLE: "🧾 **Tariffs**\\n\\n"
-ADMIN_TARIFFS_SUBMENU_DESCRIPTION: "Manage the tariff mode and upcoming features:\\n\\nChoose an action:"
-ADMIN_TARIFFS_ACTIVATE_BUTTON: "⚙️ Activate tariff mode"
-ADMIN_TARIFFS_CREATE_BUTTON: "➕ Create tariff"
-ADMIN_TARIFFS_LIST_BUTTON: "📋 Tariff list"
-ADMIN_TARIFFS_STATS_BUTTON: "📊 Tariff statistics"
-ADMIN_TARIFFS_PLACEHOLDER_TITLE: "🧾 <b>Tariffs</b>\\n\\n"
-ADMIN_TARIFFS_ACTIVATE_PLACEHOLDER: "⚙️ Tariff mode is still under development.\\n\\nOnce launched it will rename 'servers' to 'tariffs' in the client interface and unlock additional sales settings."
-ADMIN_TARIFFS_CREATE_PLACEHOLDER: "➕ Tariff creation will appear here. Prepare the parameter list in advance."
-ADMIN_TARIFFS_LIST_PLACEHOLDER: "📋 Tariff browsing is coming soon. The list will show both active and hidden tariffs."
-ADMIN_TARIFFS_STATS_PLACEHOLDER: "📊 Tariff statistics will appear here to help track sales per tariff."
-
