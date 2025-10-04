@@ -10,13 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings, PERIOD_PRICES, get_traffic_prices
 from app.database.crud.discount_offer import get_offer_by_id, mark_offer_claimed
-from app.database.crud.promo_offer import (
-    create_activation as create_promo_activation,
-    get_activation_by_offer_and_user as get_promo_activation,
-    get_delivery_by_discount_offer,
-    get_promo_offer_by_id,
-    mark_delivery_activated,
-)
 from app.database.crud.subscription import (
     create_trial_subscription,
     create_paid_subscription, add_subscription_traffic, add_subscription_devices,
@@ -26,7 +19,7 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance, add_user_balance
 from app.database.models import (
     User, TransactionType, SubscriptionStatus,
-    Subscription, PromoOfferType
+    Subscription
 )
 from app.keyboards.inline import (
     get_subscription_keyboard, get_trial_keyboard,
@@ -59,7 +52,6 @@ from app.services.subscription_checkout_service import (
     should_offer_checkout_resume,
 )
 from app.services.subscription_service import SubscriptionService
-from app.services.promo_offer_utils import determine_user_segments
 from app.states import SubscriptionStates
 from app.utils.pagination import paginate_list
 from app.utils.pricing_utils import (
@@ -5019,89 +5011,6 @@ async def handle_connect_subscription(
     await callback.answer()
 
 
-async def activate_test_promo_offer(
-        callback: types.CallbackQuery,
-        db_user: User,
-        db: AsyncSession,
-):
-    texts = get_texts(db_user.language)
-
-    try:
-        offer_id = int(callback.data.split("_")[-1])
-    except (ValueError, AttributeError):
-        await callback.answer(texts.t("PROMO_OFFER_TEST_NOT_FOUND", "❌ Предложение не найдено"), show_alert=True)
-        return
-
-    promo_offer = await get_promo_offer_by_id(db, offer_id)
-    if not promo_offer or promo_offer.offer_type != PromoOfferType.TEST_SQUADS.value:
-        await callback.answer(texts.t("PROMO_OFFER_TEST_NOT_AVAILABLE", "❌ Предложение недоступно"), show_alert=True)
-        return
-
-    now = datetime.utcnow()
-    if promo_offer.starts_at > now or promo_offer.expires_at <= now:
-        await callback.answer(texts.t("PROMO_OFFER_TEST_EXPIRED", "⚠️ Срок действия предложения истек"), show_alert=True)
-        return
-
-    existing_activation = await get_promo_activation(db, promo_offer.id, db_user.id)
-    if existing_activation and existing_activation.revoked_at is None:
-        await callback.answer(texts.t("PROMO_OFFER_TEST_ALREADY", "ℹ️ Предложение уже активировано"), show_alert=True)
-        return
-
-    segments = determine_user_segments(db_user, now)
-    allowed_segments = {"paid_active", "trial_active"}
-    if not (segments & allowed_segments):
-        await callback.answer(texts.t("PROMO_OFFER_TEST_NOT_AVAILABLE", "❌ Предложение недоступно"), show_alert=True)
-        return
-
-    subscription = db_user.subscription
-    if not subscription:
-        await callback.answer(texts.t("PROMO_OFFER_TEST_NOT_AVAILABLE", "❌ Подписка не найдена"), show_alert=True)
-        return
-
-    current_squads = list(subscription.connected_squads or [])
-    new_squads = []
-    for squad_uuid in promo_offer.test_squad_uuids or []:
-        if squad_uuid not in current_squads:
-            current_squads.append(squad_uuid)
-            new_squads.append(squad_uuid)
-
-    subscription.connected_squads = current_squads
-    subscription.updated_at = now
-    await db.commit()
-
-    service = SubscriptionService()
-    await service.update_remnawave_user(db, subscription)
-
-    expires_at = now + timedelta(hours=promo_offer.test_access_hours)
-    if expires_at > promo_offer.expires_at:
-        expires_at = promo_offer.expires_at
-
-    await create_promo_activation(
-        db,
-        offer_id=promo_offer.id,
-        user_id=db_user.id,
-        subscription_id=subscription.id,
-        discount_offer_id=None,
-        payload={"added_squads": new_squads},
-        expires_at=expires_at,
-    )
-
-    expires_str = expires_at.strftime("%d.%m.%Y %H:%M")
-    if new_squads:
-        success_text = texts.t(
-            "PROMO_OFFER_TEST_SUCCESS",
-            "🎉 Тестовые серверы подключены! Доступ действует до {expires_at}.",
-        ).format(expires_at=expires_str)
-    else:
-        success_text = texts.t(
-            "PROMO_OFFER_TEST_SUCCESS_NO_NEW",
-            "ℹ️ Дополнительные серверы уже подключены. Предложение активно до {expires_at}.",
-        ).format(expires_at=expires_str)
-
-    await callback.answer(texts.t("PROMO_OFFER_TEST_SUCCESS_ALERT", "✅ Предложение активировано"), show_alert=True)
-    await callback.message.answer(success_text)
-
-
 async def claim_discount_offer(
         callback: types.CallbackQuery,
         db_user: User,
@@ -5159,26 +5068,6 @@ async def claim_discount_offer(
             return
 
     await mark_offer_claimed(db, offer)
-
-    delivery = await get_delivery_by_discount_offer(db, offer.id)
-    if delivery and delivery.offer_id:
-        existing = await get_promo_activation(db, delivery.offer_id, db_user.id)
-        if not existing:
-            expires_at = offer.expires_at
-            await create_promo_activation(
-                db,
-                offer_id=delivery.offer_id,
-                user_id=db_user.id,
-                subscription_id=db_user.subscription.id if db_user.subscription else None,
-                discount_offer_id=offer.id,
-                payload={
-                    "discount_percent": offer.discount_percent,
-                    "bonus_amount": offer.bonus_amount_kopeks,
-                },
-                expires_at=expires_at,
-            )
-        if delivery and delivery.activated_at is None:
-            await mark_delivery_activated(db, delivery)
 
     success_message = texts.get(
         "DISCOUNT_CLAIM_SUCCESS",
@@ -6086,11 +5975,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         handle_change_devices,
         F.data == "subscription_change_devices"
-    )
-
-    dp.callback_query.register(
-        activate_test_promo_offer,
-        F.data.startswith("promo_offer_test_")
     )
 
     dp.callback_query.register(
