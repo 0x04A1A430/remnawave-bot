@@ -1,6 +1,7 @@
 import logging
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Tuple, Dict, Any
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
@@ -18,6 +19,176 @@ logger = logging.getLogger(__name__)
 
 
 PriceItem = Tuple[str, str, int]
+
+
+def _is_truthy(value: Any) -> bool:
+    """Return whether a dynamic configuration value should be treated as enabled."""
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float, Decimal)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        return normalized in {"1", "true", "yes", "on", "да", "вкл", "enabled", "enable"}
+    return bool(value)
+
+
+@dataclass(slots=True)
+class ChoiceOption:
+    value: Any
+    label_ru: str
+    label_en: str | None = None
+
+    def label(self, lang_code: str) -> str:
+        if lang_code == "ru":
+            return self.label_ru
+        return self.label_en or self.label_ru
+
+
+@dataclass(slots=True)
+class SettingEntry:
+    key: str
+    section: str
+    label_ru: str
+    label_en: str
+    action: str  # "input", "toggle", "price", "choice"
+    description_ru: str | None = None
+    description_en: str | None = None
+    choices: Tuple[ChoiceOption, ...] | None = None
+
+    def label(self, lang_code: str) -> str:
+        if lang_code == "ru":
+            return self.label_ru
+        return self.label_en or self.label_ru
+
+    def description(self, lang_code: str) -> str | None:
+        if lang_code == "ru":
+            return self.description_ru
+        return self.description_en or self.description_ru
+
+
+TRIAL_ENTRIES: Tuple[SettingEntry, ...] = (
+    SettingEntry(
+        key="TRIAL_DURATION_DAYS",
+        section="trial",
+        label_ru="⏳ Длительность (дни)",
+        label_en="⏳ Duration (days)",
+        action="input",
+    ),
+    SettingEntry(
+        key="TRIAL_TRAFFIC_LIMIT_GB",
+        section="trial",
+        label_ru="📦 Лимит трафика (ГБ)",
+        label_en="📦 Traffic limit (GB)",
+        action="input",
+    ),
+    SettingEntry(
+        key="TRIAL_DEVICE_LIMIT",
+        section="trial",
+        label_ru="📱 Лимит устройств",
+        label_en="📱 Device limit",
+        action="input",
+    ),
+    SettingEntry(
+        key="TRIAL_ADD_REMAINING_DAYS_TO_PAID",
+        section="trial",
+        label_ru="➕ Добавлять оставшиеся дни к платной подписке",
+        label_en="➕ Add remaining trial days to paid plan",
+        action="toggle",
+        description_ru="Если включено — при покупке платной подписки оставшиеся дни триала будут добавлены к сроку.",
+        description_en="When enabled, remaining trial days are added to paid subscription duration.",
+    ),
+    SettingEntry(
+        key="TRIAL_SQUAD_UUID",
+        section="trial",
+        label_ru="🆔 Squad UUID",
+        label_en="🆔 Squad UUID",
+        action="input",
+        description_ru="Можно оставить пустым, если не требуется назначать пробные подписки в конкретный Squad.",
+        description_en="Leave empty if trial subscriptions shouldn't be bound to a specific Squad.",
+    ),
+)
+
+
+CORE_PRICING_ENTRIES: Tuple[SettingEntry, ...] = (
+    SettingEntry(
+        key="BASE_SUBSCRIPTION_PRICE",
+        section="core",
+        label_ru="💳 Базовая стоимость подписки",
+        label_en="💳 Base subscription price",
+        action="price",
+    ),
+    SettingEntry(
+        key="DEFAULT_DEVICE_LIMIT",
+        section="core",
+        label_ru="📱 Устройств по умолчанию",
+        label_en="📱 Default device limit",
+        action="input",
+    ),
+    SettingEntry(
+        key="DEFAULT_TRAFFIC_LIMIT_GB",
+        section="core",
+        label_ru="📦 Трафик по умолчанию (ГБ)",
+        label_en="📦 Default traffic (GB)",
+        action="input",
+    ),
+    SettingEntry(
+        key="MAX_DEVICES_LIMIT",
+        section="core",
+        label_ru="📈 Максимум устройств",
+        label_en="📈 Maximum devices",
+        action="input",
+    ),
+    SettingEntry(
+        key="RESET_TRAFFIC_ON_PAYMENT",
+        section="core",
+        label_ru="🔄 Сбрасывать трафик при оплате",
+        label_en="🔄 Reset traffic on payment",
+        action="toggle",
+    ),
+    SettingEntry(
+        key="DEFAULT_TRAFFIC_RESET_STRATEGY",
+        section="core",
+        label_ru="🗓 Стратегия сброса трафика",
+        label_en="🗓 Traffic reset strategy",
+        action="input",
+        description_ru="Доступные значения: DAY, WEEK, MONTH, NEVER.",
+        description_en="Available values: DAY, WEEK, MONTH, NEVER.",
+    ),
+    SettingEntry(
+        key="TRAFFIC_SELECTION_MODE",
+        section="core",
+        label_ru="⚙️ Режим выбора трафика",
+        label_en="⚙️ Traffic selection mode",
+        action="choice",
+        choices=(
+            ChoiceOption("selectable", "Выбор пакетов", "Selectable"),
+            ChoiceOption("fixed", "Фиксированный лимит", "Fixed limit"),
+        ),
+        description_ru="Определяет, выбирают ли пользователи пакеты или получают фиксированный лимит.",
+        description_en="Defines whether users pick packages or use a fixed limit.",
+    ),
+    SettingEntry(
+        key="FIXED_TRAFFIC_LIMIT_GB",
+        section="core",
+        label_ru="📏 Фиксированный лимит трафика (ГБ)",
+        label_en="📏 Fixed traffic limit (GB)",
+        action="input",
+        description_ru="Используется только в режиме фиксированного трафика. 0 = безлимит.",
+        description_en="Used only in fixed traffic mode. 0 = unlimited.",
+    ),
+)
+
+
+SETTING_ENTRIES_BY_SECTION: Dict[str, Tuple[SettingEntry, ...]] = {
+    "trial": TRIAL_ENTRIES,
+    "core": CORE_PRICING_ENTRIES,
+}
+
+SETTING_ENTRY_BY_KEY: Dict[str, SettingEntry] = {
+    entry.key: entry for entries in SETTING_ENTRIES_BY_SECTION.values() for entry in entries
+}
 
 
 def _language_code(language: str | None) -> str:
@@ -42,6 +213,29 @@ def _format_traffic_label(gb: int, lang_code: str, short: bool = False) -> str:
     if short:
         return f"{gb}{unit}" if lang_code == "ru" else f"{gb}{unit}"
     return f"{gb} {unit}"
+
+
+def _format_trial_summary(lang_code: str) -> str:
+    duration = settings.TRIAL_DURATION_DAYS
+    traffic = settings.TRIAL_TRAFFIC_LIMIT_GB
+    devices = settings.TRIAL_DEVICE_LIMIT
+
+    traffic_label = _format_traffic_label(traffic, lang_code, short=True)
+    devices_label = f"{devices}📱" if lang_code == "ru" else f"{devices}📱"
+    days_suffix = "д" if lang_code == "ru" else "d"
+    return f"{duration}{days_suffix}, {traffic_label}, {devices_label}"
+
+
+def _format_core_summary(lang_code: str) -> str:
+    base_price = settings.format_price(settings.BASE_SUBSCRIPTION_PRICE)
+    device_limit = settings.DEFAULT_DEVICE_LIMIT
+    traffic_limit = settings.DEFAULT_TRAFFIC_LIMIT_GB
+    if settings.TRAFFIC_SELECTION_MODE == "fixed":
+        traffic_mode = "⚙️ fixed"
+    else:
+        traffic_mode = "⚙️ selectable"
+    traffic_label = _format_traffic_label(traffic_limit, lang_code, short=True)
+    return f"{base_price}, {device_limit}📱, {traffic_label}, {traffic_mode}"
 
 
 def _get_period_items(lang_code: str) -> List[PriceItem]:
@@ -119,9 +313,207 @@ def _build_traffic_summary(items: Iterable[PriceItem], lang_code: str, fallback:
     return ", ".join(parts) if parts else fallback
 
 
+def _build_period_options_summary(lang_code: str) -> str:
+    suffix = "д" if lang_code == "ru" else "d"
+    available = ", ".join(f"{days}{suffix}" for days in settings.get_available_subscription_periods())
+    renewal = ", ".join(f"{days}{suffix}" for days in settings.get_available_renewal_periods())
+    if lang_code == "ru":
+        return f"Подписки: {available or '—'} | Продления: {renewal or '—'}"
+    return f"Subscriptions: {available or '-'} | Renewals: {renewal or '-'}"
+
+
 def _build_extra_summary(items: Iterable[PriceItem], fallback: str) -> str:
     parts = [f"{label}: {settings.format_price(price)}" for key, label, price in items]
     return ", ".join(parts) if parts else fallback
+
+
+def _build_settings_section(
+    section: str,
+    language: str,
+) -> Tuple[str, types.InlineKeyboardMarkup]:
+    texts = get_texts(language)
+    lang_code = _language_code(language)
+    entries = SETTING_ENTRIES_BY_SECTION.get(section, ())
+
+    if section == "trial":
+        title = texts.t("ADMIN_PRICING_SECTION_TRIAL_TITLE", "🎁 Пробный период")
+    elif section == "core":
+        title = texts.t("ADMIN_PRICING_SECTION_CORE_TITLE", "⚙️ Настройки тарифов")
+    else:
+        title = texts.t("ADMIN_PRICING_SECTION_SETTINGS_GENERIC", "⚙️ Настройки")
+
+    helper_hint = texts.t(
+        "ADMIN_PRICING_SECTION_SETTINGS_HINT",
+        "Нажмите кнопку под нужным параметром, чтобы изменить его.",
+    )
+
+    action_icons = {
+        "input": "✏️",
+        "price": "💵",
+        "toggle": "🎚",
+        "choice": "🎛",
+    }
+
+    lines: List[str] = [title, helper_hint, ""]
+    keyboard_rows: List[List[types.InlineKeyboardButton]] = []
+
+    for entry in entries:
+        label = entry.label(lang_code)
+        value = bot_configuration_service.get_current_value(entry.key)
+        formatted = bot_configuration_service.format_value_human(entry.key, value)
+
+        icon = action_icons.get(entry.action, "•")
+        lines.append(f"{icon} <b>{label}</b>")
+        lines.append(
+            texts.t(
+                "ADMIN_PRICING_SETTING_CURRENT_VALUE",
+                "Текущее значение: <code>{value}</code>",
+            ).format(value=formatted)
+        )
+
+        if entry.action == "toggle":
+            state_text = (
+                texts.t("ADMIN_PRICING_SETTING_STATE_ENABLED", "Сейчас: ✅ Включено")
+                if _is_truthy(value)
+                else texts.t("ADMIN_PRICING_SETTING_STATE_DISABLED", "Сейчас: ❌ Выключено")
+            )
+            lines.append(state_text)
+
+        description = entry.description(lang_code)
+        if description:
+            lines.append(f"<i>{description}</i>")
+        lines.append("")
+
+        if entry.action == "toggle":
+            is_enabled = _is_truthy(value)
+            toggle_text = (
+                texts.t(
+                    "ADMIN_PRICING_SETTING_TOGGLE_DISABLE",
+                    "🚫 Выключить {label}",
+                ).format(label=label)
+                if is_enabled
+                else texts.t(
+                    "ADMIN_PRICING_SETTING_TOGGLE_ENABLE",
+                    "✅ Включить {label}",
+                ).format(label=label)
+            )
+            fallback_text = texts.t(
+                "ADMIN_PRICING_SETTING_TOGGLE_BUTTON",
+                "🔁 Переключить {label}",
+            ).format(label=label)
+            keyboard_rows.append(
+                [
+                    types.InlineKeyboardButton(
+                        text=toggle_text or fallback_text,
+                        callback_data=f"admin_pricing_toggle:{section}:{entry.key}",
+                    )
+                ]
+            )
+        elif entry.action == "choice" and entry.choices:
+            buttons: List[types.InlineKeyboardButton] = []
+            for option in entry.choices:
+                is_active = value == option.value
+                icon_choice = "✅" if is_active else "⚪️"
+                buttons.append(
+                    types.InlineKeyboardButton(
+                        text=f"{icon_choice} {option.label(lang_code)}",
+                        callback_data=(
+                            f"admin_pricing_choice:{section}:{entry.key}:{option.value}"
+                        ),
+                    )
+                )
+            for i in range(0, len(buttons), 2):
+                keyboard_rows.append(buttons[i : i + 2])
+        else:
+            button_text = texts.t(
+                "ADMIN_PRICING_SETTING_EDIT",
+                "✏️ Изменить {label}",
+            ).format(label=label)
+            keyboard_rows.append(
+                [
+                    types.InlineKeyboardButton(
+                        text=button_text,
+                        callback_data=f"admin_pricing_setting:{section}:{entry.key}",
+                    )
+                ]
+            )
+
+    if entries:
+        lines.append(texts.t("ADMIN_PRICING_SECTION_PROMPT", "Выберите что изменить:"))
+    else:
+        lines.append(texts.t("ADMIN_PRICING_SECTION_EMPTY", "Нет параметров для изменения."))
+
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="admin_pricing")])
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    return "\n".join(lines).strip(), keyboard
+
+
+def _build_period_options_section(language: str) -> Tuple[str, types.InlineKeyboardMarkup]:
+    texts = get_texts(language)
+    lang_code = _language_code(language)
+    suffix = "д" if lang_code == "ru" else "d"
+
+    available_subscription = set(settings.get_available_subscription_periods())
+    available_renewal = set(settings.get_available_renewal_periods())
+
+    subscription_options = (14, 30, 60, 90, 180, 360)
+    renewal_options = (30, 60, 90, 180, 360)
+
+    title = texts.t("ADMIN_PRICING_SECTION_PERIOD_OPTIONS_TITLE", "🗓 Доступные периоды")
+    lines: List[str] = [title, ""]
+
+    sub_list = ", ".join(f"{days}{suffix}" for days in sorted(available_subscription)) or "—"
+    renew_list = ", ".join(f"{days}{suffix}" for days in sorted(available_renewal)) or "—"
+
+    lines.append(
+        texts.t(
+            "ADMIN_PRICING_SECTION_PERIOD_OPTIONS_SUB",
+            "Активные периоды подписки: {items}",
+        ).format(items=sub_list)
+    )
+    lines.append(
+        texts.t(
+            "ADMIN_PRICING_SECTION_PERIOD_OPTIONS_RENEW",
+            "Активные периоды продления: {items}",
+        ).format(items=renew_list)
+    )
+    lines.append("")
+    lines.append(
+        texts.t(
+            "ADMIN_PRICING_SECTION_PERIOD_OPTIONS_PROMPT",
+            "Нажмите на период, чтобы включить или выключить его отображение.",
+        )
+    )
+
+    keyboard_rows: List[List[types.InlineKeyboardButton]] = []
+
+    sub_buttons = []
+    for days in subscription_options:
+        icon = "✅" if days in available_subscription else "⚪️"
+        sub_buttons.append(
+            types.InlineKeyboardButton(
+                text=f"{icon} {days}{suffix}",
+                callback_data=f"admin_pricing_toggle_period:subscription:{days}",
+            )
+        )
+    for i in range(0, len(sub_buttons), 3):
+        keyboard_rows.append(sub_buttons[i : i + 3])
+
+    renew_buttons = []
+    for days in renewal_options:
+        icon = "✅" if days in available_renewal else "⚪️"
+        renew_buttons.append(
+            types.InlineKeyboardButton(
+                text=f"{icon} {days}{suffix}",
+                callback_data=f"admin_pricing_toggle_period:renewal:{days}",
+            )
+        )
+    for i in range(0, len(renew_buttons), 3):
+        keyboard_rows.append(renew_buttons[i : i + 3])
+
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="admin_pricing")])
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    return "\n".join(lines), keyboard
 
 
 def _build_overview(language: str) -> Tuple[str, types.InlineKeyboardMarkup]:
@@ -136,36 +528,98 @@ def _build_overview(language: str) -> Tuple[str, types.InlineKeyboardMarkup]:
     summary_periods = _build_period_summary(period_items, lang_code, fallback)
     summary_traffic = _build_traffic_summary(traffic_items, lang_code, fallback)
     summary_extra = _build_extra_summary(extra_items, fallback)
+    summary_trial = _format_trial_summary(lang_code)
+    summary_core = _format_core_summary(lang_code)
+    summary_period_options = _build_period_options_summary(lang_code)
 
-    text = (
-        f"💰 <b>{texts.t('ADMIN_PRICING_MENU_TITLE', 'Управление ценами')}</b>\n\n"
-        f"{texts.t('ADMIN_PRICING_MENU_DESCRIPTION', 'Быстрый доступ к тарифам и пакетам.')}\n\n"
-        f"<b>{texts.t('ADMIN_PRICING_MENU_SUMMARY', 'Краткая сводка:')}</b>\n"
-        f"{texts.t('ADMIN_PRICING_MENU_SUMMARY_PERIODS', '• Периоды: {summary}').format(summary=summary_periods)}\n"
-        f"{texts.t('ADMIN_PRICING_MENU_SUMMARY_TRAFFIC', '• Трафик: {summary}').format(summary=summary_traffic)}\n"
-        f"{texts.t('ADMIN_PRICING_MENU_SUMMARY_EXTRA', '• Дополнительно: {summary}').format(summary=summary_extra)}\n\n"
-        f"{texts.t('ADMIN_PRICING_MENU_PROMPT', 'Выберите раздел для редактирования:')}"
+    summary_pairs = [
+        (
+            "🎁",
+            texts.t("ADMIN_PRICING_MENU_SUMMARY_TRIAL_TITLE", "Триал"),
+            summary_trial,
+        ),
+        (
+            "⚙️",
+            texts.t("ADMIN_PRICING_MENU_SUMMARY_CORE_TITLE", "Базовые лимиты"),
+            summary_core,
+        ),
+        (
+            "🗓",
+            texts.t("ADMIN_PRICING_MENU_SUMMARY_PERIOD_OPTIONS_TITLE", "Выводимые периоды"),
+            summary_period_options,
+        ),
+        (
+            "💵",
+            texts.t("ADMIN_PRICING_MENU_SUMMARY_PERIODS_TITLE", "Стоимость периодов"),
+            summary_periods,
+        ),
+        (
+            "📦",
+            texts.t("ADMIN_PRICING_MENU_SUMMARY_TRAFFIC_TITLE", "Пакеты трафика"),
+            summary_traffic,
+        ),
+        (
+            "➕",
+            texts.t("ADMIN_PRICING_MENU_SUMMARY_EXTRA_TITLE", "Дополнительно"),
+            summary_extra,
+        ),
+    ]
+
+    overview_lines = [
+        f"💰 <b>{texts.t('ADMIN_PRICING_MENU_TITLE', 'Управление ценами')}</b>",
+        texts.t(
+            "ADMIN_PRICING_MENU_DESCRIPTION",
+            "Быстрый доступ к настройкам подписок и тарифов.",
+        ),
+        "",
+        f"<b>{texts.t('ADMIN_PRICING_MENU_SUMMARY', 'Краткая сводка')}</b>",
+    ]
+
+    for icon, title_label, summary in summary_pairs:
+        overview_lines.append(f"{icon} <b>{title_label}</b>")
+        overview_lines.append(f"{summary}")
+        overview_lines.append("")
+
+    overview_lines.append(
+        texts.t(
+            "ADMIN_PRICING_MENU_PROMPT",
+            "Выберите раздел ниже, чтобы изменить настройки:",
+        )
     )
+
+    text = "\n".join(overview_lines).strip()
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t("ADMIN_PRICING_BUTTON_PERIODS", "🗓 Периоды подписки"),
+                    text=texts.t("ADMIN_PRICING_BUTTON_TRIAL", "🎁 Пробный период"),
+                    callback_data="admin_pricing_section:trial",
+                ),
+                types.InlineKeyboardButton(
+                    text=texts.t("ADMIN_PRICING_BUTTON_CORE", "⚙️ Настройки тарифов"),
+                    callback_data="admin_pricing_section:core",
+                ),
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t("ADMIN_PRICING_BUTTON_PERIOD_OPTIONS", "🗓 Доступные периоды"),
+                    callback_data="admin_pricing_section:period_options",
+                ),
+                types.InlineKeyboardButton(
+                    text=texts.t("ADMIN_PRICING_BUTTON_PERIODS", "💵 Стоимость периодов"),
                     callback_data="admin_pricing_section:periods",
-                )
+                ),
             ],
             [
                 types.InlineKeyboardButton(
                     text=texts.t("ADMIN_PRICING_BUTTON_TRAFFIC", "📦 Пакеты трафика"),
                     callback_data="admin_pricing_section:traffic",
-                )
-            ],
-            [
+                ),
                 types.InlineKeyboardButton(
                     text=texts.t("ADMIN_PRICING_BUTTON_EXTRA", "➕ Дополнительно"),
                     callback_data="admin_pricing_section:extra",
-                )
+                ),
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data="admin_panel")],
         ]
@@ -187,6 +641,13 @@ def _build_section(
     elif section == "traffic":
         items = _get_traffic_items(lang_code)
         title = texts.t("ADMIN_PRICING_SECTION_TRAFFIC_TITLE", "📦 Пакеты трафика")
+    elif section == "extra":
+        items = _get_extra_items(lang_code)
+        title = texts.t("ADMIN_PRICING_SECTION_EXTRA_TITLE", "➕ Дополнительные опции")
+    elif section in SETTING_ENTRIES_BY_SECTION:
+        return _build_settings_section(section, language)
+    elif section == "period_options":
+        return _build_period_options_section(language)
     else:
         items = _get_extra_items(lang_code)
         title = texts.t("ADMIN_PRICING_SECTION_EXTRA_TITLE", "➕ Дополнительные опции")
@@ -273,6 +734,10 @@ def _parse_price_input(text: str) -> int:
 def _resolve_label(section: str, key: str, language: str) -> str:
     lang_code = _language_code(language)
 
+    entry = SETTING_ENTRY_BY_KEY.get(key)
+    if entry is not None:
+        return entry.label(lang_code)
+
     if section == "periods" and key.startswith("PRICE_") and key.endswith("_DAYS"):
         try:
             days = int(key.replace("PRICE_", "").replace("_DAYS", ""))
@@ -343,6 +808,7 @@ async def start_price_edit(
         pricing_key=key,
         pricing_section=section,
         pricing_message_id=callback.message.message_id,
+        pricing_mode="price",
     )
     await state.set_state(PricingStates.waiting_for_value)
 
@@ -368,7 +834,95 @@ async def start_price_edit(
     await callback.answer()
 
 
-async def process_price_input(
+@admin_required
+@error_handler
+async def start_setting_edit(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        _, section, key = callback.data.split(":", 2)
+    except ValueError:
+        await callback.answer()
+        return
+
+    entry = SETTING_ENTRY_BY_KEY.get(key)
+    texts = get_texts(db_user.language)
+    lang_code = _language_code(db_user.language)
+    label = entry.label(lang_code) if entry else key
+    current_value = bot_configuration_service.get_current_value(key)
+    formatted_current = bot_configuration_service.format_value_human(key, current_value)
+    guidance = bot_configuration_service.get_setting_guidance(key)
+
+    mode = "price" if entry and entry.action == "price" else "setting"
+
+    await state.update_data(
+        pricing_key=key,
+        pricing_section=section,
+        pricing_message_id=callback.message.message_id,
+        pricing_mode=mode,
+        pricing_label=label,
+    )
+    await state.set_state(PricingStates.waiting_for_value)
+
+    if mode == "price":
+        prompt = (
+            f"💰 <b>{texts.t('ADMIN_PRICING_EDIT_TITLE', 'Изменение цены')}</b>\n\n"
+            f"{texts.t('ADMIN_PRICING_EDIT_TARGET', 'Текущий тариф')}: <b>{label}</b>\n"
+            f"{texts.t('ADMIN_PRICING_EDIT_CURRENT', 'Текущее значение')}: <b>{settings.format_price(int(current_value or 0))}</b>\n\n"
+            f"{texts.t('ADMIN_PRICING_EDIT_PROMPT', 'Введите новую стоимость в рублях (например 990 или 990.50). Для бесплатного тарифа укажите 0.')}"
+        )
+    else:
+        description = guidance.get("description") or ""
+        format_hint = guidance.get("format") or ""
+        example = guidance.get("example") or "—"
+        warning = guidance.get("warning") or ""
+        prompt_parts = [
+            f"⚙️ <b>{texts.t('ADMIN_PRICING_SETTING_EDIT_TITLE', 'Настройка параметра')}</b>",
+            "",
+            f"{texts.t('ADMIN_PRICING_SETTING_PARAMETER', 'Параметр')}: <b>{label}</b>",
+            f"{texts.t('ADMIN_PRICING_SETTING_CURRENT', 'Текущее значение')}: <b>{formatted_current}</b>",
+        ]
+        if description:
+            prompt_parts.extend(["", description])
+        prompt_parts.extend(
+            [
+                "",
+                f"{texts.t('ADMIN_PRICING_SETTING_FORMAT', 'Формат ввода')}: {format_hint}",
+                f"{texts.t('ADMIN_PRICING_SETTING_EXAMPLE', 'Пример')}: {example}",
+            ]
+        )
+        if warning:
+            prompt_parts.append(f"{texts.t('ADMIN_PRICING_SETTING_WARNING', 'Важно')}: {warning}")
+        prompt_parts.extend(
+            [
+                "",
+                texts.t(
+                    'ADMIN_PRICING_SETTING_PROMPT',
+                    'Отправьте новое значение или напишите «Отмена». Для очистки используйте none.',
+                ),
+            ]
+        )
+        prompt = "\n".join(prompt_parts)
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t("ADMIN_PRICING_EDIT_CANCEL", "❌ Отмена"),
+                    callback_data=f"admin_pricing_section:{section}",
+                )
+            ]
+        ]
+    )
+
+    await _render_message(callback.message, prompt, keyboard)
+    await callback.answer()
+
+
+async def process_pricing_input(
     message: types.Message,
     state: FSMContext,
     db_user: User,
@@ -378,6 +932,8 @@ async def process_price_input(
     key = data.get("pricing_key")
     section = data.get("pricing_section", "periods")
     message_id = data.get("pricing_message_id")
+    mode = data.get("pricing_mode", "price")
+    stored_label = data.get("pricing_label")
 
     texts = get_texts(db_user.language)
 
@@ -401,27 +957,52 @@ async def process_price_input(
         await message.answer(texts.t("ADMIN_PRICING_EDIT_CANCELLED", "Изменения отменены."))
         return
 
-    try:
-        price_kopeks = _parse_price_input(raw_value)
-    except ValueError:
-        await message.answer(
-            texts.t(
-                "ADMIN_PRICING_EDIT_INVALID",
-                "Не удалось распознать цену. Укажите число в рублях (например 990 или 990.50).",
+    if mode == "price":
+        try:
+            new_value = _parse_price_input(raw_value)
+        except ValueError:
+            await message.answer(
+                texts.t(
+                    "ADMIN_PRICING_EDIT_INVALID",
+                    "Не удалось распознать цену. Укажите число в рублях (например 990 или 990.50).",
+                )
             )
-        )
-        return
+            return
+    else:
+        try:
+            new_value = bot_configuration_service.parse_user_value(key, raw_value)
+        except ValueError as error:
+            error_text = str(error) or texts.t(
+                "ADMIN_PRICING_SETTING_INVALID",
+                "Не удалось обновить параметр. Проверьте формат значения.",
+            )
+            await message.answer(error_text)
+            return
 
-    await bot_configuration_service.set_value(db, key, price_kopeks)
+    await bot_configuration_service.set_value(db, key, new_value)
     await db.commit()
 
-    label = _resolve_label(section, key, db_user.language)
-    await message.answer(
-        texts.t("ADMIN_PRICING_EDIT_SUCCESS", "Цена для {item} обновлена: {price}").format(
-            item=label,
-            price=settings.format_price(price_kopeks),
+    if mode == "price":
+        label = _resolve_label(section, key, db_user.language)
+        await message.answer(
+            texts.t("ADMIN_PRICING_EDIT_SUCCESS", "Цена для {item} обновлена: {price}").format(
+                item=label,
+                price=settings.format_price(int(new_value)),
+            )
         )
-    )
+    else:
+        entry = SETTING_ENTRY_BY_KEY.get(key)
+        lang_code = _language_code(db_user.language)
+        label = entry.label(lang_code) if entry else (stored_label or key)
+        formatted_value = bot_configuration_service.format_value_human(
+            key, bot_configuration_service.get_current_value(key)
+        )
+        await message.answer(
+            texts.t(
+                "ADMIN_PRICING_SETTING_SUCCESS",
+                "Параметр {label} обновлен: {value}",
+            ).format(label=label, value=formatted_value)
+        )
 
     await state.clear()
 
@@ -434,6 +1015,155 @@ async def process_price_input(
             section_text,
             section_keyboard,
         )
+
+
+@admin_required
+@error_handler
+async def toggle_setting(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        _, section, key = callback.data.split(":", 2)
+    except ValueError:
+        await callback.answer()
+        return
+
+    entry = SETTING_ENTRY_BY_KEY.get(key)
+    if not entry or entry.action != "toggle":
+        await callback.answer()
+        return
+
+    current = _is_truthy(bot_configuration_service.get_current_value(key))
+    new_value = not current
+    await bot_configuration_service.set_value(db, key, new_value)
+    await db.commit()
+
+    status_text = (
+        texts.t("ADMIN_PRICING_SETTING_STATE_ENABLED_SHORT", "Включено")
+        if new_value
+        else texts.t("ADMIN_PRICING_SETTING_STATE_DISABLED_SHORT", "Выключено")
+    )
+    await callback.answer(status_text, show_alert=False)
+
+    text, keyboard = _build_section(section, db_user.language)
+    await _render_message(callback.message, text, keyboard)
+
+
+@admin_required
+@error_handler
+async def select_setting_choice(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        _, section, key, value_raw = callback.data.split(":", 3)
+    except ValueError:
+        await callback.answer()
+        return
+
+    entry = SETTING_ENTRY_BY_KEY.get(key)
+    if not entry or entry.action != "choice" or not entry.choices:
+        await callback.answer()
+        return
+
+    target_option = None
+    for option in entry.choices:
+        if str(option.value) == value_raw:
+            target_option = option
+            break
+
+    if target_option is None:
+        await callback.answer()
+        return
+
+    texts = get_texts(db_user.language)
+    current_value = bot_configuration_service.get_current_value(key)
+    if current_value == target_option.value:
+        await callback.answer(
+            texts.t(
+                "ADMIN_PRICING_CHOICE_ALREADY",
+                "Это значение уже активно.",
+            )
+        )
+        return
+
+    await bot_configuration_service.set_value(db, key, target_option.value)
+    await db.commit()
+
+    lang_code = _language_code(db_user.language)
+    await callback.answer(
+        texts.t(
+            "ADMIN_PRICING_CHOICE_UPDATED",
+            "Выбрано: {label}",
+        ).format(label=target_option.label(lang_code))
+    )
+
+    text, keyboard = _build_section(section, db_user.language)
+    await _render_message(callback.message, text, keyboard)
+
+
+@admin_required
+@error_handler
+async def toggle_period_option(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        _, target, value_raw = callback.data.split(":", 2)
+        days = int(value_raw)
+    except (ValueError, TypeError):
+        await callback.answer()
+        return
+
+    texts = get_texts(db_user.language)
+
+    if target == "subscription":
+        current = set(settings.get_available_subscription_periods())
+        options = {14, 30, 60, 90, 180, 360}
+        setting_key = "AVAILABLE_SUBSCRIPTION_PERIODS"
+    elif target == "renewal":
+        current = set(settings.get_available_renewal_periods())
+        options = {30, 60, 90, 180, 360}
+        setting_key = "AVAILABLE_RENEWAL_PERIODS"
+    else:
+        await callback.answer()
+        return
+
+    if days not in options:
+        await callback.answer()
+        return
+
+    if days in current:
+        if len(current) == 1:
+            await callback.answer(
+                texts.t(
+                    "ADMIN_PRICING_PERIOD_MIN",
+                    "Должен оставаться хотя бы один период.",
+                ),
+                show_alert=True,
+            )
+            return
+        current.remove(days)
+        action_text = texts.t("ADMIN_PRICING_PERIOD_DISABLED", "Период отключен.")
+    else:
+        current.add(days)
+        action_text = texts.t("ADMIN_PRICING_PERIOD_ENABLED", "Период включен.")
+
+    new_value = ",".join(str(item) for item in sorted(current))
+    await bot_configuration_service.set_value(db, setting_key, new_value)
+    await db.commit()
+
+    await callback.answer(action_text)
+
+    text, keyboard = _build_period_options_section(db_user.language)
+    await _render_message(callback.message, text, keyboard)
 
 
 def register_handlers(dp: Dispatcher) -> None:
@@ -449,7 +1179,23 @@ def register_handlers(dp: Dispatcher) -> None:
         start_price_edit,
         F.data.startswith("admin_pricing_edit:"),
     )
+    dp.callback_query.register(
+        start_setting_edit,
+        F.data.startswith("admin_pricing_setting:"),
+    )
+    dp.callback_query.register(
+        toggle_setting,
+        F.data.startswith("admin_pricing_toggle:"),
+    )
+    dp.callback_query.register(
+        select_setting_choice,
+        F.data.startswith("admin_pricing_choice:"),
+    )
+    dp.callback_query.register(
+        toggle_period_option,
+        F.data.startswith("admin_pricing_toggle_period:"),
+    )
     dp.message.register(
-        process_price_input,
+        process_pricing_input,
         PricingStates.waiting_for_value,
     )
