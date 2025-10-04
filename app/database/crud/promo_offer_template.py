@@ -10,6 +10,36 @@ from app.config import settings
 from app.database.models import PromoOfferTemplate
 
 
+UPDATED_TEMPLATE_MESSAGES = {
+    "extend_discount": (
+        "💎 Экономия {discount_percent}% при продлении\n\n"
+        "Скидка суммируется с промогруппой и действует один раз.\n"
+        "Срок действия предложения — {valid_hours} ч."
+    ),
+    "purchase_discount": (
+        "🎯 Вернитесь со скидкой {discount_percent}%\n\n"
+        "Скидка суммируется с промогруппой и действует один раз.\n"
+        "Предложение действует {valid_hours} ч."
+    ),
+}
+
+
+LEGACY_TEMPLATE_MESSAGES = {
+    "extend_discount": (
+        "💎 <b>Экономия {discount_percent}% при продлении</b>\n\n"
+        "Активируйте предложение и получите дополнительную скидку на оплату продления. "
+        "Она суммируется с вашими промогрупповыми скидками и действует один раз.\n"
+        "Срок действия предложения — {valid_hours} ч."
+    ),
+    "purchase_discount": (
+        "🎯 <b>Вернитесь со скидкой {discount_percent}%</b>\n\n"
+        "После активации мы применим дополнительную скидку к вашей следующей оплате подписки. "
+        "Скидка суммируется с промогруппой и действует один раз.\n"
+        "Предложение действует {valid_hours} ч."
+    ),
+}
+
+
 DEFAULT_TEMPLATES: tuple[dict, ...] = (
     {
         "offer_type": "test_access",
@@ -29,12 +59,7 @@ DEFAULT_TEMPLATES: tuple[dict, ...] = (
     {
         "offer_type": "extend_discount",
         "name": "Скидка на продление",
-        "message_text": (
-            "💎 <b>Экономия {discount_percent}% при продлении</b>\n\n"
-            "Активируйте предложение и получите дополнительную скидку на оплату продления. "
-            "Она суммируется с вашими промогрупповыми скидками и действует один раз.\n"
-            "Срок действия предложения — {valid_hours} ч."
-        ),
+        "message_text": UPDATED_TEMPLATE_MESSAGES["extend_discount"],
         "button_text": "🎁 Получить скидку",
         "valid_hours": 24,
         "discount_percent": 20,
@@ -45,12 +70,7 @@ DEFAULT_TEMPLATES: tuple[dict, ...] = (
     {
         "offer_type": "purchase_discount",
         "name": "Скидка на покупку",
-        "message_text": (
-            "🎯 <b>Вернитесь со скидкой {discount_percent}%</b>\n\n"
-            "После активации мы применим дополнительную скидку к вашей следующей оплате подписки. "
-            "Скидка суммируется с промогруппой и действует один раз.\n"
-            "Предложение действует {valid_hours} ч."
-        ),
+        "message_text": UPDATED_TEMPLATE_MESSAGES["purchase_discount"],
         "button_text": "🎁 Забрать скидку",
         "valid_hours": 48,
         "discount_percent": 25,
@@ -80,6 +100,21 @@ async def ensure_default_templates(db: AsyncSession, *, created_by: Optional[int
         )
         existing = result.scalars().first()
         if existing:
+            new_message = UPDATED_TEMPLATE_MESSAGES.get(template_data["offer_type"])
+            legacy_message = LEGACY_TEMPLATE_MESSAGES.get(template_data["offer_type"])
+            should_update = False
+
+            if new_message and legacy_message and existing.message_text == legacy_message:
+                should_update = True
+            elif new_message and (
+                "{bonus_amount" in existing.message_text or "Мы начислим" in existing.message_text
+            ):
+                should_update = True
+
+            if should_update and new_message:
+                existing.message_text = new_message
+                existing.updated_at = datetime.utcnow()
+                await db.flush()
             templates.append(existing)
             continue
 

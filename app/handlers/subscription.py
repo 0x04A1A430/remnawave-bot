@@ -133,18 +133,6 @@ def _apply_promo_offer_discount(user: Optional[User], amount: int) -> Dict[str, 
     return {"discounted": discounted, "discount": discount_value, "percent": percent}
 
 
-async def _consume_promo_offer_discount(db: AsyncSession, user: User) -> None:
-    if _get_promo_offer_discount_percent(user) <= 0:
-        return
-
-    user.promo_offer_discount_percent = 0
-    user.promo_offer_discount_source = None
-    user.updated_at = datetime.utcnow()
-
-    await db.commit()
-    await db.refresh(user)
-
-
 def _get_period_hint_from_subscription(subscription: Optional[Subscription]) -> Optional[int]:
     if not subscription:
         return None
@@ -2891,8 +2879,11 @@ async def confirm_extend_subscription(
 
     try:
         success = await subtract_user_balance(
-            db, db_user, price,
-            f"Продление подписки на {days} дней"
+            db,
+            db_user,
+            price,
+            f"Продление подписки на {days} дней",
+            consume_promo_offer=promo_component["discount"] > 0,
         )
 
         if not success:
@@ -2988,9 +2979,6 @@ async def confirm_extend_subscription(
                 f" (включая доп. скидку {promo_component['percent']}%:"
                 f" -{texts.format_price(promo_component['discount'])})"
             )
-
-        if promo_component["discount"] > 0:
-            await _consume_promo_offer_discount(db, db_user)
 
         await callback.message.edit_text(
             success_message,
@@ -3760,8 +3748,11 @@ async def confirm_purchase(
 
     try:
         success = await subtract_user_balance(
-            db, db_user, final_price,
-            f"Покупка подписки на {data['period_days']} дней"
+            db,
+            db_user,
+            final_price,
+            f"Покупка подписки на {data['period_days']} дней",
+            consume_promo_offer=promo_offer_discount_value > 0,
         )
 
         if not success:
@@ -4043,9 +4034,6 @@ async def confirm_purchase(
                                           callback_data="back_to_menu")],
                 ])
 
-            if promo_offer_discount_value > 0:
-                await _consume_promo_offer_discount(db, db_user)
-
             await callback.message.edit_text(
                 success_text,
                 reply_markup=connect_keyboard,
@@ -4055,9 +4043,6 @@ async def confirm_purchase(
             purchase_text = texts.SUBSCRIPTION_PURCHASED
             if discount_note:
                 purchase_text = f"{purchase_text}\n\n{discount_note}"
-            if promo_offer_discount_value > 0:
-                await _consume_promo_offer_discount(db, db_user)
-
             await callback.message.edit_text(
                 texts.t(
                     "SUBSCRIPTION_LINK_GENERATING_NOTICE",

@@ -113,7 +113,7 @@ def _build_offer_detail_keyboard(template: PromoOfferTemplate, language: str) ->
         InlineKeyboardButton(text="📬 Отправить", callback_data=f"promo_offer_send_menu_{template.id}"),
     ])
     rows.append([
-        InlineKeyboardButton(text=texts.BACK, callback_data="admin_messages"),
+        InlineKeyboardButton(text=texts.BACK, callback_data="admin_promo_offers"),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

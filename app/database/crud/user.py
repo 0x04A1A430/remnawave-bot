@@ -273,6 +273,8 @@ async def subtract_user_balance(
     description: str,
     create_transaction: bool = False,
     payment_method: Optional[PaymentMethod] = None,
+    *,
+    consume_promo_offer: bool = False,
 ) -> bool:
     logger.error(f"💸 ОТЛАДКА subtract_user_balance:")
     logger.error(f"   👤 User ID: {user.id} (TG: {user.telegram_id})")
@@ -287,6 +289,11 @@ async def subtract_user_balance(
     try:
         old_balance = user.balance_kopeks
         user.balance_kopeks -= amount_kopeks
+
+        if consume_promo_offer and getattr(user, "promo_offer_discount_percent", 0):
+            user.promo_offer_discount_percent = 0
+            user.promo_offer_discount_source = None
+
         user.updated_at = datetime.utcnow()
         
         await db.commit()
