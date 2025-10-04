@@ -17,6 +17,10 @@ from app.database.crud.discount_offer import (
     deactivate_expired_offers,
     upsert_discount_offer,
 )
+from app.database.crud.promo_offer import (
+    get_expired_test_activations,
+    mark_activation_revoked,
+)
 from app.database.crud.notification import (
     clear_notification_by_type,
     notification_sent,
@@ -185,6 +189,7 @@ class MonitoringService:
                 await self._check_trial_inactivity_notifications(db)
                 await self._check_trial_channel_subscriptions(db)
                 await self._check_expired_subscription_followups(db)
+                await self._cleanup_expired_test_offers(db)
                 await self._process_autopayments(db)
                 await self._cleanup_inactive_users(db)
                 await self._sync_with_remnawave(db)
@@ -750,6 +755,47 @@ class MonitoringService:
 
         except Exception as e:
             logger.error(f"Ошибка проверки напоминаний об истекшей подписке: {e}")
+
+    async def _cleanup_expired_test_offers(self, db: AsyncSession):
+        try:
+            expired_activations = await get_expired_test_activations(db, now=datetime.utcnow())
+            if not expired_activations:
+                return
+
+            subscription_service = SubscriptionService()
+            cleaned = 0
+
+            for activation in expired_activations:
+                payload = activation.payload or {}
+                added_squads = payload.get("added_squads") or []
+                subscription = activation.subscription
+
+                if subscription and added_squads:
+                    current_squads = list(subscription.connected_squads or [])
+                    updated_squads = [uuid for uuid in current_squads if uuid not in added_squads]
+
+                    if len(updated_squads) != len(current_squads):
+                        subscription.connected_squads = updated_squads
+                        subscription.updated_at = datetime.utcnow()
+                        await db.commit()
+
+                        try:
+                            await subscription_service.update_remnawave_user(db, subscription)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(
+                                "⚠️ Не удалось обновить RemnaWave после завершения тестового доступа подписки %s: %s",
+                                subscription.id,
+                                exc,
+                            )
+
+                await mark_activation_revoked(db, activation)
+                cleaned += 1
+
+            if cleaned:
+                logger.info("🧹 Завершено %s тестовых доступов к серверам", cleaned)
+
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Ошибка очистки истекших тестовых предложений: %s", exc)
 
     async def _get_expiring_paid_subscriptions(self, db: AsyncSession, days_before: int) -> List[Subscription]:
         current_time = datetime.utcnow()
