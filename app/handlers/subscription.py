@@ -16,7 +16,7 @@ from app.database.crud.subscription import (
     update_subscription_autopay
 )
 from app.database.crud.transaction import create_transaction
-from app.database.crud.user import subtract_user_balance, add_user_balance
+from app.database.crud.user import subtract_user_balance
 from app.database.models import (
     User, TransactionType, SubscriptionStatus,
     Subscription
@@ -109,6 +109,40 @@ def _apply_addon_discount(
         "discount": discount_value,
         "percent": percent,
     }
+
+
+def _get_promo_offer_discount_percent(user: Optional[User]) -> int:
+    if not user:
+        return 0
+
+    try:
+        percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+    return max(0, min(100, percent))
+
+
+def _apply_promo_offer_discount(user: Optional[User], amount: int) -> Dict[str, int]:
+    percent = _get_promo_offer_discount_percent(user)
+
+    if amount <= 0 or percent <= 0:
+        return {"discounted": amount, "discount": 0, "percent": 0}
+
+    discounted, discount_value = apply_percentage_discount(amount, percent)
+    return {"discounted": discounted, "discount": discount_value, "percent": percent}
+
+
+async def _consume_promo_offer_discount(db: AsyncSession, user: User) -> None:
+    if _get_promo_offer_discount_percent(user) <= 0:
+        return
+
+    user.promo_offer_discount_percent = 0
+    user.promo_offer_discount_source = None
+    user.updated_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(user)
 
 
 def _get_period_hint_from_subscription(subscription: Optional[Subscription]) -> Optional[int]:
@@ -246,7 +280,20 @@ async def _prepare_subscription_summary(
     if not is_valid:
         raise ValueError("Subscription price calculation validation failed")
 
+    original_total_price = total_price
+    promo_offer_component = _apply_promo_offer_discount(db_user, total_price)
+    if promo_offer_component["discount"] > 0:
+        total_price = promo_offer_component["discounted"]
+
     summary_data['total_price'] = total_price
+    if promo_offer_component["discount"] > 0:
+        summary_data['promo_offer_discount_percent'] = promo_offer_component["percent"]
+        summary_data['promo_offer_discount_value'] = promo_offer_component["discount"]
+        summary_data['total_price_before_promo_offer'] = original_total_price
+    else:
+        summary_data.pop('promo_offer_discount_percent', None)
+        summary_data.pop('promo_offer_discount_value', None)
+        summary_data.pop('total_price_before_promo_offer', None)
     summary_data['server_prices_for_period'] = selected_server_prices
     summary_data['months_in_period'] = months_in_period
     summary_data['base_price'] = base_price
@@ -329,6 +376,17 @@ async def _prepare_subscription_summary(
                 f" -{texts.format_price(devices_component['discount_total'])})"
             )
         details_lines.append(devices_line)
+
+    if promo_offer_component["discount"] > 0:
+        details_lines.append(
+            texts.t(
+                "SUBSCRIPTION_SUMMARY_PROMO_DISCOUNT",
+                "- Промо-предложение: -{amount} ({percent}% дополнительно)",
+            ).format(
+                amount=texts.format_price(promo_offer_component["discount"]),
+                percent=promo_offer_component["percent"],
+            )
+        )
 
     details_text = "\n".join(details_lines)
 
@@ -2374,6 +2432,7 @@ async def handle_extend_subscription(
 
     available_periods = settings.get_available_renewal_periods()
     renewal_prices = {}
+    promo_offer_percent = _get_promo_offer_discount_percent(db_user)
 
     for days in available_periods:
         try:
@@ -2419,7 +2478,8 @@ async def handle_extend_subscription(
             total_traffic_price = (traffic_price_per_month - traffic_discount_per_month) * months_in_period
 
             price = base_price + total_servers_price + total_devices_price + total_traffic_price
-            renewal_prices[days] = price
+            promo_component = _apply_promo_offer_discount(db_user, price)
+            renewal_prices[days] = promo_component["discounted"]
 
         except Exception as e:
             logger.error(f"Ошибка расчета цены для периода {days}: {e}")
@@ -2455,6 +2515,15 @@ async def handle_extend_subscription(
 
     if promo_discounts_text:
         message_text += f"{promo_discounts_text}\n\n"
+
+    if promo_offer_percent > 0:
+        message_text += (
+            texts.t(
+                "SUBSCRIPTION_PROMO_DISCOUNT_HINT",
+                "⚡ Доп. скидка {percent}% активирована и будет применена автоматически. Суммируется с промогруппой.",
+            ).format(percent=promo_offer_percent)
+            + "\n\n"
+        )
 
     message_text += "💡 <i>Цена включает все ваши текущие серверы и настройки</i>"
 
@@ -2720,13 +2789,17 @@ async def confirm_extend_subscription(
         total_traffic_price = discounted_traffic_price_per_month * months_in_period
 
         price = base_price + total_servers_price + total_devices_price + total_traffic_price
+        original_price = price
+        promo_component = _apply_promo_offer_discount(db_user, price)
+        if promo_component["discount"] > 0:
+            price = promo_component["discounted"]
 
         monthly_additions = (
                 discounted_servers_price_per_month
                 + discounted_devices_price_per_month
                 + discounted_traffic_price_per_month
         )
-        is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, price)
+        is_valid = validate_pricing_calculation(base_price, monthly_additions, months_in_period, original_price)
 
         if not is_valid:
             logger.error(f"Ошибка в расчете цены продления для пользователя {db_user.telegram_id}")
@@ -2773,6 +2846,12 @@ async def confirm_extend_subscription(
                     if traffic_discount_percent > 0 and traffic_discount_per_month > 0
                     else ""
                 )
+            )
+        if promo_component["discount"] > 0:
+            logger.info(
+                "   🎯 Промо-предложение: -%s₽ (%s%%)",
+                promo_component["discount"] / 100,
+                promo_component["percent"],
             )
         logger.info(f"   💎 ИТОГО: {price / 100}₽")
 
@@ -2903,6 +2982,15 @@ async def confirm_extend_subscription(
             f"Действует до: {refreshed_end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
             f"💰 Списано: {texts.format_price(price)}"
         )
+
+        if promo_component["discount"] > 0:
+            success_message += (
+                f" (включая доп. скидку {promo_component['percent']}%:"
+                f" -{texts.format_price(promo_component['discount'])})"
+            )
+
+        if promo_component["discount"] > 0:
+            await _consume_promo_offer_discount(db, db_user)
 
         await callback.message.edit_text(
             success_message,
@@ -3550,7 +3638,26 @@ async def confirm_purchase(
 
     total_servers_price = data.get('total_servers_price', total_countries_price)
 
-    final_price = data['total_price']
+    cached_total_price = data['total_price']
+    cached_promo_discount_value = data.get('promo_offer_discount_value', 0)
+
+    validation_total_price = data.get('total_price_before_promo_offer')
+    if validation_total_price is None and cached_promo_discount_value > 0:
+        validation_total_price = cached_total_price + cached_promo_discount_value
+    if validation_total_price is None:
+        validation_total_price = cached_total_price
+
+    current_promo_offer_percent = _get_promo_offer_discount_percent(db_user)
+    if current_promo_offer_percent > 0:
+        final_price, promo_offer_discount_value = apply_percentage_discount(
+            validation_total_price,
+            current_promo_offer_percent,
+        )
+        promo_offer_discount_percent = current_promo_offer_percent
+    else:
+        final_price = validation_total_price
+        promo_offer_discount_value = 0
+        promo_offer_discount_percent = 0
 
     discounted_monthly_additions = data.get(
         'discounted_monthly_additions',
@@ -3563,7 +3670,7 @@ async def confirm_purchase(
         base_price,
         discounted_monthly_additions,
         months_in_period,
-        final_price,
+        validation_total_price,
     )
 
     if not is_valid:
@@ -3612,6 +3719,12 @@ async def confirm_purchase(
                 f" -{devices_discount_total / 100}₽)"
             )
         logger.info(message)
+    if promo_offer_discount_value > 0:
+        logger.info(
+            "   🎯 Промо-предложение: -%s₽ (%s%%)",
+            promo_offer_discount_value / 100,
+            promo_offer_discount_percent,
+        )
     logger.info(f"   ИТОГО: {final_price / 100}₽")
 
     if db_user.balance_kopeks < final_price:
@@ -3811,6 +3924,16 @@ async def confirm_purchase(
         subscription_link = get_display_subscription_link(subscription)
         hide_subscription_link = settings.should_hide_subscription_link()
 
+        discount_note = ""
+        if promo_offer_discount_value > 0:
+            discount_note = texts.t(
+                "SUBSCRIPTION_PROMO_DISCOUNT_NOTE",
+                "⚡ Доп. скидка {percent}%: -{amount}",
+            ).format(
+                percent=promo_offer_discount_percent,
+                amount=texts.format_price(promo_offer_discount_value),
+            )
+
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
                 success_text = (
@@ -3849,6 +3972,9 @@ async def confirm_purchase(
                     f"{import_link_section}\n\n"
                     f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
                 )
+
+            if discount_note:
+                success_text = f"{success_text}\n\n{discount_note}"
 
             connect_mode = settings.CONNECT_BUTTON_MODE
 
@@ -3917,17 +4043,26 @@ async def confirm_purchase(
                                           callback_data="back_to_menu")],
                 ])
 
+            if promo_offer_discount_value > 0:
+                await _consume_promo_offer_discount(db, db_user)
+
             await callback.message.edit_text(
                 success_text,
                 reply_markup=connect_keyboard,
                 parse_mode="HTML"
             )
         else:
+            purchase_text = texts.SUBSCRIPTION_PURCHASED
+            if discount_note:
+                purchase_text = f"{purchase_text}\n\n{discount_note}"
+            if promo_offer_discount_value > 0:
+                await _consume_promo_offer_discount(db, db_user)
+
             await callback.message.edit_text(
                 texts.t(
                     "SUBSCRIPTION_LINK_GENERATING_NOTICE",
                     "{purchase_text}\n\nСсылка генерируется, перейдите в раздел 'Моя подписка' через несколько секунд.",
-                ).format(purchase_text=texts.SUBSCRIPTION_PURCHASED),
+                ).format(purchase_text=purchase_text),
                 reply_markup=get_back_keyboard(db_user.language)
             )
 
@@ -5053,7 +5188,9 @@ async def claim_discount_offer(
         )
         return
 
-    effect_type = (offer.effect_type or "balance_bonus").lower()
+    effect_type = (offer.effect_type or "percent_discount").lower()
+    if effect_type == "balance_bonus":
+        effect_type = "percent_discount"
 
     if effect_type == "test_access":
         success, added_squads, expires_at, error_code = await promo_offer_service.grant_test_access(
@@ -5094,30 +5231,25 @@ async def claim_discount_offer(
         await callback.message.answer(success_message)
         return
 
-    bonus_amount = offer.bonus_amount_kopeks or 0
-    if bonus_amount > 0:
-        success = await add_user_balance(
-            db,
-            db_user,
-            bonus_amount,
-            texts.get("DISCOUNT_BONUS_DESCRIPTION", "Скидка за продление подписки"),
+    discount_percent = int(offer.discount_percent or 0)
+    if discount_percent <= 0:
+        await callback.answer(
+            texts.get("DISCOUNT_CLAIM_ERROR", "❌ Не удалось активировать скидку. Попробуйте позже."),
+            show_alert=True,
         )
-        if not success:
-            await callback.answer(
-                texts.get("DISCOUNT_CLAIM_ERROR", "❌ Не удалось начислить скидку. Попробуйте позже."),
-                show_alert=True,
-            )
-            return
+        return
+
+    db_user.promo_offer_discount_percent = discount_percent
+    db_user.promo_offer_discount_source = offer.notification_type
+    db_user.updated_at = now
 
     await mark_offer_claimed(db, offer)
+    await db.refresh(db_user)
 
     success_message = texts.get(
         "DISCOUNT_CLAIM_SUCCESS",
-        "🎉 Скидка {percent}% активирована! На баланс начислено {amount}.",
-    ).format(
-        percent=offer.discount_percent,
-        amount=settings.format_price(bonus_amount),
-    )
+        "🎉 Скидка {percent}% активирована! Она автоматически применится при следующей оплате.",
+    ).format(percent=discount_percent)
 
     await callback.answer("✅ Скидка активирована!", show_alert=True)
     await callback.message.answer(success_message)
