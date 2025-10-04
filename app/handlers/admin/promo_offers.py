@@ -4,12 +4,13 @@ import logging
 import re
 from typing import List, Optional, Sequence, Tuple
 
-from aiogram import Dispatcher, F
+from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.discount_offer import upsert_discount_offer
 from app.database.crud.server_squad import (
     get_all_server_squads,
@@ -24,9 +25,11 @@ from app.database.crud.promo_offer_template import (
 )
 from app.database.crud.user import get_users_for_promo_segment
 from app.database.models import PromoOfferTemplate, User
+from app.keyboards.inline import get_happ_download_button_row
 from app.localization.texts import get_texts
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
+from app.utils.subscription_utils import get_display_subscription_link
 
 logger = logging.getLogger(__name__)
 
@@ -599,6 +602,64 @@ async def show_send_segments(callback: CallbackQuery, db_user: User, db: AsyncSe
     await callback.answer()
 
 
+def _build_connect_button_rows(user: User, texts) -> List[List[InlineKeyboardButton]]:
+    subscription = getattr(user, "subscription", None)
+    if not subscription:
+        return []
+
+    button_text = texts.t("CONNECT_BUTTON", "🔗 Подключиться")
+    subscription_link = get_display_subscription_link(subscription)
+    connect_mode = settings.CONNECT_BUTTON_MODE
+
+    def _fallback_button() -> InlineKeyboardButton:
+        return InlineKeyboardButton(text=button_text, callback_data="subscription_connect")
+
+    rows: List[List[InlineKeyboardButton]] = []
+
+    if connect_mode == "miniapp_subscription":
+        if subscription_link:
+            rows.append([
+                InlineKeyboardButton(
+                    text=button_text,
+                    web_app=types.WebAppInfo(url=subscription_link),
+                )
+            ])
+        else:
+            rows.append([_fallback_button()])
+    elif connect_mode == "miniapp_custom":
+        if settings.MINIAPP_CUSTOM_URL:
+            rows.append([
+                InlineKeyboardButton(
+                    text=button_text,
+                    web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
+                )
+            ])
+        else:
+            rows.append([_fallback_button()])
+    elif connect_mode == "link":
+        if subscription_link:
+            rows.append([
+                InlineKeyboardButton(text=button_text, url=subscription_link)
+            ])
+        else:
+            rows.append([_fallback_button()])
+    elif connect_mode == "happ_cryptolink":
+        if subscription_link:
+            rows.append([
+                InlineKeyboardButton(text=button_text, callback_data="open_subscription_link")
+            ])
+        else:
+            rows.append([_fallback_button()])
+    else:
+        rows.append([_fallback_button()])
+
+    happ_row = get_happ_download_button_row(texts)
+    if happ_row:
+        rows.append(happ_row)
+
+    return rows
+
+
 @admin_required
 @error_handler
 async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: AsyncSession):
@@ -669,9 +730,29 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
                 },
             )
 
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            user_texts = get_texts(user.language or db_user.language)
+            keyboard_rows: List[List[InlineKeyboardButton]] = [
                 [InlineKeyboardButton(text=template.button_text, callback_data=f"claim_discount_{offer_record.id}")]
-            ])
+            ]
+
+            if template.offer_type == "purchase_discount":
+                keyboard_rows.append([
+                    InlineKeyboardButton(
+                        text=user_texts.t("ADMIN_PROMO_OFFER_CTA_BUY", "Купить подписку"),
+                        callback_data="menu_buy",
+                    )
+                ])
+            elif template.offer_type == "extend_discount":
+                keyboard_rows.append([
+                    InlineKeyboardButton(
+                        text=user_texts.t("ADMIN_PROMO_OFFER_CTA_EXTEND", "Продлить подписку"),
+                        callback_data="subscription_extend",
+                    )
+                ])
+            elif template.offer_type == "test_access":
+                keyboard_rows.extend(_build_connect_button_rows(user, user_texts))
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
             message_text = _render_template_text(
                 template,
@@ -702,20 +783,28 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
             "Пропущено: {skipped} (уже есть доступ)",
         ).format(skipped=skipped)
     refreshed = await get_promo_offer_template_by_id(db, template.id)
+    result_keyboard_rows: List[List[InlineKeyboardButton]] = []
+
     if refreshed:
-        refreshed_uuid, refreshed_name = await _resolve_template_squad(db, refreshed)
-        description = _describe_offer(
-            refreshed,
-            db_user.language,
-            server_name=refreshed_name,
-            server_uuid=refreshed_uuid,
+        result_keyboard_rows.append([
+            InlineKeyboardButton(
+                text=texts.t("ADMIN_PROMO_OFFER_BACK_TO_TEMPLATE", "↩️ К предложению"),
+                callback_data=f"promo_offer_{refreshed.id}",
+            )
+        ])
+
+    result_keyboard_rows.append([
+        InlineKeyboardButton(
+            text=texts.t("ADMIN_PROMO_OFFER_BACK_TO_LIST", "⬅️ К промопредложениям"),
+            callback_data="admin_promo_offers",
         )
-        await callback.message.edit_text(
-            description,
-            reply_markup=_build_offer_detail_keyboard(refreshed, db_user.language),
-            parse_mode="HTML",
-        )
-    await callback.message.answer(summary)
+    ])
+
+    await callback.message.edit_text(
+        summary,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=result_keyboard_rows),
+        parse_mode="HTML",
+    )
 
 
 async def process_edit_message_text(message: Message, state: FSMContext, db: AsyncSession, db_user: User):
