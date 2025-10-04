@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timedelta
+from typing import List, Optional, Sequence, Tuple
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.database.models import (
+    DiscountOffer,
+    Subscription,
+    SubscriptionTemporaryAccess,
+    User,
+)
+from app.services.subscription_service import SubscriptionService
+
+logger = logging.getLogger(__name__)
+
+
+class PromoOfferService:
+    def __init__(self) -> None:
+        self.subscription_service = SubscriptionService()
+
+    async def grant_test_access(
+        self,
+        db: AsyncSession,
+        user: User,
+        offer: DiscountOffer,
+    ) -> Tuple[bool, Optional[List[str]], Optional[datetime], str]:
+        subscription = getattr(user, "subscription", None)
+        if not subscription:
+            return False, None, None, "subscription_missing"
+
+        payload = offer.extra_data or {}
+        squad_uuids: Sequence[str] = payload.get("test_squad_uuids") or payload.get("squads") or []
+        if not squad_uuids:
+            return False, None, None, "squads_missing"
+
+        try:
+            duration_hours = int(payload.get("test_duration_hours") or payload.get("duration_hours") or 24)
+        except (TypeError, ValueError):
+            duration_hours = 24
+
+        if duration_hours <= 0:
+            duration_hours = 24
+
+        now = datetime.utcnow()
+        expires_at = now + timedelta(hours=duration_hours)
+
+        connected = set(subscription.connected_squads or [])
+        newly_added: List[str] = []
+
+        for squad_uuid in squad_uuids:
+            normalized_uuid = str(squad_uuid)
+            existing_result = await db.execute(
+                select(SubscriptionTemporaryAccess)
+                .where(
+                    SubscriptionTemporaryAccess.offer_id == offer.id,
+                    SubscriptionTemporaryAccess.squad_uuid == normalized_uuid,
+                )
+                .order_by(SubscriptionTemporaryAccess.id.desc())
+            )
+            existing_access = existing_result.scalars().first()
+            if existing_access and existing_access.is_active:
+                existing_access.expires_at = expires_at
+                continue
+
+            was_already_connected = normalized_uuid in connected
+            if not was_already_connected:
+                connected.add(normalized_uuid)
+                newly_added.append(normalized_uuid)
+
+            access_entry = SubscriptionTemporaryAccess(
+                subscription_id=subscription.id,
+                offer_id=offer.id,
+                squad_uuid=normalized_uuid,
+                expires_at=expires_at,
+                is_active=True,
+                was_already_connected=was_already_connected,
+            )
+            db.add(access_entry)
+
+        if newly_added:
+            subscription.connected_squads = list(connected)
+            subscription.updated_at = now
+
+        await db.commit()
+        await db.refresh(subscription)
+
+        if newly_added:
+            await self.subscription_service.update_remnawave_user(db, subscription)
+
+        return True, newly_added, expires_at, "ok"
+
+    async def cleanup_expired_test_access(self, db: AsyncSession) -> int:
+        now = datetime.utcnow()
+        result = await db.execute(
+            select(SubscriptionTemporaryAccess)
+            .options(selectinload(SubscriptionTemporaryAccess.subscription))
+            .where(
+                SubscriptionTemporaryAccess.is_active == True,  # noqa: E712
+                SubscriptionTemporaryAccess.expires_at <= now,
+            )
+        )
+        entries = result.scalars().all()
+        if not entries:
+            return 0
+
+        subscriptions_updates: dict[int, Tuple[Subscription, set[str]]] = {}
+
+        for entry in entries:
+            entry.is_active = False
+            entry.deactivated_at = now
+            subscription = entry.subscription
+            if not subscription:
+                continue
+
+            bucket = subscriptions_updates.setdefault(subscription.id, (subscription, set()))
+            if not entry.was_already_connected:
+                bucket[1].add(entry.squad_uuid)
+
+        for subscription, squads_to_remove in subscriptions_updates.values():
+            if not squads_to_remove:
+                continue
+            current = set(subscription.connected_squads or [])
+            updated = current.difference(squads_to_remove)
+            if updated != current:
+                subscription.connected_squads = list(updated)
+                subscription.updated_at = now
+                try:
+                    await self.subscription_service.update_remnawave_user(db, subscription)
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.error(
+                        "Ошибка обновления Remnawave при отзыве тестового доступа подписки %s: %s",
+                        subscription.id,
+                        exc,
+                    )
+
+        await db.commit()
+        return len(entries)
+
+
+promo_offer_service = PromoOfferService()

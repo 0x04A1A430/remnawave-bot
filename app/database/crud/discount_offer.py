@@ -16,6 +16,8 @@ async def upsert_discount_offer(
     discount_percent: int,
     bonus_amount_kopeks: int,
     valid_hours: int,
+    effect_type: str = "balance_bonus",
+    extra_data: Optional[dict] = None,
 ) -> DiscountOffer:
     """Create or refresh a discount offer for a user."""
 
@@ -37,6 +39,8 @@ async def upsert_discount_offer(
         offer.bonus_amount_kopeks = bonus_amount_kopeks
         offer.expires_at = expires_at
         offer.subscription_id = subscription_id
+        offer.effect_type = effect_type
+        offer.extra_data = extra_data
     else:
         offer = DiscountOffer(
             user_id=user_id,
@@ -46,6 +50,8 @@ async def upsert_discount_offer(
             bonus_amount_kopeks=bonus_amount_kopeks,
             expires_at=expires_at,
             is_active=True,
+            effect_type=effect_type,
+            extra_data=extra_data,
         )
         db.add(offer)
 

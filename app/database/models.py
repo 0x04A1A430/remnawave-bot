@@ -453,6 +453,7 @@ class Subscription(Base):
 
     user = relationship("User", back_populates="subscription")
     discount_offers = relationship("DiscountOffer", back_populates="subscription")
+    temporary_accesses = relationship("SubscriptionTemporaryAccess", back_populates="subscription")
     
     @property
     def is_active(self) -> bool:
@@ -811,11 +812,54 @@ class DiscountOffer(Base):
     expires_at = Column(DateTime, nullable=False)
     claimed_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    effect_type = Column(String(50), nullable=False, default="balance_bonus")
+    extra_data = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="discount_offers")
     subscription = relationship("Subscription", back_populates="discount_offers")
+
+
+class PromoOfferTemplate(Base):
+    __tablename__ = "promo_offer_templates"
+    __table_args__ = (
+        Index("ix_promo_offer_templates_type", "offer_type"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    offer_type = Column(String(50), nullable=False)
+    message_text = Column(Text, nullable=False)
+    button_text = Column(String(255), nullable=False)
+    valid_hours = Column(Integer, nullable=False, default=24)
+    discount_percent = Column(Integer, nullable=False, default=0)
+    bonus_amount_kopeks = Column(Integer, nullable=False, default=0)
+    test_duration_hours = Column(Integer, nullable=True)
+    test_squad_uuids = Column(JSON, default=list)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    creator = relationship("User")
+
+
+class SubscriptionTemporaryAccess(Base):
+    __tablename__ = "subscription_temporary_access"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
+    offer_id = Column(Integer, ForeignKey("discount_offers.id", ondelete="CASCADE"), nullable=False)
+    squad_uuid = Column(String(255), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+    deactivated_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    was_already_connected = Column(Boolean, default=False, nullable=False)
+
+    subscription = relationship("Subscription", back_populates="temporary_accesses")
+    offer = relationship("DiscountOffer")
 
 class BroadcastHistory(Base):
     __tablename__ = "broadcast_history"
