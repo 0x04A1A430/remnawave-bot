@@ -1998,6 +1998,74 @@ async def create_system_settings_table() -> bool:
         return False
 
 
+async def create_system_settings_history_table() -> bool:
+    table_name = "system_settings_history"
+    table_exists = await check_table_exists(table_name)
+    if table_exists:
+        logger.info("ℹ️ Таблица system_settings_history уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_sql = """
+                CREATE TABLE system_settings_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key VARCHAR(255) NOT NULL,
+                    old_value TEXT NULL,
+                    new_value TEXT NULL,
+                    changed_by INTEGER NULL,
+                    changed_by_username VARCHAR(255) NULL,
+                    source VARCHAR(50) NOT NULL DEFAULT 'bot',
+                    reason VARCHAR(255) NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX ix_system_settings_history_key ON system_settings_history(key);
+                """
+            elif db_type == "postgresql":
+                create_sql = """
+                CREATE TABLE system_settings_history (
+                    id SERIAL PRIMARY KEY,
+                    key VARCHAR(255) NOT NULL,
+                    old_value TEXT NULL,
+                    new_value TEXT NULL,
+                    changed_by INTEGER NULL,
+                    changed_by_username VARCHAR(255) NULL,
+                    source VARCHAR(50) NOT NULL DEFAULT 'bot',
+                    reason VARCHAR(255) NULL,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+                CREATE INDEX ix_system_settings_history_key ON system_settings_history(key);
+                """
+            else:
+                create_sql = """
+                CREATE TABLE system_settings_history (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    key VARCHAR(255) NOT NULL,
+                    old_value TEXT NULL,
+                    new_value TEXT NULL,
+                    changed_by INT NULL,
+                    changed_by_username VARCHAR(255) NULL,
+                    source VARCHAR(50) NOT NULL DEFAULT 'bot',
+                    reason VARCHAR(255) NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB;
+                CREATE INDEX ix_system_settings_history_key ON system_settings_history(key);
+                """
+
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица system_settings_history создана")
+            return True
+
+    except Exception as error:
+        logger.error(
+            f"❌ Ошибка создания таблицы system_settings_history: {error}"
+        )
+        return False
+
+
 async def create_web_api_tokens_table() -> bool:
     table_exists = await check_table_exists("web_api_tokens")
     if table_exists:
@@ -2152,6 +2220,13 @@ async def run_universal_migration():
             logger.info("✅ Таблица system_settings готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей system_settings")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ SYSTEM_SETTINGS_HISTORY ===")
+        system_settings_history_ready = await create_system_settings_history_table()
+        if system_settings_history_ready:
+            logger.info("✅ Таблица system_settings_history готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей system_settings_history")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ WEB_API_TOKENS ===")
         web_api_tokens_ready = await create_web_api_tokens_table()
