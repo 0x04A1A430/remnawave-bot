@@ -728,7 +728,7 @@ async def create_discount_offers_table():
                         expires_at DATETIME NOT NULL,
                         claimed_at DATETIME NULL,
                         is_active BOOLEAN NOT NULL DEFAULT 1,
-                        effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus',
+                        effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount',
                         extra_data TEXT NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -753,7 +753,7 @@ async def create_discount_offers_table():
                         expires_at TIMESTAMP NOT NULL,
                         claimed_at TIMESTAMP NULL,
                         is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                        effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus',
+                        effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount',
                         extra_data JSON NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -776,7 +776,7 @@ async def create_discount_offers_table():
                         expires_at DATETIME NOT NULL,
                         claimed_at DATETIME NULL,
                         is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                        effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus',
+                        effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount',
                         extra_data JSON NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -814,15 +814,15 @@ async def ensure_discount_offer_columns():
             if not effect_exists:
                 if db_type == 'sqlite':
                     await conn.execute(text(
-                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus'"
+                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount'"
                     ))
                 elif db_type == 'postgresql':
                     await conn.execute(text(
-                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus'"
+                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount'"
                     ))
                 elif db_type == 'mysql':
                     await conn.execute(text(
-                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus'"
+                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount'"
                     ))
                 else:
                     raise ValueError(f"Unsupported database type: {db_type}")
@@ -848,6 +848,76 @@ async def ensure_discount_offer_columns():
 
     except Exception as e:
         logger.error(f"Ошибка обновления колонок discount_offers: {e}")
+        return False
+
+
+async def ensure_user_promo_offer_discount_columns():
+    try:
+        percent_exists = await check_column_exists('users', 'promo_offer_discount_percent')
+        source_exists = await check_column_exists('users', 'promo_offer_discount_source')
+
+        if percent_exists and source_exists:
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not percent_exists:
+                column_def = 'INTEGER NOT NULL DEFAULT 0'
+                if db_type == 'mysql':
+                    column_def = 'INT NOT NULL DEFAULT 0'
+                await conn.execute(text(
+                    f"ALTER TABLE users ADD COLUMN promo_offer_discount_percent {column_def}"
+                ))
+
+            if not source_exists:
+                if db_type == 'sqlite':
+                    column_def = 'TEXT NULL'
+                elif db_type == 'postgresql':
+                    column_def = 'VARCHAR(100) NULL'
+                elif db_type == 'mysql':
+                    column_def = 'VARCHAR(100) NULL'
+                else:
+                    raise ValueError(f"Unsupported database type: {db_type}")
+
+                await conn.execute(text(
+                    f"ALTER TABLE users ADD COLUMN promo_offer_discount_source {column_def}"
+                ))
+
+        logger.info("✅ Колонки promo_offer_discount_* для users проверены")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка обновления колонок promo_offer_discount_*: {e}")
+        return False
+
+
+async def migrate_discount_offer_effect_types():
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(
+                "UPDATE discount_offers SET effect_type = 'percent_discount' "
+                "WHERE effect_type = 'balance_bonus'"
+            ))
+        logger.info("✅ Типы эффектов discount_offers обновлены на percent_discount")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка обновления типов эффектов discount_offers: {e}")
+        return False
+
+
+async def reset_discount_offer_bonuses():
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(
+                "UPDATE discount_offers SET bonus_amount_kopeks = 0 WHERE bonus_amount_kopeks <> 0"
+            ))
+            await conn.execute(text(
+                "UPDATE promo_offer_templates SET bonus_amount_kopeks = 0 WHERE bonus_amount_kopeks <> 0"
+            ))
+        logger.info("✅ Бонусы промо-предложений сброшены до нуля")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка обнуления бонусов промо-предложений: {e}")
         return False
 
 
@@ -2433,6 +2503,24 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Не удалось обновить колонки discount_offers")
 
+        user_discount_columns_ready = await ensure_user_promo_offer_discount_columns()
+        if user_discount_columns_ready:
+            logger.info("✅ Колонки пользовательских промо-скидок готовы")
+        else:
+            logger.warning("⚠️ Не удалось обновить пользовательские промо-скидки")
+
+        effect_types_updated = await migrate_discount_offer_effect_types()
+        if effect_types_updated:
+            logger.info("✅ Типы эффектов промо-предложений обновлены")
+        else:
+            logger.warning("⚠️ Не удалось обновить типы эффектов промо-предложений")
+
+        bonuses_reset = await reset_discount_offer_bonuses()
+        if bonuses_reset:
+            logger.info("✅ Бонусные начисления промо-предложений отключены")
+        else:
+            logger.warning("⚠️ Не удалось обнулить бонусы промо-предложений")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PROMO_OFFER_TEMPLATES ===")
         promo_templates_created = await create_promo_offer_templates_table()
         if promo_templates_created:
@@ -2647,6 +2735,8 @@ async def check_migration_status():
             "promo_groups_addon_discount_column": False,
             "users_auto_promo_group_assigned_column": False,
             "users_auto_promo_group_threshold_column": False,
+            "users_promo_offer_discount_percent_column": False,
+            "users_promo_offer_discount_source_column": False,
             "subscription_crypto_link_column": False,
             "discount_offers_table": False,
             "discount_offers_effect_column": False,
@@ -2677,6 +2767,8 @@ async def check_migration_status():
         status["promo_groups_addon_discount_column"] = await check_column_exists('promo_groups', 'apply_discounts_to_addons')
         status["users_auto_promo_group_assigned_column"] = await check_column_exists('users', 'auto_promo_group_assigned')
         status["users_auto_promo_group_threshold_column"] = await check_column_exists('users', 'auto_promo_group_threshold_kopeks')
+        status["users_promo_offer_discount_percent_column"] = await check_column_exists('users', 'promo_offer_discount_percent')
+        status["users_promo_offer_discount_source_column"] = await check_column_exists('users', 'promo_offer_discount_source')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         
         media_fields_exist = (
@@ -2716,7 +2808,14 @@ async def check_migration_status():
             "promo_groups_addon_discount_column": "Колонка apply_discounts_to_addons у промо-групп",
             "users_auto_promo_group_assigned_column": "Флаг автоназначения промогруппы у пользователей",
             "users_auto_promo_group_threshold_column": "Порог последней авто-промогруппы у пользователей",
+            "users_promo_offer_discount_percent_column": "Колонка процента промо-скидки у пользователей",
+            "users_promo_offer_discount_source_column": "Колонка источника промо-скидки у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
+            "discount_offers_table": "Таблица discount_offers",
+            "discount_offers_effect_column": "Колонка effect_type в discount_offers",
+            "discount_offers_extra_column": "Колонка extra_data в discount_offers",
+            "promo_offer_templates_table": "Таблица promo_offer_templates",
+            "subscription_temporary_access_table": "Таблица subscription_temporary_access",
         }
         
         for check_key, check_status in status.items():
