@@ -9,7 +9,7 @@ from app.database.universal_migration import ensure_default_web_api_token
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings, settings
+from app.config import Settings, refresh_period_prices, settings
 from app.database.crud.system_setting import (
     delete_system_setting,
     upsert_system_setting,
@@ -57,6 +57,14 @@ class ChoiceOption:
 
 
 class BotConfigurationService:
+    _SUBSCRIPTION_PRICE_KEYS: set[str] = {
+        "PRICE_14_DAYS",
+        "PRICE_30_DAYS",
+        "PRICE_60_DAYS",
+        "PRICE_90_DAYS",
+        "PRICE_180_DAYS",
+        "PRICE_360_DAYS",
+    }
     EXCLUDED_KEYS: set[str] = {"BOT_TOKEN", "ADMIN_IDS"}
 
     CATEGORY_TITLES: Dict[str, str] = {
@@ -885,6 +893,10 @@ class BotConfigurationService:
             setattr(settings, key, value)
         except Exception as error:
             logger.error("Не удалось применить значение %s=%s: %s", key, value, error)
+            return
+
+        if key in cls._SUBSCRIPTION_PRICE_KEYS:
+            refresh_period_prices()
 
     @staticmethod
     async def _sync_default_web_api_token() -> None:
