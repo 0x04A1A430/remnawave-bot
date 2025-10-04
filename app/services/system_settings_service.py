@@ -9,7 +9,7 @@ from app.database.universal_migration import ensure_default_web_api_token
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings, settings
+from app.config import Settings, refresh_period_prices, settings
 from app.database.crud.system_setting import (
     delete_system_setting,
     upsert_system_setting,
@@ -866,6 +866,9 @@ class BotConfigurationService:
         cls._overrides_raw[key] = raw_value
         cls._apply_to_settings(key, value)
 
+        if key.startswith("PRICE_") and key.endswith("_DAYS") and "TRAFFIC" not in key:
+            refresh_period_prices()
+
         if key in {"WEB_API_DEFAULT_TOKEN", "WEB_API_DEFAULT_TOKEN_NAME"}:
             await cls._sync_default_web_api_token()
 
@@ -875,6 +878,9 @@ class BotConfigurationService:
         cls._overrides_raw.pop(key, None)
         original = cls.get_original_value(key)
         cls._apply_to_settings(key, original)
+
+        if key.startswith("PRICE_") and key.endswith("_DAYS") and "TRAFFIC" not in key:
+            refresh_period_prices()
 
         if key in {"WEB_API_DEFAULT_TOKEN", "WEB_API_DEFAULT_TOKEN_NAME"}:
             await cls._sync_default_web_api_token()
