@@ -11,7 +11,6 @@ from app.keyboards.admin import (
     get_admin_promo_submenu_keyboard,
     get_admin_communications_submenu_keyboard,
     get_admin_support_submenu_keyboard,
-    get_admin_tariffs_submenu_keyboard,
     get_admin_settings_submenu_keyboard,
     get_admin_system_submenu_keyboard
 )
@@ -143,24 +142,6 @@ async def show_support_submenu(
             else texts.t("ADMIN_SUPPORT_SUBMENU_DESCRIPTION", "Управление тикетами и настройками поддержки:")
         ),
         reply_markup=kb,
-        parse_mode="Markdown"
-    )
-    await callback.answer()
-
-
-@admin_required
-@error_handler
-async def show_tariffs_submenu(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession
-):
-    texts = get_texts(db_user.language)
-
-    await callback.message.edit_text(
-        texts.t("ADMIN_TARIFFS_SUBMENU_TITLE", "🧾 **Тарифы**\n\n") +
-        texts.t("ADMIN_TARIFFS_SUBMENU_DESCRIPTION", "Управление тарифным режимом и подготовка функций:"),
-        reply_markup=get_admin_tariffs_submenu_keyboard(db_user.language),
         parse_mode="Markdown"
     )
     await callback.answer()
@@ -421,12 +402,7 @@ def register_handlers(dp: Dispatcher):
         show_promo_submenu,
         F.data == "admin_submenu_promo"
     )
-
-    dp.callback_query.register(
-        show_tariffs_submenu,
-        F.data == "admin_submenu_tariffs"
-    )
-
+    
     dp.callback_query.register(
         show_communications_submenu,
         F.data == "admin_submenu_communications"
