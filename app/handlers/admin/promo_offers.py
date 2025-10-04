@@ -45,7 +45,7 @@ OFFER_TYPE_CONFIG = {
         "allowed_segments": [
             ("paid_active", "🟢 Активные платные"),
         ],
-        "effect_type": "balance_bonus",
+        "effect_type": "percent_discount",
     },
     "purchase_discount": {
         "icon": "🎯",
@@ -55,7 +55,7 @@ OFFER_TYPE_CONFIG = {
             ("paid_expired", "🔴 Истёкшие платные"),
             ("trial_expired", "🥶 Истёкшие триалы"),
         ],
-        "effect_type": "balance_bonus",
+        "effect_type": "percent_discount",
     },
 }
 
@@ -109,9 +109,6 @@ def _build_offer_detail_keyboard(template: PromoOfferTemplate, language: str) ->
 
     if template.offer_type != "test_access":
         rows[-1].append(InlineKeyboardButton(text="📉 %", callback_data=f"promo_offer_edit_discount_{template.id}"))
-        rows.append([
-            InlineKeyboardButton(text="💰 Бонус", callback_data=f"promo_offer_edit_bonus_{template.id}"),
-        ])
     else:
         rows.append([
             InlineKeyboardButton(text="⏳ Длительность", callback_data=f"promo_offer_edit_duration_{template.id}"),
@@ -156,7 +153,6 @@ def _describe_offer(template: PromoOfferTemplate, language: str) -> str:
 
     if template.offer_type != "test_access":
         lines.append(texts.t("ADMIN_PROMO_OFFER_DISCOUNT", "Скидка: {percent}%").format(percent=template.discount_percent))
-        lines.append(texts.t("ADMIN_PROMO_OFFER_BONUS", "Бонус: {amount}").format(amount=_format_bonus(template)))
     else:
         duration = template.test_duration_hours or 0
         lines.append(texts.t("ADMIN_PROMO_OFFER_TEST_DURATION", "Доступ: {hours} ч").format(hours=duration))
@@ -424,17 +420,22 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
 
     sent = 0
     failed = 0
-    effect_type = config.get("effect_type", "balance_bonus")
+    effect_type = config.get("effect_type", "percent_discount")
 
     for user in users:
         try:
+            bonus_amount = (
+                template.bonus_amount_kopeks
+                if effect_type not in {"percent_discount"}
+                else 0
+            )
             offer_record = await upsert_discount_offer(
                 db,
                 user_id=user.id,
                 subscription_id=user.subscription.id if user.subscription else None,
                 notification_type=f"promo_template_{template.id}",
                 discount_percent=template.discount_percent,
-                bonus_amount_kopeks=template.bonus_amount_kopeks,
+                bonus_amount_kopeks=bonus_amount,
                 valid_hours=template.valid_hours,
                 effect_type=effect_type,
                 extra_data={

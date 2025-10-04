@@ -396,7 +396,10 @@ class User(Base):
     has_made_first_topup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="RESTRICT"), nullable=False, index=True)
     promo_group = relationship("PromoGroup", back_populates="users")
-    
+    pending_discount_percent = Column(Integer, nullable=False, default=0)
+    pending_discount_expires_at = Column(DateTime, nullable=True)
+    pending_discount_offer_id = Column(Integer, ForeignKey("discount_offers.id", ondelete="SET NULL"), nullable=True)
+
     @property
     def balance_rubles(self) -> float:
         return self.balance_kopeks / 100
@@ -812,7 +815,7 @@ class DiscountOffer(Base):
     expires_at = Column(DateTime, nullable=False)
     claimed_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
-    effect_type = Column(String(50), nullable=False, default="balance_bonus")
+    effect_type = Column(String(50), nullable=False, default="percent_discount")
     extra_data = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

@@ -728,7 +728,7 @@ async def create_discount_offers_table():
                         expires_at DATETIME NOT NULL,
                         claimed_at DATETIME NULL,
                         is_active BOOLEAN NOT NULL DEFAULT 1,
-                        effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus',
+                        effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount',
                         extra_data TEXT NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -753,7 +753,7 @@ async def create_discount_offers_table():
                         expires_at TIMESTAMP NOT NULL,
                         claimed_at TIMESTAMP NULL,
                         is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                        effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus',
+                        effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount',
                         extra_data JSON NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -776,7 +776,7 @@ async def create_discount_offers_table():
                         expires_at DATETIME NOT NULL,
                         claimed_at DATETIME NULL,
                         is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                        effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus',
+                        effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount',
                         extra_data JSON NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -814,15 +814,15 @@ async def ensure_discount_offer_columns():
             if not effect_exists:
                 if db_type == 'sqlite':
                     await conn.execute(text(
-                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus'"
+                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount'"
                     ))
                 elif db_type == 'postgresql':
                     await conn.execute(text(
-                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus'"
+                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount'"
                     ))
                 elif db_type == 'mysql':
                     await conn.execute(text(
-                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus'"
+                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount'"
                     ))
                 else:
                     raise ValueError(f"Unsupported database type: {db_type}")
@@ -842,6 +842,13 @@ async def ensure_discount_offer_columns():
                     ))
                 else:
                     raise ValueError(f"Unsupported database type: {db_type}")
+
+            await conn.execute(
+                text(
+                    "UPDATE discount_offers SET effect_type = 'percent_discount' "
+                    "WHERE effect_type = 'balance_bonus'"
+                )
+            )
 
         logger.info("✅ Колонки effect_type и extra_data для discount_offers проверены")
         return True
@@ -1911,6 +1918,64 @@ async def add_referral_system_columns():
         logger.error(f"Ошибка миграции реферальной системы: {e}")
         return False
 
+
+async def ensure_user_pending_discount_columns() -> bool:
+    try:
+        percent_exists = await check_column_exists('users', 'pending_discount_percent')
+        expires_exists = await check_column_exists('users', 'pending_discount_expires_at')
+        offer_exists = await check_column_exists('users', 'pending_discount_offer_id')
+
+        if percent_exists and expires_exists and offer_exists:
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not percent_exists:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN pending_discount_percent INTEGER NOT NULL DEFAULT 0"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN pending_discount_percent INTEGER NOT NULL DEFAULT 0"
+                    ))
+                elif db_type == 'mysql':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN pending_discount_percent INTEGER NOT NULL DEFAULT 0"
+                    ))
+                else:
+                    raise ValueError(f"Unsupported database type: {db_type}")
+
+            if not expires_exists:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN pending_discount_expires_at DATETIME NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN pending_discount_expires_at TIMESTAMP NULL"
+                    ))
+                elif db_type == 'mysql':
+                    await conn.execute(text(
+                        "ALTER TABLE users ADD COLUMN pending_discount_expires_at DATETIME NULL"
+                    ))
+                else:
+                    raise ValueError(f"Unsupported database type: {db_type}")
+
+            if not offer_exists:
+                await conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN pending_discount_offer_id INTEGER NULL"
+                ))
+
+        logger.info("✅ Колонки pending_discount_* для users проверены")
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка обновления колонок скидок пользователя: {e}")
+        return False
+
+
 async def create_subscription_conversions_table():
     table_exists = await check_table_exists('subscription_conversions')
     if table_exists:
@@ -2372,6 +2437,10 @@ async def run_universal_migration():
         if not referral_migration_success:
             logger.warning("⚠️ Проблемы с миграцией реферальной системы")
 
+        pending_discount_columns_ready = await ensure_user_pending_discount_columns()
+        if not pending_discount_columns_ready:
+            logger.warning("⚠️ Не удалось обновить колонки скидок пользователя")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ SYSTEM_SETTINGS ===")
         system_settings_ready = await create_system_settings_table()
         if system_settings_ready:
@@ -2653,6 +2722,9 @@ async def check_migration_status():
             "discount_offers_extra_column": False,
             "promo_offer_templates_table": False,
             "subscription_temporary_access_table": False,
+            "users_pending_discount_percent_column": False,
+            "users_pending_discount_expires_column": False,
+            "users_pending_discount_offer_column": False,
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -2678,6 +2750,9 @@ async def check_migration_status():
         status["users_auto_promo_group_assigned_column"] = await check_column_exists('users', 'auto_promo_group_assigned')
         status["users_auto_promo_group_threshold_column"] = await check_column_exists('users', 'auto_promo_group_threshold_kopeks')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
+        status["users_pending_discount_percent_column"] = await check_column_exists('users', 'pending_discount_percent')
+        status["users_pending_discount_expires_column"] = await check_column_exists('users', 'pending_discount_expires_at')
+        status["users_pending_discount_offer_column"] = await check_column_exists('users', 'pending_discount_offer_id')
         
         media_fields_exist = (
             await check_column_exists('broadcast_history', 'has_media') and
@@ -2717,6 +2792,9 @@ async def check_migration_status():
             "users_auto_promo_group_assigned_column": "Флаг автоназначения промогруппы у пользователей",
             "users_auto_promo_group_threshold_column": "Порог последней авто-промогруппы у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
+            "users_pending_discount_percent_column": "Колонка pending_discount_percent у пользователей",
+            "users_pending_discount_expires_column": "Колонка pending_discount_expires_at у пользователей",
+            "users_pending_discount_offer_column": "Колонка pending_discount_offer_id у пользователей",
         }
         
         for check_key, check_status in status.items():
