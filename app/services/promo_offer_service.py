@@ -34,20 +34,9 @@ class PromoOfferService:
             return False, None, None, "subscription_missing"
 
         payload = offer.extra_data or {}
-        raw_squads = payload.get("test_squad_uuids") or payload.get("squads") or []
-        if isinstance(raw_squads, str):
-            candidates = [raw_squads]
-        else:
-            try:
-                candidates = list(raw_squads)
-            except TypeError:
-                candidates = []
-
-        squad_uuids: Sequence[str] = [str(item) for item in candidates if item]
+        squad_uuids: Sequence[str] = payload.get("test_squad_uuids") or payload.get("squads") or []
         if not squad_uuids:
             return False, None, None, "squads_missing"
-
-        squad_uuids = list(dict.fromkeys(squad_uuids))
 
         try:
             duration_hours = int(payload.get("test_duration_hours") or payload.get("duration_hours") or 24)
@@ -61,9 +50,7 @@ class PromoOfferService:
         expires_at = now + timedelta(hours=duration_hours)
 
         connected = set(subscription.connected_squads or [])
-        original_connected = set(connected)
         newly_added: List[str] = []
-        changes_made = False
 
         for squad_uuid in squad_uuids:
             normalized_uuid = str(squad_uuid)
@@ -77,16 +64,13 @@ class PromoOfferService:
             )
             existing_access = existing_result.scalars().first()
             if existing_access and existing_access.is_active:
-                if existing_access.expires_at < expires_at:
-                    existing_access.expires_at = expires_at
-                    changes_made = True
+                existing_access.expires_at = expires_at
                 continue
 
             was_already_connected = normalized_uuid in connected
             if not was_already_connected:
                 connected.add(normalized_uuid)
                 newly_added.append(normalized_uuid)
-                changes_made = True
 
             access_entry = SubscriptionTemporaryAccess(
                 subscription_id=subscription.id,
@@ -97,33 +81,16 @@ class PromoOfferService:
                 was_already_connected=was_already_connected,
             )
             db.add(access_entry)
-            changes_made = True
-
-        connected_changed = connected != original_connected
 
         if newly_added:
             subscription.connected_squads = list(connected)
             subscription.updated_at = now
-            changes_made = True
 
-        if connected_changed:
-            remnawave_user = await self.subscription_service.update_remnawave_user(
-                db,
-                subscription,
-            )
-            if remnawave_user is None:
-                await db.rollback()
-                await db.refresh(subscription)
-                logger.error(
-                    "Не удалось синхронизировать временный доступ подписки %s с RemnaWave",
-                    subscription.id,
-                )
-                return False, None, None, "remnawave_sync_failed"
+        await db.commit()
+        await db.refresh(subscription)
 
-            await db.refresh(subscription)
-        elif changes_made:
-            await db.commit()
-            await db.refresh(subscription)
+        if newly_added:
+            await self.subscription_service.update_remnawave_user(db, subscription)
 
         return True, newly_added, expires_at, "ok"
 

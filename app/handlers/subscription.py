@@ -5195,11 +5195,6 @@ async def claim_discount_offer(
                     "TEST_ACCESS_NO_SQUADS",
                     "❌ Не удалось определить список серверов для теста. Обратитесь к администратору.",
                 )
-            elif error_code == "remnawave_sync_failed":
-                error_message = texts.get(
-                    "TEST_ACCESS_REMNAWAVE_ERROR",
-                    "❌ Не удалось подключить серверы. Попробуйте позже или обратитесь в поддержку.",
-                )
             else:
                 error_message = texts.get(
                     "TEST_ACCESS_UNKNOWN_ERROR",
@@ -5218,17 +5213,7 @@ async def claim_discount_offer(
 
         popup_text = texts.get("TEST_ACCESS_ACTIVATED_POPUP", "✅ Доступ выдан!")
         await callback.answer(popup_text, show_alert=True)
-        back_keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text=texts.get("BACK_TO_MENU", "🏠 В главное меню"),
-                        callback_data="back_to_menu",
-                    )
-                ]
-            ]
-        )
-        await callback.message.answer(success_message, reply_markup=back_keyboard)
+        await callback.message.answer(success_message)
         return
 
     discount_percent = int(offer.discount_percent or 0)
