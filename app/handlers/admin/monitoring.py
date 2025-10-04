@@ -226,18 +226,16 @@ def _build_notification_preview_message(language: str, notification_type: str):
     elif notification_type == "expired_2d":
         percent = NotificationSettingsService.get_second_wave_discount_percent()
         valid_hours = NotificationSettingsService.get_second_wave_valid_hours()
-        bonus_amount = settings.PRICE_30_DAYS * percent // 100
         template = texts.get(
             "SUBSCRIPTION_EXPIRED_SECOND_WAVE",
             (
                 "🔥 <b>Скидка {percent}% на продление</b>\n\n"
-                "Нажмите «Получить скидку», и мы начислим {bonus} на баланс. "
-                "Предложение действует до {expires_at}."
+                "Активируйте предложение — дополнительная скидка {percent}% автоматически применится при оплате. "
+                "Скидка суммируется с вашей промогруппой и действует до {expires_at}."
             ),
         )
         message = template.format(
             percent=percent,
-            bonus=settings.format_price(bonus_amount),
             expires_at=(now + timedelta(hours=valid_hours)).strftime("%d.%m.%Y %H:%M"),
             trigger_days=3,
         )
@@ -273,18 +271,16 @@ def _build_notification_preview_message(language: str, notification_type: str):
         percent = NotificationSettingsService.get_third_wave_discount_percent()
         valid_hours = NotificationSettingsService.get_third_wave_valid_hours()
         trigger_days = NotificationSettingsService.get_third_wave_trigger_days()
-        bonus_amount = settings.PRICE_30_DAYS * percent // 100
         template = texts.get(
             "SUBSCRIPTION_EXPIRED_THIRD_WAVE",
             (
                 "🎁 <b>Индивидуальная скидка {percent}%</b>\n\n"
-                "Прошло {trigger_days} дней без подписки — возвращайтесь, и мы добавим {bonus} на баланс. "
-                "Скидка действует до {expires_at}."
+                "Прошло {trigger_days} дней без подписки — возвращайтесь, и скидка {percent}% автоматически применится при оплате. "
+                "Скидка суммируется с вашей промогруппой и действует до {expires_at}."
             ),
         )
         message = template.format(
             percent=percent,
-            bonus=settings.format_price(bonus_amount),
             trigger_days=trigger_days,
             expires_at=(now + timedelta(hours=valid_hours)).strftime("%d.%m.%Y %H:%M"),
         )
