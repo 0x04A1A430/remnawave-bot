@@ -133,20 +133,23 @@ class WebhookServer:
 
             payment_service = PaymentService(self.bot)
 
-            async for db in get_db():
-                try:
-                    success = await payment_service.process_mulenpay_callback(db, payload)
-                    if success:
-                        return web.json_response({"status": "ok"}, status=200)
-                    return web.json_response({"status": "error", "reason": "processing_failed"}, status=400)
-                except Exception as error:
-                    logger.error(f"Ошибка обработки Mulen Pay webhook: {error}", exc_info=True)
-                    return web.json_response({"status": "error", "reason": "internal_error"}, status=500)
-                finally:
-                    break
+            # Получаем соединение с БД
+            db_generator = get_db()
+            db = await db_generator.__anext__()
             
-            # Если не удалось получить соединение с БД
-            return web.json_response({"status": "error", "reason": "database_error"}, status=500)
+            try:
+                success = await payment_service.process_mulenpay_callback(db, payload)
+                if success:
+                    return web.json_response({"status": "ok"}, status=200)
+                return web.json_response({"status": "error", "reason": "processing_failed"}, status=400)
+            except Exception as error:
+                logger.error(f"Ошибка обработки Mulen Pay webhook: {error}", exc_info=True)
+                return web.json_response({"status": "error", "reason": "internal_error"}, status=500)
+            finally:
+                try:
+                    await db_generator.__anext__()
+                except StopAsyncIteration:
+                    pass
 
         except Exception as error:
             logger.error(f"Критическая ошибка Mulen Pay webhook: {error}", exc_info=True)
