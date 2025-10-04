@@ -41,7 +41,6 @@ from app.services.notification_settings_service import NotificationSettingsServi
 from app.services.payment_service import PaymentService
 from app.services.subscription_service import SubscriptionService
 from app.services.promo_offer_service import promo_offer_service
-from app.utils.pricing_utils import apply_percentage_discount
 
 from app.external.remnawave_api import (
     RemnaWaveAPIError,
@@ -682,15 +681,15 @@ class MonitoringService:
                     if not await notification_sent(db, user.id, subscription.id, "expired_discount_wave2"):
                         percent = NotificationSettingsService.get_second_wave_discount_percent()
                         valid_hours = NotificationSettingsService.get_second_wave_valid_hours()
+                        bonus_amount = settings.PRICE_30_DAYS * percent // 100
                         offer = await upsert_discount_offer(
                             db,
                             user_id=user.id,
                             subscription_id=subscription.id,
                             notification_type="expired_discount_wave2",
                             discount_percent=percent,
-                            bonus_amount_kopeks=0,
+                            bonus_amount_kopeks=bonus_amount,
                             valid_hours=valid_hours,
-                            effect_type="percent_discount",
                         )
                         success = await self._send_expired_discount_notification(
                             user,
@@ -699,6 +698,7 @@ class MonitoringService:
                             offer.expires_at,
                             offer.id,
                             "second",
+                            bonus_amount,
                         )
                         if success:
                             await record_notification(db, user.id, subscription.id, "expired_discount_wave2")
@@ -711,15 +711,15 @@ class MonitoringService:
                         if not await notification_sent(db, user.id, subscription.id, "expired_discount_wave3"):
                             percent = NotificationSettingsService.get_third_wave_discount_percent()
                             valid_hours = NotificationSettingsService.get_third_wave_valid_hours()
+                            bonus_amount = settings.PRICE_30_DAYS * percent // 100
                             offer = await upsert_discount_offer(
                                 db,
                                 user_id=user.id,
                                 subscription_id=subscription.id,
                                 notification_type="expired_discount_wave3",
                                 discount_percent=percent,
-                                bonus_amount_kopeks=0,
+                                bonus_amount_kopeks=bonus_amount,
                                 valid_hours=valid_hours,
-                                effect_type="percent_discount",
                             )
                             success = await self._send_expired_discount_notification(
                                 user,
@@ -728,6 +728,7 @@ class MonitoringService:
                                 offer.expires_at,
                                 offer.id,
                                 "third",
+                                bonus_amount,
                                 trigger_days=trigger_days,
                             )
                             if success:
@@ -781,30 +782,6 @@ class MonitoringService:
         
         return subscriptions
     
-    @staticmethod
-    def _get_user_promo_offer_discount_percent(user: Optional[User]) -> int:
-        if not user:
-            return 0
-
-        try:
-            percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
-        except (TypeError, ValueError):
-            return 0
-
-        return max(0, min(100, percent))
-
-    @staticmethod
-    async def _consume_user_promo_offer_discount(db: AsyncSession, user: User) -> None:
-        if MonitoringService._get_user_promo_offer_discount_percent(user) <= 0:
-            return
-
-        user.promo_offer_discount_percent = 0
-        user.promo_offer_discount_source = None
-        user.updated_at = datetime.utcnow()
-
-        await db.commit()
-        await db.refresh(user)
-
     async def _process_autopayments(self, db: AsyncSession):
         try:
             current_time = datetime.utcnow()
@@ -837,26 +814,17 @@ class MonitoringService:
                     continue
                 
                 renewal_cost = settings.PRICE_30_DAYS
-                promo_discount_percent = self._get_user_promo_offer_discount_percent(user)
-                charge_amount = renewal_cost
-                promo_discount_value = 0
-
-                if renewal_cost > 0 and promo_discount_percent > 0:
-                    charge_amount, promo_discount_value = apply_percentage_discount(
-                        renewal_cost,
-                        promo_discount_percent,
-                    )
-
+                
                 autopay_key = f"autopay_{user.telegram_id}_{subscription.id}"
                 if autopay_key in self._notified_users:
                     continue
-
-                if user.balance_kopeks >= charge_amount:
+                
+                if user.balance_kopeks >= renewal_cost:
                     success = await subtract_user_balance(
-                        db, user, charge_amount,
+                        db, user, renewal_cost,
                         "Автопродление подписки"
                     )
-
+                    
                     if success:
                         await extend_subscription(db, subscription, 30)
                         await self.subscription_service.update_remnawave_user(
@@ -865,30 +833,22 @@ class MonitoringService:
                             reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
                             reset_reason="автопродление подписки",
                         )
-
-                        if promo_discount_value > 0:
-                            await self._consume_user_promo_offer_discount(db, user)
-
+                        
                         if self.bot:
-                            await self._send_autopay_success_notification(user, charge_amount, 30)
-
+                            await self._send_autopay_success_notification(user, renewal_cost, 30)
+                        
                         processed_count += 1
                         self._notified_users.add(autopay_key)
-                        logger.info(
-                            "💳 Автопродление подписки пользователя %s успешно (списано %s, скидка %s%%)",
-                            user.telegram_id,
-                            charge_amount,
-                            promo_discount_percent,
-                        )
+                        logger.info(f"💳 Автопродление подписки пользователя {user.telegram_id} успешно")
                     else:
                         failed_count += 1
                         if self.bot:
-                            await self._send_autopay_failed_notification(user, user.balance_kopeks, charge_amount)
+                            await self._send_autopay_failed_notification(user, user.balance_kopeks, renewal_cost)
                         logger.warning(f"💳 Ошибка списания средств для автопродления пользователя {user.telegram_id}")
                 else:
                     failed_count += 1
                     if self.bot:
-                        await self._send_autopay_failed_notification(user, user.balance_kopeks, charge_amount)
+                        await self._send_autopay_failed_notification(user, user.balance_kopeks, renewal_cost)
                     logger.warning(f"💳 Недостаточно средств для автопродления у пользователя {user.telegram_id}")
             
             if processed_count > 0 or failed_count > 0:
@@ -1231,6 +1191,7 @@ class MonitoringService:
         expires_at: datetime,
         offer_id: int,
         wave: str,
+        bonus_amount: int,
         trigger_days: int = None,
     ) -> bool:
         try:
@@ -1241,8 +1202,8 @@ class MonitoringService:
                     "SUBSCRIPTION_EXPIRED_SECOND_WAVE",
                     (
                         "🔥 <b>Скидка {percent}% на продление</b>\n\n"
-                        "Активируйте предложение, чтобы получить дополнительную скидку. "
-                        "Она суммируется с вашей промогруппой и действует до {expires_at}."
+                        "Нажмите «Получить скидку», и мы начислим {bonus} на баланс. "
+                        "Предложение действует до {expires_at}."
                     ),
                 )
             else:
@@ -1250,13 +1211,14 @@ class MonitoringService:
                     "SUBSCRIPTION_EXPIRED_THIRD_WAVE",
                     (
                         "🎁 <b>Индивидуальная скидка {percent}%</b>\n\n"
-                        "Прошло {trigger_days} дней без подписки — возвращайтесь и активируйте дополнительную скидку. "
-                        "Она суммируется с промогруппой и действует до {expires_at}."
+                        "Прошло {trigger_days} дней без подписки — возвращайтесь, и мы добавим {bonus} на баланс. "
+                        "Скидка действует до {expires_at}."
                     ),
                 )
 
             message = template.format(
                 percent=percent,
+                bonus=settings.format_price(bonus_amount),
                 expires_at=expires_at.strftime("%d.%m.%Y %H:%M"),
                 trigger_days=trigger_days or "",
             )
