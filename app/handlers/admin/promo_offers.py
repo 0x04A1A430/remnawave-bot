@@ -10,7 +10,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database.crud.discount_offer import upsert_discount_offer
 from app.database.crud.promo_offer_template import (
     ensure_default_templates,
@@ -45,7 +44,7 @@ OFFER_TYPE_CONFIG = {
         "allowed_segments": [
             ("paid_active", "🟢 Активные платные"),
         ],
-        "effect_type": "balance_bonus",
+        "effect_type": "percent_discount",
     },
     "purchase_discount": {
         "icon": "🎯",
@@ -55,18 +54,13 @@ OFFER_TYPE_CONFIG = {
             ("paid_expired", "🔴 Истёкшие платные"),
             ("trial_expired", "🥶 Истёкшие триалы"),
         ],
-        "effect_type": "balance_bonus",
+        "effect_type": "percent_discount",
     },
 }
-
-def _format_bonus(template: PromoOfferTemplate) -> str:
-    return settings.format_price(template.bonus_amount_kopeks or 0)
-
 
 def _render_template_text(template: PromoOfferTemplate, language: str) -> str:
     replacements = {
         "discount_percent": template.discount_percent,
-        "bonus_amount": _format_bonus(template),
         "valid_hours": template.valid_hours,
         "test_duration_hours": template.test_duration_hours or 0,
     }
@@ -109,9 +103,6 @@ def _build_offer_detail_keyboard(template: PromoOfferTemplate, language: str) ->
 
     if template.offer_type != "test_access":
         rows[-1].append(InlineKeyboardButton(text="📉 %", callback_data=f"promo_offer_edit_discount_{template.id}"))
-        rows.append([
-            InlineKeyboardButton(text="💰 Бонус", callback_data=f"promo_offer_edit_bonus_{template.id}"),
-        ])
     else:
         rows.append([
             InlineKeyboardButton(text="⏳ Длительность", callback_data=f"promo_offer_edit_duration_{template.id}"),
@@ -155,8 +146,18 @@ def _describe_offer(template: PromoOfferTemplate, language: str) -> str:
     lines.append(texts.t("ADMIN_PROMO_OFFER_VALID", "Срок действия: {hours} ч").format(hours=template.valid_hours))
 
     if template.offer_type != "test_access":
-        lines.append(texts.t("ADMIN_PROMO_OFFER_DISCOUNT", "Скидка: {percent}%").format(percent=template.discount_percent))
-        lines.append(texts.t("ADMIN_PROMO_OFFER_BONUS", "Бонус: {amount}").format(amount=_format_bonus(template)))
+        lines.append(
+            texts.t(
+                "ADMIN_PROMO_OFFER_DISCOUNT",
+                "Доп. скидка: {percent}% (суммируется с промогруппой)",
+            ).format(percent=template.discount_percent)
+        )
+        stack_note = texts.t(
+            "ADMIN_PROMO_OFFER_STACKABLE_NOTE",
+            "Скидка применяется один раз и добавляется к промогруппе.",
+        )
+        if stack_note:
+            lines.append(stack_note)
     else:
         duration = template.test_duration_hours or 0
         lines.append(texts.t("ADMIN_PROMO_OFFER_TEST_DURATION", "Доступ: {hours} ч").format(hours=duration))
@@ -268,15 +269,6 @@ async def prompt_edit_discount(callback: CallbackQuery, db_user: User, db: Async
 
 @admin_required
 @error_handler
-async def prompt_edit_bonus(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    template_id = int(callback.data.split("_")[-1])
-    texts = get_texts(db_user.language)
-    prompt = texts.t("ADMIN_PROMO_OFFER_PROMPT_BONUS", "Введите размер бонуса в копейках:")
-    await _prompt_edit(callback, state, template_id, prompt, AdminStates.editing_promo_offer_bonus)
-
-
-@admin_required
-@error_handler
 async def prompt_edit_duration(callback: CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     template_id = int(callback.data.split("_")[-1])
     texts = get_texts(db_user.language)
@@ -328,9 +320,6 @@ async def _handle_edit_field(
         elif field == "discount_percent":
             percent = max(0, min(100, int(value)))
             await update_promo_offer_template(db, template, discount_percent=percent)
-        elif field == "bonus_amount_kopeks":
-            bonus = max(0, int(value))
-            await update_promo_offer_template(db, template, bonus_amount_kopeks=bonus)
         elif field == "test_duration_hours":
             hours = max(1, int(value))
             await update_promo_offer_template(db, template, test_duration_hours=hours)
@@ -424,7 +413,7 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
 
     sent = 0
     failed = 0
-    effect_type = config.get("effect_type", "balance_bonus")
+    effect_type = config.get("effect_type", "percent_discount")
 
     for user in users:
         try:
@@ -434,7 +423,7 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
                 subscription_id=user.subscription.id if user.subscription else None,
                 notification_type=f"promo_template_{template.id}",
                 discount_percent=template.discount_percent,
-                bonus_amount_kopeks=template.bonus_amount_kopeks,
+                bonus_amount_kopeks=0,
                 valid_hours=template.valid_hours,
                 effect_type=effect_type,
                 extra_data={
@@ -495,10 +484,6 @@ async def process_edit_discount_percent(message: Message, state: FSMContext, db:
     await _handle_edit_field(message, state, db, db_user, "discount_percent")
 
 
-async def process_edit_bonus_amount(message: Message, state: FSMContext, db: AsyncSession, db_user: User):
-    await _handle_edit_field(message, state, db, db_user, "bonus_amount_kopeks")
-
-
 async def process_edit_test_duration(message: Message, state: FSMContext, db: AsyncSession, db_user: User):
     await _handle_edit_field(message, state, db, db_user, "test_duration_hours")
 
@@ -513,7 +498,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(prompt_edit_button, F.data.startswith("promo_offer_edit_button_"))
     dp.callback_query.register(prompt_edit_valid, F.data.startswith("promo_offer_edit_valid_"))
     dp.callback_query.register(prompt_edit_discount, F.data.startswith("promo_offer_edit_discount_"))
-    dp.callback_query.register(prompt_edit_bonus, F.data.startswith("promo_offer_edit_bonus_"))
     dp.callback_query.register(prompt_edit_duration, F.data.startswith("promo_offer_edit_duration_"))
     dp.callback_query.register(prompt_edit_squads, F.data.startswith("promo_offer_edit_squads_"))
     dp.callback_query.register(show_send_segments, F.data.startswith("promo_offer_send_menu_"))
@@ -524,6 +508,5 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(process_edit_button_text, AdminStates.editing_promo_offer_button)
     dp.message.register(process_edit_valid_hours, AdminStates.editing_promo_offer_valid_hours)
     dp.message.register(process_edit_discount_percent, AdminStates.editing_promo_offer_discount)
-    dp.message.register(process_edit_bonus_amount, AdminStates.editing_promo_offer_bonus)
     dp.message.register(process_edit_test_duration, AdminStates.editing_promo_offer_test_duration)
     dp.message.register(process_edit_test_squads, AdminStates.editing_promo_offer_squads)
