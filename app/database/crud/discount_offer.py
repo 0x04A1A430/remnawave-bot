@@ -16,7 +16,7 @@ async def upsert_discount_offer(
     discount_percent: int,
     bonus_amount_kopeks: int,
     valid_hours: int,
-    effect_type: str = "balance_bonus",
+    effect_type: str = "percent_discount",
     extra_data: Optional[dict] = None,
 ) -> DiscountOffer:
     """Create or refresh a discount offer for a user."""
