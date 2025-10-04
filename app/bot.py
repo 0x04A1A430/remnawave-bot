@@ -30,6 +30,7 @@ from app.handlers.admin import (
     remnawave as admin_remnawave,
     statistics as admin_statistics,
     servers as admin_servers,
+    pricing as admin_pricing,
     maintenance as admin_maintenance,
     promo_groups as admin_promo_groups,
     campaigns as admin_campaigns,
@@ -126,7 +127,8 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_main.register_handlers(dp)
     admin_users.register_handlers(dp)
     admin_subscriptions.register_handlers(dp)
-    admin_servers.register_handlers(dp)  
+    admin_servers.register_handlers(dp)
+    admin_pricing.register_handlers(dp)
     admin_promocodes.register_handlers(dp)
     admin_messages.register_handlers(dp)
     admin_monitoring.register_handlers(dp)
