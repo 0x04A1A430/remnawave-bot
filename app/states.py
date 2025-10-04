@@ -110,6 +110,7 @@ class AdminStates(StatesGroup):
     editing_promo_offer_button = State()
     editing_promo_offer_valid_hours = State()
     editing_promo_offer_discount = State()
+    editing_promo_offer_bonus = State()
     editing_promo_offer_test_duration = State()
     editing_promo_offer_squads = State()
     
