@@ -17,6 +17,8 @@ def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_PROMO_STATS", "💰 Промокоды/Статистика"), callback_data="admin_submenu_promo")],
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_SUPPORT", "🛟 Поддержка"), callback_data="admin_submenu_support")],
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_MESSAGES", "📨 Сообщения"), callback_data="admin_submenu_communications")],
+        [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_SERVERS", "🌐 Серверы"), callback_data="admin_servers")],
+        [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_PRICING", "💰 Цены и тарифы"), callback_data="admin_pricing")],
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_SETTINGS", "⚙️ Настройки"), callback_data="admin_submenu_settings")],
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_SYSTEM", "🛠️ Система"), callback_data="admin_submenu_system")],
         [InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]

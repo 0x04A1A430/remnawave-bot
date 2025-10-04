@@ -40,6 +40,7 @@ from app.handlers.admin import (
     welcome_text as admin_welcome_text,
     tickets as admin_tickets,
     reports as admin_reports,
+    pricing as admin_pricing,
     bot_configuration as admin_bot_configuration,
 )
 from app.handlers.stars_payments import register_stars_handlers
@@ -144,6 +145,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_welcome_text.register_welcome_text_handlers(dp)
     admin_tickets.register_handlers(dp)
     admin_reports.register_handlers(dp)
+    admin_pricing.register_handlers(dp)
     admin_bot_configuration.register_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
