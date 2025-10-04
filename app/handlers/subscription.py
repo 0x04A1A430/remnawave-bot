@@ -5184,6 +5184,11 @@ async def claim_discount_offer(
                     "TEST_ACCESS_NO_SQUADS",
                     "❌ Не удалось определить список серверов для теста. Обратитесь к администратору.",
                 )
+            elif error_code == "already_connected":
+                error_message = texts.get(
+                    "TEST_ACCESS_ALREADY_CONNECTED",
+                    "ℹ️ Этот сервер уже подключен к вашей подписке.",
+                )
             elif error_code == "remnawave_sync_failed":
                 error_message = texts.get(
                     "TEST_ACCESS_REMNAWAVE_ERROR",

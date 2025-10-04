@@ -49,6 +49,10 @@ class PromoOfferService:
 
         squad_uuids = list(dict.fromkeys(squad_uuids))
 
+        connected = {str(item) for item in subscription.connected_squads or []}
+        if squad_uuids and set(squad_uuids).issubset(connected):
+            return False, None, None, "already_connected"
+
         try:
             duration_hours = int(payload.get("test_duration_hours") or payload.get("duration_hours") or 24)
         except (TypeError, ValueError):
@@ -60,7 +64,6 @@ class PromoOfferService:
         now = datetime.utcnow()
         expires_at = now + timedelta(hours=duration_hours)
 
-        connected = set(subscription.connected_squads or [])
         original_connected = set(connected)
         newly_added: List[str] = []
         changes_made = False
