@@ -9,7 +9,7 @@ from app.database.universal_migration import ensure_default_web_api_token
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings, settings, refresh_period_prices, refresh_traffic_prices
+from app.config import Settings, settings
 from app.database.crud.system_setting import (
     delete_system_setting,
     upsert_system_setting,
@@ -883,17 +883,6 @@ class BotConfigurationService:
     def _apply_to_settings(cls, key: str, value: Any) -> None:
         try:
             setattr(settings, key, value)
-            if key in {
-                "PRICE_14_DAYS",
-                "PRICE_30_DAYS",
-                "PRICE_60_DAYS",
-                "PRICE_90_DAYS",
-                "PRICE_180_DAYS",
-                "PRICE_360_DAYS",
-            }:
-                refresh_period_prices()
-            elif key.startswith("PRICE_TRAFFIC_") or key == "TRAFFIC_PACKAGES_CONFIG":
-                refresh_traffic_prices()
         except Exception as error:
             logger.error("Не удалось применить значение %s=%s: %s", key, value, error)
 
