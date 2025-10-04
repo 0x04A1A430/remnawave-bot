@@ -164,7 +164,7 @@ load_state() {
       setup_env
     else
       print_error "Бот не может работать без .env файла!"
-      print_info "Вы можете настроить его позже через пункт меню [9]"
+      print_info "Вы можете настроить его позже через пункт меню [10]"
     fi
   fi
   BACKUP_DIR="$INSTALL_PATH/backups"
@@ -1046,6 +1046,31 @@ show_monitoring() {
   fi
 }
 
+update_containers() {
+  print_header "ОБНОВЛЕНИЕ ОБРАЗОВ КОНТЕЙНЕРОВ"
+  print_info "Получаем последние версии образов через Docker Compose..."
+  if run_compose pull; then
+    print_success "Образы успешно обновлены"
+  else
+    print_error "Не удалось обновить образы контейнеров"
+    return 1
+  fi
+  echo ""
+  read -rp "$(echo -e ${YELLOW}Перезапустить сервисы после обновления? [Y/n]: ${NC})" restart_after_pull
+  if [[ "${restart_after_pull,,}" != "n" ]]; then
+    print_info "Запускаем сервисы с обновленными образами..."
+    if run_compose up -d; then
+      print_success "Сервисы запущены"
+      show_monitoring
+    else
+      print_error "Не удалось запустить сервисы"
+      return 1
+    fi
+  else
+    print_warning "Перезапустите сервисы позже для применения обновлений"
+  fi
+}
+
 update_from_git() {
   print_header "ОБНОВЛЕНИЕ ИЗ GIT РЕПОЗИТОРИЯ"
   if [[ ! -d "$INSTALL_PATH/.git" ]]; then
@@ -1344,15 +1369,30 @@ EOF
   echo -e "${NC}"
   echo -e "${WHITE}${BOLD}Путь установки:${NC} ${CYAN}$INSTALL_PATH${NC}"
   echo ""
+  echo -e "${WHITE}${BOLD}Статус контейнеров:${NC}"
+  local services=("bot" "postgres" "redis")
+  local status=""
+  for service in "${services[@]}"; do
+    status=$(get_service_status "$service")
+    if [[ "$status" == "running" ]]; then
+      print_status "running" "$service: работает"
+    elif [[ "$status" == "exited" ]] || [[ "$status" == "stopped" ]]; then
+      print_status "stopped" "$service: остановлен"
+    else
+      print_status "unknown" "$service: статус неизвестен"
+    fi
+  done
+  echo ""
   echo -e "${GREEN}${BOLD}[1]${NC} ${STAR} Мониторинг и статус сервисов"
   echo -e "${BLUE}${BOLD}[2]${NC} ${GEAR} Управление сервисами"
   echo -e "${YELLOW}${BOLD}[3]${NC} 📋 Просмотр логов"
-  echo -e "${PURPLE}${BOLD}[4]${NC} 🔄 Обновление из Git"
-  echo -e "${CYAN}${BOLD}[5]${NC} 💾 Создать резервную копию"
-  echo -e "${YELLOW}${BOLD}[6]${NC} 📦 Восстановить из резервной копии"
-  echo -e "${RED}${BOLD}[7]${NC} 🧹 Очистка системы"
-  echo -e "${PURPLE}${BOLD}[8]${NC} 🌐 Настройка обратного прокси (Caddy)"
-  echo -e "${GREEN}${BOLD}[9]${NC} ⚙️  Настройка конфигурации (.env)"
+  echo -e "${PURPLE}${BOLD}[4]${NC} ⬇️  Обновить контейнеры (docker compose pull)"
+  echo -e "${PURPLE}${BOLD}[5]${NC} 🔄 Обновление из Git"
+  echo -e "${CYAN}${BOLD}[6]${NC} 💾 Создать резервную копию"
+  echo -e "${YELLOW}${BOLD}[7]${NC} 📦 Восстановить из резервной копии"
+  echo -e "${RED}${BOLD}[8]${NC} 🧹 Очистка системы"
+  echo -e "${PURPLE}${BOLD}[9]${NC} 🌐 Настройка обратного прокси (Caddy)"
+  echo -e "${GREEN}${BOLD}[10]${NC} ⚙️  Настройка конфигурации (.env)"
   echo -e "${WHITE}${BOLD}[0]${NC} 🚪 Выход"
   echo ""
 }
@@ -1374,21 +1414,24 @@ main() {
         view_logs
         ;;
       4)
-        update_from_git
+        update_containers
         ;;
       5)
-        create_backup "manual"
+        update_from_git
         ;;
       6)
-        restore_backup
+        create_backup "manual"
         ;;
       7)
-        cleanup_system
+        restore_backup
         ;;
       8)
-        configure_reverse_proxy
+        cleanup_system
         ;;
       9)
+        configure_reverse_proxy
+        ;;
+      10)
         if check_env_exists; then
           edit_env
         else

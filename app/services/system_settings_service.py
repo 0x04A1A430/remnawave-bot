@@ -9,7 +9,7 @@ from app.database.universal_migration import ensure_default_web_api_token
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings, settings
+from app.config import Settings, settings, refresh_period_prices, refresh_traffic_prices
 from app.database.crud.system_setting import (
     delete_system_setting,
     upsert_system_setting,
@@ -60,92 +60,158 @@ class BotConfigurationService:
     EXCLUDED_KEYS: set[str] = {"BOT_TOKEN", "ADMIN_IDS"}
 
     CATEGORY_TITLES: Dict[str, str] = {
-        "SUPPORT": "💬 Ссылка на поддержку",
-        "LOCALIZATION": "🌍 Языковые настройки",
-        "MAINTENANCE": "🛠️ Режим обслуживания",
+        "CORE": "🤖 Основные настройки",
+        "SUPPORT": "💬 Поддержка и тикеты",
+        "LOCALIZATION": "🌍 Языки интерфейса",
         "CHANNEL": "📣 Обязательная подписка",
-        "ADMIN_NOTIFICATIONS": "🔔 Уведомления админам",
-        "ADMIN_REPORTS": "📊 Автоматические отчеты",
-        "TRIAL": "🎁 Триальная подписка",
-        "PAID_SUBSCRIPTION": "💰 Платные подписки",
-        "PERIODS": "📅 Периоды подписки",
-        "SUBSCRIPTION_PRICES": "💵 Цены за периоды",
-        "TRAFFIC": "🚦 Настройки трафика",
-        "TRAFFIC_PACKAGES": "📦 Пакеты трафика",
-        "DISCOUNTS": "🎯 Промо и скидки",
-        "PAYMENT": "⚙️ Общие настройки платежей",
+        "PAYMENT": "💳 Общие платежные настройки",
         "TELEGRAM": "⭐ Telegram Stars",
-        "CRYPTOBOT": "💎 CryptoBot",
-        "YOOKASSA": "💸 YooKassa",
+        "CRYPTOBOT": "🪙 CryptoBot",
+        "YOOKASSA": "🟣 YooKassa",
         "TRIBUTE": "🎁 Tribute",
         "MULENPAY": "💰 MulenPay",
-        "PAL24": "🏦 Pal24/PayPalych",
-        "REMNAWAVE": "🔗 RemnaWave API",
-        "REFERRAL": "🤝 Реферальная система",
+        "PAL24": "🏦 PAL24 / PayPalych",
+        "SUBSCRIPTIONS_CORE": "📅 Подписки и лимиты",
+        "PERIODS": "📆 Периоды подписок",
+        "SUBSCRIPTION_PRICES": "💵 Стоимость тарифов",
+        "TRAFFIC": "📊 Трафик",
+        "TRAFFIC_PACKAGES": "📦 Пакеты трафика",
+        "TRIAL": "🎁 Пробный период",
+        "REFERRAL": "👥 Реферальная программа",
         "AUTOPAY": "🔄 Автопродление",
-        "INTERFACE_BRANDING": "🖼️ Визуальные настройки",
-        "INTERFACE_SUBSCRIPTION": "🔗 Скрыть ссылку подписки",
-        "CONNECT_BUTTON": "🚀 Кнопка «Подключиться»",
-        "HAPP": "🅷 Happ настройки",
-        "SKIP": "⚡ Быстрый старт",
-        "ADDITIONAL": "📱 Приложения и DeepLinks",
-        "MINIAPP": "📱 Mini App",
-        "DATABASE": "🗄️ Режим БД",
-        "POSTGRES": "🐘 PostgreSQL",
-        "SQLITE": "💾 SQLite",
-        "REDIS": "🧠 Redis",
-        "MONITORING": "📈 Общий мониторинг",
         "NOTIFICATIONS": "🔔 Уведомления пользователям",
-        "SERVER": "🖥️ Статус серверов",
-        "BACKUP": "💾 Система бэкапов",
-        "VERSION": "🔄 Обновления",
-        "LOG": "📝 Логирование",
+        "ADMIN_NOTIFICATIONS": "📣 Оповещения администраторам",
+        "ADMIN_REPORTS": "🗂 Автоматические отчеты",
+        "INTERFACE": "🎨 Интерфейс и брендинг",
+        "INTERFACE_BRANDING": "🖼️ Брендинг",
+        "INTERFACE_SUBSCRIPTION": "🔗 Ссылка на подписку",
+        "CONNECT_BUTTON": "🚀 Кнопка подключения",
+        "MINIAPP": "📱 Mini App",
+        "HAPP": "🅷 Happ",
+        "SKIP": "⚡ Быстрый старт",
+        "ADDITIONAL": "📱 Дополнительные приложения",
+        "DATABASE": "💾 База данных",
+        "POSTGRES": "🐘 PostgreSQL",
+        "SQLITE": "🧱 SQLite",
+        "REDIS": "🧠 Redis",
+        "REMNAWAVE": "🌐 RemnaWave API",
+        "SERVER_STATUS": "📊 Статус серверов",
+        "MONITORING": "📈 Мониторинг",
+        "MAINTENANCE": "🔧 Обслуживание",
+        "BACKUP": "💾 Резервные копии",
+        "VERSION": "🔄 Проверка версий",
+        "WEB_API": "⚡ Web API",
         "WEBHOOK": "🌐 Webhook",
-        "WEB_API": "🌐 Web API",
-        "DEBUG": "🔧 Режим разработки",
+        "LOG": "📝 Логирование",
+        "DEBUG": "🧪 Режим разработки",
+    }
+
+    CATEGORY_DESCRIPTIONS: Dict[str, str] = {
+        "CORE": "Базовые параметры работы бота и обязательные ссылки.",
+        "SUPPORT": "Контакты поддержки, SLA и режимы обработки обращений.",
+        "LOCALIZATION": "Доступные языки, локализация интерфейса и выбор языка.",
+        "CHANNEL": "Настройки обязательной подписки на канал или группу.",
+        "PAYMENT": "Общие тексты платежей, описания чеков и шаблоны.",
+        "YOOKASSA": "Интеграция с YooKassa: идентификаторы магазина и вебхуки.",
+        "CRYPTOBOT": "CryptoBot и криптоплатежи через Telegram.",
+        "MULENPAY": "Платежи MulenPay и параметры магазина.",
+        "PAL24": "PAL24 / PayPalych подключения и лимиты.",
+        "TRIBUTE": "Tribute и донат-сервисы.",
+        "TELEGRAM": "Telegram Stars и их стоимость.",
+        "SUBSCRIPTIONS_CORE": "Лимиты устройств, трафика и базовые цены подписок.",
+        "PERIODS": "Доступные периоды подписок и продлений.",
+        "SUBSCRIPTION_PRICES": "Стоимость подписок по периодам в копейках.",
+        "TRAFFIC": "Лимиты трафика и стратегии сброса.",
+        "TRAFFIC_PACKAGES": "Цены пакетов трафика и конфигурация предложений.",
+        "TRIAL": "Длительность и ограничения пробного периода.",
+        "REFERRAL": "Бонусы и пороги реферальной программы.",
+        "AUTOPAY": "Настройки автопродления и минимальный баланс.",
+        "NOTIFICATIONS": "Пользовательские уведомления и кэширование сообщений.",
+        "ADMIN_NOTIFICATIONS": "Оповещения админам о событиях и тикетах.",
+        "ADMIN_REPORTS": "Автоматические отчеты для команды.",
+        "INTERFACE": "Глобальные параметры интерфейса и брендирования.",
+        "INTERFACE_BRANDING": "Логотип и фирменный стиль.",
+        "INTERFACE_SUBSCRIPTION": "Отображение ссылок и кнопок подписок.",
+        "CONNECT_BUTTON": "Поведение кнопки «Подключиться» и miniapp.",
+        "MINIAPP": "Mini App и кастомные ссылки.",
+        "HAPP": "Интеграция Happ и связанные ссылки.",
+        "SKIP": "Настройки быстрого старта и гайд по подключению.",
+        "ADDITIONAL": "Конфигурация app-config.json, deep links и кеша.",
+        "DATABASE": "Режим работы базы данных и пути до файлов.",
+        "POSTGRES": "Параметры подключения к PostgreSQL.",
+        "SQLITE": "Файл SQLite и резервные параметры.",
+        "REDIS": "Подключение к Redis для кэша.",
+        "REMNAWAVE": "Параметры авторизации и интеграция с RemnaWave API.",
+        "SERVER_STATUS": "Отображение статуса серверов и external URL.",
+        "MONITORING": "Интервалы мониторинга и хранение логов.",
+        "MAINTENANCE": "Режим обслуживания, сообщения и интервалы.",
+        "BACKUP": "Резервное копирование и расписание.",
+        "VERSION": "Отслеживание обновлений репозитория.",
+        "WEB_API": "Web API, токены и права доступа.",
+        "WEBHOOK": "Пути и секреты вебхуков.",
+        "LOG": "Уровни логирования и ротация.",
+        "DEBUG": "Отладочные функции и безопасный режим.",
     }
 
     CATEGORY_KEY_OVERRIDES: Dict[str, str] = {
         "DATABASE_URL": "DATABASE",
         "DATABASE_MODE": "DATABASE",
-        "LOCALES_PATH": "DATABASE",
-        "DEFAULT_DEVICE_LIMIT": "PAID_SUBSCRIPTION",
-        "DEFAULT_TRAFFIC_LIMIT_GB": "PAID_SUBSCRIPTION",
-        "MAX_DEVICES_LIMIT": "PAID_SUBSCRIPTION",
-        "PRICE_PER_DEVICE": "PAID_SUBSCRIPTION",
+        "LOCALES_PATH": "LOCALIZATION",
+        "CHANNEL_SUB_ID": "CHANNEL",
+        "CHANNEL_LINK": "CHANNEL",
+        "CHANNEL_IS_REQUIRED_SUB": "CHANNEL",
+        "DEFAULT_LANGUAGE": "LOCALIZATION",
+        "AVAILABLE_LANGUAGES": "LOCALIZATION",
+        "LANGUAGE_SELECTION_ENABLED": "LOCALIZATION",
+        "DEFAULT_DEVICE_LIMIT": "SUBSCRIPTIONS_CORE",
+        "DEFAULT_TRAFFIC_LIMIT_GB": "SUBSCRIPTIONS_CORE",
+        "MAX_DEVICES_LIMIT": "SUBSCRIPTIONS_CORE",
+        "PRICE_PER_DEVICE": "SUBSCRIPTIONS_CORE",
+        "BASE_SUBSCRIPTION_PRICE": "SUBSCRIPTIONS_CORE",
         "DEFAULT_TRAFFIC_RESET_STRATEGY": "TRAFFIC",
         "RESET_TRAFFIC_ON_PAYMENT": "TRAFFIC",
         "TRAFFIC_SELECTION_MODE": "TRAFFIC",
         "FIXED_TRAFFIC_LIMIT_GB": "TRAFFIC",
         "AVAILABLE_SUBSCRIPTION_PERIODS": "PERIODS",
         "AVAILABLE_RENEWAL_PERIODS": "PERIODS",
-        "BASE_SUBSCRIPTION_PRICE": "SUBSCRIPTION_PRICES",
         "PRICE_14_DAYS": "SUBSCRIPTION_PRICES",
         "PRICE_30_DAYS": "SUBSCRIPTION_PRICES",
         "PRICE_60_DAYS": "SUBSCRIPTION_PRICES",
         "PRICE_90_DAYS": "SUBSCRIPTION_PRICES",
         "PRICE_180_DAYS": "SUBSCRIPTION_PRICES",
         "PRICE_360_DAYS": "SUBSCRIPTION_PRICES",
-        "PRICE_TRAFFIC_5GB": "TRAFFIC_PACKAGES",
-        "PRICE_TRAFFIC_10GB": "TRAFFIC_PACKAGES",
-        "PRICE_TRAFFIC_25GB": "TRAFFIC_PACKAGES",
-        "PRICE_TRAFFIC_50GB": "TRAFFIC_PACKAGES",
-        "PRICE_TRAFFIC_100GB": "TRAFFIC_PACKAGES",
-        "PRICE_TRAFFIC_250GB": "TRAFFIC_PACKAGES",
-        "PRICE_TRAFFIC_500GB": "TRAFFIC_PACKAGES",
-        "PRICE_TRAFFIC_1000GB": "TRAFFIC_PACKAGES",
-        "PRICE_TRAFFIC_UNLIMITED": "TRAFFIC_PACKAGES",
         "TRAFFIC_PACKAGES_CONFIG": "TRAFFIC_PACKAGES",
-        "BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED": "DISCOUNTS",
-        "BASE_PROMO_GROUP_PERIOD_DISCOUNTS": "DISCOUNTS",
+        "BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED": "SUBSCRIPTIONS_CORE",
+        "BASE_PROMO_GROUP_PERIOD_DISCOUNTS": "SUBSCRIPTIONS_CORE",
         "REFERRED_USER_REWARD": "REFERRAL",
         "DEFAULT_AUTOPAY_DAYS_BEFORE": "AUTOPAY",
         "MIN_BALANCE_FOR_AUTOPAY_KOPEKS": "AUTOPAY",
-        "TRIAL_WARNING_HOURS": "NOTIFICATIONS",
+        "TRIAL_WARNING_HOURS": "TRIAL",
+        "SUPPORT_USERNAME": "SUPPORT",
+        "SUPPORT_MENU_ENABLED": "SUPPORT",
+        "SUPPORT_SYSTEM_MODE": "SUPPORT",
+        "SUPPORT_TICKET_SLA_ENABLED": "SUPPORT",
+        "SUPPORT_TICKET_SLA_MINUTES": "SUPPORT",
+        "SUPPORT_TICKET_SLA_CHECK_INTERVAL_SECONDS": "SUPPORT",
+        "SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES": "SUPPORT",
+        "ADMIN_NOTIFICATIONS_ENABLED": "ADMIN_NOTIFICATIONS",
+        "ADMIN_NOTIFICATIONS_CHAT_ID": "ADMIN_NOTIFICATIONS",
+        "ADMIN_NOTIFICATIONS_TOPIC_ID": "ADMIN_NOTIFICATIONS",
+        "ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID": "ADMIN_NOTIFICATIONS",
+        "ADMIN_REPORTS_ENABLED": "ADMIN_REPORTS",
+        "ADMIN_REPORTS_CHAT_ID": "ADMIN_REPORTS",
+        "ADMIN_REPORTS_TOPIC_ID": "ADMIN_REPORTS",
+        "ADMIN_REPORTS_SEND_TIME": "ADMIN_REPORTS",
+        "PAYMENT_SERVICE_NAME": "PAYMENT",
+        "PAYMENT_BALANCE_DESCRIPTION": "PAYMENT",
+        "PAYMENT_SUBSCRIPTION_DESCRIPTION": "PAYMENT",
+        "PAYMENT_BALANCE_TEMPLATE": "PAYMENT",
+        "PAYMENT_SUBSCRIPTION_TEMPLATE": "PAYMENT",
         "ENABLE_NOTIFICATIONS": "NOTIFICATIONS",
         "NOTIFICATION_RETRY_ATTEMPTS": "NOTIFICATIONS",
         "NOTIFICATION_CACHE_HOURS": "NOTIFICATIONS",
         "MONITORING_LOGS_RETENTION_DAYS": "MONITORING",
+        "MONITORING_INTERVAL": "MONITORING",
         "ENABLE_LOGO_MODE": "INTERFACE_BRANDING",
         "LOGO_FILE": "INTERFACE_BRANDING",
         "HIDE_SUBSCRIPTION_LINK": "INTERFACE_SUBSCRIPTION",
@@ -154,15 +220,17 @@ class BotConfigurationService:
         "APP_CONFIG_PATH": "ADDITIONAL",
         "ENABLE_DEEP_LINKS": "ADDITIONAL",
         "APP_CONFIG_CACHE_TTL": "ADDITIONAL",
-        "DEFAULT_LANGUAGE": "LOCALIZATION",
-        "AVAILABLE_LANGUAGES": "LOCALIZATION",
-        "PAYMENT_SERVICE_NAME": "PAYMENT",
-        "PAYMENT_BALANCE_DESCRIPTION": "PAYMENT",
-        "PAYMENT_SUBSCRIPTION_DESCRIPTION": "PAYMENT",
-        "PAYMENT_BALANCE_TEMPLATE": "PAYMENT",
-        "PAYMENT_SUBSCRIPTION_TEMPLATE": "PAYMENT",
-        "INACTIVE_USER_DELETE_MONTHS": "MONITORING",
-        "LANGUAGE_SELECTION_ENABLED": "LOCALIZATION",
+        "INACTIVE_USER_DELETE_MONTHS": "MAINTENANCE",
+        "MAINTENANCE_MESSAGE": "MAINTENANCE",
+        "MAINTENANCE_CHECK_INTERVAL": "MAINTENANCE",
+        "MAINTENANCE_AUTO_ENABLE": "MAINTENANCE",
+        "WEBHOOK_URL": "WEBHOOK",
+        "WEBHOOK_SECRET": "WEBHOOK",
+        "VERSION_CHECK_ENABLED": "VERSION",
+        "VERSION_CHECK_REPO": "VERSION",
+        "VERSION_CHECK_INTERVAL_HOURS": "VERSION",
+        "TELEGRAM_STARS_RATE_RUB": "TELEGRAM",
+        "REMNAWAVE_USER_DESCRIPTION_TEMPLATE": "REMNAWAVE",
     }
 
     CATEGORY_PREFIX_OVERRIDES: Dict[str, str] = {
@@ -193,7 +261,7 @@ class BotConfigurationService:
         "MINIAPP_": "MINIAPP",
         "MONITORING_": "MONITORING",
         "NOTIFICATION_": "NOTIFICATIONS",
-        "SERVER_STATUS": "SERVER",
+        "SERVER_STATUS": "SERVER_STATUS",
         "MAINTENANCE_": "MAINTENANCE",
         "VERSION_CHECK": "VERSION",
         "BACKUP_": "BACKUP",
@@ -289,6 +357,153 @@ class BotConfigurationService:
             ChoiceOption("CRITICAL", "🔥 Critical"),
         ],
     }
+
+    SETTING_HINTS: Dict[str, Dict[str, str]] = {
+        "YOOKASSA_ENABLED": {
+            "description": "Включает оплату через YooKassa. Требует корректных идентификаторов магазина и секретного ключа.",
+            "format": "Булево значение: выберите \"Включить\" или \"Выключить\".",
+            "example": "Включено при полностью настроенной интеграции.",
+            "warning": "При включении без Shop ID и Secret Key пользователи увидят ошибки при оплате.",
+            "dependencies": "YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_RETURN_URL",
+        },
+        "CRYPTOBOT_ENABLED": {
+            "description": "Разрешает принимать криптоплатежи через CryptoBot.",
+            "format": "Булево значение.",
+            "example": "Включите после указания токена API и секрета вебхука.",
+            "warning": "Пустой токен или неверный вебхук приведут к отказам платежей.",
+            "dependencies": "CRYPTOBOT_API_TOKEN, CRYPTOBOT_WEBHOOK_SECRET",
+        },
+        "SUPPORT_TICKET_SLA_MINUTES": {
+            "description": "Лимит времени для ответа модераторов на тикет в минутах.",
+            "format": "Целое число от 1 до 1440.",
+            "example": "5",
+            "warning": "Слишком низкое значение может вызвать частые напоминания, слишком высокое — ухудшить SLA.",
+            "dependencies": "SUPPORT_TICKET_SLA_ENABLED, SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES",
+        },
+        "MAINTENANCE_MODE": {
+            "description": "Переводит бота в режим технического обслуживания и скрывает действия для пользователей.",
+            "format": "Булево значение.",
+            "example": "Включено на время плановых работ.",
+            "warning": "Не забудьте отключить после завершения работ, иначе бот останется недоступен.",
+            "dependencies": "MAINTENANCE_MESSAGE, MAINTENANCE_CHECK_INTERVAL",
+        },
+        "REMNAWAVE_API_URL": {
+            "description": "Базовый адрес панели RemnaWave, с которой синхронизируется бот.",
+            "format": "Полный URL вида https://panel.example.com.",
+            "example": "https://panel.remnawave.net",
+            "warning": "Недоступный адрес приведет к ошибкам при управлении VPN-учетками.",
+            "dependencies": "REMNAWAVE_API_KEY или REMNAWAVE_USERNAME/REMNAWAVE_PASSWORD",
+        },
+    }
+
+    @classmethod
+    def get_category_description(cls, category_key: str) -> str:
+        return cls.CATEGORY_DESCRIPTIONS.get(category_key, "")
+
+    @classmethod
+    def is_toggle(cls, key: str) -> bool:
+        definition = cls.get_definition(key)
+        return definition.python_type is bool
+
+    @classmethod
+    def _format_numeric_with_unit(cls, key: str, value: Union[int, float]) -> Optional[str]:
+        if isinstance(value, bool):
+            return None
+        upper_key = key.upper()
+        if any(suffix in upper_key for suffix in ("PRICE", "_KOPEKS", "AMOUNT")):
+            try:
+                return settings.format_price(int(value))
+            except Exception:
+                return f"{value}"
+        if upper_key.endswith("_PERCENT") or "PERCENT" in upper_key:
+            return f"{value}%"
+        if upper_key.endswith("_HOURS"):
+            return f"{value} ч"
+        if upper_key.endswith("_MINUTES"):
+            return f"{value} мин"
+        if upper_key.endswith("_SECONDS"):
+            return f"{value} сек"
+        if upper_key.endswith("_DAYS"):
+            return f"{value} дн"
+        if upper_key.endswith("_GB"):
+            return f"{value} ГБ"
+        if upper_key.endswith("_MB"):
+            return f"{value} МБ"
+        return None
+
+    @classmethod
+    def _split_comma_values(cls, text: str) -> Optional[List[str]]:
+        raw = (text or "").strip()
+        if not raw or "," not in raw:
+            return None
+        parts = [segment.strip() for segment in raw.split(",") if segment.strip()]
+        return parts or None
+
+    @classmethod
+    def format_value_human(cls, key: str, value: Any) -> str:
+        if value is None:
+            return "—"
+
+        if isinstance(value, bool):
+            return "✅ ВКЛЮЧЕНО" if value else "❌ ВЫКЛЮЧЕНО"
+
+        if isinstance(value, (int, float)):
+            formatted = cls._format_numeric_with_unit(key, value)
+            return formatted or str(value)
+
+        if isinstance(value, str):
+            cleaned = value.strip()
+            if not cleaned:
+                return "—"
+            if any(keyword in key.upper() for keyword in ("TOKEN", "SECRET", "PASSWORD", "KEY")):
+                return "••••••••"
+            items = cls._split_comma_values(cleaned)
+            if items:
+                return ", ".join(items)
+            return cleaned
+
+        if isinstance(value, (list, tuple, set)):
+            return ", ".join(str(item) for item in value)
+
+        if isinstance(value, dict):
+            try:
+                return json.dumps(value, ensure_ascii=False)
+            except Exception:
+                return str(value)
+
+        return str(value)
+
+    @classmethod
+    def get_setting_guidance(cls, key: str) -> Dict[str, str]:
+        definition = cls.get_definition(key)
+        original = cls.get_original_value(key)
+        type_label = definition.type_label
+        hints = dict(cls.SETTING_HINTS.get(key, {}))
+
+        base_description = (
+            hints.get("description")
+            or f"Параметр <b>{definition.display_name}</b> управляет категорией «{definition.category_label}»."
+        )
+        base_format = hints.get("format") or (
+            "Булево значение (да/нет)." if definition.python_type is bool
+            else "Введите значение соответствующего типа (число или строку)."
+        )
+        example = hints.get("example") or (
+            cls.format_value_human(key, original) if original is not None else "—"
+        )
+        warning = hints.get("warning") or (
+            "Неверные значения могут привести к некорректной работе бота."
+        )
+        dependencies = hints.get("dependencies") or definition.category_label
+
+        return {
+            "description": base_description,
+            "format": base_format,
+            "example": example,
+            "warning": warning,
+            "dependencies": dependencies,
+            "type": type_label,
+        }
 
     _definitions: Dict[str, SettingDefinition] = {}
     _original_values: Dict[str, Any] = settings.model_dump()
@@ -443,7 +658,7 @@ class BotConfigurationService:
     @classmethod
     def format_value_for_list(cls, key: str) -> str:
         value = cls.get_current_value(key)
-        formatted = cls.format_value(value)
+        formatted = cls.format_value_human(key, value)
         if formatted == "—":
             return formatted
         return _truncate(formatted)
@@ -668,6 +883,17 @@ class BotConfigurationService:
     def _apply_to_settings(cls, key: str, value: Any) -> None:
         try:
             setattr(settings, key, value)
+            if key in {
+                "PRICE_14_DAYS",
+                "PRICE_30_DAYS",
+                "PRICE_60_DAYS",
+                "PRICE_90_DAYS",
+                "PRICE_180_DAYS",
+                "PRICE_360_DAYS",
+            }:
+                refresh_period_prices()
+            elif key.startswith("PRICE_TRAFFIC_") or key == "TRAFFIC_PACKAGES_CONFIG":
+                refresh_traffic_prices()
         except Exception as error:
             logger.error("Не удалось применить значение %s=%s: %s", key, value, error)
 
@@ -693,8 +919,8 @@ class BotConfigurationService:
         return {
             "key": key,
             "name": definition.display_name,
-            "current": cls.format_value(current),
-            "original": cls.format_value(original),
+            "current": cls.format_value_human(key, current),
+            "original": cls.format_value_human(key, original),
             "type": definition.type_label,
             "category_key": definition.category_key,
             "category_label": definition.category_label,
