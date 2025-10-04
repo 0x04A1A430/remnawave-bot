@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import List, Sequence
+from typing import List, Optional, Sequence, Tuple
 
 from aiogram import Dispatcher, F
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
@@ -66,17 +66,45 @@ OFFER_TYPE_CONFIG = {
     },
 }
 
-def _render_template_text(template: PromoOfferTemplate, language: str) -> str:
+def _render_template_text(
+    template: PromoOfferTemplate,
+    language: str,
+    *,
+    server_name: Optional[str] = None,
+) -> str:
     replacements = {
         "discount_percent": template.discount_percent,
         "valid_hours": template.valid_hours,
         "test_duration_hours": template.test_duration_hours or 0,
     }
+
+    if server_name is not None:
+        replacements.setdefault("server_name", server_name)
+    else:
+        # Prevent KeyError if template expects server_name
+        replacements.setdefault("server_name", "???")
     try:
         return template.message_text.format(**replacements)
     except Exception:  # pragma: no cover - fallback for invalid placeholders
         logger.warning("Не удалось форматировать текст промо-предложения %s", template.id)
         return template.message_text
+
+
+async def _resolve_template_squad(
+    db: AsyncSession,
+    template: PromoOfferTemplate,
+) -> Tuple[Optional[str], Optional[str]]:
+    if template.offer_type != "test_access":
+        return None, None
+
+    squads = template.test_squad_uuids or []
+    if not squads:
+        return None, None
+
+    squad_uuid = str(squads[0])
+    server = await get_server_squad_by_uuid(db, squad_uuid)
+    server_name = server.display_name if server else None
+    return squad_uuid, server_name
 
 
 def _build_templates_keyboard(templates: Sequence[PromoOfferTemplate], language: str) -> InlineKeyboardMarkup:
@@ -143,7 +171,13 @@ def _build_send_keyboard(template: PromoOfferTemplate, language: str) -> InlineK
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _describe_offer(template: PromoOfferTemplate, language: str) -> str:
+def _describe_offer(
+    template: PromoOfferTemplate,
+    language: str,
+    *,
+    server_name: Optional[str] = None,
+    server_uuid: Optional[str] = None,
+) -> str:
     texts = get_texts(language)
     config = OFFER_TYPE_CONFIG.get(template.offer_type, {})
     label = texts.t(config.get("label_key", ""), config.get("default_label", template.offer_type))
@@ -170,8 +204,20 @@ def _describe_offer(template: PromoOfferTemplate, language: str) -> str:
         duration = template.test_duration_hours or 0
         lines.append(texts.t("ADMIN_PROMO_OFFER_TEST_DURATION", "Доступ: {hours} ч").format(hours=duration))
         squads = template.test_squad_uuids or []
-        if squads:
-            lines.append(texts.t("ADMIN_PROMO_OFFER_TEST_SQUADS", "Сквады: {squads}").format(squads=", ".join(squads)))
+        if server_name:
+            lines.append(
+                texts.t("ADMIN_PROMO_OFFER_TEST_SQUAD_NAME", "Сервер: {name}").format(name=server_name)
+            )
+        elif squads:
+            lines.append(
+                texts.t("ADMIN_PROMO_OFFER_TEST_SQUADS", "Сквады: {squads}").format(
+                    squads=", ".join(str(item) for item in squads)
+                )
+            )
+        elif server_uuid:
+            lines.append(
+                texts.t("ADMIN_PROMO_OFFER_TEST_SQUADS", "Сквады: {squads}").format(squads=server_uuid)
+            )
         else:
             lines.append(texts.t("ADMIN_PROMO_OFFER_TEST_SQUADS_EMPTY", "Сквады: не указаны"))
 
@@ -184,7 +230,13 @@ def _describe_offer(template: PromoOfferTemplate, language: str) -> str:
 
     lines.append("")
     lines.append(texts.t("ADMIN_PROMO_OFFER_PREVIEW", "Предпросмотр:"))
-    lines.append(_render_template_text(template, language))
+    lines.append(
+        _render_template_text(
+            template,
+            language,
+            server_name=server_name,
+        )
+    )
 
     return "\n".join(lines)
 
@@ -219,7 +271,13 @@ async def show_promo_offer_details(callback: CallbackQuery, db_user: User, db: A
         return
 
     await state.update_data(selected_promo_offer=template.id)
-    description = _describe_offer(template, db_user.language)
+    squad_uuid, squad_name = await _resolve_template_squad(db, template)
+    description = _describe_offer(
+        template,
+        db_user.language,
+        server_name=squad_name,
+        server_uuid=squad_uuid,
+    )
     await callback.message.edit_text(
         description,
         reply_markup=_build_offer_detail_keyboard(template, db_user.language),
@@ -429,8 +487,15 @@ async def _render_offer_details(
     callback: CallbackQuery,
     template: PromoOfferTemplate,
     language: str,
+    db: AsyncSession,
 ):
-    description = _describe_offer(template, language)
+    squad_uuid, squad_name = await _resolve_template_squad(db, template)
+    description = _describe_offer(
+        template,
+        language,
+        server_name=squad_name,
+        server_uuid=squad_uuid,
+    )
     await callback.message.edit_text(
         description,
         reply_markup=_build_offer_detail_keyboard(template, language),
@@ -494,7 +559,13 @@ async def _handle_edit_field(
         await message.answer("❌ Предложение не найдено после обновления.")
         return
 
-    description = _describe_offer(updated_template, db_user.language)
+    squad_uuid, squad_name = await _resolve_template_squad(db, updated_template)
+    description = _describe_offer(
+        updated_template,
+        db_user.language,
+        server_name=squad_name,
+        server_uuid=squad_uuid,
+    )
     reply_markup = _build_offer_detail_keyboard(updated_template, db_user.language)
 
     if edit_message_id:
@@ -548,6 +619,7 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
         return
 
     config = OFFER_TYPE_CONFIG.get(template.offer_type, {})
+    squad_uuid, squad_name = await _resolve_template_squad(db, template)
     allowed_segments = {seg for seg, _ in config.get("allowed_segments", [])}
     if segment not in allowed_segments:
         await callback.answer("⚠️ Нельзя отправить это предложение выбранной категории", show_alert=True)
@@ -557,12 +629,25 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
     await callback.answer(texts.t("ADMIN_PROMO_OFFER_SENDING", "Начинаем рассылку..."), show_alert=True)
 
     users = await get_users_for_promo_segment(db, segment)
+    initial_count = len(users)
+
+    if template.offer_type == "test_access" and squad_uuid:
+        filtered_users: List[User] = []
+        for user in users:
+            subscription = getattr(user, "subscription", None)
+            connected = set(subscription.connected_squads or []) if subscription else set()
+            if squad_uuid in connected:
+                continue
+            filtered_users.append(user)
+        users = filtered_users
+
     if not users:
         await callback.message.answer(texts.t("ADMIN_PROMO_OFFER_NO_USERS", "Подходящих пользователей не найдено."))
         return
 
     sent = 0
     failed = 0
+    skipped = initial_count - len(users)
     effect_type = config.get("effect_type", "percent_discount")
 
     for user in users:
@@ -588,7 +673,11 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
                 [InlineKeyboardButton(text=template.button_text, callback_data=f"claim_discount_{offer_record.id}")]
             ])
 
-            message_text = _render_template_text(template, user.language or db_user.language)
+            message_text = _render_template_text(
+                template,
+                user.language or db_user.language,
+                server_name=squad_name,
+            )
             await callback.bot.send_message(
                 chat_id=user.telegram_id,
                 text=message_text,
@@ -607,9 +696,20 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
         "ADMIN_PROMO_OFFER_RESULT",
         "📬 Рассылка завершена\nОтправлено: {sent}\nОшибок: {failed}",
     ).format(sent=sent, failed=failed)
+    if skipped > 0:
+        summary += "\n" + texts.t(
+            "ADMIN_PROMO_OFFER_SKIPPED",
+            "Пропущено: {skipped} (уже есть доступ)",
+        ).format(skipped=skipped)
     refreshed = await get_promo_offer_template_by_id(db, template.id)
     if refreshed:
-        description = _describe_offer(refreshed, db_user.language)
+        refreshed_uuid, refreshed_name = await _resolve_template_squad(db, refreshed)
+        description = _describe_offer(
+            refreshed,
+            db_user.language,
+            server_name=refreshed_name,
+            server_uuid=refreshed_uuid,
+        )
         await callback.message.edit_text(
             description,
             reply_markup=_build_offer_detail_keyboard(refreshed, db_user.language),
@@ -704,7 +804,7 @@ async def select_squad_for_template(callback: CallbackQuery, db_user: User, db: 
     await callback.answer(texts.t("ADMIN_PROMO_OFFER_SELECT_SQUAD_UPDATED", "✅ Сквад обновлён"))
 
     if updated:
-        await _render_offer_details(callback, updated, db_user.language)
+        await _render_offer_details(callback, updated, db_user.language, db)
     else:
         await _render_squad_selection(callback, template, db, db_user.language, page=page)
 
@@ -758,7 +858,7 @@ async def back_to_offer_from_squads(callback: CallbackQuery, db_user: User, db: 
         return
 
     await state.update_data(selected_promo_offer=template.id)
-    await _render_offer_details(callback, template, db_user.language)
+    await _render_offer_details(callback, template, db_user.language, db)
     await callback.answer()
 
 
