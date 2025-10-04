@@ -16,7 +16,7 @@ async def upsert_discount_offer(
     discount_percent: int,
     bonus_amount_kopeks: int,
     valid_hours: int,
-    effect_type: str = "balance_bonus",
+    effect_type: str = "percent_discount",
     extra_data: Optional[dict] = None,
 ) -> DiscountOffer:
     """Create or refresh a discount offer for a user."""
@@ -67,12 +67,48 @@ async def get_offer_by_id(db: AsyncSession, offer_id: int) -> Optional[DiscountO
     return result.scalar_one_or_none()
 
 
-async def mark_offer_claimed(db: AsyncSession, offer: DiscountOffer) -> DiscountOffer:
-    offer.claimed_at = datetime.utcnow()
-    offer.is_active = False
+async def mark_offer_claimed(
+    db: AsyncSession,
+    offer: DiscountOffer,
+    *,
+    deactivate: bool = True,
+) -> DiscountOffer:
+    now = datetime.utcnow()
+    offer.claimed_at = now
+    if deactivate:
+        offer.is_active = False
+        offer.consumed_at = now
     await db.commit()
     await db.refresh(offer)
     return offer
+
+
+async def mark_offer_consumed(db: AsyncSession, offer: DiscountOffer) -> DiscountOffer:
+    offer.is_active = False
+    offer.consumed_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(offer)
+    return offer
+
+
+async def get_active_percent_discount_offer(
+    db: AsyncSession,
+    user_id: int,
+) -> Optional[DiscountOffer]:
+    now = datetime.utcnow()
+    result = await db.execute(
+        select(DiscountOffer)
+        .where(
+            DiscountOffer.user_id == user_id,
+            DiscountOffer.effect_type == "percent_discount",
+            DiscountOffer.is_active == True,  # noqa: E712
+            DiscountOffer.expires_at > now,
+            DiscountOffer.claimed_at.isnot(None),
+            DiscountOffer.consumed_at.is_(None),
+        )
+        .order_by(DiscountOffer.discount_percent.desc(), DiscountOffer.expires_at.desc())
+    )
+    return result.scalars().first()
 
 
 async def deactivate_expired_offers(db: AsyncSession) -> int:
