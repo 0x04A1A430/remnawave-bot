@@ -526,7 +526,10 @@ async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> List[Us
     )
 
     if segment == "no_subscription":
-        query = base_query.outerjoin(Subscription).where(Subscription.id.is_(None))
+        query = (
+            base_query.outerjoin(Subscription, Subscription.user_id == User.id)
+            .where(Subscription.id.is_(None))
+        )
     else:
         query = base_query.join(Subscription)
 
