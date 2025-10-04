@@ -30,7 +30,7 @@ class PromoCodeStates(StatesGroup):
     waiting_for_referral_code = State()
 
 class AdminStates(StatesGroup):
-
+    
     waiting_for_user_search = State()
     editing_user_balance = State()
     extending_subscription = State()
@@ -113,10 +113,6 @@ class AdminStates(StatesGroup):
     viewing_user_from_spending_list = State()
     viewing_user_from_purchases_list = State()
     viewing_user_from_campaign_list = State()
-
-
-class AdminPricingStates(StatesGroup):
-    waiting_for_price = State()
 
 class SupportStates(StatesGroup):
     waiting_for_message = State()
