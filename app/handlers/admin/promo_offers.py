@@ -393,8 +393,12 @@ async def show_send_segments(callback: CallbackQuery, db_user: User, db: AsyncSe
 @error_handler
 async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: AsyncSession):
     try:
-        _, _, template_id, segment = callback.data.split("_", 3)
-        template_id = int(template_id)
+        prefix = "promo_offer_send_"
+        if not callback.data.startswith(prefix):
+            raise ValueError("invalid prefix")
+        data = callback.data[len(prefix):]
+        template_id_str, segment = data.split("_", 1)
+        template_id = int(template_id_str)
     except (ValueError, AttributeError):
         await callback.answer("❌ Некорректные данные", show_alert=True)
         return
