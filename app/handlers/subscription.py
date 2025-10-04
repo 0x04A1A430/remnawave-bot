@@ -807,8 +807,6 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
             except AttributeError:
                 period_discount_percent = 0
 
-        from app.utils.pricing_utils import apply_percentage_discount
-
         base_cost, _ = apply_percentage_discount(
             base_cost_original,
             period_discount_percent,
@@ -2427,8 +2425,6 @@ async def handle_extend_subscription(
             months_in_period = calculate_months_from_days(days)
 
             from app.config import PERIOD_PRICES
-            from app.utils.pricing_utils import apply_percentage_discount
-
             base_price_original = PERIOD_PRICES.get(days, 0)
             period_discount_percent = db_user.get_promo_discount("period", days)
             base_price, _ = apply_percentage_discount(
@@ -2724,7 +2720,6 @@ async def confirm_extend_subscription(
 
     try:
         from app.config import PERIOD_PRICES
-        from app.utils.pricing_utils import apply_percentage_discount
 
         base_price_original = PERIOD_PRICES.get(days, 0)
         period_discount_percent = db_user.get_promo_discount("period", days)
@@ -3540,8 +3535,6 @@ async def confirm_purchase(
         discounted_servers_price_per_month = 0
         server_prices = []
 
-        from app.utils.pricing_utils import apply_percentage_discount
-
         for server_price_per_month in per_month_prices:
             discounted_per_month, discount_per_month = apply_percentage_discount(
                 server_price_per_month,
@@ -3581,8 +3574,6 @@ async def confirm_purchase(
             "devices",
             data['period_days'],
         )
-        from app.utils.pricing_utils import apply_percentage_discount
-
         discounted_devices_price_per_month, discount_per_month = apply_percentage_discount(
             devices_price_per_month,
             devices_discount_percent,
@@ -3615,8 +3606,6 @@ async def confirm_purchase(
             "traffic",
             data['period_days'],
         )
-        from app.utils.pricing_utils import apply_percentage_discount
-
         discounted_traffic_price_per_month, discount_per_month = apply_percentage_discount(
             traffic_price_per_month,
             traffic_discount_percent,
@@ -5252,7 +5241,17 @@ async def claim_discount_offer(
     ).format(percent=discount_percent)
 
     await callback.answer("✅ Скидка активирована!", show_alert=True)
-    await callback.message.answer(success_message)
+    buy_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.get("MENU_BUY_SUBSCRIPTION", "💎 Купить подписку"),
+                    callback_data="menu_buy",
+                )
+            ]
+        ]
+    )
+    await callback.message.answer(success_message, reply_markup=buy_keyboard)
 
 
 async def handle_device_guide(
