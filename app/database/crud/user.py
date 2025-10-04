@@ -12,6 +12,7 @@ from app.database.models import (
     User,
     UserStatus,
     Subscription,
+    SubscriptionStatus,
     Transaction,
     PromoGroup,
     PaymentMethod,
@@ -513,6 +514,56 @@ async def get_referrals(db: AsyncSession, user_id: int) -> List[User]:
         .order_by(User.created_at.desc())
     )
     return result.scalars().all()
+
+
+async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> List[User]:
+    now = datetime.utcnow()
+
+    base_query = (
+        select(User)
+        .options(selectinload(User.subscription))
+        .where(User.status == UserStatus.ACTIVE.value)
+    )
+
+    if segment == "no_subscription":
+        query = base_query.outerjoin(Subscription).where(Subscription.id.is_(None))
+    else:
+        query = base_query.join(Subscription)
+
+        if segment == "paid_active":
+            query = query.where(
+                Subscription.is_trial == False,  # noqa: E712
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date > now,
+            )
+        elif segment == "paid_expired":
+            query = query.where(
+                Subscription.is_trial == False,  # noqa: E712
+                or_(
+                    Subscription.status == SubscriptionStatus.EXPIRED.value,
+                    Subscription.end_date <= now,
+                ),
+            )
+        elif segment == "trial_active":
+            query = query.where(
+                Subscription.is_trial == True,  # noqa: E712
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date > now,
+            )
+        elif segment == "trial_expired":
+            query = query.where(
+                Subscription.is_trial == True,  # noqa: E712
+                or_(
+                    Subscription.status == SubscriptionStatus.EXPIRED.value,
+                    Subscription.end_date <= now,
+                ),
+            )
+        else:
+            logger.warning("Неизвестный сегмент для промо: %s", segment)
+            return []
+
+    result = await db.execute(query.order_by(User.id))
+    return result.scalars().unique().all()
 
 
 async def get_inactive_users(db: AsyncSession, months: int = 3) -> List[User]:

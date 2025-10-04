@@ -40,6 +40,7 @@ from app.localization.texts import get_texts
 from app.services.notification_settings_service import NotificationSettingsService
 from app.services.payment_service import PaymentService
 from app.services.subscription_service import SubscriptionService
+from app.services.promo_offer_service import promo_offer_service
 
 from app.external.remnawave_api import (
     RemnaWaveAPIError,
@@ -178,6 +179,10 @@ class MonitoringService:
                 expired_offers = await deactivate_expired_offers(db)
                 if expired_offers:
                     logger.info(f"🧹 Деактивировано {expired_offers} просроченных скидочных предложений")
+
+                cleaned_test_access = await promo_offer_service.cleanup_expired_test_access(db)
+                if cleaned_test_access:
+                    logger.info(f"🧹 Отозвано {cleaned_test_access} истекших тестовых доступов к сквадам")
 
                 await self._check_expired_subscriptions(db)
                 await self._check_expiring_subscriptions(db)

@@ -52,6 +52,7 @@ from app.services.subscription_checkout_service import (
     should_offer_checkout_resume,
 )
 from app.services.subscription_service import SubscriptionService
+from app.services.promo_offer_service import promo_offer_service
 from app.states import SubscriptionStates
 from app.utils.pagination import paginate_list
 from app.utils.pricing_utils import (
@@ -5050,6 +5051,47 @@ async def claim_discount_offer(
             texts.get("DISCOUNT_CLAIM_EXPIRED", "⚠️ Время действия предложения истекло"),
             show_alert=True,
         )
+        return
+
+    effect_type = (offer.effect_type or "balance_bonus").lower()
+
+    if effect_type == "test_access":
+        success, added_squads, expires_at, error_code = await promo_offer_service.grant_test_access(
+            db,
+            db_user,
+            offer,
+        )
+
+        if not success:
+            if error_code == "subscription_missing":
+                error_message = texts.get(
+                    "TEST_ACCESS_NO_SUBSCRIPTION",
+                    "❌ Для активации предложения необходима действующая подписка.",
+                )
+            elif error_code == "squads_missing":
+                error_message = texts.get(
+                    "TEST_ACCESS_NO_SQUADS",
+                    "❌ Не удалось определить список серверов для теста. Обратитесь к администратору.",
+                )
+            else:
+                error_message = texts.get(
+                    "TEST_ACCESS_UNKNOWN_ERROR",
+                    "❌ Не удалось активировать предложение. Попробуйте позже.",
+                )
+            await callback.answer(error_message, show_alert=True)
+            return
+
+        await mark_offer_claimed(db, offer)
+
+        expires_text = expires_at.strftime("%d.%m.%Y %H:%M") if expires_at else ""
+        success_message = texts.get(
+            "TEST_ACCESS_ACTIVATED_MESSAGE",
+            "🎉 Тестовые сервера подключены! Доступ активен до {expires_at}.",
+        ).format(expires_at=expires_text)
+
+        popup_text = texts.get("TEST_ACCESS_ACTIVATED_POPUP", "✅ Доступ выдан!")
+        await callback.answer(popup_text, show_alert=True)
+        await callback.message.answer(success_message)
         return
 
     bonus_amount = offer.bonus_amount_kopeks or 0
