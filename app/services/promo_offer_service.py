@@ -34,9 +34,20 @@ class PromoOfferService:
             return False, None, None, "subscription_missing"
 
         payload = offer.extra_data or {}
-        squad_uuids: Sequence[str] = payload.get("test_squad_uuids") or payload.get("squads") or []
+        raw_squads = payload.get("test_squad_uuids") or payload.get("squads") or []
+        if isinstance(raw_squads, str):
+            candidates = [raw_squads]
+        else:
+            try:
+                candidates = list(raw_squads)
+            except TypeError:
+                candidates = []
+
+        squad_uuids: Sequence[str] = [str(item) for item in candidates if item]
         if not squad_uuids:
             return False, None, None, "squads_missing"
+
+        squad_uuids = list(dict.fromkeys(squad_uuids))
 
         try:
             duration_hours = int(payload.get("test_duration_hours") or payload.get("duration_hours") or 24)
