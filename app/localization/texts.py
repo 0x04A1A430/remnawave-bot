@@ -42,6 +42,8 @@ def _build_dynamic_values(language: str) -> Dict[str, Any]:
             "TRAFFIC_50GB": f"📊 50 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_50GB)}",
             "TRAFFIC_100GB": f"📊 100 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_100GB)}",
             "TRAFFIC_250GB": f"📊 250 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_250GB)}",
+            "TRAFFIC_500GB": f"📊 500 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_500GB)}",
+            "TRAFFIC_1000GB": f"📊 1000 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_1000GB)}",
             "TRAFFIC_UNLIMITED": f"📊 Безлимит - {settings.format_price(settings.PRICE_TRAFFIC_UNLIMITED)}",
             "SUPPORT_INFO": (
                 "\n🛟 <b>Поддержка</b>\n\n"
@@ -67,6 +69,8 @@ def _build_dynamic_values(language: str) -> Dict[str, Any]:
             "TRAFFIC_50GB": f"📊 50 GB - {settings.format_price(settings.PRICE_TRAFFIC_50GB)}",
             "TRAFFIC_100GB": f"📊 100 GB - {settings.format_price(settings.PRICE_TRAFFIC_100GB)}",
             "TRAFFIC_250GB": f"📊 250 GB - {settings.format_price(settings.PRICE_TRAFFIC_250GB)}",
+            "TRAFFIC_500GB": f"📊 500 GB - {settings.format_price(settings.PRICE_TRAFFIC_500GB)}",
+            "TRAFFIC_1000GB": f"📊 1000 GB - {settings.format_price(settings.PRICE_TRAFFIC_1000GB)}",
             "TRAFFIC_UNLIMITED": f"📊 Unlimited - {settings.format_price(settings.PRICE_TRAFFIC_UNLIMITED)}",
             "SUPPORT_INFO": (
                 "\n🛟 <b>RemnaWave Support</b>\n\n"
