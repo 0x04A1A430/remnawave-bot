@@ -14,8 +14,6 @@ def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
 
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_USERS_SUBSCRIPTIONS", "👥 Юзеры/Подписки"), callback_data="admin_submenu_users")],
-        [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_SERVERS", "🌐 Сервера"), callback_data="admin_servers")],
-        [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_PRICING", "💰 Цены"), callback_data="admin_pricing")],
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_PROMO_STATS", "💰 Промокоды/Статистика"), callback_data="admin_submenu_promo")],
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_SUPPORT", "🛟 Поддержка"), callback_data="admin_submenu_support")],
         [InlineKeyboardButton(text=_t(texts, "ADMIN_MAIN_MESSAGES", "📨 Сообщения"), callback_data="admin_submenu_communications")],
@@ -170,32 +168,6 @@ def get_admin_system_submenu_keyboard(language: str = "ru") -> InlineKeyboardMar
         [
             InlineKeyboardButton(text=texts.BACK, callback_data="admin_panel")
         ]
-    ])
-
-
-def get_admin_pricing_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_PRICING_SUBSCRIPTIONS_BUTTON", "📅 Подписки"),
-                callback_data="admin_pricing_subscriptions",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_PRICING_TRAFFIC_BUTTON", "📦 Трафик"),
-                callback_data="admin_pricing_traffic",
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_PRICING_DEVICES_BUTTON", "📱 Устройства"),
-                callback_data="admin_pricing_devices",
-            )
-        ],
-        [InlineKeyboardButton(text=texts.BACK, callback_data="admin_panel")],
     ])
 
 
