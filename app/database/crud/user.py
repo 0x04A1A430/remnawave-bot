@@ -315,24 +315,6 @@ async def subtract_user_balance(
         return False
 
 
-async def clear_user_pending_discount(db: AsyncSession, user: User) -> None:
-    try:
-        user.pending_discount_percent = 0
-        user.pending_discount_expires_at = None
-        user.pending_discount_offer_id = None
-        user.updated_at = datetime.utcnow()
-
-        await db.commit()
-        await db.refresh(user)
-        logger.info(f"🔄 Сброшена активная скидка для пользователя {user.id}")
-    except Exception as e:
-        logger.error(f"Ошибка сброса скидки пользователя {user.id}: {e}")
-        try:
-            await db.rollback()
-        except Exception as rollback_error:
-            logger.error(f"Ошибка отката транзакции при сбросе скидки пользователя {user.id}: {rollback_error}")
-
-
 async def get_users_list(
     db: AsyncSession,
     offset: int = 0,
