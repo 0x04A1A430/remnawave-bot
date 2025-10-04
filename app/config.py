@@ -1061,51 +1061,24 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-
-def get_period_prices() -> Dict[int, int]:
-    prices: Dict[int, int] = {}
-
-    for field_name in Settings.model_fields:
-        if not field_name.startswith("PRICE_"):
-            continue
-        if not field_name.endswith("_DAYS"):
-            continue
-        if "TRAFFIC" in field_name:
-            continue
-
-        try:
-            days = int(field_name.replace("PRICE_", "").replace("_DAYS", ""))
-        except ValueError:
-            continue
-
-        prices[days] = getattr(settings, field_name)
-
-    return prices
-
-
-PERIOD_PRICES: Dict[int, int] = {}
-
-
-def refresh_period_prices() -> None:
-    PERIOD_PRICES.clear()
-    PERIOD_PRICES.update(get_period_prices())
-
-
-refresh_period_prices()
-
+PERIOD_PRICES = {
+    14: settings.PRICE_14_DAYS,
+    30: settings.PRICE_30_DAYS,
+    60: settings.PRICE_60_DAYS,
+    90: settings.PRICE_90_DAYS,
+    180: settings.PRICE_180_DAYS,
+    360: settings.PRICE_360_DAYS,
+}
 
 def get_traffic_prices() -> Dict[int, int]:
     packages = settings.get_traffic_packages()
     return {package["gb"]: package["price"] for package in packages}
 
-
 TRAFFIC_PRICES = get_traffic_prices()
-
 
 def refresh_traffic_prices():
     global TRAFFIC_PRICES
     TRAFFIC_PRICES = get_traffic_prices()
-
 
 refresh_traffic_prices()
 
