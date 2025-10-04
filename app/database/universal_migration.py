@@ -728,7 +728,7 @@ async def create_discount_offers_table():
                         expires_at DATETIME NOT NULL,
                         claimed_at DATETIME NULL,
                         is_active BOOLEAN NOT NULL DEFAULT 1,
-                        effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus',
+                        effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount',
                         extra_data TEXT NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -753,7 +753,7 @@ async def create_discount_offers_table():
                         expires_at TIMESTAMP NOT NULL,
                         claimed_at TIMESTAMP NULL,
                         is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                        effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus',
+                        effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount',
                         extra_data JSON NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -776,7 +776,7 @@ async def create_discount_offers_table():
                         expires_at DATETIME NOT NULL,
                         claimed_at DATETIME NULL,
                         is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                        effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus',
+                        effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount',
                         extra_data JSON NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -814,15 +814,15 @@ async def ensure_discount_offer_columns():
             if not effect_exists:
                 if db_type == 'sqlite':
                     await conn.execute(text(
-                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus'"
+                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount'"
                     ))
                 elif db_type == 'postgresql':
                     await conn.execute(text(
-                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus'"
+                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount'"
                     ))
                 elif db_type == 'mysql':
                     await conn.execute(text(
-                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'balance_bonus'"
+                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount'"
                     ))
                 else:
                     raise ValueError(f"Unsupported database type: {db_type}")
@@ -848,6 +848,37 @@ async def ensure_discount_offer_columns():
 
     except Exception as e:
         logger.error(f"Ошибка обновления колонок discount_offers: {e}")
+        return False
+
+
+async def update_discount_offer_effect_defaults() -> bool:
+    try:
+        effect_exists = await check_column_exists('discount_offers', 'effect_type')
+        if not effect_exists:
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'postgresql':
+                await conn.execute(text(
+                    "ALTER TABLE discount_offers ALTER COLUMN effect_type SET DEFAULT 'percent_discount'"
+                ))
+            elif db_type == 'mysql':
+                await conn.execute(text(
+                    "ALTER TABLE discount_offers ALTER COLUMN effect_type SET DEFAULT 'percent_discount'"
+                ))
+            # SQLite requires table rebuild to change defaults; skip altering default but update rows
+
+            await conn.execute(text(
+                "UPDATE discount_offers SET effect_type = 'percent_discount' WHERE effect_type = 'balance_bonus'"
+            ))
+
+        logger.info("✅ Значение по умолчанию effect_type для discount_offers обновлено")
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка обновления значения по умолчанию effect_type: {e}")
         return False
 
 
@@ -2433,6 +2464,12 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Не удалось обновить колонки discount_offers")
 
+        discount_defaults_ready = await update_discount_offer_effect_defaults()
+        if discount_defaults_ready:
+            logger.info("✅ Значение по умолчанию скидочного эффекта обновлено")
+        else:
+            logger.warning("⚠️ Не удалось обновить значение по умолчанию скидочного эффекта")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PROMO_OFFER_TEMPLATES ===")
         promo_templates_created = await create_promo_offer_templates_table()
         if promo_templates_created:
@@ -2651,6 +2688,7 @@ async def check_migration_status():
             "discount_offers_table": False,
             "discount_offers_effect_column": False,
             "discount_offers_extra_column": False,
+            "discount_offers_effect_default": False,
             "promo_offer_templates_table": False,
             "subscription_temporary_access_table": False,
         }
@@ -2669,6 +2707,14 @@ async def check_migration_status():
         status["discount_offers_extra_column"] = await check_column_exists('discount_offers', 'extra_data')
         status["promo_offer_templates_table"] = await check_table_exists('promo_offer_templates')
         status["subscription_temporary_access_table"] = await check_table_exists('subscription_temporary_access')
+
+        if status["discount_offers_effect_column"]:
+            async with engine.begin() as conn:
+                result = await conn.execute(text(
+                    "SELECT COUNT(*) FROM discount_offers WHERE effect_type = 'balance_bonus'"
+                ))
+                remaining_legacy = result.scalar() or 0
+                status["discount_offers_effect_default"] = remaining_legacy == 0
 
         status["welcome_texts_is_enabled_column"] = await check_column_exists('welcome_texts', 'is_enabled')
         status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
