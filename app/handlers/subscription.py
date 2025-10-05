@@ -82,6 +82,25 @@ logger = logging.getLogger(__name__)
 TRAFFIC_PRICES = get_traffic_prices()
 
 
+class _SafeFormatDict(dict):
+    def __missing__(self, key: str) -> str:  # pragma: no cover - defensive fallback
+        return "{" + key + "}"
+
+
+def _format_text_with_placeholders(template: str, values: Dict[str, Any]) -> str:
+    if not isinstance(template, str):
+        return template
+
+    safe_values = _SafeFormatDict()
+    safe_values.update(values)
+
+    try:
+        return template.format_map(safe_values)
+    except Exception:  # pragma: no cover - defensive logging
+        logger.warning("Failed to format template '%s' with values %s", template, values)
+        return template
+
+
 def _get_addon_discount_percent_for_user(
         user: Optional[User],
         category: str,
@@ -5304,10 +5323,82 @@ async def claim_discount_offer(
     )
     await db.refresh(db_user)
 
-    success_message = texts.get(
+    success_template = texts.get(
         "DISCOUNT_CLAIM_SUCCESS",
         "🎉 Скидка {percent}% активирована! Она автоматически применится при следующей оплате.",
-    ).format(percent=discount_percent)
+    )
+
+    expires_text = (
+        discount_expires_at.strftime("%d.%m.%Y %H:%M") if discount_expires_at else ""
+    )
+
+    format_values: Dict[str, Any] = {"percent": discount_percent}
+
+    if duration_hours and duration_hours > 0:
+        format_values.setdefault("hours", duration_hours)
+        format_values.setdefault("duration_hours", duration_hours)
+
+    if discount_expires_at:
+        format_values.setdefault("expires_at", expires_text)
+        format_values.setdefault("expires_at_iso", discount_expires_at.isoformat())
+        try:
+            expires_timestamp = int(discount_expires_at.timestamp())
+        except (OverflowError, OSError, ValueError):
+            expires_timestamp = None
+        if expires_timestamp:
+            format_values.setdefault("expires_at_ts", expires_timestamp)
+        remaining_hours = int((discount_expires_at - now).total_seconds() // 3600)
+        if remaining_hours > 0:
+            format_values.setdefault("expires_in_hours", remaining_hours)
+
+    amount_text = ""
+    if isinstance(extra_data, dict):
+        raw_amount_text = (
+            extra_data.get("amount_text")
+            or extra_data.get("discount_amount_text")
+            or extra_data.get("formatted_amount")
+        )
+        if isinstance(raw_amount_text, str) and raw_amount_text.strip():
+            amount_text = raw_amount_text.strip()
+        else:
+            raw_amount = extra_data.get("amount") or extra_data.get("discount_amount")
+            if isinstance(raw_amount, (int, float)):
+                amount_text = settings.format_price(int(raw_amount))
+            elif isinstance(raw_amount, str) and raw_amount.strip():
+                amount_text = raw_amount.strip()
+
+        if not amount_text:
+            for key in ("discount_amount_kopeks", "amount_kopeks", "bonus_amount_kopeks"):
+                maybe_amount = extra_data.get(key)
+                try:
+                    amount_value = int(maybe_amount)
+                except (TypeError, ValueError):
+                    continue
+                if amount_value > 0:
+                    amount_text = settings.format_price(amount_value)
+                    break
+
+        for key, value in extra_data.items():
+            if (
+                isinstance(key, str)
+                and key.isidentifier()
+                and key not in format_values
+                and isinstance(value, (str, int, float))
+            ):
+                format_values[key] = value
+
+    if not amount_text:
+        try:
+            bonus_amount = int(getattr(offer, "bonus_amount_kopeks", 0))
+        except (TypeError, ValueError):
+            bonus_amount = 0
+        if bonus_amount > 0:
+            amount_text = settings.format_price(bonus_amount)
+
+    if amount_text:
+        format_values.setdefault("amount", amount_text)
+
+    success_message = _format_text_with_placeholders(success_template, format_values)
 
     await callback.answer("✅ Скидка активирована!", show_alert=True)
 
