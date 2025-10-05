@@ -188,7 +188,7 @@ async def update_promo_offer_template(
         template.discount_percent = discount_percent
     if bonus_amount_kopeks is not None:
         template.bonus_amount_kopeks = bonus_amount_kopeks
-    if test_duration_hours is not None or template.offer_type == "test_access":
+    if test_duration_hours is not None:
         template.test_duration_hours = test_duration_hours
     if test_squad_uuids is not None:
         template.test_squad_uuids = list(test_squad_uuids)

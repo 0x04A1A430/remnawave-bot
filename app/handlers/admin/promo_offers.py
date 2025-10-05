@@ -82,6 +82,7 @@ OFFER_TYPE_CONFIG = {
         "allowed_segments": [
             ("paid_expired", "🔴 Истёкшие платные"),
             ("trial_expired", "🥶 Истёкшие триалы"),
+            ("trial_active", "🎁 Активные триалы"),
         ],
         "effect_type": "percent_discount",
     },
@@ -791,7 +792,15 @@ async def _handle_edit_field(
                 parse_mode="HTML",
             )
         except TelegramBadRequest as exc:
-            logger.warning("Не удалось обновить сообщение редактирования промо: %s", exc)
+            error_text = str(exc).lower()
+            if "there is no text in the message to edit" in error_text:
+                logger.debug("Сообщение промо без текста, пересылаем обновлённую версию")
+                try:
+                    await message.bot.delete_message(chat_id=edit_chat_id, message_id=edit_message_id)
+                except TelegramBadRequest:
+                    logger.debug("Не удалось удалить сообщение промо без текста")
+            else:
+                logger.warning("Не удалось обновить сообщение редактирования промо: %s", exc)
             await message.answer(description, reply_markup=reply_markup, parse_mode="HTML")
     else:
         await message.answer(description, reply_markup=reply_markup, parse_mode="HTML")
