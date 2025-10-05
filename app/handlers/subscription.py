@@ -5253,6 +5253,15 @@ async def claim_discount_offer(
     extra_data = offer.extra_data or {}
     raw_duration = extra_data.get("active_discount_hours")
     template_id = extra_data.get("template_id")
+    offer_type = extra_data.get("offer_type")
+
+    subscription = getattr(db_user, "subscription", None)
+    has_active_subscription = False
+    if subscription:
+        try:
+            has_active_subscription = subscription.actual_status in {"active", "trial"}
+        except Exception:  # pragma: no cover - defensive fallback
+            has_active_subscription = False
 
     if raw_duration in (None, "") and template_id:
         try:
@@ -5287,19 +5296,20 @@ async def claim_discount_offer(
 
     success_message = texts.get(
         "DISCOUNT_CLAIM_SUCCESS",
-        "🎉 Скидка {percent}% активирована! Она автоматически применится при следующей оплате.",
+        "🎉 Скидка {percent}% активирована! Она суммируется с промогруппой и автоматически применится при следующей оплате.",
     ).format(percent=discount_percent)
 
     await callback.answer("✅ Скидка активирована!", show_alert=True)
+
+    if offer_type == "purchase_discount" and not has_active_subscription:
+        cta_text = texts.get("MENU_BUY_SUBSCRIPTION", "💎 Купить подписку")
+        cta_callback = "menu_buy"
+    else:
+        cta_text = texts.get("SUBSCRIPTION_EXTEND", "💎 Продлить подписку")
+        cta_callback = "subscription_extend"
+
     buy_keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=texts.get("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
-                    callback_data="subscription_extend",
-                )
-            ]
-        ]
+        inline_keyboard=[[InlineKeyboardButton(text=cta_text, callback_data=cta_callback)]]
     )
     await callback.message.answer(success_message, reply_markup=buy_keyboard)
 
