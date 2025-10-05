@@ -563,6 +563,7 @@
   "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "⚡ Extra {percent}% discount is active and will apply automatically. It stacks with your promo group.",
   "DISCOUNT_CLAIM_ALREADY": "ℹ️ This discount has already been activated.",
   "DISCOUNT_CLAIM_ERROR": "❌ Failed to activate the discount. Please try again later.",
+  "PROMO_OFFER_CLOSE": "❌ Close",
   "DISCOUNT_CLAIM_EXPIRED": "⚠️ The offer has expired.",
   "DISCOUNT_CLAIM_NOT_FOUND": "❌ Offer not found.",
   "DISCOUNT_CLAIM_SUCCESS": "🎉 Discount of {percent}% activated! It will be applied automatically to your next payment.",
