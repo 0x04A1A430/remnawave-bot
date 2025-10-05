@@ -331,6 +331,7 @@ async def subtract_user_balance(
         if consume_promo_offer and getattr(user, "promo_offer_discount_percent", 0):
             user.promo_offer_discount_percent = 0
             user.promo_offer_discount_source = None
+            user.promo_offer_discount_expires_at = None
 
         user.updated_at = datetime.utcnow()
 
@@ -384,6 +385,97 @@ async def subtract_user_balance(
         logger.error(f"   ❌ ОШИБКА СПИСАНИЯ: {e}")
         await db.rollback()
         return False
+
+
+async def cleanup_expired_promo_offer_discounts(db: AsyncSession) -> int:
+    now = datetime.utcnow()
+    result = await db.execute(
+        select(User).where(
+            User.promo_offer_discount_percent > 0,
+            User.promo_offer_discount_expires_at.isnot(None),
+            User.promo_offer_discount_expires_at <= now,
+        )
+    )
+    users = result.scalars().all()
+    if not users:
+        return 0
+
+    log_payloads: List[Dict[str, object]] = []
+
+    for user in users:
+        try:
+            percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
+        except (TypeError, ValueError):
+            percent = 0
+
+        source = getattr(user, "promo_offer_discount_source", None)
+        offer_id = None
+        effect_type = None
+
+        if source:
+            try:
+                offer = await get_latest_claimed_offer_for_user(db, user.id, source)
+            except Exception as lookup_error:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to fetch latest claimed promo offer for user %s during expiration cleanup: %s",
+                    user.id,
+                    lookup_error,
+                )
+                offer = None
+
+            if offer:
+                offer_id = offer.id
+                effect_type = offer.effect_type
+                if not percent and offer.discount_percent:
+                    percent = offer.discount_percent
+
+        log_payloads.append(
+            {
+                "user_id": user.id,
+                "offer_id": offer_id,
+                "source": source,
+                "percent": percent,
+                "effect_type": effect_type,
+            }
+        )
+
+        user.promo_offer_discount_percent = 0
+        user.promo_offer_discount_source = None
+        user.promo_offer_discount_expires_at = None
+        user.updated_at = now
+
+    await db.commit()
+
+    for payload in log_payloads:
+        user_id = payload.get("user_id")
+        if not user_id:
+            continue
+        try:
+            await log_promo_offer_action(
+                db,
+                user_id=user_id,
+                offer_id=payload.get("offer_id"),
+                action="disabled",
+                source=payload.get("source"),
+                percent=payload.get("percent"),
+                effect_type=payload.get("effect_type"),
+                details={"reason": "offer_expired"},
+            )
+        except Exception as log_error:  # pragma: no cover - defensive logging
+            logger.warning(
+                "Failed to log promo offer expiration for user %s: %s",
+                user_id,
+                log_error,
+            )
+            try:
+                await db.rollback()
+            except Exception as rollback_error:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to rollback session after promo offer expiration log failure: %s",
+                    rollback_error,
+                )
+
+    return len(users)
 
 
 async def get_users_list(

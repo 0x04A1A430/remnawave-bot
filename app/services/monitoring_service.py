@@ -36,6 +36,7 @@ from app.database.crud.user import (
     get_inactive_users,
     get_user_by_id,
     subtract_user_balance,
+    cleanup_expired_promo_offer_discounts,
 )
 from app.database.models import MonitoringLog, SubscriptionStatus, Subscription, User, Ticket, TicketStatus
 from app.localization.texts import get_texts
@@ -182,6 +183,13 @@ class MonitoringService:
                 expired_offers = await deactivate_expired_offers(db)
                 if expired_offers:
                     logger.info(f"🧹 Деактивировано {expired_offers} просроченных скидочных предложений")
+
+                expired_active_discounts = await cleanup_expired_promo_offer_discounts(db)
+                if expired_active_discounts:
+                    logger.info(
+                        "🧹 Сброшено %s активных скидок промо-предложений с истекшим сроком",
+                        expired_active_discounts,
+                    )
 
                 cleaned_test_access = await promo_offer_service.cleanup_expired_test_access(db)
                 if cleaned_test_access:
@@ -793,6 +801,10 @@ class MonitoringService:
         except (TypeError, ValueError):
             return 0
 
+        expires_at = getattr(user, "promo_offer_discount_expires_at", None)
+        if expires_at and expires_at <= datetime.utcnow():
+            return 0
+
         return max(0, min(100, percent))
 
     @staticmethod
@@ -827,6 +839,7 @@ class MonitoringService:
 
         user.promo_offer_discount_percent = 0
         user.promo_offer_discount_source = None
+        user.promo_offer_discount_expires_at = None
         user.updated_at = datetime.utcnow()
 
         await db.commit()
