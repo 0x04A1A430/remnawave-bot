@@ -55,8 +55,6 @@
   "LOADING": "⏳ Loading...",
   "MAIN_MENU": "👤 <b>{user_name}</b>\n\n📱 <b>Subscription:</b> {subscription_status}\n\nChoose an option:\n",
   "MAIN_MENU_ACTION_PROMPT": "Choose an option:",
-  "MAIN_MENU_TEST_ACCESS_HEADER": "🧪 Test servers active: {count}",
-  "MAIN_MENU_TEST_ACCESS_TIMER": "⏳ Access active for {time_left}\n<code>{bar}</code>",
   "MAIN_MENU_BUTTON": "🏠 Main menu",
   "MANAGE_DEVICES_BUTTON": "🔧 Manage devices",
   "MENU_BALANCE": "💰 Balance",
