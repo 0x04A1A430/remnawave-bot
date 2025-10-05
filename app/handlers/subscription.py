@@ -5291,12 +5291,39 @@ async def claim_discount_offer(
     ).format(percent=discount_percent)
 
     await callback.answer("✅ Скидка активирована!", show_alert=True)
+
+    offer_type = None
+    if isinstance(extra_data, dict):
+        offer_type = extra_data.get("offer_type")
+
+    subscription = getattr(db_user, "subscription", None)
+
+    if offer_type == "purchase_discount":
+        button_text = texts.get("MENU_BUY_SUBSCRIPTION", "💎 Купить подписку")
+        button_callback = "subscription_upgrade"
+    elif offer_type == "extend_discount":
+        button_text = texts.get("SUBSCRIPTION_EXTEND", "💎 Продлить подписку")
+        button_callback = "subscription_extend"
+    else:
+        has_active_paid_subscription = bool(
+            subscription
+            and getattr(subscription, "is_active", False)
+            and not getattr(subscription, "is_trial", False)
+        )
+
+        if has_active_paid_subscription:
+            button_text = texts.get("SUBSCRIPTION_EXTEND", "💎 Продлить подписку")
+            button_callback = "subscription_extend"
+        else:
+            button_text = texts.get("MENU_BUY_SUBSCRIPTION", "💎 Купить подписку")
+            button_callback = "subscription_upgrade"
+
     buy_keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.get("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
-                    callback_data="subscription_extend",
+                    text=button_text,
+                    callback_data=button_callback,
                 )
             ]
         ]
