@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings, PERIOD_PRICES, get_traffic_prices
 from app.database.crud.discount_offer import get_offer_by_id, mark_offer_claimed
+from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.crud.subscription import (
     create_trial_subscription,
     create_paid_subscription, add_subscription_traffic, add_subscription_devices,
@@ -118,6 +119,10 @@ def _get_promo_offer_discount_percent(user: Optional[User]) -> int:
     try:
         percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
     except (TypeError, ValueError):
+        return 0
+
+    expires_at = getattr(user, "promo_offer_discount_expires_at", None)
+    if expires_at and expires_at <= datetime.utcnow():
         return 0
 
     return max(0, min(100, percent))
@@ -5245,12 +5250,37 @@ async def claim_discount_offer(
     db_user.promo_offer_discount_source = offer.notification_type
     db_user.updated_at = now
 
+    extra_data = offer.extra_data or {}
+    raw_duration = extra_data.get("active_discount_hours")
+    template_id = extra_data.get("template_id")
+
+    if raw_duration in (None, "") and template_id:
+        try:
+            template = await get_promo_offer_template_by_id(db, int(template_id))
+        except (ValueError, TypeError):
+            template = None
+        if template and template.active_discount_hours:
+            raw_duration = template.active_discount_hours
+
+    try:
+        duration_hours = int(raw_duration) if raw_duration is not None else None
+    except (TypeError, ValueError):
+        duration_hours = None
+
+    if duration_hours and duration_hours > 0:
+        discount_expires_at = now + timedelta(hours=duration_hours)
+    else:
+        discount_expires_at = None
+
+    db_user.promo_offer_discount_expires_at = discount_expires_at
+
     await mark_offer_claimed(
         db,
         offer,
         details={
             "context": "discount_claim",
             "discount_percent": discount_percent,
+            "discount_expires_at": discount_expires_at.isoformat() if discount_expires_at else None,
         },
     )
     await db.refresh(db_user)

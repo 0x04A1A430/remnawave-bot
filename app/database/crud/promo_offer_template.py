@@ -14,12 +14,14 @@ UPDATED_TEMPLATE_MESSAGES = {
     "extend_discount": (
         "💎 Экономия {discount_percent}% при продлении\n\n"
         "Скидка суммируется с промогруппой и действует один раз.\n"
-        "Срок действия предложения — {valid_hours} ч."
+        "Срок действия предложения — {valid_hours} ч.\n"
+        "После активации скидка действует {active_discount_hours} ч."
     ),
     "purchase_discount": (
         "🎯 Вернитесь со скидкой {discount_percent}%\n\n"
         "Скидка суммируется с промогруппой и действует один раз.\n"
-        "Предложение действует {valid_hours} ч."
+        "Предложение действует {valid_hours} ч.\n"
+        "После активации скидка действует {active_discount_hours} ч."
     ),
 }
 
@@ -29,13 +31,15 @@ LEGACY_TEMPLATE_MESSAGES = {
         "💎 <b>Экономия {discount_percent}% при продлении</b>\n\n"
         "Активируйте предложение и получите дополнительную скидку на оплату продления. "
         "Она суммируется с вашими промогрупповыми скидками и действует один раз.\n"
-        "Срок действия предложения — {valid_hours} ч."
+        "Срок действия предложения — {valid_hours} ч.\n"
+        "После активации скидка действует {active_discount_hours} ч."
     ),
     "purchase_discount": (
         "🎯 <b>Вернитесь со скидкой {discount_percent}%</b>\n\n"
         "После активации мы применим дополнительную скидку к вашей следующей оплате подписки. "
         "Скидка суммируется с промогруппой и действует один раз.\n"
-        "Предложение действует {valid_hours} ч."
+        "Предложение действует {valid_hours} ч.\n"
+        "После активации скидка действует {active_discount_hours} ч."
     ),
 }
 
@@ -53,6 +57,7 @@ DEFAULT_TEMPLATES: tuple[dict, ...] = (
         "valid_hours": 24,
         "discount_percent": 0,
         "bonus_amount_kopeks": 0,
+        "active_discount_hours": None,
         "test_duration_hours": 24,
         "test_squad_uuids": [],
     },
@@ -64,6 +69,7 @@ DEFAULT_TEMPLATES: tuple[dict, ...] = (
         "valid_hours": 24,
         "discount_percent": 20,
         "bonus_amount_kopeks": 0,
+        "active_discount_hours": 24,
         "test_duration_hours": None,
         "test_squad_uuids": [],
     },
@@ -75,6 +81,7 @@ DEFAULT_TEMPLATES: tuple[dict, ...] = (
         "valid_hours": 48,
         "discount_percent": 25,
         "bonus_amount_kopeks": 0,
+        "active_discount_hours": 48,
         "test_duration_hours": None,
         "test_squad_uuids": [],
     },
@@ -86,6 +93,7 @@ def _format_template_fields(payload: dict) -> dict:
     data.setdefault("valid_hours", 24)
     data.setdefault("discount_percent", 0)
     data.setdefault("bonus_amount_kopeks", 0)
+    data.setdefault("active_discount_hours", None)
     data.setdefault("test_duration_hours", None)
     data.setdefault("test_squad_uuids", [])
     return data
@@ -115,6 +123,16 @@ async def ensure_default_templates(db: AsyncSession, *, created_by: Optional[int
                 existing.message_text = new_message
                 existing.updated_at = datetime.utcnow()
                 await db.flush()
+
+            target_active_hours = template_data.get("active_discount_hours")
+            if (
+                target_active_hours is not None
+                and target_active_hours > 0
+                and not existing.active_discount_hours
+            ):
+                existing.active_discount_hours = target_active_hours
+                existing.updated_at = datetime.utcnow()
+                await db.flush()
             templates.append(existing)
             continue
 
@@ -127,6 +145,7 @@ async def ensure_default_templates(db: AsyncSession, *, created_by: Optional[int
             valid_hours=payload["valid_hours"],
             discount_percent=payload["discount_percent"],
             bonus_amount_kopeks=payload["bonus_amount_kopeks"],
+            active_discount_hours=payload["active_discount_hours"],
             test_duration_hours=payload["test_duration_hours"],
             test_squad_uuids=payload["test_squad_uuids"],
             is_active=True,
@@ -172,6 +191,7 @@ async def update_promo_offer_template(
     valid_hours: Optional[int] = None,
     discount_percent: Optional[int] = None,
     bonus_amount_kopeks: Optional[int] = None,
+    active_discount_hours: Optional[int] = None,
     test_duration_hours: Optional[int] = None,
     test_squad_uuids: Optional[Iterable[str]] = None,
     is_active: Optional[bool] = None,
@@ -188,6 +208,8 @@ async def update_promo_offer_template(
         template.discount_percent = discount_percent
     if bonus_amount_kopeks is not None:
         template.bonus_amount_kopeks = bonus_amount_kopeks
+    if active_discount_hours is not None:
+        template.active_discount_hours = active_discount_hours
     if test_duration_hours is not None:
         template.test_duration_hours = test_duration_hours
     if test_squad_uuids is not None:

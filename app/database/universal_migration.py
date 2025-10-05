@@ -855,8 +855,9 @@ async def ensure_user_promo_offer_discount_columns():
     try:
         percent_exists = await check_column_exists('users', 'promo_offer_discount_percent')
         source_exists = await check_column_exists('users', 'promo_offer_discount_source')
+        expires_exists = await check_column_exists('users', 'promo_offer_discount_expires_at')
 
-        if percent_exists and source_exists:
+        if percent_exists and source_exists and expires_exists:
             return True
 
         async with engine.begin() as conn:
@@ -884,10 +885,59 @@ async def ensure_user_promo_offer_discount_columns():
                     f"ALTER TABLE users ADD COLUMN promo_offer_discount_source {column_def}"
                 ))
 
+            if not expires_exists:
+                if db_type == 'sqlite':
+                    column_def = 'DATETIME NULL'
+                elif db_type == 'postgresql':
+                    column_def = 'TIMESTAMP NULL'
+                elif db_type == 'mysql':
+                    column_def = 'DATETIME NULL'
+                else:
+                    raise ValueError(f"Unsupported database type: {db_type}")
+
+                await conn.execute(text(
+                    f"ALTER TABLE users ADD COLUMN promo_offer_discount_expires_at {column_def}"
+                ))
+
         logger.info("✅ Колонки promo_offer_discount_* для users проверены")
         return True
     except Exception as e:
         logger.error(f"Ошибка обновления колонок promo_offer_discount_*: {e}")
+        return False
+
+
+async def ensure_promo_offer_template_active_duration_column() -> bool:
+    try:
+        column_exists = await check_column_exists('promo_offer_templates', 'active_discount_hours')
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not column_exists:
+                if db_type == 'sqlite':
+                    column_def = 'INTEGER NULL'
+                elif db_type == 'postgresql':
+                    column_def = 'INTEGER NULL'
+                elif db_type == 'mysql':
+                    column_def = 'INT NULL'
+                else:
+                    raise ValueError(f"Unsupported database type: {db_type}")
+
+                await conn.execute(text(
+                    f"ALTER TABLE promo_offer_templates ADD COLUMN active_discount_hours {column_def}"
+                ))
+
+            await conn.execute(text(
+                "UPDATE promo_offer_templates "
+                "SET active_discount_hours = valid_hours "
+                "WHERE offer_type IN ('extend_discount', 'purchase_discount') "
+                "AND (active_discount_hours IS NULL OR active_discount_hours <= 0)"
+            ))
+
+        logger.info("✅ Колонка active_discount_hours в promo_offer_templates актуальна")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка обновления active_discount_hours в promo_offer_templates: {e}")
         return False
 
 
@@ -942,6 +992,7 @@ async def create_promo_offer_templates_table():
                     valid_hours INTEGER NOT NULL DEFAULT 24,
                     discount_percent INTEGER NOT NULL DEFAULT 0,
                     bonus_amount_kopeks INTEGER NOT NULL DEFAULT 0,
+                    active_discount_hours INTEGER NULL,
                     test_duration_hours INTEGER NULL,
                     test_squad_uuids TEXT NULL,
                     is_active BOOLEAN NOT NULL DEFAULT 1,
@@ -964,6 +1015,7 @@ async def create_promo_offer_templates_table():
                     valid_hours INTEGER NOT NULL DEFAULT 24,
                     discount_percent INTEGER NOT NULL DEFAULT 0,
                     bonus_amount_kopeks INTEGER NOT NULL DEFAULT 0,
+                    active_discount_hours INTEGER NULL,
                     test_duration_hours INTEGER NULL,
                     test_squad_uuids JSON NULL,
                     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -985,6 +1037,7 @@ async def create_promo_offer_templates_table():
                     valid_hours INT NOT NULL DEFAULT 24,
                     discount_percent INT NOT NULL DEFAULT 0,
                     bonus_amount_kopeks INT NOT NULL DEFAULT 0,
+                    active_discount_hours INT NULL,
                     test_duration_hours INT NULL,
                     test_squad_uuids JSON NULL,
                     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -2601,6 +2654,12 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей promo_offer_templates")
 
+        template_columns_ready = await ensure_promo_offer_template_active_duration_column()
+        if template_columns_ready:
+            logger.info("✅ Колонка active_discount_hours промо-предложений готова")
+        else:
+            logger.warning("⚠️ Не удалось обновить колонку active_discount_hours промо-предложений")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PROMO_OFFER_LOGS ===")
         promo_logs_created = await create_promo_offer_logs_table()
         if promo_logs_created:
@@ -2817,11 +2876,13 @@ async def check_migration_status():
             "users_auto_promo_group_threshold_column": False,
             "users_promo_offer_discount_percent_column": False,
             "users_promo_offer_discount_source_column": False,
+            "users_promo_offer_discount_expires_column": False,
             "subscription_crypto_link_column": False,
             "discount_offers_table": False,
             "discount_offers_effect_column": False,
             "discount_offers_extra_column": False,
             "promo_offer_templates_table": False,
+            "promo_offer_templates_active_discount_column": False,
             "promo_offer_logs_table": False,
             "subscription_temporary_access_table": False,
         }
@@ -2839,6 +2900,7 @@ async def check_migration_status():
         status["discount_offers_effect_column"] = await check_column_exists('discount_offers', 'effect_type')
         status["discount_offers_extra_column"] = await check_column_exists('discount_offers', 'extra_data')
         status["promo_offer_templates_table"] = await check_table_exists('promo_offer_templates')
+        status["promo_offer_templates_active_discount_column"] = await check_column_exists('promo_offer_templates', 'active_discount_hours')
         status["promo_offer_logs_table"] = await check_table_exists('promo_offer_logs')
         status["subscription_temporary_access_table"] = await check_table_exists('subscription_temporary_access')
 
@@ -2851,6 +2913,7 @@ async def check_migration_status():
         status["users_auto_promo_group_threshold_column"] = await check_column_exists('users', 'auto_promo_group_threshold_kopeks')
         status["users_promo_offer_discount_percent_column"] = await check_column_exists('users', 'promo_offer_discount_percent')
         status["users_promo_offer_discount_source_column"] = await check_column_exists('users', 'promo_offer_discount_source')
+        status["users_promo_offer_discount_expires_column"] = await check_column_exists('users', 'promo_offer_discount_expires_at')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         
         media_fields_exist = (
@@ -2892,11 +2955,13 @@ async def check_migration_status():
             "users_auto_promo_group_threshold_column": "Порог последней авто-промогруппы у пользователей",
             "users_promo_offer_discount_percent_column": "Колонка процента промо-скидки у пользователей",
             "users_promo_offer_discount_source_column": "Колонка источника промо-скидки у пользователей",
+            "users_promo_offer_discount_expires_column": "Колонка срока действия промо-скидки у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
             "discount_offers_table": "Таблица discount_offers",
             "discount_offers_effect_column": "Колонка effect_type в discount_offers",
             "discount_offers_extra_column": "Колонка extra_data в discount_offers",
             "promo_offer_templates_table": "Таблица promo_offer_templates",
+            "promo_offer_templates_active_discount_column": "Колонка active_discount_hours в promo_offer_templates",
             "promo_offer_logs_table": "Таблица promo_offer_logs",
             "subscription_temporary_access_table": "Таблица subscription_temporary_access",
         }
