@@ -33,10 +33,6 @@ from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
 from app.utils.user_utils import generate_unique_referral_code
 from app.database.crud.user_message import get_random_active_message
-from app.utils.promo_offer_display import (
-    get_promo_offer_hint,
-    get_test_access_hint,
-)
 
 
 logger = logging.getLogger(__name__)
@@ -1276,34 +1272,9 @@ def get_referral_code_keyboard(language: str):
 async def get_main_menu_text(user, texts, db: AsyncSession):
 
     import html
-    extra_sections = []
-
-    try:
-        promo_offer_hint = await get_promo_offer_hint(db, user, texts)
-    except Exception as promo_error:  # pragma: no cover - defensive logging
-        logger.debug(f"Не удалось получить информацию о промо-предложении: {promo_error}")
-        promo_offer_hint = None
-
-    if promo_offer_hint:
-        extra_sections.append(promo_offer_hint)
-
-    try:
-        test_access_hint = await get_test_access_hint(db, getattr(user, "subscription", None), texts)
-    except Exception as test_error:  # pragma: no cover - defensive logging
-        logger.debug(f"Не удалось получить информацию о тестовом доступе: {test_error}")
-        test_access_hint = None
-
-    if test_access_hint:
-        extra_sections.append(test_access_hint)
-
-    extra_text = ""
-    if extra_sections:
-        extra_text = "\n\n" + "\n\n".join(extra_sections)
-
     base_text = texts.MAIN_MENU.format(
         user_name=html.escape(user.full_name or ""),
-        subscription_status=_get_subscription_status(user, texts),
-        extra_sections=extra_text,
+        subscription_status=_get_subscription_status(user, texts)
     )
 
     action_prompt = texts.t("MAIN_MENU_ACTION_PROMPT", "Выберите действие:")
@@ -1323,8 +1294,7 @@ async def get_main_menu_text_simple(user_name, texts, db: AsyncSession):
     import html
     base_text = texts.MAIN_MENU.format(
         user_name=html.escape(user_name or ""),
-        subscription_status=_get_subscription_status_simple(texts),
-        extra_sections="",
+        subscription_status=_get_subscription_status_simple(texts)
     )
 
     action_prompt = texts.t("MAIN_MENU_ACTION_PROMPT", "Выберите действие:")

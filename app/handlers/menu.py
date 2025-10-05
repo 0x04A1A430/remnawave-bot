@@ -11,10 +11,6 @@ from app.keyboards.inline import get_main_menu_keyboard, get_language_selection_
 from app.localization.texts import get_texts, get_rules
 from app.database.models import User
 from app.database.crud.user_message import get_random_active_message
-from app.utils.promo_offer_display import (
-    get_promo_offer_hint,
-    get_test_access_hint,
-)
 from app.services.subscription_checkout_service import (
     has_subscription_checkout_draft,
     should_offer_checkout_resume,
@@ -300,46 +296,21 @@ def _insert_random_message(base_text: str, random_message: str, action_prompt: s
 
 async def get_main_menu_text(user, texts, db: AsyncSession):
 
-    extra_sections = []
-
-    try:
-        promo_offer_hint = await get_promo_offer_hint(db, user, texts)
-    except Exception as promo_error:  # pragma: no cover - defensive logging
-        logger.debug(f"Не удалось получить информацию о промо-предложении: {promo_error}")
-        promo_offer_hint = None
-
-    if promo_offer_hint:
-        extra_sections.append(promo_offer_hint)
-
-    try:
-        test_access_hint = await get_test_access_hint(db, getattr(user, "subscription", None), texts)
-    except Exception as test_error:  # pragma: no cover - defensive logging
-        logger.debug(f"Не удалось получить информацию о тестовом доступе: {test_error}")
-        test_access_hint = None
-
-    if test_access_hint:
-        extra_sections.append(test_access_hint)
-
-    extra_text = ""
-    if extra_sections:
-        extra_text = "\n\n" + "\n\n".join(extra_sections)
-
     base_text = texts.MAIN_MENU.format(
         user_name=user.full_name,
-        subscription_status=_get_subscription_status(user, texts),
-        extra_sections=extra_text,
+        subscription_status=_get_subscription_status(user, texts)
     )
-
+    
     action_prompt = texts.t("MAIN_MENU_ACTION_PROMPT", "Выберите действие:")
 
     try:
         random_message = await get_random_active_message(db)
         if random_message:
             return _insert_random_message(base_text, random_message, action_prompt)
-
+                
     except Exception as e:
         logger.error(f"Ошибка получения случайного сообщения: {e}")
-
+    
     return base_text
 
 
