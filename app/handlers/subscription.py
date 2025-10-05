@@ -5265,8 +5265,8 @@ async def claim_discount_offer(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.get("MENU_BUY_SUBSCRIPTION", "💎 Купить подписку"),
-                    callback_data="menu_buy",
+                    text=texts.get("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
+                    callback_data="subscription_extend",
                 )
             ]
         ]
