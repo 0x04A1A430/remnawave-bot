@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import html
 import logging
 import re
-from typing import List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
@@ -23,8 +24,9 @@ from app.database.crud.promo_offer_template import (
     list_promo_offer_templates,
     update_promo_offer_template,
 )
+from app.database.crud.promo_offer_log import list_promo_offer_logs
 from app.database.crud.user import get_users_for_promo_segment
-from app.database.models import PromoOfferTemplate, User
+from app.database.models import PromoOfferLog, PromoOfferTemplate, User
 from app.keyboards.inline import get_happ_download_button_row
 from app.localization.texts import get_texts
 from app.states import AdminStates
@@ -35,6 +37,22 @@ logger = logging.getLogger(__name__)
 
 
 SQUADS_PAGE_LIMIT = 10
+PROMO_OFFER_LOGS_PAGE_LIMIT = 10
+
+
+ACTION_LABEL_KEYS = {
+    "claimed": "ADMIN_PROMO_OFFER_LOGS_ACTION_CLAIMED",
+    "consumed": "ADMIN_PROMO_OFFER_LOGS_ACTION_CONSUMED",
+    "disabled": "ADMIN_PROMO_OFFER_LOGS_ACTION_DISABLED",
+}
+
+
+REASON_LABEL_KEYS = {
+    "manual_charge": "ADMIN_PROMO_OFFER_LOGS_REASON_MANUAL",
+    "autopay_consumed": "ADMIN_PROMO_OFFER_LOGS_REASON_AUTOPAY",
+    "offer_expired": "ADMIN_PROMO_OFFER_LOGS_REASON_EXPIRED",
+    "test_access_expired": "ADMIN_PROMO_OFFER_LOGS_REASON_TEST_EXPIRED",
+}
 
 
 OFFER_TYPE_CONFIG = {
@@ -123,6 +141,12 @@ def _build_templates_keyboard(templates: Sequence[PromoOfferTemplate], language:
                 callback_data=f"promo_offer_{template.id}",
             )
         ])
+    rows.append([
+        InlineKeyboardButton(
+            text=texts.t("ADMIN_PROMO_OFFER_LOGS", "📜 Лог операций"),
+            callback_data="promo_offer_logs_page_1",
+        )
+    ])
     rows.append([InlineKeyboardButton(text=texts.BACK, callback_data="admin_submenu_communications")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -154,6 +178,128 @@ def _build_offer_detail_keyboard(template: PromoOfferTemplate, language: str) ->
     rows.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="admin_promo_offers"),
     ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _format_promo_offer_log_entry(
+    entry: PromoOfferLog,
+    index: int,
+    texts,
+) -> str:
+    timestamp = entry.created_at.strftime("%d.%m.%Y %H:%M") if entry.created_at else "-"
+    action_key = ACTION_LABEL_KEYS.get(entry.action, "")
+    action_label = texts.get(action_key, entry.action.title())
+    lines = [f"{index}. <b>{timestamp}</b> — {action_label}"]
+
+    user = entry.user
+    if user:
+        username = f"@{user.username}" if user.username else f"ID{user.telegram_id}"
+        label = f"{username} (#{user.id})"
+    elif entry.user_id:
+        label = f"ID{entry.user_id}"
+    else:
+        label = texts.get("ADMIN_PROMO_OFFER_LOGS_UNKNOWN_USER", "Неизвестный пользователь")
+
+    lines.append(texts.get("ADMIN_PROMO_OFFER_LOGS_USER", "👤 {user}").format(user=html.escape(label)))
+
+    if entry.percent:
+        lines.append(
+            texts.get("ADMIN_PROMO_OFFER_LOGS_PERCENT", "📉 Скидка: {percent}%").format(
+                percent=entry.percent
+            )
+        )
+
+    effect_type = (entry.effect_type or "").lower()
+    if effect_type:
+        if effect_type == "test_access":
+            effect_label = texts.get("ADMIN_PROMO_OFFER_LOGS_EFFECT_TEST", "🧪 Тестовый доступ")
+        else:
+            effect_label = texts.get("ADMIN_PROMO_OFFER_LOGS_EFFECT_DISCOUNT", "💸 Скидка")
+        lines.append(effect_label)
+
+    if entry.source:
+        lines.append(
+            texts.get("ADMIN_PROMO_OFFER_LOGS_SOURCE", "🏷 Источник: {source}").format(
+                source=html.escape(entry.source)
+            )
+        )
+
+    details: Dict[str, object] = entry.details if isinstance(entry.details, dict) else {}
+    reason_key = details.get("reason")
+    if reason_key:
+        reason_label = texts.get(REASON_LABEL_KEYS.get(reason_key, ""), "")
+        if not reason_label:
+            reason_label = texts.get(
+                "ADMIN_PROMO_OFFER_LOGS_REASON_GENERIC",
+                "ℹ️ Действие: {reason}",
+            ).format(reason=html.escape(str(reason_key)))
+        lines.append(reason_label)
+
+    description = details.get("description")
+    if description:
+        lines.append(
+            texts.get("ADMIN_PROMO_OFFER_LOGS_DESCRIPTION", "📝 {description}").format(
+                description=html.escape(str(description))
+            )
+        )
+
+    amount = details.get("amount_kopeks")
+    if isinstance(amount, int):
+        lines.append(
+            texts.get("ADMIN_PROMO_OFFER_LOGS_AMOUNT", "💰 Сумма: {amount}").format(
+                amount=texts.format_price(amount)
+            )
+        )
+
+    squad_uuid = details.get("squad_uuid")
+    if squad_uuid:
+        lines.append(
+            texts.get("ADMIN_PROMO_OFFER_LOGS_SQUAD", "🌍 Сквад: {squad}").format(
+                squad=html.escape(str(squad_uuid))
+            )
+        )
+
+    new_squads = details.get("new_squads")
+    if isinstance(new_squads, (list, tuple)):
+        filtered = [html.escape(str(item)) for item in new_squads if item]
+        if filtered:
+            lines.append(
+                texts.get("ADMIN_PROMO_OFFER_LOGS_NEW_SQUADS", "🌍 Новые сквады: {squads}").format(
+                    squads=", ".join(filtered)
+                )
+            )
+
+    return "\n".join(lines)
+
+
+def _build_logs_keyboard(page: int, total_pages: int, language: str) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+    rows: List[List[InlineKeyboardButton]] = []
+    if total_pages > 1:
+        nav_row: List[InlineKeyboardButton] = []
+        if page > 1:
+            nav_row.append(
+                InlineKeyboardButton(
+                    text="⬅️",
+                    callback_data=f"promo_offer_logs_page_{page - 1}",
+                )
+            )
+        nav_row.append(
+            InlineKeyboardButton(
+                text=f"{page}/{total_pages}",
+                callback_data=f"promo_offer_logs_page_{page}",
+            )
+        )
+        if page < total_pages:
+            nav_row.append(
+                InlineKeyboardButton(
+                    text="➡️",
+                    callback_data=f"promo_offer_logs_page_{page + 1}",
+                )
+            )
+        rows.append(nav_row)
+
+    rows.append([InlineKeyboardButton(text=texts.BACK, callback_data="admin_promo_offers")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -284,6 +430,70 @@ async def show_promo_offer_details(callback: CallbackQuery, db_user: User, db: A
     await callback.message.edit_text(
         description,
         reply_markup=_build_offer_detail_keyboard(template, db_user.language),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_promo_offer_logs(callback: CallbackQuery, db_user: User, db: AsyncSession):
+    try:
+        if "_page_" in callback.data:
+            page = int(callback.data.split("_page_")[-1])
+        else:
+            page = 1
+    except (ValueError, AttributeError):
+        page = 1
+
+    if page < 1:
+        page = 1
+
+    limit = PROMO_OFFER_LOGS_PAGE_LIMIT
+    offset = (page - 1) * limit
+    logs, total = await list_promo_offer_logs(db, offset=offset, limit=limit)
+    total_pages = max(1, (total + limit - 1) // limit)
+
+    if page > total_pages and total > 0:
+        page = total_pages
+        offset = (page - 1) * limit
+        logs, _ = await list_promo_offer_logs(db, offset=offset, limit=limit)
+
+    texts = get_texts(db_user.language)
+    header = texts.t(
+        "ADMIN_PROMO_OFFER_LOGS_TITLE",
+        "📜 <b>Лог операций промо-предложений</b>",
+    )
+
+    if logs:
+        message_lines = [
+            header,
+            texts.get(
+                "ADMIN_PROMO_OFFER_LOGS_PAGINATION",
+                "Страница {page}/{total}",
+            ).format(page=page, total=total_pages),
+            "",
+        ]
+        for index, entry in enumerate(logs, start=offset + 1):
+            message_lines.append(_format_promo_offer_log_entry(entry, index, texts))
+            message_lines.append("")
+        message_text = "\n".join(message_lines).rstrip()
+    else:
+        message_text = "\n".join(
+            [
+                header,
+                "",
+                texts.get(
+                    "ADMIN_PROMO_OFFER_LOGS_EMPTY_BODY",
+                    "Записей пока нет.",
+                ),
+            ]
+        )
+
+    keyboard = _build_logs_keyboard(page, total_pages, db_user.language)
+    await callback.message.edit_text(
+        message_text,
+        reply_markup=keyboard,
         parse_mode="HTML",
     )
     await callback.answer()
@@ -965,6 +1175,7 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(back_to_offer_from_squads, F.data.startswith("promo_offer_squad_back_"))
     dp.callback_query.register(show_send_segments, F.data.startswith("promo_offer_send_menu_"))
     dp.callback_query.register(send_offer_to_segment, F.data.startswith("promo_offer_send_"))
+    dp.callback_query.register(show_promo_offer_logs, F.data.regexp(r"^promo_offer_logs_page_\d+$"))
     dp.callback_query.register(show_promo_offer_details, F.data.startswith("promo_offer_"))
 
     dp.message.register(process_edit_message_text, AdminStates.editing_promo_offer_message)
