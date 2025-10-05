@@ -728,6 +728,8 @@ async def create_discount_offers_table():
                         expires_at DATETIME NOT NULL,
                         claimed_at DATETIME NULL,
                         is_active BOOLEAN NOT NULL DEFAULT 1,
+                        effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount',
+                        extra_data TEXT NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -751,6 +753,8 @@ async def create_discount_offers_table():
                         expires_at TIMESTAMP NOT NULL,
                         claimed_at TIMESTAMP NULL,
                         is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount',
+                        extra_data JSON NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -772,6 +776,8 @@ async def create_discount_offers_table():
                         expires_at DATETIME NOT NULL,
                         claimed_at DATETIME NULL,
                         is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount',
+                        extra_data JSON NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                         CONSTRAINT fk_discount_offers_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -791,6 +797,422 @@ async def create_discount_offers_table():
 
     except Exception as e:
         logger.error(f"Ошибка создания таблицы discount_offers: {e}")
+        return False
+
+
+async def ensure_discount_offer_columns():
+    try:
+        effect_exists = await check_column_exists('discount_offers', 'effect_type')
+        extra_exists = await check_column_exists('discount_offers', 'extra_data')
+
+        if effect_exists and extra_exists:
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not effect_exists:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount'"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount'"
+                    ))
+                elif db_type == 'mysql':
+                    await conn.execute(text(
+                        "ALTER TABLE discount_offers ADD COLUMN effect_type VARCHAR(50) NOT NULL DEFAULT 'percent_discount'"
+                    ))
+                else:
+                    raise ValueError(f"Unsupported database type: {db_type}")
+
+            if not extra_exists:
+                if db_type == 'sqlite':
+                    await conn.execute(text(
+                        "ALTER TABLE discount_offers ADD COLUMN extra_data TEXT NULL"
+                    ))
+                elif db_type == 'postgresql':
+                    await conn.execute(text(
+                        "ALTER TABLE discount_offers ADD COLUMN extra_data JSON NULL"
+                    ))
+                elif db_type == 'mysql':
+                    await conn.execute(text(
+                        "ALTER TABLE discount_offers ADD COLUMN extra_data JSON NULL"
+                    ))
+                else:
+                    raise ValueError(f"Unsupported database type: {db_type}")
+
+        logger.info("✅ Колонки effect_type и extra_data для discount_offers проверены")
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка обновления колонок discount_offers: {e}")
+        return False
+
+
+async def ensure_user_promo_offer_discount_columns():
+    try:
+        percent_exists = await check_column_exists('users', 'promo_offer_discount_percent')
+        source_exists = await check_column_exists('users', 'promo_offer_discount_source')
+        expires_exists = await check_column_exists('users', 'promo_offer_discount_expires_at')
+
+        if percent_exists and source_exists and expires_exists:
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not percent_exists:
+                column_def = 'INTEGER NOT NULL DEFAULT 0'
+                if db_type == 'mysql':
+                    column_def = 'INT NOT NULL DEFAULT 0'
+                await conn.execute(text(
+                    f"ALTER TABLE users ADD COLUMN promo_offer_discount_percent {column_def}"
+                ))
+
+            if not source_exists:
+                if db_type == 'sqlite':
+                    column_def = 'TEXT NULL'
+                elif db_type == 'postgresql':
+                    column_def = 'VARCHAR(100) NULL'
+                elif db_type == 'mysql':
+                    column_def = 'VARCHAR(100) NULL'
+                else:
+                    raise ValueError(f"Unsupported database type: {db_type}")
+
+                await conn.execute(text(
+                    f"ALTER TABLE users ADD COLUMN promo_offer_discount_source {column_def}"
+                ))
+
+            if not expires_exists:
+                if db_type == 'sqlite':
+                    column_def = 'DATETIME NULL'
+                elif db_type == 'postgresql':
+                    column_def = 'TIMESTAMP NULL'
+                elif db_type == 'mysql':
+                    column_def = 'DATETIME NULL'
+                else:
+                    raise ValueError(f"Unsupported database type: {db_type}")
+
+                await conn.execute(text(
+                    f"ALTER TABLE users ADD COLUMN promo_offer_discount_expires_at {column_def}"
+                ))
+
+        logger.info("✅ Колонки promo_offer_discount_* для users проверены")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка обновления колонок promo_offer_discount_*: {e}")
+        return False
+
+
+async def ensure_promo_offer_template_active_duration_column() -> bool:
+    try:
+        column_exists = await check_column_exists('promo_offer_templates', 'active_discount_hours')
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if not column_exists:
+                if db_type == 'sqlite':
+                    column_def = 'INTEGER NULL'
+                elif db_type == 'postgresql':
+                    column_def = 'INTEGER NULL'
+                elif db_type == 'mysql':
+                    column_def = 'INT NULL'
+                else:
+                    raise ValueError(f"Unsupported database type: {db_type}")
+
+                await conn.execute(text(
+                    f"ALTER TABLE promo_offer_templates ADD COLUMN active_discount_hours {column_def}"
+                ))
+
+            await conn.execute(text(
+                "UPDATE promo_offer_templates "
+                "SET active_discount_hours = valid_hours "
+                "WHERE offer_type IN ('extend_discount', 'purchase_discount') "
+                "AND (active_discount_hours IS NULL OR active_discount_hours <= 0)"
+            ))
+
+        logger.info("✅ Колонка active_discount_hours в promo_offer_templates актуальна")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка обновления active_discount_hours в promo_offer_templates: {e}")
+        return False
+
+
+async def migrate_discount_offer_effect_types():
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(
+                "UPDATE discount_offers SET effect_type = 'percent_discount' "
+                "WHERE effect_type = 'balance_bonus'"
+            ))
+        logger.info("✅ Типы эффектов discount_offers обновлены на percent_discount")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка обновления типов эффектов discount_offers: {e}")
+        return False
+
+
+async def reset_discount_offer_bonuses():
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(
+                "UPDATE discount_offers SET bonus_amount_kopeks = 0 WHERE bonus_amount_kopeks <> 0"
+            ))
+            await conn.execute(text(
+                "UPDATE promo_offer_templates SET bonus_amount_kopeks = 0 WHERE bonus_amount_kopeks <> 0"
+            ))
+        logger.info("✅ Бонусы промо-предложений сброшены до нуля")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка обнуления бонусов промо-предложений: {e}")
+        return False
+
+
+async def create_promo_offer_templates_table():
+    table_exists = await check_table_exists('promo_offer_templates')
+    if table_exists:
+        logger.info("Таблица promo_offer_templates уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE promo_offer_templates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(255) NOT NULL,
+                    offer_type VARCHAR(50) NOT NULL,
+                    message_text TEXT NOT NULL,
+                    button_text VARCHAR(255) NOT NULL,
+                    valid_hours INTEGER NOT NULL DEFAULT 24,
+                    discount_percent INTEGER NOT NULL DEFAULT 0,
+                    bonus_amount_kopeks INTEGER NOT NULL DEFAULT 0,
+                    active_discount_hours INTEGER NULL,
+                    test_duration_hours INTEGER NULL,
+                    test_squad_uuids TEXT NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    created_by INTEGER NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+                );
+
+                CREATE INDEX ix_promo_offer_templates_type ON promo_offer_templates(offer_type);
+                """
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE IF NOT EXISTS promo_offer_templates (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    offer_type VARCHAR(50) NOT NULL,
+                    message_text TEXT NOT NULL,
+                    button_text VARCHAR(255) NOT NULL,
+                    valid_hours INTEGER NOT NULL DEFAULT 24,
+                    discount_percent INTEGER NOT NULL DEFAULT 0,
+                    bonus_amount_kopeks INTEGER NOT NULL DEFAULT 0,
+                    active_discount_hours INTEGER NULL,
+                    test_duration_hours INTEGER NULL,
+                    test_squad_uuids JSON NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_by INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_promo_offer_templates_type ON promo_offer_templates(offer_type);
+                """
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE IF NOT EXISTS promo_offer_templates (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    offer_type VARCHAR(50) NOT NULL,
+                    message_text TEXT NOT NULL,
+                    button_text VARCHAR(255) NOT NULL,
+                    valid_hours INT NOT NULL DEFAULT 24,
+                    discount_percent INT NOT NULL DEFAULT 0,
+                    bonus_amount_kopeks INT NOT NULL DEFAULT 0,
+                    active_discount_hours INT NULL,
+                    test_duration_hours INT NULL,
+                    test_squad_uuids JSON NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_by INT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+                );
+
+                CREATE INDEX ix_promo_offer_templates_type ON promo_offer_templates(offer_type);
+                """
+            else:
+                raise ValueError(f"Unsupported database type: {db_type}")
+
+            await conn.execute(text(create_sql))
+
+        logger.info("✅ Таблица promo_offer_templates успешно создана")
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы promo_offer_templates: {e}")
+        return False
+
+
+async def create_promo_offer_logs_table() -> bool:
+    table_exists = await check_table_exists('promo_offer_logs')
+    if table_exists:
+        logger.info("Таблица promo_offer_logs уже существует")
+        return True
+
+    try:
+        db_type = await get_database_type()
+        async with engine.begin() as conn:
+            if db_type == 'sqlite':
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS promo_offer_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+                        offer_id INTEGER NULL REFERENCES discount_offers(id) ON DELETE SET NULL,
+                        action VARCHAR(50) NOT NULL,
+                        source VARCHAR(100) NULL,
+                        percent INTEGER NULL,
+                        effect_type VARCHAR(50) NULL,
+                        details JSON NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+
+                    CREATE INDEX IF NOT EXISTS ix_promo_offer_logs_created_at ON promo_offer_logs(created_at DESC);
+                    CREATE INDEX IF NOT EXISTS ix_promo_offer_logs_user_id ON promo_offer_logs(user_id);
+                """))
+            elif db_type == 'postgresql':
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS promo_offer_logs (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                        offer_id INTEGER REFERENCES discount_offers(id) ON DELETE SET NULL,
+                        action VARCHAR(50) NOT NULL,
+                        source VARCHAR(100),
+                        percent INTEGER,
+                        effect_type VARCHAR(50),
+                        details JSONB,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+
+                    CREATE INDEX IF NOT EXISTS ix_promo_offer_logs_created_at ON promo_offer_logs(created_at DESC);
+                    CREATE INDEX IF NOT EXISTS ix_promo_offer_logs_user_id ON promo_offer_logs(user_id);
+                """))
+            elif db_type == 'mysql':
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS promo_offer_logs (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NULL,
+                        offer_id INT NULL,
+                        action VARCHAR(50) NOT NULL,
+                        source VARCHAR(100) NULL,
+                        percent INT NULL,
+                        effect_type VARCHAR(50) NULL,
+                        details JSON NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT fk_promo_offer_logs_users FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+                        CONSTRAINT fk_promo_offer_logs_offers FOREIGN KEY (offer_id) REFERENCES discount_offers(id) ON DELETE SET NULL
+                    );
+
+                    CREATE INDEX ix_promo_offer_logs_created_at ON promo_offer_logs(created_at DESC);
+                    CREATE INDEX ix_promo_offer_logs_user_id ON promo_offer_logs(user_id);
+                """))
+            else:
+                logger.warning("Неизвестный тип БД для создания promo_offer_logs: %s", db_type)
+                return False
+
+        logger.info("✅ Таблица promo_offer_logs успешно создана")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы promo_offer_logs: {e}")
+        return False
+
+
+async def create_subscription_temporary_access_table():
+    table_exists = await check_table_exists('subscription_temporary_access')
+    if table_exists:
+        logger.info("Таблица subscription_temporary_access уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE subscription_temporary_access (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    subscription_id INTEGER NOT NULL,
+                    offer_id INTEGER NOT NULL,
+                    squad_uuid VARCHAR(255) NOT NULL,
+                    expires_at DATETIME NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    deactivated_at DATETIME NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    was_already_connected BOOLEAN NOT NULL DEFAULT 0,
+                    FOREIGN KEY(subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+                    FOREIGN KEY(offer_id) REFERENCES discount_offers(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX ix_temp_access_subscription ON subscription_temporary_access(subscription_id);
+                CREATE INDEX ix_temp_access_offer ON subscription_temporary_access(offer_id);
+                CREATE INDEX ix_temp_access_active ON subscription_temporary_access(is_active, expires_at);
+                """
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE IF NOT EXISTS subscription_temporary_access (
+                    id SERIAL PRIMARY KEY,
+                    subscription_id INTEGER NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+                    offer_id INTEGER NOT NULL REFERENCES discount_offers(id) ON DELETE CASCADE,
+                    squad_uuid VARCHAR(255) NOT NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    deactivated_at TIMESTAMP NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    was_already_connected BOOLEAN NOT NULL DEFAULT FALSE
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_temp_access_subscription ON subscription_temporary_access(subscription_id);
+                CREATE INDEX IF NOT EXISTS ix_temp_access_offer ON subscription_temporary_access(offer_id);
+                CREATE INDEX IF NOT EXISTS ix_temp_access_active ON subscription_temporary_access(is_active, expires_at);
+                """
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE IF NOT EXISTS subscription_temporary_access (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    subscription_id INT NOT NULL,
+                    offer_id INT NOT NULL,
+                    squad_uuid VARCHAR(255) NOT NULL,
+                    expires_at DATETIME NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    deactivated_at DATETIME NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    was_already_connected BOOLEAN NOT NULL DEFAULT FALSE,
+                    FOREIGN KEY(subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+                    FOREIGN KEY(offer_id) REFERENCES discount_offers(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX ix_temp_access_subscription ON subscription_temporary_access(subscription_id);
+                CREATE INDEX ix_temp_access_offer ON subscription_temporary_access(offer_id);
+                CREATE INDEX ix_temp_access_active ON subscription_temporary_access(is_active, expires_at);
+                """
+            else:
+                raise ValueError(f"Unsupported database type: {db_type}")
+
+            await conn.execute(text(create_sql))
+
+        logger.info("✅ Таблица subscription_temporary_access успешно создана")
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы subscription_temporary_access: {e}")
         return False
 
 async def create_user_messages_table():
@@ -2201,6 +2623,57 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей discount_offers")
 
+        discount_columns_ready = await ensure_discount_offer_columns()
+        if discount_columns_ready:
+            logger.info("✅ Колонки discount_offers в актуальном состоянии")
+        else:
+            logger.warning("⚠️ Не удалось обновить колонки discount_offers")
+
+        user_discount_columns_ready = await ensure_user_promo_offer_discount_columns()
+        if user_discount_columns_ready:
+            logger.info("✅ Колонки пользовательских промо-скидок готовы")
+        else:
+            logger.warning("⚠️ Не удалось обновить пользовательские промо-скидки")
+
+        effect_types_updated = await migrate_discount_offer_effect_types()
+        if effect_types_updated:
+            logger.info("✅ Типы эффектов промо-предложений обновлены")
+        else:
+            logger.warning("⚠️ Не удалось обновить типы эффектов промо-предложений")
+
+        bonuses_reset = await reset_discount_offer_bonuses()
+        if bonuses_reset:
+            logger.info("✅ Бонусные начисления промо-предложений отключены")
+        else:
+            logger.warning("⚠️ Не удалось обнулить бонусы промо-предложений")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PROMO_OFFER_TEMPLATES ===")
+        promo_templates_created = await create_promo_offer_templates_table()
+        if promo_templates_created:
+            logger.info("✅ Таблица promo_offer_templates готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей promo_offer_templates")
+
+        template_columns_ready = await ensure_promo_offer_template_active_duration_column()
+        if template_columns_ready:
+            logger.info("✅ Колонка active_discount_hours промо-предложений готова")
+        else:
+            logger.warning("⚠️ Не удалось обновить колонку active_discount_hours промо-предложений")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PROMO_OFFER_LOGS ===")
+        promo_logs_created = await create_promo_offer_logs_table()
+        if promo_logs_created:
+            logger.info("✅ Таблица promo_offer_logs готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей promo_offer_logs")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ SUBSCRIPTION_TEMPORARY_ACCESS ===")
+        temp_access_created = await create_subscription_temporary_access_table()
+        if temp_access_created:
+            logger.info("✅ Таблица subscription_temporary_access готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей subscription_temporary_access")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_MESSAGES ===")
         user_messages_created = await create_user_messages_table()
         if user_messages_created:
@@ -2401,7 +2874,17 @@ async def check_migration_status():
             "promo_groups_addon_discount_column": False,
             "users_auto_promo_group_assigned_column": False,
             "users_auto_promo_group_threshold_column": False,
+            "users_promo_offer_discount_percent_column": False,
+            "users_promo_offer_discount_source_column": False,
+            "users_promo_offer_discount_expires_column": False,
             "subscription_crypto_link_column": False,
+            "discount_offers_table": False,
+            "discount_offers_effect_column": False,
+            "discount_offers_extra_column": False,
+            "promo_offer_templates_table": False,
+            "promo_offer_templates_active_discount_column": False,
+            "promo_offer_logs_table": False,
+            "subscription_temporary_access_table": False,
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -2413,6 +2896,14 @@ async def check_migration_status():
         status["promo_groups_table"] = await check_table_exists('promo_groups')
         status["server_promo_groups_table"] = await check_table_exists('server_squad_promo_groups')
 
+        status["discount_offers_table"] = await check_table_exists('discount_offers')
+        status["discount_offers_effect_column"] = await check_column_exists('discount_offers', 'effect_type')
+        status["discount_offers_extra_column"] = await check_column_exists('discount_offers', 'extra_data')
+        status["promo_offer_templates_table"] = await check_table_exists('promo_offer_templates')
+        status["promo_offer_templates_active_discount_column"] = await check_column_exists('promo_offer_templates', 'active_discount_hours')
+        status["promo_offer_logs_table"] = await check_table_exists('promo_offer_logs')
+        status["subscription_temporary_access_table"] = await check_table_exists('subscription_temporary_access')
+
         status["welcome_texts_is_enabled_column"] = await check_column_exists('welcome_texts', 'is_enabled')
         status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
         status["promo_groups_period_discounts_column"] = await check_column_exists('promo_groups', 'period_discounts')
@@ -2420,6 +2911,9 @@ async def check_migration_status():
         status["promo_groups_addon_discount_column"] = await check_column_exists('promo_groups', 'apply_discounts_to_addons')
         status["users_auto_promo_group_assigned_column"] = await check_column_exists('users', 'auto_promo_group_assigned')
         status["users_auto_promo_group_threshold_column"] = await check_column_exists('users', 'auto_promo_group_threshold_kopeks')
+        status["users_promo_offer_discount_percent_column"] = await check_column_exists('users', 'promo_offer_discount_percent')
+        status["users_promo_offer_discount_source_column"] = await check_column_exists('users', 'promo_offer_discount_source')
+        status["users_promo_offer_discount_expires_column"] = await check_column_exists('users', 'promo_offer_discount_expires_at')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         
         media_fields_exist = (
@@ -2459,7 +2953,17 @@ async def check_migration_status():
             "promo_groups_addon_discount_column": "Колонка apply_discounts_to_addons у промо-групп",
             "users_auto_promo_group_assigned_column": "Флаг автоназначения промогруппы у пользователей",
             "users_auto_promo_group_threshold_column": "Порог последней авто-промогруппы у пользователей",
+            "users_promo_offer_discount_percent_column": "Колонка процента промо-скидки у пользователей",
+            "users_promo_offer_discount_source_column": "Колонка источника промо-скидки у пользователей",
+            "users_promo_offer_discount_expires_column": "Колонка срока действия промо-скидки у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
+            "discount_offers_table": "Таблица discount_offers",
+            "discount_offers_effect_column": "Колонка effect_type в discount_offers",
+            "discount_offers_extra_column": "Колонка extra_data в discount_offers",
+            "promo_offer_templates_table": "Таблица promo_offer_templates",
+            "promo_offer_templates_active_discount_column": "Колонка active_discount_hours в promo_offer_templates",
+            "promo_offer_logs_table": "Таблица promo_offer_logs",
+            "subscription_temporary_access_table": "Таблица subscription_temporary_access",
         }
         
         for check_key, check_status in status.items():

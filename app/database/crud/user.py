@@ -12,6 +12,7 @@ from app.database.models import (
     User,
     UserStatus,
     Subscription,
+    SubscriptionStatus,
     Transaction,
     PromoGroup,
     PaymentMethod,
@@ -19,6 +20,8 @@ from app.database.models import (
 )
 from app.config import settings
 from app.database.crud.promo_group import get_default_promo_group
+from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
+from app.database.crud.promo_offer_log import log_promo_offer_action
 from app.utils.validators import sanitize_telegram_name
 
 logger = logging.getLogger(__name__)
@@ -272,6 +275,8 @@ async def subtract_user_balance(
     description: str,
     create_transaction: bool = False,
     payment_method: Optional[PaymentMethod] = None,
+    *,
+    consume_promo_offer: bool = False,
 ) -> bool:
     logger.error(f"💸 ОТЛАДКА subtract_user_balance:")
     logger.error(f"   👤 User ID: {user.id} (TG: {user.telegram_id})")
@@ -279,15 +284,57 @@ async def subtract_user_balance(
     logger.error(f"   💸 Сумма к списанию: {amount_kopeks} копеек")
     logger.error(f"   📝 Описание: {description}")
     
+    log_context: Optional[Dict[str, object]] = None
+    if consume_promo_offer:
+        try:
+            current_percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
+        except (TypeError, ValueError):
+            current_percent = 0
+
+        if current_percent > 0:
+            source = getattr(user, "promo_offer_discount_source", None)
+            log_context = {
+                "offer_id": None,
+                "percent": current_percent,
+                "source": source,
+                "effect_type": None,
+                "details": {
+                    "reason": "manual_charge",
+                    "description": description,
+                    "amount_kopeks": amount_kopeks,
+                },
+            }
+            try:
+                offer = await get_latest_claimed_offer_for_user(db, user.id, source)
+            except Exception as lookup_error:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to fetch latest claimed promo offer for user %s: %s",
+                    user.id,
+                    lookup_error,
+                )
+                offer = None
+
+            if offer:
+                log_context["offer_id"] = offer.id
+                log_context["effect_type"] = offer.effect_type
+                if not log_context["percent"] and offer.discount_percent:
+                    log_context["percent"] = offer.discount_percent
+
     if user.balance_kopeks < amount_kopeks:
         logger.error(f"   ❌ НЕДОСТАТОЧНО СРЕДСТВ!")
         return False
-    
+
     try:
         old_balance = user.balance_kopeks
         user.balance_kopeks -= amount_kopeks
+
+        if consume_promo_offer and getattr(user, "promo_offer_discount_percent", 0):
+            user.promo_offer_discount_percent = 0
+            user.promo_offer_discount_source = None
+            user.promo_offer_discount_expires_at = None
+
         user.updated_at = datetime.utcnow()
-        
+
         await db.commit()
         await db.refresh(user)
 
@@ -305,6 +352,32 @@ async def subtract_user_balance(
                 payment_method=payment_method,
             )
 
+        if consume_promo_offer and log_context:
+            try:
+                await log_promo_offer_action(
+                    db,
+                    user_id=user.id,
+                    offer_id=log_context.get("offer_id"),
+                    action="consumed",
+                    source=log_context.get("source"),
+                    percent=log_context.get("percent"),
+                    effect_type=log_context.get("effect_type"),
+                    details=log_context.get("details"),
+                )
+            except Exception as log_error:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to record promo offer consumption log for user %s: %s",
+                    user.id,
+                    log_error,
+                )
+                try:
+                    await db.rollback()
+                except Exception as rollback_error:  # pragma: no cover - defensive logging
+                    logger.warning(
+                        "Failed to rollback session after promo offer consumption log failure: %s",
+                        rollback_error,
+                    )
+
         logger.error(f"   ✅ Средства списаны: {old_balance} → {user.balance_kopeks}")
         return True
         
@@ -312,6 +385,97 @@ async def subtract_user_balance(
         logger.error(f"   ❌ ОШИБКА СПИСАНИЯ: {e}")
         await db.rollback()
         return False
+
+
+async def cleanup_expired_promo_offer_discounts(db: AsyncSession) -> int:
+    now = datetime.utcnow()
+    result = await db.execute(
+        select(User).where(
+            User.promo_offer_discount_percent > 0,
+            User.promo_offer_discount_expires_at.isnot(None),
+            User.promo_offer_discount_expires_at <= now,
+        )
+    )
+    users = result.scalars().all()
+    if not users:
+        return 0
+
+    log_payloads: List[Dict[str, object]] = []
+
+    for user in users:
+        try:
+            percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
+        except (TypeError, ValueError):
+            percent = 0
+
+        source = getattr(user, "promo_offer_discount_source", None)
+        offer_id = None
+        effect_type = None
+
+        if source:
+            try:
+                offer = await get_latest_claimed_offer_for_user(db, user.id, source)
+            except Exception as lookup_error:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to fetch latest claimed promo offer for user %s during expiration cleanup: %s",
+                    user.id,
+                    lookup_error,
+                )
+                offer = None
+
+            if offer:
+                offer_id = offer.id
+                effect_type = offer.effect_type
+                if not percent and offer.discount_percent:
+                    percent = offer.discount_percent
+
+        log_payloads.append(
+            {
+                "user_id": user.id,
+                "offer_id": offer_id,
+                "source": source,
+                "percent": percent,
+                "effect_type": effect_type,
+            }
+        )
+
+        user.promo_offer_discount_percent = 0
+        user.promo_offer_discount_source = None
+        user.promo_offer_discount_expires_at = None
+        user.updated_at = now
+
+    await db.commit()
+
+    for payload in log_payloads:
+        user_id = payload.get("user_id")
+        if not user_id:
+            continue
+        try:
+            await log_promo_offer_action(
+                db,
+                user_id=user_id,
+                offer_id=payload.get("offer_id"),
+                action="disabled",
+                source=payload.get("source"),
+                percent=payload.get("percent"),
+                effect_type=payload.get("effect_type"),
+                details={"reason": "offer_expired"},
+            )
+        except Exception as log_error:  # pragma: no cover - defensive logging
+            logger.warning(
+                "Failed to log promo offer expiration for user %s: %s",
+                user_id,
+                log_error,
+            )
+            try:
+                await db.rollback()
+            except Exception as rollback_error:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to rollback session after promo offer expiration log failure: %s",
+                    rollback_error,
+                )
+
+    return len(users)
 
 
 async def get_users_list(
@@ -513,6 +677,59 @@ async def get_referrals(db: AsyncSession, user_id: int) -> List[User]:
         .order_by(User.created_at.desc())
     )
     return result.scalars().all()
+
+
+async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> List[User]:
+    now = datetime.utcnow()
+
+    base_query = (
+        select(User)
+        .options(selectinload(User.subscription))
+        .where(User.status == UserStatus.ACTIVE.value)
+    )
+
+    if segment == "no_subscription":
+        query = (
+            base_query.outerjoin(Subscription, Subscription.user_id == User.id)
+            .where(Subscription.id.is_(None))
+        )
+    else:
+        query = base_query.join(Subscription)
+
+        if segment == "paid_active":
+            query = query.where(
+                Subscription.is_trial == False,  # noqa: E712
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date > now,
+            )
+        elif segment == "paid_expired":
+            query = query.where(
+                Subscription.is_trial == False,  # noqa: E712
+                or_(
+                    Subscription.status == SubscriptionStatus.EXPIRED.value,
+                    Subscription.end_date <= now,
+                ),
+            )
+        elif segment == "trial_active":
+            query = query.where(
+                Subscription.is_trial == True,  # noqa: E712
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date > now,
+            )
+        elif segment == "trial_expired":
+            query = query.where(
+                Subscription.is_trial == True,  # noqa: E712
+                or_(
+                    Subscription.status == SubscriptionStatus.EXPIRED.value,
+                    Subscription.end_date <= now,
+                ),
+            )
+        else:
+            logger.warning("Неизвестный сегмент для промо: %s", segment)
+            return []
+
+    result = await db.execute(query.order_by(User.id))
+    return result.scalars().unique().all()
 
 
 async def get_inactive_users(db: AsyncSession, months: int = 3) -> List[User]:

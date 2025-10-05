@@ -97,14 +97,22 @@ class AdminStates(StatesGroup):
     editing_server_limit = State()
     editing_server_description = State()
     editing_server_promo_groups = State()
-    
+
     creating_server_uuid = State()
     creating_server_name = State()
     creating_server_price = State()
     creating_server_country = State()
-    
+
     editing_welcome_text = State()
     waiting_for_message_buttons = "waiting_for_message_buttons"
+
+    editing_promo_offer_message = State()
+    editing_promo_offer_button = State()
+    editing_promo_offer_valid_hours = State()
+    editing_promo_offer_active_duration = State()
+    editing_promo_offer_discount = State()
+    editing_promo_offer_test_duration = State()
+    editing_promo_offer_squads = State()
     
     # Состояния для отслеживания источника перехода
     viewing_user_from_balance_list = State()
