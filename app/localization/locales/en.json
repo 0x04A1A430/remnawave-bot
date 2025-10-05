@@ -277,6 +277,7 @@
   "CHANGE_DEVICES_SUCCESS_INCREASE": "\n✅ Device limit increased!\n\n📱 Was: {old_count} → Now: {new_count}\n💰 Charged: {amount}\n",
   "CHANGE_DEVICES_TITLE": "📱 Change device limit",
   "CONTACT_SUPPORT": "💬 Contact support",
+  "PRIVACY_RESTRICTED_BUTTON_HINT": "⚠️ <b>Telegram blocked the contact request button because of your privacy settings.</b>\n\nAllow sharing your contact details in Telegram settings or send the required information manually in the chat.",
   "CREATE_INVITE": "📝 Create invite",
   "DEVICES_INSUFFICIENT_BALANCE": "⚠️ Insufficient balance!\nRequired: {required} (for {months} mo)\nYou have: {balance}",
   "DEVICES_LIMIT_EXCEEDED": "⚠️ Maximum device limit exceeded ({limit})",
