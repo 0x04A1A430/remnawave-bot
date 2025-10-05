@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.crud.promo_offer_log import log_promo_offer_event
 from app.database.models import (
     DiscountOffer,
     Subscription,
@@ -157,19 +156,6 @@ class PromoOfferService:
             bucket = subscriptions_updates.setdefault(subscription.id, (subscription, set()))
             if not entry.was_already_connected:
                 bucket[1].add(entry.squad_uuid)
-
-            if subscription.user_id:
-                await log_promo_offer_event(
-                    db,
-                    user_id=subscription.user_id,
-                    action="disabled",
-                    offer_id=entry.offer_id,
-                    source="test_access",
-                    metadata={
-                        "reason": "expired",
-                        "squad_uuid": entry.squad_uuid,
-                    },
-                )
 
         for subscription, squads_to_remove in subscriptions_updates.values():
             if not squads_to_remove:

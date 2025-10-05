@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime
-from html import escape
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from aiogram import Dispatcher, F, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
@@ -14,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.discount_offer import upsert_discount_offer
-from app.database.crud.promo_offer_log import paginate_promo_offer_logs
 from app.database.crud.server_squad import (
     get_all_server_squads,
     get_server_squad_by_id,
@@ -32,26 +29,12 @@ from app.keyboards.inline import get_happ_download_button_row
 from app.localization.texts import get_texts
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
-from app.utils.formatters import format_username
 from app.utils.subscription_utils import get_display_subscription_link
 
 logger = logging.getLogger(__name__)
 
 
 SQUADS_PAGE_LIMIT = 10
-LOGS_PAGE_LIMIT = 20
-
-
-LOG_ACTION_LABELS = {
-    "claimed": "ADMIN_PROMO_OFFER_LOG_ACTION_ACCEPTED",
-    "consumed": "ADMIN_PROMO_OFFER_LOG_ACTION_USED",
-    "disabled": "ADMIN_PROMO_OFFER_LOG_ACTION_DISABLED",
-}
-
-LOG_REASON_LABELS = {
-    "autopay": ("ADMIN_PROMO_OFFER_LOG_REASON_AUTOPAY", "Автоплатёж"),
-    "expired": ("ADMIN_PROMO_OFFER_LOG_REASON_EXPIRED", "Срок истёк"),
-}
 
 
 OFFER_TYPE_CONFIG = {
@@ -140,12 +123,6 @@ def _build_templates_keyboard(templates: Sequence[PromoOfferTemplate], language:
                 callback_data=f"promo_offer_{template.id}",
             )
         ])
-    rows.append([
-        InlineKeyboardButton(
-            text=texts.t("ADMIN_PROMO_OFFER_VIEW_LOGS", "📜 Лог операций"),
-            callback_data="promo_offer_logs",
-        )
-    ])
     rows.append([InlineKeyboardButton(text=texts.BACK, callback_data="admin_submenu_communications")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -196,176 +173,6 @@ def _build_send_keyboard(template: PromoOfferTemplate, language: str) -> InlineK
     rows.append([InlineKeyboardButton(text=texts.BACK, callback_data=f"promo_offer_{template.id}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
-
-def _format_log_action(action: Optional[str], texts) -> str:
-    if not action:
-        return texts.t("ADMIN_PROMO_OFFER_LOG_ACTION_UNKNOWN", "Неизвестно")
-
-    key = LOG_ACTION_LABELS.get(action)
-    if key:
-        return texts.t(key, action)
-
-    return action
-
-
-def _format_reason(metadata: Optional[dict], texts) -> Optional[str]:
-    if not metadata:
-        return None
-
-    reason_key = metadata.get("reason")
-    if not reason_key:
-        return None
-
-    label_key, default = LOG_REASON_LABELS.get(reason_key, (None, reason_key))
-    if label_key:
-        return texts.t(label_key, default)
-    return default
-
-
-def _build_logs_keyboard(page: int, total_pages: int, language: str) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    nav_row: List[InlineKeyboardButton] = []
-
-    if page > 1 and total_pages > 0:
-        nav_row.append(
-            InlineKeyboardButton(
-                text=texts.t("ADMIN_PROMO_OFFER_LOGS_PREV", "⬅️"),
-                callback_data=f"promo_offer_logs_page_{page - 1}",
-            )
-        )
-
-    nav_row.append(InlineKeyboardButton(text=texts.BACK, callback_data="admin_promo_offers"))
-
-    if total_pages > 0 and page < total_pages:
-        nav_row.append(
-            InlineKeyboardButton(
-                text=texts.t("ADMIN_PROMO_OFFER_LOGS_NEXT", "➡️"),
-                callback_data=f"promo_offer_logs_page_{page + 1}",
-            )
-        )
-
-    return InlineKeyboardMarkup(inline_keyboard=[nav_row])
-
-
-def _render_logs_text(
-    logs: Sequence[Any],
-    *,
-    page: int,
-    total_pages: int,
-    total_count: int,
-    page_size: int,
-    language: str,
-) -> str:
-    texts = get_texts(language)
-    lines: List[str] = [
-        texts.t("ADMIN_PROMO_OFFER_LOGS_TITLE", "📜 <b>Лог промо-предложений</b>"),
-        texts.t("ADMIN_PROMO_OFFER_LOGS_TOTAL", "Всего записей: {count}").format(count=total_count),
-        "",
-    ]
-
-    if not logs:
-        lines.append(texts.t("ADMIN_PROMO_OFFER_LOGS_EMPTY", "Пока нет операций."))
-        return "\n".join(lines)
-
-    start_index = (max(1, page) - 1) * page_size
-
-    for offset, log in enumerate(logs, start=1):
-        absolute_index = start_index + offset
-        timestamp = log.created_at.strftime("%d.%m.%Y %H:%M") if isinstance(log.created_at, datetime) else "-"
-        user_obj = getattr(log, "user", None)
-        if user_obj:
-            user_display = format_username(
-                getattr(user_obj, "username", None),
-                getattr(user_obj, "telegram_id", log.user_id),
-                getattr(user_obj, "full_name", None),
-            )
-        else:
-            user_display = f"ID{log.user_id}"
-
-        user_display = escape(str(user_display))
-        lines.append(
-            texts.t("ADMIN_PROMO_OFFER_LOG_ENTRY_TITLE", "{index}. {timestamp} — {user}").format(
-                index=absolute_index,
-                timestamp=timestamp,
-                user=user_display,
-            )
-        )
-
-        action_label = _format_log_action(getattr(log, "action", None), texts)
-        lines.append(
-            texts.t("ADMIN_PROMO_OFFER_LOG_ENTRY_ACTION", "• Действие: {action}").format(action=escape(str(action_label)))
-        )
-
-        if getattr(log, "offer_id", None):
-            lines.append(
-                texts.t("ADMIN_PROMO_OFFER_LOG_ENTRY_OFFER", "• Предложение: #{offer_id}").format(offer_id=log.offer_id)
-            )
-
-        if getattr(log, "source", None):
-            lines.append(
-                texts.t("ADMIN_PROMO_OFFER_LOG_ENTRY_SOURCE", "• Источник: {source}").format(
-                    source=escape(str(log.source))
-                )
-            )
-
-        percent = getattr(log, "percent", None)
-        if isinstance(percent, int) and percent > 0:
-            lines.append(
-                texts.t("ADMIN_PROMO_OFFER_LOG_ENTRY_PERCENT", "• Скидка: {percent}%").format(percent=percent)
-            )
-
-        discount_value = getattr(log, "discount_value_kopeks", None)
-        if isinstance(discount_value, int) and discount_value > 0:
-            lines.append(
-                texts.t("ADMIN_PROMO_OFFER_LOG_ENTRY_DISCOUNT_VALUE", "• Сумма скидки: {amount}").format(
-                    amount=texts.format_price(discount_value)
-                )
-            )
-
-        metadata = getattr(log, "metadata", None) or {}
-        effect_type = metadata.get("effect_type")
-        if effect_type:
-            lines.append(
-                texts.t("ADMIN_PROMO_OFFER_LOG_ENTRY_EFFECT", "• Эффект: {effect}").format(
-                    effect=escape(str(effect_type))
-                )
-            )
-
-        reason_label = _format_reason(metadata, texts)
-        if reason_label:
-            lines.append(
-                texts.t("ADMIN_PROMO_OFFER_LOG_ENTRY_REASON", "• Причина: {reason}").format(
-                    reason=escape(str(reason_label))
-                )
-            )
-
-        description = metadata.get("description")
-        if description:
-            lines.append(
-                texts.t("ADMIN_PROMO_OFFER_LOG_ENTRY_DESCRIPTION", "• Описание: {description}").format(
-                    description=escape(str(description))
-                )
-            )
-
-        squad_uuid = metadata.get("squad_uuid")
-        if squad_uuid:
-            lines.append(
-                texts.t("ADMIN_PROMO_OFFER_LOG_ENTRY_SQUAD", "• Сервер: {squad}").format(
-                    squad=escape(str(squad_uuid))
-                )
-            )
-
-        lines.append("")
-
-    footer_total = total_pages if total_pages > 0 else 1
-    lines.append(
-        texts.t("ADMIN_PROMO_OFFER_LOGS_FOOTER", "Страница {page} из {total}").format(
-            page=page,
-            total=footer_total,
-        )
-    )
-
-    return "\n".join(lines)
 
 def _describe_offer(
     template: PromoOfferTemplate,
@@ -450,49 +257,6 @@ async def show_promo_offers_menu(callback: CallbackQuery, db_user: User, db: Asy
         parse_mode="HTML",
     )
     await callback.answer()
-
-
-async def _show_logs_page(callback: CallbackQuery, db_user: User, db: AsyncSession, page: int) -> None:
-    logs, total_count, total_pages, current_page = await paginate_promo_offer_logs(
-        db,
-        page=page,
-        page_size=LOGS_PAGE_LIMIT,
-    )
-
-    message_text = _render_logs_text(
-        logs,
-        page=current_page,
-        total_pages=total_pages,
-        total_count=total_count,
-        page_size=LOGS_PAGE_LIMIT,
-        language=db_user.language,
-    )
-
-    keyboard = _build_logs_keyboard(current_page, total_pages, db_user.language)
-
-    await callback.message.edit_text(
-        message_text,
-        reply_markup=keyboard,
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-
-@admin_required
-@error_handler
-async def show_promo_offer_logs(callback: CallbackQuery, db_user: User, db: AsyncSession):
-    await _show_logs_page(callback, db_user, db, 1)
-
-
-@admin_required
-@error_handler
-async def paginate_promo_offer_logs_view(callback: CallbackQuery, db_user: User, db: AsyncSession):
-    try:
-        page = int(callback.data.rsplit("_", 1)[-1])
-    except (ValueError, AttributeError):
-        page = 1
-
-    await _show_logs_page(callback, db_user, db, page)
 
 
 @admin_required
@@ -1189,8 +953,6 @@ async def back_to_offer_from_squads(callback: CallbackQuery, db_user: User, db: 
 
 def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_promo_offers_menu, F.data == "admin_promo_offers")
-    dp.callback_query.register(show_promo_offer_logs, F.data == "promo_offer_logs")
-    dp.callback_query.register(paginate_promo_offer_logs_view, F.data.startswith("promo_offer_logs_page_"))
     dp.callback_query.register(prompt_edit_message, F.data.startswith("promo_offer_edit_message_"))
     dp.callback_query.register(prompt_edit_button, F.data.startswith("promo_offer_edit_button_"))
     dp.callback_query.register(prompt_edit_valid, F.data.startswith("promo_offer_edit_valid_"))
