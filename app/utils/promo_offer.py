@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
-from app.database.models import ServerSquad, SubscriptionTemporaryAccess, User
+from app.database.models import SubscriptionTemporaryAccess, User
 
 
 def get_user_active_promo_discount_percent(user: Optional[User]) -> int:
@@ -197,46 +197,21 @@ async def build_test_access_hint(
     bar = _build_progress_bar(seconds_left, total_seconds)
     time_left_text = _format_time_left(seconds_left, getattr(texts, "language", "ru"))
 
-    unique_squad_uuids: list[str] = []
-    seen_squads: set[str] = set()
-    for entry in active_entries:
-        squad_uuid = getattr(entry, "squad_uuid", None)
-        if squad_uuid and squad_uuid not in seen_squads:
-            seen_squads.add(squad_uuid)
-            unique_squad_uuids.append(squad_uuid)
-
-    squad_display_names: list[str] = []
-    if unique_squad_uuids:
-        squads_result = await db.execute(
-            select(ServerSquad.squad_uuid, ServerSquad.display_name).where(
-                ServerSquad.squad_uuid.in_(unique_squad_uuids)
-            )
-        )
-        names_map = {
-            squad_uuid: display_name
-            for squad_uuid, display_name in squads_result.all()
-            if display_name
-        }
-        for squad_uuid in unique_squad_uuids:
-            squad_display_names.append(names_map.get(squad_uuid, squad_uuid))
-
-    if squad_display_names:
-        servers_display = ", ".join(squad_display_names)
-    elif unique_squad_uuids:
-        servers_display = ", ".join(unique_squad_uuids)
-    else:
-        servers_display = str(len(active_entries))
+    unique_squads = {
+        entry.squad_uuid for entry in active_entries if getattr(entry, "squad_uuid", None)
+    }
+    count = len(unique_squads) or len(active_entries)
 
     header_template = texts.t(
         "MAIN_MENU_TEST_ACCESS_HEADER",
-        "🧪 Test servers active: {servers}",
+        "🧪 Test servers active: {count}",
     )
     timer_template = texts.t(
         "MAIN_MENU_TEST_ACCESS_TIMER",
         "⏳ Access active for {time_left}\n<code>{bar}</code>",
     )
 
-    header = header_template.format(servers=servers_display)
+    header = header_template.format(count=count)
     timer_line = timer_template.format(time_left=time_left_text, bar=bar)
 
     return f"{header}\n{timer_line}"
