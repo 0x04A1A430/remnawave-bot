@@ -17,6 +17,7 @@ from app.database.crud.discount_offer import (
     deactivate_expired_offers,
     upsert_discount_offer,
 )
+from app.database.crud.promo_offer_log import log_promo_offer_event
 from app.database.crud.notification import (
     clear_notification_by_type,
     notification_sent,
@@ -794,10 +795,27 @@ class MonitoringService:
         return max(0, min(100, percent))
 
     @staticmethod
-    async def _consume_user_promo_offer_discount(db: AsyncSession, user: User) -> None:
-        if MonitoringService._get_user_promo_offer_discount_percent(user) <= 0:
+    async def _consume_user_promo_offer_discount(
+        db: AsyncSession,
+        user: User,
+        *,
+        discount_value_kopeks: Optional[int] = None,
+        reason: str = "autopay",
+    ) -> None:
+        percent = MonitoringService._get_user_promo_offer_discount_percent(user)
+        if percent <= 0:
             return
 
+        source = getattr(user, "promo_offer_discount_source", None)
+        await log_promo_offer_event(
+            db,
+            user_id=user.id,
+            action="consumed",
+            source=source,
+            percent=percent,
+            discount_value_kopeks=discount_value_kopeks,
+            metadata={"reason": reason} if reason else None,
+        )
         user.promo_offer_discount_percent = 0
         user.promo_offer_discount_source = None
         user.updated_at = datetime.utcnow()
@@ -867,7 +885,12 @@ class MonitoringService:
                         )
 
                         if promo_discount_value > 0:
-                            await self._consume_user_promo_offer_discount(db, user)
+                            await self._consume_user_promo_offer_discount(
+                                db,
+                                user,
+                                discount_value_kopeks=promo_discount_value,
+                                reason="autopay",
+                            )
 
                         if self.bot:
                             await self._send_autopay_success_notification(user, charge_amount, 30)
