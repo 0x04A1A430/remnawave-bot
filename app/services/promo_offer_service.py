@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +15,6 @@ from app.database.models import (
     User,
 )
 from app.services.subscription_service import SubscriptionService
-from app.database.crud.promo_offer_log import log_promo_offer_action
 
 logger = logging.getLogger(__name__)
 
@@ -135,10 +134,7 @@ class PromoOfferService:
         now = datetime.utcnow()
         result = await db.execute(
             select(SubscriptionTemporaryAccess)
-            .options(
-                selectinload(SubscriptionTemporaryAccess.subscription),
-                selectinload(SubscriptionTemporaryAccess.offer),
-            )
+            .options(selectinload(SubscriptionTemporaryAccess.subscription))
             .where(
                 SubscriptionTemporaryAccess.is_active == True,  # noqa: E712
                 SubscriptionTemporaryAccess.expires_at <= now,
@@ -149,7 +145,6 @@ class PromoOfferService:
             return 0
 
         subscriptions_updates: dict[int, Tuple[Subscription, set[str]]] = {}
-        log_payloads: List[Dict[str, object]] = []
 
         for entry in entries:
             entry.is_active = False
@@ -161,23 +156,6 @@ class PromoOfferService:
             bucket = subscriptions_updates.setdefault(subscription.id, (subscription, set()))
             if not entry.was_already_connected:
                 bucket[1].add(entry.squad_uuid)
-
-            user_id = subscription.user_id
-            if user_id:
-                offer = entry.offer
-                log_payloads.append(
-                    {
-                        "user_id": user_id,
-                        "offer_id": entry.offer_id,
-                        "source": getattr(offer, "notification_type", None),
-                        "percent": getattr(offer, "discount_percent", None),
-                        "effect_type": getattr(offer, "effect_type", "test_access"),
-                        "details": {
-                            "reason": "test_access_expired",
-                            "squad_uuid": entry.squad_uuid,
-                        },
-                    }
-                )
 
         for subscription, squads_to_remove in subscriptions_updates.values():
             if not squads_to_remove:
@@ -197,24 +175,6 @@ class PromoOfferService:
                     )
 
         await db.commit()
-        for payload in log_payloads:
-            try:
-                await log_promo_offer_action(
-                    db,
-                    user_id=payload["user_id"],
-                    offer_id=payload.get("offer_id"),
-                    action="disabled",
-                    source=payload.get("source"),
-                    percent=payload.get("percent"),
-                    effect_type=payload.get("effect_type"),
-                    details=payload.get("details"),
-                )
-            except Exception as exc:  # pragma: no cover - defensive logging
-                logger.warning(
-                    "Failed to record promo offer test access disable log for user %s: %s",
-                    payload.get("user_id"),
-                    exc,
-                )
         return len(entries)
 
 

@@ -386,7 +386,6 @@ class User(Base):
     transactions = relationship("Transaction", back_populates="user")
     referral_earnings = relationship("ReferralEarning", foreign_keys="ReferralEarning.user_id", back_populates="user")
     discount_offers = relationship("DiscountOffer", back_populates="user")
-    promo_offer_logs = relationship("PromoOfferLog", back_populates="user")
     lifetime_used_traffic_bytes = Column(BigInteger, default=0)
     auto_promo_group_assigned = Column(Boolean, nullable=False, default=False)
     auto_promo_group_threshold_kopeks = Column(BigInteger, nullable=False, default=0)
@@ -822,7 +821,6 @@ class DiscountOffer(Base):
 
     user = relationship("User", back_populates="discount_offers")
     subscription = relationship("Subscription", back_populates="discount_offers")
-    logs = relationship("PromoOfferLog", back_populates="offer")
 
 
 class PromoOfferTemplate(Base):
@@ -864,23 +862,6 @@ class SubscriptionTemporaryAccess(Base):
 
     subscription = relationship("Subscription", back_populates="temporary_accesses")
     offer = relationship("DiscountOffer")
-
-
-class PromoOfferLog(Base):
-    __tablename__ = "promo_offer_logs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    offer_id = Column(Integer, ForeignKey("discount_offers.id", ondelete="SET NULL"), nullable=True, index=True)
-    action = Column(String(50), nullable=False)
-    source = Column(String(100), nullable=True)
-    percent = Column(Integer, nullable=True)
-    effect_type = Column(String(50), nullable=True)
-    details = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=func.now())
-
-    user = relationship("User", back_populates="promo_offer_logs")
-    offer = relationship("DiscountOffer", back_populates="logs")
 
 class BroadcastHistory(Base):
     __tablename__ = "broadcast_history"
