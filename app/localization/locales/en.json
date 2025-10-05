@@ -566,7 +566,7 @@
   "PROMO_OFFER_CLOSE": "❌ Close",
   "DISCOUNT_CLAIM_EXPIRED": "⚠️ The offer has expired.",
   "DISCOUNT_CLAIM_NOT_FOUND": "❌ Offer not found.",
-  "DISCOUNT_CLAIM_SUCCESS": "🎉 Discount of {percent}% activated! It stacks with your promo group and will be applied automatically to your next payment.",
+  "DISCOUNT_CLAIM_SUCCESS": "🎉 Discount of {percent}% activated! It will be applied automatically to your next payment.",
   "TEST_ACCESS_ALREADY_CONNECTED": "ℹ️ This server is already connected to your subscription.",
   "ENTER_BLOCK_MINUTES": "Enter the number of minutes to block the user (e.g., 15):",
   "LANGUAGE_SELECTION_DISABLED": "⚙️ Language selection is temporarily unavailable. Using the default language.",
