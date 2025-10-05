@@ -40,6 +40,16 @@ SQUADS_PAGE_LIMIT = 10
 PROMO_OFFER_LOGS_PAGE_LIMIT = 10
 
 
+async def _safe_delete_message(message: Message) -> None:
+    try:
+        await message.delete()
+    except TelegramBadRequest as exc:
+        if "message to delete not found" not in str(exc).lower():
+            logger.debug("Не удалось удалить сообщение администратора: %s", exc)
+    except TelegramForbiddenError:
+        logger.debug("Недостаточно прав для удаления сообщения администратора")
+
+
 ACTION_LABEL_KEYS = {
     "claimed": "ADMIN_PROMO_OFFER_LOGS_ACTION_CLAIMED",
     "consumed": "ADMIN_PROMO_OFFER_LOGS_ACTION_CONSUMED",
@@ -727,12 +737,14 @@ async def _handle_edit_field(
     data = await state.get_data()
     template_id = data.get("selected_promo_offer")
     if not template_id:
+        await _safe_delete_message(message)
         await message.answer("❌ Не удалось определить предложение. Повторите действие.")
         await state.clear()
         return
 
     template = await get_promo_offer_template_by_id(db, int(template_id))
     if not template:
+        await _safe_delete_message(message)
         await message.answer("❌ Предложение не найдено.")
         await state.clear()
         return
@@ -761,6 +773,7 @@ async def _handle_edit_field(
         else:
             raise ValueError("Unsupported field")
     except ValueError:
+        await _safe_delete_message(message)
         await message.answer("❌ Некорректное значение. Попробуйте снова.")
         return
 
@@ -770,6 +783,7 @@ async def _handle_edit_field(
     await state.clear()
     updated_template = await get_promo_offer_template_by_id(db, template.id)
     if not updated_template:
+        await _safe_delete_message(message)
         await message.answer("❌ Предложение не найдено после обновления.")
         return
 
@@ -804,6 +818,8 @@ async def _handle_edit_field(
             await message.answer(description, reply_markup=reply_markup, parse_mode="HTML")
     else:
         await message.answer(description, reply_markup=reply_markup, parse_mode="HTML")
+
+    await _safe_delete_message(message)
 
 
 @admin_required
