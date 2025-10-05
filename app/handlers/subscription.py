@@ -5274,6 +5274,22 @@ async def claim_discount_offer(
     await callback.message.answer(success_message, reply_markup=buy_keyboard)
 
 
+async def handle_promo_offer_close(
+        callback: types.CallbackQuery,
+        db_user: User,
+        db: AsyncSession,
+):
+    try:
+        await callback.message.delete()
+    except Exception:
+        try:
+            await callback.message.edit_reply_markup()
+        except Exception:
+            pass
+
+    await callback.answer()
+
+
 async def handle_device_guide(
         callback: types.CallbackQuery,
         db_user: User,
@@ -6315,6 +6331,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         claim_discount_offer,
         F.data.startswith("claim_discount_")
+    )
+
+    dp.callback_query.register(
+        handle_promo_offer_close,
+        F.data == "promo_offer_close",
     )
 
     dp.callback_query.register(

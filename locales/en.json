@@ -534,6 +534,7 @@
   "DISCOUNT_CLAIM_EXPIRED": "⚠️ The offer has expired.",
   "DISCOUNT_CLAIM_NOT_FOUND": "❌ Offer not found.",
   "DISCOUNT_CLAIM_ERROR": "❌ Failed to activate the discount. Please try again later.",
+  "PROMO_OFFER_CLOSE": "❌ Close",
   "TEST_ACCESS_NO_SUBSCRIPTION": "❌ You need an active subscription to use this offer.",
   "TEST_ACCESS_NO_SQUADS": "❌ Unable to determine servers for the test access. Please contact support.",
   "TEST_ACCESS_REMNAWAVE_ERROR": "❌ Failed to connect the servers. Please try again later or contact support.",

@@ -970,22 +970,12 @@ async def send_offer_to_segment(callback: CallbackQuery, db_user: User, db: Asyn
                 [InlineKeyboardButton(text=template.button_text, callback_data=f"claim_discount_{offer_record.id}")]
             ]
 
-            if template.offer_type == "purchase_discount":
-                keyboard_rows.append([
-                    InlineKeyboardButton(
-                        text=user_texts.t("ADMIN_PROMO_OFFER_CTA_BUY", "Купить подписку"),
-                        callback_data="menu_buy",
-                    )
-                ])
-            elif template.offer_type == "extend_discount":
-                keyboard_rows.append([
-                    InlineKeyboardButton(
-                        text=user_texts.t("ADMIN_PROMO_OFFER_CTA_EXTEND", "Продлить подписку"),
-                        callback_data="subscription_extend",
-                    )
-                ])
-            elif template.offer_type == "test_access":
-                keyboard_rows.extend(_build_connect_button_rows(user, user_texts))
+            keyboard_rows.append([
+                InlineKeyboardButton(
+                    text=user_texts.t("PROMO_OFFER_CLOSE", "❌ Закрыть"),
+                    callback_data="promo_offer_close",
+                )
+            ])
 
             keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
