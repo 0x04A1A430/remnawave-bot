@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Tuple, Optional
 
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings, PERIOD_PRICES, get_traffic_prices
 from app.database.crud.discount_offer import (
     get_offer_by_id,
+    get_latest_claimed_offer_for_user,
     mark_offer_claimed,
 )
 from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
@@ -72,10 +74,6 @@ from app.utils.subscription_utils import (
     get_happ_cryptolink_redirect_link,
     convert_subscription_link_to_happ_scheme,
 )
-from app.utils.promo_offer import (
-    build_promo_offer_hint,
-    get_user_active_promo_discount_percent,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +118,19 @@ def _apply_addon_discount(
 
 
 def _get_promo_offer_discount_percent(user: Optional[User]) -> int:
-    return get_user_active_promo_discount_percent(user)
+    if not user:
+        return 0
+
+    try:
+        percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+    expires_at = getattr(user, "promo_offer_discount_expires_at", None)
+    if expires_at and expires_at <= datetime.utcnow():
+        return 0
+
+    return max(0, min(100, percent))
 
 
 def _apply_promo_offer_discount(user: Optional[User], amount: int) -> Dict[str, int]:
@@ -133,13 +143,114 @@ def _apply_promo_offer_discount(user: Optional[User], amount: int) -> Dict[str, 
     return {"discounted": discounted, "discount": discount_value, "percent": percent}
 
 
+def _format_promo_offer_time_left(seconds_left: int, language: str) -> str:
+    total_minutes = max(1, math.ceil(seconds_left / 60))
+    days, remainder_minutes = divmod(total_minutes, 60 * 24)
+    hours, minutes = divmod(remainder_minutes, 60)
+
+    language_code = (language or "ru").split("-")[0].lower()
+    if language_code == "en":
+        day_label, hour_label, minute_label = "d", "h", "m"
+    else:
+        day_label, hour_label, minute_label = "д", "ч", "м"
+
+    parts: List[str] = []
+    if days:
+        parts.append(f"{days}{day_label}")
+    if hours or days:
+        parts.append(f"{hours}{hour_label}")
+    parts.append(f"{minutes}{minute_label}")
+    return " ".join(parts)
+
+
+async def _get_promo_offer_timer_line(
+        db: AsyncSession,
+        db_user: User,
+        texts,
+) -> Optional[str]:
+    expires_at = getattr(db_user, "promo_offer_discount_expires_at", None)
+    if not expires_at:
+        return None
+
+    now = datetime.utcnow()
+    if expires_at <= now:
+        return None
+
+    seconds_left = int((expires_at - now).total_seconds())
+    if seconds_left <= 0:
+        return None
+
+    total_seconds: Optional[int] = None
+    source = getattr(db_user, "promo_offer_discount_source", None)
+
+    try:
+        offer = await get_latest_claimed_offer_for_user(db, db_user.id, source)
+    except Exception as lookup_error:  # pragma: no cover - defensive logging
+        logger.debug(
+            "Failed to resolve latest claimed promo offer for user %s: %s",
+            db_user.id,
+            lookup_error,
+        )
+        offer = None
+
+    if offer and getattr(offer, "claimed_at", None):
+        total_seconds = int((expires_at - offer.claimed_at).total_seconds())
+        if total_seconds <= 0:
+            total_seconds = None
+
+    if total_seconds is None and offer and isinstance(offer.extra_data, dict):
+        raw_duration = (
+            offer.extra_data.get("active_discount_hours")
+            or offer.extra_data.get("duration_hours")
+        )
+        try:
+            if raw_duration:
+                total_seconds = int(float(raw_duration) * 3600)
+        except (TypeError, ValueError):
+            total_seconds = None
+
+    if total_seconds is None or total_seconds <= 0:
+        total_seconds = seconds_left
+
+    ratio = max(0.0, min(1.0, seconds_left / total_seconds))
+    bar_length = 10
+    filled_segments = int(round(ratio * bar_length))
+    filled_segments = max(0, min(bar_length, filled_segments))
+    if filled_segments == 0 and seconds_left > 0:
+        filled_segments = 1
+
+    bar = f"[{'█' * filled_segments}{'░' * (bar_length - filled_segments)}]"
+    time_left_text = _format_promo_offer_time_left(seconds_left, getattr(texts, "language", "ru"))
+
+    template = texts.t(
+        "SUBSCRIPTION_PROMO_DISCOUNT_TIMER",
+        "⏳ Discount active for {time_left}\n<code>{bar}</code>",
+    )
+    return template.format(bar=bar, time_left=time_left_text)
+
+
 async def _get_promo_offer_hint(
         db: AsyncSession,
         db_user: User,
         texts,
         percent: Optional[int] = None,
 ) -> Optional[str]:
-    return await build_promo_offer_hint(db, db_user, texts, percent)
+    if percent is None:
+        percent = _get_promo_offer_discount_percent(db_user)
+
+    if percent <= 0:
+        return None
+
+    base_hint = texts.t(
+        "SUBSCRIPTION_PROMO_DISCOUNT_HINT",
+        "⚡ Extra {percent}% discount is active and will apply automatically. It stacks with other discounts.",
+    ).format(percent=percent)
+
+    timer_line = await _get_promo_offer_timer_line(db, db_user, texts)
+    if timer_line:
+        return f"{base_hint}\n{timer_line}"
+
+    return base_hint
 
 
 def _get_period_hint_from_subscription(subscription: Optional[Subscription]) -> Optional[int]:

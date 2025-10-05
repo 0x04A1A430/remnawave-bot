@@ -32,10 +32,6 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
 from app.utils.user_utils import generate_unique_referral_code
-from app.utils.promo_offer import (
-    build_promo_offer_hint,
-    build_test_access_hint,
-)
 from app.database.crud.user_message import get_random_active_message
 
 
@@ -1282,35 +1278,6 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
     )
 
     action_prompt = texts.t("MAIN_MENU_ACTION_PROMPT", "Выберите действие:")
-
-    info_sections: list[str] = []
-
-    try:
-        promo_hint = await build_promo_offer_hint(db, user, texts)
-        if promo_hint:
-            info_sections.append(promo_hint.strip())
-    except Exception as hint_error:
-        logger.debug(
-            "Не удалось построить подсказку промо-предложения для пользователя %s: %s",
-            getattr(user, "id", None),
-            hint_error,
-        )
-
-    try:
-        test_access_hint = await build_test_access_hint(db, user, texts)
-        if test_access_hint:
-            info_sections.append(test_access_hint.strip())
-    except Exception as test_error:
-        logger.debug(
-            "Не удалось построить подсказку тестового доступа для пользователя %s: %s",
-            getattr(user, "id", None),
-            test_error,
-        )
-
-    if info_sections:
-        extra_block = "\n\n".join(section for section in info_sections if section)
-        if extra_block:
-            base_text = _insert_random_message(base_text, extra_block, action_prompt)
 
     try:
         random_message = await get_random_active_message(db)
