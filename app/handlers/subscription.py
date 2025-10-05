@@ -5167,7 +5167,7 @@ async def claim_discount_offer(
         effect_type = "percent_discount"
 
     if effect_type == "test_access":
-        success, newly_added, expires_at, error_code = await promo_offer_service.grant_test_access(
+        success, added_squads, expires_at, error_code = await promo_offer_service.grant_test_access(
             db,
             db_user,
             offer,
@@ -5202,15 +5202,7 @@ async def claim_discount_offer(
             await callback.answer(error_message, show_alert=True)
             return
 
-        await mark_offer_claimed(
-            db,
-            offer,
-            details={
-                "context": "test_access_claim",
-                "new_squads": newly_added,
-                "expires_at": expires_at.isoformat() if expires_at else None,
-            },
-        )
+        await mark_offer_claimed(db, offer)
 
         expires_text = expires_at.strftime("%d.%m.%Y %H:%M") if expires_at else ""
         success_message = texts.get(
@@ -5245,14 +5237,7 @@ async def claim_discount_offer(
     db_user.promo_offer_discount_source = offer.notification_type
     db_user.updated_at = now
 
-    await mark_offer_claimed(
-        db,
-        offer,
-        details={
-            "context": "discount_claim",
-            "discount_percent": discount_percent,
-        },
-    )
+    await mark_offer_claimed(db, offer)
     await db.refresh(db_user)
 
     success_message = texts.get(
