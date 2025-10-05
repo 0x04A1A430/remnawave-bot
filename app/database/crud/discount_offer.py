@@ -1,10 +1,16 @@
+from __future__ import annotations
+
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database.crud.promo_offer_log import log_promo_offer_action
 from app.database.models import DiscountOffer
+
+logger = logging.getLogger(__name__)
 
 
 async def upsert_discount_offer(
@@ -67,11 +73,35 @@ async def get_offer_by_id(db: AsyncSession, offer_id: int) -> Optional[DiscountO
     return result.scalar_one_or_none()
 
 
-async def mark_offer_claimed(db: AsyncSession, offer: DiscountOffer) -> DiscountOffer:
+async def mark_offer_claimed(
+    db: AsyncSession,
+    offer: DiscountOffer,
+    *,
+    details: Optional[dict] = None,
+) -> DiscountOffer:
     offer.claimed_at = datetime.utcnow()
     offer.is_active = False
     await db.commit()
     await db.refresh(offer)
+
+    try:
+        await log_promo_offer_action(
+            db,
+            user_id=offer.user_id,
+            offer_id=offer.id,
+            action="claimed",
+            source=offer.notification_type,
+            percent=offer.discount_percent,
+            effect_type=offer.effect_type,
+            details=details,
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.warning(
+            "Failed to record promo offer claim log for offer %s: %s",
+            offer.id,
+            exc,
+        )
+
     return offer
 
 
@@ -88,9 +118,62 @@ async def deactivate_expired_offers(db: AsyncSession) -> int:
         return 0
 
     count = 0
+    log_payloads = []
     for offer in offers:
         offer.is_active = False
         count += 1
+        log_payloads.append(
+            {
+                "user_id": offer.user_id,
+                "offer_id": offer.id,
+                "source": offer.notification_type,
+                "percent": offer.discount_percent,
+                "effect_type": offer.effect_type,
+            }
+        )
 
     await db.commit()
+
+    for payload in log_payloads:
+        if not payload.get("user_id"):
+            continue
+        try:
+            await log_promo_offer_action(
+                db,
+                user_id=payload["user_id"],
+                offer_id=payload["offer_id"],
+                action="disabled",
+                source=payload.get("source"),
+                percent=payload.get("percent"),
+                effect_type=payload.get("effect_type"),
+                details={"reason": "offer_expired"},
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning(
+                "Failed to record promo offer disable log for offer %s: %s",
+                payload.get("offer_id"),
+                exc,
+            )
+
     return count
+
+
+async def get_latest_claimed_offer_for_user(
+    db: AsyncSession,
+    user_id: int,
+    source: Optional[str] = None,
+) -> Optional[DiscountOffer]:
+    stmt = (
+        select(DiscountOffer)
+        .where(
+            DiscountOffer.user_id == user_id,
+            DiscountOffer.claimed_at.isnot(None),
+        )
+        .order_by(DiscountOffer.claimed_at.desc())
+    )
+
+    if source:
+        stmt = stmt.where(DiscountOffer.notification_type == source)
+
+    result = await db.execute(stmt)
+    return result.scalars().first()
