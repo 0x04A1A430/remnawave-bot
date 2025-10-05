@@ -2879,7 +2879,6 @@ async def confirm_extend_subscription(
             price,
             f"Продление подписки на {days} дней",
             consume_promo_offer=promo_component["discount"] > 0,
-            promo_offer_discount_value=promo_component["discount"],
         )
 
         if not success:
@@ -3743,7 +3742,6 @@ async def confirm_purchase(
             final_price,
             f"Покупка подписки на {data['period_days']} дней",
             consume_promo_offer=promo_offer_discount_value > 0,
-            promo_offer_discount_value=promo_offer_discount_value,
         )
 
         if not success:

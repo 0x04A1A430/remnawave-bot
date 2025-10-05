@@ -2,26 +2,24 @@ import logging
 import secrets
 import string
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
-
-from sqlalchemy import and_, case, func, nullslast, or_, select, text
+from typing import Optional, List, Dict
+from sqlalchemy import select, and_, or_, func, case, nullslast, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import IntegrityError
 
-from app.config import settings
-from app.database.crud.promo_group import get_default_promo_group
-from app.database.crud.promo_offer_log import log_promo_offer_event
 from app.database.models import (
-    PaymentMethod,
-    PromoGroup,
+    User,
+    UserStatus,
     Subscription,
     SubscriptionStatus,
     Transaction,
+    PromoGroup,
+    PaymentMethod,
     TransactionType,
-    User,
-    UserStatus,
 )
+from app.config import settings
+from app.database.crud.promo_group import get_default_promo_group
 from app.utils.validators import sanitize_telegram_name
 
 logger = logging.getLogger(__name__)
@@ -277,7 +275,6 @@ async def subtract_user_balance(
     payment_method: Optional[PaymentMethod] = None,
     *,
     consume_promo_offer: bool = False,
-    promo_offer_discount_value: Optional[int] = None,
 ) -> bool:
     logger.error(f"💸 ОТЛАДКА subtract_user_balance:")
     logger.error(f"   👤 User ID: {user.id} (TG: {user.telegram_id})")
@@ -293,25 +290,7 @@ async def subtract_user_balance(
         old_balance = user.balance_kopeks
         user.balance_kopeks -= amount_kopeks
 
-        promo_discount_percent = 0
-        promo_discount_source = None
-        if consume_promo_offer:
-            try:
-                promo_discount_percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
-            except (TypeError, ValueError):
-                promo_discount_percent = 0
-            promo_discount_source = getattr(user, "promo_offer_discount_source", None)
-
-        if consume_promo_offer and promo_discount_percent > 0:
-            await log_promo_offer_event(
-                db,
-                user_id=user.id,
-                action="consumed",
-                source=promo_discount_source,
-                percent=promo_discount_percent,
-                discount_value_kopeks=promo_offer_discount_value,
-                metadata={"description": description},
-            )
+        if consume_promo_offer and getattr(user, "promo_offer_discount_percent", 0):
             user.promo_offer_discount_percent = 0
             user.promo_offer_discount_source = None
 

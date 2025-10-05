@@ -4,7 +4,6 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.crud.promo_offer_log import log_promo_offer_event
 from app.database.models import DiscountOffer
 
 
@@ -71,21 +70,6 @@ async def get_offer_by_id(db: AsyncSession, offer_id: int) -> Optional[DiscountO
 async def mark_offer_claimed(db: AsyncSession, offer: DiscountOffer) -> DiscountOffer:
     offer.claimed_at = datetime.utcnow()
     offer.is_active = False
-    metadata = {
-        "effect_type": offer.effect_type,
-    }
-    if offer.extra_data:
-        metadata["extra_data"] = offer.extra_data
-
-    await log_promo_offer_event(
-        db,
-        user_id=offer.user_id,
-        action="claimed",
-        offer_id=offer.id,
-        source=offer.notification_type,
-        percent=offer.discount_percent,
-        metadata=metadata,
-    )
     await db.commit()
     await db.refresh(offer)
     return offer
