@@ -7,7 +7,11 @@ from datetime import datetime
 
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id, update_user
-from app.keyboards.inline import get_main_menu_keyboard, get_language_selection_keyboard
+from app.keyboards.inline import (
+    get_main_menu_keyboard,
+    get_language_selection_keyboard,
+    get_info_menu_keyboard,
+)
 from app.localization.texts import get_texts, get_rules
 from app.database.models import User
 from app.database.crud.user_message import get_random_active_message
@@ -91,6 +95,26 @@ async def show_service_rules(
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")]
         ])
+    )
+    await callback.answer()
+
+
+async def show_info_menu(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+
+    header = texts.t("MENU_INFO_HEADER", "ℹ️ <b>Инфо</b>")
+    prompt = texts.t("MENU_INFO_PROMPT", "Выберите раздел:")
+    caption = f"{header}\n\n{prompt}" if prompt else header
+
+    await edit_or_answer_photo(
+        callback=callback,
+        caption=caption,
+        keyboard=get_info_menu_keyboard(language=db_user.language),
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -357,6 +381,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_service_rules,
         F.data == "menu_rules"
+    )
+
+    dp.callback_query.register(
+        show_info_menu,
+        F.data == "menu_info",
     )
 
     dp.callback_query.register(
