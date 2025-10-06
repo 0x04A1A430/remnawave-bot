@@ -113,8 +113,6 @@ class AdminStates(StatesGroup):
     editing_promo_offer_discount = State()
     editing_promo_offer_test_duration = State()
     editing_promo_offer_squads = State()
-    selecting_promo_offer_user = State()
-    searching_promo_offer_user = State()
     
     # Состояния для отслеживания источника перехода
     viewing_user_from_balance_list = State()
