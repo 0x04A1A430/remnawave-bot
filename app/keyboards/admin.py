@@ -726,12 +726,6 @@ def get_user_management_keyboard(user_id: int, user_status: str, language: str =
         ],
         [
             InlineKeyboardButton(
-                text=texts.get("ADMIN_USER_PROMO_TEMPLATES_BUTTON", "🎯 Промо-предложения"),
-                callback_data=f"admin_user_promo_templates_{user_id}"
-            )
-        ],
-        [
-            InlineKeyboardButton(
                 text=_t(texts, "ADMIN_USER_STATISTICS", "📊 Статистика"),
                 callback_data=f"admin_user_statistics_{user_id}"
             )
