@@ -52,6 +52,11 @@ async def list_promo_offer_logs(
     db: AsyncSession,
     offset: int = 0,
     limit: int = 20,
+    *,
+    user_id: Optional[int] = None,
+    offer_id: Optional[int] = None,
+    action: Optional[str] = None,
+    source: Optional[str] = None,
 ) -> Tuple[List[PromoOfferLog], int]:
     stmt = (
         select(PromoOfferLog)
@@ -63,10 +68,29 @@ async def list_promo_offer_logs(
         .offset(offset)
         .limit(limit)
     )
+
+    if user_id is not None:
+        stmt = stmt.where(PromoOfferLog.user_id == user_id)
+    if offer_id is not None:
+        stmt = stmt.where(PromoOfferLog.offer_id == offer_id)
+    if action:
+        stmt = stmt.where(PromoOfferLog.action == action)
+    if source:
+        stmt = stmt.where(PromoOfferLog.source == source)
+
     result = await db.execute(stmt)
     logs = result.scalars().all()
 
     count_stmt = select(func.count(PromoOfferLog.id))
+    if user_id is not None:
+        count_stmt = count_stmt.where(PromoOfferLog.user_id == user_id)
+    if offer_id is not None:
+        count_stmt = count_stmt.where(PromoOfferLog.offer_id == offer_id)
+    if action:
+        count_stmt = count_stmt.where(PromoOfferLog.action == action)
+    if source:
+        count_stmt = count_stmt.where(PromoOfferLog.source == source)
+
     total = (await db.execute(count_stmt)).scalar() or 0
 
     return logs, total
