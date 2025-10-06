@@ -1,39 +1,61 @@
+import html
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List, Tuple
+
 from aiogram import Dispatcher, types, F
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.context import FSMContext
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.states import AdminStates
-from app.database.models import User, UserStatus, Subscription, SubscriptionStatus, TransactionType 
-from app.database.crud.user import get_user_by_id
 from app.database.crud.campaign import (
     get_campaign_registration_by_user,
     get_campaign_statistics,
 )
-from app.keyboards.admin import (
-    get_admin_users_keyboard, get_user_management_keyboard,
-    get_admin_pagination_keyboard, get_confirmation_keyboard,
-    get_admin_users_filters_keyboard, get_user_promo_group_keyboard
-)
-from app.localization.texts import get_texts
-from app.services.user_service import UserService
-from app.services.admin_notification_service import AdminNotificationService
+from app.database.crud.discount_offer import upsert_discount_offer
 from app.database.crud.promo_group import get_promo_groups_with_counts
-from app.utils.decorators import admin_required, error_handler
-from app.utils.formatters import format_datetime, format_time_ago
-from app.services.remnawave_service import RemnaWaveService
-from app.external.remnawave_api import TrafficLimitStrategy
+from app.database.crud.promo_offer_template import (
+    ensure_default_templates,
+    get_promo_offer_template_by_id,
+    list_promo_offer_templates,
+)
 from app.database.crud.server_squad import (
     get_all_server_squads,
     get_server_squad_by_uuid,
     get_server_squad_by_id,
     get_server_ids_by_uuids,
 )
+from app.database.crud.user import get_user_by_id
+from app.database.models import (
+    Subscription,
+    SubscriptionStatus,
+    TransactionType,
+    User,
+    UserStatus,
+)
+from app.external.remnawave_api import TrafficLimitStrategy
+from app.keyboards.admin import (
+    get_admin_pagination_keyboard,
+    get_admin_users_filters_keyboard,
+    get_admin_users_keyboard,
+    get_confirmation_keyboard,
+    get_user_management_keyboard,
+    get_user_promo_group_keyboard,
+)
+from app.localization.texts import get_texts
+from app.services.admin_notification_service import AdminNotificationService
+from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
+from app.services.user_service import UserService
+from app.states import AdminStates
+from app.utils.decorators import admin_required, error_handler
+from app.utils.formatters import format_datetime, format_time_ago
+from app.utils.promo_offer import (
+    build_promo_offer_timer_line,
+    get_user_active_promo_discount_percent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -997,6 +1019,12 @@ async def _render_user_subscription_overview(
     user = profile["user"]
     subscription = profile["subscription"]
 
+    if subscription is not None:
+        try:
+            setattr(user, "subscription", subscription)
+        except Exception:
+            pass
+
     text = "📱 <b>Подписка и настройки пользователя</b>\n\n"
     text += f"👤 {user.full_name} (ID: <code>{user.telegram_id}</code>)\n\n"
 
@@ -1448,6 +1476,44 @@ async def show_user_management(
     else:
         sections.append(texts.ADMIN_USER_MANAGEMENT_PROMO_GROUP_NONE)
 
+    promo_percent = get_user_active_promo_discount_percent(user)
+    promo_expires_at = getattr(user, "promo_offer_discount_expires_at", None)
+    promo_source = getattr(user, "promo_offer_discount_source", None)
+
+    if promo_percent > 0:
+        expires_text = (
+            format_datetime(promo_expires_at)
+            if promo_expires_at
+            else texts.get("ADMIN_USER_PROMO_OFFER_NO_EXPIRY", "∞")
+        )
+        source_text = (
+            promo_source
+            if promo_source
+            else texts.get("ADMIN_USER_PROMO_OFFER_SOURCE_UNKNOWN", "—")
+        )
+        promo_section = texts.get(
+            "ADMIN_USER_MANAGEMENT_PROMO_OFFER_ACTIVE",
+            "🎯 <b>Активное промо:</b> {percent}% (источник: {source})\nДействует до: {expires_at}",
+        ).format(
+            percent=promo_percent,
+            source=source_text,
+            expires_at=expires_text,
+        )
+        try:
+            timer_line = await build_promo_offer_timer_line(db, user, texts)
+        except Exception:
+            timer_line = None
+        if timer_line:
+            promo_section += f"\n{timer_line}"
+        sections.append(promo_section)
+    else:
+        sections.append(
+            texts.get(
+                "ADMIN_USER_MANAGEMENT_PROMO_OFFER_NONE",
+                "🎯 <b>Активное промо:</b> отсутствует",
+            )
+        )
+
     text = "\n\n".join(sections)
 
     # Проверяем состояние, чтобы определить, откуда пришел пользователь
@@ -1483,6 +1549,182 @@ async def show_user_management(
         reply_markup=kb
     )
     await callback.answer()
+
+
+PROMO_TEMPLATE_ICONS = {
+    "test_access": "🧪",
+    "extend_discount": "💎",
+    "purchase_discount": "🎯",
+}
+
+PROMO_TEMPLATE_EFFECT_TYPES = {
+    "test_access": "test_access",
+    "extend_discount": "percent_discount",
+    "purchase_discount": "percent_discount",
+}
+
+
+def _build_user_template_button_text(template) -> str:
+    icon = PROMO_TEMPLATE_ICONS.get(template.offer_type, "📨")
+    suffix = ""
+    try:
+        percent = int(template.discount_percent or 0)
+    except (TypeError, ValueError):
+        percent = 0
+    if template.offer_type != "test_access" and percent > 0:
+        suffix = f" ({percent}%)"
+    return f"{icon} {template.name}{suffix}"
+
+
+def _render_promo_template_text(template, language: str, *, server_name: Optional[str] = None) -> str:
+    replacements = {
+        "discount_percent": template.discount_percent,
+        "valid_hours": template.valid_hours,
+        "test_duration_hours": template.test_duration_hours or 0,
+        "active_discount_hours": template.active_discount_hours or template.valid_hours,
+    }
+
+    if server_name is not None:
+        replacements.setdefault("server_name", server_name)
+    else:
+        replacements.setdefault("server_name", "???")
+
+    try:
+        return template.message_text.format(**replacements)
+    except Exception:
+        logger.warning(
+            "Не удалось форматировать текст промо-предложения %s для языка %s",
+            template.id,
+            language,
+        )
+        return template.message_text
+
+
+async def _resolve_template_squad_info(
+    db: AsyncSession,
+    template,
+) -> Tuple[Optional[str], Optional[str]]:
+    if template.offer_type != "test_access":
+        return None, None
+
+    squad_uuids = template.test_squad_uuids or []
+    if not squad_uuids:
+        return None, None
+
+    squad_uuid = str(squad_uuids[0])
+    server = await get_server_squad_by_uuid(db, squad_uuid)
+    server_name = server.display_name if server else None
+    return squad_uuid, server_name
+
+
+def _get_template_effect_type(template) -> str:
+    return PROMO_TEMPLATE_EFFECT_TYPES.get(template.offer_type, "percent_discount")
+
+
+def _get_template_restriction_key(template, subscription: Optional[Subscription]) -> Optional[str]:
+    if not subscription:
+        return None
+
+    if subscription.is_trial and template.offer_type == "extend_discount":
+        return "trial"
+
+    if subscription.is_active and not subscription.is_trial and template.offer_type == "purchase_discount":
+        return "active_paid"
+
+    return None
+
+
+def _get_template_restriction_message(key: str, texts) -> str:
+    if key == "trial":
+        return texts.t(
+            "ADMIN_USER_PROMO_TEMPLATE_RESTRICTED_TRIAL",
+            "⚠️ Шаблоны продления недоступны для пользователей на тестовом периоде.",
+        )
+
+    if key == "active_paid":
+        return texts.t(
+            "ADMIN_USER_PROMO_TEMPLATE_RESTRICTED_ACTIVE",
+            "⚠️ Скидки на покупку подписки недоступны для пользователей с активной подпиской.",
+        )
+
+    return ""
+
+
+def _build_user_promo_template_preview_content(language: str, preview_data: dict):
+    texts = get_texts(language)
+    template_name = html.escape(preview_data.get("template_name", ""))
+    user_name = html.escape(preview_data.get("target_user_name", ""))
+    button_text = html.escape(preview_data.get("button_text", ""))
+    message_text = preview_data.get("message_text", "")
+
+    lines = [
+        texts.t(
+            "ADMIN_USER_PROMO_TEMPLATE_PREVIEW_TITLE",
+            "📨 <b>Предпросмотр «{name}» для {user}</b>",
+        ).format(name=template_name, user=user_name),
+        "",
+        texts.t(
+            "ADMIN_USER_PROMO_TEMPLATE_PREVIEW_HINT",
+            "Отредактируйте текст при необходимости и подтвердите отправку.",
+        ),
+        "",
+        message_text,
+    ]
+
+    if button_text:
+        lines.extend(
+            [
+                "",
+                texts.t(
+                    "ADMIN_USER_PROMO_TEMPLATE_PREVIEW_BUTTON",
+                    "Кнопка пользователя: «{text}»",
+                ).format(text=button_text),
+            ]
+        )
+
+    preview_text = "\n".join(lines)
+
+    user_id = preview_data.get("user_id")
+    template_id = preview_data.get("template_id")
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t(
+                        "ADMIN_USER_PROMO_TEMPLATE_PREVIEW_EDIT",
+                        "✏️ Редактировать текст",
+                    ),
+                    callback_data=f"admin_user_promo_edit_{user_id}_{template_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t(
+                        "ADMIN_USER_PROMO_TEMPLATE_PREVIEW_CONFIRM",
+                        "✅ Отправить",
+                    ),
+                    callback_data=f"admin_user_promo_confirm_{user_id}_{template_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.BACK,
+                    callback_data=f"admin_user_promo_templates_{user_id}",
+                )
+            ],
+        ]
+    )
+
+    return preview_text, keyboard
+
+
+async def _get_promo_template_preview_data(state: FSMContext) -> Optional[dict]:
+    data = await state.get_data()
+    preview_data = data.get("promo_template_preview")
+    if isinstance(preview_data, dict) and preview_data:
+        return preview_data
+    return None
 
 
 async def _render_user_promo_group(
@@ -1615,6 +1857,637 @@ async def set_user_promo_group(
         )
 
 
+@admin_required
+@error_handler
+async def show_user_promo_templates(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    try:
+        user_id = int(callback.data.split("_")[-1])
+    except (ValueError, AttributeError):
+        await callback.answer("❌ Некорректные данные", show_alert=True)
+        return
+
+    user_service = UserService()
+    profile = await user_service.get_user_profile(db, user_id)
+    if not profile:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    target_user: User = profile["user"]
+    subscription: Optional[Subscription] = profile.get("subscription")
+    if subscription is not None:
+        try:
+            setattr(target_user, "subscription", subscription)
+        except Exception:
+            pass
+
+    await state.update_data(promo_template_preview=None)
+
+    await ensure_default_templates(db, created_by=db_user.id)
+    templates = await list_promo_offer_templates(db)
+
+    texts = get_texts(db_user.language)
+    active_templates = [template for template in templates if getattr(template, "is_active", True)]
+
+    if not active_templates:
+        await callback.answer(
+            texts.t("ADMIN_USER_PROMO_TEMPLATES_EMPTY", "Нет активных шаблонов промо-предложений."),
+            show_alert=True,
+        )
+        return
+
+    promo_percent = get_user_active_promo_discount_percent(target_user)
+    promo_expires_at = getattr(target_user, "promo_offer_discount_expires_at", None)
+    expires_text = (
+        format_datetime(promo_expires_at)
+        if promo_expires_at
+        else texts.get("ADMIN_USER_PROMO_OFFER_NO_EXPIRY", "∞")
+    )
+
+    restriction_keys = set()
+    available_templates = []
+
+    for template in active_templates:
+        restriction_key = _get_template_restriction_key(template, subscription)
+        if restriction_key:
+            restriction_keys.add(restriction_key)
+            continue
+        available_templates.append(template)
+
+    message_lines = [
+        texts.t(
+            "ADMIN_USER_PROMO_TEMPLATES_TITLE",
+            "🎯 <b>Промо-предложения для {name}</b>",
+        ).format(name=target_user.full_name),
+        "",
+        texts.t(
+            "ADMIN_USER_PROMO_TEMPLATES_HINT",
+            "Выберите шаблон, чтобы отправить пользователю промо-предложение.",
+        ),
+    ]
+
+    if promo_percent > 0:
+        message_lines.extend(
+            [
+                "",
+                texts.t(
+                    "ADMIN_USER_PROMO_TEMPLATES_ACTIVE_INFO",
+                    "Активная скидка: {percent}% (до {expires_at})",
+                ).format(percent=promo_percent, expires_at=expires_text),
+            ]
+        )
+
+    for key in sorted(restriction_keys):
+        restriction_message = _get_template_restriction_message(key, texts)
+        if restriction_message:
+            message_lines.extend(["", restriction_message])
+
+    if not available_templates:
+        message_lines.extend(
+            [
+                "",
+                texts.t(
+                    "ADMIN_USER_PROMO_TEMPLATES_UNAVAILABLE",
+                    "Нет доступных шаблонов для отправки этому пользователю.",
+                ),
+            ]
+        )
+
+        keyboard_rows = [
+            [
+                InlineKeyboardButton(
+                    text=texts.BACK,
+                    callback_data=f"admin_user_manage_{target_user.id}",
+                )
+            ]
+        ]
+
+        await state.set_state(None)
+
+        await callback.message.edit_text(
+            "\n".join(message_lines),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+
+    keyboard_rows: List[List[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=_build_user_template_button_text(template),
+                callback_data=f"admin_user_promo_send_{target_user.id}_{template.id}",
+            )
+        ]
+        for template in available_templates
+    ]
+
+    keyboard_rows.append([
+        InlineKeyboardButton(
+            text=texts.BACK,
+            callback_data=f"admin_user_manage_{target_user.id}",
+        )
+    ])
+
+    await state.set_state(None)
+
+    await callback.message.edit_text(
+        "\n".join(message_lines),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def send_user_promo_template(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    prefix = "admin_user_promo_send_"
+    if not callback.data.startswith(prefix):
+        await callback.answer("❌ Некорректные данные", show_alert=True)
+        return
+
+    payload = callback.data[len(prefix):]
+    try:
+        user_part, template_part = payload.split("_", 1)
+        user_id = int(user_part)
+        template_id = int(template_part)
+    except (ValueError, AttributeError):
+        await callback.answer("❌ Некорректные данные", show_alert=True)
+        return
+
+    user_service = UserService()
+    profile = await user_service.get_user_profile(db, user_id)
+    if not profile:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    target_user: User = profile["user"]
+    subscription: Optional[Subscription] = profile.get("subscription")
+    if subscription is not None:
+        try:
+            setattr(target_user, "subscription", subscription)
+        except Exception:
+            pass
+
+    template = await get_promo_offer_template_by_id(db, template_id)
+    if not template or not getattr(template, "is_active", True):
+        await callback.answer("❌ Шаблон недоступен", show_alert=True)
+        return
+
+    restriction_key = _get_template_restriction_key(template, subscription)
+    if restriction_key:
+        texts = get_texts(db_user.language)
+        restriction_message = _get_template_restriction_message(restriction_key, texts)
+        await callback.answer(restriction_message or "❌ Шаблон недоступен", show_alert=True)
+        return
+
+    squad_uuid, squad_name = await _resolve_template_squad_info(db, template)
+
+    if template.offer_type == "test_access" and squad_uuid:
+        connected = set(subscription.connected_squads or []) if subscription else set()
+        if squad_uuid in connected:
+            texts = get_texts(db_user.language)
+            await callback.answer(
+                texts.t(
+                    "ADMIN_USER_PROMO_TEMPLATE_ALREADY_HAS_ACCESS",
+                    "У пользователя уже есть доступ к этому серверу.",
+                ),
+                show_alert=True,
+            )
+            return
+
+    user_language = target_user.language or db_user.language
+    message_text = _render_promo_template_text(
+        template,
+        user_language,
+        server_name=squad_name,
+    )
+
+    preview_data = {
+        "user_id": target_user.id,
+        "template_id": template.id,
+        "template_name": template.name,
+        "target_user_name": target_user.full_name,
+        "button_text": template.button_text,
+        "message_text": message_text,
+        "admin_language": db_user.language,
+        "user_language": user_language,
+        "message_chat_id": callback.message.chat.id,
+        "message_id": callback.message.message_id,
+    }
+
+    await state.update_data(promo_template_preview=preview_data)
+
+    preview_text, keyboard = _build_user_promo_template_preview_content(
+        db_user.language,
+        preview_data,
+    )
+
+    await state.set_state(None)
+
+    await callback.message.edit_text(
+        preview_text,
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+
+
+
+@admin_required
+@error_handler
+async def prompt_user_promo_template_edit(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+):
+    prefix = "admin_user_promo_edit_"
+    if not callback.data.startswith(prefix):
+        await callback.answer("❌ Некорректные данные", show_alert=True)
+        return
+
+    payload = callback.data[len(prefix):]
+    try:
+        user_part, template_part = payload.split("_", 1)
+        user_id = int(user_part)
+        template_id = int(template_part)
+    except (ValueError, AttributeError):
+        await callback.answer("❌ Некорректные данные", show_alert=True)
+        return
+
+    preview_data = await _get_promo_template_preview_data(state)
+    if (
+        not preview_data
+        or preview_data.get("user_id") != user_id
+        or preview_data.get("template_id") != template_id
+    ):
+        texts = get_texts(db_user.language)
+        await callback.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_TEMPLATE_PREVIEW_MISSING",
+                "❌ Предпросмотр не найден. Выберите шаблон заново.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    await state.set_state(AdminStates.editing_user_promo_template_message)
+
+    texts = get_texts(db_user.language)
+    await callback.message.answer(
+        texts.t(
+            "ADMIN_USER_PROMO_TEMPLATE_EDIT_PROMPT",
+            "✏️ Отправьте новый текст сообщения одним сообщением.\n\nИспользуйте HTML-разметку при необходимости. Отправьте /cancel для отмены.",
+        )
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_user_promo_template_edit_message(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+):
+    preview_data = await _get_promo_template_preview_data(state)
+    texts = get_texts(db_user.language)
+
+    if not preview_data:
+        await message.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_TEMPLATE_PREVIEW_MISSING",
+                "❌ Предпросмотр не найден. Выберите шаблон заново.",
+            )
+        )
+        await state.set_state(None)
+        return
+
+    admin_language = preview_data.get("admin_language", db_user.language)
+
+    if message.text and message.text.strip().lower() == "/cancel":
+        await state.set_state(None)
+        preview_text, keyboard = _build_user_promo_template_preview_content(
+            admin_language,
+            preview_data,
+        )
+        try:
+            await message.bot.edit_message_text(
+                text=preview_text,
+                chat_id=preview_data["message_chat_id"],
+                message_id=preview_data["message_id"],
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+        except TelegramBadRequest:
+            pass
+        await message.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_TEMPLATE_EDIT_CANCELLED",
+                "ℹ️ Редактирование отменено. Исходный текст сохранён.",
+            )
+        )
+        return
+
+    if not message.text:
+        await message.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_TEMPLATE_EDIT_INVALID",
+                "❌ Можно редактировать только текст сообщения.",
+            )
+        )
+        return
+
+    new_text = message.html_text or message.text
+    preview_data["message_text"] = new_text
+    await state.update_data(promo_template_preview=preview_data)
+
+    preview_text, keyboard = _build_user_promo_template_preview_content(
+        admin_language,
+        preview_data,
+    )
+
+    try:
+        await message.bot.edit_message_text(
+            text=preview_text,
+            chat_id=preview_data["message_chat_id"],
+            message_id=preview_data["message_id"],
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
+    except TelegramBadRequest as exc:
+        admin_identifier = getattr(db_user, "telegram_id", getattr(db_user, "id", "unknown"))
+        logger.warning(
+            "Failed to update promo template preview for admin %s: %s",
+            admin_identifier,
+            exc,
+        )
+        await message.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_TEMPLATE_EDIT_INVALID",
+                "❌ Можно редактировать только текст сообщения.",
+            )
+        )
+        return
+
+    await state.set_state(None)
+    await message.answer(
+        texts.t(
+            "ADMIN_USER_PROMO_TEMPLATE_EDIT_SUCCESS",
+            "✅ Текст обновлён. Проверьте предпросмотр выше.",
+        )
+    )
+
+
+@admin_required
+@error_handler
+async def confirm_user_promo_template(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    prefix = "admin_user_promo_confirm_"
+    if not callback.data.startswith(prefix):
+        await callback.answer("❌ Некорректные данные", show_alert=True)
+        return
+
+    payload = callback.data[len(prefix):]
+    try:
+        user_part, template_part = payload.split("_", 1)
+        user_id = int(user_part)
+        template_id = int(template_part)
+    except (ValueError, AttributeError):
+        await callback.answer("❌ Некорректные данные", show_alert=True)
+        return
+
+    preview_data = await _get_promo_template_preview_data(state)
+    if (
+        not preview_data
+        or preview_data.get("user_id") != user_id
+        or preview_data.get("template_id") != template_id
+    ):
+        texts = get_texts(db_user.language)
+        await callback.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_TEMPLATE_PREVIEW_MISSING",
+                "❌ Предпросмотр не найден. Выберите шаблон заново.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    message_text = preview_data.get("message_text", "")
+    if not message_text.strip():
+        texts = get_texts(db_user.language)
+        await callback.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_TEMPLATE_EDIT_INVALID",
+                "❌ Можно редактировать только текст сообщения.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    user_service = UserService()
+    profile = await user_service.get_user_profile(db, user_id)
+    if not profile:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    target_user: User = profile["user"]
+    subscription: Optional[Subscription] = profile.get("subscription")
+    if subscription is not None:
+        try:
+            setattr(target_user, "subscription", subscription)
+        except Exception:
+            pass
+
+    template = await get_promo_offer_template_by_id(db, template_id)
+    if not template or not getattr(template, "is_active", True):
+        await callback.answer("❌ Шаблон недоступен", show_alert=True)
+        return
+
+    restriction_key = _get_template_restriction_key(template, subscription)
+    if restriction_key:
+        texts = get_texts(db_user.language)
+        restriction_message = _get_template_restriction_message(restriction_key, texts)
+        await callback.answer(restriction_message or "❌ Шаблон недоступен", show_alert=True)
+        return
+
+    squad_uuid, squad_name = await _resolve_template_squad_info(db, template)
+
+    if template.offer_type == "test_access" and squad_uuid:
+        connected = set(subscription.connected_squads or []) if subscription else set()
+        if squad_uuid in connected:
+            texts = get_texts(db_user.language)
+            await callback.answer(
+                texts.t(
+                    "ADMIN_USER_PROMO_TEMPLATE_ALREADY_HAS_ACCESS",
+                    "У пользователя уже есть доступ к этому серверу.",
+                ),
+                show_alert=True,
+            )
+            return
+
+    effect_type = _get_template_effect_type(template)
+
+    try:
+        offer_record = await upsert_discount_offer(
+            db,
+            user_id=target_user.id,
+            subscription_id=subscription.id if subscription else None,
+            notification_type=f"promo_template_{template.id}",
+            discount_percent=template.discount_percent,
+            bonus_amount_kopeks=0,
+            valid_hours=template.valid_hours,
+            effect_type=effect_type,
+            extra_data={
+                "template_id": template.id,
+                "offer_type": template.offer_type,
+                "test_duration_hours": template.test_duration_hours,
+                "test_squad_uuids": template.test_squad_uuids,
+                "active_discount_hours": template.active_discount_hours,
+            },
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to upsert discount offer for template %s and user %s: %s",
+            template_id,
+            user_id,
+            exc,
+        )
+        texts = get_texts(db_user.language)
+        await callback.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_TEMPLATE_SEND_ERROR",
+                "Не удалось подготовить промо-предложение.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    user_language = target_user.language or preview_data.get("user_language") or db_user.language
+    user_texts = get_texts(user_language)
+    keyboard_rows: List[List[InlineKeyboardButton]] = [
+        [
+            InlineKeyboardButton(
+                text=template.button_text,
+                callback_data=f"claim_discount_{offer_record.id}",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=user_texts.t("PROMO_OFFER_CLOSE", "❌ Закрыть"),
+                callback_data="promo_offer_close",
+            )
+        ],
+    ]
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+    try:
+        await callback.bot.send_message(
+            chat_id=target_user.telegram_id,
+            text=message_text,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
+    except TelegramForbiddenError:
+        texts = get_texts(db_user.language)
+        await callback.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_TEMPLATE_DELIVERY_FAILED",
+                "Пользователь заблокировал бота. Сообщение не отправлено.",
+            ),
+            show_alert=True,
+        )
+        return
+    except TelegramBadRequest as exc:
+        logger.warning(
+            "Telegram API error while sending promo template %s to %s: %s",
+            template_id,
+            target_user.telegram_id,
+            exc,
+        )
+        texts = get_texts(db_user.language)
+        await callback.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_TEMPLATE_DELIVERY_FAILED",
+                "Не удалось отправить сообщение пользователю.",
+            ),
+            show_alert=True,
+        )
+        return
+    except Exception as exc:
+        logger.error(
+            "Unexpected error while sending promo template %s to %s: %s",
+            template_id,
+            target_user.telegram_id,
+            exc,
+        )
+        texts = get_texts(db_user.language)
+        await callback.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_TEMPLATE_SEND_ERROR",
+                "Не удалось отправить промо-предложение пользователю.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    texts = get_texts(db_user.language)
+    success_text = texts.t(
+        "ADMIN_USER_PROMO_TEMPLATE_SEND_SUCCESS",
+        "✅ Промо-предложение «{name}» отправлено пользователю {user}.",
+    ).format(name=template.name, user=target_user.full_name)
+
+    reply_markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t(
+                        "ADMIN_USER_PROMO_TEMPLATE_SEND_AGAIN",
+                        "📨 Отправить другое",
+                    ),
+                    callback_data=f"admin_user_promo_templates_{target_user.id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.BACK,
+                    callback_data=f"admin_user_manage_{target_user.id}",
+                )
+            ],
+        ]
+    )
+
+    await state.update_data(promo_template_preview=None)
+    await state.set_state(None)
+
+    await callback.message.edit_text(
+        success_text,
+        reply_markup=reply_markup,
+        parse_mode="HTML",
+    )
+    await callback.answer(
+        texts.t(
+            "ADMIN_USER_PROMO_TEMPLATE_SEND_DONE",
+            "Промо-предложение отправлено.",
+        )
+    )
 
 @admin_required
 @error_handler
@@ -3967,6 +4840,31 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         set_user_promo_group,
         F.data.startswith("admin_user_promo_group_set_")
+    )
+
+    dp.callback_query.register(
+        show_user_promo_templates,
+        F.data.startswith("admin_user_promo_templates_")
+    )
+
+    dp.callback_query.register(
+        send_user_promo_template,
+        F.data.startswith("admin_user_promo_send_")
+    )
+
+    dp.callback_query.register(
+        prompt_user_promo_template_edit,
+        F.data.startswith("admin_user_promo_edit_"),
+    )
+
+    dp.callback_query.register(
+        confirm_user_promo_template,
+        F.data.startswith("admin_user_promo_confirm_"),
+    )
+
+    dp.message.register(
+        process_user_promo_template_edit_message,
+        AdminStates.editing_user_promo_template_message,
     )
 
     dp.callback_query.register(
