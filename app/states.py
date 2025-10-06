@@ -33,6 +33,8 @@ class AdminStates(StatesGroup):
     
     waiting_for_user_search = State()
     editing_user_balance = State()
+    editing_user_promo_message = State()
+    editing_user_promo_button = State()
     extending_subscription = State()
     adding_traffic = State()
     granting_subscription = State()
