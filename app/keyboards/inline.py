@@ -237,41 +237,23 @@ def get_main_menu_keyboard(
         ]
     ])
 
-    # Server status button
-    server_status_mode = settings.get_server_status_mode()
-    server_status_text = texts.t("MENU_SERVER_STATUS", "📊 Статус серверов")
-
-    if server_status_mode == "external_link":
-        status_url = settings.get_server_status_external_url()
-        if status_url:
-            keyboard.append([
-                InlineKeyboardButton(text=server_status_text, url=status_url)
-            ])
-    elif server_status_mode == "external_link_miniapp":
-        status_url = settings.get_server_status_external_url()
-        if status_url:
-            keyboard.append([
-                InlineKeyboardButton(
-                    text=server_status_text,
-                    web_app=types.WebAppInfo(url=status_url),
-                )
-            ])
-    elif server_status_mode == "xray":
-        keyboard.append([
-            InlineKeyboardButton(text=server_status_text, callback_data="menu_server_status")
-        ])
-
     # Support button is configurable (runtime via service)
     try:
         from app.services.support_settings_service import SupportSettingsService
         support_enabled = SupportSettingsService.is_support_menu_enabled()
     except Exception:
         support_enabled = settings.SUPPORT_MENU_ENABLED
-    support_row = []
     if support_enabled:
-        support_row.append(InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data="menu_support"))
-    support_row.append(InlineKeyboardButton(text=texts.MENU_RULES, callback_data="menu_rules"))
-    keyboard.append(support_row)
+        keyboard.append([
+            InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data="menu_support")
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(
+            text=texts.t("MENU_INFO", "ℹ️ Инфо"),
+            callback_data="menu_info",
+        )
+    ])
 
     if settings.is_language_selection_enabled():
         keyboard.append([
@@ -296,6 +278,42 @@ def get_main_menu_keyboard(
         ])
     
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_info_menu_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+
+    buttons: List[List[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text=texts.MENU_RULES, callback_data="menu_rules")]
+    ]
+
+    server_status_mode = settings.get_server_status_mode()
+    server_status_text = texts.t("MENU_SERVER_STATUS", "📊 Статус серверов")
+
+    if server_status_mode == "external_link":
+        status_url = settings.get_server_status_external_url()
+        if status_url:
+            buttons.append([InlineKeyboardButton(text=server_status_text, url=status_url)])
+    elif server_status_mode == "external_link_miniapp":
+        status_url = settings.get_server_status_external_url()
+        if status_url:
+            buttons.append([
+                InlineKeyboardButton(
+                    text=server_status_text,
+                    web_app=types.WebAppInfo(url=status_url),
+                )
+            ])
+    elif server_status_mode == "xray":
+        buttons.append([
+            InlineKeyboardButton(
+                text=server_status_text,
+                callback_data="menu_server_status",
+            )
+        ])
+
+    buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_happ_download_button_row(texts) -> Optional[List[InlineKeyboardButton]]:
