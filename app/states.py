@@ -30,10 +30,9 @@ class PromoCodeStates(StatesGroup):
     waiting_for_referral_code = State()
 
 class AdminStates(StatesGroup):
-
+    
     waiting_for_user_search = State()
     editing_user_balance = State()
-    editing_user_promo_template_message = State()
     extending_subscription = State()
     adding_traffic = State()
     granting_subscription = State()
