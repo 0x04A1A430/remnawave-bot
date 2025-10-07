@@ -89,10 +89,6 @@ class AdminStates(StatesGroup):
     editing_rules_page = State()
     editing_privacy_policy = State()
     editing_public_offer = State()
-    creating_faq_title = State()
-    creating_faq_content = State()
-    editing_faq_title = State()
-    editing_faq_content = State()
     editing_notification_value = State()
 
     confirming_sync = State()
