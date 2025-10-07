@@ -13,7 +13,6 @@ from pathlib import Path
 class Settings(BaseSettings):
     
     BOT_TOKEN: str
-    BOT_USERNAME: Optional[str] = None
     ADMIN_IDS: str = ""
     SUPPORT_USERNAME: str = "@support"
     SUPPORT_MENU_ENABLED: bool = True
@@ -257,8 +256,6 @@ class Settings(BaseSettings):
     WEB_API_DEFAULT_TOKEN_NAME: str = "Bootstrap Token"
     WEB_API_TOKEN_HASH_ALGORITHM: str = "sha256"
     WEB_API_REQUEST_LOGGING: bool = True
-
-    EXTERNAL_ADMIN_TOKEN: Optional[str] = None
     
     APP_CONFIG_PATH: str = "app-config.json"
     ENABLE_DEEP_LINKS: bool = True
@@ -391,28 +388,16 @@ class Settings(BaseSettings):
     def get_admin_ids(self) -> List[int]:
         try:
             admin_ids = self.ADMIN_IDS
-
+            
             if isinstance(admin_ids, str):
                 if not admin_ids.strip():
                     return []
                 return [int(x.strip()) for x in admin_ids.split(',') if x.strip()]
-
+            
             return []
-
+            
         except (ValueError, AttributeError):
             return []
-
-    def get_bot_username(self) -> Optional[str]:
-        username = (self.BOT_USERNAME or "").strip()
-        if not username:
-            return None
-        return username.lstrip("@") or None
-
-    def get_bot_username_display(self) -> Optional[str]:
-        username = self.get_bot_username()
-        if not username:
-            return None
-        return f"@{username}"
 
     def get_remnawave_auth_params(self) -> Dict[str, Optional[str]]:
         return {

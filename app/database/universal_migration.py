@@ -5,7 +5,6 @@ from sqlalchemy import inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.services.external_admin_token_service import external_admin_token_service
 from app.database.database import AsyncSessionLocal, engine
 from app.database.models import WebApiToken
 from app.utils.security import hash_api_token
@@ -2770,22 +2769,6 @@ async def ensure_default_web_api_token() -> bool:
         return False
 
 
-async def ensure_external_admin_token() -> bool:
-    token, updated = await external_admin_token_service.ensure_from_config()
-
-    if token:
-        if updated:
-            logger.info("✅ Токен внешней админки создан или обновлен")
-        else:
-            logger.info("ℹ️ Токен внешней админки уже существует")
-        return True
-
-    logger.warning(
-        "⚠️ Не удалось гарантировать токен внешней админки — укажите BOT_USERNAME"
-    )
-    return False
-
-
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
@@ -2853,15 +2836,6 @@ async def run_universal_migration():
             logger.info("✅ Бутстрап токен веб-API готов")
         else:
             logger.warning("⚠️ Не удалось создать бутстрап токен веб-API")
-
-        logger.info("=== ГЕНЕРАЦИЯ ТОКЕНА ВНЕШНЕЙ АДМИНКИ ===")
-        external_admin_ready = await ensure_external_admin_token()
-        if external_admin_ready:
-            logger.info("✅ Токен внешней админки готов")
-        else:
-            logger.warning(
-                "⚠️ Токен внешней админки не создан — внешняя панель может быть недоступна"
-            )
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ CRYPTOBOT ===")
         cryptobot_created = await create_cryptobot_payments_table()

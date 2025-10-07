@@ -22,7 +22,6 @@ from app.services.backup_service import backup_service
 from app.services.reporting_service import reporting_service
 from app.localization.loader import ensure_locale_templates
 from app.services.system_settings_service import bot_configuration_service
-from app.services.external_admin_token_service import external_admin_token_service
 from app.services.broadcast_service import broadcast_service
 from app.utils.startup_timeline import StartupTimeline
 
@@ -133,25 +132,6 @@ async def main():
         async with timeline.stage("Настройка бота", "🤖", success_message="Бот настроен") as stage:
             bot, dp = await setup_bot()
             stage.log("Кеш и FSM подготовлены")
-
-            try:
-                bot_profile = await bot.get_me()
-                token, updated = await external_admin_token_service.ensure_token(
-                    bot_profile.username
-                )
-                if token:
-                    if updated:
-                        await bot_configuration_service.reload()
-                        stage.log("Токен внешней админки синхронизирован")
-                    else:
-                        stage.log("Токен внешней админки без изменений")
-                else:
-                    stage.warning("Не удалось получить username бота для токена внешней админки")
-            except Exception as error:
-                stage.warning(f"Ошибка синхронизации токена внешней админки: {error}")
-                logging.getLogger(__name__).warning(
-                    "Не удалось синхронизировать токен внешней админки: %s", error
-                )
 
         monitoring_service.bot = bot
         maintenance_service.set_bot(bot)
