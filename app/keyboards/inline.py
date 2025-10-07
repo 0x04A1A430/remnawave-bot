@@ -284,10 +284,19 @@ def get_info_menu_keyboard(
     language: str = DEFAULT_LANGUAGE,
     show_privacy_policy: bool = False,
     show_public_offer: bool = False,
+    show_faq: bool = False,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
     buttons: List[List[InlineKeyboardButton]] = []
+
+    if show_faq:
+        buttons.append([
+            InlineKeyboardButton(
+                text=texts.t("MENU_FAQ", "❓ FAQ"),
+                callback_data="menu_faq",
+            )
+        ])
 
     if show_privacy_policy:
         buttons.append([
