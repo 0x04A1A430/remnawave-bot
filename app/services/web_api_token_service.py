@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud import web_api_token as crud
-from app.database.models import WebApiToken
+from app.database.models import User, WebApiToken
 from app.database.universal_migration import ensure_default_web_api_token
 from app.utils.security import generate_api_token, hash_api_token
 
@@ -66,9 +66,13 @@ class WebApiTokenService:
         expires_at: Optional[datetime] = None,
         created_by: Optional[str] = None,
         token_value: Optional[str] = None,
+        user: Optional[User] = None,
+        user_id: Optional[int] = None,
     ) -> Tuple[str, WebApiToken]:
         plain_token = token_value or generate_api_token()
         token_hash = self.hash_token(plain_token)
+
+        resolved_user_id = user.id if user else user_id
 
         token = await crud.create_token(
             db,
@@ -78,6 +82,43 @@ class WebApiTokenService:
             description=description,
             expires_at=expires_at,
             created_by=created_by,
+            user_id=resolved_user_id,
+        )
+
+        return plain_token, token
+
+    async def issue_user_token(
+        self,
+        db: AsyncSession,
+        user: User,
+    ) -> Tuple[str, WebApiToken]:
+        existing_tokens = await crud.list_tokens(
+            db,
+            include_inactive=True,
+            user_id=user.id,
+        )
+
+        now = datetime.utcnow()
+        has_updates = False
+        for token in existing_tokens:
+            if token.is_active:
+                token.is_active = False
+                token.updated_at = now
+                has_updates = True
+
+        if has_updates:
+            await db.flush()
+
+        token_name = f"User {user.telegram_id}"
+        description = "Generated via Telegram bot"
+        created_by = f"telegram:{user.telegram_id}"
+
+        plain_token, token = await self.create_token(
+            db,
+            name=token_name,
+            description=description,
+            created_by=created_by,
+            user=user,
         )
 
         return plain_token, token

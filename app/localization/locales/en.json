@@ -305,6 +305,7 @@
   "MENU_INFO": "ℹ️ Info",
   "MENU_INFO_HEADER": "ℹ️ <b>Info</b>",
   "MENU_INFO_PROMPT": "Choose a section:",
+  "MENU_API_ACCESS": "🔑 API key",
   "MENU_PROMOCODE": "🎫 Promo code",
   "MENU_REFERRALS": "🤝 Referral program",
   "MENU_RULES": "📋 Service rules",
@@ -759,3 +760,13 @@
   "ADMIN_PUBLIC_OFFER_RETURN_TO_EDIT": "⬅️ Back to editing",
   "ADMIN_PUBLIC_OFFER_EDIT_CANCELLED": "Offer editing cancelled."
 }
+  "API_ACCESS_HEADER": "🔑 <b>API access</b>",
+  "API_ACCESS_NO_TOKEN": "You don't have an active API key yet.\nTap the button below to issue your first key.\n\nEach new key disables the previous one.",
+  "API_ACCESS_LAST_USED_NEVER": "not used yet",
+  "API_ACCESS_LAST_IP_LINE": "Last IP: {ip}",
+  "API_ACCESS_ACTIVE_TOKEN": "Your current API key was issued on {created_at}.\nFirst characters: <code>{prefix}</code>.\nLast used: {last_used}.{last_ip_line}\nTap the button below to issue a new key — the previous one will be revoked.",
+  "API_ACCESS_INACTIVE_TOKEN": "The last key was issued on {created_at}.\nFirst characters: <code>{prefix}</code>.\nLast used: {last_used}.{last_ip_line}\nIssue a new key to regain access — old keys no longer work.",
+  "API_ACCESS_SECURITY_HINT": "Store the key securely and never share it with anyone.",
+  "API_ACCESS_GENERATE_BUTTON": "🔄 Issue key",
+  "API_ACCESS_NEW_TOKEN": "Here is your new API key:\n<code>{token}</code>\n\nSave it now — it cannot be shown again. Previous keys have been revoked.",
+  "API_ACCESS_GENERATED_ALERT": "New API key issued",

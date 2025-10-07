@@ -18,12 +18,24 @@ class TokenResponse(BaseModel):
     last_used_at: Optional[datetime] = None
     last_used_ip: Optional[str] = None
     created_by: Optional[str] = None
+    user_id: Optional[int] = Field(
+        default=None,
+        description="ID пользователя, которому принадлежит токен",
+    )
+    user_telegram_id: Optional[int] = Field(
+        default=None,
+        description="Telegram ID владельца токена",
+    )
 
 
 class TokenCreateRequest(BaseModel):
     name: str
     description: Optional[str] = None
     expires_at: Optional[datetime] = None
+    user_id: Optional[int] = Field(
+        default=None,
+        description="ID пользователя, для которого выпускается токен",
+    )
 
 
 class TokenCreateResponse(TokenResponse):

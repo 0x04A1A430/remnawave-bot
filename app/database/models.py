@@ -387,6 +387,7 @@ class User(Base):
     referral_earnings = relationship("ReferralEarning", foreign_keys="ReferralEarning.user_id", back_populates="user")
     discount_offers = relationship("DiscountOffer", back_populates="user")
     promo_offer_logs = relationship("PromoOfferLog", back_populates="user")
+    web_api_tokens = relationship("WebApiToken", back_populates="user")
     lifetime_used_traffic_bytes = Column(BigInteger, default=0)
     auto_promo_group_assigned = Column(Boolean, nullable=False, default=False)
     auto_promo_group_threshold_kopeks = Column(BigInteger, nullable=False, default=0)
@@ -1238,6 +1239,7 @@ class WebApiToken(Base):
     __tablename__ = "web_api_tokens"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
     token_hash = Column(String(128), nullable=False, unique=True, index=True)
     token_prefix = Column(String(32), nullable=False, index=True)
@@ -1249,6 +1251,7 @@ class WebApiToken(Base):
     last_used_ip = Column(String(64), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_by = Column(String(255), nullable=True)
+    user = relationship("User", back_populates="web_api_tokens")
 
     def __repr__(self) -> str:
         status = "active" if self.is_active else "revoked"
