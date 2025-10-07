@@ -156,14 +156,18 @@ class FaqService:
         language: str,
         title: str,
         content: str,
+        display_order: Optional[int] = None,
+        is_active: Optional[bool] = None,
     ) -> FaqPage:
         lang = cls._normalize_language(language)
+        is_active_value = True if is_active is None else bool(is_active)
         page = await create_faq_page(
             db,
             language=lang,
             title=title,
             content=content,
-            is_active=True,
+            display_order=display_order,
+            is_active=is_active_value,
         )
 
         setting = await get_faq_setting(db, lang)
