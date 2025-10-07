@@ -400,6 +400,12 @@ class User(Base):
     has_made_first_topup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="RESTRICT"), nullable=False, index=True)
     promo_group = relationship("PromoGroup", back_populates="users")
+    api_token = relationship(
+        "UserApiToken",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
     
     @property
     def balance_rubles(self) -> float:
@@ -1253,3 +1259,33 @@ class WebApiToken(Base):
     def __repr__(self) -> str:
         status = "active" if self.is_active else "revoked"
         return f"<WebApiToken id={self.id} name='{self.name}' status={status}>"
+
+
+class UserApiToken(Base):
+    __tablename__ = "user_api_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    token_hash = Column(String(128), nullable=False, unique=True, index=True)
+    token_prefix = Column(String(32), nullable=False)
+    token_last_digits = Column(String(16), nullable=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    last_used_at = Column(DateTime, nullable=True)
+    last_used_ip = Column(String(64), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    user = relationship("User", back_populates="api_token")
+
+    def __repr__(self) -> str:
+        status = "active" if self.is_active else "revoked"
+        return (
+            f"<UserApiToken id={self.id} user_id={self.user_id} "
+            f"prefix='{self.token_prefix}' status={status}>"
+        )

@@ -12,6 +12,7 @@ from app.keyboards.inline import (
     get_main_menu_keyboard,
     get_language_selection_keyboard,
     get_info_menu_keyboard,
+    get_user_api_token_keyboard,
 )
 from app.localization.texts import get_texts, get_rules
 from app.database.models import User
@@ -29,6 +30,7 @@ from app.utils.promo_offer import (
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
 from app.services.faq_service import FaqService
+from app.services.user_api_token_service import user_api_token_service
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +132,77 @@ async def show_info_menu(
         parse_mode="HTML",
     )
     await callback.answer()
+
+
+async def show_user_api_token(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+
+    token = await user_api_token_service.get_token_for_user(db, db_user)
+    is_active = bool(token and token.is_active)
+
+    if token and token.is_active:
+        token_hint = f"{token.token_prefix}…{token.token_last_digits}"
+        caption = texts.t(
+            "USER_API_TOKEN_EXISTS",
+            (
+                "🔑 <b>Ваш API ключ</b>\n\n"
+                "Сейчас активен ключ с префиксом <code>{token_hint}</code>.\n"
+                "Чтобы получить полный ключ, выпустите новый — предыдущий станет недействительным."
+            ),
+        ).format(token_hint=token_hint)
+    else:
+        caption = texts.t(
+            "USER_API_TOKEN_EMPTY",
+            (
+                "🔑 <b>API ключ не выпущен</b>\n\n"
+                "Нажмите кнопку ниже, чтобы получить персональный ключ для внешней админки."
+            ),
+        )
+
+    await callback.message.edit_text(
+        caption,
+        reply_markup=get_user_api_token_keyboard(
+            db_user.language,
+            has_active_token=is_active,
+        ),
+    )
+    await callback.answer()
+
+
+async def generate_user_api_token(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+
+    new_token, _ = await user_api_token_service.generate_token(db, db_user)
+    await db.commit()
+
+    message_text = texts.t(
+        "USER_API_TOKEN_NEW",
+        (
+            "🎉 <b>Новый API ключ</b>\n\n"
+            "<code>{token}</code>\n\n"
+            "Сохраните ключ — повторно показать его невозможно. При необходимости вы можете выпустить новый."
+        ),
+    ).format(token=new_token)
+
+    await callback.message.edit_text(
+        message_text,
+        reply_markup=get_user_api_token_keyboard(
+            db_user.language,
+            has_active_token=True,
+        ),
+    )
+    await callback.answer(
+        texts.t("USER_API_TOKEN_GENERATED_TOAST", "✅ Новый ключ создан"),
+        show_alert=True,
+    )
 
 
 async def show_faq_pages(
@@ -783,6 +856,11 @@ def register_handlers(dp: Dispatcher):
     )
 
     dp.callback_query.register(
+        show_user_api_token,
+        F.data == "menu_api_token",
+    )
+
+    dp.callback_query.register(
         show_faq_pages,
         F.data == "menu_faq",
     )
@@ -821,4 +899,9 @@ def register_handlers(dp: Dispatcher):
         process_language_change,
         F.data.startswith("language_select:"),
         StateFilter(None)
+    )
+
+    dp.callback_query.register(
+        generate_user_api_token,
+        F.data == "user_api_token_generate",
     )
