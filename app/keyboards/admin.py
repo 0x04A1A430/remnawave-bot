@@ -191,6 +191,12 @@ def get_admin_settings_submenu_keyboard(language: str = "ru") -> InlineKeyboardM
             )
         ],
         [
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_SETTINGS_FAQ", "❓ FAQ"),
+                callback_data="admin_faq",
+            )
+        ],
+        [
             InlineKeyboardButton(text=texts.BACK, callback_data="admin_panel")
         ]
     ])
