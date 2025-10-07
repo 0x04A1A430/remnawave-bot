@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import re
@@ -275,6 +276,8 @@ class Settings(BaseSettings):
     BACKUP_SEND_ENABLED: bool = False
     BACKUP_SEND_CHAT_ID: Optional[str] = None
     BACKUP_SEND_TOPIC_ID: Optional[int] = None
+
+    EXTERNAL_ADMIN_TOKEN: Optional[str] = None
 
     @field_validator('SERVER_STATUS_MODE', mode='before')
     @classmethod
@@ -556,6 +559,20 @@ class Settings(BaseSettings):
     
     def get_app_config_cache_ttl(self) -> int:
         return self.APP_CONFIG_CACHE_TTL
+
+    def build_external_admin_token(self, bot_username: str) -> str:
+        """Генерирует детерминированный токен внешней админки по username."""
+        normalized = (bot_username or "").strip().lstrip("@").lower()
+        if not normalized:
+            raise ValueError("Bot username is required to build external admin token")
+
+        seed = f"remnawave.external_admin::{normalized}"
+        digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+        return digest[:48]
+
+    def get_external_admin_token(self) -> Optional[str]:
+        token = (self.EXTERNAL_ADMIN_TOKEN or "").strip()
+        return token or None
     
     def is_traffic_selectable(self) -> bool:
         return self.TRAFFIC_SELECTION_MODE.lower() == "selectable"
