@@ -280,12 +280,25 @@ def get_main_menu_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_info_menu_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+def get_info_menu_keyboard(
+    language: str = DEFAULT_LANGUAGE,
+    show_privacy_policy: bool = False,
+) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
-    buttons: List[List[InlineKeyboardButton]] = [
-        [InlineKeyboardButton(text=texts.MENU_RULES, callback_data="menu_rules")]
-    ]
+    buttons: List[List[InlineKeyboardButton]] = []
+
+    if show_privacy_policy:
+        buttons.append([
+            InlineKeyboardButton(
+                text=texts.t("MENU_PRIVACY_POLICY", "🛡️ Политика конф."),
+                callback_data="menu_privacy_policy",
+            )
+        ])
+
+    buttons.append([
+        InlineKeyboardButton(text=texts.MENU_RULES, callback_data="menu_rules")
+    ])
 
     server_status_mode = settings.get_server_status_mode()
     server_status_text = texts.t("MENU_SERVER_STATUS", "📊 Статус серверов")

@@ -744,9 +744,9 @@ class Squad(Base):
 
 class ServiceRule(Base):
     __tablename__ = "service_rules"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    
+
     order = Column(Integer, default=0)
     title = Column(String(255), nullable=False)
     
@@ -756,6 +756,17 @@ class ServiceRule(Base):
     
     language = Column(String(5), default="ru")
     
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class PrivacyPolicy(Base):
+    __tablename__ = "privacy_policies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    language = Column(String(10), nullable=False, unique=True)
+    content = Column(Text, nullable=False)
+    is_enabled = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
