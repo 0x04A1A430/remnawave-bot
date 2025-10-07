@@ -16,6 +16,7 @@ from .routes import (
     miniapp,
     promo_groups,
     promo_offers,
+    pages,
     remnawave,
     stats,
     subscriptions,
@@ -78,6 +79,10 @@ OPENAPI_TAGS = [
         "name": "miniapp",
         "description": "Endpoint для Telegram Mini App с информацией о подписке пользователя.",
     },
+    {
+        "name": "pages",
+        "description": "Управление контентом публичных страниц: оферта, политика, FAQ и правила.",
+    },
 ]
 
 
@@ -115,6 +120,7 @@ def create_web_api_app() -> FastAPI:
     app.include_router(transactions.router, prefix="/transactions", tags=["transactions"])
     app.include_router(promo_groups.router, prefix="/promo-groups", tags=["promo-groups"])
     app.include_router(promo_offers.router, prefix="/promo-offers", tags=["promo-offers"])
+    app.include_router(pages.router, prefix="/pages", tags=["pages"])
     app.include_router(promocodes.router, prefix="/promo-codes", tags=["promo-codes"])
     app.include_router(broadcasts.router, prefix="/broadcasts", tags=["broadcasts"])
     app.include_router(backups.router, prefix="/backups", tags=["backups"])
