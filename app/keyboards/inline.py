@@ -285,6 +285,7 @@ def get_info_menu_keyboard(
     show_privacy_policy: bool = False,
     show_public_offer: bool = False,
     show_faq: bool = False,
+    show_promo_groups: bool = False,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
@@ -295,6 +296,14 @@ def get_info_menu_keyboard(
             InlineKeyboardButton(
                 text=texts.t("MENU_FAQ", "❓ FAQ"),
                 callback_data="menu_faq",
+            )
+        ])
+
+    if show_promo_groups:
+        buttons.append([
+            InlineKeyboardButton(
+                text=texts.t("MENU_PROMO_GROUPS_INFO", "🎯 Промогруппы"),
+                callback_data="menu_info_promo_groups",
             )
         ])
 
