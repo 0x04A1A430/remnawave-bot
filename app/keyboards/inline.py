@@ -283,7 +283,6 @@ def get_main_menu_keyboard(
 def get_info_menu_keyboard(
     language: str = DEFAULT_LANGUAGE,
     show_privacy_policy: bool = False,
-    show_public_offer: bool = False,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
@@ -294,14 +293,6 @@ def get_info_menu_keyboard(
             InlineKeyboardButton(
                 text=texts.t("MENU_PRIVACY_POLICY", "🛡️ Политика конф."),
                 callback_data="menu_privacy_policy",
-            )
-        ])
-
-    if show_public_offer:
-        buttons.append([
-            InlineKeyboardButton(
-                text=texts.t("MENU_PUBLIC_OFFER", "📄 Оферта"),
-                callback_data="menu_public_offer",
             )
         ])
 
