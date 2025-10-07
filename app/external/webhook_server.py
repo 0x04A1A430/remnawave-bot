@@ -66,37 +66,20 @@ class WebhookServer:
             
             self.site = web.TCPSite(
                 self.runner,
-                host=settings.TRIBUTE_WEBHOOK_HOST,
+                host='0.0.0.0',
                 port=settings.TRIBUTE_WEBHOOK_PORT
             )
-
+            
             await self.site.start()
-
-            logger.info(
-                "Webhook сервер запущен на %s:%s",
-                settings.TRIBUTE_WEBHOOK_HOST,
-                settings.TRIBUTE_WEBHOOK_PORT,
-            )
-            logger.info(
-                "Tribute webhook URL: http://%s:%s%s",
-                settings.TRIBUTE_WEBHOOK_HOST,
-                settings.TRIBUTE_WEBHOOK_PORT,
-                settings.TRIBUTE_WEBHOOK_PATH,
-            )
+            
+            logger.info(f"Webhook сервер запущен на порту {settings.TRIBUTE_WEBHOOK_PORT}")
+            logger.info(f"Tribute webhook URL: http://0.0.0.0:{settings.TRIBUTE_WEBHOOK_PORT}{settings.TRIBUTE_WEBHOOK_PATH}")
             if settings.is_mulenpay_enabled():
                 logger.info(
-                    "Mulen Pay webhook URL: http://%s:%s%s",
-                    settings.TRIBUTE_WEBHOOK_HOST,
-                    settings.TRIBUTE_WEBHOOK_PORT,
-                    settings.MULENPAY_WEBHOOK_PATH,
+                    f"Mulen Pay webhook URL: http://0.0.0.0:{settings.TRIBUTE_WEBHOOK_PORT}{settings.MULENPAY_WEBHOOK_PATH}"
                 )
             if settings.is_cryptobot_enabled():
-                logger.info(
-                    "CryptoBot webhook URL: http://%s:%s%s",
-                    settings.TRIBUTE_WEBHOOK_HOST,
-                    settings.TRIBUTE_WEBHOOK_PORT,
-                    settings.CRYPTOBOT_WEBHOOK_PATH,
-                )
+                logger.info(f"CryptoBot webhook URL: http://0.0.0.0:{settings.TRIBUTE_WEBHOOK_PORT}{settings.CRYPTOBOT_WEBHOOK_PATH}")
             
         except Exception as e:
             logger.error(f"Ошибка запуска webhook сервера: {e}")
