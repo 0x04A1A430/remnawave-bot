@@ -2606,6 +2606,120 @@ async def create_public_offers_table() -> bool:
         return False
 
 
+async def create_faq_settings_table() -> bool:
+    table_exists = await check_table_exists("faq_settings")
+    if table_exists:
+        logger.info("ℹ️ Таблица faq_settings уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_sql = """
+                CREATE TABLE faq_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    language VARCHAR(10) NOT NULL UNIQUE,
+                    is_enabled BOOLEAN NOT NULL DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                """
+            elif db_type == "postgresql":
+                create_sql = """
+                CREATE TABLE faq_settings (
+                    id SERIAL PRIMARY KEY,
+                    language VARCHAR(10) NOT NULL UNIQUE,
+                    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                );
+                """
+            else:
+                create_sql = """
+                CREATE TABLE faq_settings (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    language VARCHAR(10) NOT NULL UNIQUE,
+                    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB;
+                """
+
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица faq_settings создана")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы faq_settings: {error}")
+        return False
+
+
+async def create_faq_pages_table() -> bool:
+    table_exists = await check_table_exists("faq_pages")
+    if table_exists:
+        logger.info("ℹ️ Таблица faq_pages уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_sql = """
+                CREATE TABLE faq_pages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    language VARCHAR(10) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    content TEXT NOT NULL,
+                    display_order INTEGER NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX idx_faq_pages_language ON faq_pages(language);
+                """
+            elif db_type == "postgresql":
+                create_sql = """
+                CREATE TABLE faq_pages (
+                    id SERIAL PRIMARY KEY,
+                    language VARCHAR(10) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    content TEXT NOT NULL,
+                    display_order INTEGER NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                );
+                CREATE INDEX idx_faq_pages_language ON faq_pages(language);
+                CREATE INDEX idx_faq_pages_order ON faq_pages(language, display_order);
+                """
+            else:
+                create_sql = """
+                CREATE TABLE faq_pages (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    language VARCHAR(10) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    content TEXT NOT NULL,
+                    display_order INT NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB;
+                CREATE INDEX idx_faq_pages_language ON faq_pages(language);
+                CREATE INDEX idx_faq_pages_order ON faq_pages(language, display_order);
+                """
+
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица faq_pages создана")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы faq_pages: {error}")
+        return False
+
+
 async def ensure_default_web_api_token() -> bool:
     default_token = (settings.WEB_API_DEFAULT_TOKEN or "").strip()
     if not default_token:
@@ -2701,6 +2815,20 @@ async def run_universal_migration():
             logger.info("✅ Таблица public_offers готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей public_offers")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ FAQ_SETTINGS ===")
+        faq_settings_ready = await create_faq_settings_table()
+        if faq_settings_ready:
+            logger.info("✅ Таблица faq_settings готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей faq_settings")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ FAQ_PAGES ===")
+        faq_pages_ready = await create_faq_pages_table()
+        if faq_pages_ready:
+            logger.info("✅ Таблица faq_pages готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей faq_pages")
 
         logger.info("=== ПРОВЕРКА БАЗОВЫХ ТОКЕНОВ ВЕБ-API ===")
         default_token_ready = await ensure_default_web_api_token()

@@ -782,9 +782,32 @@ class PublicOffer(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
+class FaqSetting(Base):
+    __tablename__ = "faq_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    language = Column(String(10), nullable=False, unique=True)
+    is_enabled = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class FaqPage(Base):
+    __tablename__ = "faq_pages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    language = Column(String(10), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    content = Column(Text, nullable=False)
+    display_order = Column(Integer, default=0, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class SystemSetting(Base):
     __tablename__ = "system_settings"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String(255), unique=True, nullable=False)
     value = Column(Text, nullable=True)
