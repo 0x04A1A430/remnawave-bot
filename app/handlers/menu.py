@@ -1,5 +1,7 @@
 import html
 import logging
+from decimal import Decimal
+from typing import Dict, List
 from aiogram import Dispatcher, types, F
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
@@ -8,13 +10,18 @@ from datetime import datetime
 
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id, update_user
+from app.database.crud.promo_group import (
+    get_auto_assign_promo_groups,
+    has_auto_assign_promo_groups,
+)
+from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.keyboards.inline import (
     get_main_menu_keyboard,
     get_language_selection_keyboard,
     get_info_menu_keyboard,
 )
 from app.localization.texts import get_texts, get_rules
-from app.database.models import User
+from app.database.models import PromoGroup, User
 from app.database.crud.user_message import get_random_active_message
 from app.services.subscription_checkout_service import (
     has_subscription_checkout_draft,
@@ -29,8 +36,107 @@ from app.utils.promo_offer import (
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
 from app.services.faq_service import FaqService
+from app.utils.pricing_utils import format_period_description
 
 logger = logging.getLogger(__name__)
+
+
+def _format_rubles(amount_kopeks: int) -> str:
+    rubles = Decimal(amount_kopeks) / Decimal(100)
+
+    if rubles == rubles.to_integral_value():
+        formatted = f"{rubles:,.0f}"
+    else:
+        formatted = f"{rubles:,.2f}"
+
+    return f"{formatted.replace(',', ' ')} ₽"
+
+
+def _collect_period_discounts(group: PromoGroup) -> Dict[int, int]:
+    discounts: Dict[int, int] = {}
+    raw_discounts = getattr(group, "period_discounts", None)
+
+    if isinstance(raw_discounts, dict):
+        for key, value in raw_discounts.items():
+            try:
+                period = int(key)
+                percent = int(value)
+            except (TypeError, ValueError):
+                continue
+
+            normalized_percent = max(0, min(100, percent))
+            if normalized_percent > 0:
+                discounts[period] = normalized_percent
+
+    if group.is_default and settings.is_base_promo_group_period_discount_enabled():
+        try:
+            base_discounts = settings.get_base_promo_group_period_discounts() or {}
+        except Exception:
+            base_discounts = {}
+
+        for key, value in base_discounts.items():
+            try:
+                period = int(key)
+                percent = int(value)
+            except (TypeError, ValueError):
+                continue
+
+            if period in discounts:
+                continue
+
+            normalized_percent = max(0, min(100, percent))
+            if normalized_percent > 0:
+                discounts[period] = normalized_percent
+
+    return dict(sorted(discounts.items()))
+
+
+def _build_group_discount_lines(group: PromoGroup, texts, language: str) -> list[str]:
+    lines: list[str] = []
+
+    if getattr(group, "server_discount_percent", 0) > 0:
+        lines.append(
+            texts.t("PROMO_GROUP_DISCOUNT_SERVERS", "🌍 Серверы: {percent}%").format(
+                percent=group.server_discount_percent
+            )
+        )
+
+    if getattr(group, "traffic_discount_percent", 0) > 0:
+        lines.append(
+            texts.t("PROMO_GROUP_DISCOUNT_TRAFFIC", "📊 Трафик: {percent}%").format(
+                percent=group.traffic_discount_percent
+            )
+        )
+
+    if getattr(group, "device_discount_percent", 0) > 0:
+        lines.append(
+            texts.t("PROMO_GROUP_DISCOUNT_DEVICES", "📱 Доп. устройства: {percent}%").format(
+                percent=group.device_discount_percent
+            )
+        )
+
+    period_discounts = _collect_period_discounts(group)
+
+    if period_discounts:
+        lines.append(
+            texts.t(
+                "PROMO_GROUP_PERIOD_DISCOUNTS_HEADER",
+                "⏳ Скидки за длительный период:",
+            )
+        )
+
+        for period_days, percent in period_discounts.items():
+            lines.append(
+                texts.t(
+                    "PROMO_GROUP_PERIOD_DISCOUNT_ITEM",
+                    "{period} — {percent}%",
+                ).format(
+                    period=format_period_description(period_days, language),
+                    percent=percent,
+                )
+            )
+
+    return lines
 
 
 async def show_main_menu(
@@ -117,6 +223,7 @@ async def show_info_menu(
     privacy_enabled = await PrivacyPolicyService.is_policy_enabled(db, db_user.language)
     public_offer_enabled = await PublicOfferService.is_offer_enabled(db, db_user.language)
     faq_enabled = await FaqService.is_enabled(db, db_user.language)
+    promo_groups_available = await has_auto_assign_promo_groups(db)
 
     await edit_or_answer_photo(
         callback=callback,
@@ -126,7 +233,148 @@ async def show_info_menu(
             show_privacy_policy=privacy_enabled,
             show_public_offer=public_offer_enabled,
             show_faq=faq_enabled,
+            show_promo_groups=promo_groups_available,
         ),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+async def show_promo_groups_info(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+
+    promo_groups = await get_auto_assign_promo_groups(db)
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[[types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_info")]]
+    )
+
+    if not promo_groups:
+        empty_text = texts.t(
+            "PROMO_GROUPS_INFO_EMPTY",
+            "Промогруппы с автовыдачей ещё не настроены.",
+        )
+        header = texts.t("PROMO_GROUPS_INFO_HEADER", "🎯 <b>Промогруппы</b>")
+        message = f"{header}\n\n{empty_text}" if empty_text else header
+
+        await callback.message.edit_text(
+            message,
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+
+    total_spent_kopeks = await get_user_total_spent_kopeks(db, db_user.id)
+    total_spent_text = _format_rubles(total_spent_kopeks)
+
+    sorted_groups = sorted(
+        promo_groups,
+        key=lambda group: (group.auto_assign_total_spent_kopeks or 0, group.id),
+    )
+
+    achieved_groups: List[PromoGroup] = [
+        group
+        for group in sorted_groups
+        if (group.auto_assign_total_spent_kopeks or 0) > 0
+        and total_spent_kopeks >= (group.auto_assign_total_spent_kopeks or 0)
+    ]
+
+    current_group = next(
+        (group for group in sorted_groups if group.id == db_user.promo_group_id),
+        None,
+    )
+
+    if not current_group and achieved_groups:
+        current_group = achieved_groups[-1]
+
+    next_group = next(
+        (
+            group
+            for group in sorted_groups
+            if (group.auto_assign_total_spent_kopeks or 0) > total_spent_kopeks
+        ),
+        None,
+    )
+
+    header = texts.t("PROMO_GROUPS_INFO_HEADER", "🎯 <b>Промогруппы</b>")
+    lines: List[str] = [header, ""]
+
+    spent_line = texts.t(
+        "PROMO_GROUPS_INFO_TOTAL_SPENT",
+        "💰 Потрачено в боте: {amount}",
+    ).format(amount=total_spent_text)
+    lines.append(spent_line)
+
+    if current_group:
+        lines.append(
+            texts.t(
+                "PROMO_GROUPS_INFO_CURRENT_LEVEL",
+                "🏆 Текущий уровень: {name}",
+            ).format(name=html.escape(current_group.name)),
+        )
+    else:
+        lines.append(
+            texts.t(
+                "PROMO_GROUPS_INFO_NO_LEVEL",
+                "🏆 Текущий уровень: пока не получен",
+            )
+        )
+
+    if next_group:
+        remaining_kopeks = (next_group.auto_assign_total_spent_kopeks or 0) - total_spent_kopeks
+        lines.append(
+            texts.t(
+                "PROMO_GROUPS_INFO_NEXT_LEVEL",
+                "📈 До уровня «{name}»: осталось {amount}",
+            ).format(
+                name=html.escape(next_group.name),
+                amount=_format_rubles(max(remaining_kopeks, 0)),
+            )
+        )
+    else:
+        lines.append(
+            texts.t(
+                "PROMO_GROUPS_INFO_MAX_LEVEL",
+                "🏆 Вы уже получили максимальный уровень скидок!",
+            )
+        )
+
+    lines.extend(["", texts.t("PROMO_GROUPS_INFO_LEVELS_HEADER", "📋 Уровни с автовыдачей:")])
+
+    for group in sorted_groups:
+        threshold = group.auto_assign_total_spent_kopeks or 0
+        status_icon = "✅" if total_spent_kopeks >= threshold else "🔒"
+        lines.append(
+            texts.t(
+                "PROMO_GROUPS_INFO_LEVEL_LINE",
+                "{status} <b>{name}</b> — от {amount}",
+            ).format(
+                status=status_icon,
+                name=html.escape(group.name),
+                amount=_format_rubles(threshold),
+            )
+        )
+
+        discount_lines = _build_group_discount_lines(group, texts, db_user.language)
+        for discount_line in discount_lines:
+            if discount_line:
+                lines.append(f"   {discount_line}")
+
+        lines.append("")
+
+    while lines and not lines[-1]:
+        lines.pop()
+
+    message_text = "\n".join(lines)
+
+    await callback.message.edit_text(
+        message_text,
+        reply_markup=keyboard,
         parse_mode="HTML",
     )
     await callback.answer()
@@ -780,6 +1028,11 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_info_menu,
         F.data == "menu_info",
+    )
+
+    dp.callback_query.register(
+        show_promo_groups_info,
+        F.data == "menu_info_promo_groups",
     )
 
     dp.callback_query.register(
