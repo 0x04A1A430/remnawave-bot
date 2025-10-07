@@ -149,6 +149,7 @@ class Settings(BaseSettings):
     TRIBUTE_API_KEY: Optional[str] = None
     TRIBUTE_DONATE_LINK: Optional[str] = None
     TRIBUTE_WEBHOOK_PATH: str = "/tribute-webhook"
+    TRIBUTE_WEBHOOK_HOST: str = "0.0.0.0"
     TRIBUTE_WEBHOOK_PORT: int = 8081
 
     YOOKASSA_ENABLED: bool = False
@@ -158,9 +159,10 @@ class Settings(BaseSettings):
     YOOKASSA_DEFAULT_RECEIPT_EMAIL: Optional[str] = None
     YOOKASSA_VAT_CODE: int = 1
     YOOKASSA_SBP_ENABLED: bool = False 
-    YOOKASSA_PAYMENT_MODE: str = "full_payment" 
+    YOOKASSA_PAYMENT_MODE: str = "full_payment"
     YOOKASSA_PAYMENT_SUBJECT: str = "service"
     YOOKASSA_WEBHOOK_PATH: str = "/yookassa-webhook"
+    YOOKASSA_WEBHOOK_HOST: str = "0.0.0.0"
     YOOKASSA_WEBHOOK_PORT: int = 8082
     YOOKASSA_WEBHOOK_SECRET: Optional[str] = None
     YOOKASSA_MIN_AMOUNT_KOPEKS: int = 5000
