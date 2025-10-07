@@ -2434,7 +2434,6 @@ async def create_web_api_tokens_table() -> bool:
                 create_sql = """
                 CREATE TABLE web_api_tokens (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NULL,
                     name VARCHAR(255) NOT NULL,
                     token_hash VARCHAR(128) NOT NULL UNIQUE,
                     token_prefix VARCHAR(32) NOT NULL,
@@ -2445,19 +2444,16 @@ async def create_web_api_tokens_table() -> bool:
                     last_used_at DATETIME NULL,
                     last_used_ip VARCHAR(64) NULL,
                     is_active BOOLEAN NOT NULL DEFAULT 1,
-                    created_by VARCHAR(255) NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+                    created_by VARCHAR(255) NULL
                 );
                 CREATE INDEX idx_web_api_tokens_active ON web_api_tokens(is_active);
                 CREATE INDEX idx_web_api_tokens_prefix ON web_api_tokens(token_prefix);
                 CREATE INDEX idx_web_api_tokens_last_used ON web_api_tokens(last_used_at);
-                CREATE INDEX ix_web_api_tokens_user_id ON web_api_tokens(user_id);
                 """
             elif db_type == "postgresql":
                 create_sql = """
                 CREATE TABLE web_api_tokens (
                     id SERIAL PRIMARY KEY,
-                    user_id INTEGER NULL,
                     name VARCHAR(255) NOT NULL,
                     token_hash VARCHAR(128) NOT NULL UNIQUE,
                     token_prefix VARCHAR(32) NOT NULL,
@@ -2468,19 +2464,16 @@ async def create_web_api_tokens_table() -> bool:
                     last_used_at TIMESTAMP NULL,
                     last_used_ip VARCHAR(64) NULL,
                     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                    created_by VARCHAR(255) NULL,
-                    CONSTRAINT fk_web_api_tokens_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+                    created_by VARCHAR(255) NULL
                 );
                 CREATE INDEX idx_web_api_tokens_active ON web_api_tokens(is_active);
                 CREATE INDEX idx_web_api_tokens_prefix ON web_api_tokens(token_prefix);
                 CREATE INDEX idx_web_api_tokens_last_used ON web_api_tokens(last_used_at);
-                CREATE INDEX ix_web_api_tokens_user_id ON web_api_tokens(user_id);
                 """
             else:
                 create_sql = """
                 CREATE TABLE web_api_tokens (
                     id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT NULL,
                     name VARCHAR(255) NOT NULL,
                     token_hash VARCHAR(128) NOT NULL UNIQUE,
                     token_prefix VARCHAR(32) NOT NULL,
@@ -2491,8 +2484,7 @@ async def create_web_api_tokens_table() -> bool:
                     last_used_at TIMESTAMP NULL,
                     last_used_ip VARCHAR(64) NULL,
                     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                    created_by VARCHAR(255) NULL,
-                    CONSTRAINT fk_web_api_tokens_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+                    created_by VARCHAR(255) NULL
                 ) ENGINE=InnoDB;
                 CREATE INDEX idx_web_api_tokens_active ON web_api_tokens(is_active);
                 CREATE INDEX idx_web_api_tokens_prefix ON web_api_tokens(token_prefix);
@@ -2505,71 +2497,6 @@ async def create_web_api_tokens_table() -> bool:
 
     except Exception as error:
         logger.error(f"❌ Ошибка создания таблицы web_api_tokens: {error}")
-        return False
-
-
-async def ensure_web_api_tokens_user_column() -> bool:
-    column_exists = await check_column_exists("web_api_tokens", "user_id")
-    index_name = "ix_web_api_tokens_user_id"
-    constraint_name = "fk_web_api_tokens_user_id"
-
-    try:
-        async with engine.begin() as conn:
-            db_type = await get_database_type()
-
-            if not column_exists:
-                if db_type == "sqlite":
-                    await conn.execute(text("ALTER TABLE web_api_tokens ADD COLUMN user_id INTEGER"))
-                elif db_type == "postgresql":
-                    await conn.execute(text("ALTER TABLE web_api_tokens ADD COLUMN user_id INTEGER"))
-                elif db_type == "mysql":
-                    await conn.execute(text("ALTER TABLE web_api_tokens ADD COLUMN user_id INT NULL"))
-                else:
-                    logger.error(f"Неподдерживаемый тип БД для web_api_tokens.user_id: {db_type}")
-                    return False
-                logger.info("Добавлена колонка web_api_tokens.user_id")
-
-            if db_type in {"postgresql", "mysql"}:
-                constraint_exists = await check_constraint_exists("web_api_tokens", constraint_name)
-                if not constraint_exists:
-                    try:
-                        await conn.execute(
-                            text(
-                                "ALTER TABLE web_api_tokens "
-                                "ADD CONSTRAINT fk_web_api_tokens_user_id "
-                                "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL"
-                            )
-                        )
-                        logger.info("Добавлено ограничение fk_web_api_tokens_user_id")
-                    except Exception as constraint_error:
-                        logger.warning(
-                            "Не удалось создать ограничение fk_web_api_tokens_user_id: %s",
-                            constraint_error,
-                        )
-
-        index_exists = await check_index_exists("web_api_tokens", index_name)
-        if not index_exists:
-            try:
-                async with engine.begin() as conn:
-                    db_type = await get_database_type()
-                    if db_type == "sqlite":
-                        await conn.execute(
-                            text("CREATE INDEX IF NOT EXISTS ix_web_api_tokens_user_id ON web_api_tokens(user_id)")
-                        )
-                    elif db_type == "postgresql":
-                        await conn.execute(
-                            text("CREATE INDEX IF NOT EXISTS ix_web_api_tokens_user_id ON web_api_tokens(user_id)")
-                        )
-                    elif db_type == "mysql":
-                        await conn.execute(text("CREATE INDEX ix_web_api_tokens_user_id ON web_api_tokens(user_id)"))
-                    logger.info("Создан индекс ix_web_api_tokens_user_id")
-            except Exception as index_error:
-                logger.warning(f"Не удалось создать индекс ix_web_api_tokens_user_id: {index_error}")
-
-        return True
-
-    except Exception as error:
-        logger.error(f"Ошибка обновления web_api_tokens.user_id: {error}")
         return False
 
 
@@ -2872,7 +2799,6 @@ async def run_universal_migration():
         web_api_tokens_ready = await create_web_api_tokens_table()
         if web_api_tokens_ready:
             logger.info("✅ Таблица web_api_tokens готова")
-            await ensure_web_api_tokens_user_column()
         else:
             logger.warning("⚠️ Проблемы с таблицей web_api_tokens")
 

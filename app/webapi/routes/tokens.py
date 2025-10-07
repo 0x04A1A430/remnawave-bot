@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Response, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.crud.user import get_user_by_id
 from app.database.crud.web_api_token import (
     delete_token,
     get_token_by_id,
@@ -33,8 +30,6 @@ def _serialize(token: WebApiToken) -> TokenResponse:
         last_used_at=token.last_used_at,
         last_used_ip=token.last_used_ip,
         created_by=token.created_by,
-        user_id=token.user_id,
-        user_telegram_id=getattr(token.user, "telegram_id", None),
     )
 
 
@@ -42,13 +37,8 @@ def _serialize(token: WebApiToken) -> TokenResponse:
 async def get_tokens(
     _: WebApiToken = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
-    user_id: Optional[int] = Query(default=None, description="Фильтр по ID пользователя"),
 ) -> list[TokenResponse]:
-    tokens = await list_tokens(
-        db,
-        include_inactive=True,
-        user_id=user_id,
-    )
+    tokens = await list_tokens(db, include_inactive=True)
     return [_serialize(token) for token in tokens]
 
 
@@ -58,19 +48,12 @@ async def create_token(
     actor: WebApiToken = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> TokenCreateResponse:
-    target_user = None
-    if payload.user_id is not None:
-        target_user = await get_user_by_id(db, payload.user_id)
-        if not target_user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-
     token_value, token = await web_api_token_service.create_token(
         db,
         name=payload.name.strip(),
         description=payload.description,
         expires_at=payload.expires_at,
         created_by=actor.name,
-        user=target_user,
     )
     await db.commit()
 
