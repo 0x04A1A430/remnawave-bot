@@ -250,6 +250,13 @@ def get_main_menu_keyboard(
 
     keyboard.append([
         InlineKeyboardButton(
+            text=texts.t("MENU_API_TOKEN", "🔑 API ключ"),
+            callback_data="menu_api_token",
+        )
+    ])
+
+    keyboard.append([
+        InlineKeyboardButton(
             text=texts.t("MENU_INFO", "ℹ️ Инфо"),
             callback_data="menu_info",
         )
@@ -343,6 +350,30 @@ def get_info_menu_keyboard(
         ])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_user_api_token_keyboard(
+    language: str = DEFAULT_LANGUAGE,
+    *,
+    has_active_token: bool,
+) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+
+    action_text = (
+        texts.t("USER_API_TOKEN_REGENERATE", "🔄 Выпустить новый ключ")
+        if has_active_token
+        else texts.t("USER_API_TOKEN_GENERATE", "🔑 Выпустить API ключ")
+    )
+
+    buttons: List[List[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text=action_text, callback_data="user_api_token_generate")]
+    ]
+
+    buttons.append([
+        InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
+    ])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

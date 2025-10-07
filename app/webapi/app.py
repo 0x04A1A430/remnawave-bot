@@ -24,6 +24,7 @@ from .routes import (
     tokens,
     transactions,
     users,
+    user_api,
 )
 
 
@@ -83,6 +84,10 @@ OPENAPI_TAGS = [
         "name": "pages",
         "description": "Управление контентом публичных страниц: оферта, политика, FAQ и правила.",
     },
+    {
+        "name": "user-api",
+        "description": "Публичные эндпоинты для внешней админки, доступные по пользовательским API ключам.",
+    },
 ]
 
 
@@ -128,5 +133,6 @@ def create_web_api_app() -> FastAPI:
     app.include_router(tokens.router, prefix="/tokens", tags=["auth"])
     app.include_router(remnawave.router, prefix="/remnawave", tags=["remnawave"])
     app.include_router(miniapp.router, prefix="/miniapp", tags=["miniapp"])
+    app.include_router(user_api.router, prefix="/user-api", tags=["user-api"])
 
     return app

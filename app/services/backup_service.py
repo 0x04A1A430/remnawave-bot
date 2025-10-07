@@ -727,7 +727,7 @@ class BackupService:
             "transactions", "welcome_texts", "subscriptions",
             "promocodes", "users", "promo_groups",
             "server_squads", "squads", "service_rules",
-            "system_settings", "web_api_tokens", "monitoring_logs"
+            "system_settings", "web_api_tokens", "user_api_tokens", "monitoring_logs"
         ]
         
         for table_name in tables_order:
