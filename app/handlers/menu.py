@@ -26,6 +26,7 @@ from app.utils.promo_offer import (
     build_test_access_hint,
 )
 from app.services.privacy_policy_service import PrivacyPolicyService
+from app.services.public_offer_service import PublicOfferService
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,7 @@ async def show_info_menu(
     caption = f"{header}\n\n{prompt}" if prompt else header
 
     privacy_enabled = await PrivacyPolicyService.is_policy_enabled(db, db_user.language)
+    public_offer_enabled = await PublicOfferService.is_offer_enabled(db, db_user.language)
 
     await edit_or_answer_photo(
         callback=callback,
@@ -119,6 +121,7 @@ async def show_info_menu(
         keyboard=get_info_menu_keyboard(
             language=db_user.language,
             show_privacy_policy=privacy_enabled,
+            show_public_offer=public_offer_enabled,
         ),
         parse_mode="HTML",
     )
@@ -216,6 +219,113 @@ async def show_privacy_policy(
                 types.InlineKeyboardButton(
                     text=texts.t("PAGINATION_NEXT", "➡️"),
                     callback_data=f"menu_privacy_policy:{current_page + 1}",
+                )
+            )
+
+        keyboard_rows.append(nav_row)
+
+    keyboard_rows.append(
+        [types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_info")]
+    )
+
+    await callback.message.edit_text(
+        message_text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+    )
+    await callback.answer()
+
+
+async def show_public_offer(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+
+    raw_page = 1
+    if callback.data and ":" in callback.data:
+        try:
+            raw_page = int(callback.data.split(":", 1)[1])
+        except ValueError:
+            raw_page = 1
+
+    if raw_page < 1:
+        raw_page = 1
+
+    offer = await PublicOfferService.get_active_offer(db, db_user.language)
+
+    if not offer:
+        await callback.answer(
+            texts.t(
+                "PUBLIC_OFFER_NOT_AVAILABLE",
+                "Публичная оферта временно недоступна.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    pages = PublicOfferService.split_content_into_pages(offer.content)
+
+    if not pages:
+        await callback.answer(
+            texts.t(
+                "PUBLIC_OFFER_EMPTY_ALERT",
+                "Публичная оферта ещё не заполнена.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    total_pages = len(pages)
+    current_page = raw_page if raw_page <= total_pages else total_pages
+
+    header = texts.t(
+        "PUBLIC_OFFER_HEADER",
+        "📄 <b>Публичная оферта</b>",
+    )
+    body = pages[current_page - 1]
+
+    footer_template = texts.t(
+        "PUBLIC_OFFER_PAGE_INFO",
+        "Страница {current} из {total}",
+    )
+    footer = ""
+    if total_pages > 1 and footer_template:
+        try:
+            footer = footer_template.format(current=current_page, total=total_pages)
+        except Exception:
+            footer = f"{current_page}/{total_pages}"
+
+    message_text = header
+    if body:
+        message_text += f"\n\n{body}"
+    if footer:
+        message_text += f"\n\n<code>{footer}</code>"
+
+    keyboard_rows: list[list[types.InlineKeyboardButton]] = []
+
+    if total_pages > 1:
+        nav_row: list[types.InlineKeyboardButton] = []
+        if current_page > 1:
+            nav_row.append(
+                types.InlineKeyboardButton(
+                    text=texts.t("PAGINATION_PREV", "⬅️"),
+                    callback_data=f"menu_public_offer:{current_page - 1}",
+                )
+            )
+
+        nav_row.append(
+            types.InlineKeyboardButton(
+                text=f"{current_page}/{total_pages}",
+                callback_data="noop",
+            )
+        )
+
+        if current_page < total_pages:
+            nav_row.append(
+                types.InlineKeyboardButton(
+                    text=texts.t("PAGINATION_NEXT", "➡️"),
+                    callback_data=f"menu_public_offer:{current_page + 1}",
                 )
             )
 
@@ -509,6 +619,16 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_privacy_policy,
         F.data.startswith("menu_privacy_policy:"),
+    )
+
+    dp.callback_query.register(
+        show_public_offer,
+        F.data == "menu_public_offer",
+    )
+
+    dp.callback_query.register(
+        show_public_offer,
+        F.data.startswith("menu_public_offer:"),
     )
 
     dp.callback_query.register(
