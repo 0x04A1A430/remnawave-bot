@@ -149,6 +149,7 @@ class Settings(BaseSettings):
     TRIBUTE_API_KEY: Optional[str] = None
     TRIBUTE_DONATE_LINK: Optional[str] = None
     TRIBUTE_WEBHOOK_PATH: str = "/tribute-webhook"
+    TRIBUTE_WEBHOOK_HOST: str = "0.0.0.0"
     TRIBUTE_WEBHOOK_PORT: int = 8081
 
     YOOKASSA_ENABLED: bool = False
