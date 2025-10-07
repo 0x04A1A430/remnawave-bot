@@ -12,12 +12,10 @@ from app.keyboards.inline import (
     get_main_menu_keyboard,
     get_language_selection_keyboard,
     get_info_menu_keyboard,
-    get_api_access_keyboard,
 )
 from app.localization.texts import get_texts, get_rules
-from app.database.models import User, WebApiToken
+from app.database.models import User
 from app.database.crud.user_message import get_random_active_message
-from app.database.crud import web_api_token as web_api_token_crud
 from app.services.subscription_checkout_service import (
     has_subscription_checkout_draft,
     should_offer_checkout_resume,
@@ -31,8 +29,6 @@ from app.utils.promo_offer import (
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
 from app.services.faq_service import FaqService
-from app.services.web_api_token_service import web_api_token_service
-from app.utils.formatters import format_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -134,150 +130,6 @@ async def show_info_menu(
         parse_mode="HTML",
     )
     await callback.answer()
-
-
-def _build_api_access_caption(
-    texts,
-    token: WebApiToken | None,
-    *,
-    has_active_token: bool,
-) -> str:
-    header = texts.t("API_ACCESS_HEADER", "🔑 <b>API доступ</b>")
-
-    parts: list[str] = [header]
-
-    if not token:
-        parts.append(
-            texts.t(
-                "API_ACCESS_NO_TOKEN",
-                (
-                    "У вас еще нет активного API ключа.\n"
-                    "Нажмите кнопку ниже, чтобы выпустить первый ключ."
-                ),
-            )
-        )
-    else:
-        created_at = format_datetime(token.created_at) if token.created_at else "—"
-        last_used = (
-            format_datetime(token.last_used_at)
-            if token.last_used_at
-            else texts.t("API_ACCESS_LAST_USED_NEVER", "еще не использовался")
-        )
-        last_ip_line = ""
-        if token.last_used_ip:
-            last_ip_line = "\n" + texts.t(
-                "API_ACCESS_LAST_IP_LINE",
-                "Последний IP: {ip}",
-            ).format(ip=token.last_used_ip)
-
-        template_key = "API_ACCESS_ACTIVE_TOKEN" if has_active_token else "API_ACCESS_INACTIVE_TOKEN"
-        parts.append(
-            texts.t(
-                template_key,
-                (
-                    "Ваш текущий API ключ выпущен {created_at}.\n"
-                    "Первые символы: <code>{prefix}</code>.\n"
-                    "Последнее использование: {last_used}.{last_ip_line}\n"
-                    "Чтобы выпустить новый ключ, нажмите кнопку ниже — предыдущий будет отключен."
-                )
-                if has_active_token
-                else (
-                    "Последний ключ выпущен {created_at}.\n"
-                    "Первые символы: <code>{prefix}</code>.\n"
-                    "Последнее использование: {last_used}.{last_ip_line}\n"
-                    "Чтобы получить доступ, создайте новый ключ."
-                ),
-            ).format(
-                created_at=created_at,
-                prefix=token.token_prefix,
-                last_used=last_used,
-                last_ip_line=last_ip_line,
-            )
-        )
-
-    parts.append(
-        texts.t(
-            "API_ACCESS_SECURITY_HINT",
-            "Берегите ключ и не передавайте его другим людям.",
-        )
-    )
-
-    return "\n\n".join(part for part in parts if part)
-
-
-async def show_api_access(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-    *,
-    skip_callback_answer: bool = False,
-) -> None:
-    texts = get_texts(db_user.language)
-    tokens = await web_api_token_crud.list_tokens(
-        db,
-        include_inactive=True,
-        user_id=db_user.id,
-    )
-
-    active_token = next((token for token in tokens if token.is_active), None)
-    latest_token = tokens[0] if tokens else None
-    token_to_show = active_token or latest_token
-
-    caption = _build_api_access_caption(
-        texts,
-        token_to_show,
-        has_active_token=bool(active_token),
-    )
-
-    await edit_or_answer_photo(
-        callback=callback,
-        caption=caption,
-        keyboard=get_api_access_keyboard(db_user.language),
-        parse_mode="HTML",
-    )
-
-    if not skip_callback_answer:
-        await callback.answer()
-
-
-async def generate_api_access_token(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-) -> None:
-    texts = get_texts(db_user.language)
-
-    token_value, token = await web_api_token_service.issue_user_token(db, db_user)
-    await db.commit()
-
-    logger.info(
-        "🔑 Пользователь %s выпустил новый API ключ (token_id=%s)",
-        db_user.telegram_id,
-        token.id,
-    )
-
-    message_text = texts.t(
-        "API_ACCESS_NEW_TOKEN",
-        (
-            "Ваш новый API ключ:\n"
-            "<code>{token}</code>\n\n"
-            "Сохраните его — повторно показать не получится."
-        ),
-    ).format(token=token_value)
-
-    await callback.message.answer(message_text, parse_mode="HTML")
-
-    await show_api_access(
-        callback,
-        db_user,
-        db,
-        skip_callback_answer=True,
-    )
-
-    await callback.answer(
-        texts.t("API_ACCESS_GENERATED_ALERT", "Новый API ключ создан"),
-        show_alert=True,
-    )
 
 
 async def show_faq_pages(
@@ -928,16 +780,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_info_menu,
         F.data == "menu_info",
-    )
-
-    dp.callback_query.register(
-        show_api_access,
-        F.data == "menu_api_access",
-    )
-
-    dp.callback_query.register(
-        generate_api_access_token,
-        F.data == "api_access_generate",
     )
 
     dp.callback_query.register(
