@@ -87,6 +87,7 @@ class AdminStates(StatesGroup):
     editing_user_traffic = State()
 
     editing_rules_page = State()
+    editing_privacy_policy = State()
     editing_notification_value = State()
 
     confirming_sync = State()

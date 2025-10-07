@@ -2500,6 +2500,59 @@ async def create_web_api_tokens_table() -> bool:
         return False
 
 
+async def create_privacy_policies_table() -> bool:
+    table_exists = await check_table_exists("privacy_policies")
+    if table_exists:
+        logger.info("ℹ️ Таблица privacy_policies уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_sql = """
+                CREATE TABLE privacy_policies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    language VARCHAR(10) NOT NULL UNIQUE,
+                    content TEXT NOT NULL,
+                    is_enabled BOOLEAN NOT NULL DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                """
+            elif db_type == "postgresql":
+                create_sql = """
+                CREATE TABLE privacy_policies (
+                    id SERIAL PRIMARY KEY,
+                    language VARCHAR(10) NOT NULL UNIQUE,
+                    content TEXT NOT NULL,
+                    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                );
+                """
+            else:
+                create_sql = """
+                CREATE TABLE privacy_policies (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    language VARCHAR(10) NOT NULL UNIQUE,
+                    content TEXT NOT NULL,
+                    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB;
+                """
+
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица privacy_policies создана")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы privacy_policies: {error}")
+        return False
+
+
 async def ensure_default_web_api_token() -> bool:
     default_token = (settings.WEB_API_DEFAULT_TOKEN or "").strip()
     if not default_token:
@@ -2581,6 +2634,13 @@ async def run_universal_migration():
             logger.info("✅ Таблица web_api_tokens готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей web_api_tokens")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PRIVACY_POLICIES ===")
+        privacy_policies_ready = await create_privacy_policies_table()
+        if privacy_policies_ready:
+            logger.info("✅ Таблица privacy_policies готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей privacy_policies")
 
         logger.info("=== ПРОВЕРКА БАЗОВЫХ ТОКЕНОВ ВЕБ-API ===")
         default_token_ready = await ensure_default_web_api_token()
@@ -2868,6 +2928,7 @@ async def check_migration_status():
             "subscription_conversions_table": False,
             "promo_groups_table": False,
             "server_promo_groups_table": False,
+            "privacy_policies_table": False,
             "users_promo_group_column": False,
             "promo_groups_period_discounts_column": False,
             "promo_groups_auto_assign_column": False,
@@ -2892,6 +2953,7 @@ async def check_migration_status():
         status["cryptobot_table"] = await check_table_exists('cryptobot_payments')
         status["user_messages_table"] = await check_table_exists('user_messages')
         status["welcome_texts_table"] = await check_table_exists('welcome_texts')
+        status["privacy_policies_table"] = await check_table_exists('privacy_policies')
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
         status["promo_groups_table"] = await check_table_exists('promo_groups')
         status["server_promo_groups_table"] = await check_table_exists('server_squad_promo_groups')
@@ -2941,6 +3003,7 @@ async def check_migration_status():
             "cryptobot_table": "Таблица CryptoBot payments",
             "user_messages_table": "Таблица пользовательских сообщений",
             "welcome_texts_table": "Таблица приветственных текстов",
+            "privacy_policies_table": "Таблица политик конфиденциальности",
             "welcome_texts_is_enabled_column": "Поле is_enabled в welcome_texts",
             "broadcast_history_media_fields": "Медиа поля в broadcast_history",
             "subscription_conversions_table": "Таблица конверсий подписок",
