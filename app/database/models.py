@@ -771,6 +771,17 @@ class PrivacyPolicy(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
+class PublicOffer(Base):
+    __tablename__ = "public_offers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    language = Column(String(10), nullable=False, unique=True)
+    content = Column(Text, nullable=False)
+    is_enabled = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class SystemSetting(Base):
     __tablename__ = "system_settings"
     
