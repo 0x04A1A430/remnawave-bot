@@ -1,4 +1,3 @@
-import html
 import logging
 from aiogram import Dispatcher, types, F
 from aiogram.filters import StateFilter
@@ -28,7 +27,6 @@ from app.utils.promo_offer import (
 )
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
-from app.services.faq_service import FaqService
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +114,6 @@ async def show_info_menu(
 
     privacy_enabled = await PrivacyPolicyService.is_policy_enabled(db, db_user.language)
     public_offer_enabled = await PublicOfferService.is_offer_enabled(db, db_user.language)
-    faq_enabled = await FaqService.is_enabled(db, db_user.language)
 
     await edit_or_answer_photo(
         callback=callback,
@@ -125,179 +122,11 @@ async def show_info_menu(
             language=db_user.language,
             show_privacy_policy=privacy_enabled,
             show_public_offer=public_offer_enabled,
-            show_faq=faq_enabled,
         ),
         parse_mode="HTML",
     )
     await callback.answer()
 
-
-async def show_faq_pages(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    texts = get_texts(db_user.language)
-
-    pages = await FaqService.get_pages(db, db_user.language)
-    if not pages:
-        await callback.answer(
-            texts.t("FAQ_NOT_AVAILABLE", "FAQ временно недоступен."),
-            show_alert=True,
-        )
-        return
-
-    header = texts.t("FAQ_HEADER", "❓ <b>FAQ</b>")
-    prompt = texts.t("FAQ_PAGES_PROMPT", "Выберите вопрос:" )
-    caption = f"{header}\n\n{prompt}" if prompt else header
-
-    buttons: list[list[types.InlineKeyboardButton]] = []
-    for index, page in enumerate(pages, start=1):
-        raw_title = (page.title or "").strip()
-        if not raw_title:
-            raw_title = texts.t("FAQ_PAGE_UNTITLED", "Без названия")
-        if len(raw_title) > 60:
-            raw_title = f"{raw_title[:57]}..."
-        buttons.append([
-            types.InlineKeyboardButton(
-                text=f"{index}. {raw_title}",
-                callback_data=f"menu_faq_page:{page.id}:1",
-            )
-        ])
-
-    buttons.append([
-        types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_info")
-    ])
-
-    await callback.message.edit_text(
-        caption,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
-    )
-    await callback.answer()
-
-
-async def show_faq_page(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    texts = get_texts(db_user.language)
-
-    raw_data = callback.data or ""
-    parts = raw_data.split(":")
-
-    page_id = None
-    requested_page = 1
-
-    if len(parts) >= 2:
-        try:
-            page_id = int(parts[1])
-        except ValueError:
-            page_id = None
-
-    if len(parts) >= 3:
-        try:
-            requested_page = int(parts[2])
-        except ValueError:
-            requested_page = 1
-
-    if not page_id:
-        await callback.answer()
-        return
-
-    page = await FaqService.get_page(db, page_id, db_user.language)
-
-    if not page or not page.is_active:
-        await callback.answer(
-            texts.t("FAQ_PAGE_NOT_AVAILABLE", "Эта страница FAQ недоступна."),
-            show_alert=True,
-        )
-        return
-
-    content_pages = FaqService.split_content_into_pages(page.content)
-
-    if not content_pages:
-        await callback.answer(
-            texts.t("FAQ_PAGE_EMPTY", "Текст для этой страницы ещё не добавлен."),
-            show_alert=True,
-        )
-        return
-
-    total_pages = len(content_pages)
-    current_page = max(1, min(requested_page, total_pages))
-
-    header = texts.t("FAQ_HEADER", "❓ <b>FAQ</b>")
-    title_template = texts.t("FAQ_PAGE_TITLE", "<b>{title}</b>")
-    page_title = (page.title or "").strip()
-    if not page_title:
-        page_title = texts.t("FAQ_PAGE_UNTITLED", "Без названия")
-    title_block = title_template.format(title=html.escape(page_title))
-
-    body = content_pages[current_page - 1]
-
-    footer_template = texts.t(
-        "FAQ_PAGE_FOOTER",
-        "Страница {current} из {total}",
-    )
-    footer = ""
-    if total_pages > 1 and footer_template:
-        try:
-            footer = footer_template.format(current=current_page, total=total_pages)
-        except Exception:
-            footer = f"{current_page}/{total_pages}"
-
-    parts_to_join = [header, title_block]
-    if body:
-        parts_to_join.append(body)
-    if footer:
-        parts_to_join.append(f"<code>{footer}</code>")
-
-    message_text = "\n\n".join(segment for segment in parts_to_join if segment)
-
-    keyboard_rows: list[list[types.InlineKeyboardButton]] = []
-
-    if total_pages > 1:
-        nav_row: list[types.InlineKeyboardButton] = []
-        if current_page > 1:
-            nav_row.append(
-                types.InlineKeyboardButton(
-                    text=texts.t("PAGINATION_PREV", "⬅️"),
-                    callback_data=f"menu_faq_page:{page.id}:{current_page - 1}",
-                )
-            )
-
-        nav_row.append(
-            types.InlineKeyboardButton(
-                text=f"{current_page}/{total_pages}",
-                callback_data="noop",
-            )
-        )
-
-        if current_page < total_pages:
-            nav_row.append(
-                types.InlineKeyboardButton(
-                    text=texts.t("PAGINATION_NEXT", "➡️"),
-                    callback_data=f"menu_faq_page:{page.id}:{current_page + 1}",
-                )
-            )
-
-        keyboard_rows.append(nav_row)
-
-    keyboard_rows.append([
-        types.InlineKeyboardButton(
-            text=texts.t("FAQ_BACK_TO_LIST", "⬅️ К списку FAQ"),
-            callback_data="menu_faq",
-        )
-    ])
-    keyboard_rows.append([
-        types.InlineKeyboardButton(text=texts.BACK, callback_data="menu_info")
-    ])
-
-    await callback.message.edit_text(
-        message_text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
-    )
-    await callback.answer()
 
 async def show_privacy_policy(
     callback: types.CallbackQuery,
@@ -780,16 +609,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         show_info_menu,
         F.data == "menu_info",
-    )
-
-    dp.callback_query.register(
-        show_faq_pages,
-        F.data == "menu_faq",
-    )
-
-    dp.callback_query.register(
-        show_faq_page,
-        F.data.startswith("menu_faq_page:"),
     )
 
     dp.callback_query.register(
