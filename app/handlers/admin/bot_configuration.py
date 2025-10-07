@@ -18,10 +18,7 @@ from app.config import settings
 from app.services.remnawave_service import RemnaWaveService
 from app.services.payment_service import PaymentService
 from app.services.tribute_service import TributeService
-from app.services.system_settings_service import (
-    ReadOnlySettingError,
-    bot_configuration_service,
-)
+from app.services.system_settings_service import bot_configuration_service
 from app.states import BotConfigStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.currency_converter import currency_converter
@@ -110,12 +107,6 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
         "icon": "⚡",
         "categories": ("WEB_API", "WEBHOOK", "LOG", "DEBUG"),
     },
-    "external_admin": {
-        "title": "🛡️ Внешняя админка",
-        "description": "Токен, по которому внешняя админка проверяет запросы.",
-        "icon": "🛡️",
-        "categories": ("EXTERNAL_ADMIN",),
-    },
 }
 
 CATEGORY_GROUP_ORDER: Tuple[str, ...] = (
@@ -132,7 +123,6 @@ CATEGORY_GROUP_ORDER: Tuple[str, ...] = (
     "server",
     "maintenance",
     "advanced",
-    "external_admin",
 )
 
 CATEGORY_GROUP_DEFINITIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = tuple(
@@ -697,12 +687,6 @@ async def apply_preset(
         try:
             await bot_configuration_service.set_value(db, setting_key, value)
             applied.append(setting_key)
-        except ReadOnlySettingError:
-            logging.getLogger(__name__).info(
-                "Пропускаем настройку %s из пресета %s: только для чтения",
-                setting_key,
-                preset_key,
-            )
         except Exception as error:
             logging.getLogger(__name__).warning(
                 "Не удалось применить пресет %s для %s: %s",
@@ -870,14 +854,8 @@ async def handle_import_message(
             errors.append(f"{setting_key}: {error}")
             continue
 
-        if bot_configuration_service.is_read_only(setting_key):
-            skipped.append(setting_key)
-            continue
-        try:
-            await bot_configuration_service.set_value(db, setting_key, value_to_apply)
-            applied.append(setting_key)
-        except ReadOnlySettingError:
-            skipped.append(setting_key)
+        await bot_configuration_service.set_value(db, setting_key, value_to_apply)
+        applied.append(setting_key)
 
     await db.commit()
 
@@ -1383,10 +1361,9 @@ def _build_setting_keyboard(
     definition = bot_configuration_service.get_definition(key)
     rows: list[list[types.InlineKeyboardButton]] = []
     callback_token = bot_configuration_service.get_callback_token(key)
-    is_read_only = bot_configuration_service.is_read_only(key)
 
     choice_options = bot_configuration_service.get_choice_options(key)
-    if choice_options and not is_read_only:
+    if choice_options:
         current_value = bot_configuration_service.get_current_value(key)
         choice_buttons: list[types.InlineKeyboardButton] = []
         for option in choice_options:
@@ -1408,7 +1385,7 @@ def _build_setting_keyboard(
         for chunk in _chunk(choice_buttons, 2):
             rows.append(list(chunk))
 
-    if definition.python_type is bool and not is_read_only:
+    if definition.python_type is bool:
         rows.append([
             types.InlineKeyboardButton(
                 text="🔁 Переключить",
@@ -1418,31 +1395,22 @@ def _build_setting_keyboard(
             )
         ])
 
-    if not is_read_only:
-        rows.append([
-            types.InlineKeyboardButton(
-                text="✏️ Изменить",
-                callback_data=(
-                    f"botcfg_edit:{group_key}:{category_page}:{settings_page}:{callback_token}"
-                ),
-            )
-        ])
+    rows.append([
+        types.InlineKeyboardButton(
+            text="✏️ Изменить",
+            callback_data=(
+                f"botcfg_edit:{group_key}:{category_page}:{settings_page}:{callback_token}"
+            ),
+        )
+    ])
 
-    if bot_configuration_service.has_override(key) and not is_read_only:
+    if bot_configuration_service.has_override(key):
         rows.append([
             types.InlineKeyboardButton(
                 text="♻️ Сбросить",
                 callback_data=(
                     f"botcfg_reset:{group_key}:{category_page}:{settings_page}:{callback_token}"
                 ),
-            )
-        ])
-
-    if is_read_only:
-        rows.append([
-            types.InlineKeyboardButton(
-                text="🔒 Только для чтения",
-                callback_data="botcfg_group:noop",
             )
         ])
 
@@ -1470,11 +1438,6 @@ def _render_setting_text(key: str) -> str:
         f"📌 <b>Текущее:</b> {summary['current']}",
         f"📦 <b>По умолчанию:</b> {summary['original']}",
         f"✳️ <b>Переопределено:</b> {'Да' if summary['has_override'] else 'Нет'}",
-        *(
-            ["🔒 <b>Режим:</b> Только для чтения (управляется автоматически)"]
-            if summary.get("is_read_only")
-            else []
-        ),
         "",
         f"📘 <b>Описание:</b> {guidance['description']}",
         f"📐 <b>Формат:</b> {guidance['format']}",
@@ -2103,9 +2066,6 @@ async def start_edit_setting(
     except KeyError:
         await callback.answer("Эта настройка больше недоступна", show_alert=True)
         return
-    if bot_configuration_service.is_read_only(key):
-        await callback.answer("Эта настройка доступна только для чтения", show_alert=True)
-        return
     definition = bot_configuration_service.get_definition(key)
 
     summary = bot_configuration_service.get_setting_summary(key)
@@ -2171,23 +2131,13 @@ async def handle_edit_setting(
         await state.clear()
         return
 
-    if bot_configuration_service.is_read_only(key):
-        await message.answer("⚠️ Эта настройка доступна только для чтения.")
-        await state.clear()
-        return
-
     try:
         value = bot_configuration_service.parse_user_value(key, message.text or "")
     except ValueError as error:
         await message.answer(f"⚠️ {error}")
         return
 
-    try:
-        await bot_configuration_service.set_value(db, key, value)
-    except ReadOnlySettingError:
-        await message.answer("⚠️ Эта настройка доступна только для чтения.")
-        await state.clear()
-        return
+    await bot_configuration_service.set_value(db, key, value)
     await db.commit()
 
     text = _render_setting_text(key)
@@ -2222,23 +2172,13 @@ async def handle_direct_setting_input(
     if not key:
         return
 
-    if bot_configuration_service.is_read_only(key):
-        await message.answer("⚠️ Эта настройка доступна только для чтения.")
-        await state.clear()
-        return
-
     try:
         value = bot_configuration_service.parse_user_value(key, message.text or "")
     except ValueError as error:
         await message.answer(f"⚠️ {error}")
         return
 
-    try:
-        await bot_configuration_service.set_value(db, key, value)
-    except ReadOnlySettingError:
-        await message.answer("⚠️ Эта настройка доступна только для чтения.")
-        await state.clear()
-        return
+    await bot_configuration_service.set_value(db, key, value)
     await db.commit()
 
     text = _render_setting_text(key)
@@ -2280,14 +2220,7 @@ async def reset_setting(
     except KeyError:
         await callback.answer("Эта настройка больше недоступна", show_alert=True)
         return
-    if bot_configuration_service.is_read_only(key):
-        await callback.answer("Эта настройка доступна только для чтения", show_alert=True)
-        return
-    try:
-        await bot_configuration_service.reset_value(db, key)
-    except ReadOnlySettingError:
-        await callback.answer("Эта настройка доступна только для чтения", show_alert=True)
-        return
+    await bot_configuration_service.reset_value(db, key)
     await db.commit()
 
     text = _render_setting_text(key)
@@ -2327,16 +2260,9 @@ async def toggle_setting(
     except KeyError:
         await callback.answer("Эта настройка больше недоступна", show_alert=True)
         return
-    if bot_configuration_service.is_read_only(key):
-        await callback.answer("Эта настройка доступна только для чтения", show_alert=True)
-        return
     current = bot_configuration_service.get_current_value(key)
     new_value = not bool(current)
-    try:
-        await bot_configuration_service.set_value(db, key, new_value)
-    except ReadOnlySettingError:
-        await callback.answer("Эта настройка доступна только для чтения", show_alert=True)
-        return
+    await bot_configuration_service.set_value(db, key, new_value)
     await db.commit()
 
     text = _render_setting_text(key)
@@ -2378,9 +2304,6 @@ async def apply_setting_choice(
     except KeyError:
         await callback.answer("Эта настройка больше недоступна", show_alert=True)
         return
-    if bot_configuration_service.is_read_only(key):
-        await callback.answer("Эта настройка доступна только для чтения", show_alert=True)
-        return
 
     try:
         value = bot_configuration_service.resolve_choice_token(key, choice_token)
@@ -2388,11 +2311,7 @@ async def apply_setting_choice(
         await callback.answer("Это значение больше недоступно", show_alert=True)
         return
 
-    try:
-        await bot_configuration_service.set_value(db, key, value)
-    except ReadOnlySettingError:
-        await callback.answer("Эта настройка доступна только для чтения", show_alert=True)
-        return
+    await bot_configuration_service.set_value(db, key, value)
     await db.commit()
 
     text = _render_setting_text(key)
