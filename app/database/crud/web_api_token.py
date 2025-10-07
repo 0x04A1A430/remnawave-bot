@@ -6,6 +6,7 @@ from typing import Iterable, List, Optional
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database.models import WebApiToken
 
@@ -14,8 +15,12 @@ async def list_tokens(
     db: AsyncSession,
     *,
     include_inactive: bool = False,
+    user_id: Optional[int] = None,
 ) -> List[WebApiToken]:
-    query = select(WebApiToken)
+    query = select(WebApiToken).options(selectinload(WebApiToken.user))
+
+    if user_id is not None:
+        query = query.where(WebApiToken.user_id == user_id)
 
     if not include_inactive:
         query = query.where(WebApiToken.is_active.is_(True))
@@ -27,12 +32,20 @@ async def list_tokens(
 
 
 async def get_token_by_id(db: AsyncSession, token_id: int) -> Optional[WebApiToken]:
-    return await db.get(WebApiToken, token_id)
+    query = (
+        select(WebApiToken)
+        .options(selectinload(WebApiToken.user))
+        .where(WebApiToken.id == token_id)
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
 
 
 async def get_token_by_hash(db: AsyncSession, token_hash: str) -> Optional[WebApiToken]:
-    query = select(WebApiToken).where(
-        WebApiToken.token_hash == token_hash
+    query = (
+        select(WebApiToken)
+        .options(selectinload(WebApiToken.user))
+        .where(WebApiToken.token_hash == token_hash)
     )
     result = await db.execute(query)
     return result.scalar_one_or_none()
@@ -47,8 +60,10 @@ async def create_token(
     description: Optional[str] = None,
     expires_at: Optional[datetime] = None,
     created_by: Optional[str] = None,
+    user_id: Optional[int] = None,
 ) -> WebApiToken:
     token = WebApiToken(
+        user_id=user_id,
         name=name,
         token_hash=token_hash,
         token_prefix=token_prefix,

@@ -315,6 +315,13 @@ def get_info_menu_keyboard(
         ])
 
     buttons.append([
+        InlineKeyboardButton(
+            text=texts.t("MENU_API_ACCESS", "🔑 API доступ"),
+            callback_data="menu_api_access",
+        )
+    ])
+
+    buttons.append([
         InlineKeyboardButton(text=texts.MENU_RULES, callback_data="menu_rules")
     ])
 
@@ -343,6 +350,22 @@ def get_info_menu_keyboard(
         ])
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_api_access_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
+
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=texts.t("API_ACCESS_GENERATE_BUTTON", "🔄 Выпустить ключ"),
+                callback_data="api_access_generate",
+            )
+        ],
+        [InlineKeyboardButton(text=texts.BACK, callback_data="menu_info")],
+    ]
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
