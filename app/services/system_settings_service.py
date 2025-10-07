@@ -57,8 +57,7 @@ class ChoiceOption:
 
 
 class BotConfigurationService:
-    EXCLUDED_KEYS: set[str] = {"BOT_TOKEN", "ADMIN_IDS", "BOT_USERNAME"}
-    READONLY_KEYS: set[str] = {"EXTERNAL_ADMIN_TOKEN"}
+    EXCLUDED_KEYS: set[str] = {"BOT_TOKEN", "ADMIN_IDS"}
 
     CATEGORY_TITLES: Dict[str, str] = {
         "CORE": "🤖 Основные настройки",
@@ -105,7 +104,6 @@ class BotConfigurationService:
         "WEBHOOK": "🌐 Webhook",
         "LOG": "📝 Логирование",
         "DEBUG": "🧪 Режим разработки",
-        "EXTERNAL_ADMIN": "🛡️ Внешняя админка",
     }
 
     CATEGORY_DESCRIPTIONS: Dict[str, str] = {
@@ -153,7 +151,6 @@ class BotConfigurationService:
         "WEBHOOK": "Пути и секреты вебхуков.",
         "LOG": "Уровни логирования и ротация.",
         "DEBUG": "Отладочные функции и безопасный режим.",
-        "EXTERNAL_ADMIN": "Статический токен доступа для внешней административной панели.",
     }
 
     CATEGORY_KEY_OVERRIDES: Dict[str, str] = {
@@ -234,7 +231,6 @@ class BotConfigurationService:
         "VERSION_CHECK_INTERVAL_HOURS": "VERSION",
         "TELEGRAM_STARS_RATE_RUB": "TELEGRAM",
         "REMNAWAVE_USER_DESCRIPTION_TEMPLATE": "REMNAWAVE",
-        "EXTERNAL_ADMIN_TOKEN": "EXTERNAL_ADMIN",
     }
 
     CATEGORY_PREFIX_OVERRIDES: Dict[str, str] = {
@@ -273,7 +269,6 @@ class BotConfigurationService:
         "LOG_": "LOG",
         "WEB_API_": "WEB_API",
         "DEBUG": "DEBUG",
-        "EXTERNAL_ADMIN_": "EXTERNAL_ADMIN",
     }
 
     CHOICES: Dict[str, List[ChoiceOption]] = {
@@ -399,13 +394,6 @@ class BotConfigurationService:
             "warning": "Недоступный адрес приведет к ошибкам при управлении VPN-учетками.",
             "dependencies": "REMNAWAVE_API_KEY или REMNAWAVE_USERNAME/REMNAWAVE_PASSWORD",
         },
-        "EXTERNAL_ADMIN_TOKEN": {
-            "description": "Используется внешней админкой для проверки запросов к API.",
-            "format": "Значение формируется автоматически и доступно только для чтения.",
-            "example": "b5c8e1d4b7f0a93c4e2d1f6a8c7b5d1e",
-            "warning": "Изменение username бота приведет к изменению токена. Сохраните его в конфигурации внешней панели.",
-            "dependencies": "BOT_USERNAME",
-        },
     }
 
     @classmethod
@@ -416,10 +404,6 @@ class BotConfigurationService:
     def is_toggle(cls, key: str) -> bool:
         definition = cls.get_definition(key)
         return definition.python_type is bool
-
-    @classmethod
-    def is_readonly(cls, key: str) -> bool:
-        return key in cls.READONLY_KEYS
 
     @classmethod
     def _format_numeric_with_unit(cls, key: str, value: Union[int, float]) -> Optional[str]:
@@ -471,8 +455,6 @@ class BotConfigurationService:
             cleaned = value.strip()
             if not cleaned:
                 return "—"
-            if key == "EXTERNAL_ADMIN_TOKEN":
-                return cleaned
             if any(keyword in key.upper() for keyword in ("TOKEN", "SECRET", "PASSWORD", "KEY")):
                 return "••••••••"
             items = cls._split_comma_values(cleaned)
@@ -879,8 +861,6 @@ class BotConfigurationService:
 
     @classmethod
     async def set_value(cls, db: AsyncSession, key: str, value: Any) -> None:
-        if cls.is_readonly(key):
-            raise ValueError("Эта настройка доступна только для чтения")
         raw_value = cls.serialize_value(key, value)
         await upsert_system_setting(db, key, raw_value)
         cls._overrides_raw[key] = raw_value
@@ -891,8 +871,6 @@ class BotConfigurationService:
 
     @classmethod
     async def reset_value(cls, db: AsyncSession, key: str) -> None:
-        if cls.is_readonly(key):
-            raise ValueError("Эта настройка нельзя сбросить")
         await delete_system_setting(db, key)
         cls._overrides_raw.pop(key, None)
         original = cls.get_original_value(key)
