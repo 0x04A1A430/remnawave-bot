@@ -2500,79 +2500,6 @@ async def create_web_api_tokens_table() -> bool:
         return False
 
 
-async def create_user_api_tokens_table() -> bool:
-    table_exists = await check_table_exists("user_api_tokens")
-    if table_exists:
-        logger.info("ℹ️ Таблица user_api_tokens уже существует")
-        return True
-
-    try:
-        async with engine.begin() as conn:
-            db_type = await get_database_type()
-
-            if db_type == "sqlite":
-                create_sql = """
-                CREATE TABLE user_api_tokens (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL UNIQUE,
-                    token_hash VARCHAR(128) NOT NULL UNIQUE,
-                    token_prefix VARCHAR(32) NOT NULL,
-                    token_last_digits VARCHAR(16) NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    last_used_at DATETIME NULL,
-                    last_used_ip VARCHAR(64) NULL,
-                    is_active BOOLEAN NOT NULL DEFAULT 1,
-                    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-                );
-                CREATE INDEX idx_user_api_tokens_hash ON user_api_tokens(token_hash);
-                CREATE INDEX idx_user_api_tokens_last_used ON user_api_tokens(last_used_at);
-                """
-            elif db_type == "postgresql":
-                create_sql = """
-                CREATE TABLE user_api_tokens (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-                    token_hash VARCHAR(128) NOT NULL UNIQUE,
-                    token_prefix VARCHAR(32) NOT NULL,
-                    token_last_digits VARCHAR(16) NOT NULL,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    updated_at TIMESTAMP DEFAULT NOW(),
-                    last_used_at TIMESTAMP NULL,
-                    last_used_ip VARCHAR(64) NULL,
-                    is_active BOOLEAN NOT NULL DEFAULT TRUE
-                );
-                CREATE INDEX idx_user_api_tokens_hash ON user_api_tokens(token_hash);
-                CREATE INDEX idx_user_api_tokens_last_used ON user_api_tokens(last_used_at);
-                """
-            else:
-                create_sql = """
-                CREATE TABLE user_api_tokens (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT NOT NULL UNIQUE,
-                    token_hash VARCHAR(128) NOT NULL UNIQUE,
-                    token_prefix VARCHAR(32) NOT NULL,
-                    token_last_digits VARCHAR(16) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    last_used_at TIMESTAMP NULL,
-                    last_used_ip VARCHAR(64) NULL,
-                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                    CONSTRAINT fk_user_api_tokens_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                ) ENGINE=InnoDB;
-                CREATE INDEX idx_user_api_tokens_hash ON user_api_tokens(token_hash);
-                CREATE INDEX idx_user_api_tokens_last_used ON user_api_tokens(last_used_at);
-                """
-
-            await conn.execute(text(create_sql))
-            logger.info("✅ Таблица user_api_tokens создана")
-            return True
-
-    except Exception as error:
-        logger.error(f"❌ Ошибка создания таблицы user_api_tokens: {error}")
-        return False
-
-
 async def create_privacy_policies_table() -> bool:
     table_exists = await check_table_exists("privacy_policies")
     if table_exists:
@@ -2874,13 +2801,6 @@ async def run_universal_migration():
             logger.info("✅ Таблица web_api_tokens готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей web_api_tokens")
-
-        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_API_TOKENS ===")
-        user_api_tokens_ready = await create_user_api_tokens_table()
-        if user_api_tokens_ready:
-            logger.info("✅ Таблица user_api_tokens готова")
-        else:
-            logger.warning("⚠️ Проблемы с таблицей user_api_tokens")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PRIVACY_POLICIES ===")
         privacy_policies_ready = await create_privacy_policies_table()

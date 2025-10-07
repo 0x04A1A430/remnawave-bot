@@ -12,7 +12,6 @@ from . import (
     tokens,
     transactions,
     users,
-    user_api,
 )
 
 __all__ = [
@@ -29,5 +28,4 @@ __all__ = [
     "tokens",
     "transactions",
     "users",
-    "user_api",
 ]
