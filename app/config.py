@@ -255,7 +255,6 @@ class Settings(BaseSettings):
     WEB_API_DEFAULT_TOKEN: Optional[str] = None
     WEB_API_DEFAULT_TOKEN_NAME: str = "Bootstrap Token"
     WEB_API_TOKEN_HASH_ALGORITHM: str = "sha256"
-    USER_API_TOKEN_HASH_ALGORITHM: str = "sha256"
     WEB_API_REQUEST_LOGGING: bool = True
     
     APP_CONFIG_PATH: str = "app-config.json"

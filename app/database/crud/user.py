@@ -39,7 +39,6 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
         .options(
             selectinload(User.subscription),
             selectinload(User.promo_group),
-            selectinload(User.api_token),
         )
         .where(User.id == user_id)
     )
@@ -57,7 +56,6 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optiona
         .options(
             selectinload(User.subscription),
             selectinload(User.promo_group),
-            selectinload(User.api_token),
         )
         .where(User.telegram_id == telegram_id)
     )
@@ -72,10 +70,7 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optiona
 async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> Optional[User]:
     result = await db.execute(
         select(User)
-        .options(
-            selectinload(User.promo_group),
-            selectinload(User.api_token),
-        )
+        .options(selectinload(User.promo_group))
         .where(User.referral_code == referral_code)
     )
     return result.scalar_one_or_none()
