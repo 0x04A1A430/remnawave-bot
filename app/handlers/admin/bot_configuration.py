@@ -105,7 +105,7 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
         "title": "⚡ Расширенные",
         "description": "Web API, webhook, логирование и режим отладки.",
         "icon": "⚡",
-        "categories": ("WEB_API", "WEBHOOK", "LOG", "DEBUG"),
+        "categories": ("WEB_API", "EXTERNAL_ADMIN", "WEBHOOK", "LOG", "DEBUG"),
     },
 }
 
@@ -1361,6 +1361,7 @@ def _build_setting_keyboard(
     definition = bot_configuration_service.get_definition(key)
     rows: list[list[types.InlineKeyboardButton]] = []
     callback_token = bot_configuration_service.get_callback_token(key)
+    readonly = bot_configuration_service.is_readonly(key)
 
     choice_options = bot_configuration_service.get_choice_options(key)
     if choice_options:
@@ -1385,7 +1386,7 @@ def _build_setting_keyboard(
         for chunk in _chunk(choice_buttons, 2):
             rows.append(list(chunk))
 
-    if definition.python_type is bool:
+    if definition.python_type is bool and not readonly:
         rows.append([
             types.InlineKeyboardButton(
                 text="🔁 Переключить",
@@ -1395,24 +1396,25 @@ def _build_setting_keyboard(
             )
         ])
 
-    rows.append([
-        types.InlineKeyboardButton(
-            text="✏️ Изменить",
-            callback_data=(
-                f"botcfg_edit:{group_key}:{category_page}:{settings_page}:{callback_token}"
-            ),
-        )
-    ])
-
-    if bot_configuration_service.has_override(key):
+    if not readonly:
         rows.append([
             types.InlineKeyboardButton(
-                text="♻️ Сбросить",
+                text="✏️ Изменить",
                 callback_data=(
-                    f"botcfg_reset:{group_key}:{category_page}:{settings_page}:{callback_token}"
+                    f"botcfg_edit:{group_key}:{category_page}:{settings_page}:{callback_token}"
                 ),
             )
         ])
+
+        if bot_configuration_service.has_override(key):
+            rows.append([
+                types.InlineKeyboardButton(
+                    text="♻️ Сбросить",
+                    callback_data=(
+                        f"botcfg_reset:{group_key}:{category_page}:{settings_page}:{callback_token}"
+                    ),
+                )
+            ])
 
     rows.append([
         types.InlineKeyboardButton(
