@@ -540,6 +540,7 @@ async def add_user_to_servers(
             )
         
         await db.commit()
+        await db.expire_all()
         logger.info(f"✅ Увеличен счетчик пользователей для серверов: {server_squad_ids}")
         return True
         
@@ -563,6 +564,7 @@ async def remove_user_from_servers(
             )
         
         await db.commit()
+        await db.expire_all()
         logger.info(f"✅ Уменьшен счетчик пользователей для серверов: {server_squad_ids}")
         return True
         
