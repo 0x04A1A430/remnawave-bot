@@ -132,8 +132,9 @@ class Settings(BaseSettings):
     REFERRED_USER_REWARD: int = 0 
     
     AUTOPAY_WARNING_DAYS: str = "3,1"
-    
-    DEFAULT_AUTOPAY_DAYS_BEFORE: int = 3 
+
+    DEFAULT_AUTOPAY_ENABLED: bool = False
+    DEFAULT_AUTOPAY_DAYS_BEFORE: int = 3
     MIN_BALANCE_FOR_AUTOPAY_KOPEKS: int = 10000  
     
     MONITORING_INTERVAL: int = 60
@@ -464,6 +465,15 @@ class Settings(BaseSettings):
             return [3, 1]
         except (ValueError, AttributeError):
             return [3, 1]
+
+    def is_autopay_enabled_by_default(self) -> bool:
+        value = getattr(self, "DEFAULT_AUTOPAY_ENABLED", True)
+
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            return normalized in {"1", "true", "yes", "on"}
+
+        return bool(value)
     
     def get_available_languages(self) -> List[str]:
         try:

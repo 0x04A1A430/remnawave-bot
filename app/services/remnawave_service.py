@@ -1182,7 +1182,7 @@ class RemnaWaveService:
                     user.subscription.device_limit = 1
                     user.subscription.connected_squads = []
                     user.subscription.autopay_enabled = False
-                    user.subscription.autopay_days_before = 3
+                    user.subscription.autopay_days_before = settings.DEFAULT_AUTOPAY_DAYS_BEFORE
                     user.subscription.remnawave_short_uuid = None
                     user.subscription.subscription_url = ""
                     user.subscription.subscription_crypto_link = ""
