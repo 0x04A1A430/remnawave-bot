@@ -88,35 +88,8 @@ async def create_trial_subscription(
     db.add(subscription)
     await db.commit()
     await db.refresh(subscription)
-
+    
     logger.info(f"🎁 Создана триальная подписка для пользователя {user_id}")
-
-    if squad_uuid:
-        try:
-            from app.database.crud.server_squad import (
-                get_server_ids_by_uuids,
-                add_user_to_servers,
-            )
-
-            server_ids = await get_server_ids_by_uuids(db, [squad_uuid])
-            if server_ids:
-                await add_user_to_servers(db, server_ids)
-                logger.info(
-                    "📈 Обновлен счетчик пользователей для триального сквада %s",
-                    squad_uuid,
-                )
-            else:
-                logger.warning(
-                    "⚠️ Не удалось найти серверы для обновления счетчика (сквад %s)",
-                    squad_uuid,
-                )
-        except Exception as error:
-            logger.error(
-                "⚠️ Ошибка обновления счетчика пользователей для триального сквада %s: %s",
-                squad_uuid,
-                error,
-            )
-
     return subscription
 
 
