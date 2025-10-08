@@ -1366,121 +1366,6 @@ ADMIN_NOTIFICATIONS_TOPIC_ID=123             # ID топика (опционал
 - **🔗 SQLAlchemy ORM** - безопасная работа с БД
 - **🚀 aiogram 3** - современная Telegram Bot API
 
-### 📁 Структура проекта
-
-```
-bedolaga_bot/
-├── 🎯 main.py                    # Точка входа
-├── 📦 requirements.txt           # Зависимости
-├── ⚙️ .env.example               # Конфиг
-├── ⚙️ app-config.json            # Информация для гайда подключения
-│
-├── 📱 app/
-│   ├── 🤖 bot.py                 # Инициализация бота
-│   ├── ⚙️ config.py              # Настройки
-│   ├── 🎛️ states.py              # FSM состояния
-│   │
-│   ├── 🎮 handlers/              # Обработчики событий
-│   │   ├── 🏠 start.py           # Регистрация и старт
-│   │   ├── 🛒 subscription.py    # Подписки
-│   │   ├── 💰 balance.py         # Баланс и платежи
-│   │   ├── 🎁 promocode.py       # Промокоды
-│   │   ├── 👥 referral.py        # Реферальная система
-│   │   ├── 🌟 stars_payment.py   # Start платежи
-│   │   ├── common.py         
-│   │   ├── 💬 support.py         # Техподдержка
-│   │   └── 👑 admin/             # Админ панель
-│   │       ├── 📊 statistics.py  # Статистика
-│   │       ├── 🗄️ backup.py      # Бекапы
-│   │       ├── 👥 users.py       # Управление юзерами
-│   │       ├── 🎫 promocodes.py  # Управление промокодами
-│   │       ├── 🚧 maintenance.py # Тех работы
-│   │       ├── 📨 messages.py    # Рассылки
-│   │       ├── 📨 user_messages.py # Рандомные сообщения в меню
-│   │       ├── 📨 welcome_text.py  # Приветственное сообщение 
-│   │       ├── ⚙️ main.py        # Админское меню
-│   │       ├── 📖 rules.py       # Правила
-│   │       ├── 🙋 referrals.py   # Правила
-│   │       ├── 🌎 servers.py     # Сервера
-│   │       ├── 📱 subscriptions.py  # Подписки
-│   │       ├── 🔍 monitoring.py  # Мониторинг
-│   │       └── 🔗 remnawave.py   # Система Remnawave
-│   │
-│   ├── 🗄️ database/                  # База данных
-│   │   ├── 📊 models.py              # Модели SQLAlchemy
-│   │   ├── 🔗 database.py            # Подключение к БД
-│   │   ├── 🔄 universal_migration.py # Миграции
-│   │   └── 📝 crud/                  # CRUD операции
-│   │       ├── 👤 user.py            # Операции с пользователями
-│   │       ├── 📋 subscription.py    # Операции с подписками
-│   │       ├── 💰 transaction.py     # Операции с транзакциями
-│   │       ├── 📜 rules.py           # Правила сервиса
-│   │       ├── 📜 subscription_conversion.py # Правила сервиса
-│   │       ├── 💳 yookassa.py        # YooKassa операции
-│   │       ├── 📨 welcome_text.py    # Приветственное сообщение 
-│   │       ├── 💳 cryptobot.py       # CryptoBot операции
-│   │       ├── 🌐 server_squad.py    # Серверы и сквады
-│   │       ├── 🎁 promocode.py       # Промокоды
-│   │       └── 👥 referral.py        # Партнерка
-│   │
-│   ├── 🔧 services/                   # Бизнес-логика
-│   │   ├── 👤 user_service.py         # Сервис пользователей
-│   │   ├── 📋 subscription_service.py # Сервис подписок
-│   │   ├── 💰 payment_service.py      # Платежи
-│   │   ├── 🗄️ backup_service.py       # Бекапы
-│   │   ├── 🎁 promocode_service.py    # Промокоды
-│   │   ├── 🚧 maintenance_service.py  # Промокоды
-│   │   ├── 👥 referral_service.py     # Партнерка
-│   │   ├── 💬 admin_notification_service.py     # Уведомления для администраторов в чаты
-│   │   ├── 🔍 monitoring_service.py   # Мониторинг
-│   │   ├── ♻️ version_service.py      # Проверка версий бота
-│   │   ├── 🎖️ tribute_service.py      # Tribute платежи
-│   │   ├── 💳 yookassa_service.py     # YooKassa платежи
-│   │   └── 🌐 remnawave_service.py    # Интеграция с Remnawave
-│   │
-│   ├── 🛠️ utils/                     # Утилиты
-│   │   ├── 🎨 decorators.py          # Декораторы
-│   │   ├── 📝 formatters.py          # Форматирование данных
-│   │   ├── ✅ validators.py          # Валидация
-│   │   ├── ✅ subscription_utils.py  # Проверка подписок
-│   │   ├── 📄 pagination.py          # Пагинация
-│   │   ├── 📄 pricing_utils.py       # Цены
-│   │   ├── 📄 message_patch.py
-│   │   ├── 📄 photo_message.py
-│   │   ├── ‼️ global_error.py        # Обработка ошибок
-│   │   ├── 👤 user_utils.py          # Утилиты для пользователей
-│   │   ├── 🫰 currency_converter.py  # Курсы для CryptoBota
-│   │   └── ⚡ cache.py                # Кеширование
-│   │
-│   ├── 🛡️ middlewares/                # Middleware
-│   │   ├── 🔐 auth.py                 # Авторизация
-│   │   ├── 📋 logging.py              # Логирование
-│   │   ├── 🚧 maintenance.py          # тех работы
-│   │   ├── 🔐 subscription_checker.py # тех работы
-│   │   ├── 🔐 channel_checker.py
-│   │   └── ⏱️ throttling.py           # Ограничение запросов
-│   │
-│   ├── 🌐 localization/          # Локализация
-│   │   ├── 📝 texts.py           # Тексты интерфейса
-│   │   └── 🗣️ languages/
-│   │
-│   ├── ⌨️ keyboards/             # Клавиатуры
-│   │   ├── 🔗 inline.py          # Inline клавиатуры
-│   │   ├── 💬 reply.py           # Reply клавиатуры
-│   │   └── 👑 admin.py           # Админские клавиатуры
-│   │
-│   └── 🔌 external/               # Внешние API
-│       ├── 🌐 remnawave_api.py    # Remnawave API
-│       ├── ⭐ telegram_stars.py   # Telegram Stars
-│       ├── 💳 yookassa_webhook.py # YooKassa webhook
-│       ├── 🌐 webhook_server.py   # Webhook сервер
-│       ├── 💳 cryptobot.py        # CryptoBot Api
-│       └── 🎖️ tribute.py          # Tribute платежи
-│
-├── 🔄 migrations/                # Миграции БД
-└── 📋 logs/                      # Логи системы
-```
-
 ---
 
 ## 🐛 Устранение неполадок
@@ -1725,61 +1610,131 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 <tr>
 <td>🥇</td>
 <td><strong>@pilot_737800</strong></td>
-<td>₽4,750</td>
+<td>₽7,750</td>
 <td>За веру в проект с самого начала</td>
 </tr>
 
 <tr>
 <td>🥈</td>
-<td><strong>@Legacyyy777</strong></td>
-<td>₽2,600</td>
-<td>За ценные предложения по улучшению</td>
+<td><strong>@k0tbtc</strong></td>
+<td>₽5,500</td>
+<td>За щедрую поддержку и вклад в развитие</td>
 </tr>
 
 <tr>
 <td>🥉</td>
-<td><strong>Илья (@ispanec_nn)</strong></td>
-<td>$30</td>
-<td>За активное тестирование и фидбек</td>
+<td><strong>@Vldmrmtn</strong></td>
+<td>₽5,000</td>
+<td>За значительную поддержку проекта</td>
 </tr>
 
 <tr>
 <td>4</td>
+<td><strong>@sklvg</strong></td>
+<td>₽3,000</td>
+<td>За поддержку и доверие</td>
+</tr>
+
+<tr>
+<td>5</td>
+<td><strong>@Legacyyy777</strong></td>
+<td>₽2,900</td>
+<td>За ценные предложения по улучшению</td>
+</tr>
+
+<tr>
+<td>6</td>
+<td><strong>@psych0O</strong></td>
+<td>$60</td>
+<td>За международную поддержку</td>
+</tr>
+
+<tr>
+<td>7</td>
+<td><strong>@bolgov0zero</strong></td>
+<td>₽2,000</td>
+<td>За поддержку и доверие</td>
+</tr>
+
+<tr>
+<td>8</td>
+<td><strong>@i_burjuy</strong></td>
+<td>₽1,300</td>
+<td>За активное участие в проекте</td>
+</tr>
+
+<tr>
+<td>9</td>
+<td><strong>@kr33njee</strong></td>
+<td>₽1,550</td>
+<td>За поддержку и доверие</td>
+</tr>
+
+<tr>
+<td>10</td>
+<td><strong>@Nav1_0</strong></td>
+<td>₽2,000</td>
+<td>За поддержку и доверие</td>
+</tr>
+
+<tr>
+<td>11</td>
 <td><strong>@fso404</strong></td>
 <td>₽1,000</td>
 <td>За поддержку и доверие</td>
 </tr>
 
 <tr>
-<td>5</td>
+<td>12</td>
 <td><strong>@edward_forix</strong></td>
 <td>₽1,000</td>
 <td>За поддержку и доверие</td>
 </tr>
 
 <tr>
-<td>5</td>
-<td><strong>@Nav1_0</strong></td>
-<td>₽1,000</td>
-<td>За поддержку и доверие</td>
+<td>13</td>
+<td><strong>@Илья (@ispanec_nn)</strong></td>
+<td>$30</td>
+<td>За активное тестирование и фидбек</td>
 </tr>
 
 <tr>
-<td>6</td>
-<td><strong>@kr33njee</strong></td>
-<td>₽800</td>
-<td>За поддержку и доверие</td>
-</tr>
-
-<tr>
-<td>7</td>
+<td>14</td>
 <td><strong>@SmartSystemCompany</strong></td>
 <td>₽600</td>
 <td>За поддержку и доверие</td>
 </tr>
 
 <tr>
-<td>8</td>
+<td>15</td>
+<td><strong>@DonMatteoRU</strong></td>
+<td>₽500</td>
+<td>За участие в развитии</td>
+</tr>
+
+<tr>
+<td>16</td>
+<td><strong>@pedzeo</strong></td>
+<td>₽500</td>
+<td>За участие в развитии</td>
+</tr>
+
+<tr>
+<td>17</td>
+<td><strong>@suzumuj</strong></td>
+<td>₽400</td>
+<td>За участие в развитии</td>
+</tr>
+
+<tr>
+<td>18</td>
+<td><strong>@andrey_93rus</strong></td>
+<td>₽300</td>
+<td>За участие в развитии</td>
+</tr>
+
+<tr>
+<td>19</td>
 <td><strong>@PhiLin58</strong></td>
 <td>₽300</td>
 <td>За участие в развитии</td>
