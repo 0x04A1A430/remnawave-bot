@@ -621,24 +621,7 @@ class RemnaWaveService:
                             try:
                                 from sqlalchemy import delete
                                 from app.database.models import SubscriptionServer
-                                from app.database.crud.subscription import get_subscription_server_ids
-                                from app.database.crud.server_squad import (
-                                    get_server_ids_by_uuids,
-                                    remove_user_from_servers,
-                                )
-
-                                removed_server_ids = set(
-                                    await get_subscription_server_ids(db, subscription.id)
-                                )
-
-                                if subscription.connected_squads:
-                                    removed_server_ids.update(
-                                        await get_server_ids_by_uuids(db, subscription.connected_squads)
-                                    )
-
-                                if removed_server_ids:
-                                    await remove_user_from_servers(db, list(removed_server_ids))
-
+                                
                                 await db.execute(
                                     delete(SubscriptionServer).where(
                                         SubscriptionServer.subscription_id == subscription.id
@@ -1191,42 +1174,6 @@ class RemnaWaveService:
                 user.updated_at = self._now_in_panel_timezone()
                 
                 if user.subscription:
-                    try:
-                        from sqlalchemy import delete
-                        from app.database.models import SubscriptionServer
-                        from app.database.crud.subscription import get_subscription_server_ids
-                        from app.database.crud.server_squad import (
-                            get_server_ids_by_uuids,
-                            remove_user_from_servers,
-                        )
-
-                        removed_server_ids = set(
-                            await get_subscription_server_ids(db, user.subscription.id)
-                        )
-
-                        if user.subscription.connected_squads:
-                            removed_server_ids.update(
-                                await get_server_ids_by_uuids(
-                                    db, user.subscription.connected_squads
-                                )
-                            )
-
-                        if removed_server_ids:
-                            await remove_user_from_servers(db, list(removed_server_ids))
-
-                        await db.execute(
-                            delete(SubscriptionServer).where(
-                                SubscriptionServer.subscription_id == user.subscription.id
-                            )
-                        )
-                        logger.info(
-                            f"🗑️ Удалены привязанные серверы подписки для пользователя {user.telegram_id}"
-                        )
-                    except Exception as servers_error:
-                        logger.error(
-                            f"❌ Ошибка удаления серверов подписки при очистке пользователя {user.telegram_id}: {servers_error}"
-                        )
-
                     user.subscription.status = SubscriptionStatus.DISABLED.value
                     user.subscription.is_trial = True
                     user.subscription.end_date = self._now_in_panel_timezone()
