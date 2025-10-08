@@ -769,13 +769,5 @@
   "ADMIN_PUBLIC_OFFER_ENABLED": "✅ Offer enabled",
   "ADMIN_PUBLIC_OFFER_DISABLED": "🚫 Offer disabled",
   "ADMIN_PUBLIC_OFFER_RETURN_TO_EDIT": "⬅️ Back to editing",
-  "ADMIN_PUBLIC_OFFER_EDIT_CANCELLED": "Offer editing cancelled.",
-  "ADMIN_PRICING_BUTTON_TRAFFIC_OPTIONS": "🚦 Package visibility",
-  "ADMIN_PRICING_TRAFFIC_PACKAGE_ENABLED": "Package enabled.",
-  "ADMIN_PRICING_TRAFFIC_PACKAGE_DISABLED": "Package disabled.",
-  "ADMIN_PRICING_TRAFFIC_PACKAGE_MIN": "At least one package must remain.",
-  "ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_TITLE": "🚦 Traffic package visibility",
-  "ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_ACTIVE": "Active packages: {items}",
-  "ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_NONE": "No active packages.",
-  "ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_PROMPT": "Tap a package to toggle its visibility."
+  "ADMIN_PUBLIC_OFFER_EDIT_CANCELLED": "Offer editing cancelled."
 }
