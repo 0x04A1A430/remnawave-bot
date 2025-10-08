@@ -963,6 +963,7 @@ class ServerSquad(Base):
     country_code = Column(String(5), nullable=True)
     
     is_available = Column(Boolean, default=True)
+    is_trial_eligible = Column(Boolean, default=False, nullable=False)
     
     price_kopeks = Column(Integer, default=0)
     

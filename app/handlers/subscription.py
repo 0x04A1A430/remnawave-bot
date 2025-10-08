@@ -907,18 +907,34 @@ async def show_trial_offer(
         await callback.answer()
         return
 
-    trial_server_name = "🎯 Тестовый сервер"
+    trial_server_name = texts.t("TRIAL_SERVER_DEFAULT_NAME", "🎯 Тестовый сервер")
     try:
-        from app.database.crud.server_squad import get_server_squad_by_uuid
+        from app.database.crud.server_squad import (
+            get_server_squad_by_uuid,
+            get_trial_eligible_server_squads,
+        )
 
-        if settings.TRIAL_SQUAD_UUID:
+        trial_squads = await get_trial_eligible_server_squads(db, include_unavailable=True)
+
+        if trial_squads:
+            if len(trial_squads) == 1:
+                trial_server_name = trial_squads[0].display_name
+            else:
+                trial_server_name = texts.t(
+                    "TRIAL_SERVER_RANDOM_POOL",
+                    "🎲 Случайный из {count} серверов",
+                ).format(count=len(trial_squads))
+        elif settings.TRIAL_SQUAD_UUID:
             trial_server = await get_server_squad_by_uuid(db, settings.TRIAL_SQUAD_UUID)
             if trial_server:
                 trial_server_name = trial_server.display_name
             else:
-                logger.warning(f"Триальный сервер с UUID {settings.TRIAL_SQUAD_UUID} не найден в БД")
+                logger.warning(
+                    "Триальный сервер с UUID %s не найден в БД",
+                    settings.TRIAL_SQUAD_UUID,
+                )
         else:
-            logger.warning("TRIAL_SQUAD_UUID не настроен в конфигурации")
+            logger.warning("Не настроены сквады для выдачи триалов")
 
     except Exception as e:
         logger.error(f"Ошибка получения триального сервера: {e}")

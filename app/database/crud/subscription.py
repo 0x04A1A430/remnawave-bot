@@ -47,10 +47,31 @@ async def create_trial_subscription(
     duration_days = duration_days or settings.TRIAL_DURATION_DAYS
     traffic_limit_gb = traffic_limit_gb or settings.TRIAL_TRAFFIC_LIMIT_GB
     device_limit = device_limit or settings.TRIAL_DEVICE_LIMIT
-    squad_uuid = squad_uuid or settings.TRIAL_SQUAD_UUID
-    
+    if not squad_uuid:
+        try:
+            from app.database.crud.server_squad import get_random_trial_squad_uuid
+
+            squad_uuid = await get_random_trial_squad_uuid(
+                db,
+                settings.TRIAL_SQUAD_UUID,
+            )
+
+            if squad_uuid:
+                logger.debug(
+                    "Выбран сквад %s для триальной подписки пользователя %s",
+                    squad_uuid,
+                    user_id,
+                )
+        except Exception as error:
+            logger.error(
+                "Не удалось получить сквад для триальной подписки пользователя %s: %s",
+                user_id,
+                error,
+            )
+            squad_uuid = settings.TRIAL_SQUAD_UUID
+
     end_date = datetime.utcnow() + timedelta(days=duration_days)
-    
+
     subscription = Subscription(
         user_id=user_id,
         status=SubscriptionStatus.ACTIVE.value,

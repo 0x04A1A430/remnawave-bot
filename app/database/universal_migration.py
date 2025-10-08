@@ -2367,6 +2367,41 @@ async def ensure_server_promo_groups_setup() -> bool:
         )
         return False
 
+
+async def add_server_trial_flag_column() -> bool:
+    column_exists = await check_column_exists('server_squads', 'is_trial_eligible')
+    if column_exists:
+        logger.info("Колонка is_trial_eligible уже существует в server_squads")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                column_def = 'BOOLEAN NOT NULL DEFAULT 0'
+            elif db_type == 'postgresql':
+                column_def = 'BOOLEAN NOT NULL DEFAULT FALSE'
+            else:
+                column_def = 'BOOLEAN NOT NULL DEFAULT FALSE'
+
+            await conn.execute(
+                text(f"ALTER TABLE server_squads ADD COLUMN is_trial_eligible {column_def}")
+            )
+
+            if db_type == 'postgresql':
+                await conn.execute(
+                    text("ALTER TABLE server_squads ALTER COLUMN is_trial_eligible SET DEFAULT FALSE")
+                )
+
+        logger.info("✅ Добавлена колонка is_trial_eligible в server_squads")
+        return True
+
+    except Exception as error:
+        logger.error(f"Ошибка добавления колонки is_trial_eligible: {error}")
+        return False
+
+
 async def create_system_settings_table() -> bool:
     table_exists = await check_table_exists("system_settings")
     if table_exists:
@@ -2802,6 +2837,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей web_api_tokens")
 
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ ДЛЯ ТРИАЛЬНЫХ СКВАДОВ ===")
+        trial_column_ready = await add_server_trial_flag_column()
+        if trial_column_ready:
+            logger.info("✅ Колонка is_trial_eligible готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой is_trial_eligible")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PRIVACY_POLICIES ===")
         privacy_policies_ready = await create_privacy_policies_table()
         if privacy_policies_ready:
@@ -3116,6 +3158,7 @@ async def check_migration_status():
             "subscription_conversions_table": False,
             "promo_groups_table": False,
             "server_promo_groups_table": False,
+            "server_squads_trial_column": False,
             "privacy_policies_table": False,
             "public_offers_table": False,
             "users_promo_group_column": False,
@@ -3147,6 +3190,7 @@ async def check_migration_status():
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
         status["promo_groups_table"] = await check_table_exists('promo_groups')
         status["server_promo_groups_table"] = await check_table_exists('server_squad_promo_groups')
+        status["server_squads_trial_column"] = await check_column_exists('server_squads', 'is_trial_eligible')
 
         status["discount_offers_table"] = await check_table_exists('discount_offers')
         status["discount_offers_effect_column"] = await check_column_exists('discount_offers', 'effect_type')
@@ -3201,6 +3245,7 @@ async def check_migration_status():
             "subscription_duplicates": "Отсутствие дубликатов подписок",
             "promo_groups_table": "Таблица промо-групп",
             "server_promo_groups_table": "Связи серверов и промогрупп",
+            "server_squads_trial_column": "Колонка триального назначения у серверов",
             "users_promo_group_column": "Колонка promo_group_id у пользователей",
             "promo_groups_period_discounts_column": "Колонка period_discounts у промо-групп",
             "promo_groups_auto_assign_column": "Колонка auto_assign_total_spent_kopeks у промо-групп",
