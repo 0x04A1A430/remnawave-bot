@@ -121,6 +121,7 @@ def get_main_menu_keyboard(
     show_resume_checkout: bool = False,
     *,
     is_moderator: bool = False,
+    custom_buttons: Optional[list[InlineKeyboardButton]] = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     
@@ -229,6 +230,11 @@ def get_main_menu_keyboard(
                 callback_data="subscription_resume_checkout",
             )
         ])
+
+    if custom_buttons:
+        for button in custom_buttons:
+            if isinstance(button, InlineKeyboardButton):
+                keyboard.append([button])
 
     keyboard.extend([
         [

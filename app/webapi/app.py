@@ -12,6 +12,7 @@ from .routes import (
     campaigns,
     config,
     health,
+    main_menu_buttons,
     promocodes,
     miniapp,
     promo_groups,
@@ -39,6 +40,10 @@ OPENAPI_TAGS = [
     {
         "name": "settings",
         "description": "Получение и изменение конфигурации бота из административной панели.",
+    },
+    {
+        "name": "main-menu",
+        "description": "Управление кнопками главного меню Telegram-бота.",
     },
     {
         "name": "users",
@@ -120,6 +125,11 @@ def create_web_api_app() -> FastAPI:
     app.include_router(transactions.router, prefix="/transactions", tags=["transactions"])
     app.include_router(promo_groups.router, prefix="/promo-groups", tags=["promo-groups"])
     app.include_router(promo_offers.router, prefix="/promo-offers", tags=["promo-offers"])
+    app.include_router(
+        main_menu_buttons.router,
+        prefix="/main-menu/buttons",
+        tags=["main-menu"],
+    )
     app.include_router(pages.router, prefix="/pages", tags=["pages"])
     app.include_router(promocodes.router, prefix="/promo-codes", tags=["promo-codes"])
     app.include_router(broadcasts.router, prefix="/broadcasts", tags=["broadcasts"])
