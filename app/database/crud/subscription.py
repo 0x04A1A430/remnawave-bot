@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, List, Tuple
+from typing import Iterable, Optional, List, Tuple
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -88,8 +88,35 @@ async def create_trial_subscription(
     db.add(subscription)
     await db.commit()
     await db.refresh(subscription)
-    
+
     logger.info(f"🎁 Создана триальная подписка для пользователя {user_id}")
+
+    if squad_uuid:
+        try:
+            from app.database.crud.server_squad import (
+                get_server_ids_by_uuids,
+                add_user_to_servers,
+            )
+
+            server_ids = await get_server_ids_by_uuids(db, [squad_uuid])
+            if server_ids:
+                await add_user_to_servers(db, server_ids)
+                logger.info(
+                    "📈 Обновлен счетчик пользователей для триального сквада %s",
+                    squad_uuid,
+                )
+            else:
+                logger.warning(
+                    "⚠️ Не удалось найти серверы для обновления счетчика (сквад %s)",
+                    squad_uuid,
+                )
+        except Exception as error:
+            logger.error(
+                "⚠️ Ошибка обновления счетчика пользователей для триального сквада %s: %s",
+                squad_uuid,
+                error,
+            )
+
     return subscription
 
 
@@ -253,6 +280,64 @@ async def remove_subscription_squad(
         logger.info(f"🚫 Из подписки пользователя {subscription.user_id} удален сквад {squad_uuid}")
     
     return subscription
+
+
+async def decrement_subscription_server_counts(
+    db: AsyncSession,
+    subscription: Optional[Subscription],
+    *,
+    subscription_servers: Optional[Iterable[SubscriptionServer]] = None,
+) -> None:
+    """Decrease server counters linked to the provided subscription."""
+
+    if not subscription:
+        return
+
+    server_ids: set[int] = set()
+
+    if subscription_servers is not None:
+        for sub_server in subscription_servers:
+            if sub_server and sub_server.server_squad_id is not None:
+                server_ids.add(sub_server.server_squad_id)
+    else:
+        try:
+            ids_from_links = await get_subscription_server_ids(db, subscription.id)
+            server_ids.update(ids_from_links)
+        except Exception as error:
+            logger.error(
+                "⚠️ Не удалось получить серверы подписки %s для уменьшения счетчика: %s",
+                subscription.id,
+                error,
+            )
+
+    connected_squads = list(subscription.connected_squads or [])
+    if connected_squads:
+        try:
+            from app.database.crud.server_squad import get_server_ids_by_uuids
+
+            squad_server_ids = await get_server_ids_by_uuids(db, connected_squads)
+            server_ids.update(squad_server_ids)
+        except Exception as error:
+            logger.error(
+                "⚠️ Не удалось сопоставить сквады подписки %s с серверами: %s",
+                subscription.id,
+                error,
+            )
+
+    if not server_ids:
+        return
+
+    try:
+        from app.database.crud.server_squad import remove_user_from_servers
+
+        await remove_user_from_servers(db, sorted(server_ids))
+    except Exception as error:
+        logger.error(
+            "⚠️ Ошибка уменьшения счетчика пользователей серверов %s для подписки %s: %s",
+            list(server_ids),
+            subscription.id,
+            error,
+        )
 
 
 async def update_subscription_autopay(

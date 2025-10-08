@@ -38,6 +38,7 @@ from app.utils.promo_offer import (
     build_test_access_hint,
 )
 from app.database.crud.user_message import get_random_active_message
+from app.database.crud.subscription import decrement_subscription_server_counts
 
 
 logger = logging.getLogger(__name__)
@@ -371,6 +372,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             from sqlalchemy import delete
             
             if user.subscription:
+                await decrement_subscription_server_counts(db, user.subscription)
                 await db.execute(
                     delete(SubscriptionServer).where(
                         SubscriptionServer.subscription_id == user.subscription.id
