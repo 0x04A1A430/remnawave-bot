@@ -1679,62 +1679,69 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 <tr>
 <td>11</td>
+<td><strong>@vitos_7771997</strong></td>
+<td>₽1,500</td>
+<td>За поддержку и доверие</td>
+</tr>
+
+<tr>
+<td>12</td>
 <td><strong>@fso404</strong></td>
 <td>₽1,000</td>
 <td>За поддержку и доверие</td>
 </tr>
 
 <tr>
-<td>12</td>
+<td>13</td>
 <td><strong>@edward_forix</strong></td>
 <td>₽1,000</td>
 <td>За поддержку и доверие</td>
 </tr>
 
 <tr>
-<td>13</td>
+<td>14</td>
 <td><strong>@Илья (@ispanec_nn)</strong></td>
 <td>$30</td>
 <td>За активное тестирование и фидбек</td>
 </tr>
 
 <tr>
-<td>14</td>
+<td>15</td>
 <td><strong>@SmartSystemCompany</strong></td>
 <td>₽600</td>
 <td>За поддержку и доверие</td>
 </tr>
 
 <tr>
-<td>15</td>
+<td>16</td>
 <td><strong>@DonMatteoRU</strong></td>
 <td>₽500</td>
 <td>За участие в развитии</td>
 </tr>
 
 <tr>
-<td>16</td>
+<td>17</td>
 <td><strong>@pedzeo</strong></td>
 <td>₽500</td>
 <td>За участие в развитии</td>
 </tr>
 
 <tr>
-<td>17</td>
+<td>18</td>
 <td><strong>@suzumuj</strong></td>
 <td>₽400</td>
 <td>За участие в развитии</td>
 </tr>
 
 <tr>
-<td>18</td>
+<td>19</td>
 <td><strong>@andrey_93rus</strong></td>
 <td>₽300</td>
 <td>За участие в развитии</td>
 </tr>
 
 <tr>
-<td>19</td>
+<td>20</td>
 <td><strong>@PhiLin58</strong></td>
 <td>₽300</td>
 <td>За участие в развитии</td>
