@@ -537,31 +537,6 @@ class UserService:
                     
                     if subscription_servers:
                         logger.info(f"🔄 Удаляем {len(subscription_servers)} связей подписка-сервер")
-
-                        try:
-                            from app.database.crud.server_squad import (
-                                get_server_ids_by_uuids,
-                                remove_user_from_servers,
-                            )
-
-                            removed_server_ids = {
-                                sub_server.server_squad_id for sub_server in subscription_servers
-                            }
-
-                            if user.subscription.connected_squads:
-                                removed_server_ids.update(
-                                    await get_server_ids_by_uuids(
-                                        db, user.subscription.connected_squads
-                                    )
-                                )
-
-                            if removed_server_ids:
-                                await remove_user_from_servers(db, list(removed_server_ids))
-                        except Exception as counter_error:
-                            logger.error(
-                                f"❌ Ошибка обновления счетчиков серверов при удалении пользователя {user.telegram_id}: {counter_error}"
-                            )
-
                         await db.execute(
                             delete(SubscriptionServer).where(
                                 SubscriptionServer.subscription_id == user.subscription.id
