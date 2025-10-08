@@ -371,6 +371,31 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             from sqlalchemy import delete
             
             if user.subscription:
+                try:
+                    from app.database.crud.subscription import get_subscription_server_ids
+                    from app.database.crud.server_squad import (
+                        get_server_ids_by_uuids,
+                        remove_user_from_servers,
+                    )
+
+                    removed_server_ids = set(
+                        await get_subscription_server_ids(db, user.subscription.id)
+                    )
+
+                    if user.subscription.connected_squads:
+                        removed_server_ids.update(
+                            await get_server_ids_by_uuids(
+                                db, user.subscription.connected_squads
+                            )
+                        )
+
+                    if removed_server_ids:
+                        await remove_user_from_servers(db, list(removed_server_ids))
+                except Exception as counter_error:
+                    logger.error(
+                        f"❌ Ошибка обновления счетчиков серверов при повторной регистрации {user.telegram_id}: {counter_error}"
+                    )
+
                 await db.execute(
                     delete(SubscriptionServer).where(
                         SubscriptionServer.subscription_id == user.subscription.id

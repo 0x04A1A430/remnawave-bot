@@ -1610,19 +1610,35 @@ async def apply_countries_changes(
                 description=f"Добавление стран к подписке: {', '.join(added_names)} на {charged_months} мес"
             )
 
-        if added:
-            from app.database.crud.server_squad import get_server_ids_by_uuids, add_user_to_servers
-            from app.database.crud.subscription import add_subscription_servers
+        if added or removed:
+            from app.database.crud.server_squad import (
+                get_server_ids_by_uuids,
+                add_user_to_servers,
+                remove_user_from_servers,
+            )
+            from app.database.crud.subscription import (
+                add_subscription_servers,
+                remove_subscription_servers,
+            )
 
-            added_server_ids = await get_server_ids_by_uuids(db, added)
+            added_server_ids = await get_server_ids_by_uuids(db, added) if added else []
+            removed_server_ids = await get_server_ids_by_uuids(db, removed) if removed else []
 
             if added_server_ids:
                 await add_subscription_servers(db, subscription, added_server_ids, added_server_prices)
                 await add_user_to_servers(db, added_server_ids)
 
                 logger.info(
-                    f"📊 Добавлены серверы с ценами за {charged_months} мес: {list(zip(added_server_ids, added_server_prices))}")
+                    f"📊 Добавлены серверы с ценами за {charged_months} мес: {list(zip(added_server_ids, added_server_prices))}"
+                )
 
+            if removed_server_ids:
+                await remove_subscription_servers(db, subscription.id, removed_server_ids)
+                await remove_user_from_servers(db, removed_server_ids)
+
+                logger.info(
+                    f"📉 Удалены серверы из подписки {subscription.id}: {removed_server_ids}"
+                )
         subscription.connected_squads = selected_countries
         subscription.updated_at = datetime.utcnow()
         await db.commit()
