@@ -1685,6 +1685,13 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 </tr>
 
 <tr>
+<td>11</td>
+<td><strong>@haxonate</strong></td>
+<td>₽1,500</td>
+<td>За поддержку и доверие</td>
+</tr>
+
+<tr>
 <td>12</td>
 <td><strong>@fso404</strong></td>
 <td>₽1,000</td>
