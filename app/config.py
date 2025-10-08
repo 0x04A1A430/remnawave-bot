@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import time
 from typing import List, Optional, Union, Dict
 from pydantic_settings import BaseSettings
-from pydantic import field_validator, Field
+from pydantic import field_validator, Field, AliasChoices
 from pathlib import Path
 
 
@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     REMNAWAVE_AUTH_TYPE: str = "api_key"
     REMNAWAVE_USER_DESCRIPTION_TEMPLATE: str = "Bot user: {full_name} {username}"
     REMNAWAVE_USER_DELETE_MODE: str = "delete"  # "delete" или "disable"
+
+    TIMEZONE: str = Field(default="UTC", validation_alias=AliasChoices("TIMEZONE", "TZ"))
     
     TRIAL_DURATION_DAYS: int = 3
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
@@ -413,6 +415,10 @@ class Settings(BaseSettings):
             "password": self.REMNAWAVE_PASSWORD,
             "auth_type": self.REMNAWAVE_AUTH_TYPE
         }
+
+    def get_timezone(self) -> str:
+        timezone_value = (self.TIMEZONE or "UTC").strip()
+        return timezone_value or "UTC"
 
     def get_pal24_sbp_button_text(self, fallback: str) -> str:
         value = (self.PAL24_SBP_BUTTON_TEXT or "").strip()
