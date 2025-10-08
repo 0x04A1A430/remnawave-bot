@@ -15,7 +15,11 @@ from app.external.remnawave_api import (
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.crud.user import get_users_list, get_user_by_telegram_id, update_user
-from app.database.crud.subscription import get_subscription_by_user_id, update_subscription_usage
+from app.database.crud.subscription import (
+    get_subscription_by_user_id,
+    update_subscription_usage,
+    decrement_subscription_server_counts,
+)
 from app.database.models import (
     User, SubscriptionServer, Transaction, ReferralEarning, 
     PromoCodeUse, SubscriptionStatus
@@ -621,7 +625,9 @@ class RemnaWaveService:
                             try:
                                 from sqlalchemy import delete
                                 from app.database.models import SubscriptionServer
-                                
+
+                                await decrement_subscription_server_counts(db, subscription)
+
                                 await db.execute(
                                     delete(SubscriptionServer).where(
                                         SubscriptionServer.subscription_id == subscription.id
@@ -1137,6 +1143,8 @@ class RemnaWaveService:
                 )
                 
                 if user.subscription:
+                    await decrement_subscription_server_counts(db, user.subscription)
+
                     await db.execute(
                         delete(SubscriptionServer).where(
                             SubscriptionServer.subscription_id == user.subscription.id
