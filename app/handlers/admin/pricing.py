@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Iterable, List, Tuple, Dict, Any
+from typing import Iterable, List, Tuple, Dict, Any, Optional
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.fsm.context import FSMContext
@@ -235,25 +235,42 @@ def _get_period_items(lang_code: str) -> List[PriceItem]:
     return items
 
 
+def _traffic_price_key(gb: int) -> Optional[str]:
+    if gb == 0:
+        return "PRICE_TRAFFIC_UNLIMITED"
+    if gb < 0:
+        return None
+    return f"PRICE_TRAFFIC_{gb}GB"
+
+
 def _get_traffic_items(lang_code: str) -> List[PriceItem]:
-    traffic_keys: Tuple[Tuple[int, str], ...] = (
-        (5, "PRICE_TRAFFIC_5GB"),
-        (10, "PRICE_TRAFFIC_10GB"),
-        (25, "PRICE_TRAFFIC_25GB"),
-        (50, "PRICE_TRAFFIC_50GB"),
-        (100, "PRICE_TRAFFIC_100GB"),
-        (250, "PRICE_TRAFFIC_250GB"),
-        (500, "PRICE_TRAFFIC_500GB"),
-        (1000, "PRICE_TRAFFIC_1000GB"),
-        (0, "PRICE_TRAFFIC_UNLIMITED"),
-    )
+    packages = settings.get_traffic_packages()
 
     items: List[PriceItem] = []
-    for gb, key in traffic_keys:
-        if hasattr(settings, key):
-            price = getattr(settings, key)
-            items.append((key, _format_traffic_label(gb, lang_code), price))
+    for package in packages:
+        if not package.get("enabled"):
+            continue
+
+        gb = int(package.get("gb", 0))
+        key = _traffic_price_key(gb)
+        if key is None:
+            continue
+
+        label = _format_traffic_label(gb, lang_code)
+        price = int(package.get("price", 0))
+        items.append((key, label, price))
+
     return items
+
+
+def _serialize_traffic_packages(packages: Iterable[Dict[str, Any]]) -> str:
+    serialized: List[str] = []
+    for package in packages:
+        gb = int(package.get("gb", 0))
+        price = int(package.get("price", 0))
+        enabled = "true" if bool(package.get("enabled")) else "false"
+        serialized.append(f"{gb}:{price}:{enabled}")
+    return ",".join(serialized)
 
 
 def _get_extra_items(lang_code: str) -> List[PriceItem]:
@@ -559,8 +576,7 @@ def _build_section(
         items = _get_period_items(lang_code)
         title = texts.t("ADMIN_PRICING_SECTION_PERIODS_TITLE", "🗓 Периоды подписки")
     elif section == "traffic":
-        items = _get_traffic_items(lang_code)
-        title = texts.t("ADMIN_PRICING_SECTION_TRAFFIC_TITLE", "📦 Пакеты трафика")
+        return _build_traffic_section(language)
     elif section == "extra":
         items = _get_extra_items(lang_code)
         title = texts.t("ADMIN_PRICING_SECTION_EXTRA_TITLE", "➕ Дополнительные опции")
@@ -599,6 +615,69 @@ def _build_section(
 
     keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
     return "\n".join(lines), keyboard
+
+
+def _build_traffic_section(language: str) -> Tuple[str, types.InlineKeyboardMarkup]:
+    texts = get_texts(language)
+    lang_code = _language_code(language)
+    title = texts.t("ADMIN_PRICING_SECTION_TRAFFIC_TITLE", "📦 Пакеты трафика")
+
+    packages = settings.get_traffic_packages()
+
+    lines: List[str] = [title, ""]
+
+    if packages:
+        hint_toggle = texts.t(
+            "ADMIN_PRICING_TRAFFIC_TOGGLE_HINT",
+            "Нажмите на значок, чтобы включить или выключить пакет.",
+        )
+        hint_edit = texts.t(
+            "ADMIN_PRICING_TRAFFIC_EDIT_HINT",
+            "Нажмите на цену, чтобы изменить её.",
+        )
+
+        for package in packages:
+            gb = int(package.get("gb", 0))
+            label = _format_traffic_label(gb, lang_code)
+            price = settings.format_price(int(package.get("price", 0)))
+            icon = "✅" if package.get("enabled") else "⚪️"
+            lines.append(f"{icon} {label} — {price}")
+
+        lines.append("")
+        lines.append(hint_toggle)
+        lines.append(hint_edit)
+    else:
+        lines.append(texts.t("ADMIN_PRICING_SECTION_EMPTY", "Нет доступных значений."))
+
+    keyboard_rows: List[List[types.InlineKeyboardButton]] = []
+
+    for package in packages:
+        gb = int(package.get("gb", 0))
+        label = _format_traffic_label(gb, lang_code, short=True)
+        icon = "✅" if package.get("enabled") else "⚪️"
+        toggle_button = types.InlineKeyboardButton(
+            text=f"{icon} {label}",
+            callback_data=f"admin_pricing_toggle_traffic:{gb}",
+        )
+
+        buttons: List[types.InlineKeyboardButton] = [toggle_button]
+
+        price_key = _traffic_price_key(gb)
+        if price_key:
+            price_text = settings.format_price(int(package.get("price", 0)))
+            buttons.append(
+                types.InlineKeyboardButton(
+                    text=f"💵 {price_text}",
+                    callback_data=f"admin_pricing_edit:traffic:{price_key}",
+                )
+            )
+
+        keyboard_rows.append(buttons)
+
+    keyboard_rows.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="admin_pricing")])
+
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    return "\n".join(lines).strip(), keyboard
 
 
 def _build_price_prompt(texts: Any, label: str, current_price: str) -> str:
@@ -1102,6 +1181,66 @@ async def toggle_period_option(
     await _render_message(callback.message, text, keyboard)
 
 
+@admin_required
+@error_handler
+async def toggle_traffic_package(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+) -> None:
+    try:
+        _, raw_value = callback.data.split(":", 1)
+        gb = int(raw_value)
+    except (ValueError, TypeError):
+        await callback.answer()
+        return
+
+    packages = settings.get_traffic_packages()
+    target_package: Optional[Dict[str, Any]] = None
+    for package in packages:
+        if int(package.get("gb", 0)) == gb:
+            target_package = package
+            break
+
+    if target_package is None:
+        await callback.answer()
+        return
+
+    texts = get_texts(db_user.language)
+    lang_code = _language_code(db_user.language)
+    label = _format_traffic_label(gb, lang_code)
+
+    enabled_packages = [pkg for pkg in packages if pkg.get("enabled")]
+
+    if target_package.get("enabled") and len(enabled_packages) == 1:
+        await callback.answer(
+            texts.t(
+                "ADMIN_PRICING_TRAFFIC_MIN",
+                "Должен оставаться хотя бы один активный пакет.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    target_package["enabled"] = not target_package.get("enabled")
+
+    action_text = (
+        texts.t("ADMIN_PRICING_TRAFFIC_ENABLED", "Пакет {label} включен.")
+        if target_package.get("enabled")
+        else texts.t("ADMIN_PRICING_TRAFFIC_DISABLED", "Пакет {label} отключен.")
+    )
+
+    serialized = _serialize_traffic_packages(packages)
+    await bot_configuration_service.set_value(db, "TRAFFIC_PACKAGES_CONFIG", serialized)
+    await db.commit()
+
+    await callback.answer(action_text.format(label=label))
+
+    text, keyboard = _build_traffic_section(db_user.language)
+    await _render_message(callback.message, text, keyboard)
+
+
 def register_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(
         show_pricing_menu,
@@ -1122,6 +1261,10 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.callback_query.register(
         toggle_setting,
         F.data.startswith("admin_pricing_toggle:"),
+    )
+    dp.callback_query.register(
+        toggle_traffic_package,
+        F.data.startswith("admin_pricing_toggle_traffic:"),
     )
     dp.callback_query.register(
         select_setting_choice,
