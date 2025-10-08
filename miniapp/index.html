@@ -959,6 +959,29 @@
             margin: 20px 0;
         }
 
+        .connect-scheme {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: -4px;
+            margin-bottom: 16px;
+            word-break: break-word;
+        }
+
+        .connect-scheme-label {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .connect-scheme-value {
+            background: rgba(var(--primary-rgb), 0.08);
+            color: var(--primary);
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+        }
+
         /* App Installation */
         .platform-selector {
             display: grid;
@@ -1005,6 +1028,7 @@
             margin-bottom: 12px;
             border: 2px solid var(--border-color);
             transition: all 0.3s ease;
+            cursor: pointer;
         }
 
         .app-card:hover {
@@ -1015,6 +1039,25 @@
         .app-card.featured {
             border-color: var(--primary);
             background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.05), rgba(var(--primary-rgb), 0.02));
+        }
+
+        .app-card.selected {
+            border-color: var(--primary);
+            box-shadow: var(--shadow-md);
+        }
+
+        .selected-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.08);
+            border-radius: 999px;
+            padding: 4px 10px;
+            margin-left: auto;
+            align-self: flex-start;
         }
 
         .app-header {
@@ -1408,6 +1451,11 @@
                 </button>
             </div>
 
+            <div class="connect-scheme hidden" id="connectSchemeContainer">
+                <span class="connect-scheme-label" data-i18n="button.connect.scheme_label">Connection scheme</span>
+                <code class="connect-scheme-value" id="connectSchemeValue"></code>
+            </div>
+
             <!-- Balance Card -->
             <div class="card balance-card" id="balanceCard">
                 <div class="balance-content">
@@ -1665,6 +1713,8 @@
                 'info.autopay': 'Auto-pay',
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
+                'button.connect.open_in': 'Open in {{app}}',
+                'button.connect.scheme_label': 'Connection scheme',
                 'button.copy': 'Copy subscription link',
                 'button.buy_subscription': 'Buy Subscription',
                 'card.balance.title': 'Balance',
@@ -1674,6 +1724,7 @@
                 'apps.title': 'Installation guide',
                 'apps.no_data': 'No installation guide available for this platform yet.',
                 'apps.featured': 'Recommended',
+                'apps.selected': 'Selected',
                 'apps.step.download': 'Download & install',
                 'apps.step.add': 'Add subscription',
                 'apps.step.connect': 'Connect & use',
@@ -1729,6 +1780,8 @@
                 'info.autopay': 'Автоплатеж',
                 'button.connect.default': 'Подключиться к VPN',
                 'button.connect.happ': 'Подключиться',
+                'button.connect.open_in': 'Открыть в {{app}}',
+                'button.connect.scheme_label': 'Схема подключения',
                 'button.copy': 'Скопировать ссылку подписки',
                 'button.buy_subscription': 'Купить подписку',
                 'card.balance.title': 'Баланс',
@@ -1738,6 +1791,7 @@
                 'apps.title': 'Инструкция по установке',
                 'apps.no_data': 'Для этой платформы инструкция пока недоступна.',
                 'apps.featured': 'Рекомендуем',
+                'apps.selected': 'Выбрано',
                 'apps.step.download': 'Скачать и установить',
                 'apps.step.add': 'Добавить подписку',
                 'apps.step.connect': 'Подключиться и пользоваться',
@@ -1869,6 +1923,7 @@
         let preferredLanguage = 'en';
         let languageLockedByUser = false;
         let currentErrorState = null;
+        const selectedAppIds = {};
 
         function resolveLanguage(lang) {
             if (!lang) {
@@ -1929,6 +1984,51 @@
             return div.innerHTML;
         }
 
+        function formatString(template, replacements = {}) {
+            if (typeof template !== 'string') {
+                return '';
+            }
+            return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key) => {
+                if (Object.prototype.hasOwnProperty.call(replacements, key)) {
+                    return replacements[key];
+                }
+                return '';
+            });
+        }
+
+        function base64Encode(value) {
+            if (typeof value !== 'string') {
+                return '';
+            }
+            try {
+                return btoa(value);
+            } catch (error) {
+                try {
+                    if (typeof TextEncoder !== 'undefined') {
+                        const encoder = new TextEncoder();
+                        const bytes = encoder.encode(value);
+                        let binary = '';
+                        bytes.forEach(byte => {
+                            binary += String.fromCharCode(byte);
+                        });
+                        return btoa(binary);
+                    }
+                    return btoa(unescape(encodeURIComponent(value)));
+                } catch (encoderError) {
+                    console.warn('Base64 encode failed:', encoderError);
+                    return '';
+                }
+            }
+        }
+
+        function extractScheme(value) {
+            if (typeof value !== 'string') {
+                return '';
+            }
+            const match = value.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//);
+            return match ? `${match[1]}://` : '';
+        }
+
         function normalizeUrl(value) {
             if (typeof value !== 'string') {
                 return null;
@@ -1952,6 +2052,51 @@
             }
 
             return null;
+        }
+
+        function getSelectedAppId(platformKey = getPlatformKey(currentPlatform)) {
+            return selectedAppIds[platformKey] || null;
+        }
+
+        function setSelectedAppId(appId, platformKey = getPlatformKey(currentPlatform)) {
+            if (!appId) {
+                delete selectedAppIds[platformKey];
+                return;
+            }
+            selectedAppIds[platformKey] = String(appId);
+        }
+
+        function getSelectedApp(platformKey = getPlatformKey(currentPlatform)) {
+            const apps = appsConfig?.[platformKey] || [];
+            const selectedId = getSelectedAppId(platformKey);
+            return apps.find(app => String(app.id) === String(selectedId)) || null;
+        }
+
+        function getAppScheme(app) {
+            if (!app) {
+                return '';
+            }
+            if (app.id === 'happ') {
+                const happLink = getHappCryptoLink() || userData?.happ_cryptolink_redirect_link || app.urlScheme || '';
+                return extractScheme(happLink) || extractScheme(app.urlScheme || '');
+            }
+            return extractScheme(app.urlScheme || '');
+        }
+
+        function updateConnectScheme() {
+            const container = document.getElementById('connectSchemeContainer');
+            const valueElement = document.getElementById('connectSchemeValue');
+            if (!container || !valueElement) {
+                return;
+            }
+            const scheme = getAppScheme(getSelectedApp());
+            if (scheme) {
+                valueElement.textContent = scheme;
+                container.classList.remove('hidden');
+            } else {
+                valueElement.textContent = '';
+                container.classList.add('hidden');
+            }
         }
 
         function updateErrorTexts() {
@@ -1996,9 +2141,27 @@
             if (!label) {
                 return;
             }
-            const useHappLabel = Boolean(getHappCryptoLink() || userData?.happ_cryptolink_redirect_link);
-            const key = useHappLabel ? 'button.connect.happ' : 'button.connect.default';
-            label.textContent = t(key);
+            const selectedApp = getSelectedApp();
+            if (!selectedApp) {
+                label.textContent = t('button.connect.default');
+                return;
+            }
+
+            const hasHappLink = Boolean(getHappCryptoLink() || userData?.happ_cryptolink_redirect_link);
+            if (selectedApp.id === 'happ' && hasHappLink) {
+                label.textContent = t('button.connect.happ');
+                return;
+            }
+
+            const template = t('button.connect.open_in');
+            const appName = String(selectedApp.name || t('values.not_available'));
+            if (!template || template === 'button.connect.open_in') {
+                label.textContent = `Open in ${appName}`.trim();
+                return;
+            }
+
+            const formatted = formatString(template, { app: appName });
+            label.textContent = formatted || `${template} ${appName}`.trim();
         }
 
         function refreshAfterLanguageChange() {
@@ -2009,6 +2172,7 @@
                 updateConnectButtonLabel();
             }
             renderApps();
+            updateConnectButtonLabel();
             updateActionButtons();
         }
 
@@ -2336,27 +2500,46 @@
                 return;
             }
 
-            const apps = getAppsForCurrentPlatform();
+            const platformKey = getPlatformKey(currentPlatform);
+            const apps = appsConfig?.[platformKey] || [];
 
             if (!apps.length) {
                 container.innerHTML = `<div class="step-description">${escapeHtml(t('apps.no_data'))}</div>`;
+                updateConnectScheme();
                 return;
+            }
+
+            let selectedAppId = getSelectedAppId(platformKey);
+            if (!apps.some(app => String(app.id) === String(selectedAppId))) {
+                const defaultApp = apps.find(app => app.isFeatured) || apps[0];
+                selectedAppId = defaultApp ? String(defaultApp.id) : null;
+                if (selectedAppId) {
+                    setSelectedAppId(selectedAppId, platformKey);
+                } else {
+                    setSelectedAppId(null, platformKey);
+                }
             }
 
             container.innerHTML = apps.map(app => {
                 const iconChar = (app.name?.[0] || 'A').toUpperCase();
                 const appName = escapeHtml(app.name || 'App');
+                const appId = String(app.id ?? '');
                 const featuredBadge = app.isFeatured
                     ? `<span class="featured-badge">${escapeHtml(t('apps.featured'))}</span>`
                     : '';
+                const isSelected = String(app.id) === String(selectedAppId);
+                const selectedBadge = isSelected
+                    ? `<span class="selected-indicator">${escapeHtml(t('apps.selected'))}</span>`
+                    : '';
                 return `
-                    <div class="app-card ${app.isFeatured ? 'featured' : ''}">
+                    <div class="app-card ${app.isFeatured ? 'featured' : ''} ${isSelected ? 'selected' : ''}" data-app-id="${escapeHtml(appId)}">
                         <div class="app-header">
                             <div class="app-icon">${escapeHtml(iconChar)}</div>
                             <div class="app-info">
                                 <div class="app-name">${appName}</div>
                                 ${featuredBadge}
                             </div>
+                            ${selectedBadge}
                         </div>
                         <div class="app-steps">
                             ${renderAppSteps(app)}
@@ -2364,6 +2547,8 @@
                     </div>
                 `;
             }).join('');
+
+            updateConnectScheme();
         }
 
         function renderAppSteps(app) {
@@ -2717,45 +2902,45 @@
                 return null;
             }
 
-            const happCryptoLink = getHappCryptoLink();
-            const isPC = currentPlatform === 'pc' || (!['ios', 'android', 'tv'].includes(currentPlatform));
-            
-            // For PC, prefer direct subscription URL if no Happ redirect link
-            if (isPC) {
-                if (userData.happ_cryptolink_redirect_link) {
-                    return userData.happ_cryptolink_redirect_link;
-                }
+            const selectedApp = getSelectedApp();
+            const subscriptionUrl = getCurrentSubscriptionUrl();
+
+            if (!selectedApp) {
+                return subscriptionUrl || null;
+            }
+
+            if (selectedApp.id === 'happ') {
+                const happCryptoLink = getHappCryptoLink();
                 if (happCryptoLink) {
                     return happCryptoLink;
                 }
-                // Return plain subscription URL for PC
-                return getCurrentSubscriptionUrl();
-            }
-            
-            // Original logic for mobile platforms
-            if (happCryptoLink) {
-                return happCryptoLink;
+                if (userData.happ_cryptolink_redirect_link) {
+                    return userData.happ_cryptolink_redirect_link;
+                }
+                if (selectedApp.urlScheme && subscriptionUrl) {
+                    return `${selectedApp.urlScheme}${subscriptionUrl}`;
+                }
+                if (userData?.happ_link) {
+                    return userData.happ_link;
+                }
+                return subscriptionUrl || null;
             }
 
-            if (userData.happ_cryptolink_redirect_link) {
-                return userData.happ_cryptolink_redirect_link;
-            }
-
-            const subscriptionUrl = getCurrentSubscriptionUrl();
             if (!subscriptionUrl) {
                 return null;
             }
 
-            const apps = getAppsForCurrentPlatform();
-            const featuredApp = apps.find(app => app.isFeatured) || apps[0];
+            let payload = subscriptionUrl;
+            if (selectedApp.isNeedBase64Encoding) {
+                const encoded = base64Encode(subscriptionUrl);
+                payload = encoded || subscriptionUrl;
+            }
 
-            if (featuredApp?.urlScheme) {
-                return `${featuredApp.urlScheme}${subscriptionUrl}`;
+            if (selectedApp.urlScheme) {
+                return `${selectedApp.urlScheme}${payload}`;
             }
-            if (userData?.happ_link && featuredApp?.id === 'happ') {
-                return userData.happ_link;
-            }
-            return subscriptionUrl;
+
+            return payload;
         }
 
         function openExternalLink(link, options = {}) {
@@ -2926,6 +3111,8 @@
                 const hasUrl = Boolean(subscriptionUrl);
                 copyBtn.disabled = !hasUrl || !navigator.clipboard;
             }
+
+            updateConnectScheme();
         }
 
         function showPopup(message, title = 'Info') {
@@ -2958,8 +3145,28 @@
                 currentPlatform = btn.dataset.platform;
                 setActivePlatformButton();
                 renderApps();
+                updateConnectButtonLabel();
                 updateActionButtons();
             });
+        });
+
+        document.getElementById('appsContainer')?.addEventListener('click', event => {
+            const card = event.target.closest('.app-card');
+            if (!card) {
+                return;
+            }
+            const appId = card.dataset.appId;
+            if (!appId) {
+                return;
+            }
+            const platformKey = getPlatformKey(currentPlatform);
+            if (appId === getSelectedAppId(platformKey)) {
+                return;
+            }
+            setSelectedAppId(appId, platformKey);
+            renderApps();
+            updateConnectButtonLabel();
+            updateActionButtons();
         });
 
         document.getElementById('connectBtn')?.addEventListener('click', () => {
