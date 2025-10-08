@@ -803,5 +803,13 @@
   "ADMIN_SUPPORT_EDIT_DESCRIPTION_CONTACT_HINT": "Добавьте в описание при необходимости.",
   "ADMIN_SUPPORT_DESCRIPTION_UPDATED": "✅ Описание обновлено.",
   "ADMIN_SUPPORT_DESCRIPTION_SENT": "Текст отправлен ниже",
-  "ADMIN_SUPPORT_MESSAGE_DELETED": "Сообщение удалено"
+  "ADMIN_SUPPORT_MESSAGE_DELETED": "Сообщение удалено",
+  "ADMIN_PRICING_BUTTON_TRAFFIC_OPTIONS": "🚦 Отображение пакетов",
+  "ADMIN_PRICING_TRAFFIC_PACKAGE_ENABLED": "Пакет включен.",
+  "ADMIN_PRICING_TRAFFIC_PACKAGE_DISABLED": "Пакет отключен.",
+  "ADMIN_PRICING_TRAFFIC_PACKAGE_MIN": "Должен оставаться хотя бы один пакет.",
+  "ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_TITLE": "🚦 Отображение пакетов трафика",
+  "ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_ACTIVE": "Активные пакеты: {items}",
+  "ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_NONE": "Активных пакетов нет.",
+  "ADMIN_PRICING_SECTION_TRAFFIC_OPTIONS_PROMPT": "Нажмите на пакет, чтобы включить или выключить его отображение."
 }
