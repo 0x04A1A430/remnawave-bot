@@ -403,23 +403,34 @@ async def get_trial_eligible_server_squads(
 
     query = select(ServerSquad).where(ServerSquad.is_trial_eligible.is_(True))
 
-    if not include_unavailable:
-        query = query.where(ServerSquad.is_available.is_(True))
-
     result = await db.execute(query)
     squads = result.scalars().unique().all()
 
     if include_unavailable:
         return squads
 
-    available_squads: List[ServerSquad] = []
+    preferred_squads: List[ServerSquad] = []
+    fallback_squads: List[ServerSquad] = []
 
     for squad in squads:
         current_users = squad.current_users or 0
-        if squad.max_users is None or current_users < squad.max_users:
-            available_squads.append(squad)
+        is_full = squad.max_users is not None and current_users >= squad.max_users
 
-    return available_squads or squads
+        if is_full:
+            continue
+
+        if squad.is_available:
+            preferred_squads.append(squad)
+        else:
+            fallback_squads.append(squad)
+
+    if preferred_squads:
+        return preferred_squads
+
+    if fallback_squads:
+        return fallback_squads
+
+    return squads
 
 
 async def choose_random_trial_server_squad(
