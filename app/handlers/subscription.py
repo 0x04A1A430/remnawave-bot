@@ -2501,9 +2501,20 @@ async def handle_extend_subscription(
             traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
             total_traffic_price = (traffic_price_per_month - traffic_discount_per_month) * months_in_period
 
+            total_original_price = (
+                base_price_original
+                + servers_price_per_month * months_in_period
+                + devices_price_per_month * months_in_period
+                + traffic_price_per_month * months_in_period
+            )
+
             price = base_price + total_servers_price + total_devices_price + total_traffic_price
             promo_component = _apply_promo_offer_discount(db_user, price)
-            renewal_prices[days] = promo_component["discounted"]
+
+            renewal_prices[days] = {
+                "final": promo_component["discounted"],
+                "original": total_original_price,
+            }
 
         except Exception as e:
             logger.error(f"Ошибка расчета цены для периода {days}: {e}")
@@ -2516,9 +2527,35 @@ async def handle_extend_subscription(
     prices_text = ""
 
     for days in available_periods:
-        if days in renewal_prices:
-            period_display = format_period_description(days, db_user.language)
-            prices_text += f"📅 {period_display} - {texts.format_price(renewal_prices[days])}\n"
+        if days not in renewal_prices:
+            continue
+
+        price_info = renewal_prices[days]
+
+        if isinstance(price_info, dict):
+            final_price = price_info.get("final")
+            if final_price is None:
+                final_price = price_info.get("original", 0)
+            original_price = price_info.get("original", final_price)
+        else:
+            final_price = price_info
+            original_price = final_price
+
+        has_discount = original_price > final_price
+
+        period_display = format_period_description(days, db_user.language)
+
+        if has_discount:
+            prices_text += (
+                "📅 "
+                f"{period_display} - <s>{texts.format_price(original_price)}</s> "
+                f"{texts.format_price(final_price)}\n"
+            )
+        else:
+            prices_text += (
+                "📅 "
+                f"{period_display} - {texts.format_price(final_price)}\n"
+            )
 
     promo_discounts_text = _build_promo_group_discount_text(
         db_user,

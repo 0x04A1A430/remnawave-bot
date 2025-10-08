@@ -1704,14 +1704,25 @@ def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) ->
     available_periods = settings.get_available_renewal_periods()
 
     for days in available_periods:
-        if days in prices:
-            period_display = format_period_description(days, language)
-            keyboard.append([
-                InlineKeyboardButton(
-                    text=f"📅 {period_display} - {texts.format_price(prices[days])}",
-                    callback_data=f"extend_period_{days}"
-                )
-            ])
+        if days not in prices:
+            continue
+
+        price_info = prices[days]
+
+        if isinstance(price_info, dict):
+            final_price = price_info.get("final")
+            if final_price is None:
+                final_price = price_info.get("original", 0)
+        else:
+            final_price = price_info
+
+        period_display = format_period_description(days, language)
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"📅 {period_display} - {texts.format_price(final_price)}",
+                callback_data=f"extend_period_{days}"
+            )
+        ])
 
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
