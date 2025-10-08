@@ -1609,6 +1609,13 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 <tr>
 <td>🥇</td>
+<td><strong>@SmartSystemCompany</strong></td>
+<td>₽8,500</td>
+<td>За щедрую поддержку и вклад в развитие</td>
+</tr>
+
+<tr>
+<td>🥈</td>
 <td><strong>@pilot_737800</strong></td>
 <td>₽7,750</td>
 <td>За веру в проект с самого начала</td>
@@ -1685,38 +1692,31 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 </tr>
 
 <tr>
-<td>11</td>
+<td>12</td>
 <td><strong>@haxonate</strong></td>
 <td>₽1,500</td>
 <td>За поддержку и доверие</td>
 </tr>
 
 <tr>
-<td>12</td>
+<td>13</td>
 <td><strong>@fso404</strong></td>
 <td>₽1,000</td>
 <td>За поддержку и доверие</td>
 </tr>
 
 <tr>
-<td>13</td>
+<td>14</td>
 <td><strong>@edward_forix</strong></td>
 <td>₽1,000</td>
 <td>За поддержку и доверие</td>
 </tr>
 
 <tr>
-<td>14</td>
+<td>15</td>
 <td><strong>@Илья (@ispanec_nn)</strong></td>
 <td>$30</td>
 <td>За активное тестирование и фидбек</td>
-</tr>
-
-<tr>
-<td>15</td>
-<td><strong>@SmartSystemCompany</strong></td>
-<td>₽600</td>
-<td>За поддержку и доверие</td>
 </tr>
 
 <tr>
