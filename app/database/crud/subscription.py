@@ -110,7 +110,14 @@ async def extend_subscription(
     logger.info(f"🔄 Продление подписки {subscription.id} на {days} дней")
     logger.info(f"📊 Текущие параметры: статус={subscription.status}, окончание={subscription.end_date}")
     
-    if subscription.end_date > current_time:
+    if days < 0:
+        subscription.end_date = subscription.end_date + timedelta(days=days)
+        logger.info(
+            "📅 Срок подписки уменьшен на %s дней, новая дата окончания: %s",
+            abs(days),
+            subscription.end_date,
+        )
+    elif subscription.end_date > current_time:
         subscription.end_date = subscription.end_date + timedelta(days=days)
         logger.info(f"📅 Подписка активна, добавляем {days} дней к текущей дате окончания")
     else:
@@ -133,7 +140,7 @@ async def extend_subscription(
             if subscription.user:
                 subscription.user.has_had_paid_subscription = True
 
-    if subscription.status == SubscriptionStatus.EXPIRED.value:
+    if subscription.status == SubscriptionStatus.EXPIRED.value and days > 0:
         subscription.status = SubscriptionStatus.ACTIVE.value
         logger.info(f"🔄 Статус изменён с EXPIRED на ACTIVE")
 
