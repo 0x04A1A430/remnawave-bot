@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 from typing import Dict, List, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import re
 
 from app.config import settings
@@ -51,6 +52,8 @@ class RemnaWaveService:
                 password=auth_params.get("password")
             )
 
+        self._timezone = self._resolve_timezone()
+
     @property
     def is_configured(self) -> bool:
         return self._config_error is None
@@ -72,33 +75,51 @@ class RemnaWaveService:
         async with self.api as api:
             yield api
 
+    def _resolve_timezone(self) -> ZoneInfo:
+        timezone_name = settings.get_timezone()
+        try:
+            return ZoneInfo(timezone_name)
+        except Exception:
+            logger.warning(
+                f"⚠️ Не удалось загрузить временную зону '{timezone_name}', используется UTC"
+            )
+            return ZoneInfo("UTC")
+
+    def _default_expire_at(self) -> datetime:
+        localized = datetime.now(self._timezone) + timedelta(days=30)
+        return localized.astimezone(timezone.utc).replace(tzinfo=None)
+
     def _parse_remnawave_date(self, date_str: str) -> datetime:
         if not date_str:
-            return datetime.utcnow() + timedelta(days=30)
-        
+            return self._default_expire_at()
+
         try:
-            
             cleaned_date = date_str.strip()
-            
+
             if cleaned_date.endswith('Z'):
                 cleaned_date = cleaned_date[:-1] + '+00:00'
-            
+
             if '+00:00+00:00' in cleaned_date:
                 cleaned_date = cleaned_date.replace('+00:00+00:00', '+00:00')
-            
+
             cleaned_date = re.sub(r'(\+\d{2}:\d{2})\+\d{2}:\d{2}$', r'\1', cleaned_date)
-            
+
             parsed_date = datetime.fromisoformat(cleaned_date)
-            
-            if parsed_date.tzinfo is not None:
-                parsed_date = parsed_date.replace(tzinfo=None)
-            
-            logger.debug(f"Успешно распарсена дата: {date_str} -> {parsed_date}")
-            return parsed_date
-            
+
+            if parsed_date.tzinfo is None:
+                parsed_date = parsed_date.replace(tzinfo=self._timezone)
+
+            utc_date = parsed_date.astimezone(timezone.utc)
+            result = utc_date.replace(tzinfo=None)
+
+            logger.debug(f"Успешно распарсена дата: {date_str} -> {result}")
+            return result
+
         except Exception as e:
-            logger.warning(f"⚠️ Не удалось распарсить дату '{date_str}': {e}. Используем дефолтную дату.")
-            return datetime.utcnow() + timedelta(days=30)
+            logger.warning(
+                f"⚠️ Не удалось распарсить дату '{date_str}': {e}. Используем дефолтную дату."
+            )
+            return self._default_expire_at()
     
     async def get_system_statistics(self) -> Dict[str, Any]:
             try:
