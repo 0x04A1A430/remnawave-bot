@@ -149,36 +149,6 @@ async def create_paid_subscription(
     await db.refresh(subscription)
     
     logger.info(f"💎 Создана платная подписка для пользователя {user_id}")
-
-    squad_uuids = list(connected_squads or [])
-    if squad_uuids:
-        try:
-            from app.database.crud.server_squad import (
-                get_server_ids_by_uuids,
-                add_user_to_servers,
-            )
-
-            server_ids = await get_server_ids_by_uuids(db, squad_uuids)
-            if server_ids:
-                await add_user_to_servers(db, server_ids)
-                logger.info(
-                    "📈 Обновлен счетчик пользователей для платной подписки пользователя %s (сквады: %s)",
-                    user_id,
-                    squad_uuids,
-                )
-            else:
-                logger.warning(
-                    "⚠️ Не удалось найти серверы для обновления счетчика платной подписки пользователя %s (сквады: %s)",
-                    user_id,
-                    squad_uuids,
-                )
-        except Exception as error:
-            logger.error(
-                "⚠️ Ошибка обновления счетчика пользователей серверов для платной подписки пользователя %s: %s",
-                user_id,
-                error,
-            )
-
     return subscription
 
 
