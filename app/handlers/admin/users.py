@@ -3260,13 +3260,33 @@ async def _grant_paid_subscription(db: AsyncSession, user_id: int, days: int, ad
             logger.error(f"У пользователя {user_id} уже есть подписка")
             return False
         
+        trial_squads: list[str] = []
+
+        try:
+            from app.database.crud.server_squad import get_random_trial_squad_uuid
+
+            trial_uuid = await get_random_trial_squad_uuid(
+                db,
+                getattr(settings, "TRIAL_SQUAD_UUID", None),
+            )
+            if trial_uuid:
+                trial_squads = [trial_uuid]
+        except Exception as error:
+            logger.error(
+                "Не удалось подобрать сквад при выдаче подписки админом %s: %s",
+                admin_id,
+                error,
+            )
+            if getattr(settings, "TRIAL_SQUAD_UUID", None):
+                trial_squads = [settings.TRIAL_SQUAD_UUID]
+
         subscription = await create_paid_subscription(
             db=db,
             user_id=user_id,
             duration_days=days,
             traffic_limit_gb=settings.DEFAULT_TRAFFIC_LIMIT_GB,
             device_limit=settings.DEFAULT_DEVICE_LIMIT,
-            connected_squads=[settings.TRIAL_SQUAD_UUID] if settings.TRIAL_SQUAD_UUID else []
+            connected_squads=trial_squads
         )
         
         subscription_service = SubscriptionService()

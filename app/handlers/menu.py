@@ -29,6 +29,7 @@ from app.services.subscription_checkout_service import (
 )
 from app.utils.photo_message import edit_or_answer_photo
 from app.services.support_settings_service import SupportSettingsService
+from app.services.main_menu_button_service import MainMenuButtonService
 from app.utils.promo_offer import (
     build_promo_offer_hint,
     build_test_access_hint,
@@ -167,6 +168,13 @@ async def show_main_menu(
         db_user.telegram_id
     )
 
+    custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+        db,
+        is_admin=is_admin,
+        has_active_subscription=has_active_subscription,
+        subscription_is_active=subscription_is_active,
+    )
+
     await edit_or_answer_photo(
         callback=callback,
         caption=menu_text,
@@ -180,6 +188,7 @@ async def show_main_menu(
             balance_kopeks=db_user.balance_kopeks,
             subscription=db_user.subscription,
             show_resume_checkout=show_resume_checkout,
+            custom_buttons=custom_buttons,
         ),
         parse_mode="HTML",
     )
@@ -871,6 +880,13 @@ async def handle_back_to_menu(
         db_user.telegram_id
     )
 
+    custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+        db,
+        is_admin=is_admin,
+        has_active_subscription=has_active_subscription,
+        subscription_is_active=subscription_is_active,
+    )
+
     await edit_or_answer_photo(
         callback=callback,
         caption=menu_text,
@@ -884,6 +900,7 @@ async def handle_back_to_menu(
             balance_kopeks=db_user.balance_kopeks,
             subscription=db_user.subscription,
             show_resume_checkout=show_resume_checkout,
+            custom_buttons=custom_buttons,
         ),
         parse_mode="HTML",
     )

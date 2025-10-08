@@ -1062,6 +1062,78 @@ async def create_promo_offer_templates_table():
         return False
 
 
+async def create_main_menu_buttons_table() -> bool:
+    table_exists = await check_table_exists('main_menu_buttons')
+    if table_exists:
+        logger.info("Таблица main_menu_buttons уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE main_menu_buttons (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    text VARCHAR(64) NOT NULL,
+                    action_type VARCHAR(20) NOT NULL,
+                    action_value TEXT NOT NULL,
+                    visibility VARCHAR(20) NOT NULL DEFAULT 'all',
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    display_order INTEGER NOT NULL DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_main_menu_buttons_order ON main_menu_buttons(display_order, id);
+                """
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE IF NOT EXISTS main_menu_buttons (
+                    id SERIAL PRIMARY KEY,
+                    text VARCHAR(64) NOT NULL,
+                    action_type VARCHAR(20) NOT NULL,
+                    action_value TEXT NOT NULL,
+                    visibility VARCHAR(20) NOT NULL DEFAULT 'all',
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    display_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_main_menu_buttons_order ON main_menu_buttons(display_order, id);
+                """
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE IF NOT EXISTS main_menu_buttons (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    text VARCHAR(64) NOT NULL,
+                    action_type VARCHAR(20) NOT NULL,
+                    action_value TEXT NOT NULL,
+                    visibility VARCHAR(20) NOT NULL DEFAULT 'all',
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    display_order INT NOT NULL DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX ix_main_menu_buttons_order ON main_menu_buttons(display_order, id);
+                """
+            else:
+                logger.error(f"Неподдерживаемый тип БД для таблицы main_menu_buttons: {db_type}")
+                return False
+
+            await conn.execute(text(create_sql))
+
+        logger.info("✅ Таблица main_menu_buttons успешно создана")
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы main_menu_buttons: {e}")
+        return False
+
+
 async def create_promo_offer_logs_table() -> bool:
     table_exists = await check_table_exists('promo_offer_logs')
     if table_exists:
@@ -2367,6 +2439,41 @@ async def ensure_server_promo_groups_setup() -> bool:
         )
         return False
 
+
+async def add_server_trial_flag_column() -> bool:
+    column_exists = await check_column_exists('server_squads', 'is_trial_eligible')
+    if column_exists:
+        logger.info("Колонка is_trial_eligible уже существует в server_squads")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                column_def = 'BOOLEAN NOT NULL DEFAULT 0'
+            elif db_type == 'postgresql':
+                column_def = 'BOOLEAN NOT NULL DEFAULT FALSE'
+            else:
+                column_def = 'BOOLEAN NOT NULL DEFAULT FALSE'
+
+            await conn.execute(
+                text(f"ALTER TABLE server_squads ADD COLUMN is_trial_eligible {column_def}")
+            )
+
+            if db_type == 'postgresql':
+                await conn.execute(
+                    text("ALTER TABLE server_squads ALTER COLUMN is_trial_eligible SET DEFAULT FALSE")
+                )
+
+        logger.info("✅ Добавлена колонка is_trial_eligible в server_squads")
+        return True
+
+    except Exception as error:
+        logger.error(f"Ошибка добавления колонки is_trial_eligible: {error}")
+        return False
+
+
 async def create_system_settings_table() -> bool:
     table_exists = await check_table_exists("system_settings")
     if table_exists:
@@ -2802,6 +2909,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей web_api_tokens")
 
+        logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ ДЛЯ ТРИАЛЬНЫХ СКВАДОВ ===")
+        trial_column_ready = await add_server_trial_flag_column()
+        if trial_column_ready:
+            logger.info("✅ Колонка is_trial_eligible готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой is_trial_eligible")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PRIVACY_POLICIES ===")
         privacy_policies_ready = await create_privacy_policies_table()
         if privacy_policies_ready:
@@ -2901,6 +3015,13 @@ async def run_universal_migration():
             logger.info("✅ Таблица promo_offer_templates готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей promo_offer_templates")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ MAIN_MENU_BUTTONS ===")
+        main_menu_buttons_created = await create_main_menu_buttons_table()
+        if main_menu_buttons_created:
+            logger.info("✅ Таблица main_menu_buttons готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей main_menu_buttons")
 
         template_columns_ready = await ensure_promo_offer_template_active_duration_column()
         if template_columns_ready:
@@ -3116,6 +3237,7 @@ async def check_migration_status():
             "subscription_conversions_table": False,
             "promo_groups_table": False,
             "server_promo_groups_table": False,
+            "server_squads_trial_column": False,
             "privacy_policies_table": False,
             "public_offers_table": False,
             "users_promo_group_column": False,
@@ -3147,6 +3269,7 @@ async def check_migration_status():
         status["subscription_conversions_table"] = await check_table_exists('subscription_conversions')
         status["promo_groups_table"] = await check_table_exists('promo_groups')
         status["server_promo_groups_table"] = await check_table_exists('server_squad_promo_groups')
+        status["server_squads_trial_column"] = await check_column_exists('server_squads', 'is_trial_eligible')
 
         status["discount_offers_table"] = await check_table_exists('discount_offers')
         status["discount_offers_effect_column"] = await check_column_exists('discount_offers', 'effect_type')
@@ -3201,6 +3324,7 @@ async def check_migration_status():
             "subscription_duplicates": "Отсутствие дубликатов подписок",
             "promo_groups_table": "Таблица промо-групп",
             "server_promo_groups_table": "Связи серверов и промогрупп",
+            "server_squads_trial_column": "Колонка триального назначения у серверов",
             "users_promo_group_column": "Колонка promo_group_id у пользователей",
             "promo_groups_period_discounts_column": "Колонка period_discounts у промо-групп",
             "promo_groups_auto_assign_column": "Колонка auto_assign_total_spent_kopeks у промо-групп",

@@ -79,6 +79,17 @@ class PaymentMethod(Enum):
     PAL24 = "pal24"
     MANUAL = "manual"
 
+
+class MainMenuButtonActionType(Enum):
+    URL = "url"
+    MINI_APP = "mini_app"
+
+
+class MainMenuButtonVisibility(Enum):
+    ALL = "all"
+    ADMINS = "admins"
+    SUBSCRIBERS = "subscribers"
+
 class YooKassaPayment(Base):
     __tablename__ = "yookassa_payments"
     
@@ -963,6 +974,7 @@ class ServerSquad(Base):
     country_code = Column(String(5), nullable=True)
     
     is_available = Column(Boolean, default=True)
+    is_trial_eligible = Column(Boolean, default=False, nullable=False)
     
     price_kopeks = Column(Integer, default=0)
     
@@ -1253,3 +1265,41 @@ class WebApiToken(Base):
     def __repr__(self) -> str:
         status = "active" if self.is_active else "revoked"
         return f"<WebApiToken id={self.id} name='{self.name}' status={status}>"
+
+
+class MainMenuButton(Base):
+    __tablename__ = "main_menu_buttons"
+
+    id = Column(Integer, primary_key=True, index=True)
+    text = Column(String(64), nullable=False)
+    action_type = Column(String(20), nullable=False)
+    action_value = Column(Text, nullable=False)
+    visibility = Column(String(20), nullable=False, default=MainMenuButtonVisibility.ALL.value)
+    is_active = Column(Boolean, nullable=False, default=True)
+    display_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index("ix_main_menu_buttons_order", "display_order", "id"),
+    )
+
+    @property
+    def action_type_enum(self) -> MainMenuButtonActionType:
+        try:
+            return MainMenuButtonActionType(self.action_type)
+        except ValueError:
+            return MainMenuButtonActionType.URL
+
+    @property
+    def visibility_enum(self) -> MainMenuButtonVisibility:
+        try:
+            return MainMenuButtonVisibility(self.visibility)
+        except ValueError:
+            return MainMenuButtonVisibility.ALL
+
+    def __repr__(self) -> str:
+        return (
+            f"<MainMenuButton id={self.id} text='{self.text}' "
+            f"action={self.action_type} visibility={self.visibility} active={self.is_active}>"
+        )
