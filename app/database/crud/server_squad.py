@@ -536,7 +536,9 @@ async def add_user_to_servers(
             await db.execute(
                 update(ServerSquad)
                 .where(ServerSquad.id == server_id)
-                .values(current_users=ServerSquad.current_users + 1)
+                .values(
+                    current_users=func.coalesce(ServerSquad.current_users, 0) + 1
+                )
             )
         
         await db.commit()
@@ -559,7 +561,11 @@ async def remove_user_from_servers(
             await db.execute(
                 update(ServerSquad)
                 .where(ServerSquad.id == server_id)
-                .values(current_users=func.greatest(ServerSquad.current_users - 1, 0))
+                .values(
+                    current_users=func.greatest(
+                        func.coalesce(ServerSquad.current_users, 0) - 1, 0
+                    )
+                )
             )
         
         await db.commit()
