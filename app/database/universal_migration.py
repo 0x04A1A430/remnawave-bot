@@ -1062,6 +1062,78 @@ async def create_promo_offer_templates_table():
         return False
 
 
+async def create_main_menu_buttons_table() -> bool:
+    table_exists = await check_table_exists('main_menu_buttons')
+    if table_exists:
+        logger.info("Таблица main_menu_buttons уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE main_menu_buttons (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    text VARCHAR(64) NOT NULL,
+                    action_type VARCHAR(20) NOT NULL,
+                    action_value TEXT NOT NULL,
+                    visibility VARCHAR(20) NOT NULL DEFAULT 'all',
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    display_order INTEGER NOT NULL DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_main_menu_buttons_order ON main_menu_buttons(display_order, id);
+                """
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE IF NOT EXISTS main_menu_buttons (
+                    id SERIAL PRIMARY KEY,
+                    text VARCHAR(64) NOT NULL,
+                    action_type VARCHAR(20) NOT NULL,
+                    action_value TEXT NOT NULL,
+                    visibility VARCHAR(20) NOT NULL DEFAULT 'all',
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    display_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_main_menu_buttons_order ON main_menu_buttons(display_order, id);
+                """
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE IF NOT EXISTS main_menu_buttons (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    text VARCHAR(64) NOT NULL,
+                    action_type VARCHAR(20) NOT NULL,
+                    action_value TEXT NOT NULL,
+                    visibility VARCHAR(20) NOT NULL DEFAULT 'all',
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    display_order INT NOT NULL DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX ix_main_menu_buttons_order ON main_menu_buttons(display_order, id);
+                """
+            else:
+                logger.error(f"Неподдерживаемый тип БД для таблицы main_menu_buttons: {db_type}")
+                return False
+
+            await conn.execute(text(create_sql))
+
+        logger.info("✅ Таблица main_menu_buttons успешно создана")
+        return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы main_menu_buttons: {e}")
+        return False
+
+
 async def create_promo_offer_logs_table() -> bool:
     table_exists = await check_table_exists('promo_offer_logs')
     if table_exists:
@@ -2901,6 +2973,13 @@ async def run_universal_migration():
             logger.info("✅ Таблица promo_offer_templates готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей promo_offer_templates")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ MAIN_MENU_BUTTONS ===")
+        main_menu_buttons_created = await create_main_menu_buttons_table()
+        if main_menu_buttons_created:
+            logger.info("✅ Таблица main_menu_buttons готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей main_menu_buttons")
 
         template_columns_ready = await ensure_promo_offer_template_active_duration_column()
         if template_columns_ready:

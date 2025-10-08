@@ -31,6 +31,7 @@ from app.services.campaign_service import AdvertisingCampaignService
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_service import SubscriptionService
 from app.services.support_settings_service import SupportSettingsService
+from app.services.main_menu_button_service import MainMenuButtonService
 from app.utils.user_utils import generate_unique_referral_code
 from app.utils.promo_offer import (
     build_promo_offer_hint,
@@ -333,6 +334,13 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             user.telegram_id
         )
 
+        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+            db,
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+        )
+
         await message.answer(
             menu_text,
             reply_markup=get_main_menu_keyboard(
@@ -344,6 +352,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                 balance_kopeks=user.balance_kopeks,
                 subscription=user.subscription,
                 is_moderator=is_moderator,
+                custom_buttons=custom_buttons,
             ),
             parse_mode="HTML"
         )
@@ -746,6 +755,13 @@ async def complete_registration_from_callback(
             and SupportSettingsService.is_moderator(existing_user.telegram_id)
         )
 
+        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+            db,
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+        )
+
         try:
             await callback.message.answer(
                 menu_text,
@@ -758,6 +774,7 @@ async def complete_registration_from_callback(
                     balance_kopeks=existing_user.balance_kopeks,
                     subscription=existing_user.subscription,
                     is_moderator=is_moderator,
+                    custom_buttons=custom_buttons,
                 ),
                 parse_mode="HTML"
             )
@@ -918,6 +935,13 @@ async def complete_registration_from_callback(
             and SupportSettingsService.is_moderator(user.telegram_id)
         )
 
+        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+            db,
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+        )
+
         try:
             await callback.message.answer(
                 menu_text,
@@ -930,6 +954,7 @@ async def complete_registration_from_callback(
                     balance_kopeks=user.balance_kopeks,
                     subscription=user.subscription,
                     is_moderator=is_moderator,
+                    custom_buttons=custom_buttons,
                 ),
                 parse_mode="HTML"
             )
@@ -984,6 +1009,13 @@ async def complete_registration(
             and SupportSettingsService.is_moderator(existing_user.telegram_id)
         )
 
+        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+            db,
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+        )
+
         try:
             await message.answer(
                 menu_text,
@@ -996,6 +1028,7 @@ async def complete_registration(
                     balance_kopeks=existing_user.balance_kopeks,
                     subscription=existing_user.subscription,
                     is_moderator=is_moderator,
+                    custom_buttons=custom_buttons,
                 ),
                 parse_mode="HTML"
             )
@@ -1156,6 +1189,13 @@ async def complete_registration(
             and SupportSettingsService.is_moderator(user.telegram_id)
         )
 
+        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+            db,
+            is_admin=is_admin,
+            has_active_subscription=has_active_subscription,
+            subscription_is_active=subscription_is_active,
+        )
+
         try:
             await message.answer(
                 menu_text,
@@ -1168,6 +1208,7 @@ async def complete_registration(
                     balance_kopeks=user.balance_kopeks,
                     subscription=user.subscription,
                     is_moderator=is_moderator,
+                    custom_buttons=custom_buttons,
                 ),
                 parse_mode="HTML"
             )
@@ -1431,6 +1472,13 @@ async def required_sub_channel_check(
                 and SupportSettingsService.is_moderator(user.telegram_id)
             )
 
+            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+                db,
+                is_admin=is_admin,
+                has_active_subscription=has_active_subscription,
+                subscription_is_active=subscription_is_active,
+            )
+
             keyboard = get_main_menu_keyboard(
                 language=user.language,
                 is_admin=is_admin,
@@ -1440,6 +1488,7 @@ async def required_sub_channel_check(
                 balance_kopeks=user.balance_kopeks,
                 subscription=user.subscription,
                 is_moderator=is_moderator,
+                custom_buttons=custom_buttons,
             )
 
             if settings.ENABLE_LOGO_MODE:
