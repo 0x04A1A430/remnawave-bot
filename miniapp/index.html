@@ -242,9 +242,26 @@
             animation: shimmer 3s infinite;
         }
 
+        .logo-container.has-image {
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .logo-container.has-image::after {
+            display: none;
+        }
+
         .logo-icon {
             font-size: 40px;
             color: white;
+            z-index: 1;
+        }
+
+        .logo-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            padding: 12px;
             z-index: 1;
         }
 
@@ -962,7 +979,7 @@
         /* App Installation */
         .platform-selector {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
             gap: 10px;
             margin-bottom: 20px;
         }
@@ -1005,6 +1022,7 @@
             margin-bottom: 12px;
             border: 2px solid var(--border-color);
             transition: all 0.3s ease;
+            cursor: pointer;
         }
 
         .app-card:hover {
@@ -1015,6 +1033,59 @@
         .app-card.featured {
             border-color: var(--primary);
             background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.05), rgba(var(--primary-rgb), 0.02));
+        }
+
+        .app-card.selected {
+            border-color: var(--primary);
+            box-shadow: var(--shadow-md);
+        }
+
+        .app-card.selected .app-icon {
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.85), var(--primary));
+        }
+
+        .connect-details-card {
+            margin-top: 8px;
+        }
+
+        .connect-details-grid {
+            display: grid;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .connect-details-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .connect-details-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .connect-details-value {
+            font-size: 14px;
+            font-weight: 600;
+            text-align: right;
+            word-break: break-all;
+        }
+
+        .connect-details-value.muted {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .connect-details-value.monospace {
+            font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+        }
+
+        .connect-details-hint {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 8px;
         }
 
         .app-header {
@@ -1303,8 +1374,9 @@
 
         <!-- Header -->
         <div class="header animate-in">
-            <div class="logo-container">
-                <div class="logo-icon">⚡</div>
+            <div class="logo-container" id="logoContainer">
+                <div class="logo-icon" id="logoIcon">⚡</div>
+                <img src="" alt="" class="logo-image hidden" id="logoImage">
             </div>
             <div class="logo" data-i18n="app.name">VPN</div>
             <div class="subtitle" data-i18n="app.subtitle">Secure & Fast Connection</div>
@@ -1408,6 +1480,29 @@
                 </button>
             </div>
 
+            <div class="card connect-details-card hidden" id="connectDetailsCard">
+                <div class="card-header">
+                    <div class="card-title" data-i18n="connect.meta.title">Connection details</div>
+                </div>
+                <div class="card-content">
+                    <div class="connect-details-hint" id="connectDetailsHint" data-i18n="connect.meta.empty">Select an app to generate a link.</div>
+                    <div class="connect-details-grid" id="connectDetailsContent">
+                        <div class="connect-details-row">
+                            <span class="connect-details-label" data-i18n="connect.meta.app">Application</span>
+                            <span class="connect-details-value" id="connectDetailsApp">—</span>
+                        </div>
+                        <div class="connect-details-row">
+                            <span class="connect-details-label" data-i18n="connect.meta.scheme">URL scheme</span>
+                            <span class="connect-details-value" id="connectDetailsScheme">—</span>
+                        </div>
+                        <div class="connect-details-row">
+                            <span class="connect-details-label" data-i18n="connect.meta.link">Generated link</span>
+                            <span class="connect-details-value monospace" id="connectDetailsLink">—</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Balance Card -->
             <div class="card balance-card" id="balanceCard">
                 <div class="balance-content">
@@ -1491,6 +1586,10 @@
                         <button class="platform-btn" data-platform="pc">
                             <span class="platform-icon">💻</span>
                             <span data-i18n="platform.pc">PC</span>
+                        </button>
+                        <button class="platform-btn" data-platform="mac">
+                            <span class="platform-icon">🖥️</span>
+                            <span data-i18n="platform.mac">macOS</span>
                         </button>
                         <button class="platform-btn" data-platform="tv">
                             <span class="platform-icon">📺</span>
@@ -1642,7 +1741,12 @@
 
         // All original constants and functions
         const LANG_STORAGE_KEY = 'remnawave-miniapp-language';
-        const SUPPORTED_LANGUAGES = ['en', 'ru'];
+        const LANGUAGE_LABELS = {
+            en: '🇬🇧 English',
+            ru: '🇷🇺 Русский',
+            fa: '🇮🇷 فارسی',
+            zh: '🇨🇳 中文'
+        };
 
         const translations = {
             en: {
@@ -1677,6 +1781,7 @@
                 'apps.step.download': 'Download & install',
                 'apps.step.add': 'Add subscription',
                 'apps.step.connect': 'Connect & use',
+                'apps.step.extra': 'Additional step',
                 'history.empty': 'No transactions yet',
                 'history.status.completed': 'Completed',
                 'history.status.pending': 'Processing',
@@ -1704,10 +1809,20 @@
                 'platform.ios': 'iOS',
                 'platform.android': 'Android',
                 'platform.pc': 'PC',
+                'platform.mac': 'macOS',
                 'platform.tv': 'TV',
                 'units.gb': 'GB',
                 'values.unlimited': 'Unlimited',
-                'values.not_available': 'Not available'
+                'values.not_available': 'Not available',
+                'connect.meta.title': 'Connection details',
+                'connect.meta.app': 'Application',
+                'connect.meta.scheme': 'URL scheme',
+                'connect.meta.link': 'Generated link',
+                'connect.meta.empty': 'Select an app to generate a link.',
+                'connect.meta.hint': 'Use the button above to open the generated link.',
+                'connect.meta.no_link': 'Link is unavailable for this app.',
+                'connect.meta.no_subscription': 'Subscription link is not available yet.',
+                'connect.meta.loading': 'Preparing link…'
             },
             ru: {
                 'app.title': 'Подписка VPN',
@@ -1741,6 +1856,7 @@
                 'apps.step.download': 'Скачать и установить',
                 'apps.step.add': 'Добавить подписку',
                 'apps.step.connect': 'Подключиться и пользоваться',
+                'apps.step.extra': 'Дополнительный шаг',
                 'history.empty': 'Операции ещё не проводились',
                 'history.status.completed': 'Выполнено',
                 'history.status.pending': 'Обрабатывается',
@@ -1768,11 +1884,23 @@
                 'platform.ios': 'iOS',
                 'platform.android': 'Android',
                 'platform.pc': 'ПК',
+                'platform.mac': 'macOS',
                 'platform.tv': 'ТВ',
                 'units.gb': 'ГБ',
                 'values.unlimited': 'Безлимит',
-                'values.not_available': 'Недоступно'
-            }
+                'values.not_available': 'Недоступно',
+                'connect.meta.title': 'Детали подключения',
+                'connect.meta.app': 'Приложение',
+                'connect.meta.scheme': 'Схема ссылки',
+                'connect.meta.link': 'Сформированная ссылка',
+                'connect.meta.empty': 'Выберите приложение, чтобы получить ссылку.',
+                'connect.meta.hint': 'Нажмите кнопку выше, чтобы открыть подготовленную ссылку.',
+                'connect.meta.no_link': 'Для этого приложения ссылка недоступна.',
+                'connect.meta.no_subscription': 'Ссылка подписки пока не готова.',
+                'connect.meta.loading': 'Подготавливаем ссылку…'
+            },
+            fa: {},
+            zh: {}
         };
 
         const pcTranslations = {
@@ -1794,6 +1922,10 @@
             Object.assign(translations[lang], pcTranslations[lang]);
         });
 
+        let languageOrder = ['en', 'ru'];
+        const supportedLanguages = new Set(Object.keys(translations));
+        languageOrder = Array.from(new Set([...languageOrder, ...supportedLanguages]));
+
         // Include all the original JavaScript functions
         function applyBrandingOverrides(branding) {
             if (!branding || typeof branding !== 'object') {
@@ -1802,10 +1934,22 @@
 
             const {
                 service_name: rawServiceName = {},
-                service_description: rawServiceDescription = {}
+                service_description: rawServiceDescription = {},
+                name: displayName = null,
+                title: displayTitle = null,
+                subtitle: displaySubtitle = null,
+                description: displayDescription = null,
+                logo: rawLogo = null,
+                logoUrl: explicitLogoUrl = null,
+                logo_url: legacyLogoUrl = null,
             } = branding;
 
             function normalizeMap(map) {
+                if (typeof map === 'string') {
+                    const trimmed = map.trim();
+                    return trimmed ? { default: trimmed } : {};
+                }
+
                 const normalized = {};
                 Object.entries(map || {}).forEach(([lang, value]) => {
                     if (typeof value !== 'string') {
@@ -1856,9 +2000,51 @@
                 });
             }
 
+            function extractDefault(map) {
+                const normalized = normalizeMap(map);
+                return normalized.default
+                    || normalized.en
+                    || normalized.ru
+                    || null;
+            }
+
             applyKey('app.name', rawServiceName);
             applyKey('app.title', rawServiceName);
             applyKey('app.subtitle', rawServiceDescription);
+
+            if (displayName) {
+                applyKey('app.name', displayName);
+                applyKey('app.title', displayName);
+            }
+            if (displayTitle) {
+                applyKey('app.title', displayTitle);
+            }
+            if (displaySubtitle) {
+                applyKey('app.subtitle', displaySubtitle);
+            } else if (displayDescription) {
+                applyKey('app.subtitle', displayDescription);
+            }
+
+            const resolvedLogoUrl = normalizeUrl(explicitLogoUrl || legacyLogoUrl || rawLogo);
+            if (resolvedLogoUrl) {
+                const logoImage = document.getElementById('logoImage');
+                const logoIcon = document.getElementById('logoIcon');
+                const logoContainer = document.getElementById('logoContainer');
+                if (logoImage) {
+                    const altText = extractDefault(displayName)
+                        || extractDefault(rawServiceName)
+                        || 'Logo';
+                    logoImage.src = resolvedLogoUrl;
+                    logoImage.alt = altText;
+                    logoImage.classList.remove('hidden');
+                }
+                if (logoIcon) {
+                    logoIcon.classList.add('hidden');
+                }
+                if (logoContainer) {
+                    logoContainer.classList.add('has-image');
+                }
+            }
         }
 
         let userData = null;
@@ -1869,17 +2055,26 @@
         let preferredLanguage = 'en';
         let languageLockedByUser = false;
         let currentErrorState = null;
+        let selectedAppId = null;
+        let configSettings = {};
+
+        function normalizeLocale(value) {
+            if (typeof value !== 'string') {
+                return '';
+            }
+            return value.trim().toLowerCase();
+        }
 
         function resolveLanguage(lang) {
-            if (!lang) {
+            const normalized = normalizeLocale(lang);
+            if (!normalized) {
                 return null;
             }
-            const normalized = String(lang).toLowerCase();
-            if (SUPPORTED_LANGUAGES.includes(normalized)) {
+            if (supportedLanguages.has(normalized)) {
                 return normalized;
             }
             const short = normalized.split('-')[0];
-            if (SUPPORTED_LANGUAGES.includes(short)) {
+            if (supportedLanguages.has(short)) {
                 return short;
             }
             return null;
@@ -1899,6 +2094,67 @@
                 localStorage.setItem(LANG_STORAGE_KEY, lang);
             } catch (error) {
                 console.warn('Unable to persist language preference:', error);
+            }
+        }
+
+        function addSupportedLanguage(lang) {
+            const normalized = normalizeLocale(lang);
+            if (!normalized) {
+                return;
+            }
+            if (!translations[normalized]) {
+                translations[normalized] = {};
+            }
+            supportedLanguages.add(normalized);
+            if (!languageOrder.includes(normalized)) {
+                languageOrder.push(normalized);
+            }
+        }
+
+        function renderLanguageOptions() {
+            const languageSelect = document.getElementById('languageSelect');
+            if (!languageSelect) {
+                return;
+            }
+
+            const seen = new Set();
+            const ordered = [];
+            [...languageOrder, ...supportedLanguages].forEach(lang => {
+                const normalized = normalizeLocale(lang);
+                if (!normalized || seen.has(normalized)) {
+                    return;
+                }
+                if (!supportedLanguages.has(normalized)) {
+                    return;
+                }
+                seen.add(normalized);
+                ordered.push(normalized);
+            });
+
+            const optionsHtml = ordered.map(lang => {
+                const label = LANGUAGE_LABELS[lang] || lang.toUpperCase();
+                return `<option value="${escapeAttribute(lang)}">${escapeHtml(label)}</option>`;
+            }).join('');
+
+            languageSelect.innerHTML = optionsHtml;
+            const resolved = resolveLanguage(preferredLanguage) || ordered[0] || 'en';
+            languageSelect.value = resolved;
+        }
+
+        function applyConfigSettings(configData = {}) {
+            if (!configData || typeof configData !== 'object') {
+                return;
+            }
+
+            configSettings = { ...configSettings, ...configData };
+
+            if (Array.isArray(configData.additionalLocales)) {
+                configData.additionalLocales.forEach(locale => addSupportedLanguage(locale));
+                renderLanguageOptions();
+            }
+
+            if (configData.branding) {
+                applyBrandingOverrides(configData.branding);
             }
         }
 
@@ -1927,6 +2183,15 @@
             const div = document.createElement('div');
             div.textContent = value ?? '';
             return div.innerHTML;
+        }
+
+        function escapeAttribute(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
         }
 
         function normalizeUrl(value) {
@@ -1983,9 +2248,11 @@
                 }
                 element.textContent = t(key);
             });
+            renderLanguageOptions();
             const languageSelect = document.getElementById('languageSelect');
             if (languageSelect) {
-                languageSelect.value = preferredLanguage;
+                const resolved = resolveLanguage(preferredLanguage) || 'en';
+                languageSelect.value = resolved;
                 languageSelect.setAttribute('aria-label', t('language.ariaLabel'));
             }
             updateErrorTexts();
@@ -1996,8 +2263,14 @@
             if (!label) {
                 return;
             }
-            const useHappLabel = Boolean(getHappCryptoLink() || userData?.happ_cryptolink_redirect_link);
-            const key = useHappLabel ? 'button.connect.happ' : 'button.connect.default';
+            const selectedApp = getSelectedApp();
+            const appId = selectedApp ? normalizeAppId(selectedApp.id).toLowerCase() : '';
+            const hasHappLink = Boolean(
+                userData
+                && appId === 'happ'
+                && (getHappCryptoLink() || userData?.happ_cryptolink_redirect_link || userData?.happ_link)
+            );
+            const key = hasHappLink ? 'button.connect.happ' : 'button.connect.default';
             label.textContent = t(key);
         }
 
@@ -2005,11 +2278,9 @@
             applyTranslations();
             if (userData) {
                 renderUserData();
-            } else {
-                updateConnectButtonLabel();
             }
             renderApps();
-            updateActionButtons();
+            updateConnectUI();
         }
 
         function setLanguage(language, options = {}) {
@@ -2038,7 +2309,7 @@
         }
 
         applyTranslations();
-        updateConnectButtonLabel();
+        updateConnectUI();
 
         document.getElementById('languageSelect')?.addEventListener('change', event => {
             setLanguage(event.target.value, { persist: true });
@@ -2063,7 +2334,7 @@
                     if (resolved) {
                         preferredLanguage = resolved;
                         applyTranslations();
-                        updateConnectButtonLabel();
+                        updateConnectUI();
                     }
                 }
 
@@ -2173,8 +2444,11 @@
 
                 const data = await response.json();
                 appsConfig = data?.platforms || {};
+                selectedAppId = null;
 
                 const configData = data?.config || {};
+                applyConfigSettings(configData);
+
                 const configUrl = normalizeUrl(
                     configData.subscriptionPurchaseUrl
                     || configData.subscription_purchase_url
@@ -2188,6 +2462,9 @@
                 if (configUrl) {
                     configPurchaseUrl = configUrl;
                 }
+
+                renderApps();
+                updateConnectUI();
             } catch (error) {
                 console.warn('Unable to load apps configuration:', error);
                 appsConfig = {};
@@ -2293,8 +2570,7 @@
             renderTransactionHistory();
             renderServersList();
             renderDevicesList();
-            updateConnectButtonLabel();
-            updateActionButtons();
+            updateConnectUI();
         }
 
         function detectPlatform() {
@@ -2303,9 +2579,12 @@
                 currentPlatform = 'ios';
             } else if (userAgent.includes('android')) {
                 currentPlatform = 'android';
+            } else if (userAgent.includes('macintosh')) {
+                currentPlatform = 'mac';
             } else {
                 currentPlatform = 'pc';
             }
+            selectedAppId = null;
         }
 
         function setActivePlatformButton() {
@@ -2330,6 +2609,35 @@
             return appsConfig?.[platformKey] || [];
         }
 
+        function normalizeAppId(value) {
+            if (value === undefined || value === null) {
+                return '';
+            }
+            return String(value);
+        }
+
+        function resolveSelectedApp(apps = getAppsForCurrentPlatform()) {
+            if (!Array.isArray(apps) || !apps.length) {
+                selectedAppId = null;
+                return null;
+            }
+
+            if (selectedAppId) {
+                const current = apps.find(app => normalizeAppId(app?.id) === selectedAppId);
+                if (current) {
+                    return current;
+                }
+            }
+
+            const fallback = apps.find(app => app && app.isFeatured) || apps[0];
+            selectedAppId = fallback ? normalizeAppId(fallback.id) : null;
+            return fallback || null;
+        }
+
+        function getSelectedApp() {
+            return resolveSelectedApp();
+        }
+
         function renderApps() {
             const container = document.getElementById('appsContainer');
             if (!container) {
@@ -2338,23 +2646,43 @@
 
             const apps = getAppsForCurrentPlatform();
 
-            if (!apps.length) {
+            if (!Array.isArray(apps) || !apps.length) {
                 container.innerHTML = `<div class="step-description">${escapeHtml(t('apps.no_data'))}</div>`;
                 return;
             }
 
+            const selectedApp = resolveSelectedApp(apps);
             container.innerHTML = apps.map(app => {
-                const iconChar = (app.name?.[0] || 'A').toUpperCase();
-                const appName = escapeHtml(app.name || 'App');
+                const appNameRaw = typeof app.name === 'object'
+                    ? getLocalizedText(app.name)
+                    : app.name;
+                const appNameSafe = appNameRaw && String(appNameRaw).trim().length
+                    ? String(appNameRaw).trim()
+                    : 'App';
+                const iconChar = (appNameSafe[0] || 'A').toUpperCase();
+                const isSelected = selectedApp && normalizeAppId(selectedApp.id) === normalizeAppId(app.id);
+                const classes = ['app-card'];
+                if (app.isFeatured) {
+                    classes.push('featured');
+                }
+                if (isSelected) {
+                    classes.push('selected');
+                }
                 const featuredBadge = app.isFeatured
                     ? `<span class="featured-badge">${escapeHtml(t('apps.featured'))}</span>`
                     : '';
                 return `
-                    <div class="app-card ${app.isFeatured ? 'featured' : ''}">
+                    <div
+                        class="${classes.join(' ')}"
+                        data-app-id="${escapeAttribute(normalizeAppId(app.id))}"
+                        tabindex="0"
+                        role="button"
+                        aria-pressed="${isSelected}"
+                    >
                         <div class="app-header">
                             <div class="app-icon">${escapeHtml(iconChar)}</div>
                             <div class="app-info">
-                                <div class="app-name">${appName}</div>
+                                <div class="app-name">${escapeHtml(appNameSafe)}</div>
                                 ${featuredBadge}
                             </div>
                         </div>
@@ -2364,63 +2692,236 @@
                     </div>
                 `;
             }).join('');
+
+            container.querySelectorAll('.app-card').forEach(card => {
+                const appId = normalizeAppId(card.dataset.appId);
+                if (!appId) {
+                    return;
+                }
+
+                const selectApp = () => {
+                    if (selectedAppId === appId) {
+                        return;
+                    }
+                    selectedAppId = appId;
+                    renderApps();
+                    updateConnectUI();
+                };
+
+                card.addEventListener('click', event => {
+                    if (event.target.closest('.step-btn')) {
+                        return;
+                    }
+                    selectApp();
+                });
+
+                card.addEventListener('keydown', event => {
+                    if (event.target.closest('.step-btn')) {
+                        return;
+                    }
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        selectApp();
+                    }
+                });
+            });
+        }
+
+        function renderStepButtons(buttons) {
+            if (!Array.isArray(buttons) || !buttons.length) {
+                return '';
+            }
+
+            const items = buttons.map(btn => {
+                const link = normalizeUrl(btn?.buttonLink || btn?.link);
+                if (!link) {
+                    return '';
+                }
+                const text = getLocalizedText(btn.buttonText) || link;
+                return `<a href="${escapeAttribute(link)}" class="step-btn" target="_blank" rel="noopener">${escapeHtml(text)}</a>`;
+            }).filter(Boolean);
+
+            if (!items.length) {
+                return '';
+            }
+
+            return `
+                            <div class="step-buttons">
+                                ${items.join('')}
+                            </div>
+                        `;
+        }
+
+        function renderStepBlock(stepNumber, title, descriptionHtml = '', buttonsHtml = '') {
+            const hasTitle = typeof title === 'string' && title.trim().length;
+            const hasDescription = Boolean(descriptionHtml);
+            const hasButtons = Boolean(buttonsHtml);
+
+            if (!hasTitle && !hasDescription && !hasButtons) {
+                return '';
+            }
+
+            const titleHtml = hasTitle
+                ? `<div class="step-title">${escapeHtml(title)}</div>`
+                : '';
+
+            return `
+                    <div class="step">
+                        <span class="step-number">${stepNumber}</span>
+                        <div>
+                            ${titleHtml}
+                            ${descriptionHtml || ''}
+                            ${buttonsHtml || ''}
+                        </div>
+                    </div>
+                `;
         }
 
         function renderAppSteps(app) {
             let html = '';
             let stepNum = 1;
 
+            const appendStep = (title, descriptionHtml, buttonsHtml) => {
+                const block = renderStepBlock(stepNum, title, descriptionHtml, buttonsHtml);
+                if (block) {
+                    html += block;
+                    stepNum += 1;
+                }
+            };
+
             if (app.installationStep) {
                 const descriptionHtml = app.installationStep.description
                     ? `<div class="step-description">${getLocalizedText(app.installationStep.description)}</div>`
                     : '';
-                const buttonsHtml = Array.isArray(app.installationStep.buttons) && app.installationStep.buttons.length
-                    ? `
-                            <div class="step-buttons">
-                                ${app.installationStep.buttons.map(btn => {
-                                    const buttonText = escapeHtml(getLocalizedText(btn.buttonText));
-                                    return `<a href="${btn.buttonLink}" class="step-btn" target="_blank" rel="noopener">${buttonText}</a>`;
-                                }).join('')}
-                            </div>
-                        `
+                const buttonsHtml = renderStepButtons(app.installationStep.buttons);
+                appendStep(t('apps.step.download'), descriptionHtml, buttonsHtml);
+            }
+
+            if (app.additionalBeforeAddSubscriptionStep) {
+                const step = app.additionalBeforeAddSubscriptionStep;
+                const title = getLocalizedText(step.title) || t('apps.step.extra');
+                const descriptionHtml = step.description
+                    ? `<div class="step-description">${getLocalizedText(step.description)}</div>`
                     : '';
-                html += `
-                    <div class="step">
-                        <span class="step-number">${stepNum++}</span>
-                        <div>
-                            <div class="step-title">${escapeHtml(t('apps.step.download'))}</div>
-                            ${descriptionHtml}
-                            ${buttonsHtml}
-                        </div>
-                    </div>
-                `;
+                const buttonsHtml = renderStepButtons(step.buttons);
+                appendStep(title, descriptionHtml, buttonsHtml);
             }
 
             if (app.addSubscriptionStep) {
-                html += `
-                    <div class="step">
-                        <span class="step-number">${stepNum++}</span>
-                        <div>
-                            <div class="step-title">${escapeHtml(t('apps.step.add'))}</div>
-                            <div class="step-description">${getLocalizedText(app.addSubscriptionStep.description)}</div>
-                        </div>
-                    </div>
-                `;
+                const descriptionHtml = app.addSubscriptionStep.description
+                    ? `<div class="step-description">${getLocalizedText(app.addSubscriptionStep.description)}</div>`
+                    : '';
+                const buttonsHtml = renderStepButtons(app.addSubscriptionStep.buttons);
+                appendStep(t('apps.step.add'), descriptionHtml, buttonsHtml);
+            }
+
+            if (app.additionalAfterAddSubscriptionStep) {
+                const step = app.additionalAfterAddSubscriptionStep;
+                const title = getLocalizedText(step.title) || t('apps.step.extra');
+                const descriptionHtml = step.description
+                    ? `<div class="step-description">${getLocalizedText(step.description)}</div>`
+                    : '';
+                const buttonsHtml = renderStepButtons(step.buttons);
+                appendStep(title, descriptionHtml, buttonsHtml);
             }
 
             if (app.connectAndUseStep) {
-                html += `
-                    <div class="step">
-                        <span class="step-number">${stepNum++}</span>
-                        <div>
-                            <div class="step-title">${escapeHtml(t('apps.step.connect'))}</div>
-                            <div class="step-description">${getLocalizedText(app.connectAndUseStep.description)}</div>
-                        </div>
-                    </div>
-                `;
+                const descriptionHtml = app.connectAndUseStep.description
+                    ? `<div class="step-description">${getLocalizedText(app.connectAndUseStep.description)}</div>`
+                    : '';
+                const buttonsHtml = renderStepButtons(app.connectAndUseStep.buttons);
+                appendStep(t('apps.step.connect'), descriptionHtml, buttonsHtml);
             }
 
             return html;
+        }
+
+        function renderConnectionDetails() {
+            const card = document.getElementById('connectDetailsCard');
+            if (!card) {
+                return;
+            }
+
+            const apps = getAppsForCurrentPlatform();
+            if (!Array.isArray(apps) || !apps.length) {
+                card.classList.add('hidden');
+                return;
+            }
+
+            card.classList.remove('hidden');
+
+            const hintElement = document.getElementById('connectDetailsHint');
+            const appElement = document.getElementById('connectDetailsApp');
+            const schemeElement = document.getElementById('connectDetailsScheme');
+            const linkElement = document.getElementById('connectDetailsLink');
+            const contentElement = document.getElementById('connectDetailsContent');
+
+            const selectedApp = getSelectedApp();
+            if (!selectedApp) {
+                if (contentElement) {
+                    contentElement.classList.add('hidden');
+                }
+                if (hintElement) {
+                    const hint = t('connect.meta.empty');
+                    hintElement.textContent = hint === 'connect.meta.empty'
+                        ? 'Select an app to generate a link.'
+                        : hint;
+                }
+                return;
+            }
+
+            if (contentElement) {
+                contentElement.classList.remove('hidden');
+            }
+
+            if (appElement) {
+                const appNameRaw = typeof selectedApp.name === 'object'
+                    ? getLocalizedText(selectedApp.name)
+                    : selectedApp.name;
+                const appNameSafe = appNameRaw && String(appNameRaw).trim().length
+                    ? String(appNameRaw).trim()
+                    : '—';
+                appElement.textContent = appNameSafe;
+            }
+
+            if (schemeElement) {
+                const scheme = selectedApp.urlScheme ? String(selectedApp.urlScheme) : '';
+                schemeElement.textContent = scheme || t('values.not_available');
+            }
+
+            const link = userData ? getConnectLink() : null;
+            const hasLink = Boolean(link);
+            const subscriptionUrl = getCurrentSubscriptionUrl();
+            const hasSubscriptionUrl = Boolean(subscriptionUrl);
+
+            if (linkElement) {
+                linkElement.classList.toggle('muted', !hasLink);
+                if (hasLink) {
+                    linkElement.textContent = link;
+                    linkElement.setAttribute('title', link);
+                } else {
+                    const messageKey = !userData
+                        ? 'connect.meta.loading'
+                        : hasSubscriptionUrl
+                            ? 'connect.meta.no_link'
+                            : 'connect.meta.no_subscription';
+                    const message = t(messageKey);
+                    linkElement.textContent = message === messageKey ? '—' : message;
+                    linkElement.removeAttribute('title');
+                }
+            }
+
+            if (hintElement) {
+                const hintKey = !userData
+                    ? 'connect.meta.loading'
+                    : hasLink
+                        ? 'connect.meta.hint'
+                        : hasSubscriptionUrl
+                            ? 'connect.meta.no_link'
+                            : 'connect.meta.no_subscription';
+                const hint = t(hintKey);
+                hintElement.textContent = hint === hintKey ? '' : hint;
+            }
         }
 
         function getLocalizedText(textObj) {
@@ -2712,50 +3213,95 @@
             );
         }
 
+        function encodeBase64(value) {
+            try {
+                if (typeof TextEncoder !== 'undefined') {
+                    const bytes = new TextEncoder().encode(value);
+                    const binary = Array.from(bytes, byte => String.fromCharCode(byte)).join('');
+                    return btoa(binary);
+                }
+                return btoa(unescape(encodeURIComponent(value)));
+            } catch (error) {
+                console.warn('Failed to encode base64 value:', error);
+                return '';
+            }
+        }
+
+        function buildAppLink(app, subscriptionUrl) {
+            if (!app || !subscriptionUrl) {
+                return null;
+            }
+
+            const schemeRaw = typeof app.urlScheme === 'string' ? app.urlScheme : '';
+            if (!schemeRaw) {
+                return subscriptionUrl;
+            }
+
+            let payload;
+            if (app.isNeedBase64Encoding) {
+                payload = encodeBase64(subscriptionUrl);
+                if (!payload) {
+                    payload = encodeURIComponent(subscriptionUrl);
+                }
+            } else if (app.skipUrlEncoding) {
+                payload = subscriptionUrl;
+            } else {
+                payload = encodeURIComponent(subscriptionUrl);
+            }
+
+            if (!payload) {
+                payload = subscriptionUrl;
+            }
+
+            if (schemeRaw.includes('{link}')) {
+                return schemeRaw.replace(/\{link\}/g, payload);
+            }
+            if (schemeRaw.includes('{encoded}')) {
+                return schemeRaw.replace(/\{encoded\}/g, payload);
+            }
+            if (schemeRaw.includes('%s')) {
+                return schemeRaw.replace(/%s/g, payload);
+            }
+
+            return `${schemeRaw}${payload}`;
+        }
+
         function getConnectLink() {
             if (!userData) {
                 return null;
             }
 
-            const happCryptoLink = getHappCryptoLink();
-            const isPC = currentPlatform === 'pc' || (!['ios', 'android', 'tv'].includes(currentPlatform));
-            
-            // For PC, prefer direct subscription URL if no Happ redirect link
-            if (isPC) {
-                if (userData.happ_cryptolink_redirect_link) {
-                    return userData.happ_cryptolink_redirect_link;
+            const selectedApp = getSelectedApp();
+            const subscriptionUrl = normalizeUrl(getCurrentSubscriptionUrl());
+            const happCryptoLink = normalizeUrl(getHappCryptoLink());
+            const redirectLink = normalizeUrl(userData?.happ_cryptolink_redirect_link);
+            const happLink = normalizeUrl(userData?.happ_link);
+
+            if (!selectedApp) {
+                return happCryptoLink || redirectLink || subscriptionUrl || null;
+            }
+
+            const appId = normalizeAppId(selectedApp.id).toLowerCase();
+
+            if (appId === 'happ') {
+                if (redirectLink) {
+                    return redirectLink;
                 }
                 if (happCryptoLink) {
                     return happCryptoLink;
                 }
-                // Return plain subscription URL for PC
-                return getCurrentSubscriptionUrl();
-            }
-            
-            // Original logic for mobile platforms
-            if (happCryptoLink) {
-                return happCryptoLink;
+                if (happLink) {
+                    return happLink;
+                }
+                return subscriptionUrl || null;
             }
 
-            if (userData.happ_cryptolink_redirect_link) {
-                return userData.happ_cryptolink_redirect_link;
-            }
-
-            const subscriptionUrl = getCurrentSubscriptionUrl();
             if (!subscriptionUrl) {
                 return null;
             }
 
-            const apps = getAppsForCurrentPlatform();
-            const featuredApp = apps.find(app => app.isFeatured) || apps[0];
-
-            if (featuredApp?.urlScheme) {
-                return `${featuredApp.urlScheme}${subscriptionUrl}`;
-            }
-            if (userData?.happ_link && featuredApp?.id === 'happ') {
-                return userData.happ_link;
-            }
-            return subscriptionUrl;
+            const builtLink = buildAppLink(selectedApp, subscriptionUrl);
+            return builtLink || subscriptionUrl;
         }
 
         function openExternalLink(link, options = {}) {
@@ -2910,6 +3456,12 @@
             }
         }
 
+        function updateConnectUI() {
+            updateConnectButtonLabel();
+            updateActionButtons();
+            renderConnectionDetails();
+        }
+
         function updateActionButtons() {
             const connectBtn = document.getElementById('connectBtn');
             const copyBtn = document.getElementById('copyBtn');
@@ -2919,12 +3471,14 @@
                 const hasConnect = Boolean(connectLink);
                 connectBtn.disabled = !hasConnect;
                 connectBtn.classList.toggle('hidden', !hasConnect);
+                connectBtn.setAttribute('aria-disabled', String(!hasConnect));
             }
 
             const subscriptionUrl = getCurrentSubscriptionUrl();
             if (copyBtn) {
                 const hasUrl = Boolean(subscriptionUrl);
                 copyBtn.disabled = !hasUrl || !navigator.clipboard;
+                copyBtn.setAttribute('aria-disabled', String(copyBtn.disabled));
             }
         }
 
@@ -2950,15 +3504,20 @@
             };
             updateErrorTexts();
             document.getElementById('errorState').classList.remove('hidden');
-            updateActionButtons();
+            updateConnectUI();
         }
 
         document.querySelectorAll('.platform-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                currentPlatform = btn.dataset.platform;
+                const nextPlatform = btn.dataset.platform;
+                if (!nextPlatform || nextPlatform === currentPlatform) {
+                    return;
+                }
+                currentPlatform = nextPlatform;
+                selectedAppId = null;
                 setActivePlatformButton();
                 renderApps();
-                updateActionButtons();
+                updateConnectUI();
             });
         });
 
