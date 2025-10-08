@@ -635,7 +635,7 @@ class RemnaWaveService:
                             
                             subscription.status = SubscriptionStatus.DISABLED.value
                             subscription.is_trial = True 
-                            subscription.end_date = self._now_in_panel_timezone()
+                            subscription.end_date = datetime.utcnow()
                             subscription.traffic_limit_gb = 0
                             subscription.traffic_used_gb = 0.0
                             subscription.device_limit = 1
