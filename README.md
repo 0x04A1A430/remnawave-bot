@@ -1616,8 +1616,8 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 <tr>
 <td>🥈</td>
-<td><strong>@k0tbtc</strong></td>
-<td>₽5,500</td>
+<td><strong>@psych0O</strong></td>
+<td>$60</td>
 <td>За щедрую поддержку и вклад в развитие</td>
 </tr>
 
@@ -1630,7 +1630,7 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 <tr>
 <td>4</td>
-<td><strong>@sklvg</strong></td>
+<td><strong>@k0tbtc</strong></td>
 <td>₽3,000</td>
 <td>За поддержку и доверие</td>
 </tr>
@@ -1644,8 +1644,8 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 <tr>
 <td>6</td>
-<td><strong>@psych0O</strong></td>
-<td>$60</td>
+<td><strong>@sklvg</strong></td>
+<td>₽3,000</td>
 <td>За международную поддержку</td>
 </tr>
 
