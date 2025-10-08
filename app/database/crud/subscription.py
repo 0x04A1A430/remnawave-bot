@@ -59,7 +59,9 @@ async def create_trial_subscription(
         end_date=end_date,
         traffic_limit_gb=traffic_limit_gb,
         device_limit=device_limit,
-        connected_squads=[squad_uuid] if squad_uuid else []
+        connected_squads=[squad_uuid] if squad_uuid else [],
+        autopay_enabled=settings.is_autopay_enabled_by_default(),
+        autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
     )
     
     db.add(subscription)
@@ -89,7 +91,9 @@ async def create_paid_subscription(
         end_date=end_date,
         traffic_limit_gb=traffic_limit_gb,
         device_limit=device_limit,
-        connected_squads=connected_squads or []
+        connected_squads=connected_squads or [],
+        autopay_enabled=settings.is_autopay_enabled_by_default(),
+        autopay_days_before=settings.DEFAULT_AUTOPAY_DAYS_BEFORE,
     )
     
     db.add(subscription)
@@ -993,7 +997,9 @@ async def create_subscription(
     connected_squads: list = None,
     remnawave_short_uuid: str = None,
     subscription_url: str = "",
-    subscription_crypto_link: str = ""
+    subscription_crypto_link: str = "",
+    autopay_enabled: Optional[bool] = None,
+    autopay_days_before: Optional[int] = None,
 ) -> Subscription:
     
     if end_date is None:
@@ -1013,7 +1019,17 @@ async def create_subscription(
         connected_squads=connected_squads,
         remnawave_short_uuid=remnawave_short_uuid,
         subscription_url=subscription_url,
-        subscription_crypto_link=subscription_crypto_link
+        subscription_crypto_link=subscription_crypto_link,
+        autopay_enabled=(
+            settings.is_autopay_enabled_by_default()
+            if autopay_enabled is None
+            else autopay_enabled
+        ),
+        autopay_days_before=(
+            settings.DEFAULT_AUTOPAY_DAYS_BEFORE
+            if autopay_days_before is None
+            else autopay_days_before
+        ),
     )
     
     db.add(subscription)
