@@ -2,7 +2,7 @@ import logging
 import os
 import re
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from zoneinfo import ZoneInfo
@@ -91,7 +91,7 @@ class RemnaWaveService:
 
     def _parse_remnawave_date(self, date_str: str) -> datetime:
         if not date_str:
-            return self._now_in_panel_timezone() + timedelta(days=30)
+            return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30)
 
         try:
 
@@ -112,14 +112,14 @@ class RemnaWaveService:
             else:
                 localized = parsed_date.replace(tzinfo=self._panel_timezone)
 
-            localized_naive = localized.replace(tzinfo=None)
+            utc_naive = localized.astimezone(timezone.utc).replace(tzinfo=None)
 
-            logger.debug(f"Успешно распарсена дата: {date_str} -> {localized_naive}")
-            return localized_naive
+            logger.debug(f"Успешно распарсена дата: {date_str} -> {utc_naive}")
+            return utc_naive
 
         except Exception as e:
             logger.warning(f"⚠️ Не удалось распарсить дату '{date_str}': {e}. Используем дефолтную дату.")
-            return self._now_in_panel_timezone() + timedelta(days=30)
+            return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30)
     
     async def get_system_statistics(self) -> Dict[str, Any]:
             try:
@@ -635,7 +635,7 @@ class RemnaWaveService:
                             
                             subscription.status = SubscriptionStatus.DISABLED.value
                             subscription.is_trial = True 
-                            subscription.end_date = self._now_in_panel_timezone()
+                            subscription.end_date = datetime.now(timezone.utc).replace(tzinfo=None)
                             subscription.traffic_limit_gb = 0
                             subscription.traffic_used_gb = 0.0
                             subscription.device_limit = 1
@@ -728,7 +728,7 @@ class RemnaWaveService:
                     user_id=user.id,
                     status=SubscriptionStatus.ACTIVE.value,
                     is_trial=False,
-                    end_date=self._now_in_panel_timezone() + timedelta(days=30),
+                    end_date=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30),
                     traffic_limit_gb=0,
                     traffic_used_gb=0.0,
                     device_limit=1,
@@ -1171,12 +1171,12 @@ class RemnaWaveService:
                 user.remnawave_uuid = None
                 user.has_had_paid_subscription = False
                 user.used_promocodes = 0
-                user.updated_at = self._now_in_panel_timezone()
+                user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 
                 if user.subscription:
                     user.subscription.status = SubscriptionStatus.DISABLED.value
                     user.subscription.is_trial = True
-                    user.subscription.end_date = self._now_in_panel_timezone()
+                    user.subscription.end_date = datetime.now(timezone.utc).replace(tzinfo=None)
                     user.subscription.traffic_limit_gb = 0
                     user.subscription.traffic_used_gb = 0.0
                     user.subscription.device_limit = 1
@@ -1186,7 +1186,7 @@ class RemnaWaveService:
                     user.subscription.remnawave_short_uuid = None
                     user.subscription.subscription_url = ""
                     user.subscription.subscription_crypto_link = ""
-                    user.subscription.updated_at = self._now_in_panel_timezone()
+                    user.subscription.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 
                 await db.commit()
                 
