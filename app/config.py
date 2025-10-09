@@ -491,8 +491,14 @@ class Settings(BaseSettings):
         return bool(getattr(self, "LANGUAGE_SELECTION_ENABLED", True))
 
     def format_price(self, price_kopeks: int) -> str:
-        rubles = price_kopeks // 100
-        return f"{rubles} ₽"
+        sign = "-" if price_kopeks < 0 else ""
+        rubles, kopeks = divmod(abs(price_kopeks), 100)
+
+        if kopeks:
+            value = f"{sign}{rubles}.{kopeks:02d}".rstrip("0").rstrip(".")
+            return f"{value} ₽"
+
+        return f"{sign}{rubles} ₽"
 
     def get_reports_chat_id(self) -> Optional[str]:
         if self.ADMIN_REPORTS_CHAT_ID:

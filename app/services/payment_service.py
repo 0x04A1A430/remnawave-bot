@@ -2,7 +2,7 @@ import logging
 import hashlib
 import hmac
 import uuid
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Optional, Dict, Any
 from datetime import datetime
 from aiogram import Bot
@@ -113,8 +113,8 @@ class PaymentService:
             raise ValueError("Bot instance required for Stars payments")
         
         try:
-            amount_rubles = amount_kopeks / 100
-            stars_amount = TelegramStarsService.calculate_stars_from_rubles(amount_rubles)
+            amount_rubles = Decimal(amount_kopeks) / Decimal(100)
+            stars_amount = TelegramStarsService.calculate_stars_from_rubles(float(amount_rubles))
             
             invoice_link = await self.bot.create_invoice_link(
                 title="Пополнение баланса VPN",
@@ -125,7 +125,11 @@ class PaymentService:
                 prices=[LabeledPrice(label="Пополнение", amount=stars_amount)]
             )
             
-            logger.info(f"Создан Stars invoice на {stars_amount} звезд (~{int(amount_rubles)}₽)")
+            logger.info(
+                "Создан Stars invoice на %s звезд (~%s)",
+                stars_amount,
+                settings.format_price(amount_kopeks),
+            )
             return invoice_link
             
         except Exception as e:
@@ -142,7 +146,7 @@ class PaymentService:
     ) -> bool:
         try:
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(stars_amount)
-            amount_kopeks = int(rubles_amount * 100)
+            amount_kopeks = int((rubles_amount * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
             
             transaction = await create_transaction(
                 db=db,
@@ -167,7 +171,9 @@ class PaymentService:
                 
                 logger.info(f"💰 Баланс пользователя {user.telegram_id} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
                 
-                description_for_referral = f"Пополнение Stars: {int(rubles_amount)}₽ ({stars_amount} ⭐)"
+                description_for_referral = (
+                    f"Пополнение Stars: {settings.format_price(amount_kopeks)} ({stars_amount} ⭐)"
+                )
                 logger.info(f"🔍 Проверка реферальной логики для описания: '{description_for_referral}'")
                 
                 if any(word in description_for_referral.lower() for word in ["пополнение", "stars", "yookassa", "topup"]) and not any(word in description_for_referral.lower() for word in ["комиссия", "бонус"]):
@@ -206,14 +212,18 @@ class PaymentService:
                             reply_markup=keyboard,
                         )
                         logger.info(
-                            f"✅ Отправлено уведомление пользователю {user.telegram_id} о пополнении на {int(rubles_amount)}₽"
+                            "✅ Отправлено уведомление пользователю %s о пополнении на %s",
+                            user.telegram_id,
+                            settings.format_price(amount_kopeks),
                         )
                     except Exception as e:
                         logger.error(f"Ошибка отправки уведомления о пополнении Stars: {e}")
                 
                 logger.info(
-                    f"✅ Обработан Stars платеж: пользователь {user_id}, "
-                    f"{stars_amount} звезд → {int(rubles_amount)}₽"
+                    "✅ Обработан Stars платеж: пользователь %s, %s звезд → %s",
+                    user_id,
+                    stars_amount,
+                    settings.format_price(amount_kopeks),
                 )
                 return True
             else:
