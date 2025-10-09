@@ -166,13 +166,6 @@ class SquadCreateStates(StatesGroup):
 class SquadRenameStates(StatesGroup):
     waiting_for_new_name = State()
 
-
-class SquadMigrationStates(StatesGroup):
-    selecting_source = State()
-    selecting_target = State()
-    confirming = State()
-
-
 class AdminSubmenuStates(StatesGroup):
     in_users_submenu = State()
     in_promo_submenu = State()

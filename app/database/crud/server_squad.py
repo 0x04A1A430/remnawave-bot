@@ -17,14 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import (
-    PromoGroup,
-    ServerSquad,
-    SubscriptionServer,
-    Subscription,
-    SubscriptionStatus,
-    User,
-)
+from app.database.models import PromoGroup, ServerSquad, SubscriptionServer, Subscription, User
 
 logger = logging.getLogger(__name__)
 
@@ -502,10 +495,10 @@ def _extract_country_code(original_name: str) -> Optional[str]:
 
 
 async def get_server_statistics(db: AsyncSession) -> dict:
-
+    
     total_result = await db.execute(select(func.count(ServerSquad.id)))
     total_servers = total_result.scalar()
-
+    
     available_result = await db.execute(
         select(func.count(ServerSquad.id))
         .where(ServerSquad.is_available == True)
@@ -543,25 +536,6 @@ async def get_server_statistics(db: AsyncSession) -> dict:
         'total_revenue_kopeks': total_revenue_kopeks,
         'total_revenue_rubles': total_revenue_kopeks / 100
     }
-
-
-async def count_active_users_for_squad(db: AsyncSession, squad_uuid: str) -> int:
-    """Возвращает количество активных подписок, подключенных к указанному скваду."""
-
-    result = await db.execute(
-        select(func.count(Subscription.id)).where(
-            Subscription.status.in_(
-                [
-                    SubscriptionStatus.ACTIVE.value,
-                    SubscriptionStatus.TRIAL.value,
-                ]
-            ),
-            cast(Subscription.connected_squads, String).like(f'%"{squad_uuid}"%'),
-        )
-    )
-
-    return result.scalar() or 0
-
 
 async def add_user_to_servers(
     db: AsyncSession,
