@@ -676,12 +676,6 @@ def get_admin_remnawave_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text=_t(texts, "ADMIN_REMNAWAVE_MIGRATION", "🚚 Переезд"),
-                callback_data="admin_rw_migration"
-            )
-        ],
-        [
-            InlineKeyboardButton(
                 text=_t(texts, "ADMIN_REMNAWAVE_TRAFFIC", "📈 Трафик"),
                 callback_data="admin_rw_traffic"
             )
