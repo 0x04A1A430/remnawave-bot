@@ -39,7 +39,6 @@ from app.services.remnawave_service import (
     RemnaWaveService,
 )
 from app.services.promo_offer_service import promo_offer_service
-from app.services.promocode_service import PromoCodeService
 from app.services.subscription_service import SubscriptionService
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
 from app.utils.telegram_webapp import (
@@ -59,8 +58,6 @@ from ..schemas.miniapp import (
     MiniAppPromoOffer,
     MiniAppPromoOfferClaimRequest,
     MiniAppPromoOfferClaimResponse,
-    MiniAppPromoCodeActivationRequest,
-    MiniAppPromoCodeActivationResponse,
     MiniAppRichTextDocument,
     MiniAppSubscriptionRequest,
     MiniAppSubscriptionResponse,
@@ -72,7 +69,6 @@ from ..schemas.miniapp import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-promo_code_service = PromoCodeService()
 
 
 def _format_gb(value: Optional[float]) -> float:
@@ -1048,83 +1044,6 @@ async def get_subscription_details(
         branding=settings.get_miniapp_branding(),
         faq=faq_payload,
         legal_documents=legal_documents_payload,
-    )
-
-
-@router.post(
-    "/promo-codes/activate",
-    response_model=MiniAppPromoCodeActivationResponse,
-)
-async def activate_promo_code(
-    payload: MiniAppPromoCodeActivationRequest,
-    db: AsyncSession = Depends(get_db_session),
-) -> MiniAppPromoCodeActivationResponse:
-    try:
-        webapp_data = parse_webapp_init_data(payload.init_data, settings.BOT_TOKEN)
-    except TelegramWebAppAuthError as error:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "unauthorized", "message": str(error)},
-        ) from error
-
-    telegram_user = webapp_data.get("user")
-    if not isinstance(telegram_user, dict) or "id" not in telegram_user:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={"code": "invalid_user", "message": "Invalid Telegram user payload"},
-        )
-
-    try:
-        telegram_id = int(telegram_user["id"])
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={"code": "invalid_user", "message": "Invalid Telegram user identifier"},
-        ) from None
-
-    user = await get_user_by_telegram_id(db, telegram_id)
-    if not user:
-        return MiniAppPromoCodeActivationResponse(
-            success=False,
-            error_code="user_not_found",
-            message="User not found",
-        )
-
-    normalized_code = (payload.code or "").strip().upper()
-    if not normalized_code:
-        return MiniAppPromoCodeActivationResponse(
-            success=False,
-            error_code="invalid_code",
-            message="Promo code is required",
-        )
-
-    result = await promo_code_service.activate_promocode(db, user.id, normalized_code)
-
-    if result.get("success"):
-        description = (result.get("description") or "").strip()
-        promocode_data = result.get("promocode") or {}
-        return MiniAppPromoCodeActivationResponse(
-            success=True,
-            description=description or None,
-            code=promocode_data.get("code") or normalized_code,
-        )
-
-    error_code = result.get("error") or "generic"
-    message_map = {
-        "not_found": "Promo code not found",
-        "expired": "Promo code expired",
-        "used": "Promo code already used",
-        "already_used_by_user": "Promo code already used by this user",
-        "server_error": "Failed to activate promo code",
-        "user_not_found": "User not found",
-        "invalid_code": "Promo code is required",
-    }
-    message = message_map.get(error_code, "Failed to activate promo code")
-
-    return MiniAppPromoCodeActivationResponse(
-        success=False,
-        error_code=error_code,
-        message=message,
     )
 
 
