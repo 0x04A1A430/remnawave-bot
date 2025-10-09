@@ -34,9 +34,6 @@ class MiniAppSubscriptionUser(BaseModel):
     traffic_limit_label: str
     lifetime_used_traffic_gb: float = 0.0
     has_active_subscription: bool = False
-    promo_offer_discount_percent: int = 0
-    promo_offer_discount_expires_at: Optional[datetime] = None
-    promo_offer_discount_source: Optional[str] = None
 
 
 class MiniAppPromoGroup(BaseModel):
@@ -90,39 +87,6 @@ class MiniAppTransaction(BaseModel):
     completed_at: Optional[datetime] = None
 
 
-class MiniAppPromoOffer(BaseModel):
-    id: int
-    status: str
-    notification_type: Optional[str] = None
-    offer_type: Optional[str] = None
-    effect_type: Optional[str] = None
-    discount_percent: int = 0
-    bonus_amount_kopeks: int = 0
-    bonus_amount_label: Optional[str] = None
-    expires_at: Optional[datetime] = None
-    claimed_at: Optional[datetime] = None
-    is_active: bool = False
-    template_id: Optional[int] = None
-    template_name: Optional[str] = None
-    button_text: Optional[str] = None
-    title: Optional[str] = None
-    message_text: Optional[str] = None
-    icon: Optional[str] = None
-    test_squads: List[MiniAppConnectedServer] = Field(default_factory=list)
-    active_discount_expires_at: Optional[datetime] = None
-    active_discount_started_at: Optional[datetime] = None
-    active_discount_duration_seconds: Optional[int] = None
-
-
-class MiniAppPromoOfferClaimRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-
-
-class MiniAppPromoOfferClaimResponse(BaseModel):
-    success: bool = True
-    code: Optional[str] = None
-
-
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: int
@@ -145,7 +109,6 @@ class MiniAppSubscriptionResponse(BaseModel):
     balance_rubles: float = 0.0
     balance_currency: Optional[str] = None
     transactions: List[MiniAppTransaction] = Field(default_factory=list)
-    promo_offers: List[MiniAppPromoOffer] = Field(default_factory=list)
     promo_group: Optional[MiniAppPromoGroup] = None
     auto_assign_promo_groups: List[MiniAppAutoPromoGroupLevel] = Field(default_factory=list)
     total_spent_kopeks: int = 0
