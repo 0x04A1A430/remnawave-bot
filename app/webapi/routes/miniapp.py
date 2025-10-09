@@ -56,6 +56,8 @@ from ..schemas.miniapp import (
     MiniAppAutoPromoGroupLevel,
     MiniAppConnectedServer,
     MiniAppDevice,
+    MiniAppDeviceRemovalRequest,
+    MiniAppDeviceRemovalResponse,
     MiniAppFaq,
     MiniAppFaqItem,
     MiniAppLegalDocuments,
@@ -642,6 +644,7 @@ async def _load_devices_info(user: User) -> Tuple[int, List[MiniAppDevice]]:
 
     devices: List[MiniAppDevice] = []
     for device in devices_payload:
+        hwid = device.get("hwid") or device.get("deviceId") or device.get("id")
         platform = device.get("platform") or device.get("platformType")
         model = device.get("deviceModel") or device.get("model") or device.get("name")
         app_version = device.get("appVersion") or device.get("version")
@@ -655,6 +658,7 @@ async def _load_devices_info(user: User) -> Tuple[int, List[MiniAppDevice]]:
 
         devices.append(
             MiniAppDevice(
+                hwid=hwid,
                 platform=platform,
                 device_model=model,
                 app_version=app_version,
@@ -1444,6 +1448,96 @@ async def claim_promo_offer(
     await db.refresh(user)
 
     return MiniAppPromoOfferClaimResponse(success=True, code="discount_claimed")
+
+
+@router.post(
+    "/devices/remove",
+    response_model=MiniAppDeviceRemovalResponse,
+)
+async def remove_connected_device(
+    payload: MiniAppDeviceRemovalRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppDeviceRemovalResponse:
+    try:
+        webapp_data = parse_webapp_init_data(payload.init_data, settings.BOT_TOKEN)
+    except TelegramWebAppAuthError as error:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "unauthorized", "message": str(error)},
+        ) from error
+
+    telegram_user = webapp_data.get("user")
+    if not isinstance(telegram_user, dict) or "id" not in telegram_user:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_user", "message": "Invalid Telegram user payload"},
+        )
+
+    try:
+        telegram_id = int(telegram_user["id"])
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_user", "message": "Invalid Telegram user identifier"},
+        ) from None
+
+    user = await get_user_by_telegram_id(db, telegram_id)
+    if not user:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"code": "user_not_found", "message": "User not found"},
+        )
+
+    remnawave_uuid = getattr(user, "remnawave_uuid", None)
+    if not remnawave_uuid:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={"code": "remnawave_unavailable", "message": "RemnaWave user is not linked"},
+        )
+
+    hwid = (payload.hwid or "").strip()
+    if not hwid:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_hwid", "message": "Device identifier is required"},
+        )
+
+    service = RemnaWaveService()
+    if not service.is_configured:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "service_unavailable", "message": "Device management is temporarily unavailable"},
+        )
+
+    try:
+        async with service.get_api_client() as api:
+            success = await api.remove_device(remnawave_uuid, hwid)
+    except RemnaWaveConfigurationError as error:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "service_unavailable", "message": str(error)},
+        ) from error
+    except Exception as error:  # pragma: no cover - defensive
+        logger.warning(
+            "Failed to remove device %s for user %s: %s",
+            hwid,
+            telegram_id,
+            error,
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "remnawave_error", "message": "Failed to remove device"},
+        ) from error
+
+    if not success:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "remnawave_error", "message": "Failed to remove device"},
+        )
+
+    return MiniAppDeviceRemovalResponse(success=True)
+
+
 def _safe_int(value: Any) -> int:
     try:
         return int(value)

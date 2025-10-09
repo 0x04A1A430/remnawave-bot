@@ -40,6 +40,7 @@
             --success: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
+            --danger-rgb: 239, 68, 68;
             --info: #3b82f6;
         }
 
@@ -1706,7 +1707,7 @@
             border-radius: var(--radius-lg);
             border: 2px solid var(--border-color);
             transition: all 0.3s ease;
-            cursor: pointer;
+            cursor: default;
             position: relative;
             overflow: hidden;
         }
@@ -1736,8 +1737,9 @@
 
         .device-header {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: space-between;
+            gap: 12px;
             margin-bottom: 12px;
         }
 
@@ -1745,6 +1747,73 @@
             font-size: 16px;
             font-weight: 600;
             color: var(--text-primary);
+            margin: 0;
+            flex: 1;
+            word-break: break-word;
+        }
+
+        .device-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .device-remove-button {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius);
+            border: 2px solid rgba(var(--danger-rgb), 0.4);
+            background: rgba(var(--danger-rgb), 0.08);
+            color: var(--danger);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .device-remove-button:hover {
+            background: rgba(var(--danger-rgb), 0.16);
+            border-color: rgba(var(--danger-rgb), 0.6);
+            box-shadow: var(--shadow-sm);
+            transform: translateY(-1px);
+        }
+
+        .device-remove-button:active {
+            transform: scale(0.95);
+        }
+
+        .device-remove-button:disabled,
+        .device-remove-button.is-removing {
+            opacity: 0.6;
+            cursor: default;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .device-remove-button span {
+            line-height: 1;
+            transition: opacity 0.2s ease;
+        }
+
+        .device-remove-button.is-removing span {
+            opacity: 0;
+        }
+
+        .device-remove-button.is-removing::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            animation: spin 0.8s linear infinite;
         }
 
         .device-type-badge {
@@ -2418,6 +2487,18 @@
 
         :root[data-theme="dark"] .theme-toggle .icon-moon {
             display: block;
+        }
+
+        :root[data-theme="dark"] .device-remove-button {
+            background: rgba(var(--danger-rgb), 0.12);
+            border-color: rgba(var(--danger-rgb), 0.3);
+            color: #fca5a5;
+        }
+
+        :root[data-theme="dark"] .device-remove-button:hover {
+            background: rgba(var(--danger-rgb), 0.2);
+            border-color: rgba(var(--danger-rgb), 0.5);
+            color: #fecaca;
         }
 
         :root[data-theme="light"] .theme-toggle .icon-moon {
@@ -3163,6 +3244,17 @@
                 'referral.referrals.unknown': 'Referral',
                 'servers.empty': 'No servers connected yet',
                 'devices.empty': 'No devices connected yet',
+                'devices.remove_button_label': 'Reset device',
+                'devices.remove_confirm.title': 'Reset device',
+                'devices.remove_confirm.message': 'Do you really want to reset the device “{device}”?',
+                'devices.remove_confirm.confirm': 'Reset',
+                'devices.remove_confirm.cancel': 'Cancel',
+                'devices.remove_success.title': 'Device reset',
+                'devices.remove_success': 'The device has been reset successfully.',
+                'devices.remove_error.title': 'Unable to reset device',
+                'devices.remove_error.generic': 'Failed to reset the device. Please try again later.',
+                'devices.remove_error.network': 'Network error. Please try again later.',
+                'devices.remove_error.unauthorized': 'Authorization failed. Please reopen the mini app from Telegram and try again.',
                 'promo_levels.total_spent': 'Total spent',
                 'promo_levels.threshold': 'from {amount}',
                 'promo_levels.badge.current': 'Current level',
@@ -3334,6 +3426,17 @@
                 'referral.referrals.unknown': 'Реферал',
                 'servers.empty': 'Подключённых серверов пока нет',
                 'devices.empty': 'Подключённых устройств пока нет',
+                'devices.remove_button_label': 'Сбросить устройство',
+                'devices.remove_confirm.title': 'Сброс устройства',
+                'devices.remove_confirm.message': 'Сбросить устройство «{device}»?',
+                'devices.remove_confirm.confirm': 'Сбросить',
+                'devices.remove_confirm.cancel': 'Отмена',
+                'devices.remove_success.title': 'Устройство сброшено',
+                'devices.remove_success': 'Устройство успешно сброшено.',
+                'devices.remove_error.title': 'Не удалось сбросить устройство',
+                'devices.remove_error.generic': 'Не удалось сбросить устройство. Попробуйте позже.',
+                'devices.remove_error.network': 'Ошибка сети. Попробуйте позже.',
+                'devices.remove_error.unauthorized': 'Ошибка авторизации. Откройте мини-приложение из Telegram и повторите попытку.',
                 'promo_levels.total_spent': 'Всего потрачено',
                 'promo_levels.threshold': 'от {amount}',
                 'promo_levels.badge.current': 'Активно',
@@ -5584,6 +5687,10 @@
             }
 
             emptyState.classList.add('hidden');
+            const removeLabelRaw = t('devices.remove_button_label');
+            const removeLabel = (typeof removeLabelRaw === 'string' && removeLabelRaw !== 'devices.remove_button_label')
+                ? removeLabelRaw
+                : 'Reset device';
             list.innerHTML = devices.map(device => {
                 const platform = device?.platform ? String(device.platform) : '';
                 const model = device?.device_model ? String(device.device_model) : '';
@@ -5610,13 +5717,211 @@
                     ? `<div class="device-meta">${metaParts.map(part => `<span>${escapeHtml(part)}</span>`).join(' • ')}</div>`
                     : '';
 
+                const deviceHwid = device?.hwid ? String(device.hwid) : '';
+                const safeTitle = escapeHtml(title);
+                const removeButtonHtml = deviceHwid
+                    ? `
+                        <div class="device-actions">
+                            <button
+                                class="device-remove-button"
+                                type="button"
+                                data-device-hwid="${escapeHtml(deviceHwid)}"
+                                data-device-label="${safeTitle}"
+                                aria-label="${escapeHtml(removeLabel)}"
+                            >
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                    `
+                    : '';
+
                 return `
                     <li class="device-item">
-                        <div class="device-title">${escapeHtml(title)}</div>
+                        <div class="device-header">
+                            <div class="device-title">${safeTitle}</div>
+                            ${removeButtonHtml}
+                        </div>
                         ${metaHtml}
                     </li>
                 `;
             }).join('');
+
+            list.querySelectorAll('.device-remove-button').forEach(button => {
+                button.addEventListener('click', event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const { deviceHwid = '', deviceLabel = '' } = button.dataset;
+                    handleDeviceRemoval(deviceHwid, deviceLabel, button);
+                });
+            });
+        }
+
+        function setDeviceRemovingState(button, isRemoving) {
+            if (!button) {
+                return;
+            }
+            if (isRemoving) {
+                button.disabled = true;
+                button.classList.add('is-removing');
+            } else {
+                button.disabled = false;
+                button.classList.remove('is-removing');
+            }
+        }
+
+        function resolveDeviceLabel(value) {
+            const raw = typeof value === 'string' ? value.trim() : '';
+            if (raw) {
+                return raw;
+            }
+            const fallback = t('values.not_available');
+            if (typeof fallback === 'string' && fallback !== 'values.not_available') {
+                return fallback;
+            }
+            return 'Device';
+        }
+
+        function confirmDeviceRemoval(deviceName) {
+            const label = resolveDeviceLabel(deviceName);
+            const template = t('devices.remove_confirm.message');
+            const message = typeof template === 'string' && template.includes('{device}')
+                ? template.replace('{device}', label)
+                : template;
+            const title = t('devices.remove_confirm.title');
+
+            return new Promise(resolve => {
+                if (typeof tg.showPopup === 'function') {
+                    tg.showPopup({
+                        title: typeof title === 'string' ? title : 'Confirm',
+                        message: typeof message === 'string' ? message : String(message),
+                        buttons: [
+                            {
+                                id: 'confirm',
+                                type: 'destructive',
+                                text: t('devices.remove_confirm.confirm') || 'Reset',
+                            },
+                            {
+                                id: 'cancel',
+                                type: 'cancel',
+                                text: t('devices.remove_confirm.cancel') || 'Cancel',
+                            },
+                        ],
+                    }, buttonId => {
+                        resolve(buttonId === 'confirm');
+                    });
+                } else {
+                    resolve(window.confirm(typeof message === 'string' ? message : label));
+                }
+            });
+        }
+
+        async function handleDeviceRemoval(hwid, deviceName, button) {
+            const normalizedHwid = typeof hwid === 'string' ? hwid.trim() : '';
+            if (!normalizedHwid) {
+                showPopup(
+                    t('devices.remove_error.generic') || 'Failed to reset the device. Please try again later.',
+                    t('devices.remove_error.title') || 'Unable to reset device',
+                );
+                return;
+            }
+
+            const confirmed = await confirmDeviceRemoval(deviceName);
+            if (!confirmed) {
+                return;
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                showPopup(
+                    t('devices.remove_error.unauthorized')
+                        || 'Authorization failed. Please reopen the mini app from Telegram and try again.',
+                    t('devices.remove_error.title') || 'Unable to reset device',
+                );
+                return;
+            }
+
+            setDeviceRemovingState(button, true);
+
+            try {
+                const response = await fetch('/miniapp/devices/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData, hwid: normalizedHwid }),
+                });
+
+                let payload = null;
+                try {
+                    payload = await response.json();
+                } catch (error) {
+                    payload = null;
+                }
+
+                if (!response.ok || (payload && payload.success === false)) {
+                    const message = payload?.message
+                        || payload?.detail?.message
+                        || t('devices.remove_error.generic')
+                        || 'Failed to reset the device. Please try again later.';
+                    showPopup(
+                        message,
+                        t('devices.remove_error.title') || 'Unable to reset device',
+                    );
+                    return;
+                }
+
+                applyDeviceRemovalUpdate(normalizedHwid);
+                showPopup(
+                    t('devices.remove_success') || 'The device has been reset successfully.',
+                    t('devices.remove_success.title') || 'Device reset',
+                );
+            } catch (error) {
+                console.warn('Failed to remove device:', error);
+                showPopup(
+                    t('devices.remove_error.network') || 'Network error. Please try again later.',
+                    t('devices.remove_error.title') || 'Unable to reset device',
+                );
+            } finally {
+                setDeviceRemovingState(button, false);
+            }
+        }
+
+        function applyDeviceRemovalUpdate(hwid) {
+            if (!userData) {
+                return;
+            }
+
+            const normalizedHwid = typeof hwid === 'string' ? hwid.trim() : '';
+            if (!normalizedHwid) {
+                return;
+            }
+
+            const devices = Array.isArray(userData.connected_devices)
+                ? userData.connected_devices
+                : [];
+
+            const filtered = devices.filter(device => {
+                if (!device) {
+                    return false;
+                }
+                const deviceHwid = typeof device.hwid === 'string'
+                    ? device.hwid.trim()
+                    : device.hwid;
+                if (!deviceHwid) {
+                    return true;
+                }
+                return deviceHwid !== normalizedHwid;
+            });
+
+            userData.connected_devices = filtered;
+
+            const newCount = filtered.length;
+            userData.connected_devices_count = newCount;
+
+            const devicesCountElement = document.getElementById('devicesCount');
+            if (devicesCountElement) {
+                devicesCountElement.textContent = newCount;
+            }
+
+            renderDevicesList();
         }
 
         function renderFaqSection() {

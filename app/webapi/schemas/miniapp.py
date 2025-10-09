@@ -70,11 +70,22 @@ class MiniAppConnectedServer(BaseModel):
 
 
 class MiniAppDevice(BaseModel):
+    hwid: Optional[str] = None
     platform: Optional[str] = None
     device_model: Optional[str] = None
     app_version: Optional[str] = None
     last_seen: Optional[str] = None
     last_ip: Optional[str] = None
+
+
+class MiniAppDeviceRemovalRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    hwid: str
+
+
+class MiniAppDeviceRemovalResponse(BaseModel):
+    success: bool = True
+    message: Optional[str] = None
 
 
 class MiniAppTransaction(BaseModel):
