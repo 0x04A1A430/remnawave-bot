@@ -55,25 +55,6 @@
             --shadow-lg: 0 8px 32px rgba(2, 6, 23, 0.55);
         }
 
-        :root[data-theme="dark"] .promo-offer-active {
-            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.32), rgba(var(--primary-rgb), 0.62));
-            color: #f8fafc;
-        }
-
-        :root[data-theme="dark"] .promo-offer-active-timer-value {
-            background: rgba(15, 23, 42, 0.45);
-        }
-
-        :root[data-theme="dark"] .promo-offer-card {
-            background: rgba(30, 41, 59, 0.92);
-            border-color: rgba(148, 163, 184, 0.3);
-        }
-
-        :root[data-theme="dark"] .promo-offer-tag.neutral {
-            background: rgba(148, 163, 184, 0.2);
-            color: var(--text-primary);
-        }
-
         :root[data-theme="light"] {
             color-scheme: light;
         }
@@ -101,212 +82,6 @@
             margin: 0 auto;
             padding: 16px;
             padding-bottom: 32px;
-        }
-
-        .promo-offer-container {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .promo-offer-active {
-            position: relative;
-            border-radius: var(--radius-lg);
-            padding: 20px;
-            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.24), rgba(var(--primary-rgb), 0.42));
-            color: #ffffff;
-            overflow: hidden;
-            box-shadow: var(--shadow-md);
-        }
-
-        .promo-offer-active::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.35), transparent 55%);
-            pointer-events: none;
-        }
-
-        .promo-offer-active-header {
-            position: relative;
-            z-index: 1;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 16px;
-        }
-
-        .promo-offer-active-title {
-            font-size: 18px;
-            font-weight: 700;
-            letter-spacing: 0.02em;
-        }
-
-        .promo-offer-active-subtitle {
-            font-size: 13px;
-            opacity: 0.85;
-            margin-top: 6px;
-        }
-
-        .promo-offer-active-percent {
-            font-size: 34px;
-            font-weight: 800;
-            letter-spacing: 0.02em;
-            line-height: 1;
-            text-align: right;
-        }
-
-        .promo-offer-active-timer {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 16px;
-            position: relative;
-            z-index: 1;
-        }
-
-        .promo-offer-active-timer-label {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            opacity: 0.75;
-        }
-
-        .promo-offer-active-timer-value {
-            font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-            font-size: 18px;
-            font-weight: 700;
-            padding: 6px 12px;
-            border-radius: var(--radius);
-            background: rgba(255, 255, 255, 0.22);
-            letter-spacing: 0.08em;
-        }
-
-        .promo-offer-active-meta {
-            margin-top: 14px;
-            font-size: 13px;
-            opacity: 0.9;
-            position: relative;
-            z-index: 1;
-        }
-
-        .promo-offer-list {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .promo-offer-list.hidden {
-            display: none;
-        }
-
-        .promo-offer-list-header {
-            font-weight: 700;
-            font-size: 15px;
-            letter-spacing: 0.02em;
-            color: var(--text-primary);
-        }
-
-        .promo-offer-card {
-            border-radius: var(--radius-lg);
-            border: 1px solid var(--border-color);
-            background: var(--bg-secondary);
-            padding: 18px;
-            box-shadow: var(--shadow-sm);
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .promo-offer-card-title {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-
-        .promo-offer-card-message {
-            font-size: 14px;
-            color: var(--text-secondary);
-            line-height: 1.55;
-            word-break: break-word;
-        }
-
-        .promo-offer-card-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .promo-offer-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 12px;
-            font-weight: 600;
-            background: rgba(var(--primary-rgb), 0.12);
-            color: var(--primary);
-        }
-
-        .promo-offer-tag.muted {
-            background: rgba(148, 163, 184, 0.16);
-            color: var(--text-secondary);
-        }
-
-        .promo-offer-tag.neutral {
-            background: rgba(255, 255, 255, 0.12);
-            color: var(--text-primary);
-        }
-
-        .promo-offer-card-footer {
-            margin-top: 4px;
-            display: flex;
-            justify-content: flex-start;
-        }
-
-        .promo-offer-button {
-            position: relative;
-            border: none;
-            border-radius: var(--radius);
-            background: var(--primary);
-            color: var(--tg-theme-button-text-color);
-            font-weight: 700;
-            font-size: 15px;
-            padding: 10px 18px;
-            cursor: pointer;
-            box-shadow: var(--shadow-sm);
-            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-        }
-
-        .promo-offer-button:hover:not(.loading) {
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .promo-offer-button:active:not(.loading) {
-            transform: translateY(0);
-            box-shadow: var(--shadow-sm);
-        }
-
-        .promo-offer-button.loading {
-            opacity: 0.75;
-            pointer-events: none;
-        }
-
-        .promo-offer-button.loading::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 18px;
-            height: 18px;
-            margin: -9px 0 0 -9px;
-            border-radius: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.6);
-            border-top-color: transparent;
-            animation: spin 0.8s linear infinite;
         }
 
         /* Animations */
@@ -1821,24 +1596,6 @@
             </button>
         </div>
 
-        <div id="promoOfferContainer" class="promo-offer-container hidden">
-            <div id="activePromoBanner" class="promo-offer-active hidden">
-                <div class="promo-offer-active-header">
-                    <div>
-                        <div class="promo-offer-active-title" id="activePromoTitle"></div>
-                        <div class="promo-offer-active-subtitle hidden" id="activePromoSubtitle"></div>
-                    </div>
-                    <div class="promo-offer-active-percent" id="activePromoPercent">0%</div>
-                </div>
-                <div class="promo-offer-active-timer hidden" id="activePromoTimerWrapper">
-                    <span class="promo-offer-active-timer-label" id="activePromoTimerLabel"></span>
-                    <span class="promo-offer-active-timer-value" id="activePromoTimer">—</span>
-                </div>
-                <div class="promo-offer-active-meta" id="activePromoMeta"></div>
-            </div>
-            <div class="promo-offer-list hidden" id="pendingPromoList"></div>
-        </div>
-
         <!-- Header -->
         <div class="header animate-in">
             <div class="logo-container">
@@ -2245,34 +2002,6 @@
                 'info.promo_group': 'Promo group',
                 'info.device_limit': 'Device limit',
                 'info.autopay': 'Auto-pay',
-                'promo.offer.active.title': 'Discount {percent}% is active',
-                'promo.offer.active.subtitle': 'Your exclusive offer is already applied to payments.',
-                'promo.offer.active.timer': 'Expires in',
-                'promo.offer.active.until': 'Valid until {datetime}',
-                'promo.offer.active.no_expiry': 'Discount is active',
-                'promo.offer.available.header': 'Special offers',
-                'promo.offer.default.title': 'Special offer',
-                'promo.offer.discount.percent': 'Save {percent}%',
-                'promo.offer.expires': 'Valid until {datetime}',
-                'promo.offer.effect.test_access': 'Test access',
-                'promo.offer.button.claim': 'Activate',
-                'promo.offer.claim.title.success': 'Offer activated',
-                'promo.offer.claim.title.error': 'Unable to activate offer',
-                'promo.offer.claim.success.percent': 'Discount {percent}% is now active.',
-                'promo.offer.claim.success.test_access': 'Test access activated. Enjoy the new servers!',
-                'promo.offer.claim.success.test_access_until': 'Access valid until {datetime}.',
-                'promo.offer.claim.success.test_access_servers': 'New servers: {servers}',
-                'promo.offer.claim.success.generic': 'Offer activated successfully.',
-                'promo.offer.claim.error.expired': 'This offer has expired.',
-                'promo.offer.claim.error.inactive': 'This offer is no longer active.',
-                'promo.offer.claim.error.already_claimed': 'You have already activated this offer.',
-                'promo.offer.claim.error.no_discount': 'This offer does not provide a discount anymore.',
-                'promo.offer.claim.error.subscription_missing': 'Subscription for this account is unavailable.',
-                'promo.offer.claim.error.squads_missing': 'Offer configuration is incomplete. Please contact support.',
-                'promo.offer.claim.error.already_connected': 'Test servers are already available in your account.',
-                'promo.offer.claim.error.remnawave_sync_failed': 'Unable to activate test access right now. Please try again later.',
-                'promo.offer.claim.error.unknown': 'Failed to activate the offer. Please try again later.',
-                'promo.offer.claim.error.generic': 'Something went wrong. Please try again later.',
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
@@ -2358,34 +2087,6 @@
                 'info.promo_group': 'Уровень',
                 'info.device_limit': 'Лимит устройств',
                 'info.autopay': 'Автоплатеж',
-                'promo.offer.active.title': 'Скидка {percent}% активна',
-                'promo.offer.active.subtitle': 'Ваше эксклюзивное предложение уже применяется к оплатам.',
-                'promo.offer.active.timer': 'Истекает через',
-                'promo.offer.active.until': 'Действует до {datetime}',
-                'promo.offer.active.no_expiry': 'Скидка активна',
-                'promo.offer.available.header': 'Спецпредложения',
-                'promo.offer.default.title': 'Спецпредложение',
-                'promo.offer.discount.percent': 'Скидка {percent}%',
-                'promo.offer.expires': 'Действует до {datetime}',
-                'promo.offer.effect.test_access': 'Тестовый доступ',
-                'promo.offer.button.claim': 'Активировать',
-                'promo.offer.claim.title.success': 'Предложение активировано',
-                'promo.offer.claim.title.error': 'Не удалось активировать предложение',
-                'promo.offer.claim.success.percent': 'Скидка {percent}% активирована.',
-                'promo.offer.claim.success.test_access': 'Тестовый доступ подключён. Новые серверы уже доступны.',
-                'promo.offer.claim.success.test_access_until': 'Доступ действует до {datetime}.',
-                'promo.offer.claim.success.test_access_servers': 'Новые серверы: {servers}',
-                'promo.offer.claim.success.generic': 'Предложение успешно активировано.',
-                'promo.offer.claim.error.expired': 'Срок действия предложения истёк.',
-                'promo.offer.claim.error.inactive': 'Это предложение больше не активно.',
-                'promo.offer.claim.error.already_claimed': 'Вы уже активировали это предложение.',
-                'promo.offer.claim.error.no_discount': 'По этому предложению больше нет скидки.',
-                'promo.offer.claim.error.subscription_missing': 'Подписка для этого аккаунта не найдена.',
-                'promo.offer.claim.error.squads_missing': 'Настройки предложения неполные. Свяжитесь с поддержкой.',
-                'promo.offer.claim.error.already_connected': 'Тестовые серверы уже подключены к вашему аккаунту.',
-                'promo.offer.claim.error.remnawave_sync_failed': 'Не удалось выдать тестовый доступ. Попробуйте позже.',
-                'promo.offer.claim.error.unknown': 'Не удалось активировать предложение. Попробуйте позже.',
-                'promo.offer.claim.error.generic': 'Что-то пошло не так. Попробуйте позже.',
                 'button.connect.default': 'Подключиться к VPN',
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
@@ -2546,8 +2247,6 @@
         let currentPlatform = 'android';
         let configPurchaseUrl = null;
         let subscriptionPurchaseUrl = null;
-        let currentInitData = '';
-        let activePromoTimerId = null;
         let preferredLanguage = 'en';
         let languageLockedByUser = false;
         let currentErrorState = null;
@@ -2756,8 +2455,71 @@
                     throw createError('Authorization Error', 'Missing Telegram ID');
                 }
 
-                const subscriptionPayload = await fetchSubscriptionData(initData);
-                applySubscriptionData(subscriptionPayload);
+                const response = await fetch('/miniapp/subscription', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ initData })
+                });
+
+                if (!response.ok) {
+                    let detail = response.status === 401
+                        ? 'Authorization failed. Please open the mini app from Telegram.'
+                        : 'Subscription not found';
+                    let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
+                    let purchaseUrl = null;
+
+                    try {
+                        const errorPayload = await response.json();
+                        if (errorPayload?.detail) {
+                            if (typeof errorPayload.detail === 'string') {
+                                detail = errorPayload.detail;
+                            } else if (typeof errorPayload.detail === 'object') {
+                                if (typeof errorPayload.detail.message === 'string') {
+                                    detail = errorPayload.detail.message;
+                                }
+                                purchaseUrl = errorPayload.detail.purchase_url
+                                    || errorPayload.detail.purchaseUrl
+                                    || purchaseUrl;
+                            }
+                        } else if (typeof errorPayload?.message === 'string') {
+                            detail = errorPayload.message;
+                        }
+
+                        if (typeof errorPayload?.title === 'string') {
+                            title = errorPayload.title;
+                        }
+
+                        purchaseUrl = purchaseUrl
+                            || errorPayload?.purchase_url
+                            || errorPayload?.purchaseUrl
+                            || null;
+                    } catch (parseError) {
+                        // ignore
+                    }
+
+                    const errorObject = createError(title, detail, response.status);
+                    const normalizedPurchaseUrl = normalizeUrl(purchaseUrl);
+                    if (normalizedPurchaseUrl) {
+                        errorObject.purchaseUrl = normalizedPurchaseUrl;
+                    }
+                    throw errorObject;
+                }
+
+                userData = await response.json();
+                userData.subscriptionUrl = userData.subscription_url || null;
+                userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
+                subscriptionPurchaseUrl = normalizeUrl(
+                    userData.subscription_purchase_url
+                    || userData.subscriptionPurchaseUrl
+                );
+                if (subscriptionPurchaseUrl) {
+                    userData.subscriptionPurchaseUrl = subscriptionPurchaseUrl;
+                }
+                if (userData.branding) {
+                    applyBrandingOverrides(userData.branding);
+                }
 
                 const responseLanguage = resolveLanguage(userData?.user?.language);
                 if (responseLanguage && !languageLockedByUser) {
@@ -2810,134 +2572,6 @@
             } catch (error) {
                 console.warn('Unable to load apps configuration:', error);
                 appsConfig = {};
-            }
-        }
-
-        async function fetchSubscriptionData(initDataValue) {
-            const payload = initDataValue || currentInitData;
-            if (initDataValue) {
-                currentInitData = initDataValue;
-            }
-            if (!payload) {
-                throw createError('Authorization Error', 'Missing Telegram ID');
-            }
-
-            const response = await fetch('/miniapp/subscription', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ initData: payload })
-            });
-
-            if (!response.ok) {
-                let detail = response.status === 401
-                    ? 'Authorization failed. Please open the mini app from Telegram.'
-                    : 'Subscription not found';
-                let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
-                let purchaseUrl = null;
-
-                try {
-                    const errorPayload = await response.json();
-                    if (errorPayload?.detail) {
-                        if (typeof errorPayload.detail === 'string') {
-                            detail = errorPayload.detail;
-                        } else if (typeof errorPayload.detail === 'object') {
-                            if (typeof errorPayload.detail.message === 'string') {
-                                detail = errorPayload.detail.message;
-                            }
-                            purchaseUrl = errorPayload.detail.purchase_url
-                                || errorPayload.detail.purchaseUrl
-                                || purchaseUrl;
-                        }
-                    } else if (typeof errorPayload?.message === 'string') {
-                        detail = errorPayload.message;
-                    }
-
-                    if (typeof errorPayload?.title === 'string') {
-                        title = errorPayload.title;
-                    }
-
-                    purchaseUrl = purchaseUrl
-                        || errorPayload?.purchase_url
-                        || errorPayload?.purchaseUrl
-                        || null;
-                } catch (parseError) {
-                    // ignore
-                }
-
-                const errorObject = createError(title, detail, response.status);
-                const normalizedPurchaseUrl = normalizeUrl(purchaseUrl);
-                if (normalizedPurchaseUrl) {
-                    errorObject.purchaseUrl = normalizedPurchaseUrl;
-                }
-                throw errorObject;
-            }
-
-            const data = await response.json();
-            data.subscriptionUrl = data.subscription_url || data.subscriptionUrl || null;
-            data.subscriptionCryptoLink = data.subscription_crypto_link || data.subscriptionCryptoLink || null;
-
-            const normalizedPurchase = normalizeUrl(
-                data.subscription_purchase_url
-                || data.subscriptionPurchaseUrl
-            );
-            if (normalizedPurchase) {
-                data.subscriptionPurchaseUrl = normalizedPurchase;
-            } else {
-                delete data.subscriptionPurchaseUrl;
-            }
-
-            return data;
-        }
-
-        function applySubscriptionData(data) {
-            if (!data) {
-                return;
-            }
-
-            userData = data;
-            userData.subscriptionUrl = userData.subscriptionUrl || userData.subscription_url || null;
-            userData.subscriptionCryptoLink = userData.subscriptionCryptoLink || userData.subscription_crypto_link || null;
-
-            subscriptionPurchaseUrl = normalizeUrl(
-                userData.subscription_purchase_url
-                || userData.subscriptionPurchaseUrl
-            );
-
-            if (subscriptionPurchaseUrl) {
-                userData.subscriptionPurchaseUrl = subscriptionPurchaseUrl;
-            } else {
-                delete userData.subscriptionPurchaseUrl;
-            }
-
-            if (userData.branding) {
-                applyBrandingOverrides(userData.branding);
-            }
-        }
-
-        async function refreshSubscriptionData(options = {}) {
-            const { silent = false } = options;
-            try {
-                const data = await fetchSubscriptionData();
-                applySubscriptionData(data);
-                renderUserData();
-                renderApps();
-                updateActionButtons();
-            } catch (error) {
-                console.error('Failed to refresh subscription data:', error);
-                if (!silent) {
-                    const titleKey = 'promo.offer.claim.title.error';
-                    const messageKey = 'promo.offer.claim.error.generic';
-                    const title = t(titleKey);
-                    const message = t(messageKey);
-                    showPopup(
-                        message === messageKey
-                            ? 'Unable to update data right now. Please try again later.'
-                            : message,
-                        title === titleKey ? 'Error' : title,
-                    );
-                }
             }
         }
 
@@ -3036,7 +2670,6 @@
                     : autopayLabel;
             }
 
-            renderPromoOffers();
             renderPromoSection();
             renderBalanceSection();
             renderTransactionHistory();
@@ -3373,545 +3006,6 @@
             }).join('');
 
             list.innerHTML = itemsHtml;
-        }
-
-        function clearActivePromoTimer() {
-            if (activePromoTimerId) {
-                clearInterval(activePromoTimerId);
-                activePromoTimerId = null;
-            }
-        }
-
-        function getPromoTimerLabels() {
-            const lang = (preferredLanguage || 'en').split('-')[0];
-            if (lang === 'ru') {
-                return { day: 'д', hour: 'ч', minute: 'м' };
-            }
-            return { day: 'd', hour: 'h', minute: 'm' };
-        }
-
-        function formatPromoTimeRemaining(expiresDate) {
-            if (!expiresDate || Number.isNaN(expiresDate.getTime())) {
-                return null;
-            }
-
-            const now = new Date();
-            const diffMs = expiresDate.getTime() - now.getTime();
-            if (diffMs <= 0) {
-                return null;
-            }
-
-            const totalMinutes = Math.max(1, Math.floor(diffMs / (1000 * 60)));
-            const labels = getPromoTimerLabels();
-            const days = Math.floor(totalMinutes / (60 * 24));
-            const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-            const minutes = totalMinutes % 60;
-
-            const parts = [];
-            if (days > 0) {
-                parts.push(`${days}${labels.day}`);
-            }
-            if (hours > 0 || days > 0) {
-                parts.push(`${hours}${labels.hour}`);
-            }
-            parts.push(`${minutes}${labels.minute}`);
-
-            return parts.join(' ');
-        }
-
-        function renderActivePromoBanner() {
-            const banner = document.getElementById('activePromoBanner');
-            if (!banner) {
-                return false;
-            }
-
-            const titleElement = document.getElementById('activePromoTitle');
-            const subtitleElement = document.getElementById('activePromoSubtitle');
-            const percentElement = document.getElementById('activePromoPercent');
-            const timerWrapper = document.getElementById('activePromoTimerWrapper');
-            const timerLabelElement = document.getElementById('activePromoTimerLabel');
-            const timerValueElement = document.getElementById('activePromoTimer');
-            const metaElement = document.getElementById('activePromoMeta');
-
-            const percentRaw = userData?.user?.promo_offer_discount_percent;
-            const percent = Number(percentRaw);
-            const expiresRaw = userData?.user?.promo_offer_discount_expires_at;
-            const expiresDate = expiresRaw ? new Date(expiresRaw) : null;
-
-            if (!percent || !Number.isFinite(percent) || percent <= 0) {
-                banner.classList.add('hidden');
-                clearActivePromoTimer();
-                if (timerWrapper) {
-                    timerWrapper.classList.add('hidden');
-                }
-                if (metaElement) {
-                    metaElement.textContent = '';
-                }
-                return false;
-            }
-
-            const titleTemplate = t('promo.offer.active.title');
-            if (titleElement) {
-                if (titleTemplate && titleTemplate.includes('{percent}') && titleTemplate !== 'promo.offer.active.title') {
-                    titleElement.textContent = titleTemplate.replace('{percent}', percent);
-                } else {
-                    titleElement.textContent = `🔥 ${percent}%`;
-                }
-            }
-
-            if (subtitleElement) {
-                const subtitleTemplate = t('promo.offer.active.subtitle');
-                if (subtitleTemplate && subtitleTemplate !== 'promo.offer.active.subtitle') {
-                    subtitleElement.textContent = subtitleTemplate;
-                    subtitleElement.classList.remove('hidden');
-                } else {
-                    subtitleElement.textContent = '';
-                    subtitleElement.classList.add('hidden');
-                }
-            }
-
-            if (percentElement) {
-                percentElement.textContent = `${percent}%`;
-            }
-
-            if (timerWrapper && timerLabelElement && timerValueElement) {
-                if (expiresDate && !Number.isNaN(expiresDate.getTime()) && expiresDate > new Date()) {
-                    timerLabelElement.textContent = t('promo.offer.active.timer');
-                    timerWrapper.classList.remove('hidden');
-
-                    const updateTimer = () => {
-                        const formatted = formatPromoTimeRemaining(expiresDate);
-                        if (!formatted) {
-                            clearActivePromoTimer();
-                            timerWrapper.classList.add('hidden');
-                            if (metaElement) {
-                                const fallback = t('promo.offer.claim.error.expired');
-                                metaElement.textContent = fallback === 'promo.offer.claim.error.expired'
-                                    ? 'Expired'
-                                    : fallback;
-                            }
-                            return;
-                        }
-                        timerValueElement.textContent = formatted;
-                    };
-
-                    updateTimer();
-                    clearActivePromoTimer();
-                    activePromoTimerId = setInterval(updateTimer, 1000);
-                } else {
-                    timerWrapper.classList.add('hidden');
-                    clearActivePromoTimer();
-                }
-            }
-
-            if (metaElement) {
-                if (expiresDate && !Number.isNaN(expiresDate.getTime())) {
-                    const formatted = formatDateTime(expiresDate.toISOString());
-                    const template = t('promo.offer.active.until');
-                    metaElement.textContent = template && template.includes('{datetime}') && template !== 'promo.offer.active.until'
-                        ? template.replace('{datetime}', formatted)
-                        : formatted;
-                } else {
-                    const text = t('promo.offer.active.no_expiry');
-                    metaElement.textContent = text === 'promo.offer.active.no_expiry'
-                        ? 'Discount is active'
-                        : text;
-                }
-            }
-
-            banner.classList.remove('hidden');
-            return true;
-        }
-
-        function renderPendingPromoOffers() {
-            const container = document.getElementById('pendingPromoList');
-            if (!container) {
-                return false;
-            }
-
-            container.innerHTML = '';
-            const offers = Array.isArray(userData?.promo_offers) ? userData.promo_offers : [];
-            if (!offers.length) {
-                container.classList.add('hidden');
-                return false;
-            }
-
-            container.classList.remove('hidden');
-
-            const header = document.createElement('div');
-            header.className = 'promo-offer-list-header';
-            const headerTemplate = t('promo.offer.available.header');
-            header.textContent = headerTemplate === 'promo.offer.available.header'
-                ? 'Special offers'
-                : headerTemplate;
-            container.appendChild(header);
-
-            offers.forEach(offer => {
-                const card = document.createElement('div');
-                card.className = 'promo-offer-card';
-
-                const title = document.createElement('div');
-                title.className = 'promo-offer-card-title';
-                const titleRaw = offer?.name || t('promo.offer.default.title');
-                title.textContent = titleRaw === 'promo.offer.default.title' ? 'Special offer' : titleRaw;
-                card.appendChild(title);
-
-                if (offer?.message) {
-                    const message = document.createElement('div');
-                    message.className = 'promo-offer-card-message';
-                    message.innerHTML = escapeHtml(String(offer.message)).replace(/\n/g, '<br>');
-                    card.appendChild(message);
-                }
-
-                const tags = document.createElement('div');
-                tags.className = 'promo-offer-card-tags';
-
-                const discountPercent = Number(offer?.discount_percent || 0);
-                if (discountPercent > 0) {
-                    const tag = document.createElement('span');
-                    tag.className = 'promo-offer-tag';
-                    const template = t('promo.offer.discount.percent');
-                    tag.textContent = template && template.includes('{percent}') && template !== 'promo.offer.discount.percent'
-                        ? template.replace('{percent}', discountPercent)
-                        : `${discountPercent}%`;
-                    tags.appendChild(tag);
-                }
-
-                const effectType = String(offer?.effect_type || '').toLowerCase();
-                if (effectType === 'test_access') {
-                    const tag = document.createElement('span');
-                    tag.className = 'promo-offer-tag neutral';
-                    const label = t('promo.offer.effect.test_access');
-                    tag.textContent = label === 'promo.offer.effect.test_access' ? 'Test access' : label;
-                    tags.appendChild(tag);
-                }
-
-                if (offer?.expires_at) {
-                    const formatted = formatDateTime(offer.expires_at);
-                    if (formatted) {
-                        const tag = document.createElement('span');
-                        tag.className = 'promo-offer-tag muted';
-                        const template = t('promo.offer.expires');
-                        tag.textContent = template && template.includes('{datetime}') && template !== 'promo.offer.expires'
-                            ? template.replace('{datetime}', formatted)
-                            : formatted;
-                        tags.appendChild(tag);
-                    }
-                }
-
-                if (tags.children.length) {
-                    card.appendChild(tags);
-                }
-
-                const footer = document.createElement('div');
-                footer.className = 'promo-offer-card-footer';
-                const button = document.createElement('button');
-                button.type = 'button';
-                button.className = 'promo-offer-button';
-                const buttonLabel = (offer?.button_text && typeof offer.button_text === 'string')
-                    ? offer.button_text
-                    : t('promo.offer.button.claim');
-                button.textContent = buttonLabel === 'promo.offer.button.claim' ? 'Activate' : buttonLabel;
-                button.addEventListener('click', () => claimPromoOffer(offer.id, button));
-                footer.appendChild(button);
-                card.appendChild(footer);
-
-                container.appendChild(card);
-            });
-
-            return true;
-        }
-
-        function renderPromoOffers() {
-            const container = document.getElementById('promoOfferContainer');
-            if (!container) {
-                return;
-            }
-
-            const hasActive = renderActivePromoBanner();
-            const hasPending = renderPendingPromoOffers();
-            container.classList.toggle('hidden', !(hasActive || hasPending));
-        }
-
-        function setPromoOfferButtonLoading(button, isLoading) {
-            if (!button) {
-                return;
-            }
-
-            if (isLoading) {
-                button.disabled = true;
-                button.classList.add('loading');
-            } else {
-                button.disabled = false;
-                button.classList.remove('loading');
-            }
-        }
-
-        function getPromoClaimErrorMessage(errorCode) {
-            if (!errorCode) {
-                const fallbackKey = 'promo.offer.claim.error.generic';
-                const fallback = t(fallbackKey);
-                return fallback === fallbackKey
-                    ? 'Something went wrong. Please try again later.'
-                    : fallback;
-            }
-
-            const normalized = String(errorCode).toLowerCase();
-            const key = `promo.offer.claim.error.${normalized}`;
-            const message = t(key);
-            if (message && message !== key) {
-                return message;
-            }
-
-            const fallbackKey = 'promo.offer.claim.error.generic';
-            const fallback = t(fallbackKey);
-            return fallback === fallbackKey
-                ? 'Something went wrong. Please try again later.'
-                : fallback;
-        }
-
-        function formatPromoClaimSuccessMessage(result) {
-            const genericKey = 'promo.offer.claim.success.generic';
-            const genericMessage = t(genericKey);
-
-            if (!result || typeof result !== 'object') {
-                return genericMessage === genericKey
-                    ? 'Offer activated successfully.'
-                    : genericMessage;
-            }
-
-            const effectType = String(result.effect_type || '').toLowerCase();
-
-            if (effectType === 'percent_discount') {
-                const percent = Number(result.discount_percent
-                    || result.discountPercent
-                    || userData?.user?.promo_offer_discount_percent
-                    || 0);
-                const normalized = Number.isFinite(percent) ? Math.max(0, Math.round(percent)) : 0;
-                const template = t('promo.offer.claim.success.percent');
-                if (template && template.includes('{percent}') && template !== 'promo.offer.claim.success.percent') {
-                    return template.replace('{percent}', normalized);
-                }
-                if (normalized > 0) {
-                    return `Discount ${normalized}% is now active.`;
-                }
-            }
-
-            if (effectType === 'test_access') {
-                const parts = [];
-                const baseKey = 'promo.offer.claim.success.test_access';
-                const baseMessage = t(baseKey);
-                parts.push(baseMessage === baseKey
-                    ? 'Test access activated. Enjoy the new servers!'
-                    : baseMessage);
-
-                if (result.test_access_expires_at || result.testAccessExpiresAt) {
-                    const expiresAt = result.test_access_expires_at || result.testAccessExpiresAt;
-                    const formatted = formatDateTime(expiresAt);
-                    if (formatted) {
-                        const untilKey = 'promo.offer.claim.success.test_access_until';
-                        const untilTemplate = t(untilKey);
-                        const untilMessage = untilTemplate && untilTemplate.includes('{datetime}') && untilTemplate !== untilKey
-                            ? untilTemplate.replace('{datetime}', formatted)
-                            : (untilTemplate === untilKey
-                                ? `Access valid until ${formatted}.`
-                                : untilTemplate);
-                        parts.push(untilMessage);
-                    }
-                }
-
-                const newSquads = result.newly_added_squads || result.newlyAddedSquads;
-                if (Array.isArray(newSquads) && newSquads.length) {
-                    const joined = newSquads.join(', ');
-                    const serversKey = 'promo.offer.claim.success.test_access_servers';
-                    const serversTemplate = t(serversKey);
-                    const serversMessage = serversTemplate && serversTemplate.includes('{servers}') && serversTemplate !== serversKey
-                        ? serversTemplate.replace('{servers}', joined)
-                        : (serversTemplate === serversKey
-                            ? `New servers: ${joined}`
-                            : serversTemplate);
-                    parts.push(serversMessage);
-                }
-
-                return parts.join(' ');
-            }
-
-            return genericMessage === genericKey
-                ? 'Offer activated successfully.'
-                : genericMessage;
-        }
-
-        function applyPromoClaimResult(offerId, result) {
-            if (!userData || typeof userData !== 'object') {
-                return;
-            }
-
-            if (Array.isArray(userData.promo_offers)) {
-                userData.promo_offers = userData.promo_offers.filter(offer => offer?.id !== offerId);
-            }
-
-            if (userData.user && typeof userData.user === 'object') {
-                if (Object.prototype.hasOwnProperty.call(result || {}, 'discount_percent')
-                    || Object.prototype.hasOwnProperty.call(result || {}, 'discountPercent')) {
-                    const percentRaw = result?.discount_percent ?? result?.discountPercent;
-                    const percent = Number(percentRaw);
-                    if (Number.isFinite(percent)) {
-                        userData.user.promo_offer_discount_percent = percent;
-                    }
-                }
-
-                if (Object.prototype.hasOwnProperty.call(result || {}, 'discount_expires_at')
-                    || Object.prototype.hasOwnProperty.call(result || {}, 'discountExpiresAt')) {
-                    const expiresAt = result?.discount_expires_at ?? result?.discountExpiresAt;
-                    userData.user.promo_offer_discount_expires_at = expiresAt || null;
-                } else if ((result?.effect_type || result?.effectType) === 'percent_discount'
-                    && (result?.discount_percent || result?.discountPercent)) {
-                    userData.user.promo_offer_discount_expires_at = null;
-                }
-            }
-
-            if (Array.isArray(userData.connected_squads)) {
-                const newSquads = result?.newly_added_squads || result?.newlyAddedSquads;
-                if (Array.isArray(newSquads) && newSquads.length) {
-                    const merged = new Set(userData.connected_squads);
-                    newSquads.forEach(squad => {
-                        if (squad) {
-                            merged.add(String(squad));
-                        }
-                    });
-                    userData.connected_squads = Array.from(merged);
-                }
-            }
-
-            if (Array.isArray(userData.connected_servers)) {
-                const newSquads = result?.newly_added_squads || result?.newlyAddedSquads;
-                if (Array.isArray(newSquads) && newSquads.length) {
-                    const knownIds = new Set(
-                        userData.connected_servers
-                            .map(server => (server && server.uuid ? String(server.uuid) : null))
-                            .filter(Boolean)
-                    );
-                    newSquads.forEach(squad => {
-                        const normalized = squad ? String(squad) : '';
-                        if (normalized && !knownIds.has(normalized)) {
-                            userData.connected_servers.push({
-                                uuid: normalized,
-                                name: normalized,
-                            });
-                            knownIds.add(normalized);
-                        }
-                    });
-                }
-            }
-        }
-
-        async function claimPromoOffer(offerId, triggerButton) {
-            const button = triggerButton instanceof HTMLElement ? triggerButton : null;
-
-            if (!offerId) {
-                return;
-            }
-
-            const initData = currentInitData;
-            if (!initData) {
-                const titleKey = 'promo.offer.claim.title.error';
-                const title = t(titleKey);
-                const messageKey = 'promo.offer.claim.error.generic';
-                const message = t(messageKey);
-                showPopup(
-                    message === messageKey
-                        ? 'Unable to activate the offer. Please reopen the mini app from Telegram.'
-                        : message,
-                    title === titleKey ? 'Error' : title,
-                );
-                return;
-            }
-
-            setPromoOfferButtonLoading(button, true);
-
-            try {
-                const response = await fetch(`/miniapp/promo-offers/${encodeURIComponent(offerId)}/claim`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ initData })
-                });
-
-                let payload = null;
-                const contentType = response.headers?.get?.('content-type') || '';
-                if (contentType.includes('application/json')) {
-                    try {
-                        payload = await response.json();
-                    } catch (parseError) {
-                        console.warn('Unable to parse promo offer claim response:', parseError);
-                    }
-                }
-
-                if (!response.ok) {
-                    const titleKey = 'promo.offer.claim.title.error';
-                    const title = t(titleKey);
-                    const fallbackKey = 'promo.offer.claim.error.generic';
-                    const fallback = t(fallbackKey);
-                    const detail = payload && typeof payload === 'object'
-                        ? (payload.detail || payload.message || payload.error)
-                        : null;
-                    const message = typeof detail === 'string' && detail.trim().length
-                        ? detail.trim()
-                        : (fallback === fallbackKey
-                            ? 'Unable to activate the offer. Please try again later.'
-                            : fallback);
-                    showPopup(message, title === titleKey ? 'Error' : title);
-                    return;
-                }
-
-                if (!payload || typeof payload !== 'object') {
-                    const titleKey = 'promo.offer.claim.title.error';
-                    const title = t(titleKey);
-                    const fallbackKey = 'promo.offer.claim.error.generic';
-                    const fallback = t(fallbackKey);
-                    const message = fallback === fallbackKey
-                        ? 'Something went wrong. Please try again later.'
-                        : fallback;
-                    showPopup(message, title === titleKey ? 'Error' : title);
-                    return;
-                }
-
-                if (!payload.success) {
-                    const titleKey = 'promo.offer.claim.title.error';
-                    const title = t(titleKey);
-                    const message = getPromoClaimErrorMessage(payload.error_code || payload.errorCode);
-                    showPopup(message, title === titleKey ? 'Error' : title);
-                    return;
-                }
-
-                applyPromoClaimResult(offerId, payload);
-                renderPromoOffers();
-                renderServersList();
-
-                const titleKey = 'promo.offer.claim.title.success';
-                const title = t(titleKey);
-                const message = formatPromoClaimSuccessMessage(payload);
-                showPopup(message, title === titleKey ? 'Success' : title);
-
-                try {
-                    await refreshSubscriptionData({ silent: true });
-                } catch (refreshError) {
-                    console.warn('Failed to refresh subscription data after promo claim:', refreshError);
-                }
-            } catch (error) {
-                console.error('Failed to claim promo offer:', error);
-                const titleKey = 'promo.offer.claim.title.error';
-                const title = t(titleKey);
-                const fallbackKey = 'promo.offer.claim.error.generic';
-                const fallback = t(fallbackKey);
-                const message = fallback === fallbackKey
-                    ? 'Something went wrong. Please try again later.'
-                    : fallback;
-                showPopup(message, title === titleKey ? 'Error' : title);
-            } finally {
-                setPromoOfferButtonLoading(button, false);
-            }
         }
 
         function renderServersList() {
