@@ -244,35 +244,6 @@ class MiniAppReferralList(BaseModel):
     items: List[MiniAppReferralItem] = Field(default_factory=list)
 
 
-class MiniAppPaymentMethod(BaseModel):
-    id: str
-    name: str
-    description: Optional[str] = None
-    icon: Optional[str] = None
-    requires_amount: bool = False
-    amount_min_kopeks: Optional[int] = None
-    amount_max_kopeks: Optional[int] = None
-    currency: Optional[str] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class MiniAppPaymentRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-    method_id: str = Field(..., alias="methodId")
-    amount: Optional[float] = None
-    currency: Optional[str] = None
-
-
-class MiniAppPaymentResponse(BaseModel):
-    success: bool = True
-    method_id: str = Field(..., alias="methodId")
-    redirect_url: Optional[str] = None
-    invoice_url: Optional[str] = None
-    amount_kopeks: Optional[int] = None
-    details: Dict[str, Any] = Field(default_factory=dict)
-    message: Optional[str] = None
-
-
 class MiniAppReferralInfo(BaseModel):
     referral_code: Optional[str] = None
     referral_link: Optional[str] = None
@@ -316,5 +287,4 @@ class MiniAppSubscriptionResponse(BaseModel):
     faq: Optional[MiniAppFaq] = None
     legal_documents: Optional[MiniAppLegalDocuments] = None
     referral: Optional[MiniAppReferralInfo] = None
-    payment_methods: List[MiniAppPaymentMethod] = Field(default_factory=list)
 
