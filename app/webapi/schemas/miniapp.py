@@ -34,6 +34,9 @@ class MiniAppSubscriptionUser(BaseModel):
     traffic_limit_label: str
     lifetime_used_traffic_gb: float = 0.0
     has_active_subscription: bool = False
+    promo_offer_discount_percent: int = 0
+    promo_offer_discount_source: Optional[str] = None
+    promo_offer_discount_expires_at: Optional[datetime] = None
 
 
 class MiniAppPromoGroup(BaseModel):
@@ -59,6 +62,19 @@ class MiniAppAutoPromoGroupLevel(BaseModel):
     device_discount_percent: int = 0
     period_discounts: Dict[int, int] = Field(default_factory=dict)
     apply_discounts_to_addons: bool = True
+
+
+class MiniAppPromoOffer(BaseModel):
+    id: int
+    template_id: Optional[int] = None
+    name: Optional[str] = None
+    message: Optional[str] = None
+    button_text: Optional[str] = None
+    discount_percent: int = 0
+    bonus_amount_kopeks: int = 0
+    expires_at: datetime
+    effect_type: str = "percent_discount"
+    extra_data: Dict[str, Any] = Field(default_factory=dict)
 
 
 class MiniAppConnectedServer(BaseModel):
@@ -111,10 +127,25 @@ class MiniAppSubscriptionResponse(BaseModel):
     transactions: List[MiniAppTransaction] = Field(default_factory=list)
     promo_group: Optional[MiniAppPromoGroup] = None
     auto_assign_promo_groups: List[MiniAppAutoPromoGroupLevel] = Field(default_factory=list)
+    promo_offers: List[MiniAppPromoOffer] = Field(default_factory=list)
     total_spent_kopeks: int = 0
     total_spent_rubles: float = 0.0
     total_spent_label: Optional[str] = None
     subscription_type: str
     autopay_enabled: bool = False
     branding: Optional[MiniAppBranding] = None
+
+
+class MiniAppPromoOfferClaimRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+
+
+class MiniAppPromoOfferClaimResponse(BaseModel):
+    success: bool = True
+    effect_type: Optional[str] = None
+    discount_percent: Optional[int] = None
+    discount_expires_at: Optional[datetime] = None
+    test_access_expires_at: Optional[datetime] = None
+    newly_added_squads: List[str] = Field(default_factory=list)
+    error_code: Optional[str] = None
 

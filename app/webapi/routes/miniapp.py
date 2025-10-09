@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import html
 import logging
+import re
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,11 +11,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.crud.discount_offer import get_offer_by_id, list_discount_offers
+from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.crud.promo_group import get_auto_assign_promo_groups
 from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.models import PromoGroup, Subscription, Transaction, User
+from app.services.promo_offer_service import promo_offer_service
 from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
@@ -29,7 +35,10 @@ from ..schemas.miniapp import (
     MiniAppConnectedServer,
     MiniAppDevice,
     MiniAppAutoPromoGroupLevel,
+    MiniAppPromoOffer,
     MiniAppPromoGroup,
+    MiniAppPromoOfferClaimRequest,
+    MiniAppPromoOfferClaimResponse,
     MiniAppSubscriptionRequest,
     MiniAppSubscriptionResponse,
     MiniAppSubscriptionUser,
@@ -218,6 +227,129 @@ def _is_remnawave_configured() -> bool:
     return bool(params.get("base_url") and params.get("api_key"))
 
 
+def _sanitize_offer_message(text: Optional[str]) -> Optional[str]:
+    if not text:
+        return None
+
+    normalized = text.replace("\r\n", "\n")
+    normalized = re.sub(r"<br\s*/?>", "\n", normalized, flags=re.IGNORECASE)
+    stripped = re.sub(r"<[^>]+>", "", normalized)
+    unescaped = html.unescape(stripped)
+    cleaned = unescaped.strip()
+    return cleaned or None
+
+
+def _parse_init_payload(init_data: str) -> int:
+    try:
+        webapp_data = parse_webapp_init_data(init_data, settings.BOT_TOKEN)
+    except TelegramWebAppAuthError as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(error),
+        ) from error
+
+    telegram_user = webapp_data.get("user")
+    if not isinstance(telegram_user, dict) or "id" not in telegram_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Telegram user payload",
+        )
+
+    try:
+        return int(telegram_user["id"])
+    except (TypeError, ValueError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Telegram user identifier",
+        ) from error
+
+
+async def _load_available_promo_offers(
+    db: AsyncSession,
+    user: User,
+) -> List[MiniAppPromoOffer]:
+    offers = await list_discount_offers(
+        db,
+        user_id=user.id,
+        is_active=True,
+        limit=20,
+    )
+
+    now = datetime.utcnow()
+    templates_cache: Dict[int, Optional[Any]] = {}
+    result: List[MiniAppPromoOffer] = []
+
+    for offer in offers:
+        if offer.claimed_at is not None:
+            continue
+        if offer.expires_at <= now:
+            continue
+
+        extra_data = offer.extra_data if isinstance(offer.extra_data, dict) else {}
+
+        template_id: Optional[int] = None
+        raw_template_id = extra_data.get("template_id")
+        if raw_template_id is not None:
+            try:
+                template_id = int(raw_template_id)
+            except (TypeError, ValueError):
+                template_id = None
+
+        template = None
+        if template_id is not None:
+            if template_id in templates_cache:
+                template = templates_cache[template_id]
+            else:
+                template = await get_promo_offer_template_by_id(db, template_id)
+                templates_cache[template_id] = template
+
+        name = None
+        button_text = None
+        message_text = None
+
+        if template is not None:
+            name = template.name
+            button_text = template.button_text
+            message_text = template.message_text
+        else:
+            name = extra_data.get("title") or extra_data.get("name")
+            button_text = extra_data.get("button_text") or extra_data.get("buttonText")
+            message_text = (
+                extra_data.get("message_text")
+                or extra_data.get("messageText")
+                or extra_data.get("text")
+            )
+
+        sanitized_message = _sanitize_offer_message(message_text)
+
+        try:
+            discount_percent = int(offer.discount_percent or 0)
+        except (TypeError, ValueError):
+            discount_percent = 0
+
+        try:
+            bonus_amount = int(offer.bonus_amount_kopeks or 0)
+        except (TypeError, ValueError):
+            bonus_amount = 0
+
+        result.append(
+            MiniAppPromoOffer(
+                id=offer.id,
+                template_id=template_id,
+                name=name,
+                message=sanitized_message,
+                button_text=button_text,
+                discount_percent=discount_percent,
+                bonus_amount_kopeks=bonus_amount,
+                expires_at=offer.expires_at,
+                effect_type=offer.effect_type or "percent_discount",
+                extra_data=extra_data,
+            )
+        )
+
+    return result
+
+
 def _serialize_transaction(transaction: Transaction) -> MiniAppTransaction:
     return MiniAppTransaction(
         id=transaction.id,
@@ -266,28 +398,7 @@ async def get_subscription_details(
     payload: MiniAppSubscriptionRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionResponse:
-    try:
-        webapp_data = parse_webapp_init_data(payload.init_data, settings.BOT_TOKEN)
-    except TelegramWebAppAuthError as error:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(error),
-        ) from error
-
-    telegram_user = webapp_data.get("user")
-    if not isinstance(telegram_user, dict) or "id" not in telegram_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Telegram user payload",
-        )
-
-    try:
-        telegram_id = int(telegram_user["id"])
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Telegram user identifier",
-        ) from None
+    telegram_id = _parse_init_payload(payload.init_data)
 
     user = await get_user_by_telegram_id(db, telegram_id)
     purchase_url = (settings.MINIAPP_PURCHASE_URL or "").strip()
@@ -361,6 +472,8 @@ async def get_subscription_details(
             )
         )
 
+    available_promo_offers = await _load_available_promo_offers(db, user)
+
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
         username=user.username,
@@ -387,6 +500,14 @@ async def get_subscription_details(
         traffic_limit_label=_format_limit_label(traffic_limit),
         lifetime_used_traffic_gb=lifetime_used,
         has_active_subscription=status_actual in {"active", "trial"},
+        promo_offer_discount_percent=
+            int(getattr(user, "promo_offer_discount_percent", 0) or 0),
+        promo_offer_discount_source=getattr(user, "promo_offer_discount_source", None),
+        promo_offer_discount_expires_at=getattr(
+            user,
+            "promo_offer_discount_expires_at",
+            None,
+        ),
     )
 
     return MiniAppSubscriptionResponse(
@@ -420,6 +541,7 @@ async def get_subscription_details(
             else None
         ),
         auto_assign_promo_groups=auto_promo_levels,
+        promo_offers=available_promo_offers,
         total_spent_kopeks=total_spent_kopeks,
         total_spent_rubles=round(total_spent_kopeks / 100, 2),
         total_spent_label=settings.format_price(total_spent_kopeks),
@@ -427,6 +549,45 @@ async def get_subscription_details(
         autopay_enabled=bool(subscription.autopay_enabled),
         branding=settings.get_miniapp_branding(),
     )
+
+
+@router.post(
+    "/promo-offers/{offer_id}/claim",
+    response_model=MiniAppPromoOfferClaimResponse,
+)
+async def claim_promo_offer(
+    offer_id: int,
+    payload: MiniAppPromoOfferClaimRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppPromoOfferClaimResponse:
+    telegram_id = _parse_init_payload(payload.init_data)
+
+    user = await get_user_by_telegram_id(db, telegram_id)
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+    offer = await get_offer_by_id(db, offer_id)
+    if not offer or offer.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo offer not found")
+
+    result = await promo_offer_service.claim_offer(db, user, offer)
+
+    if not result.success:
+        return MiniAppPromoOfferClaimResponse(
+            success=False,
+            effect_type=result.effect_type,
+            error_code=result.error_code or "unknown",
+        )
+
+    return MiniAppPromoOfferClaimResponse(
+        success=True,
+        effect_type=result.effect_type,
+        discount_percent=result.discount_percent or None,
+        discount_expires_at=result.discount_expires_at,
+        test_access_expires_at=result.test_access_expires_at,
+        newly_added_squads=result.newly_added_squads,
+    )
+
 
 def _safe_int(value: Any) -> int:
     try:
