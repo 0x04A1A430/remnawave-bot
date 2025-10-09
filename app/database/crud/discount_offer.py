@@ -110,6 +110,31 @@ async def list_discount_offers(
     return result.scalars().all()
 
 
+async def list_active_discount_offers_for_user(
+    db: AsyncSession,
+    user_id: int,
+) -> List[DiscountOffer]:
+    """Return active (not yet claimed) offers for a user."""
+
+    now = datetime.utcnow()
+    stmt = (
+        select(DiscountOffer)
+        .options(
+            selectinload(DiscountOffer.user),
+            selectinload(DiscountOffer.subscription),
+        )
+        .where(
+            DiscountOffer.user_id == user_id,
+            DiscountOffer.is_active == True,  # noqa: E712
+            DiscountOffer.expires_at > now,
+        )
+        .order_by(DiscountOffer.expires_at.asc())
+    )
+
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
 async def count_discount_offers(
     db: AsyncSession,
     *,
