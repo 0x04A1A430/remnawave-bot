@@ -1599,6 +1599,121 @@
             box-shadow: var(--shadow-sm);
         }
 
+        /* FAQ */
+        .faq-card .card-content {
+            padding: 0 16px 16px;
+        }
+
+        .faq-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .faq-item {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            background: var(--bg-primary);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .faq-item:hover {
+            border-color: rgba(var(--primary-rgb), 0.3);
+            box-shadow: var(--shadow-md);
+        }
+
+        :root[data-theme="dark"] .faq-item {
+            background: var(--bg-secondary);
+        }
+
+        .faq-question {
+            width: 100%;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            background: transparent;
+            border: none;
+            color: inherit;
+            font-size: 15px;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .faq-question:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.12);
+        }
+
+        .faq-question-title {
+            flex: 1;
+        }
+
+        .faq-question-icon {
+            width: 20px;
+            height: 20px;
+            color: var(--text-secondary);
+            transition: transform 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .faq-item.expanded .faq-question-icon {
+            transform: rotate(180deg);
+        }
+
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            opacity: 0;
+            padding: 0 16px;
+            transition: all 0.3s ease;
+        }
+
+        .faq-item.expanded .faq-answer {
+            max-height: 2000px;
+            opacity: 1;
+            padding: 0 16px 16px;
+        }
+
+        .faq-answer-page {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .faq-answer-page + .faq-answer-page {
+            margin-top: 12px;
+        }
+
+        .faq-answer-divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 12px 0;
+        }
+
+        .faq-answer-page ul,
+        .faq-answer-page ol {
+            margin: 8px 0 8px 20px;
+            padding: 0;
+        }
+
+        .faq-answer-page li {
+            margin-bottom: 4px;
+        }
+
+        .faq-answer-page a {
+            color: var(--tg-theme-link-color, var(--primary));
+            text-decoration: none;
+        }
+
+        .faq-answer-page a:hover {
+            text-decoration: underline;
+        }
+
         /* Hidden */
         .hidden {
             display: none !important;
@@ -2061,6 +2176,21 @@
                     </div>
                 </div>
             </div>
+
+            <!-- FAQ Section -->
+            <div class="card faq-card hidden" id="faqCard">
+                <div class="card-header">
+                    <div class="card-title">
+                        <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9a4 4 0 118 0c0 2-2 3-2 3m-2 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span data-i18n="faq.title">FAQ</span>
+                    </div>
+                </div>
+                <div class="card-content faq-content">
+                    <div class="faq-list" id="faqList"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2078,6 +2208,7 @@
         let hasAnimatedCards = false;
         let promoOfferTimers = [];
         let promoOfferTimerHandle = null;
+        let faqData = null;
 
         if (typeof tg.expand === 'function') {
             tg.expand();
@@ -2250,6 +2381,8 @@
                 'apps.step.download': 'Download & install',
                 'apps.step.add': 'Add subscription',
                 'apps.step.connect': 'Connect & use',
+                'faq.title': 'FAQ',
+                'faq.default_question': 'Question {index}',
                 'history.empty': 'No transactions yet',
                 'history.status.completed': 'Completed',
                 'history.status.pending': 'Processing',
@@ -2361,6 +2494,8 @@
                 'apps.step.download': 'Скачать и установить',
                 'apps.step.add': 'Добавить подписку',
                 'apps.step.connect': 'Подключиться и пользоваться',
+                'faq.title': 'Вопросы и ответы',
+                'faq.default_question': 'Вопрос {index}',
                 'history.empty': 'Операции ещё не проводились',
                 'history.status.completed': 'Выполнено',
                 'history.status.pending': 'Обрабатывается',
@@ -2680,6 +2815,8 @@
                 safeSetStoredLanguage(preferredLanguage);
             }
             refreshAfterLanguageChange();
+            refreshFaqData({ language: preferredLanguage })
+                .catch(error => console.warn('Unable to refresh FAQ after language change:', error));
         }
 
         const storedLanguage = resolveLanguage(safeGetStoredLanguage());
@@ -2859,6 +2996,53 @@
             return applySubscriptionData(payload);
         }
 
+        async function refreshFaqData(options = {}) {
+            const { language = preferredLanguage, fallback = true } = options;
+
+            if (!tg.initData) {
+                faqData = null;
+                renderFaq();
+                return null;
+            }
+
+            const body = {
+                initData: tg.initData,
+            };
+
+            if (language) {
+                body.language = language;
+            }
+
+            if (fallback === false) {
+                body.fallback = false;
+            }
+
+            const previousData = faqData;
+
+            try {
+                const response = await fetch('/miniapp/faq', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Request failed with status ${response.status}`);
+                }
+
+                const data = await response.json();
+                faqData = data;
+            } catch (error) {
+                console.warn('Unable to load FAQ:', error);
+                faqData = previousData ?? null;
+            }
+
+            renderFaq();
+            return faqData;
+        }
+
         async function init() {
             try {
                 const telegramUser = tg.initDataUnsafe?.user;
@@ -2873,6 +3057,7 @@
 
                 await loadAppsConfig();
                 await refreshSubscriptionData();
+                await refreshFaqData({ language: preferredLanguage });
             } catch (error) {
                 console.error('Initialization error:', error);
                 showError(error);
@@ -3139,6 +3324,46 @@
             const parser = new DOMParser();
             const doc = parser.parseFromString(`<div>${input}</div>`, 'text/html');
             const allowedTags = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'BR', 'SPAN', 'CODE', 'A']);
+            const elements = [];
+            const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null);
+            while (walker.nextNode()) {
+                elements.push(walker.currentNode);
+            }
+
+            elements.forEach(node => {
+                const tagName = node.tagName;
+                if (!allowedTags.has(tagName)) {
+                    node.replaceWith(document.createTextNode(node.textContent || ''));
+                    return;
+                }
+
+                if (tagName === 'A') {
+                    const href = node.getAttribute('href') || '';
+                    if (!/^https?:\/\//i.test(href)) {
+                        node.replaceWith(document.createTextNode(node.textContent || ''));
+                        return;
+                    }
+                    node.setAttribute('target', '_blank');
+                    node.setAttribute('rel', 'noopener noreferrer');
+                } else {
+                    Array.from(node.attributes).forEach(attr => node.removeAttribute(attr.name));
+                }
+            });
+
+            return doc.body.innerHTML.replace(/\n/g, '<br>');
+        }
+
+        function sanitizeFaqContent(input) {
+            if (!input || typeof input !== 'string') {
+                return '';
+            }
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(`<div>${input}</div>`, 'text/html');
+            const allowedTags = new Set([
+                'B', 'STRONG', 'I', 'EM', 'U', 'BR', 'SPAN', 'CODE', 'A',
+                'UL', 'OL', 'LI', 'P', 'PRE', 'BLOCKQUOTE', 'H1', 'H2', 'H3', 'H4', 'HR'
+            ]);
             const elements = [];
             const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null);
             while (walker.nextNode()) {
@@ -4302,6 +4527,89 @@
             if (!shouldShow) {
                 card.classList.remove('expanded');
             }
+        }
+
+        function renderFaq() {
+            const card = document.getElementById('faqCard');
+            const list = document.getElementById('faqList');
+            if (!card || !list) {
+                return;
+            }
+
+            const items = Array.isArray(faqData?.items) ? faqData.items : [];
+            const sortedItems = items
+                .slice()
+                .sort((a, b) => {
+                    const normalizedA = Number(a?.display_order);
+                    const normalizedB = Number(b?.display_order);
+                    const orderA = Number.isFinite(normalizedA) ? normalizedA : 0;
+                    const orderB = Number.isFinite(normalizedB) ? normalizedB : 0;
+                    if (orderA !== orderB) {
+                        return orderA - orderB;
+                    }
+                    const idA = Number(a?.id);
+                    const idB = Number(b?.id);
+                    const safeA = Number.isFinite(idA) ? idA : 0;
+                    const safeB = Number.isFinite(idB) ? idB : 0;
+                    return safeA - safeB;
+                });
+
+            const shouldShow = Boolean(faqData?.is_enabled) && sortedItems.length > 0;
+            card.classList.toggle('hidden', !shouldShow);
+            list.innerHTML = '';
+
+            if (!shouldShow) {
+                return;
+            }
+
+            const fallbackTemplate = t('faq.default_question');
+            list.innerHTML = sortedItems
+                .map((item, index) => {
+                    const questionIndex = index + 1;
+                    const fallbackTitle = fallbackTemplate.includes('{index}')
+                        ? fallbackTemplate.replace('{index}', questionIndex)
+                        : `Question ${questionIndex}`;
+                    const title = (item?.title ? String(item.title) : fallbackTitle) || fallbackTitle;
+
+                    const rawSegments = Array.isArray(item?.content_pages) && item.content_pages.length
+                        ? item.content_pages
+                        : (item?.content ? [item.content] : []);
+
+                    const segments = rawSegments
+                        .map(segment => sanitizeFaqContent(segment))
+                        .map(html => html.trim())
+                        .filter(html => html.length);
+
+                    const bodyHtml = segments.length
+                        ? segments
+                            .map(html => `<div class="faq-answer-page">${html}</div>`)
+                            .join('<div class="faq-answer-divider"></div>')
+                        : `<div class="faq-answer-page">${escapeHtml(t('values.not_available'))}</div>`;
+
+                    return `
+                        <div class="faq-item">
+                            <button class="faq-question" type="button">
+                                <span class="faq-question-title">${escapeHtml(title)}</span>
+                                <svg class="faq-question-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </button>
+                            <div class="faq-answer">
+                                ${bodyHtml}
+                            </div>
+                        </div>
+                    `;
+                })
+                .join('');
+
+            list.querySelectorAll('.faq-question').forEach(button => {
+                button.addEventListener('click', () => {
+                    const item = button.closest('.faq-item');
+                    if (item) {
+                        item.classList.toggle('expanded');
+                    }
+                });
+            });
         }
 
         function getCurrentSubscriptionUrl() {
