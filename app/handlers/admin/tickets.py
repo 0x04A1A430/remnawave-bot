@@ -371,7 +371,7 @@ async def handle_admin_ticket_reply(
             return
 
         # Обычный режим ответа админа
-        ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False)
+        ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False, load_user=True)
         if not ticket:
             texts = get_texts(db_user.language)
             await message.answer(
@@ -859,52 +859,71 @@ async def notify_user_about_ticket_reply(bot: Bot, ticket: Ticket, reply_text: s
         except Exception:
             pass
         from app.localization.texts import get_texts
-        
-        # Получаем тикет с пользователем
-        ticket_with_user = await TicketCRUD.get_ticket_by_id(db, ticket.id, load_user=True)
-        if not ticket_with_user or not ticket_with_user.user:
+
+        # Обеспечим наличие данных пользователя в объекте тикета
+        ticket_with_user = ticket
+        if not getattr(ticket_with_user, "user", None):
+            ticket_with_user = await TicketCRUD.get_ticket_by_id(db, ticket.id, load_user=True)
+
+        user = getattr(ticket_with_user, "user", None)
+        if not user:
             logger.error(f"User not found for ticket #{ticket.id}")
             return
-        
-        texts = get_texts(ticket_with_user.user.language)
-        
+
+        if not getattr(user, "telegram_id", None):
+            logger.error(
+                "Cannot notify ticket #%s user without telegram_id (username=%s)",
+                ticket.id,
+                getattr(user, "username", None),
+            )
+            return
+
+        chat_id = int(user.telegram_id)
+        texts = get_texts(user.language)
+
         # Формируем уведомление
         base_text = texts.t(
-            "TICKET_REPLY_NOTIFICATION", 
+            "TICKET_REPLY_NOTIFICATION",
             "🎫 Получен ответ по тикету #{ticket_id}\n\n{reply_preview}\n\nНажмите кнопку ниже, чтобы перейти к тикету:"
         ).format(
             ticket_id=ticket.id,
             reply_preview=reply_text[:100] + "..." if len(reply_text) > 100 else reply_text
         )
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text=texts.t("VIEW_TICKET", "👁️ Посмотреть тикет"), callback_data=f"view_ticket_{ticket.id}")],
+            [types.InlineKeyboardButton(text=texts.t("CLOSE_NOTIFICATION", "❌ Закрыть уведомление"), callback_data=f"close_ticket_notification_{ticket.id}")]
+        ])
+
         # Если было фото в последнем ответе админа — отправим как фото
         last_message = await TicketMessageCRUD.get_last_message(db, ticket.id)
         if last_message and last_message.has_media and last_message.media_type == "photo" and last_message.is_from_admin:
             caption = base_text
             try:
                 await bot.send_photo(
-                    chat_id=ticket_with_user.user.telegram_id,
+                    chat_id=chat_id,
                     photo=last_message.media_file_id,
                     caption=caption,
-                    reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-                        [types.InlineKeyboardButton(text=texts.t("VIEW_TICKET", "👁️ Посмотреть тикет"), callback_data=f"view_ticket_{ticket.id}")],
-                        [types.InlineKeyboardButton(text=texts.t("CLOSE_NOTIFICATION", "❌ Закрыть уведомление"), callback_data=f"close_ticket_notification_{ticket.id}")]
-                    ])
+                    reply_markup=keyboard,
                 )
                 return
+            except TelegramBadRequest as photo_error:
+                logger.error(
+                    "Не удалось отправить фото-уведомление пользователю %s для тикета %s: %s",
+                    chat_id,
+                    ticket.id,
+                    photo_error,
+                )
             except Exception as e:
                 logger.error(f"Не удалось отправить фото-уведомление: {e}")
         # Фоллбек: текстовое уведомление
         await bot.send_message(
-            chat_id=ticket_with_user.user.telegram_id,
+            chat_id=chat_id,
             text=base_text,
-            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-                [types.InlineKeyboardButton(text=texts.t("VIEW_TICKET", "👁️ Посмотреть тикет"), callback_data=f"view_ticket_{ticket.id}")],
-                [types.InlineKeyboardButton(text=texts.t("CLOSE_NOTIFICATION", "❌ Закрыть уведомление"), callback_data=f"close_ticket_notification_{ticket.id}")]
-            ])
+            reply_markup=keyboard,
         )
-        
-        logger.info(f"Ticket #{ticket.id} reply notification sent to user {ticket_with_user.user.telegram_id}")
-        
+
+        logger.info(f"Ticket #{ticket.id} reply notification sent to user {chat_id}")
+
     except Exception as e:
         logger.error(f"Error notifying user about ticket reply: {e}")
 
