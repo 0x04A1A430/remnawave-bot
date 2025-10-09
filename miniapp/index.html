@@ -1079,163 +1079,6 @@
             letter-spacing: 0.5px;
         }
 
-        .promo-code-card {
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .promo-code-header {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .promo-code-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-
-        .promo-code-subtitle {
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-
-        .promo-code-form {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .promo-code-input-group {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 14px;
-            background: rgba(var(--primary-rgb), 0.04);
-            border: 2px solid rgba(var(--primary-rgb), 0.12);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-sm);
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .promo-code-input-group:focus-within {
-            border-color: rgba(var(--primary-rgb), 0.45);
-            box-shadow: 0 6px 20px rgba(var(--primary-rgb), 0.18);
-        }
-
-        .promo-code-input {
-            flex: 1;
-            border: none;
-            background: transparent;
-            color: var(--text-primary);
-            font-size: 16px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
-        }
-
-        .promo-code-input::placeholder {
-            color: var(--text-secondary);
-            opacity: 0.75;
-        }
-
-        .promo-code-input:focus {
-            outline: none;
-        }
-
-        .promo-code-button {
-            border: none;
-            border-radius: var(--radius);
-            background: var(--primary);
-            color: var(--tg-theme-button-text-color);
-            font-weight: 700;
-            font-size: 14px;
-            padding: 10px 18px;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            white-space: nowrap;
-        }
-
-        .promo-code-button:hover:not(:disabled) {
-            transform: translateY(-1px);
-            box-shadow: 0 8px 20px rgba(var(--primary-rgb), 0.35);
-        }
-
-        .promo-code-button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-
-        .promo-code-feedback {
-            font-size: 14px;
-            border-radius: var(--radius);
-            padding: 12px 14px;
-            line-height: 1.5;
-        }
-
-        .promo-code-feedback.hidden {
-            display: none;
-        }
-
-        .promo-code-feedback.error {
-            background: rgba(239, 68, 68, 0.12);
-            color: #b91c1c;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-
-        .promo-code-feedback.success {
-            background: rgba(16, 185, 129, 0.12);
-            color: #047857;
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-
-        .promo-code-result {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            border-radius: var(--radius);
-            padding: 14px 16px;
-            background: rgba(var(--primary-rgb), 0.06);
-            border: 1px solid rgba(var(--primary-rgb), 0.1);
-        }
-
-        .promo-code-result.hidden {
-            display: none;
-        }
-
-        .promo-code-result-title {
-            font-size: 13px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-secondary);
-        }
-
-        .promo-code-result-list {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            margin: 0;
-            padding: 0;
-        }
-
-        .promo-code-result-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 15px;
-            color: var(--text-primary);
-        }
-
-        .promo-code-result-icon {
-            font-size: 18px;
-        }
-
         /* Transaction History */
         .history-list {
             list-style: none;
@@ -2173,29 +2016,6 @@
             border-color: rgba(148, 163, 184, 0.25);
         }
 
-        :root[data-theme="dark"] .promo-code-input-group {
-            background: rgba(15, 23, 42, 0.85);
-            border-color: rgba(148, 163, 184, 0.35);
-            box-shadow: none;
-        }
-
-        :root[data-theme="dark"] .promo-code-feedback.error {
-            color: #fca5a5;
-            border-color: rgba(239, 68, 68, 0.4);
-            background: rgba(239, 68, 68, 0.18);
-        }
-
-        :root[data-theme="dark"] .promo-code-feedback.success {
-            color: #34d399;
-            border-color: rgba(16, 185, 129, 0.4);
-            background: rgba(16, 185, 129, 0.18);
-        }
-
-        :root[data-theme="dark"] .promo-code-result {
-            background: rgba(37, 99, 235, 0.12);
-            border-color: rgba(59, 130, 246, 0.25);
-        }
-
         :root[data-theme="dark"] .btn-primary {
             box-shadow: 0 10px 30px rgba(37, 99, 235, 0.45);
         }
@@ -2205,22 +2025,13 @@
             .logo {
                 font-size: 24px;
             }
-
+            
             .balance-amount {
                 font-size: 28px;
             }
-
+            
             .stats-grid {
                 grid-template-columns: 1fr;
-            }
-
-            .promo-code-input-group {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .promo-code-button {
-                width: 100%;
             }
         }
     </style>
@@ -2404,34 +2215,6 @@
                 <div class="balance-content">
                     <div class="balance-amount" id="balanceAmount">—</div>
                     <div class="balance-label" data-i18n="card.balance.title">Balance</div>
-                </div>
-            </div>
-
-            <div class="card promo-code-card" id="promoCodeCard">
-                <div class="promo-code-header">
-                    <div class="promo-code-title" data-i18n="promo_code.title">Activate promo code</div>
-                    <div class="promo-code-subtitle" data-i18n="promo_code.subtitle">Enter a promo code to unlock rewards instantly.</div>
-                </div>
-                <form class="promo-code-form" id="promoCodeForm">
-                    <div class="promo-code-input-group">
-                        <input
-                            type="text"
-                            id="promoCodeInput"
-                            class="promo-code-input"
-                            data-i18n-placeholder="promo_code.placeholder"
-                            placeholder="Enter promo code"
-                            autocomplete="off"
-                            autocapitalize="characters"
-                            spellcheck="false"
-                            maxlength="32"
-                        >
-                        <button type="submit" class="promo-code-button" id="promoCodeSubmit" data-i18n="promo_code.button.default">Activate</button>
-                    </div>
-                </form>
-                <div class="promo-code-feedback hidden" id="promoCodeFeedback"></div>
-                <div class="promo-code-result hidden" id="promoCodeResult">
-                    <div class="promo-code-result-title" data-i18n="promo_code.result.title">You received</div>
-                    <ul class="promo-code-result-list" id="promoCodeResultList"></ul>
                 </div>
             </div>
 
@@ -2711,28 +2494,6 @@
                 'button.copy': 'Copy subscription link',
                 'button.buy_subscription': 'Buy Subscription',
                 'card.balance.title': 'Balance',
-                'promo_code.title': 'Activate promo code',
-                'promo_code.subtitle': 'Enter a promo code to unlock rewards instantly.',
-                'promo_code.placeholder': 'Enter promo code',
-                'promo_code.button.default': 'Activate',
-                'promo_code.button.loading': 'Activating…',
-                'promo_code.success.title': 'Promo code activated',
-                'promo_code.success.default': 'Rewards credited to your account.',
-                'promo_code.result.title': 'You received',
-                'promo_code.result.balance': 'Balance bonus: {amount}',
-                'promo_code.result.subscription_days': 'Subscription extended by {days} days',
-                'promo_code.result.trial': 'Trial subscription for {days} days',
-                'promo_code.error.empty': 'Please enter a promo code.',
-                'promo_code.error.invalid': 'Enter a valid promo code.',
-                'promo_code.error.not_found': 'Promo code not found.',
-                'promo_code.error.expired': 'Promo code has expired.',
-                'promo_code.error.used': 'Promo code already used.',
-                'promo_code.error.already_used_by_user': 'You have already activated this promo code.',
-                'promo_code.error.user_not_found': 'User not found.',
-                'promo_code.error.server_error': 'Failed to activate the promo code. Please try again later.',
-                'promo_code.error.generic': 'Unable to activate the promo code.',
-                'promo_code.error.unauthorized': 'Authorization failed. Please reopen the mini app from Telegram.',
-                'promo_code.error.network': 'Network error. Please try again later.',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
                 'card.devices.title': 'Connected Devices',
@@ -2852,28 +2613,6 @@
                 'button.copy': 'Скопировать ссылку подписки',
                 'button.buy_subscription': 'Купить подписку',
                 'card.balance.title': 'Баланс',
-                'promo_code.title': 'Активировать промокод',
-                'promo_code.subtitle': 'Введите промокод и сразу получите бонусы.',
-                'promo_code.placeholder': 'Введите промокод',
-                'promo_code.button.default': 'Активировать',
-                'promo_code.button.loading': 'Активация…',
-                'promo_code.success.title': 'Промокод активирован',
-                'promo_code.success.default': 'Бонусы зачислены на ваш аккаунт.',
-                'promo_code.result.title': 'Вы получили',
-                'promo_code.result.balance': 'Пополнение баланса: {amount}',
-                'promo_code.result.subscription_days': 'Подписка продлена на {days} дн.',
-                'promo_code.result.trial': 'Триал подписка на {days} дн.',
-                'promo_code.error.empty': 'Введите промокод.',
-                'promo_code.error.invalid': 'Введите корректный промокод.',
-                'promo_code.error.not_found': 'Промокод не найден.',
-                'promo_code.error.expired': 'Срок действия промокода истёк.',
-                'promo_code.error.used': 'Промокод уже использован.',
-                'promo_code.error.already_used_by_user': 'Вы уже активировали этот промокод.',
-                'promo_code.error.user_not_found': 'Пользователь не найден.',
-                'promo_code.error.server_error': 'Не удалось активировать промокод. Попробуйте позже.',
-                'promo_code.error.generic': 'Не удалось активировать промокод.',
-                'promo_code.error.unauthorized': 'Ошибка авторизации. Откройте мини-приложение из Telegram.',
-                'promo_code.error.network': 'Ошибка сети. Попробуйте ещё раз.',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
                 'card.devices.title': 'Подключенные устройства',
@@ -3197,13 +2936,6 @@
                     return;
                 }
                 element.textContent = t(key);
-            });
-            document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
-                const key = element.getAttribute('data-i18n-placeholder');
-                if (!key) {
-                    return;
-                }
-                element.setAttribute('placeholder', t(key));
             });
             const languageSelect = document.getElementById('languageSelect');
             if (languageSelect) {
@@ -4243,222 +3975,6 @@
                     button.textContent = originalText || t('promo_offer.accept');
                 }
                 return;
-            }
-        }
-
-        function setPromoCodeFeedback(type, message) {
-            const feedback = document.getElementById('promoCodeFeedback');
-            if (!feedback) {
-                return;
-            }
-
-            feedback.classList.remove('error', 'success');
-
-            if (!message) {
-                feedback.textContent = '';
-                feedback.classList.add('hidden');
-                return;
-            }
-
-            if (type === 'error') {
-                feedback.classList.add('error');
-            } else if (type === 'success') {
-                feedback.classList.add('success');
-            }
-
-            feedback.textContent = message;
-            feedback.classList.remove('hidden');
-        }
-
-        function clearPromoCodeResult() {
-            const container = document.getElementById('promoCodeResult');
-            const list = document.getElementById('promoCodeResultList');
-            if (container) {
-                container.classList.add('hidden');
-            }
-            if (list) {
-                list.innerHTML = '';
-            }
-        }
-
-        function renderPromoCodeResult(rewards = [], fallbackEntries = []) {
-            const container = document.getElementById('promoCodeResult');
-            const list = document.getElementById('promoCodeResultList');
-            if (!container || !list) {
-                return;
-            }
-
-            list.innerHTML = '';
-
-            const entries = [];
-            if (Array.isArray(rewards)) {
-                rewards.filter(item => item && item.text).forEach(item => {
-                    entries.push({
-                        icon: item.icon || '🎉',
-                        text: item.text,
-                    });
-                });
-            }
-
-            if (Array.isArray(fallbackEntries)) {
-                fallbackEntries.filter(item => item && item.text).forEach(item => {
-                    if (!entries.some(entry => entry.text === item.text)) {
-                        entries.push({
-                            icon: item.icon || '🎉',
-                            text: item.text,
-                        });
-                    }
-                });
-            }
-
-            if (!entries.length) {
-                container.classList.add('hidden');
-                return;
-            }
-
-            entries.forEach(entry => {
-                const listItem = document.createElement('li');
-                listItem.className = 'promo-code-result-item';
-
-                const icon = document.createElement('span');
-                icon.className = 'promo-code-result-icon';
-                icon.textContent = entry.icon || '🎉';
-
-                const text = document.createElement('span');
-                text.textContent = entry.text;
-
-                listItem.appendChild(icon);
-                listItem.appendChild(text);
-                list.appendChild(listItem);
-            });
-
-            container.classList.remove('hidden');
-        }
-
-        async function handlePromoCodeSubmit(event) {
-            event.preventDefault();
-
-            const input = document.getElementById('promoCodeInput');
-            const button = document.getElementById('promoCodeSubmit');
-
-            clearPromoCodeResult();
-            setPromoCodeFeedback(null, null);
-
-            const rawCode = (input?.value || '').trim();
-            if (!rawCode) {
-                setPromoCodeFeedback('error', t('promo_code.error.empty'));
-                input?.focus();
-                return;
-            }
-
-            const normalizedCode = rawCode.toUpperCase();
-            if (input) {
-                input.value = normalizedCode;
-            }
-
-            const initData = tg.initData || '';
-            if (!initData) {
-                setPromoCodeFeedback('error', t('promo_code.error.unauthorized'));
-                return;
-            }
-
-            if (button) {
-                button.disabled = true;
-                button.textContent = t('promo_code.button.loading');
-            }
-
-            try {
-                const response = await fetch('/miniapp/promo-codes/activate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData, code: normalizedCode }),
-                });
-
-                const payload = await response.json().catch(() => ({}));
-
-                if (!response.ok) {
-                    const code = payload?.detail?.code || payload?.code;
-                    const messageKey = code ? `promo_code.error.${code}` : 'promo_code.error.generic';
-                    const translated = t(messageKey);
-                    const message = translated === messageKey
-                        ? (payload?.detail?.message || t('promo_code.error.generic'))
-                        : translated;
-                    setPromoCodeFeedback('error', message);
-                    return;
-                }
-
-                const promocode = payload?.promocode || {};
-                const rewards = [];
-                const fallback = [];
-
-                const balanceKopeks = Number.parseInt(promocode?.balance_bonus_kopeks, 10);
-                if (!Number.isNaN(balanceKopeks) && balanceKopeks > 0) {
-                    const currency = (userData?.balance_currency || 'RUB').toUpperCase();
-                    const amount = formatCurrency(balanceKopeks / 100, currency);
-                    const template = t('promo_code.result.balance');
-                    rewards.push({
-                        icon: '💰',
-                        text: template.replace('{amount}', amount),
-                    });
-                }
-
-                const subscriptionDays = Number.parseInt(promocode?.subscription_days, 10);
-                if (!Number.isNaN(subscriptionDays) && subscriptionDays > 0) {
-                    const type = String(promocode?.type || '').toLowerCase();
-                    const key = type === 'trial_subscription'
-                        ? 'promo_code.result.trial'
-                        : 'promo_code.result.subscription_days';
-                    const template = t(key);
-                    rewards.push({
-                        icon: type === 'trial_subscription' ? '🎁' : '⏰',
-                        text: template.replace('{days}', subscriptionDays),
-                    });
-                }
-
-                if (typeof payload?.description === 'string' && payload.description.trim()) {
-                    const lines = payload.description.split(/\n+/).map(line => line.trim()).filter(Boolean);
-                    lines.forEach(line => {
-                        fallback.push({ icon: '🎉', text: line });
-                    });
-                }
-
-                renderPromoCodeResult(rewards, fallback);
-                setPromoCodeFeedback('success', t('promo_code.success.default'));
-
-                if (input) {
-                    input.value = '';
-                }
-
-                try {
-                    await refreshSubscriptionData({ silent: true });
-                } catch (refreshError) {
-                    console.warn('Failed to refresh subscription after promo code activation:', refreshError);
-                }
-            } catch (error) {
-                console.error('Failed to activate promo code:', error);
-                setPromoCodeFeedback('error', t('promo_code.error.network'));
-            } finally {
-                if (button) {
-                    button.disabled = false;
-                    button.textContent = t('promo_code.button.default');
-                }
-            }
-        }
-
-        function initializePromoCodeForm() {
-            const form = document.getElementById('promoCodeForm');
-            if (!form) {
-                return;
-            }
-
-            form.addEventListener('submit', handlePromoCodeSubmit);
-
-            const input = document.getElementById('promoCodeInput');
-            if (input) {
-                input.addEventListener('input', () => {
-                    setPromoCodeFeedback(null, null);
-                    clearPromoCodeResult();
-                });
             }
         }
 
@@ -5746,8 +5262,6 @@
             }
             openExternalLink(link, { openInMiniApp: true });
         });
-
-        initializePromoCodeForm();
 
         init();
 
