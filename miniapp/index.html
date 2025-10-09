@@ -1079,6 +1079,139 @@
             letter-spacing: 0.5px;
         }
 
+        /* Promo Code */
+        .promo-code-card {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .promo-code-header {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .promo-code-title {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .promo-code-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .promo-code-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .promo-code-input-wrapper {
+            display: flex;
+            align-items: stretch;
+            gap: 8px;
+            padding: 6px;
+            border-radius: var(--radius-lg);
+            background: rgba(var(--primary-rgb), 0.04);
+            border: 1px solid rgba(var(--primary-rgb), 0.18);
+        }
+
+        .promo-code-input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            color: var(--text-primary);
+            font-size: 16px;
+            font-weight: 600;
+            padding: 10px 12px;
+            outline: none;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .promo-code-input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.7;
+            letter-spacing: normal;
+            text-transform: none;
+        }
+
+        .promo-code-button {
+            border: none;
+            border-radius: calc(var(--radius-lg) - 4px);
+            background: linear-gradient(135deg, var(--primary), rgba(var(--primary-rgb), 0.8));
+            color: var(--tg-theme-button-text-color);
+            font-weight: 700;
+            font-size: 15px;
+            padding: 0 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+            min-height: 44px;
+        }
+
+        .promo-code-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .promo-code-button:not(:disabled):hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .promo-code-status {
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            line-height: 1.4;
+        }
+
+        .promo-code-status::before {
+            content: '\2714';
+            font-size: 16px;
+        }
+
+        .promo-code-status-info {
+            background: rgba(var(--primary-rgb), 0.08);
+            color: var(--primary);
+            border: 1px solid rgba(var(--primary-rgb), 0.25);
+        }
+
+        .promo-code-status-info::before {
+            content: '\2139';
+        }
+
+        .promo-code-status-success {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .promo-code-status-success::before {
+            content: '\2728';
+        }
+
+        .promo-code-status-error {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.28);
+        }
+
+        .promo-code-status-error::before {
+            content: '\26A0';
+        }
+
         /* Transaction History */
         .history-list {
             list-style: none;
@@ -2001,6 +2134,7 @@
         :root[data-theme="dark"] .card,
         :root[data-theme="dark"] .user-card,
         :root[data-theme="dark"] .balance-card,
+        :root[data-theme="dark"] .promo-code-card,
         :root[data-theme="dark"] .card.expandable,
         :root[data-theme="dark"] .language-select,
         :root[data-theme="dark"] .theme-toggle {
@@ -2012,8 +2146,28 @@
         :root[data-theme="dark"] .stat-item,
         :root[data-theme="dark"] .server-item,
         :root[data-theme="dark"] .device-item,
-        :root[data-theme="dark"] .app-card {
+        :root[data-theme="dark"] .app-card,
+        :root[data-theme="dark"] .promo-code-input-wrapper {
             border-color: rgba(148, 163, 184, 0.25);
+        }
+
+        :root[data-theme="dark"] .promo-code-input-wrapper {
+            background: rgba(148, 163, 184, 0.12);
+        }
+
+        :root[data-theme="dark"] .promo-code-status-info {
+            background: rgba(var(--primary-rgb), 0.18);
+            border-color: rgba(var(--primary-rgb), 0.35);
+        }
+
+        :root[data-theme="dark"] .promo-code-status-success {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: rgba(16, 185, 129, 0.45);
+        }
+
+        :root[data-theme="dark"] .promo-code-status-error {
+            background: rgba(239, 68, 68, 0.24);
+            border-color: rgba(239, 68, 68, 0.45);
         }
 
         :root[data-theme="dark"] .btn-primary {
@@ -2218,6 +2372,33 @@
                 </div>
             </div>
 
+            <!-- Promo Code Card -->
+            <div class="card promo-code-card" id="promoCodeCard">
+                <div class="promo-code-header">
+                    <div class="promo-code-title" data-i18n="promo_code.title">Have a promo code?</div>
+                    <div class="promo-code-subtitle" data-i18n="promo_code.subtitle">Enter it to receive your reward.</div>
+                </div>
+                <form class="promo-code-form" id="promoCodeForm" novalidate>
+                    <div class="promo-code-input-wrapper">
+                        <input
+                            type="text"
+                            id="promoCodeInput"
+                            class="promo-code-input"
+                            inputmode="text"
+                            autocomplete="off"
+                            autocapitalize="characters"
+                            spellcheck="false"
+                            data-i18n-placeholder="promo_code.placeholder"
+                            placeholder="Enter promo code"
+                        >
+                        <button type="submit" class="promo-code-button" id="promoCodeSubmit">
+                            <span class="promo-code-button-label" data-i18n="promo_code.button">Activate</span>
+                        </button>
+                    </div>
+                </form>
+                <div class="promo-code-status hidden" id="promoCodeStatus" role="status" aria-live="polite"></div>
+            </div>
+
             <!-- History Card (Expandable) -->
             <div class="card expandable" id="historyCard">
                 <div class="card-header">
@@ -2342,6 +2523,7 @@
         let hasAnimatedCards = false;
         let promoOfferTimers = [];
         let promoOfferTimerHandle = null;
+        let promoCodeStatusState = null;
 
         if (typeof tg.expand === 'function') {
             tg.expand();
@@ -2494,6 +2676,22 @@
                 'button.copy': 'Copy subscription link',
                 'button.buy_subscription': 'Buy Subscription',
                 'card.balance.title': 'Balance',
+                'promo_code.title': 'Have a promo code?',
+                'promo_code.subtitle': 'Enter it to receive your reward.',
+                'promo_code.placeholder': 'Enter promo code',
+                'promo_code.button': 'Activate',
+                'promo_code.status.activating': 'Activating promo code…',
+                'promo_code.success': 'Promo code activated! {description}',
+                'promo_code.error.empty': 'Please enter a promo code.',
+                'promo_code.error.invalid_code': 'Please enter a promo code.',
+                'promo_code.error.not_found': 'Promo code not found.',
+                'promo_code.error.expired': 'Promo code has expired.',
+                'promo_code.error.used': 'Promo code has already been used.',
+                'promo_code.error.already_used_by_user': 'You have already activated this promo code.',
+                'promo_code.error.server_error': 'Something went wrong. Please try again later.',
+                'promo_code.error.generic': 'Failed to activate the promo code. Please try again later.',
+                'promo_code.error.user_not_found': 'Unable to find your account. Please relaunch the mini app.',
+                'promo_code.error.auth': 'Authorization error. Please open the mini app from Telegram.',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
                 'card.devices.title': 'Connected Devices',
@@ -2613,6 +2811,22 @@
                 'button.copy': 'Скопировать ссылку подписки',
                 'button.buy_subscription': 'Купить подписку',
                 'card.balance.title': 'Баланс',
+                'promo_code.title': 'Есть промокод?',
+                'promo_code.subtitle': 'Введите его и получите бонус.',
+                'promo_code.placeholder': 'Введите промокод',
+                'promo_code.button': 'Активировать',
+                'promo_code.status.activating': 'Активируем промокод…',
+                'promo_code.success': 'Промокод активирован! {description}',
+                'promo_code.error.empty': 'Введите промокод.',
+                'promo_code.error.invalid_code': 'Введите промокод.',
+                'promo_code.error.not_found': 'Промокод не найден.',
+                'promo_code.error.expired': 'Срок действия промокода истёк.',
+                'promo_code.error.used': 'Промокод уже использован.',
+                'promo_code.error.already_used_by_user': 'Вы уже активировали этот промокод.',
+                'promo_code.error.server_error': 'Не удалось активировать промокод. Попробуйте позже.',
+                'promo_code.error.generic': 'Не удалось активировать промокод. Попробуйте позже.',
+                'promo_code.error.user_not_found': 'Не удалось найти ваш профиль. Откройте мини-приложение снова из Telegram.',
+                'promo_code.error.auth': 'Ошибка авторизации. Откройте мини-приложение из Telegram.',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
                 'card.devices.title': 'Подключенные устройства',
@@ -2877,6 +3091,65 @@
             return key;
         }
 
+        function translateWithFallback(key, replacements = {}, fallback = '') {
+            if (!key) {
+                return fallback || '';
+            }
+            const template = t(key);
+            const base = template && template !== key ? template : fallback || '';
+            if (!base) {
+                return base;
+            }
+            let result = base;
+            if (replacements && typeof replacements === 'object') {
+                Object.entries(replacements).forEach(([token, value]) => {
+                    const pattern = new RegExp(`\\{${token}\\}`, 'g');
+                    result = result.replace(pattern, value ?? '');
+                });
+            }
+            return result;
+        }
+
+        function renderPromoCodeStatus() {
+            const statusElement = document.getElementById('promoCodeStatus');
+            if (!statusElement) {
+                return;
+            }
+            if (!promoCodeStatusState || (!promoCodeStatusState.key && !promoCodeStatusState.fallback)) {
+                statusElement.textContent = '';
+                statusElement.className = 'promo-code-status';
+                statusElement.classList.add('hidden');
+                return;
+            }
+            const { key, fallback, replacements, variant } = promoCodeStatusState;
+            const message = key
+                ? translateWithFallback(key, replacements, fallback)
+                : (fallback || '');
+            if (!message) {
+                statusElement.textContent = '';
+                statusElement.className = 'promo-code-status';
+                statusElement.classList.add('hidden');
+                return;
+            }
+            statusElement.textContent = message.trim();
+            statusElement.className = `promo-code-status promo-code-status-${variant || 'info'}`;
+            statusElement.classList.remove('hidden');
+        }
+
+        function setPromoCodeStatus(state) {
+            if (!state) {
+                promoCodeStatusState = null;
+            } else {
+                promoCodeStatusState = {
+                    key: state.key || null,
+                    fallback: state.fallback || '',
+                    replacements: state.replacements || {},
+                    variant: state.variant || 'info',
+                };
+            }
+            renderPromoCodeStatus();
+        }
+
         function escapeHtml(value) {
             const div = document.createElement('div');
             div.textContent = value ?? '';
@@ -2937,12 +3210,23 @@
                 }
                 element.textContent = t(key);
             });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
+                const key = element.getAttribute('data-i18n-placeholder');
+                if (!key) {
+                    return;
+                }
+                const value = t(key);
+                if (value && value !== key) {
+                    element.setAttribute('placeholder', value);
+                }
+            });
             const languageSelect = document.getElementById('languageSelect');
             if (languageSelect) {
                 languageSelect.value = preferredLanguage;
                 languageSelect.setAttribute('aria-label', t('language.ariaLabel'));
             }
             updateErrorTexts();
+            renderPromoCodeStatus();
         }
 
         function updateConnectButtonLabel() {
@@ -3975,6 +4259,122 @@
                     button.textContent = originalText || t('promo_offer.accept');
                 }
                 return;
+            }
+        }
+
+        function normalizePromoCode(value) {
+            if (typeof value !== 'string') {
+                return '';
+            }
+            return value.trim().toUpperCase().replace(/\s+/g, '');
+        }
+
+        async function handlePromoCodeSubmit(event) {
+            event?.preventDefault?.();
+
+            const form = event?.currentTarget || document.getElementById('promoCodeForm');
+            const input = document.getElementById('promoCodeInput');
+            const submitButton = form?.querySelector('button[type="submit"]')
+                || document.getElementById('promoCodeSubmit');
+
+            const rawCode = input?.value ?? '';
+            const code = normalizePromoCode(rawCode);
+
+            if (!code) {
+                setPromoCodeStatus({
+                    key: 'promo_code.error.empty',
+                    fallback: 'Please enter a promo code.',
+                    variant: 'error',
+                });
+                input?.focus();
+                return;
+            }
+
+            if (input) {
+                input.value = code;
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                setPromoCodeStatus({
+                    key: 'promo_code.error.auth',
+                    fallback: 'Authorization error. Please open the mini app from Telegram.',
+                    variant: 'error',
+                });
+                return;
+            }
+
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
+
+            setPromoCodeStatus({
+                key: 'promo_code.status.activating',
+                fallback: 'Activating promo code…',
+                variant: 'info',
+            });
+
+            try {
+                const response = await fetch('/miniapp/promo-codes/activate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initData, code }),
+                });
+
+                const payload = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    const detailCode = payload?.detail?.code || payload?.error_code || payload?.errorCode;
+                    const detailMessage = payload?.detail?.message || payload?.message || '';
+                    const messageKey = detailCode ? `promo_code.error.${detailCode}` : 'promo_code.error.generic';
+                    setPromoCodeStatus({
+                        key: messageKey,
+                        fallback: detailMessage || 'Failed to activate the promo code.',
+                        variant: 'error',
+                    });
+                    return;
+                }
+
+                if (payload?.success) {
+                    const description = (payload.description || '').trim();
+                    const replacements = { description };
+                    const fallback = description
+                        ? `Promo code activated! ${description}`
+                        : 'Promo code activated!';
+                    const successMessage = translateWithFallback('promo_code.success', replacements, fallback);
+                    setPromoCodeStatus({
+                        key: 'promo_code.success',
+                        replacements,
+                        fallback,
+                        variant: 'success',
+                    });
+                    if (input) {
+                        input.value = '';
+                    }
+                    showPopup(successMessage.trim());
+                    await refreshSubscriptionData({ silent: true });
+                    return;
+                }
+
+                const errorCode = payload?.error_code || payload?.errorCode || payload?.error;
+                const fallbackMessage = payload?.message || '';
+                const messageKey = errorCode ? `promo_code.error.${errorCode}` : 'promo_code.error.generic';
+                setPromoCodeStatus({
+                    key: messageKey,
+                    fallback: fallbackMessage || 'Failed to activate the promo code.',
+                    variant: 'error',
+                });
+            } catch (error) {
+                console.error('Failed to activate promo code:', error);
+                setPromoCodeStatus({
+                    key: 'promo_code.error.generic',
+                    fallback: 'Failed to activate the promo code. Please try again later.',
+                    variant: 'error',
+                });
+            } finally {
+                if (submitButton) {
+                    submitButton.disabled = false;
+                }
             }
         }
 
@@ -5234,6 +5634,8 @@
                 updateActionButtons();
             });
         });
+
+        document.getElementById('promoCodeForm')?.addEventListener('submit', handlePromoCodeSubmit);
 
         document.getElementById('connectBtn')?.addEventListener('click', () => {
             const link = getConnectLink();
