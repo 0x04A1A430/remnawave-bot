@@ -123,6 +123,37 @@ class MiniAppPromoOfferClaimResponse(BaseModel):
     code: Optional[str] = None
 
 
+class MiniAppFaqItem(BaseModel):
+    id: int
+    title: Optional[str] = None
+    content: Optional[str] = None
+    display_order: Optional[int] = None
+
+
+class MiniAppFaq(BaseModel):
+    requested_language: str
+    language: str
+    is_enabled: bool = True
+    total: int = 0
+    items: List[MiniAppFaqItem] = Field(default_factory=list)
+
+
+class MiniAppRichTextDocument(BaseModel):
+    requested_language: str
+    language: str
+    title: Optional[str] = None
+    is_enabled: bool = True
+    content: str = ""
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class MiniAppLegalDocuments(BaseModel):
+    public_offer: Optional[MiniAppRichTextDocument] = None
+    service_rules: Optional[MiniAppRichTextDocument] = None
+    privacy_policy: Optional[MiniAppRichTextDocument] = None
+
+
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: int
@@ -154,4 +185,6 @@ class MiniAppSubscriptionResponse(BaseModel):
     subscription_type: str
     autopay_enabled: bool = False
     branding: Optional[MiniAppBranding] = None
+    faq: Optional[MiniAppFaq] = None
+    legal_documents: Optional[MiniAppLegalDocuments] = None
 

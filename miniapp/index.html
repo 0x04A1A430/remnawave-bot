@@ -1599,6 +1599,250 @@
             box-shadow: var(--shadow-sm);
         }
 
+        /* FAQ Section */
+        .faq-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .faq-item {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 0 16px;
+            transition: all 0.3s ease;
+        }
+
+        .faq-item[open] {
+            border-color: rgba(var(--primary-rgb), 0.35);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .faq-question {
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            cursor: pointer;
+            font-weight: 700;
+            color: var(--text-primary);
+            padding: 16px 0;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .faq-question::-webkit-details-marker {
+            display: none;
+        }
+
+        .faq-question-text {
+            flex: 1;
+        }
+
+        .faq-toggle-icon {
+            width: 20px;
+            height: 20px;
+            color: var(--text-secondary);
+            transition: transform 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .faq-item[open] .faq-toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .faq-answer {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.6;
+            padding-bottom: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .faq-answer > *:first-child {
+            margin-top: 16px;
+        }
+
+        .faq-answer p {
+            margin: 0 0 12px;
+        }
+
+        .faq-answer ul,
+        .faq-answer ol {
+            margin: 8px 0 16px 20px;
+        }
+
+        .faq-answer li + li {
+            margin-top: 6px;
+        }
+
+        /* Legal Documents */
+        .legal-doc-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legal-doc-item {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 0 16px;
+            transition: all 0.3s ease;
+        }
+
+        .legal-doc-item[open] {
+            border-color: rgba(var(--primary-rgb), 0.35);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .legal-doc-summary {
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            font-weight: 700;
+            color: var(--text-primary);
+            padding: 16px 0;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .legal-doc-summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .legal-doc-icon {
+            font-size: 20px;
+            line-height: 1;
+        }
+
+        .legal-doc-title {
+            flex: 1;
+        }
+
+        .legal-doc-toggle {
+            width: 20px;
+            height: 20px;
+            color: var(--text-secondary);
+            transition: transform 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .legal-doc-item[open] .legal-doc-toggle {
+            transform: rotate(180deg);
+        }
+
+        .legal-doc-body {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.6;
+            padding-bottom: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .legal-doc-body > *:first-child {
+            margin-top: 16px;
+        }
+
+        .legal-doc-updated {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 12px;
+        }
+
+        .legal-doc-content p {
+            margin: 0 0 12px;
+        }
+
+        .legal-doc-content ul,
+        .legal-doc-content ol {
+            margin: 8px 0 16px 20px;
+        }
+
+        .legal-doc-content li + li {
+            margin-top: 6px;
+        }
+
+        .legal-doc-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0;
+        }
+
+        .legal-doc-content th,
+        .legal-doc-content td {
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            text-align: left;
+        }
+
+        .legal-doc-content a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .legal-doc-content a:hover {
+            text-decoration: underline;
+        }
+
+        .faq-answer a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .faq-answer a:hover {
+            text-decoration: underline;
+        }
+
+        .faq-answer code {
+            background: rgba(var(--primary-rgb), 0.08);
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 13px;
+        }
+
+        .faq-answer pre {
+            background: rgba(var(--primary-rgb), 0.08);
+            padding: 12px;
+            border-radius: var(--radius);
+            overflow-x: auto;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 13px;
+            margin: 16px 0;
+        }
+
+        :root[data-theme="dark"] .faq-item {
+            border-color: rgba(148, 163, 184, 0.18);
+            background: rgba(15, 23, 42, 0.75);
+        }
+
+        :root[data-theme="dark"] .faq-item[open] {
+            border-color: rgba(var(--primary-rgb), 0.45);
+            box-shadow: var(--shadow-md);
+        }
+
+        :root[data-theme="dark"] .faq-answer pre {
+            background: rgba(148, 163, 184, 0.12);
+        }
+
+        :root[data-theme="dark"] .faq-answer code {
+            background: rgba(148, 163, 184, 0.12);
+        }
+
+        .faq-question:focus-visible {
+            outline: 2px solid rgba(var(--primary-rgb), 0.35);
+            border-radius: var(--radius);
+        }
+
         /* Hidden */
         .hidden {
             display: none !important;
@@ -2061,6 +2305,26 @@
                     </div>
                 </div>
             </div>
+
+            <!-- FAQ Section -->
+            <div class="card hidden" id="faqCard">
+                <div class="card-header">
+                    <div class="card-title" data-i18n="faq.title">FAQ</div>
+                </div>
+                <div class="card-content">
+                    <div class="faq-list" id="faqList"></div>
+                </div>
+            </div>
+
+            <!-- Legal Documents Section -->
+            <div class="card hidden" id="legalDocsCard">
+                <div class="card-header">
+                    <div class="card-title" data-i18n="legal.title">Legal documents</div>
+                </div>
+                <div class="card-content">
+                    <div class="legal-doc-list" id="legalDocsList"></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2250,6 +2514,14 @@
                 'apps.step.download': 'Download & install',
                 'apps.step.add': 'Add subscription',
                 'apps.step.connect': 'Connect & use',
+                'faq.title': 'FAQ',
+                'faq.item_default_title': 'Question {index}',
+                'faq.item_empty': 'Answer will be added soon.',
+                'legal.title': 'Legal documents',
+                'legal.public_offer.title': 'Public offer',
+                'legal.service_rules.title': 'Service rules',
+                'legal.privacy_policy.title': 'Privacy policy',
+                'legal.updated_at': 'Updated {date}',
                 'history.empty': 'No transactions yet',
                 'history.status.completed': 'Completed',
                 'history.status.pending': 'Processing',
@@ -2361,6 +2633,14 @@
                 'apps.step.download': 'Скачать и установить',
                 'apps.step.add': 'Добавить подписку',
                 'apps.step.connect': 'Подключиться и пользоваться',
+                'faq.title': 'FAQ',
+                'faq.item_default_title': 'Вопрос {index}',
+                'faq.item_empty': 'Ответ будет добавлен позже.',
+                'legal.title': 'Правовые документы',
+                'legal.public_offer.title': 'Публичная оферта',
+                'legal.service_rules.title': 'Правила сервиса',
+                'legal.privacy_policy.title': 'Политика конфиденциальности',
+                'legal.updated_at': 'Обновлено {date}',
                 'history.empty': 'Операции ещё не проводились',
                 'history.status.completed': 'Выполнено',
                 'history.status.pending': 'Обрабатывается',
@@ -2449,6 +2729,24 @@
         Object.keys(pcTranslations).forEach(lang => {
             Object.assign(translations[lang], pcTranslations[lang]);
         });
+
+        const LEGAL_DOCUMENT_CONFIG = {
+            public_offer: {
+                icon: '📜',
+                titleKey: 'legal.public_offer.title',
+                fallback: 'Public offer',
+            },
+            service_rules: {
+                icon: '📘',
+                titleKey: 'legal.service_rules.title',
+                fallback: 'Service rules',
+            },
+            privacy_policy: {
+                icon: '🔐',
+                titleKey: 'legal.privacy_policy.title',
+                fallback: 'Privacy policy',
+            },
+        };
 
         // Include all the original JavaScript functions
         function applyBrandingOverrides(branding) {
@@ -3010,6 +3308,8 @@
             renderTransactionHistory();
             renderServersList();
             renderDevicesList();
+            renderFaqSection();
+            renderLegalDocuments();
             updateConnectButtonLabel();
             updateActionButtons();
         }
@@ -3166,6 +3466,177 @@
             });
 
             return doc.body.innerHTML.replace(/\n/g, '<br>');
+        }
+
+        function sanitizeFaqHtml(input) {
+            if (!input || typeof input !== 'string') {
+                return '';
+            }
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(`<div>${input}</div>`, 'text/html');
+            const allowedTags = new Set([
+                'P',
+                'BR',
+                'UL',
+                'OL',
+                'LI',
+                'STRONG',
+                'B',
+                'EM',
+                'I',
+                'U',
+                'A',
+                'CODE',
+                'PRE',
+                'SPAN',
+                'DIV',
+                'H1',
+                'H2',
+                'H3',
+                'H4',
+                'H5',
+                'H6',
+                'BLOCKQUOTE',
+            ]);
+
+            const elements = [];
+            const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null);
+            while (walker.nextNode()) {
+                elements.push(walker.currentNode);
+            }
+
+            elements.forEach(node => {
+                const tagName = node.tagName;
+                if (!allowedTags.has(tagName)) {
+                    const replacementText = node.textContent || '';
+                    node.replaceWith(doc.createTextNode(replacementText));
+                    return;
+                }
+
+                if (tagName === 'A') {
+                    const href = node.getAttribute('href') || '';
+                    if (!/^https?:\/\//i.test(href)) {
+                        node.replaceWith(doc.createTextNode(node.textContent || ''));
+                        return;
+                    }
+                    node.setAttribute('target', '_blank');
+                    node.setAttribute('rel', 'noopener noreferrer');
+                    Array.from(node.attributes).forEach(attr => {
+                        if (!['href', 'target', 'rel'].includes(attr.name)) {
+                            node.removeAttribute(attr.name);
+                        }
+                    });
+                    return;
+                }
+
+                Array.from(node.attributes).forEach(attr => node.removeAttribute(attr.name));
+
+                if (tagName === 'PRE') {
+                    const codeChild = node.querySelector('code');
+                    if (codeChild) {
+                        Array.from(codeChild.attributes).forEach(attr => codeChild.removeAttribute(attr.name));
+                    }
+                }
+            });
+
+            return doc.body.innerHTML.trim();
+        }
+
+        function sanitizeLegalDocumentHtml(input) {
+            if (!input || typeof input !== 'string') {
+                return '';
+            }
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(`<div>${input}</div>`, 'text/html');
+            const allowedTags = new Set([
+                'P',
+                'BR',
+                'UL',
+                'OL',
+                'LI',
+                'STRONG',
+                'B',
+                'EM',
+                'I',
+                'U',
+                'A',
+                'CODE',
+                'PRE',
+                'SPAN',
+                'DIV',
+                'H1',
+                'H2',
+                'H3',
+                'H4',
+                'H5',
+                'H6',
+                'BLOCKQUOTE',
+                'TABLE',
+                'THEAD',
+                'TBODY',
+                'TFOOT',
+                'TR',
+                'TD',
+                'TH',
+                'COLGROUP',
+                'COL',
+                'HR',
+                'DL',
+                'DT',
+                'DD',
+                'SUP',
+                'SUB',
+            ]);
+
+            const elements = [];
+            const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null);
+            while (walker.nextNode()) {
+                elements.push(walker.currentNode);
+            }
+
+            elements.forEach(node => {
+                const tagName = node.tagName;
+                if (!allowedTags.has(tagName)) {
+                    const replacementText = node.textContent || '';
+                    node.replaceWith(doc.createTextNode(replacementText));
+                    return;
+                }
+
+                if (tagName === 'A') {
+                    const href = (node.getAttribute('href') || '').trim();
+                    const isHttpLink = /^https?:\/\//i.test(href);
+                    const isMailto = href.toLowerCase().startsWith('mailto:');
+                    if (!isHttpLink && !isMailto) {
+                        node.replaceWith(doc.createTextNode(node.textContent || ''));
+                        return;
+                    }
+                    node.setAttribute('target', '_blank');
+                    node.setAttribute('rel', 'noopener noreferrer');
+                    Array.from(node.attributes).forEach(attr => {
+                        const name = attr.name.toLowerCase();
+                        if (!['href', 'target', 'rel'].includes(name)) {
+                            node.removeAttribute(attr.name);
+                        }
+                    });
+                    return;
+                }
+
+                if (tagName === 'TD' || tagName === 'TH') {
+                    Array.from(node.attributes).forEach(attr => {
+                        const name = attr.name.toLowerCase();
+                        if (!['colspan', 'rowspan', 'scope'].includes(name)) {
+                            node.removeAttribute(attr.name);
+                        }
+                    });
+                    return;
+                }
+
+                Array.from(node.attributes).forEach(attr => node.removeAttribute(attr.name));
+            });
+
+            return doc.body.innerHTML.trim();
         }
 
         function formatShortDuration(seconds) {
@@ -3760,6 +4231,21 @@
             }
         }
 
+        function formatLegalUpdatedLabel(value) {
+            const formatted = formatDateTime(value);
+            if (!formatted) {
+                return '';
+            }
+            const template = t('legal.updated_at');
+            if (!template || template === 'legal.updated_at') {
+                return formatted;
+            }
+            if (template.includes('{date}')) {
+                return template.replace('{date}', formatted);
+            }
+            return `${template} ${formatted}`;
+        }
+
         function renderBalanceSection() {
             const amountElement = document.getElementById('balanceAmount');
             if (!amountElement) {
@@ -3918,6 +4404,184 @@
                     </li>
                 `;
             }).join('');
+        }
+
+        function renderFaqSection() {
+            const faqCard = document.getElementById('faqCard');
+            const faqList = document.getElementById('faqList');
+
+            if (!faqCard || !faqList) {
+                return;
+            }
+
+            const faq = userData?.faq;
+            const isEnabled = faq && faq.is_enabled !== false;
+
+            if (!isEnabled) {
+                faqCard.classList.add('hidden');
+                faqList.innerHTML = '';
+                return;
+            }
+
+            const items = Array.isArray(faq?.items) ? faq.items : [];
+            const processedItems = [];
+
+            items.forEach(item => {
+                if (!item) {
+                    return;
+                }
+                const sanitized = sanitizeFaqHtml(item.content);
+                if (!sanitized) {
+                    return;
+                }
+                const probe = document.createElement('div');
+                probe.innerHTML = sanitized;
+                if (!probe.textContent.trim()) {
+                    return;
+                }
+                processedItems.push({ item, sanitized });
+            });
+
+            if (!processedItems.length) {
+                faqCard.classList.add('hidden');
+                faqList.innerHTML = '';
+                return;
+            }
+
+            processedItems.sort((a, b) => {
+                const parseOrder = value => {
+                    if (value === null || value === undefined) {
+                        return null;
+                    }
+                    const parsed = Number(value);
+                    return Number.isFinite(parsed) ? parsed : null;
+                };
+
+                const orderA = parseOrder(a.item?.display_order);
+                const orderB = parseOrder(b.item?.display_order);
+
+                if (orderA !== null && orderB !== null && orderA !== orderB) {
+                    return orderA - orderB;
+                }
+                if (orderA !== null) {
+                    return -1;
+                }
+                if (orderB !== null) {
+                    return 1;
+                }
+
+                const idA = Number(a.item?.id) || 0;
+                const idB = Number(b.item?.id) || 0;
+                return idA - idB;
+            });
+
+            const fallbackTitleTemplate = t('faq.item_default_title');
+            const fallbackAnswer = t('faq.item_empty');
+
+            const html = processedItems.map(({ item, sanitized }, index) => {
+                const hasTitle = typeof item.title === 'string' && item.title.trim().length > 0;
+                const fallbackTitle = fallbackTitleTemplate.includes('{index}')
+                    ? fallbackTitleTemplate.replace('{index}', String(index + 1))
+                    : `${fallbackTitleTemplate} ${index + 1}`;
+                const question = escapeHtml(hasTitle ? item.title : fallbackTitle);
+                const answer = sanitized || `<p>${escapeHtml(fallbackAnswer)}</p>`;
+
+                return `
+                    <details class="faq-item">
+                        <summary class="faq-question">
+                            <span class="faq-question-text">${question}</span>
+                            <svg class="faq-toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </summary>
+                        <div class="faq-answer">${answer}</div>
+                    </details>
+                `;
+            }).join('');
+
+            faqList.innerHTML = html;
+            faqCard.classList.remove('hidden');
+        }
+
+        function renderLegalDocuments() {
+            const card = document.getElementById('legalDocsCard');
+            const list = document.getElementById('legalDocsList');
+
+            if (!card || !list) {
+                return;
+            }
+
+            const documents = userData?.legal_documents;
+            if (!documents || typeof documents !== 'object') {
+                list.innerHTML = '';
+                card.classList.add('hidden');
+                return;
+            }
+
+            const entries = [];
+            Object.keys(LEGAL_DOCUMENT_CONFIG).forEach(key => {
+                const doc = documents?.[key];
+                if (!doc || doc.is_enabled === false) {
+                    return;
+                }
+
+                const rawContent = typeof doc.content === 'string' ? doc.content : '';
+                const sanitized = sanitizeLegalDocumentHtml(rawContent);
+                if (!sanitized) {
+                    return;
+                }
+
+                const probe = document.createElement('div');
+                probe.innerHTML = sanitized;
+                if (!probe.textContent.trim()) {
+                    return;
+                }
+
+                entries.push({ key, doc, sanitized });
+            });
+
+            if (!entries.length) {
+                list.innerHTML = '';
+                card.classList.add('hidden');
+                return;
+            }
+
+            const html = entries.map(({ key, doc, sanitized }) => {
+                const config = LEGAL_DOCUMENT_CONFIG[key] || {};
+                const translationKey = config.titleKey || '';
+                const translatedTitle = translationKey ? t(translationKey) : translationKey;
+                const fallbackTitle = config.fallback || translationKey || key;
+                const rawTitle = typeof doc.title === 'string' ? doc.title.trim() : '';
+                const resolvedTitle = rawTitle
+                    || (translatedTitle && translatedTitle !== translationKey ? translatedTitle : fallbackTitle);
+
+                const updatedSource = doc.updated_at ?? doc.updatedAt ?? null;
+                const updatedLabel = updatedSource ? formatLegalUpdatedLabel(updatedSource) : '';
+                const updatedHtml = updatedLabel
+                    ? `<div class="legal-doc-updated">${escapeHtml(updatedLabel)}</div>`
+                    : '';
+
+                const icon = escapeHtml(config.icon || '📄');
+
+                return `
+                    <details class="legal-doc-item">
+                        <summary class="legal-doc-summary">
+                            <span class="legal-doc-icon">${icon}</span>
+                            <span class="legal-doc-title">${escapeHtml(resolvedTitle)}</span>
+                            <svg class="legal-doc-toggle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </summary>
+                        <div class="legal-doc-body">
+                            ${updatedHtml}
+                            <div class="legal-doc-content">${sanitized}</div>
+                        </div>
+                    </details>
+                `;
+            }).join('');
+
+            list.innerHTML = html;
+            card.classList.remove('hidden');
         }
 
         const PROMO_DISCOUNT_FIELDS = [
