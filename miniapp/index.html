@@ -1079,114 +1079,6 @@
             letter-spacing: 0.5px;
         }
 
-        /* Promo Activation */
-        .promo-card {
-            padding: 20px 20px 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            background: linear-gradient(145deg, rgba(var(--primary-rgb), 0.12), rgba(var(--primary-rgb), 0.04));
-            border: 1px solid rgba(var(--primary-rgb), 0.18);
-        }
-
-        .promo-header {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .promo-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-
-        .promo-subtitle {
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-
-        .promo-input-group {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .promo-input {
-            flex: 1 1 200px;
-            padding: 14px 16px;
-            border-radius: var(--radius-lg);
-            border: 2px solid rgba(var(--primary-rgb), 0.25);
-            background: rgba(255, 255, 255, 0.9);
-            color: var(--text-primary);
-            font-size: 15px;
-            font-weight: 600;
-            transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .promo-input:focus {
-            border-color: var(--primary);
-            outline: none;
-            box-shadow: 0 0 0 4px rgba(var(--primary-rgb), 0.12);
-        }
-
-        :root[data-theme="dark"] .promo-input {
-            background: rgba(15, 23, 42, 0.75);
-            border-color: rgba(var(--primary-rgb), 0.35);
-        }
-
-        .promo-button {
-            padding: 14px 22px;
-            border-radius: var(--radius-lg);
-            border: none;
-            background: var(--primary);
-            color: var(--tg-theme-button-text-color);
-            font-weight: 700;
-            font-size: 15px;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.3s ease;
-            box-shadow: 0 6px 14px rgba(var(--primary-rgb), 0.28);
-            flex-shrink: 0;
-        }
-
-        .promo-button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 20px rgba(var(--primary-rgb), 0.32);
-        }
-
-        .promo-button:active {
-            transform: translateY(1px);
-        }
-
-        :root[data-theme="dark"] .promo-card {
-            background: linear-gradient(145deg, rgba(var(--primary-rgb), 0.28), rgba(15, 23, 42, 0.7));
-            border-color: rgba(var(--primary-rgb), 0.32);
-        }
-
-        .promo-result {
-            padding: 14px 16px;
-            border-radius: var(--radius-lg);
-            font-size: 14px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            line-height: 1.4;
-        }
-
-        .promo-result--success {
-            background: rgba(16, 185, 129, 0.12);
-            color: var(--success);
-            border: 1px solid rgba(16, 185, 129, 0.2);
-        }
-
-        .promo-result--error {
-            background: rgba(239, 68, 68, 0.12);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-
         /* Transaction History */
         .history-list {
             list-style: none;
@@ -2326,19 +2218,6 @@
                 </div>
             </div>
 
-            <!-- Promo Activation Card -->
-            <div class="card promo-card" id="promoCard">
-                <div class="promo-header">
-                    <div class="promo-title" data-i18n="promo.activate.title">Activate promo code</div>
-                    <div class="promo-subtitle" data-i18n="promo.activate.subtitle">Enter a promo code to get instant rewards.</div>
-                </div>
-                <div class="promo-input-group">
-                    <input class="promo-input" id="promoInput" type="text" data-i18n-placeholder="promo.input.placeholder" placeholder="Enter your promo code">
-                    <button class="promo-button" id="promoApplyBtn" type="button" data-i18n="promo.button.apply">Activate</button>
-                </div>
-                <div class="promo-result hidden" id="promoResult" role="status"></div>
-            </div>
-
             <!-- History Card (Expandable) -->
             <div class="card expandable" id="historyCard">
                 <div class="card-header">
@@ -2615,12 +2494,6 @@
                 'button.copy': 'Copy subscription link',
                 'button.buy_subscription': 'Buy Subscription',
                 'card.balance.title': 'Balance',
-                'promo.activate.title': 'Activate promo code',
-                'promo.activate.subtitle': 'Enter a promo code to get instant rewards.',
-                'promo.input.placeholder': 'Enter your promo code',
-                'promo.button.apply': 'Activate',
-                'promo.result.success': 'Promo activated! Bonus has been added to your balance.',
-                'promo.result.empty': 'Please enter a promo code to activate it.',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
                 'card.devices.title': 'Connected Devices',
@@ -2740,12 +2613,6 @@
                 'button.copy': 'Скопировать ссылку подписки',
                 'button.buy_subscription': 'Купить подписку',
                 'card.balance.title': 'Баланс',
-                'promo.activate.title': 'Активируйте промокод',
-                'promo.activate.subtitle': 'Введите промокод, чтобы получить бонусы мгновенно.',
-                'promo.input.placeholder': 'Введите промокод',
-                'promo.button.apply': 'Активировать',
-                'promo.result.success': 'Промокод активирован! Бонус зачислен на ваш баланс.',
-                'promo.result.empty': 'Введите промокод, чтобы активировать его.',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
                 'card.devices.title': 'Подключенные устройства',
@@ -3065,20 +2932,6 @@
             document.documentElement.setAttribute('lang', preferredLanguage);
             document.querySelectorAll('[data-i18n]').forEach(element => {
                 const key = element.getAttribute('data-i18n');
-                if (!key) {
-                    return;
-                }
-                element.textContent = t(key);
-            });
-            document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
-                const key = element.getAttribute('data-i18n-placeholder');
-                if (!key) {
-                    return;
-                }
-                element.setAttribute('placeholder', t(key));
-            });
-            document.querySelectorAll('[data-i18n-message]').forEach(element => {
-                const key = element.getAttribute('data-i18n-message');
                 if (!key) {
                     return;
                 }
@@ -5360,46 +5213,6 @@
             }
         }
 
-        function clearPromoResult() {
-            const resultElement = document.getElementById('promoResult');
-            if (!resultElement) {
-                return;
-            }
-            resultElement.classList.add('hidden');
-            resultElement.textContent = '';
-            resultElement.removeAttribute('data-i18n-message');
-            resultElement.classList.remove('promo-result--success', 'promo-result--error');
-        }
-
-        function showPromoResult(type, messageKey) {
-            const resultElement = document.getElementById('promoResult');
-            if (!resultElement) {
-                return;
-            }
-            resultElement.setAttribute('data-i18n-message', messageKey);
-            resultElement.textContent = t(messageKey);
-            resultElement.classList.remove('hidden', 'promo-result--success', 'promo-result--error');
-            if (type === 'success') {
-                resultElement.classList.add('promo-result--success');
-            } else {
-                resultElement.classList.add('promo-result--error');
-            }
-        }
-
-        function handlePromoActivation() {
-            const input = document.getElementById('promoInput');
-            if (!input) {
-                return;
-            }
-            const code = input.value.trim();
-            if (!code) {
-                showPromoResult('error', 'promo.result.empty');
-                return;
-            }
-            showPromoResult('success', 'promo.result.success');
-            input.value = '';
-        }
-
         function showError(error) {
             document.getElementById('loadingState').classList.add('hidden');
             document.getElementById('mainContent').classList.add('hidden');
@@ -5439,24 +5252,6 @@
             } catch (error) {
                 console.warn('Clipboard copy failed:', error);
                 showPopup(t('notifications.copy.failure'), t('notifications.copy.title.failure'));
-            }
-        });
-
-        document.getElementById('promoApplyBtn')?.addEventListener('click', () => {
-            handlePromoActivation();
-        });
-
-        document.getElementById('promoInput')?.addEventListener('keydown', event => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                handlePromoActivation();
-            }
-        });
-
-        document.getElementById('promoInput')?.addEventListener('input', () => {
-            const resultElement = document.getElementById('promoResult');
-            if (resultElement && !resultElement.classList.contains('hidden')) {
-                clearPromoResult();
             }
         });
 
