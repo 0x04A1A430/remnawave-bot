@@ -253,38 +253,6 @@ class MiniAppReferralInfo(BaseModel):
     referrals: Optional[MiniAppReferralList] = None
 
 
-class MiniAppPaymentMethod(BaseModel):
-    id: str
-    type: str
-    icon: Optional[str] = None
-    requires_amount: bool = False
-    currency: str = "RUB"
-    min_amount: Optional[float] = None
-    max_amount: Optional[float] = None
-    amount_step: Optional[float] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class MiniAppPaymentMethodsResponse(BaseModel):
-    methods: List[MiniAppPaymentMethod] = Field(default_factory=list)
-
-
-class MiniAppCreatePaymentRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-    method: str
-    amount: Optional[float] = None
-    currency: Optional[str] = None
-
-
-class MiniAppCreatePaymentResponse(BaseModel):
-    success: bool = True
-    method: str
-    redirect_url: Optional[str] = None
-    amount_kopeks: Optional[int] = None
-    payment_id: Optional[str] = None
-    extra: Dict[str, Any] = Field(default_factory=dict)
-
-
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: int
