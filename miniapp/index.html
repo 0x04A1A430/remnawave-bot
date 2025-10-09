@@ -576,142 +576,6 @@
             text-align: right;
         }
 
-        /* Promo levels */
-        .promo-levels-card .card-content {
-            opacity: 1;
-            max-height: 2000px;
-            padding-bottom: 16px;
-        }
-
-        .promo-level-summary {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 20px 12px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .promo-level-summary-label {
-            color: var(--text-secondary);
-            font-size: 13px;
-        }
-
-        .promo-level-summary-value {
-            font-size: 16px;
-        }
-
-        .promo-level-list {
-            list-style: none;
-            padding: 0 20px 8px;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .promo-level-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 14px 16px;
-            border-radius: var(--radius);
-            border: 1px solid var(--border-color);
-            background: var(--bg-secondary);
-            transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
-        }
-
-        .promo-level-item:hover {
-            border-color: rgba(var(--primary-rgb), 0.4);
-            box-shadow: var(--shadow-sm);
-            transform: translateY(-1px);
-        }
-
-        .promo-level-item.current {
-            border-color: var(--primary);
-            box-shadow: var(--shadow-sm);
-        }
-
-        .promo-level-info {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .promo-level-name {
-            font-weight: 700;
-            color: var(--text-primary);
-            font-size: 15px;
-        }
-
-        .promo-level-threshold {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
-        .promo-level-discounts {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .promo-level-discounts-label {
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-secondary);
-        }
-
-        .promo-level-discount-badges {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
-        .promo-level-discount-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 8px;
-            border-radius: var(--radius-sm);
-            background: rgba(var(--primary-rgb), 0.08);
-            color: var(--primary);
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .promo-level-item.current .promo-level-discount-badge {
-            background: rgba(var(--primary-rgb), 0.2);
-        }
-
-        .promo-level-discount-empty {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .promo-level-badge {
-            padding: 6px 12px;
-            border-radius: 999px;
-            font-size: 12px;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-        }
-
-        .promo-level-item.current .promo-level-badge {
-            background: rgba(var(--primary-rgb), 0.18);
-            color: var(--primary);
-        }
-
-        .promo-level-item.reached .promo-level-badge {
-            background: rgba(16, 185, 129, 0.18);
-            color: var(--success);
-        }
-
-        .promo-level-item.locked .promo-level-badge {
-            background: rgba(148, 163, 184, 0.18);
-            color: var(--text-secondary);
-        }
-
         /* Balance Card */
         .balance-card {
             background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.1), rgba(var(--primary-rgb), 0.05));
@@ -1517,38 +1381,12 @@
                         <span class="info-value" id="subscriptionType">-</span>
                     </div>
                     <div class="info-item">
-                        <span class="info-label" data-i18n="info.promo_group">Promo group</span>
-                        <span class="info-value" id="promoGroupValue">-</span>
-                    </div>
-                    <div class="info-item">
                         <span class="info-label" data-i18n="info.device_limit">Device Limit</span>
                         <span class="info-value" id="deviceLimit">-</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.autopay">Auto-Pay</span>
                         <span class="info-value" id="autopayStatus">-</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Promo Levels Card -->
-            <div class="card promo-levels-card" id="promoLevelsCard">
-                <div class="card-header">
-                    <div class="card-title">
-                        <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm0 0v13m-4-5l4 2 4-2"/>
-                        </svg>
-                        <span data-i18n="card.promo_levels.title">Promo Levels</span>
-                    </div>
-                </div>
-                <div class="card-content">
-                    <div class="promo-level-summary">
-                        <span class="promo-level-summary-label" data-i18n="promo_levels.total_spent">Total spent</span>
-                        <span class="promo-level-summary-value" id="promoLevelsSpent">—</span>
-                    </div>
-                    <ul class="promo-level-list" id="promoLevelsList"></ul>
-                    <div class="empty-state hidden" id="promoLevelsEmpty" data-i18n="promo_levels.empty">
-                        Automatic promo levels are not configured yet
                     </div>
                 </div>
             </div>
@@ -1833,7 +1671,6 @@
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
                 'card.devices.title': 'Connected Devices',
-                'card.promo_levels.title': 'Promo Levels',
                 'apps.title': 'Installation guide',
                 'apps.no_data': 'No installation guide available for this platform yet.',
                 'apps.featured': 'Recommended',
@@ -1850,18 +1687,6 @@
                 'history.type.referral_reward': 'Referral reward',
                 'servers.empty': 'No servers connected yet',
                 'devices.empty': 'No devices connected yet',
-                'promo_levels.total_spent': 'Total spent',
-                'promo_levels.threshold': 'from {amount}',
-                'promo_levels.badge.current': 'Current level',
-                'promo_levels.badge.unlocked': 'Unlocked',
-                'promo_levels.badge.locked': 'Locked',
-                'promo_levels.empty': 'Automatic promo levels are not configured yet',
-                'promo_levels.discounts.title': 'Discounts',
-                'promo_levels.discounts.server': 'Servers — {percent}',
-                'promo_levels.discounts.traffic': 'Traffic — {percent}',
-                'promo_levels.discounts.devices': 'Devices — {percent}',
-                'promo_levels.discounts.period': '{days}-day plan — {percent}',
-                'promo_levels.discounts.empty': 'No discounts configured yet',
                 'language.ariaLabel': 'Select interface language',
                 'notifications.copy.success': 'Subscription link copied to clipboard.',
                 'notifications.copy.failure': 'Unable to copy the subscription link automatically. Please copy it manually.',
@@ -1910,7 +1735,6 @@
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
                 'card.devices.title': 'Подключенные устройства',
-                'card.promo_levels.title': 'Уровни промогрупп',
                 'apps.title': 'Инструкция по установке',
                 'apps.no_data': 'Для этой платформы инструкция пока недоступна.',
                 'apps.featured': 'Рекомендуем',
@@ -1927,18 +1751,6 @@
                 'history.type.referral_reward': 'Реферальное вознаграждение',
                 'servers.empty': 'Подключённых серверов пока нет',
                 'devices.empty': 'Подключённых устройств пока нет',
-                'promo_levels.total_spent': 'Всего потрачено',
-                'promo_levels.threshold': 'от {amount}',
-                'promo_levels.badge.current': 'Текущий уровень',
-                'promo_levels.badge.unlocked': 'Получен',
-                'promo_levels.badge.locked': 'Недоступен',
-                'promo_levels.empty': 'Автовыдача промогрупп ещё не настроена',
-                'promo_levels.discounts.title': 'Скидки',
-                'promo_levels.discounts.server': 'Серверы — {percent}',
-                'promo_levels.discounts.traffic': 'Трафик — {percent}',
-                'promo_levels.discounts.devices': 'Устройства — {percent}',
-                'promo_levels.discounts.period': 'Тариф на {days} дн. — {percent}',
-                'promo_levels.discounts.empty': 'Скидки для этого уровня не настроены',
                 'language.ariaLabel': 'Выберите язык интерфейса',
                 'notifications.copy.success': 'Ссылка подписки скопирована.',
                 'notifications.copy.failure': 'Не удалось автоматически скопировать ссылку. Пожалуйста, сделайте это вручную.',
@@ -2477,8 +2289,6 @@
                     : autopayLabel;
             }
 
-            renderPromoGroupInfo();
-            renderPromoLevels();
             renderBalanceSection();
             renderTransactionHistory();
             renderServersList();
@@ -2685,21 +2495,6 @@
             }
         }
 
-        function formatPriceFromKopeks(kopeks, currency) {
-            const normalized = typeof kopeks === 'number'
-                ? kopeks
-                : Number.parseInt(String(kopeks ?? '').trim() || '0', 10);
-            const currencyCode = currency
-                ? String(currency).toUpperCase()
-                : String(userData?.balance_currency || 'RUB').toUpperCase();
-
-            if (!Number.isFinite(normalized)) {
-                return formatCurrency(0, currencyCode);
-            }
-
-            return formatCurrency(normalized / 100, currencyCode);
-        }
-
         function formatDate(value) {
             if (!value) {
                 return '—';
@@ -2898,223 +2693,6 @@
                     </li>
                 `;
             }).join('');
-        }
-
-        function renderPromoGroupInfo() {
-            const valueElement = document.getElementById('promoGroupValue');
-            if (!valueElement) {
-                return;
-            }
-
-            const promoGroupName = userData?.promo_group?.name;
-            valueElement.textContent = promoGroupName || t('values.not_available');
-        }
-
-        function renderPromoLevels() {
-            const card = document.getElementById('promoLevelsCard');
-            const list = document.getElementById('promoLevelsList');
-            const emptyState = document.getElementById('promoLevelsEmpty');
-            const totalSpentElement = document.getElementById('promoLevelsSpent');
-
-            if (!card || !list || !emptyState || !totalSpentElement) {
-                return;
-            }
-
-            const levels = Array.isArray(userData?.auto_assign_promo_groups)
-                ? userData.auto_assign_promo_groups
-                : [];
-
-            const totalSpentKopeksRaw = typeof userData?.total_spent_kopeks === 'number'
-                ? userData.total_spent_kopeks
-                : Number.parseInt(userData?.total_spent_kopeks ?? '0', 10);
-            const totalSpentKopeks = Number.isFinite(totalSpentKopeksRaw) ? totalSpentKopeksRaw : 0;
-            totalSpentElement.textContent = userData?.total_spent_label
-                || formatPriceFromKopeks(totalSpentKopeks);
-
-            list.innerHTML = '';
-
-            if (!levels.length) {
-                card.classList.add('hidden');
-                emptyState.classList.add('hidden');
-                return;
-            }
-
-            card.classList.remove('hidden');
-            emptyState.classList.add('hidden');
-
-            const currencyCode = (userData?.balance_currency || 'RUB').toUpperCase();
-            const thresholdTemplate = t('promo_levels.threshold');
-
-            const replacePlaceholders = (template, replacements) => {
-                let result = template;
-                let changed = false;
-                Object.entries(replacements).forEach(([placeholder, value]) => {
-                    if (result.includes(placeholder)) {
-                        result = result.split(placeholder).join(value);
-                        changed = true;
-                    }
-                });
-                return { result, changed };
-            };
-
-            const parsePercent = value => {
-                if (typeof value === 'number') {
-                    return Number.isFinite(value) ? value : 0;
-                }
-                const parsed = Number.parseInt(value ?? '', 10);
-                return Number.isFinite(parsed) ? parsed : 0;
-            };
-
-            const buildPercentLabel = (key, percent) => {
-                const percentText = `${percent}%`;
-                const template = t(key);
-                const { result, changed } = replacePlaceholders(template, {
-                    '{percent}': percentText,
-                });
-                if (changed) {
-                    return result;
-                }
-                if (template === key) {
-                    return percentText;
-                }
-                return `${template} ${percentText}`.trim();
-            };
-
-            const buildPeriodLabel = (days, percent) => {
-                const percentText = `${percent}%`;
-                const template = t('promo_levels.discounts.period');
-                const { result, changed } = replacePlaceholders(template, {
-                    '{days}': String(days),
-                    '{percent}': percentText,
-                });
-                if (changed) {
-                    return result;
-                }
-                if (template === 'promo_levels.discounts.period') {
-                    return `${days} — ${percentText}`;
-                }
-                return `${template} ${percentText}`.trim();
-            };
-
-            levels.forEach(level => {
-                const classes = ['promo-level-item'];
-                if (level?.is_current) {
-                    classes.push('current', 'reached');
-                } else if (level?.is_reached) {
-                    classes.push('reached');
-                } else {
-                    classes.push('locked');
-                }
-
-                const item = document.createElement('li');
-                item.className = classes.join(' ');
-
-                const info = document.createElement('div');
-                info.className = 'promo-level-info';
-
-                const name = document.createElement('div');
-                name.className = 'promo-level-name';
-                name.textContent = level?.name || t('values.not_available');
-                info.appendChild(name);
-
-                const threshold = document.createElement('div');
-                threshold.className = 'promo-level-threshold';
-                const thresholdLabel = level?.threshold_label
-                    || formatPriceFromKopeks(level?.threshold_kopeks, currencyCode);
-                threshold.textContent = thresholdTemplate.includes('{amount}')
-                    ? thresholdTemplate.replace('{amount}', thresholdLabel)
-                    : `${thresholdTemplate} ${thresholdLabel}`;
-                info.appendChild(threshold);
-
-                const discounts = document.createElement('div');
-                discounts.className = 'promo-level-discounts';
-
-                const discountsLabel = document.createElement('div');
-                discountsLabel.className = 'promo-level-discounts-label';
-                discountsLabel.textContent = t('promo_levels.discounts.title');
-                discounts.appendChild(discountsLabel);
-
-                const discountBadges = [];
-
-                const serverDiscount = parsePercent(
-                    level?.server_discount_percent
-                    ?? level?.servers_discount_percent
-                    ?? level?.serverDiscountPercent
-                    ?? level?.serversDiscountPercent
-                );
-                if (serverDiscount > 0) {
-                    discountBadges.push(buildPercentLabel('promo_levels.discounts.server', serverDiscount));
-                }
-
-                const trafficDiscount = parsePercent(
-                    level?.traffic_discount_percent
-                    ?? level?.trafficDiscountPercent
-                    ?? level?.traffic_discount
-                );
-                if (trafficDiscount > 0) {
-                    discountBadges.push(buildPercentLabel('promo_levels.discounts.traffic', trafficDiscount));
-                }
-
-                const deviceDiscount = parsePercent(
-                    level?.device_discount_percent
-                    ?? level?.devices_discount_percent
-                    ?? level?.deviceDiscountPercent
-                    ?? level?.devicesDiscountPercent
-                );
-                if (deviceDiscount > 0) {
-                    discountBadges.push(buildPercentLabel('promo_levels.discounts.devices', deviceDiscount));
-                }
-
-                const periodDiscounts = [];
-                if (level?.period_discounts && typeof level.period_discounts === 'object') {
-                    Object.entries(level.period_discounts).forEach(([days, percent]) => {
-                        const periodDays = Number.parseInt(days, 10);
-                        const periodPercent = parsePercent(percent);
-                        if (Number.isFinite(periodDays) && periodDays > 0 && periodPercent > 0) {
-                            periodDiscounts.push([periodDays, periodPercent]);
-                        }
-                    });
-                }
-
-                periodDiscounts
-                    .sort((a, b) => a[0] - b[0])
-                    .forEach(([days, percent]) => {
-                        discountBadges.push(buildPeriodLabel(days, percent));
-                    });
-
-                if (discountBadges.length) {
-                    const badgesContainer = document.createElement('div');
-                    badgesContainer.className = 'promo-level-discount-badges';
-                    discountBadges.forEach(text => {
-                        const badge = document.createElement('span');
-                        badge.className = 'promo-level-discount-badge';
-                        badge.textContent = text;
-                        badgesContainer.appendChild(badge);
-                    });
-                    discounts.appendChild(badgesContainer);
-                } else {
-                    const emptyDiscounts = document.createElement('div');
-                    emptyDiscounts.className = 'promo-level-discount-empty';
-                    emptyDiscounts.textContent = t('promo_levels.discounts.empty');
-                    discounts.appendChild(emptyDiscounts);
-                }
-
-                info.appendChild(discounts);
-
-                const badge = document.createElement('div');
-                badge.className = 'promo-level-badge';
-                let badgeKey = 'promo_levels.badge.locked';
-                if (level?.is_current) {
-                    badgeKey = 'promo_levels.badge.current';
-                } else if (level?.is_reached) {
-                    badgeKey = 'promo_levels.badge.unlocked';
-                }
-                badge.textContent = t(badgeKey);
-
-                item.appendChild(info);
-                item.appendChild(badge);
-                list.appendChild(item);
-            });
         }
 
         function getCurrentSubscriptionUrl() {
