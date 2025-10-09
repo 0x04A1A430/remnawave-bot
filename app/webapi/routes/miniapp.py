@@ -9,8 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.server_squad import get_server_squad_by_uuid
-from app.database.crud.promo_group import get_auto_assign_promo_groups
-from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.models import Subscription, Transaction, User
 from app.services.remnawave_service import (
@@ -28,9 +26,7 @@ from ..dependencies import get_db_session
 from ..schemas.miniapp import (
     MiniAppConnectedServer,
     MiniAppDevice,
-    MiniAppAutoPromoGroupLevel,
     MiniAppPromoGroup,
-    MiniAppPromoGroupDiscounts,
     MiniAppSubscriptionRequest,
     MiniAppSubscriptionResponse,
     MiniAppSubscriptionUser,
@@ -340,53 +336,6 @@ async def get_subscription_details(
         balance_currency = balance_currency.upper()
 
     promo_group = getattr(user, "promo_group", None)
-    total_spent_kopeks = await get_user_total_spent_kopeks(db, user.id)
-    auto_assign_groups = await get_auto_assign_promo_groups(db)
-
-    auto_promo_levels: List[MiniAppAutoPromoGroupLevel] = []
-    for group in auto_assign_groups:
-        threshold = group.auto_assign_total_spent_kopeks or 0
-        if threshold <= 0:
-            continue
-
-        period_discounts_map: Dict[int, int] = {}
-        normalized_periods: List[Tuple[int, int]] = []
-        if isinstance(group.period_discounts, dict):
-            for raw_days, raw_percent in group.period_discounts.items():
-                try:
-                    days = int(raw_days)
-                    percent = int(raw_percent)
-                except (TypeError, ValueError):
-                    continue
-
-                normalized_percent = max(0, min(100, percent))
-                if normalized_percent > 0 and days > 0:
-                    normalized_periods.append((days, normalized_percent))
-
-        if normalized_periods:
-            normalized_periods.sort(key=lambda item: item[0])
-            period_discounts_map = {days: percent for days, percent in normalized_periods}
-
-        discounts = MiniAppPromoGroupDiscounts(
-            servers_percent=max(0, group.server_discount_percent or 0),
-            traffic_percent=max(0, group.traffic_discount_percent or 0),
-            devices_percent=max(0, group.device_discount_percent or 0),
-            period_discounts=period_discounts_map,
-            applies_to_addons=bool(group.apply_discounts_to_addons),
-        )
-
-        auto_promo_levels.append(
-            MiniAppAutoPromoGroupLevel(
-                id=group.id,
-                name=group.name,
-                threshold_kopeks=threshold,
-                threshold_rubles=round(threshold / 100, 2),
-                threshold_label=settings.format_price(threshold),
-                is_reached=total_spent_kopeks >= threshold,
-                is_current=bool(promo_group and promo_group.id == group.id),
-                discounts=discounts,
-            )
-        )
 
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
@@ -440,10 +389,6 @@ async def get_subscription_details(
         promo_group=MiniAppPromoGroup(id=promo_group.id, name=promo_group.name)
         if promo_group
         else None,
-        auto_assign_promo_groups=auto_promo_levels,
-        total_spent_kopeks=total_spent_kopeks,
-        total_spent_rubles=round(total_spent_kopeks / 100, 2),
-        total_spent_label=settings.format_price(total_spent_kopeks),
         subscription_type="trial" if subscription.is_trial else "paid",
         autopay_enabled=bool(subscription.autopay_enabled),
         branding=settings.get_miniapp_branding(),
