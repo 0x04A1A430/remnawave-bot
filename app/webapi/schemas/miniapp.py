@@ -123,6 +123,14 @@ class MiniAppPromoOfferClaimResponse(BaseModel):
     code: Optional[str] = None
 
 
+class MiniAppFaqPage(BaseModel):
+    id: int
+    language: str
+    title: str
+    content: str
+    display_order: int = 0
+
+
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: int
@@ -154,4 +162,7 @@ class MiniAppSubscriptionResponse(BaseModel):
     subscription_type: str
     autopay_enabled: bool = False
     branding: Optional[MiniAppBranding] = None
+    faq_enabled: bool = False
+    faq_language: Optional[str] = None
+    faq_pages: List[MiniAppFaqPage] = Field(default_factory=list)
 

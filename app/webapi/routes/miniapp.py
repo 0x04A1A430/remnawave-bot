@@ -30,6 +30,7 @@ from app.database.models import (
     Transaction,
     User,
 )
+from app.services.faq_service import FaqService
 from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
@@ -47,6 +48,7 @@ from ..schemas.miniapp import (
     MiniAppAutoPromoGroupLevel,
     MiniAppConnectedServer,
     MiniAppDevice,
+    MiniAppFaqPage,
     MiniAppPromoGroup,
     MiniAppPromoOffer,
     MiniAppPromoOfferClaimRequest,
@@ -879,6 +881,31 @@ async def get_subscription_details(
         promo_offer_discount_source=promo_offer_source,
     )
 
+    faq_pages: List[MiniAppFaqPage] = []
+    faq_language: Optional[str] = None
+    try:
+        preferred_faq_language = user.language or settings.DEFAULT_LANGUAGE or "ru"
+        pages = await FaqService.get_pages(
+            db,
+            preferred_faq_language,
+            include_inactive=False,
+            fallback=True,
+        )
+        if pages:
+            faq_language = pages[0].language
+            faq_pages = [
+                MiniAppFaqPage(
+                    id=page.id,
+                    language=page.language,
+                    title=page.title,
+                    content=page.content,
+                    display_order=page.display_order,
+                )
+                for page in pages
+            ]
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.warning("Failed to load FAQ pages for miniapp: %s", error)
+
     return MiniAppSubscriptionResponse(
         subscription_id=subscription.id,
         remnawave_short_uuid=subscription.remnawave_short_uuid,
@@ -917,6 +944,9 @@ async def get_subscription_details(
         subscription_type="trial" if subscription.is_trial else "paid",
         autopay_enabled=bool(subscription.autopay_enabled),
         branding=settings.get_miniapp_branding(),
+        faq_enabled=bool(faq_pages),
+        faq_language=faq_language,
+        faq_pages=faq_pages,
     )
 
 
