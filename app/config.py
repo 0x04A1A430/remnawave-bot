@@ -13,34 +13,8 @@ from pathlib import Path
 
 
 DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS = [
-    "telegram",
-    "teleqram",
-    "teiegram",
-    "teieqram",
-    "telegrarn",
-    "service",
-    "notification",
-    "system",
-    "security",
-    "safety",
-    "support",
-    "moderation",
-    "review",
-    "compliance",
-    "abuse",
-    "spam",
-    "report",
-    "телеграм",
-    "служебн",
-    "уведомлен",
-    "поддержк",
-    "безопасн",
-    "модерац",
-    "жалоб",
-    "абуз",
-    "служб",
-    "повiдом",
-    "пiдтрим",
+    "tme",
+    "joingroup",
 ]
 
 
