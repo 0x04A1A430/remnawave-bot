@@ -13,8 +13,9 @@ from pathlib import Path
 
 
 class Settings(BaseSettings):
-    
+
     BOT_TOKEN: str
+    BOT_USERNAME: Optional[str] = None
     ADMIN_IDS: str = ""
     SUPPORT_USERNAME: str = "@support"
     SUPPORT_MENU_ENABLED: bool = True
@@ -527,7 +528,14 @@ class Settings(BaseSettings):
     
     def get_trial_warning_hours(self) -> int:
         return self.TRIAL_WARNING_HOURS
-    
+
+    def get_bot_username(self) -> Optional[str]:
+        username = getattr(self, "BOT_USERNAME", None)
+        if not username:
+            return None
+        normalized = str(username).strip().lstrip("@")
+        return normalized or None
+
     def is_notifications_enabled(self) -> bool:
         return self.ENABLE_NOTIFICATIONS
     

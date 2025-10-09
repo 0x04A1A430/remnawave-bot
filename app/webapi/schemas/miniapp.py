@@ -175,6 +175,73 @@ class MiniAppLegalDocuments(BaseModel):
     privacy_policy: Optional[MiniAppRichTextDocument] = None
 
 
+class MiniAppReferralTerms(BaseModel):
+    minimum_topup_kopeks: int = 0
+    minimum_topup_label: Optional[str] = None
+    first_topup_bonus_kopeks: int = 0
+    first_topup_bonus_label: Optional[str] = None
+    inviter_bonus_kopeks: int = 0
+    inviter_bonus_label: Optional[str] = None
+    commission_percent: float = 0.0
+    referred_user_reward_kopeks: int = 0
+    referred_user_reward_label: Optional[str] = None
+
+
+class MiniAppReferralStats(BaseModel):
+    invited_count: int = 0
+    paid_referrals_count: int = 0
+    active_referrals_count: int = 0
+    total_earned_kopeks: int = 0
+    total_earned_label: Optional[str] = None
+    month_earned_kopeks: int = 0
+    month_earned_label: Optional[str] = None
+    conversion_rate: float = 0.0
+
+
+class MiniAppReferralRecentEarning(BaseModel):
+    amount_kopeks: int = 0
+    amount_label: Optional[str] = None
+    reason: Optional[str] = None
+    referral_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class MiniAppReferralItem(BaseModel):
+    id: int
+    telegram_id: Optional[int] = None
+    full_name: Optional[str] = None
+    username: Optional[str] = None
+    created_at: Optional[datetime] = None
+    last_activity: Optional[datetime] = None
+    has_made_first_topup: bool = False
+    balance_kopeks: int = 0
+    balance_label: Optional[str] = None
+    total_earned_kopeks: int = 0
+    total_earned_label: Optional[str] = None
+    topups_count: int = 0
+    days_since_registration: Optional[int] = None
+    days_since_activity: Optional[int] = None
+    status: Optional[str] = None
+
+
+class MiniAppReferralList(BaseModel):
+    total_count: int = 0
+    has_next: bool = False
+    has_prev: bool = False
+    current_page: int = 1
+    total_pages: int = 1
+    items: List[MiniAppReferralItem] = Field(default_factory=list)
+
+
+class MiniAppReferralInfo(BaseModel):
+    referral_code: Optional[str] = None
+    referral_link: Optional[str] = None
+    terms: Optional[MiniAppReferralTerms] = None
+    stats: Optional[MiniAppReferralStats] = None
+    recent_earnings: List[MiniAppReferralRecentEarning] = Field(default_factory=list)
+    referrals: Optional[MiniAppReferralList] = None
+
+
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: int
@@ -208,4 +275,5 @@ class MiniAppSubscriptionResponse(BaseModel):
     branding: Optional[MiniAppBranding] = None
     faq: Optional[MiniAppFaq] = None
     legal_documents: Optional[MiniAppLegalDocuments] = None
+    referral: Optional[MiniAppReferralInfo] = None
 
