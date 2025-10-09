@@ -39,6 +39,7 @@ from app.services.remnawave_service import (
     RemnaWaveService,
 )
 from app.services.promo_offer_service import promo_offer_service
+from app.services.promocode_service import PromoCodeService
 from app.services.subscription_service import SubscriptionService
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
 from app.utils.telegram_webapp import (
@@ -54,6 +55,9 @@ from ..schemas.miniapp import (
     MiniAppFaq,
     MiniAppFaqItem,
     MiniAppLegalDocuments,
+    MiniAppPromoCode,
+    MiniAppPromoCodeActivationRequest,
+    MiniAppPromoCodeActivationResponse,
     MiniAppPromoGroup,
     MiniAppPromoOffer,
     MiniAppPromoOfferClaimRequest,
@@ -69,6 +73,8 @@ from ..schemas.miniapp import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+promo_code_service = PromoCodeService()
 
 
 def _format_gb(value: Optional[float]) -> float:
@@ -1044,6 +1050,109 @@ async def get_subscription_details(
         branding=settings.get_miniapp_branding(),
         faq=faq_payload,
         legal_documents=legal_documents_payload,
+    )
+
+
+@router.post(
+    "/promo-codes/activate",
+    response_model=MiniAppPromoCodeActivationResponse,
+)
+async def activate_promo_code(
+    payload: MiniAppPromoCodeActivationRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppPromoCodeActivationResponse:
+    try:
+        webapp_data = parse_webapp_init_data(payload.init_data, settings.BOT_TOKEN)
+    except TelegramWebAppAuthError as error:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "unauthorized", "message": str(error)},
+        ) from error
+
+    telegram_user = webapp_data.get("user")
+    if not isinstance(telegram_user, dict) or "id" not in telegram_user:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_user", "message": "Invalid Telegram user payload"},
+        )
+
+    try:
+        telegram_id = int(telegram_user["id"])
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_user", "message": "Invalid Telegram user identifier"},
+        ) from None
+
+    user = await get_user_by_telegram_id(db, telegram_id)
+    if not user:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"code": "user_not_found", "message": "User not found"},
+        )
+
+    code = (payload.code or "").strip().upper()
+    if not code:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid", "message": "Promo code must not be empty"},
+        )
+
+    result = await promo_code_service.activate_promocode(db, user.id, code)
+    if result.get("success"):
+        promocode_data = result.get("promocode") or {}
+
+        try:
+            balance_bonus = int(promocode_data.get("balance_bonus_kopeks") or 0)
+        except (TypeError, ValueError):
+            balance_bonus = 0
+
+        try:
+            subscription_days = int(promocode_data.get("subscription_days") or 0)
+        except (TypeError, ValueError):
+            subscription_days = 0
+
+        promo_payload = MiniAppPromoCode(
+            code=str(promocode_data.get("code") or code),
+            type=promocode_data.get("type"),
+            balance_bonus_kopeks=balance_bonus,
+            subscription_days=subscription_days,
+            max_uses=promocode_data.get("max_uses"),
+            current_uses=promocode_data.get("current_uses"),
+            valid_until=promocode_data.get("valid_until"),
+        )
+
+        return MiniAppPromoCodeActivationResponse(
+            success=True,
+            description=result.get("description"),
+            promocode=promo_payload,
+        )
+
+    error_code = str(result.get("error") or "generic")
+    status_map = {
+        "user_not_found": status.HTTP_404_NOT_FOUND,
+        "not_found": status.HTTP_404_NOT_FOUND,
+        "expired": status.HTTP_410_GONE,
+        "used": status.HTTP_409_CONFLICT,
+        "already_used_by_user": status.HTTP_409_CONFLICT,
+        "server_error": status.HTTP_500_INTERNAL_SERVER_ERROR,
+    }
+    message_map = {
+        "invalid": "Promo code must not be empty",
+        "not_found": "Promo code not found",
+        "expired": "Promo code expired",
+        "used": "Promo code already used",
+        "already_used_by_user": "Promo code already used by this user",
+        "user_not_found": "User not found",
+        "server_error": "Failed to activate promo code",
+    }
+
+    http_status = status_map.get(error_code, status.HTTP_400_BAD_REQUEST)
+    message = message_map.get(error_code, "Unable to activate promo code")
+
+    raise HTTPException(
+        http_status,
+        detail={"code": error_code, "message": message},
     )
 
 
