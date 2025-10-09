@@ -552,6 +552,10 @@
             border-bottom: none;
         }
 
+        .info-item.promo-group-info {
+            align-items: flex-start;
+        }
+
         .info-item:hover {
             padding-left: 8px;
             background: rgba(var(--primary-rgb), 0.02);
@@ -574,6 +578,273 @@
             font-weight: 700;
             color: var(--text-primary);
             text-align: right;
+        }
+
+        /* Promo card */
+        .promo-card .card-header {
+            gap: 12px;
+        }
+
+        .promo-card-summary {
+            margin-left: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+
+        .promo-card-summary-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+
+        .promo-card-summary-value {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .promo-card-summary-discount {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.12);
+            padding: 4px 8px;
+            border-radius: 999px;
+        }
+
+        .promo-section {
+            padding: 16px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .promo-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .promo-section-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .promo-section-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-align: right;
+        }
+
+        .promo-section-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: flex-end;
+        }
+
+        .promo-section-meta-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .promo-section-meta-value {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .promo-divider {
+            border-top: 1px solid var(--border-color);
+            margin: 0 -16px;
+        }
+
+        .promo-discount-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .promo-periods {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .promo-periods-title,
+        .promo-periods-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+
+        .promo-period-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .promo-period-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(var(--primary-rgb), 0.12);
+            background: rgba(var(--primary-rgb), 0.05);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .promo-period-badge .promo-period-value {
+            color: var(--primary);
+        }
+
+        .promo-period-label {
+            color: var(--text-secondary);
+        }
+
+        .promo-level-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .promo-level-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 14px 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+        }
+
+        .promo-level-item:hover {
+            border-color: rgba(var(--primary-rgb), 0.4);
+            box-shadow: var(--shadow-sm);
+            transform: translateY(-1px);
+        }
+
+        .promo-level-item.current {
+            border-color: var(--primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .promo-level-info {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .promo-level-name {
+            font-weight: 700;
+            color: var(--text-primary);
+            font-size: 15px;
+        }
+
+        .promo-level-threshold {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .promo-level-benefits {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .promo-level-badge {
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .promo-level-item.current .promo-level-badge {
+            background: rgba(var(--primary-rgb), 0.18);
+            color: var(--primary);
+        }
+
+        .promo-level-item.reached .promo-level-badge {
+            background: rgba(16, 185, 129, 0.18);
+            color: var(--success);
+        }
+
+        .promo-level-item.locked .promo-level-badge {
+            background: rgba(148, 163, 184, 0.18);
+            color: var(--text-secondary);
+        }
+
+        .promo-discount-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(var(--primary-rgb), 0.12);
+            background: rgba(var(--primary-rgb), 0.08);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .promo-discount-badge .promo-discount-value {
+            color: var(--text-primary);
+        }
+
+        .promo-discount-badge.muted {
+            background: rgba(var(--primary-rgb), 0.05);
+            border-color: rgba(var(--primary-rgb), 0.08);
+        }
+
+        .promo-discount-badge.muted .promo-discount-value {
+            color: var(--text-secondary);
+        }
+
+        .promo-level-item.current .promo-discount-badge {
+            border-color: rgba(var(--primary-rgb), 0.35);
+            color: var(--primary);
+        }
+
+        .promo-level-item.current .promo-discount-badge .promo-discount-value {
+            color: var(--primary);
+        }
+
+        .promo-level-item.reached .promo-discount-badge {
+            border-color: rgba(16, 185, 129, 0.35);
+            color: var(--success);
+        }
+
+        .promo-level-item.reached .promo-discount-badge .promo-discount-value {
+            color: var(--success);
+        }
+
+        .promo-level-item.locked .promo-discount-badge {
+            opacity: 0.8;
         }
 
         /* Balance Card */
@@ -1242,6 +1513,30 @@
             color: var(--text-secondary);
         }
 
+        :root[data-theme="dark"] .promo-discount-badge {
+            background: rgba(var(--primary-rgb), 0.12);
+            border-color: rgba(var(--primary-rgb), 0.2);
+        }
+
+        :root[data-theme="dark"] .promo-discount-badge.muted {
+            background: rgba(148, 163, 184, 0.15);
+            border-color: rgba(148, 163, 184, 0.25);
+            color: rgba(226, 232, 240, 0.75);
+        }
+
+        :root[data-theme="dark"] .promo-discount-badge.muted .promo-discount-value {
+            color: rgba(226, 232, 240, 0.75);
+        }
+
+        :root[data-theme="dark"] .promo-period-badge {
+            background: rgba(var(--primary-rgb), 0.12);
+            border-color: rgba(var(--primary-rgb), 0.2);
+        }
+
+        :root[data-theme="dark"] .promo-period-badge .promo-period-value {
+            color: var(--primary);
+        }
+
         :root[data-theme="dark"] body,
         :root[data-theme="dark"] .card,
         :root[data-theme="dark"] .user-card,
@@ -1387,6 +1682,50 @@
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.autopay">Auto-Pay</span>
                         <span class="info-value" id="autopayStatus">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Promo Card -->
+            <div class="card expandable promo-card hidden" id="promoCard">
+                <div class="card-header">
+                    <div class="card-title">
+                        <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm0 0v13m-4-5l4 2 4-2"/>
+                        </svg>
+                        <span data-i18n="card.promo.title">Promo benefits</span>
+                    </div>
+                    <div class="promo-card-summary" id="promoCardSummary">
+                        <span class="promo-card-summary-label" data-i18n="promo.summary.current_group">Current group</span>
+                        <span class="promo-card-summary-value" id="promoCardGroupName">—</span>
+                        <span class="promo-card-summary-discount hidden" id="promoCardTopDiscount"></span>
+                    </div>
+                    <svg class="expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </div>
+                <div class="card-content">
+                    <div class="promo-section" id="promoCurrentGroupSection">
+                        <div class="promo-section-header">
+                            <div class="promo-section-title" data-i18n="promo.current_group.title">Current promo group</div>
+                            <div class="promo-section-value" id="promoGroupValue">—</div>
+                        </div>
+                        <div class="promo-discount-list" id="promoGroupDiscounts"></div>
+                        <div class="promo-periods hidden" id="promoGroupPeriods">
+                            <div class="promo-periods-title" data-i18n="promo.periods.title">Subscription period discounts</div>
+                            <div class="promo-period-list" id="promoGroupPeriodList"></div>
+                        </div>
+                    </div>
+                    <div class="promo-divider hidden" id="promoDivider"></div>
+                    <div class="promo-section hidden" id="promoLevelsSection">
+                        <div class="promo-section-header">
+                            <div class="promo-section-title" data-i18n="promo.levels.title">Automatic promo levels</div>
+                            <div class="promo-section-meta">
+                                <span class="promo-section-meta-label" data-i18n="promo_levels.total_spent">Total spent</span>
+                                <span class="promo-section-meta-value" id="promoLevelsSpent">—</span>
+                            </div>
+                        </div>
+                        <ul class="promo-level-list" id="promoLevelsList"></ul>
                     </div>
                 </div>
             </div>
@@ -1671,6 +2010,17 @@
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
                 'card.devices.title': 'Connected Devices',
+                'card.promo_levels.title': 'Promo Levels',
+                'card.promo.title': 'Promo benefits',
+                'promo.summary.current_group': 'Current group',
+                'promo.summary.no_group': 'No promo group',
+                'promo.summary.up_to': 'Up to {value}',
+                'promo.current_group.title': 'Current promo group',
+                'promo.levels.title': 'Automatic promo levels',
+                'promo.periods.title': 'Subscription period discounts',
+                'promo.periods.title_short': 'Periods',
+                'promo.periods.label': '{months} mo',
+                'promo.periods.month_suffix': 'mo',
                 'apps.title': 'Installation guide',
                 'apps.no_data': 'No installation guide available for this platform yet.',
                 'apps.featured': 'Recommended',
@@ -1687,6 +2037,16 @@
                 'history.type.referral_reward': 'Referral reward',
                 'servers.empty': 'No servers connected yet',
                 'devices.empty': 'No devices connected yet',
+                'promo_levels.total_spent': 'Total spent',
+                'promo_levels.threshold': 'from {amount}',
+                'promo_levels.badge.current': 'Current level',
+                'promo_levels.badge.unlocked': 'Unlocked',
+                'promo_levels.badge.locked': 'Locked',
+                'promo_levels.discounts.server': 'Servers',
+                'promo_levels.discounts.traffic': 'Traffic',
+                'promo_levels.discounts.devices': 'Devices',
+                'promo_levels.discounts.none': 'No discounts',
+                'promo_levels.empty': 'Automatic promo levels are not configured yet',
                 'language.ariaLabel': 'Select interface language',
                 'notifications.copy.success': 'Subscription link copied to clipboard.',
                 'notifications.copy.failure': 'Unable to copy the subscription link automatically. Please copy it manually.',
@@ -1735,6 +2095,17 @@
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
                 'card.devices.title': 'Подключенные устройства',
+                'card.promo_levels.title': 'Уровни промогрупп',
+                'card.promo.title': 'Промо-скидки',
+                'promo.summary.current_group': 'Текущая группа',
+                'promo.summary.no_group': 'Нет промогруппы',
+                'promo.summary.up_to': 'До {value}',
+                'promo.current_group.title': 'Текущая промогруппа',
+                'promo.levels.title': 'Автоматические уровни промогрупп',
+                'promo.periods.title': 'Скидки на периоды подписки',
+                'promo.periods.title_short': 'Периоды',
+                'promo.periods.label': '{months} мес.',
+                'promo.periods.month_suffix': 'мес.',
                 'apps.title': 'Инструкция по установке',
                 'apps.no_data': 'Для этой платформы инструкция пока недоступна.',
                 'apps.featured': 'Рекомендуем',
@@ -1751,6 +2122,16 @@
                 'history.type.referral_reward': 'Реферальное вознаграждение',
                 'servers.empty': 'Подключённых серверов пока нет',
                 'devices.empty': 'Подключённых устройств пока нет',
+                'promo_levels.total_spent': 'Всего потрачено',
+                'promo_levels.threshold': 'от {amount}',
+                'promo_levels.badge.current': 'Текущий уровень',
+                'promo_levels.badge.unlocked': 'Получен',
+                'promo_levels.badge.locked': 'Недоступен',
+                'promo_levels.discounts.server': 'Серверы',
+                'promo_levels.discounts.traffic': 'Трафик',
+                'promo_levels.discounts.devices': 'Устройства',
+                'promo_levels.discounts.none': 'Скидок нет',
+                'promo_levels.empty': 'Автовыдача промогрупп ещё не настроена',
                 'language.ariaLabel': 'Выберите язык интерфейса',
                 'notifications.copy.success': 'Ссылка подписки скопирована.',
                 'notifications.copy.failure': 'Не удалось автоматически скопировать ссылку. Пожалуйста, сделайте это вручную.',
@@ -2289,6 +2670,7 @@
                     : autopayLabel;
             }
 
+            renderPromoSection();
             renderBalanceSection();
             renderTransactionHistory();
             renderServersList();
@@ -2495,6 +2877,21 @@
             }
         }
 
+        function formatPriceFromKopeks(kopeks, currency) {
+            const normalized = typeof kopeks === 'number'
+                ? kopeks
+                : Number.parseInt(String(kopeks ?? '').trim() || '0', 10);
+            const currencyCode = currency
+                ? String(currency).toUpperCase()
+                : String(userData?.balance_currency || 'RUB').toUpperCase();
+
+            if (!Number.isFinite(normalized)) {
+                return formatCurrency(0, currencyCode);
+            }
+
+            return formatCurrency(normalized / 100, currencyCode);
+        }
+
         function formatDate(value) {
             if (!value) {
                 return '—';
@@ -2693,6 +3090,390 @@
                     </li>
                 `;
             }).join('');
+        }
+
+        const PROMO_DISCOUNT_FIELDS = [
+            { field: 'server_discount_percent', labelKey: 'promo_levels.discounts.server' },
+            { field: 'traffic_discount_percent', labelKey: 'promo_levels.discounts.traffic' },
+            { field: 'device_discount_percent', labelKey: 'promo_levels.discounts.devices' },
+        ];
+
+        function normalizePromoPercent(value) {
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                return value;
+            }
+
+            if (typeof value === 'string' && value.trim() !== '') {
+                const parsed = Number.parseInt(value, 10);
+                if (Number.isFinite(parsed)) {
+                    return parsed;
+                }
+            }
+
+            return null;
+        }
+
+        function populatePromoDiscounts(container, source, options = {}) {
+            const { showEmptyMessage = false } = options;
+
+            if (!container) {
+                return false;
+            }
+
+            container.innerHTML = '';
+
+            if (!source) {
+                if (showEmptyMessage) {
+                    const badge = document.createElement('span');
+                    badge.className = 'promo-discount-badge muted';
+                    badge.textContent = t('promo_levels.discounts.none');
+                    container.appendChild(badge);
+                    container.classList.remove('hidden');
+                } else {
+                    container.classList.add('hidden');
+                }
+                return false;
+            }
+
+            let hasDiscounts = false;
+
+            PROMO_DISCOUNT_FIELDS.forEach(({ field, labelKey }) => {
+                const percentValue = normalizePromoPercent(source?.[field]);
+                if (percentValue === null) {
+                    return;
+                }
+
+                const normalized = Math.max(0, Math.round(percentValue));
+                if (normalized <= 0) {
+                    return;
+                }
+
+                hasDiscounts = true;
+
+                const badge = document.createElement('span');
+                badge.className = 'promo-discount-badge';
+
+                const label = document.createElement('span');
+                label.className = 'promo-discount-label';
+                label.textContent = t(labelKey);
+
+                const valueElement = document.createElement('span');
+                valueElement.className = 'promo-discount-value';
+                valueElement.textContent = `${normalized}%`;
+
+                badge.appendChild(label);
+                badge.appendChild(valueElement);
+                container.appendChild(badge);
+            });
+
+            if (!hasDiscounts) {
+                if (showEmptyMessage) {
+                    const badge = document.createElement('span');
+                    badge.className = 'promo-discount-badge muted';
+                    badge.textContent = t('promo_levels.discounts.none');
+                    container.appendChild(badge);
+                    container.classList.remove('hidden');
+                } else {
+                    container.classList.add('hidden');
+                }
+                return false;
+            }
+
+            container.classList.remove('hidden');
+            return true;
+        }
+
+        function collectPromoDiscountValues(source) {
+            const values = [];
+            PROMO_DISCOUNT_FIELDS.forEach(({ field }) => {
+                const percentValue = normalizePromoPercent(source?.[field]);
+                if (percentValue === null) {
+                    return;
+                }
+
+                const normalized = Math.max(0, Math.round(percentValue));
+                if (normalized > 0) {
+                    values.push(normalized);
+                }
+            });
+            return values;
+        }
+
+        function normalizePeriodDiscountsMap(periodDiscounts) {
+            if (!periodDiscounts || typeof periodDiscounts !== 'object') {
+                return [];
+            }
+
+            const entries = [];
+
+            Object.entries(periodDiscounts).forEach(([key, value]) => {
+                const period = Number.parseInt(key, 10);
+                const percent = normalizePromoPercent(value);
+                if (!Number.isFinite(period) || period <= 0 || percent === null) {
+                    return;
+                }
+
+                const normalized = Math.max(0, Math.round(percent));
+                if (normalized <= 0) {
+                    return;
+                }
+
+                entries.push({ period, percent: normalized });
+            });
+
+            return entries.sort((a, b) => a.period - b.period);
+        }
+
+        function formatPeriodLabel(period) {
+            const template = t('promo.periods.label');
+            if (template && template !== 'promo.periods.label' && template.includes('{months}')) {
+                return template.replace('{months}', period);
+            }
+
+            const suffix = t('promo.periods.month_suffix');
+            if (suffix && suffix !== 'promo.periods.month_suffix') {
+                if (suffix.includes('{months}')) {
+                    return suffix.replace('{months}', period);
+                }
+                return `${period} ${suffix}`;
+            }
+
+            return `${period} mo`;
+        }
+
+        function populatePromoPeriods(container, periodDiscounts) {
+            if (!container) {
+                return false;
+            }
+
+            container.innerHTML = '';
+
+            const entries = normalizePeriodDiscountsMap(periodDiscounts);
+            if (!entries.length) {
+                container.classList.add('hidden');
+                return false;
+            }
+
+            entries.forEach(({ period, percent }) => {
+                const badge = document.createElement('span');
+                badge.className = 'promo-period-badge';
+
+                const label = document.createElement('span');
+                label.className = 'promo-period-label';
+                label.textContent = formatPeriodLabel(period);
+
+                const value = document.createElement('span');
+                value.className = 'promo-period-value';
+                value.textContent = `${percent}%`;
+
+                badge.appendChild(label);
+                badge.appendChild(value);
+                container.appendChild(badge);
+            });
+
+            container.classList.remove('hidden');
+            return true;
+        }
+
+        function computeTopPromoDiscount(source) {
+            if (!source) {
+                return 0;
+            }
+
+            const values = collectPromoDiscountValues(source);
+            normalizePeriodDiscountsMap(source.period_discounts).forEach(entry => {
+                values.push(entry.percent);
+            });
+
+            return values.length ? Math.max(...values) : 0;
+        }
+
+        function renderPromoGroupInfo() {
+            const section = document.getElementById('promoCurrentGroupSection');
+            const valueElement = document.getElementById('promoGroupValue');
+            const discountsContainer = document.getElementById('promoGroupDiscounts');
+            const periodWrapper = document.getElementById('promoGroupPeriods');
+            const periodList = document.getElementById('promoGroupPeriodList');
+            const summaryName = document.getElementById('promoCardGroupName');
+            const summaryDiscount = document.getElementById('promoCardTopDiscount');
+
+            if (!section || !valueElement || !summaryName) {
+                return { hasGroup: false, hasDiscounts: false, topDiscount: 0 };
+            }
+
+            const promoGroup = userData?.promo_group || null;
+            const hasGroup = Boolean(promoGroup);
+
+            const groupLabel = promoGroup?.name || t('promo.summary.no_group');
+            summaryName.textContent = groupLabel;
+            valueElement.textContent = promoGroup?.name || t('values.not_available');
+
+            let hasBaseDiscounts = false;
+            let hasPeriodDiscounts = false;
+
+            if (discountsContainer) {
+                hasBaseDiscounts = populatePromoDiscounts(discountsContainer, promoGroup, {
+                    showEmptyMessage: hasGroup,
+                });
+            }
+
+            if (periodList && periodWrapper) {
+                hasPeriodDiscounts = populatePromoPeriods(periodList, promoGroup?.period_discounts);
+                periodWrapper.classList.toggle('hidden', !hasPeriodDiscounts);
+            }
+
+            section.classList.toggle('hidden', !hasGroup);
+
+            const topDiscount = hasGroup ? computeTopPromoDiscount(promoGroup) : 0;
+            if (summaryDiscount) {
+                if (topDiscount > 0) {
+                    const template = t('promo.summary.up_to');
+                    const valueLabel = `${topDiscount}%`;
+                    summaryDiscount.textContent = template.includes('{value}')
+                        ? template.replace('{value}', valueLabel)
+                        : `${template} ${valueLabel}`;
+                    summaryDiscount.classList.remove('hidden');
+                } else {
+                    summaryDiscount.classList.add('hidden');
+                }
+            }
+
+            return {
+                hasGroup,
+                hasDiscounts: hasBaseDiscounts || hasPeriodDiscounts,
+                topDiscount,
+            };
+        }
+
+        function renderPromoLevels() {
+            const list = document.getElementById('promoLevelsList');
+            const section = document.getElementById('promoLevelsSection');
+            const totalSpentElement = document.getElementById('promoLevelsSpent');
+
+            if (!list || !section || !totalSpentElement) {
+                return false;
+            }
+
+            const levels = Array.isArray(userData?.auto_assign_promo_groups)
+                ? userData.auto_assign_promo_groups
+                : [];
+
+            const totalSpentKopeksRaw = typeof userData?.total_spent_kopeks === 'number'
+                ? userData.total_spent_kopeks
+                : Number.parseInt(userData?.total_spent_kopeks ?? '0', 10);
+            const totalSpentKopeks = Number.isFinite(totalSpentKopeksRaw) ? totalSpentKopeksRaw : 0;
+            totalSpentElement.textContent = userData?.total_spent_label
+                || formatPriceFromKopeks(totalSpentKopeks);
+
+            list.innerHTML = '';
+
+            if (!levels.length) {
+                section.classList.add('hidden');
+                return false;
+            }
+
+            section.classList.remove('hidden');
+
+            const currencyCode = (userData?.balance_currency || 'RUB').toUpperCase();
+            const thresholdTemplate = t('promo_levels.threshold');
+
+            levels.forEach(level => {
+                const classes = ['promo-level-item'];
+                if (level?.is_current) {
+                    classes.push('current', 'reached');
+                } else if (level?.is_reached) {
+                    classes.push('reached');
+                } else {
+                    classes.push('locked');
+                }
+
+                const item = document.createElement('li');
+                item.className = classes.join(' ');
+
+                const info = document.createElement('div');
+                info.className = 'promo-level-info';
+
+                const name = document.createElement('div');
+                name.className = 'promo-level-name';
+                name.textContent = level?.name || t('values.not_available');
+                info.appendChild(name);
+
+                const threshold = document.createElement('div');
+                threshold.className = 'promo-level-threshold';
+                const thresholdLabel = level?.threshold_label
+                    || formatPriceFromKopeks(level?.threshold_kopeks, currencyCode);
+                threshold.textContent = thresholdTemplate.includes('{amount}')
+                    ? thresholdTemplate.replace('{amount}', thresholdLabel)
+                    : `${thresholdTemplate} ${thresholdLabel}`;
+                info.appendChild(threshold);
+
+                const benefits = document.createElement('div');
+                benefits.className = 'promo-level-benefits';
+
+                const discountBadges = document.createElement('div');
+                discountBadges.className = 'promo-discount-list';
+                const hasDiscounts = populatePromoDiscounts(discountBadges, level);
+                if (hasDiscounts) {
+                    benefits.appendChild(discountBadges);
+                }
+
+                const periodWrapper = document.createElement('div');
+                periodWrapper.className = 'promo-periods';
+                const periodLabel = document.createElement('span');
+                periodLabel.className = 'promo-periods-label';
+                periodLabel.textContent = t('promo.periods.title_short');
+                const levelPeriodList = document.createElement('div');
+                levelPeriodList.className = 'promo-period-list';
+                const hasPeriods = populatePromoPeriods(levelPeriodList, level?.period_discounts);
+                if (hasPeriods) {
+                    periodWrapper.appendChild(periodLabel);
+                    periodWrapper.appendChild(levelPeriodList);
+                    benefits.appendChild(periodWrapper);
+                }
+
+                if (benefits.childElementCount > 0) {
+                    info.appendChild(benefits);
+                }
+
+                const badge = document.createElement('div');
+                badge.className = 'promo-level-badge';
+                let badgeKey = 'promo_levels.badge.locked';
+                if (level?.is_current) {
+                    badgeKey = 'promo_levels.badge.current';
+                } else if (level?.is_reached) {
+                    badgeKey = 'promo_levels.badge.unlocked';
+                }
+                badge.textContent = t(badgeKey);
+
+                item.appendChild(info);
+                item.appendChild(badge);
+                list.appendChild(item);
+            });
+
+            return true;
+        }
+
+        function renderPromoSection() {
+            const card = document.getElementById('promoCard');
+            const divider = document.getElementById('promoDivider');
+            if (!card) {
+                return;
+            }
+
+            const groupResult = renderPromoGroupInfo();
+            const hasLevels = renderPromoLevels();
+            const hasGroupSection = Boolean(groupResult?.hasGroup);
+
+            if (divider) {
+                divider.classList.toggle('hidden', !(hasGroupSection && hasLevels));
+            }
+
+            const shouldShow = hasGroupSection || hasLevels;
+            card.classList.toggle('hidden', !shouldShow);
+
+            if (!shouldShow) {
+                card.classList.remove('expanded');
+            }
         }
 
         function getCurrentSubscriptionUrl() {
