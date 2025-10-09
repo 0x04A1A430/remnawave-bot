@@ -30,7 +30,6 @@ from app.database.models import (
     Transaction,
     User,
 )
-from app.services.faq_service import FaqService
 from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
@@ -48,8 +47,6 @@ from ..schemas.miniapp import (
     MiniAppAutoPromoGroupLevel,
     MiniAppConnectedServer,
     MiniAppDevice,
-    MiniAppFaq,
-    MiniAppFaqItem,
     MiniAppPromoGroup,
     MiniAppPromoOffer,
     MiniAppPromoOfferClaimRequest,
@@ -851,62 +848,6 @@ async def get_subscription_details(
         user=user,
     )
 
-    faq_payload: Optional[MiniAppFaq] = None
-    requested_faq_language = user.language or settings.DEFAULT_LANGUAGE or "ru"
-    requested_faq_language = FaqService.normalize_language(requested_faq_language)
-    faq_pages = await FaqService.get_pages(
-        db,
-        requested_faq_language,
-        include_inactive=False,
-        fallback=True,
-    )
-
-    if faq_pages:
-        faq_setting = await FaqService.get_setting(
-            db,
-            requested_faq_language,
-            fallback=True,
-        )
-        is_enabled = bool(faq_setting.is_enabled) if faq_setting else True
-
-        if is_enabled:
-            ordered_pages = sorted(
-                faq_pages,
-                key=lambda page: (
-                    (page.display_order or 0),
-                    page.id,
-                ),
-            )
-            faq_items: List[MiniAppFaqItem] = []
-            for page in ordered_pages:
-                raw_content = (page.content or "").strip()
-                if not raw_content:
-                    continue
-                if not re.sub(r"<[^>]+>", "", raw_content).strip():
-                    continue
-                faq_items.append(
-                    MiniAppFaqItem(
-                        id=page.id,
-                        title=page.title or None,
-                        content=page.content or "",
-                        display_order=getattr(page, "display_order", None),
-                    )
-                )
-
-            if faq_items:
-                resolved_language = (
-                    faq_setting.language
-                    if faq_setting and faq_setting.language
-                    else ordered_pages[0].language
-                )
-                faq_payload = MiniAppFaq(
-                    requested_language=requested_faq_language,
-                    language=resolved_language or requested_faq_language,
-                    is_enabled=is_enabled,
-                    total=len(faq_items),
-                    items=faq_items,
-                )
-
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
         username=user.username,
@@ -976,7 +917,6 @@ async def get_subscription_details(
         subscription_type="trial" if subscription.is_trial else "paid",
         autopay_enabled=bool(subscription.autopay_enabled),
         branding=settings.get_miniapp_branding(),
-        faq=faq_payload,
     )
 
 
