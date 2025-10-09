@@ -9,7 +9,11 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings, PERIOD_PRICES, get_traffic_prices
-from app.database.crud.discount_offer import get_offer_by_id
+from app.database.crud.discount_offer import (
+    get_offer_by_id,
+    mark_offer_claimed,
+)
+from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.crud.subscription import (
     create_trial_subscription,
     create_paid_subscription, add_subscription_traffic, add_subscription_devices,
@@ -5238,13 +5242,35 @@ async def claim_discount_offer(
         )
         return
 
-    result = await promo_offer_service.claim_offer(db, db_user, offer)
+    now = datetime.utcnow()
+    if offer.claimed_at is not None:
+        await callback.answer(
+            texts.get("DISCOUNT_CLAIM_ALREADY", "ℹ️ Скидка уже была активирована"),
+            show_alert=True,
+        )
+        return
 
-    if not result.success:
-        error_code = (result.error_code or "unknown").lower()
-        effect_type = result.effect_type or "percent_discount"
+    if not offer.is_active or offer.expires_at <= now:
+        offer.is_active = False
+        await db.commit()
+        await callback.answer(
+            texts.get("DISCOUNT_CLAIM_EXPIRED", "⚠️ Время действия предложения истекло"),
+            show_alert=True,
+        )
+        return
 
-        if effect_type == "test_access":
+    effect_type = (offer.effect_type or "percent_discount").lower()
+    if effect_type == "balance_bonus":
+        effect_type = "percent_discount"
+
+    if effect_type == "test_access":
+        success, newly_added, expires_at, error_code = await promo_offer_service.grant_test_access(
+            db,
+            db_user,
+            offer,
+        )
+
+        if not success:
             if error_code == "subscription_missing":
                 error_message = texts.get(
                     "TEST_ACCESS_NO_SUBSCRIPTION",
@@ -5270,35 +5296,19 @@ async def claim_discount_offer(
                     "TEST_ACCESS_UNKNOWN_ERROR",
                     "❌ Не удалось активировать предложение. Попробуйте позже.",
                 )
-        else:
-            if error_code == "already_claimed":
-                error_message = texts.get(
-                    "DISCOUNT_CLAIM_ALREADY",
-                    "ℹ️ Скидка уже была активирована",
-                )
-            elif error_code in {"expired", "inactive"}:
-                error_message = texts.get(
-                    "DISCOUNT_CLAIM_EXPIRED",
-                    "⚠️ Время действия предложения истекло",
-                )
-            elif error_code == "no_discount":
-                error_message = texts.get(
-                    "DISCOUNT_CLAIM_ERROR",
-                    "❌ Не удалось активировать скидку. Попробуйте позже.",
-                )
-            else:
-                error_message = texts.get(
-                    "DISCOUNT_CLAIM_ERROR",
-                    "❌ Не удалось активировать скидку. Попробуйте позже.",
-                )
+            await callback.answer(error_message, show_alert=True)
+            return
 
-        await callback.answer(error_message, show_alert=True)
-        return
+        await mark_offer_claimed(
+            db,
+            offer,
+            details={
+                "context": "test_access_claim",
+                "new_squads": newly_added,
+                "expires_at": expires_at.isoformat() if expires_at else None,
+            },
+        )
 
-    effect_type = (result.effect_type or "percent_discount").lower()
-
-    if effect_type == "test_access":
-        expires_at = result.test_access_expires_at
         expires_text = expires_at.strftime("%d.%m.%Y %H:%M") if expires_at else ""
         success_message = texts.get(
             "TEST_ACCESS_ACTIVATED_MESSAGE",
@@ -5320,11 +5330,52 @@ async def claim_discount_offer(
         await callback.message.answer(success_message, reply_markup=back_keyboard)
         return
 
-    discount_percent = result.discount_percent
-    discount_expires_at = result.discount_expires_at
-    duration_hours = result.discount_duration_hours
+    discount_percent = int(offer.discount_percent or 0)
+    if discount_percent <= 0:
+        await callback.answer(
+            texts.get("DISCOUNT_CLAIM_ERROR", "❌ Не удалось активировать скидку. Попробуйте позже."),
+            show_alert=True,
+        )
+        return
+
+    db_user.promo_offer_discount_percent = discount_percent
+    db_user.promo_offer_discount_source = offer.notification_type
+    db_user.updated_at = now
+
     extra_data = offer.extra_data or {}
-    now = datetime.utcnow()
+    raw_duration = extra_data.get("active_discount_hours")
+    template_id = extra_data.get("template_id")
+
+    if raw_duration in (None, "") and template_id:
+        try:
+            template = await get_promo_offer_template_by_id(db, int(template_id))
+        except (ValueError, TypeError):
+            template = None
+        if template and template.active_discount_hours:
+            raw_duration = template.active_discount_hours
+
+    try:
+        duration_hours = int(raw_duration) if raw_duration is not None else None
+    except (TypeError, ValueError):
+        duration_hours = None
+
+    if duration_hours and duration_hours > 0:
+        discount_expires_at = now + timedelta(hours=duration_hours)
+    else:
+        discount_expires_at = None
+
+    db_user.promo_offer_discount_expires_at = discount_expires_at
+
+    await mark_offer_claimed(
+        db,
+        offer,
+        details={
+            "context": "discount_claim",
+            "discount_percent": discount_percent,
+            "discount_expires_at": discount_expires_at.isoformat() if discount_expires_at else None,
+        },
+    )
+    await db.refresh(db_user)
 
     success_template = texts.get(
         "DISCOUNT_CLAIM_SUCCESS",
@@ -5336,15 +5387,6 @@ async def claim_discount_offer(
     )
 
     format_values: Dict[str, Any] = {"percent": discount_percent}
-
-    if duration_hours is None and isinstance(extra_data, dict):
-        raw_duration = extra_data.get("active_discount_hours") or extra_data.get("duration_hours")
-        try:
-            parsed_duration = int(raw_duration) if raw_duration is not None else None
-        except (TypeError, ValueError):
-            parsed_duration = None
-        if parsed_duration and parsed_duration > 0:
-            duration_hours = parsed_duration
 
     if duration_hours and duration_hours > 0:
         format_values.setdefault("hours", duration_hours)
