@@ -34,6 +34,26 @@ class MiniAppSubscriptionUser(BaseModel):
     traffic_limit_label: str
     lifetime_used_traffic_gb: float = 0.0
     has_active_subscription: bool = False
+    promo_offer_discount_percent: int = 0
+    promo_offer_discount_source: Optional[str] = None
+    promo_offer_discount_expires_at: Optional[datetime] = None
+
+
+class MiniAppPromoOffer(BaseModel):
+    id: int
+    notification_type: str
+    discount_percent: int = 0
+    bonus_amount_kopeks: int = 0
+    expires_at: datetime
+    created_at: datetime
+    updated_at: datetime
+    effect_type: str
+    is_active: bool = True
+    offer_type: Optional[str] = None
+    button_text: Optional[str] = None
+    message_text: Optional[str] = None
+    active_discount_hours: Optional[int] = None
+    extra_data: Dict[str, Any] = Field(default_factory=dict)
 
 
 class MiniAppPromoGroup(BaseModel):
@@ -117,4 +137,19 @@ class MiniAppSubscriptionResponse(BaseModel):
     subscription_type: str
     autopay_enabled: bool = False
     branding: Optional[MiniAppBranding] = None
+    promo_offers: List[MiniAppPromoOffer] = Field(default_factory=list)
+
+
+class MiniAppPromoOfferClaimRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+
+
+class MiniAppPromoOfferClaimResponse(BaseModel):
+    success: bool = True
+    status: str
+    message: Optional[str] = None
+    discount_percent: Optional[int] = None
+    discount_expires_at: Optional[datetime] = None
+    test_access_expires_at: Optional[datetime] = None
+    newly_added_squads: List[str] = Field(default_factory=list)
 
