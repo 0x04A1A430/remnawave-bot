@@ -123,6 +123,27 @@ class MiniAppPromoOfferClaimResponse(BaseModel):
     code: Optional[str] = None
 
 
+class MiniAppPromoCode(BaseModel):
+    code: str
+    type: Optional[str] = None
+    balance_bonus_kopeks: int = 0
+    subscription_days: int = 0
+    max_uses: Optional[int] = None
+    current_uses: Optional[int] = None
+    valid_until: Optional[datetime] = None
+
+
+class MiniAppPromoCodeActivationRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    code: str
+
+
+class MiniAppPromoCodeActivationResponse(BaseModel):
+    success: bool = True
+    description: Optional[str] = None
+    promocode: Optional[MiniAppPromoCode] = None
+
+
 class MiniAppFaqItem(BaseModel):
     id: int
     title: Optional[str] = None
