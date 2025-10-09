@@ -552,6 +552,10 @@
             border-bottom: none;
         }
 
+        .info-item.promo-group-info {
+            align-items: flex-start;
+        }
+
         .info-item:hover {
             padding-left: 8px;
             background: rgba(var(--primary-rgb), 0.02);
@@ -574,6 +578,310 @@
             font-weight: 700;
             color: var(--text-primary);
             text-align: right;
+        }
+
+        .info-item.promo-group-info .info-value {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .promo-group-summary {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+            width: 100%;
+        }
+
+        .promo-group-name {
+            font-size: 16px;
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .promo-group-highlights {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: flex-end;
+        }
+
+        .promo-group-toggle {
+            align-self: flex-end;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(var(--primary-rgb), 0.18);
+            background: rgba(var(--primary-rgb), 0.08);
+            color: var(--primary);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .promo-group-toggle:hover {
+            border-color: rgba(var(--primary-rgb), 0.35);
+            background: rgba(var(--primary-rgb), 0.12);
+        }
+
+        .promo-group-toggle.hidden {
+            display: none !important;
+        }
+
+        .promo-group-toggle .toggle-icon {
+            width: 16px;
+            height: 16px;
+            transition: transform 0.3s ease;
+        }
+
+        .info-item.promo-group-info.expanded .promo-group-toggle .toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .promo-group-details {
+            width: 100%;
+            background: rgba(var(--primary-rgb), 0.06);
+            border-radius: var(--radius);
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: inset 0 1px 0 rgba(var(--primary-rgb), 0.08);
+        }
+
+        .promo-group-discounts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: flex-end;
+        }
+
+        .promo-period-section {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .promo-period-title {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .promo-period-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .promo-period-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(var(--primary-rgb), 0.18);
+            background: rgba(var(--primary-rgb), 0.08);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+            white-space: nowrap;
+        }
+
+        .promo-period-chip .promo-period-label {
+            color: var(--text-secondary);
+        }
+
+        .promo-period-chip .promo-period-value {
+            color: var(--primary);
+        }
+
+        .promo-group-details .promo-period-section {
+            align-items: flex-end;
+            text-align: right;
+        }
+
+        .promo-group-details .promo-period-list {
+            justify-content: flex-end;
+        }
+
+        .promo-group-highlights .promo-discount-badge {
+            background: rgba(var(--primary-rgb), 0.1);
+            border-color: rgba(var(--primary-rgb), 0.2);
+            color: var(--primary);
+        }
+
+        .promo-group-highlights .promo-discount-badge .promo-discount-value {
+            color: var(--primary);
+        }
+
+        /* Promo levels */
+        .promo-levels-card .card-content {
+            opacity: 1;
+            max-height: 2000px;
+            padding-bottom: 16px;
+        }
+
+        .promo-level-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .promo-level-summary-label {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .promo-level-summary-value {
+            font-size: 16px;
+        }
+
+        .promo-level-list {
+            list-style: none;
+            padding: 0 20px 8px;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .promo-level-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+        }
+
+        .promo-level-item:hover {
+            border-color: rgba(var(--primary-rgb), 0.4);
+            box-shadow: var(--shadow-sm);
+            transform: translateY(-1px);
+        }
+
+        .promo-level-item.current {
+            border-color: var(--primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .promo-level-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .promo-level-info .promo-period-section {
+            align-items: flex-start;
+            text-align: left;
+        }
+
+        .promo-level-info .promo-period-list {
+            justify-content: flex-start;
+        }
+
+        .promo-level-discounts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .promo-level-name {
+            font-weight: 700;
+            color: var(--text-primary);
+            font-size: 15px;
+        }
+
+        .promo-level-threshold {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .promo-level-badge {
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .promo-level-item.current .promo-level-badge {
+            background: rgba(var(--primary-rgb), 0.18);
+            color: var(--primary);
+        }
+
+        .promo-level-item.reached .promo-level-badge {
+            background: rgba(16, 185, 129, 0.18);
+            color: var(--success);
+        }
+
+        .promo-level-item.locked .promo-level-badge {
+            background: rgba(148, 163, 184, 0.18);
+            color: var(--text-secondary);
+        }
+
+        .promo-discount-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(var(--primary-rgb), 0.12);
+            background: rgba(var(--primary-rgb), 0.08);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .promo-discount-badge .promo-discount-value {
+            color: var(--text-primary);
+        }
+
+        .promo-discount-badge.muted {
+            background: rgba(var(--primary-rgb), 0.05);
+            border-color: rgba(var(--primary-rgb), 0.08);
+        }
+
+        .promo-discount-badge.muted .promo-discount-value {
+            color: var(--text-secondary);
+        }
+
+        .promo-level-item.current .promo-discount-badge {
+            border-color: rgba(var(--primary-rgb), 0.35);
+            color: var(--primary);
+        }
+
+        .promo-level-item.current .promo-discount-badge .promo-discount-value {
+            color: var(--primary);
+        }
+
+        .promo-level-item.reached .promo-discount-badge {
+            border-color: rgba(16, 185, 129, 0.35);
+            color: var(--success);
+        }
+
+        .promo-level-item.reached .promo-discount-badge .promo-discount-value {
+            color: var(--success);
+        }
+
+        .promo-level-item.locked .promo-discount-badge {
+            opacity: 0.8;
         }
 
         /* Balance Card */
@@ -1242,6 +1550,43 @@
             color: var(--text-secondary);
         }
 
+        :root[data-theme="dark"] .promo-discount-badge {
+            background: rgba(var(--primary-rgb), 0.12);
+            border-color: rgba(var(--primary-rgb), 0.2);
+        }
+
+        :root[data-theme="dark"] .promo-group-toggle {
+            background: rgba(var(--primary-rgb), 0.2);
+            border-color: rgba(var(--primary-rgb), 0.4);
+            color: var(--primary);
+        }
+
+        :root[data-theme="dark"] .promo-group-details {
+            background: rgba(30, 41, 59, 0.65);
+            box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.15);
+        }
+
+        :root[data-theme="dark"] .promo-group-highlights .promo-discount-badge,
+        :root[data-theme="dark"] .promo-period-chip {
+            background: rgba(var(--primary-rgb), 0.22);
+            border-color: rgba(var(--primary-rgb), 0.4);
+            color: var(--primary);
+        }
+
+        :root[data-theme="dark"] .promo-period-chip .promo-period-label {
+            color: rgba(203, 213, 225, 0.85);
+        }
+
+        :root[data-theme="dark"] .promo-discount-badge.muted {
+            background: rgba(148, 163, 184, 0.15);
+            border-color: rgba(148, 163, 184, 0.25);
+            color: rgba(226, 232, 240, 0.75);
+        }
+
+        :root[data-theme="dark"] .promo-discount-badge.muted .promo-discount-value {
+            color: rgba(226, 232, 240, 0.75);
+        }
+
         :root[data-theme="dark"] body,
         :root[data-theme="dark"] .card,
         :root[data-theme="dark"] .user-card,
@@ -1380,6 +1725,33 @@
                         <span class="info-label" data-i18n="info.subscription_type">Type</span>
                         <span class="info-value" id="subscriptionType">-</span>
                     </div>
+                    <div class="info-item promo-group-info">
+                        <span class="info-label" data-i18n="info.promo_group">Promo group</span>
+                        <div class="info-value">
+                            <div class="promo-group-summary">
+                                <span class="promo-group-name" id="promoGroupValue">-</span>
+                                <div class="promo-group-highlights hidden" id="promoGroupHighlights"></div>
+                                <button
+                                    type="button"
+                                    class="promo-group-toggle hidden"
+                                    id="promoGroupToggle"
+                                    aria-expanded="false"
+                                >
+                                    <span id="promoGroupToggleLabel" data-i18n="promo_group.details.show">Show details</span>
+                                    <svg class="toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="promo-group-details hidden" id="promoGroupDetails">
+                                <div class="promo-group-discounts hidden" id="promoGroupDiscounts"></div>
+                                <div class="promo-period-section hidden" id="promoGroupPeriodSection">
+                                    <div class="promo-period-title" data-i18n="promo_levels.discounts.periods.title">Subscription periods</div>
+                                    <div class="promo-period-list" id="promoGroupPeriodDiscounts"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.device_limit">Device Limit</span>
                         <span class="info-value" id="deviceLimit">-</span>
@@ -1387,6 +1759,28 @@
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.autopay">Auto-Pay</span>
                         <span class="info-value" id="autopayStatus">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Promo Levels Card -->
+            <div class="card promo-levels-card" id="promoLevelsCard">
+                <div class="card-header">
+                    <div class="card-title">
+                        <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm0 0v13m-4-5l4 2 4-2"/>
+                        </svg>
+                        <span data-i18n="card.promo_levels.title">Promo Levels</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div class="promo-level-summary">
+                        <span class="promo-level-summary-label" data-i18n="promo_levels.total_spent">Total spent</span>
+                        <span class="promo-level-summary-value" id="promoLevelsSpent">—</span>
+                    </div>
+                    <ul class="promo-level-list" id="promoLevelsList"></ul>
+                    <div class="empty-state hidden" id="promoLevelsEmpty" data-i18n="promo_levels.empty">
+                        Automatic promo levels are not configured yet
                     </div>
                 </div>
             </div>
@@ -1671,6 +2065,7 @@
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
                 'card.devices.title': 'Connected Devices',
+                'card.promo_levels.title': 'Promo Levels',
                 'apps.title': 'Installation guide',
                 'apps.no_data': 'No installation guide available for this platform yet.',
                 'apps.featured': 'Recommended',
@@ -1687,6 +2082,19 @@
                 'history.type.referral_reward': 'Referral reward',
                 'servers.empty': 'No servers connected yet',
                 'devices.empty': 'No devices connected yet',
+                'promo_levels.total_spent': 'Total spent',
+                'promo_levels.threshold': 'from {amount}',
+                'promo_levels.badge.current': 'Current level',
+                'promo_levels.badge.unlocked': 'Unlocked',
+                'promo_levels.badge.locked': 'Locked',
+                'promo_levels.discounts.server': 'Servers',
+                'promo_levels.discounts.traffic': 'Traffic',
+                'promo_levels.discounts.devices': 'Devices',
+                'promo_levels.discounts.none': 'No discounts',
+                'promo_levels.discounts.periods.title': 'Subscription periods',
+                'promo_group.details.show': 'Show details',
+                'promo_group.details.hide': 'Hide details',
+                'promo_levels.empty': 'Automatic promo levels are not configured yet',
                 'language.ariaLabel': 'Select interface language',
                 'notifications.copy.success': 'Subscription link copied to clipboard.',
                 'notifications.copy.failure': 'Unable to copy the subscription link automatically. Please copy it manually.',
@@ -1735,6 +2143,7 @@
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
                 'card.devices.title': 'Подключенные устройства',
+                'card.promo_levels.title': 'Уровни промогрупп',
                 'apps.title': 'Инструкция по установке',
                 'apps.no_data': 'Для этой платформы инструкция пока недоступна.',
                 'apps.featured': 'Рекомендуем',
@@ -1751,6 +2160,19 @@
                 'history.type.referral_reward': 'Реферальное вознаграждение',
                 'servers.empty': 'Подключённых серверов пока нет',
                 'devices.empty': 'Подключённых устройств пока нет',
+                'promo_levels.total_spent': 'Всего потрачено',
+                'promo_levels.threshold': 'от {amount}',
+                'promo_levels.badge.current': 'Текущий уровень',
+                'promo_levels.badge.unlocked': 'Получен',
+                'promo_levels.badge.locked': 'Недоступен',
+                'promo_levels.discounts.server': 'Серверы',
+                'promo_levels.discounts.traffic': 'Трафик',
+                'promo_levels.discounts.devices': 'Устройства',
+                'promo_levels.discounts.none': 'Скидок нет',
+                'promo_levels.discounts.periods.title': 'Периоды подписки',
+                'promo_group.details.show': 'Показать детали',
+                'promo_group.details.hide': 'Скрыть детали',
+                'promo_levels.empty': 'Автовыдача промогрупп ещё не настроена',
                 'language.ariaLabel': 'Выберите язык интерфейса',
                 'notifications.copy.success': 'Ссылка подписки скопирована.',
                 'notifications.copy.failure': 'Не удалось автоматически скопировать ссылку. Пожалуйста, сделайте это вручную.',
@@ -1989,6 +2411,7 @@
                 languageSelect.setAttribute('aria-label', t('language.ariaLabel'));
             }
             updateErrorTexts();
+            updatePromoGroupToggleLabel();
         }
 
         function updateConnectButtonLabel() {
@@ -2289,6 +2712,8 @@
                     : autopayLabel;
             }
 
+            renderPromoGroupInfo();
+            renderPromoLevels();
             renderBalanceSection();
             renderTransactionHistory();
             renderServersList();
@@ -2495,6 +2920,21 @@
             }
         }
 
+        function formatPriceFromKopeks(kopeks, currency) {
+            const normalized = typeof kopeks === 'number'
+                ? kopeks
+                : Number.parseInt(String(kopeks ?? '').trim() || '0', 10);
+            const currencyCode = currency
+                ? String(currency).toUpperCase()
+                : String(userData?.balance_currency || 'RUB').toUpperCase();
+
+            if (!Number.isFinite(normalized)) {
+                return formatCurrency(0, currencyCode);
+            }
+
+            return formatCurrency(normalized / 100, currencyCode);
+        }
+
         function formatDate(value) {
             if (!value) {
                 return '—';
@@ -2693,6 +3133,396 @@
                     </li>
                 `;
             }).join('');
+        }
+
+        const PROMO_DISCOUNT_FIELDS = [
+            { field: 'server_discount_percent', labelKey: 'promo_levels.discounts.server' },
+            { field: 'traffic_discount_percent', labelKey: 'promo_levels.discounts.traffic' },
+            { field: 'device_discount_percent', labelKey: 'promo_levels.discounts.devices' },
+        ];
+
+        function normalizePromoPercent(value) {
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                return value;
+            }
+
+            if (typeof value === 'string' && value.trim() !== '') {
+                const parsed = Number.parseInt(value, 10);
+                if (Number.isFinite(parsed)) {
+                    return parsed;
+                }
+            }
+
+            return null;
+        }
+
+        function getPromoDiscountEntries(source) {
+            if (!source) {
+                return [];
+            }
+
+            const entries = [];
+            PROMO_DISCOUNT_FIELDS.forEach(({ field, labelKey }) => {
+                const percentValue = normalizePromoPercent(source?.[field]);
+                if (percentValue === null) {
+                    return;
+                }
+
+                const normalized = Math.max(0, Math.round(percentValue));
+                if (normalized <= 0) {
+                    return;
+                }
+
+                entries.push({ labelKey, value: normalized });
+            });
+
+            return entries;
+        }
+
+        function populatePromoDiscounts(container, source, options = {}) {
+            const { showEmptyMessage = false, limit = null } = options;
+
+            if (!container) {
+                return false;
+            }
+
+            container.innerHTML = '';
+
+            if (!source) {
+                container.classList.add('hidden');
+                return false;
+            }
+
+            const entries = getPromoDiscountEntries(source);
+
+            if (!entries.length) {
+                if (showEmptyMessage) {
+                    const badge = document.createElement('span');
+                    badge.className = 'promo-discount-badge muted';
+                    badge.textContent = t('promo_levels.discounts.none');
+                    container.appendChild(badge);
+                    container.classList.remove('hidden');
+                    return true;
+                }
+
+                container.classList.add('hidden');
+                return false;
+            }
+
+            const limitValue = typeof limit === 'number' && limit >= 0
+                ? Math.max(0, Math.floor(limit))
+                : null;
+            const items = limitValue === null ? entries : entries.slice(0, limitValue);
+
+            const fragment = document.createDocumentFragment();
+            items.forEach(({ labelKey, value }) => {
+                const badge = document.createElement('span');
+                badge.className = 'promo-discount-badge';
+
+                const label = document.createElement('span');
+                label.className = 'promo-discount-label';
+                label.textContent = t(labelKey);
+
+                const valueElement = document.createElement('span');
+                valueElement.className = 'promo-discount-value';
+                valueElement.textContent = `−${value}%`;
+
+                badge.appendChild(label);
+                badge.appendChild(valueElement);
+                fragment.appendChild(badge);
+            });
+
+            container.appendChild(fragment);
+            container.classList.remove('hidden');
+            return true;
+        }
+
+        function declOfNum(number, titles) {
+            const normalized = Math.abs(Number(number)) || 0;
+            if (!Array.isArray(titles) || titles.length < 3) {
+                return titles?.[0] || '';
+            }
+            const cases = [2, 0, 1, 1, 1, 2];
+            return titles[(normalized % 100 > 4 && normalized % 100 < 20)
+                ? 2
+                : cases[Math.min(normalized % 10, 5)]];
+        }
+
+        function formatSubscriptionPeriodLabel(days) {
+            const totalDays = Number.parseInt(days, 10);
+            if (!Number.isFinite(totalDays) || totalDays <= 0) {
+                return `${days}`;
+            }
+
+            const months = totalDays / 30;
+            const useMonths = Number.isInteger(months) && months >= 1;
+            const lang = String(preferredLanguage || 'en').toLowerCase();
+
+            if (lang.startsWith('ru')) {
+                if (useMonths) {
+                    return `${months} ${declOfNum(months, ['месяц', 'месяца', 'месяцев'])}`;
+                }
+                return `${totalDays} ${declOfNum(totalDays, ['день', 'дня', 'дней'])}`;
+            }
+
+            if (useMonths) {
+                return `${months} month${months === 1 ? '' : 's'}`;
+            }
+
+            return `${totalDays} day${totalDays === 1 ? '' : 's'}`;
+        }
+
+        function populatePeriodDiscounts(container, source) {
+            if (!container) {
+                return false;
+            }
+
+            container.innerHTML = '';
+
+            if (!source || typeof source !== 'object') {
+                container.classList.add('hidden');
+                return false;
+            }
+
+            const raw = source.period_discounts;
+            if (!raw || typeof raw !== 'object') {
+                container.classList.add('hidden');
+                return false;
+            }
+
+            const entries = Object.entries(raw)
+                .map(([period, percent]) => ({
+                    days: Number.parseInt(period, 10),
+                    percent: normalizePromoPercent(percent),
+                }))
+                .filter(entry => Number.isFinite(entry.days)
+                    && entry.days > 0
+                    && entry.percent !== null)
+                .map(entry => ({
+                    days: entry.days,
+                    percent: Math.max(0, Math.round(entry.percent)),
+                }))
+                .filter(entry => entry.percent > 0)
+                .sort((a, b) => a.days - b.days);
+
+            if (!entries.length) {
+                container.classList.add('hidden');
+                return false;
+            }
+
+            const fragment = document.createDocumentFragment();
+            entries.forEach(({ days, percent }) => {
+                const chip = document.createElement('span');
+                chip.className = 'promo-period-chip';
+
+                const label = document.createElement('span');
+                label.className = 'promo-period-label';
+                label.textContent = formatSubscriptionPeriodLabel(days);
+
+                const value = document.createElement('span');
+                value.className = 'promo-period-value';
+                value.textContent = `−${percent}%`;
+
+                chip.appendChild(label);
+                chip.appendChild(value);
+                fragment.appendChild(chip);
+            });
+
+            container.appendChild(fragment);
+            container.classList.remove('hidden');
+            return true;
+        }
+
+        let promoGroupHasDetails = false;
+        let promoGroupDetailsExpanded = false;
+
+        function updatePromoGroupToggleLabel() {
+            const label = document.getElementById('promoGroupToggleLabel');
+            const toggle = document.getElementById('promoGroupToggle');
+            if (!label || !toggle) {
+                return;
+            }
+
+            const key = promoGroupDetailsExpanded
+                ? 'promo_group.details.hide'
+                : 'promo_group.details.show';
+            label.textContent = t(key);
+        }
+
+        function setPromoGroupExpanded(expanded) {
+            const infoItem = document.querySelector('.info-item.promo-group-info');
+            const details = document.getElementById('promoGroupDetails');
+            const toggle = document.getElementById('promoGroupToggle');
+
+            const effectiveExpanded = promoGroupHasDetails && Boolean(expanded);
+            promoGroupDetailsExpanded = effectiveExpanded;
+
+            if (infoItem) {
+                infoItem.classList.toggle('expanded', effectiveExpanded);
+            }
+            if (details) {
+                details.classList.toggle('hidden', !effectiveExpanded);
+            }
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', effectiveExpanded ? 'true' : 'false');
+            }
+
+            updatePromoGroupToggleLabel();
+        }
+
+        document.getElementById('promoGroupToggle')?.addEventListener('click', () => {
+            if (!promoGroupHasDetails) {
+                return;
+            }
+            setPromoGroupExpanded(!promoGroupDetailsExpanded);
+        });
+
+        function renderPromoGroupInfo() {
+            const valueElement = document.getElementById('promoGroupValue');
+            const discountsContainer = document.getElementById('promoGroupDiscounts');
+            const highlightsContainer = document.getElementById('promoGroupHighlights');
+            const periodSection = document.getElementById('promoGroupPeriodSection');
+            const periodList = document.getElementById('promoGroupPeriodDiscounts');
+            const toggle = document.getElementById('promoGroupToggle');
+
+            if (!valueElement) {
+                return;
+            }
+
+            const promoGroup = userData?.promo_group;
+            const promoGroupName = promoGroup?.name;
+            valueElement.textContent = promoGroupName || t('values.not_available');
+
+            let hasDiscounts = false;
+            if (discountsContainer) {
+                hasDiscounts = populatePromoDiscounts(discountsContainer, promoGroup, {
+                    showEmptyMessage: true,
+                });
+            }
+
+            if (highlightsContainer) {
+                const hasHighlights = populatePromoDiscounts(highlightsContainer, promoGroup, {
+                    showEmptyMessage: false,
+                });
+                highlightsContainer.classList.toggle('hidden', !hasHighlights);
+            }
+
+            let hasPeriodDiscounts = false;
+            if (periodList) {
+                hasPeriodDiscounts = populatePeriodDiscounts(periodList, promoGroup);
+            }
+            if (periodSection) {
+                periodSection.classList.toggle('hidden', !hasPeriodDiscounts);
+            }
+
+            promoGroupHasDetails = Boolean(hasDiscounts || hasPeriodDiscounts);
+
+            if (toggle) {
+                toggle.classList.toggle('hidden', !promoGroupHasDetails);
+                toggle.disabled = !promoGroupHasDetails;
+            }
+
+            setPromoGroupExpanded(promoGroupHasDetails && promoGroupDetailsExpanded);
+        }
+
+        function renderPromoLevels() {
+            const list = document.getElementById('promoLevelsList');
+            const emptyState = document.getElementById('promoLevelsEmpty');
+            const totalSpentElement = document.getElementById('promoLevelsSpent');
+            const card = document.getElementById('promoLevelsCard');
+
+            if (!list || !emptyState || !totalSpentElement || !card) {
+                return;
+            }
+
+            const levels = Array.isArray(userData?.auto_assign_promo_groups)
+                ? userData.auto_assign_promo_groups
+                : [];
+
+            const totalSpentKopeksRaw = typeof userData?.total_spent_kopeks === 'number'
+                ? userData.total_spent_kopeks
+                : Number.parseInt(userData?.total_spent_kopeks ?? '0', 10);
+            const totalSpentKopeks = Number.isFinite(totalSpentKopeksRaw) ? totalSpentKopeksRaw : 0;
+            totalSpentElement.textContent = userData?.total_spent_label
+                || formatPriceFromKopeks(totalSpentKopeks);
+
+            list.innerHTML = '';
+
+            if (!levels.length) {
+                card.classList.add('hidden');
+                emptyState.classList.add('hidden');
+                return;
+            }
+
+            card.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+
+            const currencyCode = (userData?.balance_currency || 'RUB').toUpperCase();
+            const thresholdTemplate = t('promo_levels.threshold');
+
+            levels.forEach(level => {
+                const classes = ['promo-level-item'];
+                if (level?.is_current) {
+                    classes.push('current', 'reached');
+                } else if (level?.is_reached) {
+                    classes.push('reached');
+                } else {
+                    classes.push('locked');
+                }
+
+                const item = document.createElement('li');
+                item.className = classes.join(' ');
+
+                const info = document.createElement('div');
+                info.className = 'promo-level-info';
+
+                const name = document.createElement('div');
+                name.className = 'promo-level-name';
+                name.textContent = level?.name || t('values.not_available');
+                info.appendChild(name);
+
+                const threshold = document.createElement('div');
+                threshold.className = 'promo-level-threshold';
+                const thresholdLabel = level?.threshold_label
+                    || formatPriceFromKopeks(level?.threshold_kopeks, currencyCode);
+                threshold.textContent = thresholdTemplate.includes('{amount}')
+                    ? thresholdTemplate.replace('{amount}', thresholdLabel)
+                    : `${thresholdTemplate} ${thresholdLabel}`;
+                info.appendChild(threshold);
+
+                const discounts = document.createElement('div');
+                discounts.className = 'promo-level-discounts';
+                if (populatePromoDiscounts(discounts, level)) {
+                    info.appendChild(discounts);
+                }
+
+                const periodListElement = document.createElement('div');
+                periodListElement.className = 'promo-period-list';
+                if (populatePeriodDiscounts(periodListElement, level)) {
+                    const periodSection = document.createElement('div');
+                    periodSection.className = 'promo-period-section';
+                    const periodTitle = document.createElement('div');
+                    periodTitle.className = 'promo-period-title';
+                    periodTitle.textContent = t('promo_levels.discounts.periods.title');
+                    periodSection.appendChild(periodTitle);
+                    periodSection.appendChild(periodListElement);
+                    info.appendChild(periodSection);
+                }
+
+                const badge = document.createElement('div');
+                badge.className = 'promo-level-badge';
+                let badgeKey = 'promo_levels.badge.locked';
+                if (level?.is_current) {
+                    badgeKey = 'promo_levels.badge.current';
+                } else if (level?.is_reached) {
+                    badgeKey = 'promo_levels.badge.unlocked';
+                }
+                badge.textContent = t(badgeKey);
+
+                item.appendChild(info);
+                item.appendChild(badge);
+                list.appendChild(item);
+            });
         }
 
         function getCurrentSubscriptionUrl() {
