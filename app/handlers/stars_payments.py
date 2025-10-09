@@ -1,7 +1,9 @@
 import logging
+from decimal import Decimal, ROUND_HALF_UP
 from aiogram import Dispatcher, types, F
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.models import User
 from app.services.payment_service import PaymentService
 from app.external.telegram_stars import TelegramStarsService
@@ -114,6 +116,8 @@ async def handle_successful_payment(
         
         if success:
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(payment.total_amount)
+            amount_kopeks = int((rubles_amount * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
+            amount_text = settings.format_price(amount_kopeks).replace(" ₽", "")
 
             keyboard = await payment_service.build_topup_success_keyboard(user)
 
@@ -129,7 +133,7 @@ async def handle_successful_payment(
                     "Спасибо за пополнение! 🚀",
                 ).format(
                     stars_spent=payment.total_amount,
-                    amount=int(rubles_amount),
+                    amount=amount_text,
                     transaction_id=transaction_id_short,
                 ),
                 parse_mode="HTML",
@@ -137,8 +141,10 @@ async def handle_successful_payment(
             )
 
             logger.info(
-                f"✅ Stars платеж успешно обработан: "
-                f"пользователь {user.id}, {payment.total_amount} звезд → {int(rubles_amount)}₽"
+                "✅ Stars платеж успешно обработан: пользователь %s, %s звезд → %s",
+                user.id,
+                payment.total_amount,
+                settings.format_price(amount_kopeks),
             )
         else:
             logger.error(f"Ошибка обработки Stars платежа для пользователя {user.id}")
