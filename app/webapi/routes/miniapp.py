@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
+from aiogram import Bot
 from app.database.crud.discount_offer import (
     get_latest_claimed_offer_for_user,
     get_offer_by_id,
@@ -41,6 +43,10 @@ from app.services.remnawave_service import (
 from app.services.promo_offer_service import promo_offer_service
 from app.services.promocode_service import PromoCodeService
 from app.services.subscription_service import SubscriptionService
+from app.services.payment_service import PaymentService
+from app.external.tribute import TributeService as TributeAPIService
+from app.utils.currency_converter import currency_converter
+from app.utils.payment_utils import get_available_payment_methods
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
 from app.utils.telegram_webapp import (
     TelegramWebAppAuthError,
@@ -60,6 +66,9 @@ from ..schemas.miniapp import (
     MiniAppDeviceRemovalResponse,
     MiniAppFaq,
     MiniAppFaqItem,
+    MiniAppPaymentMethod,
+    MiniAppPaymentRequest,
+    MiniAppPaymentResponse,
     MiniAppLegalDocuments,
     MiniAppPromoCode,
     MiniAppPromoCodeActivationRequest,
@@ -87,6 +96,28 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 promo_code_service = PromoCodeService()
+payment_service = PaymentService()
+tribute_api_service = TributeAPIService()
+
+_SUPPORTED_PAYMENT_METHODS = {
+    "stars",
+    "yookassa",
+    "tribute",
+    "mulenpay",
+    "pal24",
+    "cryptobot",
+}
+
+_AMOUNT_REQUIRED_METHODS = {
+    "stars",
+    "yookassa",
+    "mulenpay",
+    "pal24",
+    "cryptobot",
+}
+
+_CRYPTOBOT_MIN_USD = Decimal("1")
+_CRYPTOBOT_MAX_USD = Decimal("1000")
 
 
 def _format_gb(value: Optional[float]) -> float:
@@ -111,6 +142,85 @@ def _format_limit_label(limit: Optional[int]) -> str:
     if not limit:
         return "Unlimited"
     return f"{limit} GB"
+
+
+def _safe_decimal(value: Any) -> Optional[Decimal]:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
+def _amount_to_kopeks(amount: Any) -> Optional[int]:
+    decimal_amount = _safe_decimal(amount)
+    if decimal_amount is None:
+        return None
+
+    scaled = (decimal_amount * Decimal(100)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    try:
+        integer_value = int(scaled)
+    except (ValueError, TypeError):
+        return None
+
+    if integer_value <= 0:
+        return None
+
+    return integer_value
+
+
+def _build_payment_methods_payload(user: User) -> List[MiniAppPaymentMethod]:
+    available_methods = get_available_payment_methods()
+    methods: List[MiniAppPaymentMethod] = []
+    currency_code = (getattr(user, "balance_currency", None) or "RUB").upper()
+
+    min_limits = {
+        "yookassa": getattr(settings, "YOOKASSA_MIN_AMOUNT_KOPEKS", None),
+        "mulenpay": getattr(settings, "MULENPAY_MIN_AMOUNT_KOPEKS", None),
+        "pal24": getattr(settings, "PAL24_MIN_AMOUNT_KOPEKS", None),
+    }
+
+    max_limits = {
+        "yookassa": getattr(settings, "YOOKASSA_MAX_AMOUNT_KOPEKS", None),
+        "mulenpay": getattr(settings, "MULENPAY_MAX_AMOUNT_KOPEKS", None),
+        "pal24": getattr(settings, "PAL24_MAX_AMOUNT_KOPEKS", None),
+    }
+
+    for method in available_methods:
+        method_id = str(method.get("id") or "").strip().lower()
+        if method_id not in _SUPPORTED_PAYMENT_METHODS:
+            continue
+
+        min_amount = min_limits.get(method_id)
+        max_amount = max_limits.get(method_id)
+
+        metadata: Dict[str, Any] = {}
+        if method_id == "cryptobot":
+            metadata["usd_min"] = float(_CRYPTOBOT_MIN_USD)
+            metadata["usd_max"] = float(_CRYPTOBOT_MAX_USD)
+            metadata["asset"] = settings.CRYPTOBOT_DEFAULT_ASSET
+        elif method_id == "stars":
+            try:
+                metadata["stars_rate"] = settings.get_stars_rate()
+            except AttributeError:
+                metadata["stars_rate"] = None
+
+        methods.append(
+            MiniAppPaymentMethod(
+                id=method_id,
+                name=str(method.get("name") or method_id).strip(),
+                description=str(method.get("description") or "").strip() or None,
+                icon=str(method.get("icon") or "").strip() or None,
+                requires_amount=method_id in _AMOUNT_REQUIRED_METHODS,
+                amount_min_kopeks=min_amount if isinstance(min_amount, int) and min_amount > 0 else None,
+                amount_max_kopeks=max_amount if isinstance(max_amount, int) and max_amount > 0 else None,
+                currency=currency_code,
+                metadata=metadata,
+            )
+        )
+
+    return methods
 
 
 _TEMPLATE_ID_PATTERN = re.compile(r"promo_template_(?P<template_id>\d+)$")
@@ -1198,6 +1308,398 @@ async def get_subscription_details(
         faq=faq_payload,
         legal_documents=legal_documents_payload,
         referral=referral_info,
+        payment_methods=_build_payment_methods_payload(user),
+    )
+
+
+@router.post("/payments", response_model=MiniAppPaymentResponse)
+async def create_payment_link(
+    payload: MiniAppPaymentRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppPaymentResponse:
+    init_data = (payload.init_data or "").strip()
+    if not init_data:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_init_data", "message": "initData is required"},
+        )
+
+    try:
+        webapp_data = parse_webapp_init_data(init_data, settings.BOT_TOKEN)
+    except TelegramWebAppAuthError as error:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "unauthorized", "message": str(error)},
+        ) from error
+
+    telegram_user = webapp_data.get("user")
+    if not isinstance(telegram_user, dict) or "id" not in telegram_user:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_user", "message": "Invalid Telegram user payload"},
+        )
+
+    try:
+        telegram_id = int(telegram_user["id"])
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_user", "message": "Invalid Telegram user identifier"},
+        ) from None
+
+    user = await get_user_by_telegram_id(db, telegram_id)
+    if not user:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"code": "user_not_found", "message": "User not found"},
+        )
+
+    method_id = (payload.method_id or "").strip().lower()
+    if not method_id:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_method", "message": "Payment method is required"},
+        )
+
+    if method_id not in _SUPPORTED_PAYMENT_METHODS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_method", "message": "Unsupported payment method"},
+        )
+
+    available_ids = {
+        str(item.get("id") or "").strip().lower()
+        for item in get_available_payment_methods()
+    }
+    if method_id not in available_ids:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "method_unavailable", "message": "Payment method is currently unavailable"},
+        )
+
+    currency_code = (payload.currency or getattr(user, "balance_currency", "RUB") or "RUB").upper()
+    if currency_code != "RUB":
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "unsupported_currency", "message": "Only RUB currency is supported"},
+        )
+
+    amount_kopeks = _amount_to_kopeks(payload.amount)
+    if method_id in _AMOUNT_REQUIRED_METHODS:
+        if amount_kopeks is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "invalid_amount", "message": "Amount must be greater than zero"},
+            )
+    elif amount_kopeks is None:
+        amount_kopeks = 0
+
+    description = settings.get_balance_payment_description(amount_kopeks)
+
+    if method_id == "yookassa":
+        if not settings.is_yookassa_enabled():
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "disabled", "message": "YooKassa payments are unavailable"},
+            )
+
+        min_amount = getattr(settings, "YOOKASSA_MIN_AMOUNT_KOPEKS", 0)
+        max_amount = getattr(settings, "YOOKASSA_MAX_AMOUNT_KOPEKS", 0)
+        if min_amount and amount_kopeks < min_amount:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "amount_too_small",
+                    "message": f"Minimum amount is {settings.format_price(min_amount)}",
+                },
+            )
+        if max_amount and amount_kopeks > max_amount:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "amount_too_large",
+                    "message": f"Maximum amount is {settings.format_price(max_amount)}",
+                },
+            )
+
+        result = await payment_service.create_yookassa_payment(
+            db=db,
+            user_id=user.id,
+            amount_kopeks=amount_kopeks,
+            description=description,
+            receipt_email=None,
+            receipt_phone=None,
+            metadata={
+                "user_telegram_id": str(user.telegram_id),
+                "user_username": user.username or "",
+                "purpose": "balance_topup",
+            },
+        )
+
+        if not result or not result.get("confirmation_url"):
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail={"code": "payment_error", "message": "Failed to create YooKassa payment"},
+            )
+
+        return MiniAppPaymentResponse(
+            methodId=method_id,
+            redirect_url=result.get("confirmation_url"),
+            amount_kopeks=amount_kopeks,
+            details={"yookassa_payment_id": result.get("yookassa_payment_id")},
+        )
+
+    if method_id == "mulenpay":
+        if not settings.is_mulenpay_enabled():
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "disabled", "message": "Mulen Pay payments are unavailable"},
+            )
+
+        min_amount = getattr(settings, "MULENPAY_MIN_AMOUNT_KOPEKS", 0)
+        max_amount = getattr(settings, "MULENPAY_MAX_AMOUNT_KOPEKS", 0)
+        if min_amount and amount_kopeks < min_amount:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "amount_too_small",
+                    "message": f"Minimum amount is {settings.format_price(min_amount)}",
+                },
+            )
+        if max_amount and amount_kopeks > max_amount:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "amount_too_large",
+                    "message": f"Maximum amount is {settings.format_price(max_amount)}",
+                },
+            )
+
+        result = await payment_service.create_mulenpay_payment(
+            db=db,
+            user_id=user.id,
+            amount_kopeks=amount_kopeks,
+            description=description,
+            language=user.language,
+        )
+
+        if not result or not result.get("payment_url"):
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail={"code": "payment_error", "message": "Failed to create Mulen Pay payment"},
+            )
+
+        return MiniAppPaymentResponse(
+            methodId=method_id,
+            redirect_url=result.get("payment_url"),
+            amount_kopeks=amount_kopeks,
+            details={"mulen_payment_id": result.get("mulen_payment_id")},
+        )
+
+    if method_id == "pal24":
+        if not settings.is_pal24_enabled():
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "disabled", "message": "PayPalych payments are unavailable"},
+            )
+
+        min_amount = getattr(settings, "PAL24_MIN_AMOUNT_KOPEKS", 0)
+        max_amount = getattr(settings, "PAL24_MAX_AMOUNT_KOPEKS", 0)
+        if min_amount and amount_kopeks < min_amount:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "amount_too_small",
+                    "message": f"Minimum amount is {settings.format_price(min_amount)}",
+                },
+            )
+        if max_amount and amount_kopeks > max_amount:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "amount_too_large",
+                    "message": f"Maximum amount is {settings.format_price(max_amount)}",
+                },
+            )
+
+        result = await payment_service.create_pal24_payment(
+            db=db,
+            user_id=user.id,
+            amount_kopeks=amount_kopeks,
+            description=description,
+            language=user.language or settings.DEFAULT_LANGUAGE,
+        )
+
+        if not result:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail={"code": "payment_error", "message": "Failed to create PayPalych payment"},
+            )
+
+        redirect_url = (
+            result.get("link_url")
+            or result.get("sbp_url")
+            or result.get("card_url")
+            or result.get("transfer_url")
+        )
+        if not redirect_url:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail={"code": "payment_error", "message": "Missing payment link"},
+            )
+
+        return MiniAppPaymentResponse(
+            methodId=method_id,
+            redirect_url=redirect_url,
+            amount_kopeks=amount_kopeks,
+            details={
+                "bill_id": result.get("bill_id"),
+                "order_id": result.get("order_id"),
+                "sbp_url": result.get("sbp_url"),
+                "card_url": result.get("card_url"),
+            },
+        )
+
+    if method_id == "cryptobot":
+        if not settings.is_cryptobot_enabled():
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "disabled", "message": "CryptoBot payments are unavailable"},
+            )
+
+        rate = await currency_converter.get_usd_to_rub_rate()
+        if not rate or rate <= 0:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"code": "rate_unavailable", "message": "Unable to load exchange rate"},
+            )
+
+        amount_usd = (Decimal(amount_kopeks) / Decimal(100)) / Decimal(str(rate))
+        amount_usd = amount_usd.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        if amount_usd < _CRYPTOBOT_MIN_USD:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "amount_too_small",
+                    "message": f"Minimum amount is {_CRYPTOBOT_MIN_USD:.2f} USD",
+                },
+            )
+        if amount_usd > _CRYPTOBOT_MAX_USD:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "amount_too_large",
+                    "message": f"Maximum amount is {_CRYPTOBOT_MAX_USD:.2f} USD",
+                },
+            )
+
+        result = await payment_service.create_cryptobot_payment(
+            db=db,
+            user_id=user.id,
+            amount_usd=float(amount_usd),
+            asset=settings.CRYPTOBOT_DEFAULT_ASSET,
+            description=f"{description} ({amount_usd} USD)",
+            payload=f"balance_{user.id}_{amount_kopeks}",
+        )
+
+        if not result:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail={"code": "payment_error", "message": "Failed to create CryptoBot invoice"},
+            )
+
+        redirect_url = (
+            result.get("web_app_invoice_url")
+            or result.get("mini_app_invoice_url")
+            or result.get("bot_invoice_url")
+        )
+        if not redirect_url:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail={"code": "payment_error", "message": "Missing CryptoBot invoice link"},
+            )
+
+        return MiniAppPaymentResponse(
+            methodId=method_id,
+            redirect_url=redirect_url,
+            amount_kopeks=amount_kopeks,
+            details={
+                "invoice_id": result.get("invoice_id"),
+                "asset": result.get("asset"),
+                "amount_usd": float(amount_usd),
+                "rate_rub": rate,
+            },
+        )
+
+    if method_id == "stars":
+        if not settings.TELEGRAM_STARS_ENABLED:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "disabled", "message": "Telegram Stars payments are unavailable"},
+            )
+
+        bot_instance: Optional[Bot] = None
+        try:
+            bot_instance = Bot(token=settings.BOT_TOKEN, parse_mode="HTML")
+            stars_service = PaymentService(bot_instance)
+            invoice_link = await stars_service.create_stars_invoice(
+                amount_kopeks=amount_kopeks,
+                description=description,
+                payload=f"balance_{user.id}_{amount_kopeks}",
+            )
+
+            from app.external.telegram_stars import TelegramStarsService
+
+            amount_rubles = Decimal(amount_kopeks) / Decimal(100)
+            stars_amount = TelegramStarsService.calculate_stars_from_rubles(float(amount_rubles))
+
+            return MiniAppPaymentResponse(
+                methodId=method_id,
+                redirect_url=invoice_link,
+                amount_kopeks=amount_kopeks,
+                details={
+                    "stars_amount": stars_amount,
+                    "stars_rate": settings.get_stars_rate(),
+                },
+            )
+        except Exception as error:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail={"code": "payment_error", "message": f"Failed to create Stars invoice: {error}"},
+            ) from error
+        finally:
+            if bot_instance is not None:
+                await bot_instance.session.close()
+
+    if method_id == "tribute":
+        if not settings.TRIBUTE_ENABLED:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "disabled", "message": "Tribute payments are unavailable"},
+            )
+
+        payment_url = await tribute_api_service.create_payment_link(
+            user_id=user.telegram_id,
+            amount_kopeks=amount_kopeks,
+            description=description,
+        )
+
+        if not payment_url:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail={"code": "payment_error", "message": "Failed to create Tribute link"},
+            )
+
+        return MiniAppPaymentResponse(
+            methodId=method_id,
+            redirect_url=payment_url,
+            amount_kopeks=amount_kopeks,
+        )
+
+    raise HTTPException(
+        status.HTTP_400_BAD_REQUEST,
+        detail={"code": "invalid_method", "message": "Unsupported payment method"},
     )
 
 
