@@ -15,30 +15,6 @@ class MiniAppSubscriptionRequest(BaseModel):
     init_data: str = Field(..., alias="initData")
 
 
-class MiniAppFaqRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-    language: Optional[str] = None
-    fallback: Optional[bool] = None
-
-
-class MiniAppFaqPage(BaseModel):
-    id: int
-    language: str
-    title: str
-    content: str
-    content_pages: List[str] = Field(default_factory=list)
-    display_order: int = 0
-
-
-class MiniAppFaqResponse(BaseModel):
-    success: bool = True
-    requested_language: str
-    language: str
-    is_enabled: bool = False
-    total: int = 0
-    items: List[MiniAppFaqPage] = Field(default_factory=list)
-
-
 class MiniAppSubscriptionUser(BaseModel):
     telegram_id: int
     username: Optional[str] = None

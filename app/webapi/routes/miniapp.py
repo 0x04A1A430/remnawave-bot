@@ -30,7 +30,6 @@ from app.database.models import (
     Transaction,
     User,
 )
-from app.services.faq_service import FaqService
 from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
@@ -48,9 +47,6 @@ from ..schemas.miniapp import (
     MiniAppAutoPromoGroupLevel,
     MiniAppConnectedServer,
     MiniAppDevice,
-    MiniAppFaqPage,
-    MiniAppFaqRequest,
-    MiniAppFaqResponse,
     MiniAppPromoGroup,
     MiniAppPromoOffer,
     MiniAppPromoOfferClaimRequest,
@@ -710,101 +706,6 @@ async def _load_subscription_links(
     }
 
     return payload
-
-
-@router.post("/faq", response_model=MiniAppFaqResponse)
-async def get_faq_pages(
-    payload: MiniAppFaqRequest,
-    db: AsyncSession = Depends(get_db_session),
-) -> MiniAppFaqResponse:
-    try:
-        webapp_data = parse_webapp_init_data(payload.init_data, settings.BOT_TOKEN)
-    except TelegramWebAppAuthError as error:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(error),
-        ) from error
-
-    telegram_user = webapp_data.get("user")
-    if not isinstance(telegram_user, dict) or "id" not in telegram_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Telegram user payload",
-        )
-
-    try:
-        telegram_id = int(telegram_user["id"])
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Telegram user identifier",
-        ) from None
-
-    user = await get_user_by_telegram_id(db, telegram_id)
-    user_language = getattr(user, "language", None)
-    telegram_language = telegram_user.get("language_code") if isinstance(telegram_user.get("language_code"), str) else None
-
-    language_candidates = [
-        payload.language,
-        user_language,
-        telegram_language,
-        settings.DEFAULT_LANGUAGE,
-    ]
-
-    requested_language: Optional[str] = None
-    for candidate in language_candidates:
-        if not candidate:
-            continue
-        try:
-            normalized = FaqService.normalize_language(str(candidate))
-        except Exception:  # pragma: no cover - defensive
-            continue
-        if normalized:
-            requested_language = normalized
-            break
-
-    if not requested_language:
-        requested_language = FaqService.normalize_language(settings.DEFAULT_LANGUAGE or "ru")
-
-    fallback = True if payload.fallback is None else bool(payload.fallback)
-
-    pages = await FaqService.get_pages(
-        db,
-        requested_language,
-        include_inactive=False,
-        fallback=fallback,
-    )
-
-    setting = await FaqService.get_setting(db, requested_language, fallback=fallback)
-    resolved_language = requested_language
-    if pages:
-        resolved_language = pages[0].language
-    if setting and setting.language:
-        resolved_language = setting.language
-
-    serialized_pages: List[MiniAppFaqPage] = []
-    for index, page in enumerate(pages):
-        content = page.content or ""
-        serialized_pages.append(
-            MiniAppFaqPage(
-                id=page.id,
-                language=page.language,
-                title=page.title,
-                content=content,
-                content_pages=FaqService.split_content_into_pages(content),
-                display_order=page.display_order or (index + 1),
-            )
-        )
-
-    is_enabled = bool(setting.is_enabled) if setting else bool(serialized_pages)
-
-    return MiniAppFaqResponse(
-        requested_language=requested_language,
-        language=resolved_language,
-        is_enabled=is_enabled and bool(serialized_pages),
-        total=len(serialized_pages),
-        items=serialized_pages,
-    )
 
 
 @router.post("/subscription", response_model=MiniAppSubscriptionResponse)
