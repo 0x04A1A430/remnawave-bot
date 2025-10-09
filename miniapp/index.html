@@ -1080,11 +1080,212 @@
             letter-spacing: 0.5px;
         }
 
+        .balance-actions {
+            padding: 0 20px 20px;
+        }
+
+        .balance-topup-btn {
+            width: 100%;
+        }
+
         .promo-code-card {
             padding: 20px;
             display: flex;
             flex-direction: column;
             gap: 16px;
+        }
+
+        /* Top-up Modal */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 2000;
+        }
+
+        :root[data-theme="dark"] .modal-backdrop {
+            background: rgba(15, 23, 42, 0.75);
+        }
+
+        .modal-container {
+            width: 100%;
+            max-width: 420px;
+            background: var(--bg-primary);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 20px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .modal-close {
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .modal-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .payment-method-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .payment-method-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+
+        .payment-method-card:hover {
+            border-color: var(--primary);
+            box-shadow: var(--shadow-sm);
+            transform: translateY(-1px);
+        }
+
+        .payment-method-card .method-icon {
+            font-size: 22px;
+        }
+
+        .payment-method-card .method-text {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .payment-method-card .method-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .payment-method-card .method-description {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .modal-back {
+            border: none;
+            background: none;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .modal-back:hover {
+            color: var(--text-primary);
+        }
+
+        .modal-selected-method .payment-method-card {
+            border-color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.06);
+            cursor: default;
+        }
+
+        .modal-field-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .modal-input-group {
+            display: flex;
+            align-items: center;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            background: var(--bg-secondary);
+            overflow: hidden;
+        }
+
+        .modal-input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 12px 14px;
+            font-size: 16px;
+            color: var(--text-primary);
+        }
+
+        .modal-input:focus {
+            outline: none;
+        }
+
+        .modal-input-suffix {
+            padding: 12px 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .modal-field-hint {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .modal-error {
+            font-size: 13px;
+            color: var(--danger);
+            background: rgba(var(--danger-rgb), 0.12);
+            border-radius: var(--radius);
+            padding: 10px 12px;
+        }
+
+        .modal-submit {
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        .modal-backdrop.hidden {
+            display: none !important;
         }
 
         .promo-code-header {
@@ -2433,6 +2634,14 @@
             .balance-amount {
                 font-size: 32px;
             }
+
+            .modal-container {
+                padding: 16px;
+            }
+
+            .payment-method-card {
+                padding: 14px;
+            }
         }
 
         /* Dark Mode Adjustments */
@@ -2800,6 +3009,9 @@
                     <div class="balance-amount" id="balanceAmount">—</div>
                     <div class="balance-label" data-i18n="card.balance.title">Balance</div>
                 </div>
+                <div class="balance-actions">
+                    <button class="btn btn-primary balance-topup-btn hidden" id="topupBtn" type="button" data-i18n="button.topup_balance">Top up balance</button>
+                </div>
             </div>
 
             <div class="card promo-code-card" id="promoCodeCard">
@@ -2986,6 +3198,47 @@
         </div>
     </div>
 
+    <div class="modal-backdrop hidden" id="topupModal" role="dialog" aria-modal="true">
+        <div class="modal-container" role="document">
+            <div class="modal-header">
+                <h2 class="modal-title" data-i18n="payment.modal.title">Top up balance</h2>
+                <button class="modal-close" type="button" id="topupModalClose" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="topup-step" id="topupMethodsStep">
+                    <p class="modal-subtitle" data-i18n="payment.methods.subtitle">Choose a payment method</p>
+                    <div class="payment-method-list" id="paymentMethodsList"></div>
+                </div>
+                <div class="topup-step hidden" id="topupAmountStep">
+                    <button class="modal-back" type="button" id="topupBackBtn">
+                        <span aria-hidden="true">&#8592;</span>
+                        <span data-i18n="payment.action.back">Back</span>
+                    </button>
+                    <div class="modal-selected-method" id="topupSelectedMethod"></div>
+                    <label class="modal-field-label" for="topupAmountInput" data-i18n="payment.amount.title">Enter amount</label>
+                    <div class="modal-input-group">
+                        <input
+                            id="topupAmountInput"
+                            class="modal-input"
+                            type="number"
+                            inputmode="decimal"
+                            step="0.01"
+                            min="0"
+                            data-i18n-placeholder="payment.amount.placeholder"
+                            placeholder="Amount in RUB"
+                        >
+                        <span class="modal-input-suffix" id="topupAmountCurrency">₽</span>
+                    </div>
+                    <div class="modal-field-hint hidden" id="topupAmountHint"></div>
+                    <div class="modal-error hidden" id="topupAmountError"></div>
+                    <button class="btn btn-primary modal-submit" type="button" id="topupConfirmBtn">
+                        <span data-i18n="payment.action.continue">Continue</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Copy all the original JavaScript code here
         const tg = window.Telegram?.WebApp || {
@@ -3002,6 +3255,14 @@
         let promoOfferTimerHandle = null;
         let referralListExpanded = false;
         let referralCopyResetHandle = null;
+        let paymentMethods = [];
+        let paymentMethodsLoaded = false;
+        let paymentMethodsLoading = false;
+        let paymentMethodsError = null;
+        let selectedPaymentMethod = null;
+        let isProcessingPayment = false;
+        let topupModalOpen = false;
+        let topupModalKeydownHandler = null;
 
         if (typeof tg.expand === 'function') {
             tg.expand();
@@ -3153,7 +3414,38 @@
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
                 'button.buy_subscription': 'Buy Subscription',
+                'button.topup_balance': 'Top up balance',
                 'card.balance.title': 'Balance',
+                'payment.modal.title': 'Top up balance',
+                'payment.methods.subtitle': 'Choose a payment method',
+                'payment.amount.title': 'Enter amount',
+                'payment.amount.placeholder': 'Amount in RUB',
+                'payment.amount.helper': 'Available range: {min}–{max} {currency}',
+                'payment.amount.helper.min': 'Minimum amount: {value} {currency}',
+                'payment.amount.helper.max': 'Maximum amount: {value} {currency}',
+                'payment.amount.error': 'Enter a valid amount',
+                'payment.amount.currency': '{currency}',
+                'payment.action.continue': 'Continue',
+                'payment.action.back': 'Back',
+                'payment.action.cancel': 'Cancel',
+                'payment.status.success': 'Payment link opened in a new window.',
+                'payment.status.opened': 'Complete the payment to top up your balance.',
+                'payment.error.unavailable': 'This payment method is temporarily unavailable.',
+                'payment.error.generic': 'Failed to create payment. Please try again later.',
+                'payment.loading': 'Please wait…',
+                'payment.method.stars.title': 'Telegram Stars',
+                'payment.method.stars.description': 'Pay with Telegram Stars',
+                'payment.method.yookassa.title': 'Bank card (YooKassa)',
+                'payment.method.yookassa.description': 'Visa, MasterCard, MIR',
+                'payment.method.mulenpay.title': 'Bank card (Mulen Pay)',
+                'payment.method.mulenpay.description': 'Fast card payments',
+                'payment.method.pal24.title': 'SBP (PayPalych)',
+                'payment.method.pal24.description': 'Instant transfer via SBP',
+                'payment.method.cryptobot.title': 'Cryptocurrency',
+                'payment.method.cryptobot.description': 'Pay via CryptoBot',
+                'payment.method.tribute.title': 'Bank card (Tribute)',
+                'payment.method.tribute.description': 'Secure card payment',
+                'payment.method.unavailable': 'Payment method is not available',
                 'promo_code.title': 'Activate promo code',
                 'promo_code.subtitle': 'Enter a promo code to unlock rewards instantly.',
                 'promo_code.placeholder': 'Enter promo code',
@@ -3335,7 +3627,38 @@
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
                 'button.buy_subscription': 'Купить подписку',
+                'button.topup_balance': 'Пополнить баланс',
                 'card.balance.title': 'Баланс',
+                'payment.modal.title': 'Пополнить баланс',
+                'payment.methods.subtitle': 'Выберите способ оплаты',
+                'payment.amount.title': 'Введите сумму',
+                'payment.amount.placeholder': 'Сумма в рублях',
+                'payment.amount.helper': 'Доступный диапазон: {min}–{max} {currency}',
+                'payment.amount.helper.min': 'Минимальная сумма: {value} {currency}',
+                'payment.amount.helper.max': 'Максимальная сумма: {value} {currency}',
+                'payment.amount.error': 'Введите корректную сумму',
+                'payment.amount.currency': '{currency}',
+                'payment.action.continue': 'Продолжить',
+                'payment.action.back': 'Назад',
+                'payment.action.cancel': 'Отмена',
+                'payment.status.success': 'Платёжная ссылка открыта в новом окне.',
+                'payment.status.opened': 'Завершите оплату, чтобы пополнить баланс.',
+                'payment.error.unavailable': 'Этот способ оплаты временно недоступен.',
+                'payment.error.generic': 'Не удалось создать платёж. Попробуйте позже.',
+                'payment.loading': 'Пожалуйста, подождите…',
+                'payment.method.stars.title': 'Telegram Stars',
+                'payment.method.stars.description': 'Оплатить с помощью Telegram Stars',
+                'payment.method.yookassa.title': 'Банковская карта (ЮKassa)',
+                'payment.method.yookassa.description': 'Visa, MasterCard, МИР',
+                'payment.method.mulenpay.title': 'Банковская карта (Mulen Pay)',
+                'payment.method.mulenpay.description': 'Быстрые оплаты картой',
+                'payment.method.pal24.title': 'СБП (PayPalych)',
+                'payment.method.pal24.description': 'Мгновенный перевод через СБП',
+                'payment.method.cryptobot.title': 'Криптовалюта',
+                'payment.method.cryptobot.description': 'Оплата через CryptoBot',
+                'payment.method.tribute.title': 'Банковская карта (Tribute)',
+                'payment.method.tribute.description': 'Безопасная оплата картой',
+                'payment.method.unavailable': 'Способ оплаты недоступен',
                 'promo_code.title': 'Активировать промокод',
                 'promo_code.subtitle': 'Введите промокод и сразу получите бонусы.',
                 'promo_code.placeholder': 'Введите промокод',
@@ -3663,6 +3986,14 @@
             return key;
         }
 
+        function translateWithFallback(key, fallback = '') {
+            const value = t(key);
+            if (value === key) {
+                return fallback !== undefined ? fallback : key;
+            }
+            return value;
+        }
+
         function escapeHtml(value) {
             const div = document.createElement('div');
             div.textContent = value ?? '';
@@ -3736,6 +4067,8 @@
                 languageSelect.setAttribute('aria-label', t('language.ariaLabel'));
             }
             updateErrorTexts();
+            renderPaymentMethods();
+            updateTopupUi();
         }
 
         function updateConnectButtonLabel() {
@@ -3965,6 +4298,7 @@
 
                 await loadAppsConfig();
                 await refreshSubscriptionData();
+                await loadPaymentMethods();
             } catch (error) {
                 console.error('Initialization error:', error);
                 showError(error);
@@ -4106,6 +4440,7 @@
             renderFaqSection();
             renderLegalDocuments();
             updateConnectButtonLabel();
+            updateTopupUi();
             updateActionButtons();
         }
 
@@ -5200,6 +5535,740 @@
             }
 
             return formatCurrency(normalized / 100, currencyCode);
+        }
+
+        function normalizeAmountValue(value) {
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                return value;
+            }
+            if (typeof value === 'string') {
+                const trimmed = value.trim();
+                if (!trimmed) {
+                    return null;
+                }
+                const parsed = Number.parseFloat(trimmed);
+                if (Number.isFinite(parsed)) {
+                    return parsed;
+                }
+            }
+            return null;
+        }
+
+        function getCurrencyLabel(currency) {
+            const code = typeof currency === 'string' && currency.trim()
+                ? currency.trim().toUpperCase()
+                : 'RUB';
+            const mapping = {
+                RUB: '₽',
+                RUR: '₽',
+                USD: '$',
+                EUR: '€',
+            };
+            return mapping[code] || code;
+        }
+
+        function formatAmountValue(amount) {
+            if (typeof amount !== 'number' || Number.isNaN(amount)) {
+                return '';
+            }
+            const normalized = Math.round(amount * 100) / 100;
+            const isInteger = Math.abs(normalized - Math.round(normalized)) < 0.000001;
+            const fractionDigits = isInteger ? 0 : 2;
+            try {
+                return new Intl.NumberFormat(preferredLanguage, {
+                    minimumFractionDigits: fractionDigits,
+                    maximumFractionDigits: 2,
+                }).format(normalized);
+            } catch (error) {
+                return normalized.toFixed(fractionDigits);
+            }
+        }
+
+        function humanizePaymentMethodId(id) {
+            if (!id) {
+                return '';
+            }
+            return String(id)
+                .replace(/[_-]+/g, ' ')
+                .replace(/\b\w/g, char => char.toUpperCase());
+        }
+
+        function resolvePaymentMethodTitle(method) {
+            if (!method) {
+                return '';
+            }
+            const key = `payment.method.${method.id}.title`;
+            const fallback = method.rawTitle || humanizePaymentMethodId(method.id);
+            return translateWithFallback(key, fallback);
+        }
+
+        function resolvePaymentMethodDescription(method) {
+            if (!method) {
+                return '';
+            }
+            const key = `payment.method.${method.id}.description`;
+            const fallback = method.rawDescription || '';
+            const value = translateWithFallback(key, fallback);
+            return value === key ? fallback : value;
+        }
+
+        function normalizePaymentMethod(raw) {
+            if (!raw || typeof raw !== 'object') {
+                return null;
+            }
+
+            const id = String(raw.id || '').trim().toLowerCase();
+            if (!id) {
+                return null;
+            }
+
+            const requiresAmount = Boolean(raw.requires_amount);
+            const currency = String(raw.currency || 'RUB').toUpperCase();
+            const minAmount = normalizeAmountValue(raw.min_amount);
+            const maxAmount = normalizeAmountValue(raw.max_amount);
+            const amountStep = normalizeAmountValue(raw.amount_step);
+            const icon = typeof raw.icon === 'string' && raw.icon.trim() ? raw.icon.trim() : null;
+            const metadata = raw.metadata && typeof raw.metadata === 'object' ? raw.metadata : {};
+            const rawTitle = typeof raw.title === 'string' ? raw.title.trim() : null;
+            const rawDescription = typeof raw.description === 'string' ? raw.description.trim() : null;
+
+            return {
+                id,
+                type: typeof raw.type === 'string' ? raw.type : null,
+                requiresAmount,
+                currency,
+                minAmount: minAmount !== null ? minAmount : null,
+                maxAmount: maxAmount !== null ? maxAmount : null,
+                amountStep: amountStep !== null ? amountStep : null,
+                icon,
+                metadata,
+                rawTitle,
+                rawDescription,
+            };
+        }
+
+        function renderPaymentMethods() {
+            const list = document.getElementById('paymentMethodsList');
+            if (!list) {
+                return;
+            }
+
+            list.innerHTML = '';
+
+            if (paymentMethodsLoading) {
+                const loader = document.createElement('div');
+                loader.className = 'modal-field-hint';
+                loader.textContent = translateWithFallback('payment.loading', 'Please wait…');
+                list.appendChild(loader);
+                return;
+            }
+
+            if (!paymentMethods.length) {
+                const placeholder = document.createElement('div');
+                const hasError = Boolean(paymentMethodsError);
+                placeholder.className = hasError ? 'modal-error' : 'modal-field-hint';
+                const key = hasError ? 'payment.error.unavailable' : 'payment.method.unavailable';
+                const fallback = hasError
+                    ? 'This payment method is temporarily unavailable.'
+                    : 'Payment method is not available';
+                placeholder.textContent = translateWithFallback(key, fallback);
+                list.appendChild(placeholder);
+                return;
+            }
+
+            paymentMethods.forEach(method => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'payment-method-card payment-method-card-button';
+                button.dataset.methodId = method.id;
+                button.disabled = isProcessingPayment;
+
+                const icon = document.createElement('span');
+                icon.className = 'method-icon';
+                icon.textContent = method.icon || '💳';
+
+                const textWrapper = document.createElement('div');
+                textWrapper.className = 'method-text';
+
+                const title = document.createElement('div');
+                title.className = 'method-title';
+                title.textContent = resolvePaymentMethodTitle(method);
+                textWrapper.appendChild(title);
+
+                const descriptionText = resolvePaymentMethodDescription(method);
+                if (descriptionText) {
+                    const description = document.createElement('div');
+                    description.className = 'method-description';
+                    description.textContent = descriptionText;
+                    textWrapper.appendChild(description);
+                }
+
+                button.appendChild(icon);
+                button.appendChild(textWrapper);
+                button.addEventListener('click', () => {
+                    handlePaymentMethodSelect(method.id);
+                });
+
+                list.appendChild(button);
+            });
+
+            if (topupModalOpen) {
+                focusFirstPaymentMethod();
+            }
+        }
+
+        async function loadPaymentMethods() {
+            if (paymentMethodsLoading) {
+                return paymentMethods;
+            }
+
+            paymentMethodsLoading = true;
+            paymentMethodsError = null;
+
+            try {
+                const response = await fetch('/miniapp/payments/methods', { cache: 'no-cache' });
+                if (!response.ok) {
+                    throw new Error(`Failed to load payment methods: ${response.status}`);
+                }
+
+                const payload = await response.json().catch(() => ({}));
+                const methods = Array.isArray(payload?.methods) ? payload.methods : [];
+                paymentMethods = methods.map(normalizePaymentMethod).filter(Boolean);
+                paymentMethodsLoaded = true;
+            } catch (error) {
+                paymentMethodsError = error;
+                paymentMethods = [];
+                paymentMethodsLoaded = false;
+                console.warn('Unable to load payment methods:', error);
+            } finally {
+                paymentMethodsLoading = false;
+                renderPaymentMethods();
+                updateTopupUi();
+                updateActionButtons();
+            }
+
+            return paymentMethods;
+        }
+
+        function updateTopupSelectedMethod(method) {
+            const container = document.getElementById('topupSelectedMethod');
+            if (!container) {
+                return;
+            }
+
+            container.innerHTML = '';
+
+            if (!method) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+
+            const card = document.createElement('div');
+            card.className = 'payment-method-card';
+
+            const icon = document.createElement('span');
+            icon.className = 'method-icon';
+            icon.textContent = method.icon || '💳';
+            card.appendChild(icon);
+
+            const textWrapper = document.createElement('div');
+            textWrapper.className = 'method-text';
+
+            const title = document.createElement('div');
+            title.className = 'method-title';
+            title.textContent = resolvePaymentMethodTitle(method);
+            textWrapper.appendChild(title);
+
+            const descriptionText = resolvePaymentMethodDescription(method);
+            if (descriptionText) {
+                const description = document.createElement('div');
+                description.className = 'method-description';
+                description.textContent = descriptionText;
+                textWrapper.appendChild(description);
+            }
+
+            card.appendChild(textWrapper);
+            container.appendChild(card);
+        }
+
+        function updateTopupCurrencySuffix(method) {
+            const suffix = document.getElementById('topupAmountCurrency');
+            if (!suffix) {
+                return;
+            }
+
+            const currency = method?.currency || userData?.balance_currency || 'RUB';
+            const symbol = getCurrencyLabel(currency);
+            const template = translateWithFallback('payment.amount.currency', symbol);
+            suffix.textContent = template.includes('{currency}')
+                ? template.replace('{currency}', symbol)
+                : template;
+        }
+
+        function updateTopupAmountHint(method) {
+            const hint = document.getElementById('topupAmountHint');
+            if (!hint) {
+                return;
+            }
+
+            const min = typeof method?.minAmount === 'number' ? method.minAmount : null;
+            const max = typeof method?.maxAmount === 'number' ? method.maxAmount : null;
+            const currency = method?.currency || userData?.balance_currency || 'RUB';
+            const currencyLabel = getCurrencyLabel(currency);
+
+            let message = '';
+            if (min !== null && max !== null) {
+                message = translateWithFallback('payment.amount.helper', 'Available range: {min}–{max} {currency}')
+                    .replace('{min}', formatAmountValue(min))
+                    .replace('{max}', formatAmountValue(max))
+                    .replace('{currency}', currencyLabel);
+            } else if (min !== null) {
+                message = translateWithFallback('payment.amount.helper.min', 'Minimum amount: {value} {currency}')
+                    .replace('{value}', formatAmountValue(min))
+                    .replace('{currency}', currencyLabel);
+            } else if (max !== null) {
+                message = translateWithFallback('payment.amount.helper.max', 'Maximum amount: {value} {currency}')
+                    .replace('{value}', formatAmountValue(max))
+                    .replace('{currency}', currencyLabel);
+            }
+
+            if (message) {
+                hint.textContent = message;
+                hint.classList.remove('hidden');
+            } else {
+                hint.textContent = '';
+                hint.classList.add('hidden');
+            }
+        }
+
+        function clearTopupAmountError() {
+            const error = document.getElementById('topupAmountError');
+            const input = document.getElementById('topupAmountInput');
+            if (error) {
+                error.textContent = '';
+                error.classList.add('hidden');
+            }
+            if (input) {
+                input.setAttribute('aria-invalid', 'false');
+            }
+        }
+
+        function setTopupAmountError(message) {
+            const error = document.getElementById('topupAmountError');
+            const input = document.getElementById('topupAmountInput');
+            const fallback = translateWithFallback('payment.amount.error', 'Enter a valid amount');
+            const text = message || fallback;
+
+            if (error) {
+                error.textContent = text;
+                error.classList.remove('hidden');
+            }
+
+            if (input) {
+                input.setAttribute('aria-invalid', 'true');
+                input.focus();
+            }
+        }
+
+        function configureTopupAmountInput(method) {
+            const input = document.getElementById('topupAmountInput');
+            if (!input) {
+                return;
+            }
+
+            if (method?.minAmount !== null && method?.minAmount !== undefined) {
+                input.min = String(method.minAmount);
+            } else {
+                input.removeAttribute('min');
+            }
+
+            if (method?.maxAmount !== null && method?.maxAmount !== undefined) {
+                input.max = String(method.maxAmount);
+            } else {
+                input.removeAttribute('max');
+            }
+
+            const step = method?.amountStep && method.amountStep > 0 ? method.amountStep : 0.01;
+            input.step = String(step);
+
+            const shouldEnable = Boolean(method?.requiresAmount) && !isProcessingPayment;
+            input.disabled = !shouldEnable;
+            input.value = '';
+            input.setAttribute('aria-invalid', 'false');
+        }
+
+        function setTopupLoading(isLoading) {
+            isProcessingPayment = Boolean(isLoading);
+
+            const confirmBtn = document.getElementById('topupConfirmBtn');
+            const confirmLabel = confirmBtn
+                ? (confirmBtn.querySelector('[data-i18n="payment.action.continue"]') || confirmBtn.querySelector('span'))
+                : null;
+            if (confirmBtn) {
+                if (isProcessingPayment) {
+                    confirmBtn.disabled = true;
+                } else {
+                    confirmBtn.disabled = !selectedPaymentMethod?.requiresAmount;
+                }
+            }
+            if (confirmLabel) {
+                confirmLabel.textContent = translateWithFallback(
+                    isProcessingPayment ? 'payment.loading' : 'payment.action.continue',
+                    isProcessingPayment ? 'Please wait…' : 'Continue'
+                );
+            }
+
+            const backBtn = document.getElementById('topupBackBtn');
+            if (backBtn) {
+                backBtn.disabled = isProcessingPayment;
+            }
+
+            const closeBtn = document.getElementById('topupModalClose');
+            if (closeBtn) {
+                closeBtn.disabled = isProcessingPayment;
+            }
+
+            const input = document.getElementById('topupAmountInput');
+            if (input) {
+                input.disabled = isProcessingPayment || !selectedPaymentMethod?.requiresAmount;
+            }
+
+            document.querySelectorAll('#paymentMethodsList .payment-method-card-button').forEach(button => {
+                button.disabled = isProcessingPayment;
+            });
+
+            updateActionButtons();
+        }
+
+        function showTopupMethodsStep() {
+            const methodsStep = document.getElementById('topupMethodsStep');
+            const amountStep = document.getElementById('topupAmountStep');
+            if (methodsStep) {
+                methodsStep.classList.remove('hidden');
+            }
+            if (amountStep) {
+                amountStep.classList.add('hidden');
+            }
+
+            selectedPaymentMethod = null;
+            clearTopupAmountError();
+            configureTopupAmountInput(null);
+            updateTopupUi();
+        }
+
+        function showTopupAmountStep(method) {
+            const methodsStep = document.getElementById('topupMethodsStep');
+            const amountStep = document.getElementById('topupAmountStep');
+            if (methodsStep) {
+                methodsStep.classList.add('hidden');
+            }
+            if (amountStep) {
+                amountStep.classList.remove('hidden');
+            }
+
+            selectedPaymentMethod = method;
+            clearTopupAmountError();
+            configureTopupAmountInput(method);
+            updateTopupUi();
+            focusTopupAmountInput();
+        }
+
+        function focusTopupAmountInput() {
+            if (!topupModalOpen) {
+                return;
+            }
+            const input = document.getElementById('topupAmountInput');
+            if (!input) {
+                return;
+            }
+            setTimeout(() => {
+                if (!isProcessingPayment) {
+                    input.focus();
+                    input.select();
+                }
+            }, 60);
+        }
+
+        function focusFirstPaymentMethod() {
+            if (!topupModalOpen) {
+                return;
+            }
+            setTimeout(() => {
+                if (!topupModalOpen || isProcessingPayment) {
+                    return;
+                }
+                const button = document.querySelector('#paymentMethodsList .payment-method-card-button:not([disabled])');
+                button?.focus();
+            }, 60);
+        }
+
+        function updateTopupControls() {
+            const confirmBtn = document.getElementById('topupConfirmBtn');
+            if (confirmBtn) {
+                const canConfirm = Boolean(selectedPaymentMethod?.requiresAmount) && !isProcessingPayment;
+                confirmBtn.disabled = !canConfirm;
+                const label = confirmBtn.querySelector('[data-i18n="payment.action.continue"]') || confirmBtn.querySelector('span');
+                if (label && !isProcessingPayment) {
+                    label.textContent = translateWithFallback('payment.action.continue', 'Continue');
+                }
+            }
+
+            const backBtn = document.getElementById('topupBackBtn');
+            if (backBtn) {
+                backBtn.disabled = isProcessingPayment;
+            }
+        }
+
+        function updateTopupUi() {
+            updateTopupSelectedMethod(selectedPaymentMethod);
+            updateTopupCurrencySuffix(selectedPaymentMethod);
+            updateTopupAmountHint(selectedPaymentMethod);
+            updateTopupControls();
+        }
+
+        function attachTopupKeydownHandler() {
+            if (topupModalKeydownHandler) {
+                return;
+            }
+            topupModalKeydownHandler = event => {
+                if (event.key === 'Escape' && topupModalOpen && !isProcessingPayment) {
+                    event.preventDefault();
+                    closeTopupModal();
+                }
+            };
+            document.addEventListener('keydown', topupModalKeydownHandler);
+        }
+
+        function detachTopupKeydownHandler() {
+            if (!topupModalKeydownHandler) {
+                return;
+            }
+            document.removeEventListener('keydown', topupModalKeydownHandler);
+            topupModalKeydownHandler = null;
+        }
+
+        function openTopupModal() {
+            if (isProcessingPayment) {
+                return;
+            }
+
+            const modal = document.getElementById('topupModal');
+            if (!modal) {
+                return;
+            }
+
+            topupModalOpen = true;
+            modal.classList.remove('hidden');
+            showTopupMethodsStep();
+            attachTopupKeydownHandler();
+
+            if (!paymentMethodsLoaded && !paymentMethodsLoading) {
+                loadPaymentMethods();
+            } else {
+                renderPaymentMethods();
+            }
+        }
+
+        function closeTopupModal() {
+            if (!topupModalOpen || isProcessingPayment) {
+                return;
+            }
+
+            const modal = document.getElementById('topupModal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+
+            topupModalOpen = false;
+            detachTopupKeydownHandler();
+            showTopupMethodsStep();
+        }
+
+        function parseAmountInput(value) {
+            if (typeof value !== 'string') {
+                return null;
+            }
+            const normalized = value.replace(',', '.').trim();
+            if (!normalized) {
+                return null;
+            }
+            const parsed = Number.parseFloat(normalized);
+            if (!Number.isFinite(parsed)) {
+                return null;
+            }
+            return Math.round(parsed * 100) / 100;
+        }
+
+        function validateAmountBounds(method, amount) {
+            if (!method || typeof amount !== 'number' || Number.isNaN(amount)) {
+                setTopupAmountError();
+                return false;
+            }
+
+            if (amount <= 0) {
+                setTopupAmountError();
+                return false;
+            }
+
+            if (typeof method.minAmount === 'number' && amount + 0.000001 < method.minAmount) {
+                const currencyLabel = getCurrencyLabel(method.currency || 'RUB');
+                const template = translateWithFallback('payment.amount.helper.min', 'Minimum amount: {value} {currency}');
+                const message = template
+                    .replace('{value}', formatAmountValue(method.minAmount))
+                    .replace('{currency}', currencyLabel);
+                setTopupAmountError(message);
+                return false;
+            }
+
+            if (typeof method.maxAmount === 'number' && amount - 0.000001 > method.maxAmount) {
+                const currencyLabel = getCurrencyLabel(method.currency || 'RUB');
+                const template = translateWithFallback('payment.amount.helper.max', 'Maximum amount: {value} {currency}');
+                const message = template
+                    .replace('{value}', formatAmountValue(method.maxAmount))
+                    .replace('{currency}', currencyLabel);
+                setTopupAmountError(message);
+                return false;
+            }
+
+            return true;
+        }
+
+        async function createPayment(method, amount) {
+            if (!method) {
+                return null;
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                const generic = translateWithFallback('payment.error.generic', 'Failed to create payment. Please try again later.');
+                showPopup(generic, translateWithFallback('payment.modal.title', 'Top up balance'));
+                return null;
+            }
+
+            setTopupLoading(true);
+
+            try {
+                const payload = {
+                    initData,
+                    method: method.id,
+                };
+                if (method.requiresAmount && typeof amount === 'number') {
+                    payload.amount = amount;
+                    payload.currency = method.currency || 'RUB';
+                }
+
+                const response = await fetch('/miniapp/payments/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    const detail = data?.detail || {};
+                    const code = String(detail.code || data?.code || '');
+                    const message = detail.message || data?.message || '';
+
+                    if (['amount_required', 'invalid_amount', 'amount_too_low', 'amount_too_high'].includes(code)) {
+                        setTopupAmountError(message || translateWithFallback('payment.amount.error', 'Enter a valid amount'));
+                        return null;
+                    }
+
+                    if (code === 'method_not_available') {
+                        const unavailable = translateWithFallback('payment.method.unavailable', 'Payment method is not available');
+                        showPopup(message || unavailable, translateWithFallback('payment.modal.title', 'Top up balance'));
+                        return null;
+                    }
+
+                    if (code === 'rate_unavailable') {
+                        const unavailable = translateWithFallback('payment.error.unavailable', 'This payment method is temporarily unavailable.');
+                        showPopup(unavailable, translateWithFallback('payment.modal.title', 'Top up balance'));
+                        return null;
+                    }
+
+                    if (message) {
+                        showPopup(message, translateWithFallback('payment.modal.title', 'Top up balance'));
+                    } else {
+                        const generic = translateWithFallback('payment.error.generic', 'Failed to create payment. Please try again later.');
+                        showPopup(generic, translateWithFallback('payment.modal.title', 'Top up balance'));
+                    }
+                    return null;
+                }
+
+                const redirectUrl = data?.redirect_url || data?.redirectUrl;
+                if (!redirectUrl) {
+                    const generic = translateWithFallback('payment.error.generic', 'Failed to create payment. Please try again later.');
+                    showPopup(generic, translateWithFallback('payment.modal.title', 'Top up balance'));
+                    return null;
+                }
+
+                return {
+                    redirectUrl,
+                    payload: data,
+                };
+            } catch (error) {
+                console.error('Failed to create payment link:', error);
+                const generic = translateWithFallback('payment.error.generic', 'Failed to create payment. Please try again later.');
+                showPopup(generic, translateWithFallback('payment.modal.title', 'Top up balance'));
+                return null;
+            } finally {
+                setTopupLoading(false);
+            }
+        }
+
+        function notifyPaymentOpened(method) {
+            const title = translateWithFallback('payment.status.success', 'Payment link opened in a new window.');
+            const message = translateWithFallback('payment.status.opened', 'Complete the payment to top up your balance.');
+            showPopup(message, title);
+        }
+
+        async function handlePaymentMethodSelect(methodId) {
+            if (isProcessingPayment) {
+                return;
+            }
+
+            const method = paymentMethods.find(item => item.id === methodId);
+            if (!method) {
+                return;
+            }
+
+            if (method.requiresAmount) {
+                showTopupAmountStep(method);
+                return;
+            }
+
+            const result = await createPayment(method, null);
+            if (result?.redirectUrl) {
+                closeTopupModal();
+                openExternalLink(result.redirectUrl);
+                notifyPaymentOpened(method);
+            }
+        }
+
+        async function handleTopupConfirm() {
+            if (!selectedPaymentMethod || !selectedPaymentMethod.requiresAmount || isProcessingPayment) {
+                return;
+            }
+
+            const input = document.getElementById('topupAmountInput');
+            const rawValue = input ? input.value : '';
+            clearTopupAmountError();
+
+            const amount = parseAmountInput(rawValue);
+            if (!validateAmountBounds(selectedPaymentMethod, amount)) {
+                return;
+            }
+
+            const method = selectedPaymentMethod;
+            const result = await createPayment(method, amount);
+            if (result?.redirectUrl) {
+                closeTopupModal();
+                openExternalLink(result.redirectUrl);
+                notifyPaymentOpened(method);
+            }
         }
 
         function formatDate(value) {
@@ -6704,6 +7773,7 @@
         function updateActionButtons() {
             const connectBtn = document.getElementById('connectBtn');
             const copyBtn = document.getElementById('copyBtn');
+            const topupBtn = document.getElementById('topupBtn');
 
             const connectLink = getConnectLink();
             if (connectBtn) {
@@ -6716,6 +7786,12 @@
             if (copyBtn) {
                 const hasUrl = Boolean(subscriptionUrl);
                 copyBtn.disabled = !hasUrl || !navigator.clipboard;
+            }
+
+            if (topupBtn) {
+                const hasMethods = Boolean(userData) && paymentMethods.length > 0 && !paymentMethodsLoading;
+                topupBtn.classList.toggle('hidden', !hasMethods);
+                topupBtn.disabled = !hasMethods || isProcessingPayment;
             }
         }
 
@@ -6772,6 +7848,49 @@
                 showPopup(t('notifications.copy.failure'), t('notifications.copy.title.failure'));
             }
         });
+
+        document.getElementById('topupBtn')?.addEventListener('click', () => {
+            if (isProcessingPayment) {
+                return;
+            }
+            openTopupModal();
+        });
+
+        document.getElementById('topupModalClose')?.addEventListener('click', () => {
+            closeTopupModal();
+        });
+
+        document.getElementById('topupBackBtn')?.addEventListener('click', () => {
+            if (!isProcessingPayment) {
+                showTopupMethodsStep();
+            }
+        });
+
+        document.getElementById('topupConfirmBtn')?.addEventListener('click', () => {
+            handleTopupConfirm();
+        });
+
+        const topupAmountInput = document.getElementById('topupAmountInput');
+        if (topupAmountInput) {
+            topupAmountInput.addEventListener('input', () => {
+                clearTopupAmountError();
+            });
+            topupAmountInput.addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    handleTopupConfirm();
+                }
+            });
+        }
+
+        const topupModal = document.getElementById('topupModal');
+        if (topupModal) {
+            topupModal.addEventListener('click', event => {
+                if (event.target === topupModal && !isProcessingPayment) {
+                    closeTopupModal();
+                }
+            });
+        }
 
         document.getElementById('referralToggleBtn')?.addEventListener('click', () => {
             referralListExpanded = !referralListExpanded;
