@@ -1,7 +1,7 @@
 import logging
 import os
 import re
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -12,7 +12,8 @@ from app.external.remnawave_api import (
     RemnaWaveAPI, RemnaWaveUser, RemnaWaveInternalSquad,
     RemnaWaveNode, UserStatus, TrafficLimitStrategy, RemnaWaveAPIError
 )
-from sqlalchemy import delete
+from sqlalchemy import and_, cast, delete, func, select, update, String
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.crud.user import get_users_list, get_user_by_telegram_id, update_user
 from app.database.crud.subscription import (
@@ -20,9 +21,16 @@ from app.database.crud.subscription import (
     update_subscription_usage,
     decrement_subscription_server_counts,
 )
+from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.models import (
-    User, SubscriptionServer, Transaction, ReferralEarning, 
-    PromoCodeUse, SubscriptionStatus
+    User,
+    Subscription,
+    SubscriptionServer,
+    Transaction,
+    ReferralEarning,
+    PromoCodeUse,
+    SubscriptionStatus,
+    ServerSquad,
 )
 
 logger = logging.getLogger(__name__)
@@ -481,16 +489,237 @@ class RemnaWaveService:
         try:
             async with self.get_api_client() as api:
                 result = await api.delete_internal_squad(uuid)
-                
+
                 if result:
                     logger.info(f"✅ Удален сквад {uuid}")
-                
+
                 return result
-                
+
         except Exception as e:
             logger.error(f"Ошибка удаления сквада {uuid}: {e}")
             return False
-    
+
+    async def migrate_squad_users(
+        self,
+        db: AsyncSession,
+        source_uuid: str,
+        target_uuid: str,
+    ) -> Dict[str, Any]:
+        """Переносит активных подписок с одного сквада на другой."""
+
+        if source_uuid == target_uuid:
+            return {
+                "success": False,
+                "error": "same_squad",
+                "message": "Источник и назначение совпадают",
+            }
+
+        source_uuid = source_uuid.strip()
+        target_uuid = target_uuid.strip()
+
+        source_server = await get_server_squad_by_uuid(db, source_uuid)
+        target_server = await get_server_squad_by_uuid(db, target_uuid)
+
+        if not source_server or not target_server:
+            return {
+                "success": False,
+                "error": "not_found",
+                "message": "Сквады не найдены",
+            }
+
+        subscription_query = (
+            select(Subscription)
+            .options(selectinload(Subscription.user))
+            .where(
+                Subscription.status.in_(
+                    [
+                        SubscriptionStatus.ACTIVE.value,
+                        SubscriptionStatus.TRIAL.value,
+                    ]
+                ),
+                cast(Subscription.connected_squads, String).like(
+                    f'%"{source_uuid}"%'
+                ),
+            )
+        )
+
+        result = await db.execute(subscription_query)
+        subscriptions = result.scalars().unique().all()
+
+        total_candidates = len(subscriptions)
+        if not subscriptions:
+            logger.info(
+                "🚚 Переезд сквада %s → %s: подходящих подписок не найдено",
+                source_uuid,
+                target_uuid,
+            )
+            return {
+                "success": True,
+                "total": 0,
+                "updated": 0,
+                "panel_updated": 0,
+                "panel_failed": 0,
+            }
+
+        exit_stack = AsyncExitStack()
+        panel_updated = 0
+        panel_failed = 0
+        updated_subscriptions = 0
+        source_decrement = 0
+        target_increment = 0
+
+        try:
+            needs_panel_update = any(
+                subscription.user and subscription.user.remnawave_uuid
+                for subscription in subscriptions
+            )
+
+            api = None
+            if needs_panel_update:
+                api = await exit_stack.enter_async_context(self.get_api_client())
+
+            for subscription in subscriptions:
+                current_squads = list(subscription.connected_squads or [])
+                if source_uuid not in current_squads:
+                    continue
+
+                had_target_before = target_uuid in current_squads
+                new_squads = [
+                    squad_uuid for squad_uuid in current_squads if squad_uuid != source_uuid
+                ]
+                if not had_target_before:
+                    new_squads.append(target_uuid)
+
+                if subscription.user and subscription.user.remnawave_uuid:
+                    if api is None:
+                        panel_failed += 1
+                        logger.error(
+                            "❌ RemnaWave API недоступен для обновления пользователя %s",
+                            subscription.user.telegram_id,
+                        )
+                        continue
+
+                    try:
+                        await api.update_user(
+                            uuid=subscription.user.remnawave_uuid,
+                            active_internal_squads=new_squads,
+                        )
+                        panel_updated += 1
+                    except Exception as error:
+                        panel_failed += 1
+                        logger.error(
+                            "❌ Ошибка обновления сквадов пользователя %s: %s",
+                            subscription.user.telegram_id,
+                            error,
+                        )
+                        continue
+
+                subscription.connected_squads = new_squads
+                subscription.updated_at = datetime.utcnow()
+
+                source_decrement += 1
+                if not had_target_before:
+                    target_increment += 1
+
+                updated_subscriptions += 1
+
+                link_result = await db.execute(
+                    select(SubscriptionServer)
+                    .where(
+                        and_(
+                            SubscriptionServer.subscription_id == subscription.id,
+                            SubscriptionServer.server_squad_id == source_server.id,
+                        )
+                    )
+                    .limit(1)
+                )
+                link = link_result.scalars().first()
+
+                if link:
+                    if had_target_before:
+                        await db.execute(
+                            delete(SubscriptionServer).where(
+                                and_(
+                                    SubscriptionServer.subscription_id
+                                    == subscription.id,
+                                    SubscriptionServer.server_squad_id
+                                    == source_server.id,
+                                )
+                            )
+                        )
+                    else:
+                        link.server_squad_id = target_server.id
+                elif not had_target_before:
+                    db.add(
+                        SubscriptionServer(
+                            subscription_id=subscription.id,
+                            server_squad_id=target_server.id,
+                            paid_price_kopeks=0,
+                        )
+                    )
+
+            if updated_subscriptions:
+                if source_decrement:
+                    await db.execute(
+                        update(ServerSquad)
+                        .where(ServerSquad.id == source_server.id)
+                        .values(
+                            current_users=func.greatest(
+                                ServerSquad.current_users - source_decrement,
+                                0,
+                            )
+                        )
+                    )
+                if target_increment:
+                    await db.execute(
+                        update(ServerSquad)
+                        .where(ServerSquad.id == target_server.id)
+                        .values(
+                            current_users=ServerSquad.current_users + target_increment
+                        )
+                    )
+
+                await db.commit()
+            else:
+                await db.rollback()
+
+            logger.info(
+                "🚚 Завершен переезд сквада %s → %s: обновлено %s подписок (%s не обновлены в панели)",
+                source_uuid,
+                target_uuid,
+                updated_subscriptions,
+                panel_failed,
+            )
+
+            return {
+                "success": True,
+                "total": total_candidates,
+                "updated": updated_subscriptions,
+                "panel_updated": panel_updated,
+                "panel_failed": panel_failed,
+                "source_removed": source_decrement,
+                "target_added": target_increment,
+            }
+
+        except RemnaWaveConfigurationError:
+            await db.rollback()
+            raise
+        except Exception as error:
+            await db.rollback()
+            logger.error(
+                "❌ Ошибка переезда сквада %s → %s: %s",
+                source_uuid,
+                target_uuid,
+                error,
+            )
+            return {
+                "success": False,
+                "error": "unexpected",
+                "message": str(error),
+            }
+        finally:
+            await exit_stack.aclose()
+
     async def sync_users_from_panel(self, db: AsyncSession, sync_type: str = "all") -> Dict[str, int]:
         try:
             stats = {"created": 0, "updated": 0, "errors": 0, "deleted": 0}

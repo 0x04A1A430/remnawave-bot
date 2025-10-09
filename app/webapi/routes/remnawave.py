@@ -6,6 +6,11 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database.crud.server_squad import (
+    count_active_users_for_squad,
+    get_server_squad_by_uuid,
+)
+
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.remnawave import (
     RemnaWaveConnectionStatus,
@@ -22,6 +27,10 @@ from ..schemas.remnawave import (
     RemnaWaveSquadActionRequest,
     RemnaWaveSquadCreateRequest,
     RemnaWaveSquadListResponse,
+    RemnaWaveSquadMigrationPreviewResponse,
+    RemnaWaveSquadMigrationRequest,
+    RemnaWaveSquadMigrationResponse,
+    RemnaWaveSquadMigrationStats,
     RemnaWaveSquadUpdateRequest,
     RemnaWaveStatusResponse,
     RemnaWaveSystemStatsResponse,
@@ -372,6 +381,30 @@ async def get_user_traffic(
     return RemnaWaveUserTrafficResponse(telegram_id=telegram_id, **stats)
 
 
+@router.get("/squads/{squad_uuid}/migration-preview", response_model=RemnaWaveSquadMigrationPreviewResponse)
+async def preview_squad_migration(
+    squad_uuid: str,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> RemnaWaveSquadMigrationPreviewResponse:
+    service = _get_service()
+    _ensure_service_configured(service)
+
+    squad = await get_server_squad_by_uuid(db, squad_uuid)
+    if not squad:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Сквад не найден")
+
+    users_to_migrate = await count_active_users_for_squad(db, squad_uuid)
+
+    return RemnaWaveSquadMigrationPreviewResponse(
+        squad_uuid=squad.squad_uuid,
+        squad_name=squad.display_name,
+        current_users=squad.current_users or 0,
+        max_users=squad.max_users,
+        users_to_migrate=users_to_migrate,
+    )
+
+
 @router.post("/sync/from-panel", response_model=RemnaWaveGenericSyncResponse)
 async def sync_from_panel(
     payload: RemnaWaveSyncFromPanelRequest,
@@ -454,3 +487,58 @@ async def get_sync_recommendations(
     data = await service.get_sync_recommendations(db)
     detail = "Рекомендации получены"
     return RemnaWaveGenericSyncResponse(success=True, detail=detail, data=data)
+
+
+@router.post("/squads/migrate", response_model=RemnaWaveSquadMigrationResponse)
+async def migrate_squad(
+    payload: RemnaWaveSquadMigrationRequest,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> RemnaWaveSquadMigrationResponse:
+    service = _get_service()
+    _ensure_service_configured(service)
+
+    source_uuid = payload.source_uuid.strip()
+    target_uuid = payload.target_uuid.strip()
+
+    if source_uuid == target_uuid:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Источник и назначение совпадают")
+
+    source = await get_server_squad_by_uuid(db, source_uuid)
+    if not source:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Сквад-источник не найден")
+
+    target = await get_server_squad_by_uuid(db, target_uuid)
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Сквад-назначение не найден")
+
+    try:
+        result = await service.migrate_squad_users(
+            db,
+            source_uuid=source.squad_uuid,
+            target_uuid=target.squad_uuid,
+        )
+    except RemnaWaveConfigurationError as exc:  # pragma: no cover - зависит от окружения
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+
+    if not result.get("success"):
+        detail = result.get("message") or "Не удалось выполнить переезд"
+        return RemnaWaveSquadMigrationResponse(
+            success=False,
+            detail=detail,
+            error=result.get("error"),
+        )
+
+    stats = RemnaWaveSquadMigrationStats(
+        source_uuid=source.squad_uuid,
+        target_uuid=target.squad_uuid,
+        total=result.get("total", 0),
+        updated=result.get("updated", 0),
+        panel_updated=result.get("panel_updated", 0),
+        panel_failed=result.get("panel_failed", 0),
+        source_removed=result.get("source_removed", 0),
+        target_added=result.get("target_added", 0),
+    )
+
+    detail = result.get("message") or "Переезд выполнен"
+    return RemnaWaveSquadMigrationResponse(success=True, detail=detail, data=stats)
