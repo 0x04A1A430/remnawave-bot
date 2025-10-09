@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,14 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database.crud.discount_offer import (
-    get_offer_by_id,
-    list_discount_offers,
-    mark_offer_claimed,
-)
 from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.crud.promo_group import get_auto_assign_promo_groups
-from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.models import PromoGroup, Subscription, Transaction, User
@@ -24,7 +17,6 @@ from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
 )
-from app.services.promo_offer_service import promo_offer_service
 from app.services.subscription_service import SubscriptionService
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
 from app.utils.telegram_webapp import (
@@ -37,9 +29,6 @@ from ..schemas.miniapp import (
     MiniAppConnectedServer,
     MiniAppDevice,
     MiniAppAutoPromoGroupLevel,
-    MiniAppPromoOffer,
-    MiniAppPromoOfferClaimRequest,
-    MiniAppPromoOfferClaimResponse,
     MiniAppPromoGroup,
     MiniAppSubscriptionRequest,
     MiniAppSubscriptionResponse,
@@ -151,53 +140,6 @@ async def _resolve_connected_servers(
         connected_servers.append(MiniAppConnectedServer(uuid=squad_uuid, name=name))
 
     return connected_servers
-
-
-async def _resolve_authorized_user(
-    db: AsyncSession,
-    init_data: str,
-    *,
-    require_subscription: bool = False,
-    include_purchase_url: bool = False,
-) -> User:
-    try:
-        webapp_data = parse_webapp_init_data(init_data, settings.BOT_TOKEN)
-    except TelegramWebAppAuthError as error:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(error),
-        ) from error
-
-    telegram_user = webapp_data.get("user")
-    if not isinstance(telegram_user, dict) or "id" not in telegram_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Telegram user payload",
-        )
-
-    try:
-        telegram_id = int(telegram_user["id"])
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Telegram user identifier",
-        ) from None
-
-    user = await get_user_by_telegram_id(db, telegram_id)
-    if not user or (require_subscription and not getattr(user, "subscription", None)):
-        detail: Union[str, Dict[str, str]] = (
-            "Subscription not found" if require_subscription else "User not found"
-        )
-        if include_purchase_url and require_subscription:
-            purchase_url = (settings.MINIAPP_PURCHASE_URL or "").strip()
-            if purchase_url:
-                detail = {
-                    "message": "Subscription not found",
-                    "purchase_url": purchase_url,
-                }
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=detail)
-
-    return user
 
 
 async def _load_devices_info(user: User) -> Tuple[int, List[MiniAppDevice]]:
@@ -324,15 +266,44 @@ async def get_subscription_details(
     payload: MiniAppSubscriptionRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionResponse:
-    user = await _resolve_authorized_user(
-        db,
-        payload.init_data,
-        require_subscription=True,
-        include_purchase_url=True,
-    )
+    try:
+        webapp_data = parse_webapp_init_data(payload.init_data, settings.BOT_TOKEN)
+    except TelegramWebAppAuthError as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(error),
+        ) from error
+
+    telegram_user = webapp_data.get("user")
+    if not isinstance(telegram_user, dict) or "id" not in telegram_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Telegram user payload",
+        )
+
+    try:
+        telegram_id = int(telegram_user["id"])
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Telegram user identifier",
+        ) from None
+
+    user = await get_user_by_telegram_id(db, telegram_id)
+    purchase_url = (settings.MINIAPP_PURCHASE_URL or "").strip()
+    if not user or not user.subscription:
+        detail: Union[str, Dict[str, str]] = "Subscription not found"
+        if purchase_url:
+            detail = {
+                "message": "Subscription not found",
+                "purchase_url": purchase_url,
+            }
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=detail,
+        )
 
     subscription = user.subscription
-    purchase_url = (settings.MINIAPP_PURCHASE_URL or "").strip()
     traffic_used = _format_gb(subscription.traffic_used_gb)
     traffic_limit = subscription.traffic_limit_gb or 0
     lifetime_used = _bytes_to_gb(getattr(user, "lifetime_used_traffic_bytes", 0))
@@ -416,101 +387,7 @@ async def get_subscription_details(
         traffic_limit_label=_format_limit_label(traffic_limit),
         lifetime_used_traffic_gb=lifetime_used,
         has_active_subscription=status_actual in {"active", "trial"},
-        promo_offer_discount_percent=int(
-            getattr(user, "promo_offer_discount_percent", 0) or 0
-        ),
-        promo_offer_discount_source=getattr(user, "promo_offer_discount_source", None),
-        promo_offer_discount_expires_at=getattr(
-            user,
-            "promo_offer_discount_expires_at",
-            None,
-        ),
     )
-
-    raw_offers = await list_discount_offers(db, user_id=user.id, is_active=True)
-    now = datetime.utcnow()
-    template_cache: Dict[int, Optional[Any]] = {}
-    promo_offers: List[MiniAppPromoOffer] = []
-
-    for offer in raw_offers:
-        expires_at = getattr(offer, "expires_at", None)
-        if not expires_at or expires_at <= now:
-            continue
-        if getattr(offer, "claimed_at", None):
-            continue
-
-        extra_data_raw = getattr(offer, "extra_data", {})
-        normalized_extra: Dict[str, Any]
-        if isinstance(extra_data_raw, dict):
-            normalized_extra = dict(extra_data_raw)
-        else:
-            normalized_extra = {}
-
-        offer_type = normalized_extra.get("offer_type")
-        button_text = normalized_extra.get("button_text")
-        message_text = normalized_extra.get("message_text")
-
-        template_id: Optional[int] = None
-        raw_template_id = normalized_extra.get("template_id")
-        if raw_template_id is not None:
-            try:
-                template_id = int(raw_template_id)
-            except (TypeError, ValueError):
-                template_id = None
-
-        template = None
-        if template_id is not None:
-            if template_id not in template_cache:
-                template_cache[template_id] = await get_promo_offer_template_by_id(
-                    db,
-                    template_id,
-                )
-            template = template_cache.get(template_id)
-
-        active_hours_raw = normalized_extra.get("active_discount_hours")
-        if template:
-            offer_type = offer_type or template.offer_type
-            button_text = button_text or template.button_text
-            message_text = message_text or template.message_text
-            if (not active_hours_raw) and template.active_discount_hours:
-                active_hours_raw = template.active_discount_hours
-
-        try:
-            active_hours = int(float(active_hours_raw)) if active_hours_raw is not None else None
-        except (TypeError, ValueError):
-            active_hours = None
-
-        if template_id is not None:
-            normalized_extra.setdefault("template_id", template_id)
-        if offer_type:
-            normalized_extra["offer_type"] = offer_type
-        if button_text:
-            normalized_extra["button_text"] = button_text
-        if message_text:
-            normalized_extra["message_text"] = message_text
-        if active_hours is not None:
-            normalized_extra["active_discount_hours"] = active_hours
-
-        promo_offers.append(
-            MiniAppPromoOffer(
-                id=offer.id,
-                notification_type=str(getattr(offer, "notification_type", "")),
-                discount_percent=int(getattr(offer, "discount_percent", 0) or 0),
-                bonus_amount_kopeks=int(getattr(offer, "bonus_amount_kopeks", 0) or 0),
-                expires_at=expires_at,
-                created_at=getattr(offer, "created_at", now),
-                updated_at=getattr(offer, "updated_at", now),
-                effect_type=getattr(offer, "effect_type", "percent_discount") or "percent_discount",
-                is_active=bool(getattr(offer, "is_active", True)),
-                offer_type=offer_type,
-                button_text=button_text,
-                message_text=message_text,
-                active_discount_hours=active_hours,
-                extra_data=normalized_extra,
-            )
-        )
-
-    promo_offers.sort(key=lambda item: item.expires_at)
 
     return MiniAppSubscriptionResponse(
         subscription_id=subscription.id,
@@ -549,132 +426,6 @@ async def get_subscription_details(
         subscription_type="trial" if subscription.is_trial else "paid",
         autopay_enabled=bool(subscription.autopay_enabled),
         branding=settings.get_miniapp_branding(),
-        promo_offers=promo_offers,
-    )
-
-
-@router.post(
-    "/promo-offers/{offer_id}/claim",
-    response_model=MiniAppPromoOfferClaimResponse,
-)
-async def claim_miniapp_promo_offer(
-    offer_id: int,
-    payload: MiniAppPromoOfferClaimRequest,
-    db: AsyncSession = Depends(get_db_session),
-) -> MiniAppPromoOfferClaimResponse:
-    user = await _resolve_authorized_user(db, payload.init_data)
-
-    offer = await get_offer_by_id(db, offer_id)
-    if not offer or offer.user_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Offer not found")
-
-    now = datetime.utcnow()
-    if getattr(offer, "claimed_at", None) is not None:
-        return MiniAppPromoOfferClaimResponse(
-            success=False,
-            status="already_claimed",
-            message="Offer already claimed",
-        )
-
-    expires_at = getattr(offer, "expires_at", None)
-    if not offer.is_active or (expires_at and expires_at <= now):
-        offer.is_active = False
-        await db.commit()
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Offer expired")
-
-    effect_type = (getattr(offer, "effect_type", "percent_discount") or "percent_discount").lower()
-    extra_data = offer.extra_data if isinstance(offer.extra_data, dict) else {}
-
-    if effect_type == "test_access":
-        success, newly_added, access_expires_at, error_code = await promo_offer_service.grant_test_access(
-            db,
-            user,
-            offer,
-        )
-        if not success:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "code": error_code or "test_access_failed",
-                    "message": "Unable to grant test access",
-                },
-            )
-
-        await mark_offer_claimed(
-            db,
-            offer,
-            details={
-                "context": "test_access_claim",
-                "new_squads": newly_added,
-                "expires_at": access_expires_at.isoformat() if access_expires_at else None,
-            },
-        )
-
-        return MiniAppPromoOfferClaimResponse(
-            success=True,
-            status="test_access_granted",
-            message="Test access activated",
-            test_access_expires_at=access_expires_at,
-            newly_added_squads=newly_added or [],
-        )
-
-    if effect_type == "balance_bonus":
-        effect_type = "percent_discount"
-
-    discount_percent = int(getattr(offer, "discount_percent", 0) or 0)
-    if discount_percent <= 0:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail="Discount percent is not available",
-        )
-
-    user.promo_offer_discount_percent = discount_percent
-    user.promo_offer_discount_source = getattr(offer, "notification_type", None)
-    user.updated_at = now
-
-    raw_duration = extra_data.get("active_discount_hours") if isinstance(extra_data, dict) else None
-    template_id = None
-    if isinstance(extra_data, dict):
-        template_id = extra_data.get("template_id")
-
-    if (raw_duration in (None, "", 0, "0")) and template_id is not None:
-        try:
-            template = await get_promo_offer_template_by_id(db, int(template_id))
-        except (TypeError, ValueError):
-            template = None
-        if template and template.active_discount_hours:
-            raw_duration = template.active_discount_hours
-
-    try:
-        duration_hours = int(float(raw_duration)) if raw_duration is not None else None
-    except (TypeError, ValueError):
-        duration_hours = None
-
-    discount_expires_at = None
-    if duration_hours and duration_hours > 0:
-        discount_expires_at = now + timedelta(hours=duration_hours)
-
-    user.promo_offer_discount_expires_at = discount_expires_at
-
-    await mark_offer_claimed(
-        db,
-        offer,
-        details={
-            "context": "discount_claim",
-            "discount_percent": discount_percent,
-            "discount_expires_at": discount_expires_at.isoformat()
-            if discount_expires_at
-            else None,
-        },
-    )
-    await db.refresh(user)
-
-    return MiniAppPromoOfferClaimResponse(
-        success=True,
-        status="discount_claimed",
-        message="Discount activated",
-        discount_percent=discount_percent,
-        discount_expires_at=discount_expires_at,
     )
 
 def _safe_int(value: Any) -> int:
