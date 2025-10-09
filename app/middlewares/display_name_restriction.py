@@ -62,38 +62,6 @@ CHAR_TRANSLATION = str.maketrans({
 
 COLLAPSE_PATTERN = re.compile(r"[\s\._\-/\\|,:;•·﹒․⋅··`~'\"!?()\[\]{}<>+=]+")
 
-SUSPICIOUS_KEYWORDS = [
-    "telegram",
-    "teleqram",
-    "teiegram",
-    "teieqram",
-    "telegrarn",
-    "service",
-    "notification",
-    "system",
-    "security",
-    "safety",
-    "support",
-    "moderation",
-    "review",
-    "compliance",
-    "abuse",
-    "spam",
-    "report",
-    "телеграм",
-    "служебн",
-    "уведомлен",
-    "поддержк",
-    "безопасн",
-    "модерац",
-    "жалоб",
-    "абуз",
-    "служб",
-    "повiдом",
-    "пiдтрим",
-]
-
-
 class DisplayNameRestrictionMiddleware(BaseMiddleware):
     """Blocks users whose display name imitates links or official accounts."""
 
@@ -178,9 +146,11 @@ class DisplayNameRestrictionMiddleware(BaseMiddleware):
         if "tme" in collapsed:
             return True
 
+        banned_keywords = settings.get_display_name_banned_keywords()
+
         return any(
             keyword in normalized or keyword in collapsed
-            for keyword in SUSPICIOUS_KEYWORDS
+            for keyword in banned_keywords
         )
 
     @staticmethod

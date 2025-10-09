@@ -12,6 +12,12 @@ from pydantic import field_validator, Field
 from pathlib import Path
 
 
+DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS = [
+    "tme",
+    "joingroup",
+]
+
+
 class Settings(BaseSettings):
 
     BOT_TOKEN: str
@@ -198,6 +204,10 @@ class Settings(BaseSettings):
     MULENPAY_DESCRIPTION: str = "Пополнение баланса"
     MULENPAY_LANGUAGE: str = "ru"
     MULENPAY_VAT_CODE: int = 0
+
+    DISPLAY_NAME_BANNED_KEYWORDS: str = "\n".join(
+        DEFAULT_DISPLAY_NAME_BANNED_KEYWORDS
+    )
     MULENPAY_PAYMENT_SUBJECT: int = 4
     MULENPAY_PAYMENT_MODE: int = 4
     MULENPAY_MIN_AMOUNT_KOPEKS: int = 10000
@@ -455,6 +465,29 @@ class Settings(BaseSettings):
 
         description = re.sub(r'\s+', ' ', description).strip()
         return description
+
+    def get_display_name_banned_keywords(self) -> List[str]:
+        raw_value = self.DISPLAY_NAME_BANNED_KEYWORDS
+        if raw_value is None:
+            return []
+
+        if isinstance(raw_value, str):
+            candidates = re.split(r"[\n,]+", raw_value)
+        else:
+            candidates = list(raw_value)
+
+        unique: List[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            normalized = str(candidate).strip().lower()
+            if not normalized:
+                continue
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            unique.append(normalized)
+
+        return unique
     
     def get_autopay_warning_days(self) -> List[int]:
         try:
