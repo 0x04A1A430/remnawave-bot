@@ -397,209 +397,6 @@
             padding: 0 16px 16px;
         }
 
-        .promo-offers {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            margin-bottom: 16px;
-        }
-
-        .promo-offer-card {
-            position: relative;
-            padding: 18px;
-            border-radius: var(--radius-lg);
-            border: 1px solid rgba(var(--primary-rgb), 0.12);
-            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.12), rgba(var(--primary-rgb), 0.04));
-            color: var(--text-primary);
-            box-shadow: var(--shadow-md);
-            overflow: hidden;
-        }
-
-        .promo-offer-card.active {
-            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.24), rgba(var(--primary-rgb), 0.08));
-            border-color: rgba(var(--primary-rgb), 0.2);
-        }
-
-        .promo-offer-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        .promo-offer-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 14px;
-            background: rgba(var(--primary-rgb), 0.12);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-        }
-
-        .promo-offer-card.active .promo-offer-icon {
-            background: rgba(255, 255, 255, 0.18);
-            color: #fff;
-        }
-
-        .promo-offer-heading {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .promo-offer-title {
-            font-size: 18px;
-            font-weight: 700;
-        }
-
-        .promo-offer-subtitle {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
-        .promo-offer-card.active .promo-offer-subtitle {
-            color: rgba(255, 255, 255, 0.85);
-        }
-
-        .promo-offer-badge {
-            font-weight: 700;
-            font-size: 16px;
-            padding: 6px 12px;
-            border-radius: 999px;
-            background: rgba(var(--primary-rgb), 0.16);
-            color: var(--text-primary);
-        }
-
-        .promo-offer-card.active .promo-offer-badge {
-            background: rgba(255, 255, 255, 0.2);
-            color: #fff;
-        }
-
-        .promo-offer-message {
-            font-size: 14px;
-            line-height: 1.55;
-            color: inherit;
-        }
-
-        .promo-offer-details {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 12px;
-        }
-
-        .promo-offer-chip {
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 12px;
-            font-weight: 600;
-            background: rgba(var(--primary-rgb), 0.15);
-            color: var(--text-primary);
-        }
-
-        .promo-offer-footer {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-top: 16px;
-            flex-wrap: wrap;
-        }
-
-        .promo-offer-timer {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-        }
-
-        .promo-offer-card.active .promo-offer-timer {
-            color: rgba(255, 255, 255, 0.9);
-        }
-
-        .promo-offer-action {
-            margin-left: auto;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .promo-offer-btn {
-            padding: 10px 20px;
-            border-radius: var(--radius-lg);
-            border: none;
-            font-weight: 700;
-            font-size: 14px;
-            cursor: pointer;
-            background: var(--primary);
-            color: var(--tg-theme-button-text-color);
-            transition: all 0.2s ease;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .promo-offer-btn:hover:not(:disabled) {
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .promo-offer-btn:disabled {
-            opacity: 0.6;
-            cursor: default;
-            box-shadow: none;
-        }
-
-        .promo-offer-progress {
-            position: relative;
-            height: 6px;
-            border-radius: 999px;
-            overflow: hidden;
-            background: rgba(var(--primary-rgb), 0.18);
-            margin-top: 12px;
-        }
-
-        .promo-offer-progress-bar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 100%;
-            width: 100%;
-            background: linear-gradient(90deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.55));
-            transform-origin: left;
-            transition: width 0.4s ease;
-        }
-
-        .promo-offer-card:not(.active) .promo-offer-progress {
-            background: rgba(var(--primary-rgb), 0.12);
-        }
-
-        .promo-offer-card:not(.active) .promo-offer-progress-bar {
-            background: linear-gradient(90deg, rgba(var(--primary-rgb), 0.6), rgba(var(--primary-rgb), 0.3));
-        }
-
-        :root[data-theme="dark"] .promo-offer-card {
-            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.24), rgba(255, 255, 255, 0.04));
-            border-color: rgba(255, 255, 255, 0.08);
-        }
-
-        :root[data-theme="dark"] .promo-offer-card.active {
-            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.4), rgba(var(--primary-rgb), 0.2));
-            border-color: rgba(255, 255, 255, 0.18);
-        }
-
-        :root[data-theme="dark"] .promo-offer-icon {
-            background: rgba(255, 255, 255, 0.12);
-        }
-
-        :root[data-theme="dark"] .promo-offer-card.active .promo-offer-icon {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        :root[data-theme="dark"] .promo-offer-chip {
-            background: rgba(255, 255, 255, 0.08);
-            color: rgba(255, 255, 255, 0.9);
-        }
-
         /* User Card Specific */
         .user-card {
             background: linear-gradient(135deg, var(--bg-secondary), rgba(var(--primary-rgb), 0.05));
@@ -1610,19 +1407,6 @@
                 padding: 12px;
             }
 
-            .promo-offer-card {
-                padding: 16px;
-            }
-
-            .promo-offer-title {
-                font-size: 16px;
-            }
-
-            .promo-offer-badge {
-                font-size: 14px;
-                padding: 5px 10px;
-            }
-
             .stats-grid {
                 grid-template-columns: repeat(3, 1fr);
                 gap: 8px;
@@ -1844,9 +1628,6 @@
 
         <!-- Main Content -->
         <div id="mainContent" class="hidden">
-            <!-- Promo Offers -->
-            <div id="promoOffersContainer" class="promo-offers hidden"></div>
-
             <!-- User Card -->
             <div class="card user-card animate-in">
                 <div class="user-header">
@@ -2075,10 +1856,6 @@
             showPopup: null,
         };
 
-        let hasAnimatedCards = false;
-        let promoOfferTimers = [];
-        let promoOfferTimerHandle = null;
-
         if (typeof tg.expand === 'function') {
             tg.expand();
         }
@@ -2290,33 +2067,7 @@
                 'platform.tv': 'TV',
                 'units.gb': 'GB',
                 'values.unlimited': 'Unlimited',
-                'values.not_available': 'Not available',
-                'promo_offer.status.active': 'Active promo offer',
-                'promo_offer.status.pending': 'Special offer',
-                'promo_offer.accept': 'Activate',
-                'promo_offer.accepting': 'Activating…',
-                'promo_offer.accept.success': 'Offer activated successfully!',
-                'promo_offer.timer.active': 'Ends in {time}',
-                'promo_offer.timer.pending': 'Expires in {time}',
-                'promo_offer.timer.expired': 'Expired',
-                'promo_offer.error.offer_not_found': 'Offer not found',
-                'promo_offer.error.already_claimed': 'Offer already activated',
-                'promo_offer.error.offer_expired': 'Offer has expired',
-                'promo_offer.error.subscription_missing': 'An active subscription is required.',
-                'promo_offer.error.squads_missing': 'No servers available for this test access.',
-                'promo_offer.error.already_connected': 'Servers are already connected.',
-                'promo_offer.error.remnawave_sync_failed': 'Failed to activate servers. Try again later.',
-                'promo_offer.error.claim_failed': 'Unable to activate the offer right now.',
-                'promo_offer.error.invalid_discount': 'Offer does not contain a discount.',
-                'promo_offer.error.generic': 'Failed to activate the offer. Please try again.',
-                'promo_offer.type.extend_discount': 'Renewal discount',
-                'promo_offer.type.purchase_discount': 'Welcome back discount',
-                'promo_offer.type.test_access': 'Test access',
-                'promo_offer.type.percent_discount': 'Discount offer',
-                'time.days_short': '{value}d',
-                'time.hours_short': '{value}h',
-                'time.minutes_short': '{value}m',
-                'time.less_than_minute': '<1m'
+                'values.not_available': 'Not available'
             },
             ru: {
                 'app.title': 'Подписка VPN',
@@ -2401,33 +2152,7 @@
                 'platform.tv': 'ТВ',
                 'units.gb': 'ГБ',
                 'values.unlimited': 'Безлимит',
-                'values.not_available': 'Недоступно',
-                'promo_offer.status.active': 'Активное предложение',
-                'promo_offer.status.pending': 'Специальное предложение',
-                'promo_offer.accept': 'Активировать',
-                'promo_offer.accepting': 'Активируем…',
-                'promo_offer.accept.success': 'Предложение успешно активировано!',
-                'promo_offer.timer.active': 'Действует ещё {time}',
-                'promo_offer.timer.pending': 'Истекает через {time}',
-                'promo_offer.timer.expired': 'Истекло',
-                'promo_offer.error.offer_not_found': 'Предложение не найдено',
-                'promo_offer.error.already_claimed': 'Предложение уже активировано',
-                'promo_offer.error.offer_expired': 'Срок действия предложения истёк',
-                'promo_offer.error.subscription_missing': 'Нужна активная подписка.',
-                'promo_offer.error.squads_missing': 'Для тестового доступа не настроены серверы.',
-                'promo_offer.error.already_connected': 'Серверы уже подключены.',
-                'promo_offer.error.remnawave_sync_failed': 'Не удалось подключить серверы. Попробуйте позже.',
-                'promo_offer.error.claim_failed': 'Не удалось активировать предложение.',
-                'promo_offer.error.invalid_discount': 'В предложении нет скидки.',
-                'promo_offer.error.generic': 'Не удалось активировать предложение. Попробуйте позже.',
-                'promo_offer.type.extend_discount': 'Скидка на продление',
-                'promo_offer.type.purchase_discount': 'Скидка на возвращение',
-                'promo_offer.type.test_access': 'Тестовый доступ',
-                'promo_offer.type.percent_discount': 'Скидка',
-                'time.days_short': '{value}д',
-                'time.hours_short': '{value}ч',
-                'time.minutes_short': '{value}м',
-                'time.less_than_minute': '<1м'
+                'values.not_available': 'Недоступно'
             }
         };
 
@@ -2711,154 +2436,6 @@
             return error;
         }
 
-        function animateCardsOnce() {
-            if (hasAnimatedCards) {
-                return;
-            }
-
-            const cards = document.querySelectorAll('.card');
-            if (!cards.length) {
-                hasAnimatedCards = true;
-                return;
-            }
-
-            cards.forEach((card, index) => {
-                card.classList.remove('animate-in');
-                void card.offsetWidth;
-                setTimeout(() => {
-                    card.classList.add('animate-in');
-                }, index * 100);
-            });
-
-            hasAnimatedCards = true;
-        }
-
-        async function fetchSubscriptionPayload(initData) {
-            const response = await fetch('/miniapp/subscription', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ initData })
-            });
-
-            if (response.ok) {
-                return response.json();
-            }
-
-            let detail = response.status === 401
-                ? 'Authorization failed. Please open the mini app from Telegram.'
-                : 'Subscription not found';
-            let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
-            let purchaseUrl = null;
-
-            try {
-                const errorPayload = await response.json();
-                if (errorPayload?.detail) {
-                    if (typeof errorPayload.detail === 'string') {
-                        detail = errorPayload.detail;
-                    } else if (typeof errorPayload.detail === 'object') {
-                        if (typeof errorPayload.detail.message === 'string') {
-                            detail = errorPayload.detail.message;
-                        }
-                        purchaseUrl = errorPayload.detail.purchase_url
-                            || errorPayload.detail.purchaseUrl
-                            || purchaseUrl;
-                    }
-                } else if (typeof errorPayload?.message === 'string') {
-                    detail = errorPayload.message;
-                }
-
-                if (typeof errorPayload?.title === 'string') {
-                    title = errorPayload.title;
-                }
-
-                purchaseUrl = purchaseUrl
-                    || errorPayload?.purchase_url
-                    || errorPayload?.purchaseUrl
-                    || null;
-            } catch (parseError) {
-                // ignore JSON parsing errors
-            }
-
-            const errorObject = createError(title, detail, response.status);
-            const normalizedPurchaseUrl = normalizeUrl(purchaseUrl);
-            if (normalizedPurchaseUrl) {
-                errorObject.purchaseUrl = normalizedPurchaseUrl;
-            }
-            throw errorObject;
-        }
-
-        function applySubscriptionData(payload) {
-            if (!payload || typeof payload !== 'object') {
-                return null;
-            }
-
-            userData = payload;
-            userData.subscriptionUrl = userData.subscription_url || null;
-            userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
-
-            const normalizedPurchaseUrl = normalizeUrl(
-                userData.subscription_purchase_url
-                || userData.subscriptionPurchaseUrl
-            );
-            subscriptionPurchaseUrl = normalizedPurchaseUrl;
-            userData.subscriptionPurchaseUrl = normalizedPurchaseUrl || null;
-
-            if (userData.branding) {
-                applyBrandingOverrides(userData.branding);
-            }
-
-            const responseLanguage = resolveLanguage(userData?.user?.language);
-            if (responseLanguage && !languageLockedByUser) {
-                preferredLanguage = responseLanguage;
-            }
-
-            currentErrorState = null;
-            updateErrorTexts();
-
-            const errorState = document.getElementById('errorState');
-            if (errorState) {
-                errorState.classList.add('hidden');
-            }
-
-            const loadingState = document.getElementById('loadingState');
-            if (loadingState) {
-                loadingState.classList.add('hidden');
-            }
-
-            const mainContent = document.getElementById('mainContent');
-            if (mainContent) {
-                mainContent.classList.remove('hidden');
-            }
-
-            detectPlatform();
-            setActivePlatformButton();
-            refreshAfterLanguageChange();
-
-            animateCardsOnce();
-
-            return userData;
-        }
-
-        async function refreshSubscriptionData(options = {}) {
-            const { silent = false } = options;
-            const initData = tg.initData || '';
-
-            if (!initData) {
-                throw createError('Authorization Error', 'Missing Telegram ID');
-            }
-
-            if (!silent) {
-                document.getElementById('errorState')?.classList.add('hidden');
-                document.getElementById('mainContent')?.classList.add('hidden');
-                document.getElementById('loadingState')?.classList.remove('hidden');
-            }
-
-            const payload = await fetchSubscriptionPayload(initData);
-            return applySubscriptionData(payload);
-        }
-
         async function init() {
             try {
                 const telegramUser = tg.initDataUnsafe?.user;
@@ -2872,7 +2449,96 @@
                 }
 
                 await loadAppsConfig();
-                await refreshSubscriptionData();
+
+                const initData = tg.initData || '';
+                if (!initData) {
+                    throw createError('Authorization Error', 'Missing Telegram ID');
+                }
+
+                const response = await fetch('/miniapp/subscription', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ initData })
+                });
+
+                if (!response.ok) {
+                    let detail = response.status === 401
+                        ? 'Authorization failed. Please open the mini app from Telegram.'
+                        : 'Subscription not found';
+                    let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
+                    let purchaseUrl = null;
+
+                    try {
+                        const errorPayload = await response.json();
+                        if (errorPayload?.detail) {
+                            if (typeof errorPayload.detail === 'string') {
+                                detail = errorPayload.detail;
+                            } else if (typeof errorPayload.detail === 'object') {
+                                if (typeof errorPayload.detail.message === 'string') {
+                                    detail = errorPayload.detail.message;
+                                }
+                                purchaseUrl = errorPayload.detail.purchase_url
+                                    || errorPayload.detail.purchaseUrl
+                                    || purchaseUrl;
+                            }
+                        } else if (typeof errorPayload?.message === 'string') {
+                            detail = errorPayload.message;
+                        }
+
+                        if (typeof errorPayload?.title === 'string') {
+                            title = errorPayload.title;
+                        }
+
+                        purchaseUrl = purchaseUrl
+                            || errorPayload?.purchase_url
+                            || errorPayload?.purchaseUrl
+                            || null;
+                    } catch (parseError) {
+                        // ignore
+                    }
+
+                    const errorObject = createError(title, detail, response.status);
+                    const normalizedPurchaseUrl = normalizeUrl(purchaseUrl);
+                    if (normalizedPurchaseUrl) {
+                        errorObject.purchaseUrl = normalizedPurchaseUrl;
+                    }
+                    throw errorObject;
+                }
+
+                userData = await response.json();
+                userData.subscriptionUrl = userData.subscription_url || null;
+                userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
+                subscriptionPurchaseUrl = normalizeUrl(
+                    userData.subscription_purchase_url
+                    || userData.subscriptionPurchaseUrl
+                );
+                if (subscriptionPurchaseUrl) {
+                    userData.subscriptionPurchaseUrl = subscriptionPurchaseUrl;
+                }
+                if (userData.branding) {
+                    applyBrandingOverrides(userData.branding);
+                }
+
+                const responseLanguage = resolveLanguage(userData?.user?.language);
+                if (responseLanguage && !languageLockedByUser) {
+                    preferredLanguage = responseLanguage;
+                }
+
+                detectPlatform();
+                setActivePlatformButton();
+                refreshAfterLanguageChange();
+
+                document.getElementById('loadingState').classList.add('hidden');
+                document.getElementById('mainContent').classList.remove('hidden');
+                
+                // Add animation to cards
+                document.querySelectorAll('.card').forEach((card, index) => {
+                    setTimeout(() => {
+                        card.classList.add('animate-in');
+                    }, index * 100);
+                });
             } catch (error) {
                 console.error('Initialization error:', error);
                 showError(error);
@@ -3004,7 +2670,6 @@
                     : autopayLabel;
             }
 
-            renderPromoOffers();
             renderPromoSection();
             renderBalanceSection();
             renderTransactionHistory();
@@ -3012,459 +2677,6 @@
             renderDevicesList();
             updateConnectButtonLabel();
             updateActionButtons();
-        }
-
-        function resolvePromoOfferIcon(offer) {
-            if (offer?.icon && typeof offer.icon === 'string') {
-                return offer.icon;
-            }
-
-            const offerType = String(offer?.offer_type || '').toLowerCase();
-            const effectType = String(offer?.effect_type || '').toLowerCase();
-
-            if (offerType === 'extend_discount') {
-                return '💎';
-            }
-            if (offerType === 'purchase_discount') {
-                return '🎯';
-            }
-            if (offerType === 'test_access' || effectType === 'test_access') {
-                return '🧪';
-            }
-            if (effectType === 'percent_discount') {
-                return '🎁';
-            }
-            return '🎉';
-        }
-
-        function resolvePromoOfferTitle(offer) {
-            if (offer?.title) {
-                return offer.title;
-            }
-            if (offer?.template_name) {
-                return offer.template_name;
-            }
-
-            const offerType = String(offer?.offer_type || '').toLowerCase();
-            if (offerType) {
-                const key = `promo_offer.type.${offerType}`;
-                const value = t(key);
-                if (value !== key) {
-                    return value;
-                }
-            }
-
-            const effectType = String(offer?.effect_type || '').toLowerCase();
-            if (effectType) {
-                const key = `promo_offer.type.${effectType}`;
-                const value = t(key);
-                if (value !== key) {
-                    return value;
-                }
-            }
-
-            const fallbackKey = offer?.status === 'active'
-                ? 'promo_offer.status.active'
-                : 'promo_offer.status.pending';
-            const fallback = t(fallbackKey);
-            if (fallback !== fallbackKey) {
-                return fallback;
-            }
-
-            return offerType || effectType || (offer?.status === 'active' ? 'Active offer' : 'Offer');
-        }
-
-        function parseDate(value) {
-            if (!value) {
-                return null;
-            }
-            const date = new Date(value);
-            return Number.isNaN(date.getTime()) ? null : date;
-        }
-
-        function sanitizePromoOfferHtml(input) {
-            if (!input || typeof input !== 'string') {
-                return '';
-            }
-
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(`<div>${input}</div>`, 'text/html');
-            const allowedTags = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'BR', 'SPAN', 'CODE', 'A']);
-            const elements = [];
-            const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null);
-            while (walker.nextNode()) {
-                elements.push(walker.currentNode);
-            }
-
-            elements.forEach(node => {
-                const tagName = node.tagName;
-                if (!allowedTags.has(tagName)) {
-                    node.replaceWith(document.createTextNode(node.textContent || ''));
-                    return;
-                }
-
-                if (tagName === 'A') {
-                    const href = node.getAttribute('href') || '';
-                    if (!/^https?:\/\//i.test(href)) {
-                        node.replaceWith(document.createTextNode(node.textContent || ''));
-                        return;
-                    }
-                    node.setAttribute('target', '_blank');
-                    node.setAttribute('rel', 'noopener noreferrer');
-                } else {
-                    Array.from(node.attributes).forEach(attr => node.removeAttribute(attr.name));
-                }
-            });
-
-            return doc.body.innerHTML.replace(/\n/g, '<br>');
-        }
-
-        function formatShortDuration(seconds) {
-            if (!Number.isFinite(seconds) || seconds <= 0) {
-                return t('time.less_than_minute');
-            }
-
-            if (seconds < 60) {
-                return t('time.less_than_minute');
-            }
-
-            const totalMinutes = Math.round(seconds / 60);
-            const days = Math.floor(totalMinutes / (60 * 24));
-            const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-            const minutes = totalMinutes % 60;
-
-            const parts = [];
-            if (days) {
-                parts.push(t('time.days_short').replace('{value}', days));
-            }
-            if (hours) {
-                parts.push(t('time.hours_short').replace('{value}', hours));
-            }
-            if (minutes || !parts.length) {
-                parts.push(t('time.minutes_short').replace('{value}', minutes || 1));
-            }
-
-            return parts.join(' ');
-        }
-
-        function registerPromoOfferTimers(timers) {
-            promoOfferTimers = timers.filter(timer => timer && timer.expiresAt instanceof Date && !Number.isNaN(timer.expiresAt.getTime()));
-            if (promoOfferTimerHandle) {
-                clearInterval(promoOfferTimerHandle);
-                promoOfferTimerHandle = null;
-            }
-
-            if (!promoOfferTimers.length) {
-                return;
-            }
-
-            const tick = () => {
-                const now = new Date();
-                promoOfferTimers = promoOfferTimers.filter(timer => {
-                    const diffSeconds = Math.floor((timer.expiresAt.getTime() - now.getTime()) / 1000);
-                    if (!Number.isFinite(diffSeconds) || diffSeconds <= 0) {
-                        timer.element.textContent = t('promo_offer.timer.expired');
-                        if (timer.progressElement) {
-                            timer.progressElement.style.width = '0%';
-                        }
-                        if (typeof timer.onExpire === 'function') {
-                            try {
-                                timer.onExpire();
-                            } catch (error) {
-                                console.warn('Failed to handle promo offer timer expire:', error);
-                            }
-                        }
-                        return false;
-                    }
-
-                    const formatted = formatShortDuration(diffSeconds);
-                    const templateKey = timer.labelKey || 'promo_offer.timer.pending';
-                    const template = t(templateKey);
-                    timer.element.textContent = template.includes('{time}')
-                        ? template.replace('{time}', formatted)
-                        : `${template} ${formatted}`;
-
-                    if (timer.progressElement && Number.isFinite(timer.totalSeconds) && timer.totalSeconds > 0) {
-                        const ratio = Math.max(0, Math.min(1, diffSeconds / timer.totalSeconds));
-                        timer.progressElement.style.width = `${ratio * 100}%`;
-                    }
-
-                    return true;
-                });
-
-                if (!promoOfferTimers.length && promoOfferTimerHandle) {
-                    clearInterval(promoOfferTimerHandle);
-                    promoOfferTimerHandle = null;
-                }
-            };
-
-            tick();
-            promoOfferTimerHandle = window.setInterval(tick, 1000);
-        }
-
-        function buildPromoOfferCard(offer, options = {}) {
-            if (!offer) {
-                return null;
-            }
-
-            const isActive = Boolean(options.isActive || String(offer.status || '').toLowerCase() === 'active');
-            const timers = options.timers || [];
-
-            const card = document.createElement('div');
-            card.className = `promo-offer-card ${isActive ? 'active' : 'pending'}`;
-
-            const header = document.createElement('div');
-            header.className = 'promo-offer-header';
-
-            const icon = document.createElement('div');
-            icon.className = 'promo-offer-icon';
-            icon.textContent = resolvePromoOfferIcon(offer);
-            header.appendChild(icon);
-
-            const heading = document.createElement('div');
-            heading.className = 'promo-offer-heading';
-
-            const title = document.createElement('div');
-            title.className = 'promo-offer-title';
-            title.textContent = resolvePromoOfferTitle(offer);
-            heading.appendChild(title);
-
-            const subtitle = document.createElement('div');
-            subtitle.className = 'promo-offer-subtitle';
-            const statusKey = isActive ? 'promo_offer.status.active' : 'promo_offer.status.pending';
-            const statusLabel = t(statusKey);
-            subtitle.textContent = statusLabel === statusKey ? (isActive ? 'Active offer' : 'Special offer') : statusLabel;
-            heading.appendChild(subtitle);
-
-            header.appendChild(heading);
-
-            const badgeText = (() => {
-                const discountValue = Number(offer.discount_percent || 0);
-                if (Number.isFinite(discountValue) && discountValue > 0) {
-                    return `-${Math.round(discountValue)}%`;
-                }
-                if (offer.bonus_amount_label) {
-                    return offer.bonus_amount_label;
-                }
-                if (String(offer.effect_type || '').toLowerCase() === 'test_access') {
-                    const label = t('promo_offer.type.test_access');
-                    return label === 'promo_offer.type.test_access' ? 'Test access' : label;
-                }
-                return null;
-            })();
-
-            if (badgeText) {
-                const badge = document.createElement('div');
-                badge.className = 'promo-offer-badge';
-                badge.textContent = badgeText;
-                header.appendChild(badge);
-            }
-
-            card.appendChild(header);
-
-            if (offer.message_text) {
-                const message = document.createElement('div');
-                message.className = 'promo-offer-message';
-                message.innerHTML = sanitizePromoOfferHtml(offer.message_text);
-                card.appendChild(message);
-            }
-
-            const details = document.createElement('div');
-            details.className = 'promo-offer-details';
-
-            if (offer.bonus_amount_label && offer.bonus_amount_label !== badgeText) {
-                const chip = document.createElement('span');
-                chip.className = 'promo-offer-chip';
-                chip.textContent = offer.bonus_amount_label;
-                details.appendChild(chip);
-            }
-
-            if (Array.isArray(offer.test_squads)) {
-                offer.test_squads.slice(0, 3).forEach(server => {
-                    if (!server) {
-                        return;
-                    }
-                    const chip = document.createElement('span');
-                    chip.className = 'promo-offer-chip';
-                    chip.textContent = server.name || server.uuid || '';
-                    details.appendChild(chip);
-                });
-            }
-
-            if (details.children.length) {
-                card.appendChild(details);
-            }
-
-            const expiresAt = parseDate(isActive ? offer.active_discount_expires_at : offer.expires_at);
-            const startedAt = isActive ? parseDate(offer.active_discount_started_at) : null;
-            let totalSeconds = Number(offer.active_discount_duration_seconds);
-            if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
-                totalSeconds = null;
-            }
-            if ((totalSeconds === null || totalSeconds <= 0) && expiresAt && startedAt) {
-                totalSeconds = Math.max(0, Math.floor((expiresAt.getTime() - startedAt.getTime()) / 1000));
-            }
-
-            let progressElement = null;
-            if (isActive && expiresAt) {
-                const progress = document.createElement('div');
-                progress.className = 'promo-offer-progress';
-                const bar = document.createElement('div');
-                bar.className = 'promo-offer-progress-bar';
-                progress.appendChild(bar);
-                progressElement = bar;
-                card.appendChild(progress);
-            }
-
-            const footer = document.createElement('div');
-            footer.className = 'promo-offer-footer';
-
-            const timerLabel = document.createElement('div');
-            timerLabel.className = 'promo-offer-timer';
-            footer.appendChild(timerLabel);
-
-            let button = null;
-            if (!isActive && offer.id) {
-                const action = document.createElement('div');
-                action.className = 'promo-offer-action';
-                button = document.createElement('button');
-                button.className = 'promo-offer-btn';
-                button.type = 'button';
-                button.textContent = t('promo_offer.accept');
-                button.addEventListener('click', () => handlePromoOfferAccept(offer.id, button));
-                action.appendChild(button);
-                footer.appendChild(action);
-            }
-
-            if (expiresAt) {
-                const diffSeconds = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
-                if (diffSeconds > 0) {
-                    const templateKey = isActive ? 'promo_offer.timer.active' : 'promo_offer.timer.pending';
-                    const template = t(templateKey);
-                    const durationText = formatShortDuration(diffSeconds);
-                    timerLabel.textContent = template.includes('{time}')
-                        ? template.replace('{time}', durationText)
-                        : `${template} ${durationText}`;
-                } else {
-                    timerLabel.textContent = t('promo_offer.timer.expired');
-                }
-
-                timers.push({
-                    element: timerLabel,
-                    expiresAt,
-                    labelKey: isActive ? 'promo_offer.timer.active' : 'promo_offer.timer.pending',
-                    progressElement,
-                    totalSeconds,
-                    onExpire: () => {
-                        if (button) {
-                            button.disabled = true;
-                            button.textContent = t('promo_offer.timer.expired');
-                        }
-                        card.classList.add('expired');
-                    },
-                });
-            } else {
-                timerLabel.textContent = '';
-            }
-
-            if (footer.children.length) {
-                card.appendChild(footer);
-            }
-
-            return card;
-        }
-
-        function renderPromoOffers() {
-            const container = document.getElementById('promoOffersContainer');
-            if (!container) {
-                return;
-            }
-
-            const offers = Array.isArray(userData?.promo_offers) ? userData.promo_offers : [];
-            const activeOffer = offers.find(offer => String(offer?.status || '').toLowerCase() === 'active');
-            const pendingOffers = offers.filter(offer => String(offer?.status || '').toLowerCase() !== 'active');
-
-            container.innerHTML = '';
-            const timers = [];
-            let hasContent = false;
-
-            if (activeOffer) {
-                const card = buildPromoOfferCard(activeOffer, { isActive: true, timers });
-                if (card) {
-                    container.appendChild(card);
-                    hasContent = true;
-                }
-            }
-
-            pendingOffers.forEach(offer => {
-                const card = buildPromoOfferCard(offer, { timers });
-                if (card) {
-                    container.appendChild(card);
-                    hasContent = true;
-                }
-            });
-
-            container.classList.toggle('hidden', !hasContent);
-            registerPromoOfferTimers(hasContent ? timers : []);
-        }
-
-        async function handlePromoOfferAccept(offerId, button) {
-            if (!offerId) {
-                return;
-            }
-
-            const initData = tg.initData || '';
-            if (!initData) {
-                return;
-            }
-
-            const originalText = button?.textContent;
-            if (button) {
-                button.disabled = true;
-                button.textContent = t('promo_offer.accepting');
-            }
-
-            try {
-                const response = await fetch(`/miniapp/promo-offers/${offerId}/claim`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData }),
-                });
-
-                const payload = await response.json().catch(() => ({}));
-
-                if (!response.ok) {
-                    const code = payload?.detail?.code || payload?.code;
-                    const messageKey = code ? `promo_offer.error.${code}` : 'promo_offer.error.generic';
-                    const translated = t(messageKey);
-                    const message = translated === messageKey
-                        ? (payload?.detail?.message || t('promo_offer.error.generic'))
-                        : translated;
-                    showPopup(message);
-                    if (button) {
-                        button.disabled = false;
-                        button.textContent = originalText || t('promo_offer.accept');
-                    }
-                    return;
-                }
-
-                const successKey = payload?.code === 'test_access_claimed'
-                    ? 'promo_offer.accept.success'
-                    : 'promo_offer.accept.success';
-                const successMessage = t(successKey);
-                showPopup(successMessage === successKey ? 'Offer activated successfully!' : successMessage);
-
-                await refreshSubscriptionData({ silent: true });
-            } catch (error) {
-                console.error('Failed to activate promo offer:', error);
-                const message = t('promo_offer.error.generic');
-                showPopup(message === 'promo_offer.error.generic' ? 'Failed to activate the offer. Please try again.' : message);
-                if (button) {
-                    button.disabled = false;
-                    button.textContent = originalText || t('promo_offer.accept');
-                }
-                return;
-            }
         }
 
         function detectPlatform() {
