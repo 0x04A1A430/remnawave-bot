@@ -1599,73 +1599,6 @@
             box-shadow: var(--shadow-sm);
         }
 
-        /* FAQ */
-        .faq-entry {
-            padding: 16px 0;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .faq-entry:first-child {
-            padding-top: 0;
-        }
-
-        .faq-entry:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-        }
-
-        .faq-title {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 8px;
-        }
-
-        .faq-content {
-            font-size: 14px;
-            color: var(--text-secondary);
-            line-height: 1.7;
-            display: grid;
-            gap: 8px;
-        }
-
-        .faq-content p {
-            margin: 0;
-        }
-
-        .faq-content ul,
-        .faq-content ol {
-            margin: 0;
-            padding-left: 20px;
-        }
-
-        .faq-content li {
-            margin-bottom: 6px;
-        }
-
-        .faq-content code {
-            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-            background: rgba(var(--primary-rgb), 0.08);
-            padding: 2px 4px;
-            border-radius: 4px;
-            color: var(--text-primary);
-        }
-
-        .faq-content pre {
-            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-            background: var(--bg-primary);
-            border-radius: var(--radius-sm);
-            padding: 12px;
-            overflow-x: auto;
-            color: var(--text-primary);
-            margin: 0;
-        }
-
-        .faq-content a {
-            color: var(--primary);
-            text-decoration: underline;
-        }
-
         /* Hidden */
         .hidden {
             display: none !important;
@@ -1747,14 +1680,6 @@
 
             .platform-btn {
                 background: var(--bg-secondary);
-            }
-
-            .faq-content code {
-                background: rgba(37, 99, 235, 0.2);
-            }
-
-            .faq-content pre {
-                background: rgba(15, 23, 42, 0.6);
             }
 
             .theme-toggle .icon-sun {
@@ -2136,16 +2061,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- FAQ Section -->
-            <div class="card hidden" id="faqCard">
-                <div class="card-header">
-                    <div class="card-title" data-i18n="faq.title">FAQ</div>
-                </div>
-                <div class="card-content">
-                    <div id="faqContainer"></div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -2335,7 +2250,6 @@
                 'apps.step.download': 'Download & install',
                 'apps.step.add': 'Add subscription',
                 'apps.step.connect': 'Connect & use',
-                'faq.title': 'FAQ',
                 'history.empty': 'No transactions yet',
                 'history.status.completed': 'Completed',
                 'history.status.pending': 'Processing',
@@ -2447,7 +2361,6 @@
                 'apps.step.download': 'Скачать и установить',
                 'apps.step.add': 'Добавить подписку',
                 'apps.step.connect': 'Подключиться и пользоваться',
-                'faq.title': 'Частые вопросы',
                 'history.empty': 'Операции ещё не проводились',
                 'history.status.completed': 'Выполнено',
                 'history.status.pending': 'Обрабатывается',
@@ -2752,7 +2665,6 @@
                 updateConnectButtonLabel();
             }
             renderApps();
-            renderFaq();
             updateActionButtons();
         }
 
@@ -3098,7 +3010,6 @@
             renderTransactionHistory();
             renderServersList();
             renderDevicesList();
-            renderFaq();
             updateConnectButtonLabel();
             updateActionButtons();
         }
@@ -3255,91 +3166,6 @@
             });
 
             return doc.body.innerHTML.replace(/\n/g, '<br>');
-        }
-
-        function sanitizeFaqHtml(input) {
-            if (!input || typeof input !== 'string') {
-                return '';
-            }
-
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(`<div>${input}</div>`, 'text/html');
-            const allowedTags = new Set([
-                'P',
-                'BR',
-                'STRONG',
-                'B',
-                'EM',
-                'I',
-                'U',
-                'A',
-                'UL',
-                'OL',
-                'LI',
-                'SPAN',
-                'CODE',
-                'PRE',
-                'BLOCKQUOTE',
-                'H1',
-                'H2',
-                'H3',
-                'H4',
-                'H5',
-                'H6'
-            ]);
-
-            const nodes = [];
-            const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null);
-            while (walker.nextNode()) {
-                nodes.push(walker.currentNode);
-            }
-
-            nodes.forEach(node => {
-                const tagName = node.tagName;
-
-                if (!allowedTags.has(tagName)) {
-                    if (tagName === 'DIV') {
-                        const fragment = document.createDocumentFragment();
-                        while (node.firstChild) {
-                            fragment.appendChild(node.firstChild);
-                        }
-                        node.replaceWith(fragment);
-                        return;
-                    }
-
-                    node.replaceWith(document.createTextNode(node.textContent || ''));
-                    return;
-                }
-
-                if (tagName === 'A') {
-                    const href = node.getAttribute('href') || '';
-                    const normalizedHref = href.trim();
-                    const isAllowedLink = /^https?:\/\//i.test(normalizedHref)
-                        || normalizedHref.toLowerCase().startsWith('mailto:')
-                        || normalizedHref.toLowerCase().startsWith('tg://')
-                        || normalizedHref.toLowerCase().startsWith('ton://')
-                        || normalizedHref.toLowerCase().startsWith('tel:');
-
-                    if (!isAllowedLink) {
-                        node.replaceWith(document.createTextNode(node.textContent || ''));
-                        return;
-                    }
-
-                    node.setAttribute('href', normalizedHref);
-                    node.setAttribute('target', '_blank');
-                    node.setAttribute('rel', 'noopener noreferrer');
-                    Array.from(node.attributes).forEach(attr => {
-                        if (!['href', 'target', 'rel'].includes(attr.name.toLowerCase())) {
-                            node.removeAttribute(attr.name);
-                        }
-                    });
-                    return;
-                }
-
-                Array.from(node.attributes).forEach(attr => node.removeAttribute(attr.name));
-            });
-
-            return doc.body.innerHTML;
         }
 
         function formatShortDuration(seconds) {
@@ -3805,67 +3631,6 @@
             }
 
             return html;
-        }
-
-        function renderFaq() {
-            const faqCard = document.getElementById('faqCard');
-            const container = document.getElementById('faqContainer');
-            if (!faqCard || !container) {
-                return;
-            }
-
-            const enabled = Boolean(userData?.faq_enabled);
-            const pages = Array.isArray(userData?.faq_pages)
-                ? [...userData.faq_pages].sort((a, b) => {
-                    const orderAValue = Number(a?.display_order);
-                    const orderBValue = Number(b?.display_order);
-                    const orderA = Number.isFinite(orderAValue) ? orderAValue : 0;
-                    const orderB = Number.isFinite(orderBValue) ? orderBValue : 0;
-                    if (orderA === orderB) {
-                        return (a?.id || 0) - (b?.id || 0);
-                    }
-                    return orderA - orderB;
-                })
-                : [];
-
-            if (!enabled || !pages.length) {
-                container.innerHTML = '';
-                faqCard.classList.add('hidden');
-                return;
-            }
-
-            const entriesHtml = pages
-                .map(page => {
-                    if (!page) {
-                        return '';
-                    }
-
-                    const title = page.title ? `<div class="faq-title">${escapeHtml(page.title)}</div>` : '';
-                    const contentHtml = page.content ? sanitizeFaqHtml(page.content) : '';
-                    const trimmedContent = contentHtml.trim();
-
-                    if (!title && !trimmedContent) {
-                        return '';
-                    }
-
-                    const contentBlock = trimmedContent
-                        ? `<div class="faq-content">${trimmedContent}</div>`
-                        : '';
-
-                    return `<div class="faq-entry">${title}${contentBlock}</div>`;
-                })
-                .filter(Boolean)
-                .join('')
-                .trim();
-
-            if (!entriesHtml) {
-                container.innerHTML = '';
-                faqCard.classList.add('hidden');
-                return;
-            }
-
-            container.innerHTML = entriesHtml;
-            faqCard.classList.remove('hidden');
         }
 
         function getLocalizedText(textObj) {
@@ -4785,7 +4550,6 @@
         }
 
         function showError(error) {
-            userData = null;
             document.getElementById('loadingState').classList.add('hidden');
             document.getElementById('mainContent').classList.add('hidden');
             currentErrorState = {
@@ -4795,7 +4559,6 @@
             };
             updateErrorTexts();
             document.getElementById('errorState').classList.remove('hidden');
-            renderFaq();
             updateActionButtons();
         }
 
