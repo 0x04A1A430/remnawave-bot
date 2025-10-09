@@ -576,118 +576,6 @@
             text-align: right;
         }
 
-        /* Promo Group */
-        .promo-card .card-content {
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .promo-group-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        }
-
-        .promo-group-value {
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-
-        .promo-levels-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .promo-levels-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .promo-level-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            padding: 12px 16px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            background: rgba(var(--primary-rgb), 0.04);
-            transition: all 0.2s ease;
-        }
-
-        .promo-level-item.unlocked {
-            border-color: rgba(16, 185, 129, 0.4);
-            background: rgba(16, 185, 129, 0.08);
-        }
-
-        .promo-level-details {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            min-width: 0;
-        }
-
-        .promo-level-name {
-            font-weight: 600;
-            color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .promo-level-threshold {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
-        .promo-level-status {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-        }
-
-        .promo-level-status.unlocked {
-            color: var(--success);
-        }
-
-        .promo-level-status-icon {
-            font-size: 16px;
-        }
-
-        .promo-level-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 2px 8px;
-            border-radius: 999px;
-            background: rgba(var(--primary-rgb), 0.12);
-            color: var(--primary);
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-        }
-
-        .promo-levels-empty {
-            font-size: 13px;
-            color: var(--text-secondary);
-            text-align: center;
-            padding: 12px;
-            border: 1px dashed var(--border-color);
-            border-radius: var(--radius);
-        }
-
         /* Balance Card */
         .balance-card {
             background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.1), rgba(var(--primary-rgb), 0.05));
@@ -1322,8 +1210,7 @@
         :root[data-theme="dark"] .server-item,
         :root[data-theme="dark"] .device-item,
         :root[data-theme="dark"] .app-card,
-        :root[data-theme="dark"] .platform-btn,
-        :root[data-theme="dark"] .promo-level-item {
+        :root[data-theme="dark"] .platform-btn {
             background: var(--bg-secondary);
         }
 
@@ -1361,8 +1248,7 @@
         :root[data-theme="dark"] .balance-card,
         :root[data-theme="dark"] .card.expandable,
         :root[data-theme="dark"] .language-select,
-        :root[data-theme="dark"] .theme-toggle,
-        :root[data-theme="dark"] .promo-card {
+        :root[data-theme="dark"] .theme-toggle {
             background: var(--bg-primary);
         }
 
@@ -1371,8 +1257,7 @@
         :root[data-theme="dark"] .stat-item,
         :root[data-theme="dark"] .server-item,
         :root[data-theme="dark"] .device-item,
-        :root[data-theme="dark"] .app-card,
-        :root[data-theme="dark"] .promo-level-item {
+        :root[data-theme="dark"] .app-card {
             border-color: rgba(148, 163, 184, 0.25);
         }
 
@@ -1503,37 +1388,12 @@
                         <span class="info-label" data-i18n="info.autopay">Auto-Pay</span>
                         <span class="info-value" id="autopayStatus">-</span>
                     </div>
+                </div>
             </div>
-        </div>
 
-        <!-- Promo Group Card -->
-        <div class="card promo-card" id="promoCard">
-            <div class="card-header">
-                <div class="card-title">
-                    <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <span data-i18n="card.promo.title">Promo program</span>
-                </div>
-            </div>
-            <div class="card-content">
-                <div class="promo-group-row">
-                    <span class="info-label" data-i18n="info.promo_group">Promo group</span>
-                    <span class="promo-group-value" id="promoGroupValue">—</span>
-                </div>
-                <div>
-                    <div class="promo-levels-title" data-i18n="card.promo.levels_title">Auto-issued levels</div>
-                    <ul class="promo-levels-list" id="promoLevelsList"></ul>
-                    <div class="promo-levels-empty hidden" id="promoLevelsEmpty" data-i18n="card.promo.levels_empty">
-                        Auto-issued promo groups are not configured yet.
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="btn-group">
-            <button class="btn btn-primary" id="connectBtn">
+            <!-- Action Buttons -->
+            <div class="btn-group">
+                <button class="btn btn-primary" id="connectBtn">
                     <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
@@ -1803,14 +1663,6 @@
                 'info.promo_group': 'Promo group',
                 'info.device_limit': 'Device limit',
                 'info.autopay': 'Auto-pay',
-                'card.promo.title': 'Promo program',
-                'card.promo.levels_title': 'Auto-issued levels',
-                'card.promo.levels_empty': 'Auto-issued promo groups are not configured yet.',
-                'promo.group.not_assigned': 'Not assigned',
-                'promo.level.current': 'Current level',
-                'promo.level.unlocked': 'Unlocked',
-                'promo.level.locked': 'Locked',
-                'promo.level.threshold': 'From {amount}',
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
@@ -1875,14 +1727,6 @@
                 'info.promo_group': 'Промогруппа',
                 'info.device_limit': 'Лимит устройств',
                 'info.autopay': 'Автоплатеж',
-                'card.promo.title': 'Промогруппа',
-                'card.promo.levels_title': 'Автоматические уровни',
-                'card.promo.levels_empty': 'Автовыдача промогрупп ещё не настроена.',
-                'promo.group.not_assigned': 'Не назначена',
-                'promo.level.current': 'Текущий уровень',
-                'promo.level.unlocked': 'Получен',
-                'promo.level.locked': 'Недоступен',
-                'promo.level.threshold': 'От {amount}',
                 'button.connect.default': 'Подключиться к VPN',
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
@@ -2445,7 +2289,6 @@
                     : autopayLabel;
             }
 
-            renderPromoSection();
             renderBalanceSection();
             renderTransactionHistory();
             renderServersList();
@@ -2652,17 +2495,6 @@
             }
         }
 
-        function formatPriceFromKopeks(kopeks) {
-            const numeric = typeof kopeks === 'number'
-                ? kopeks
-                : Number.parseInt(kopeks ?? '0', 10);
-            if (!Number.isFinite(numeric) || numeric <= 0) {
-                return '—';
-            }
-            const currency = (userData?.balance_currency || 'RUB').toUpperCase();
-            return formatCurrency(numeric / 100, currency);
-        }
-
         function formatDate(value) {
             if (!value) {
                 return '—';
@@ -2701,110 +2533,6 @@
             } catch (error) {
                 return date.toLocaleString();
             }
-        }
-
-        function renderPromoLevels() {
-            const list = document.getElementById('promoLevelsList');
-            const emptyState = document.getElementById('promoLevelsEmpty');
-            if (!list || !emptyState) {
-                return false;
-            }
-
-            const levels = Array.isArray(userData?.auto_promo_levels)
-                ? userData.auto_promo_levels.filter(level => level && typeof level === 'object')
-                : [];
-
-            const emptyLabelRaw = t('card.promo.levels_empty');
-            const emptyLabel = emptyLabelRaw === 'card.promo.levels_empty'
-                ? 'Auto-issued promo groups are not configured yet.'
-                : emptyLabelRaw;
-
-            if (!levels.length) {
-                list.innerHTML = '';
-                emptyState.textContent = emptyLabel;
-                emptyState.classList.remove('hidden');
-                return false;
-            }
-
-            emptyState.classList.add('hidden');
-
-            const notAvailableRaw = t('values.not_available');
-            const notAvailable = notAvailableRaw === 'values.not_available' ? '—' : notAvailableRaw;
-            const currentLabelRaw = t('promo.level.current');
-            const currentLabel = currentLabelRaw === 'promo.level.current' ? 'Current level' : currentLabelRaw;
-
-            const itemsHtml = levels.map(level => {
-                const name = typeof level?.name === 'string' && level.name.trim().length
-                    ? level.name.trim()
-                    : notAvailable;
-                const amountLabelRaw = typeof level?.threshold_label === 'string' && level.threshold_label.trim().length
-                    ? level.threshold_label.trim()
-                    : formatPriceFromKopeks(level?.threshold_kopeks);
-                const amountLabel = amountLabelRaw && amountLabelRaw !== '—' ? amountLabelRaw : '';
-                const thresholdTemplate = t('promo.level.threshold');
-                const thresholdTextRaw = amountLabel
-                    ? (thresholdTemplate && thresholdTemplate !== 'promo.level.threshold'
-                        ? thresholdTemplate.replace('{amount}', amountLabel)
-                        : `From ${amountLabel}`)
-                    : notAvailable;
-                const statusKey = level?.is_unlocked ? 'promo.level.unlocked' : 'promo.level.locked';
-                const statusRaw = t(statusKey);
-                const statusLabel = statusRaw === statusKey
-                    ? (level?.is_unlocked ? 'Unlocked' : 'Locked')
-                    : statusRaw;
-                const statusClass = level?.is_unlocked ? 'unlocked' : 'locked';
-                const icon = level?.is_unlocked ? '✅' : '🔒';
-                const badgeHtml = level?.is_current
-                    ? `<span class="promo-level-badge">${escapeHtml(currentLabel)}</span>`
-                    : '';
-
-                return `
-                    <li class="promo-level-item ${statusClass}">
-                        <div class="promo-level-details">
-                            <div class="promo-level-name">
-                                ${badgeHtml}
-                                <span>${escapeHtml(name)}</span>
-                            </div>
-                            <div class="promo-level-threshold">${escapeHtml(thresholdTextRaw)}</div>
-                        </div>
-                        <div class="promo-level-status ${statusClass}">
-                            <span class="promo-level-status-icon">${icon}</span>
-                            <span>${escapeHtml(statusLabel)}</span>
-                        </div>
-                    </li>
-                `;
-            }).join('');
-
-            list.innerHTML = itemsHtml;
-            return true;
-        }
-
-        function renderPromoSection() {
-            const card = document.getElementById('promoCard');
-            if (!card) {
-                return;
-            }
-
-            const groupElement = document.getElementById('promoGroupValue');
-            const groupName = typeof userData?.promo_group?.name === 'string'
-                ? userData.promo_group.name
-                : '';
-            const notAvailableRaw = t('values.not_available');
-            const notAvailable = notAvailableRaw === 'values.not_available' ? '—' : notAvailableRaw;
-
-            if (groupElement) {
-                if (groupName) {
-                    groupElement.textContent = groupName;
-                } else {
-                    const fallbackRaw = t('promo.group.not_assigned');
-                    const fallback = fallbackRaw === 'promo.group.not_assigned'
-                        ? notAvailable
-                        : fallbackRaw;
-                    groupElement.textContent = fallback;
-                }
-            }
-
-            renderPromoLevels();
         }
 
         function renderBalanceSection() {
