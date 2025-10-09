@@ -13,8 +13,9 @@ from pathlib import Path
 
 
 class Settings(BaseSettings):
-    
+
     BOT_TOKEN: str
+    BOT_USERNAME: Optional[str] = None
     ADMIN_IDS: str = ""
     SUPPORT_USERNAME: str = "@support"
     SUPPORT_MENU_ENABLED: bool = True
@@ -527,7 +528,14 @@ class Settings(BaseSettings):
     
     def get_trial_warning_hours(self) -> int:
         return self.TRIAL_WARNING_HOURS
-    
+
+    def get_bot_username(self) -> Optional[str]:
+        username = getattr(self, "BOT_USERNAME", None)
+        if not username:
+            return None
+        normalized = str(username).strip().lstrip("@")
+        return normalized or None
+
     def is_notifications_enabled(self) -> bool:
         return self.ENABLE_NOTIFICATIONS
     
@@ -837,14 +845,42 @@ class Settings(BaseSettings):
         return (self.BACKUP_SEND_ENABLED and
                 self.get_backup_send_chat_id() is not None)
 
+    def get_referred_user_reward_kopeks(self) -> int:
+        """Return the referred user reward normalized to kopeks.
+
+        Historically the value was stored in kopeks, however some
+        installations provide it in rubles. To keep backward compatibility we
+        treat any value greater than or equal to one thousand as already being
+        in kopeks (≥ 10 ₽). Smaller positive values are assumed to be provided
+        in rubles and therefore converted to kopeks.
+        """
+
+        raw_value = getattr(self, "REFERRED_USER_REWARD", 0)
+
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            return 0
+
+        if value <= 0:
+            return 0
+
+        if value >= 1000:
+            return value
+
+        return value * 100
+
     def get_referral_settings(self) -> Dict:
+        referred_reward_kopeks = self.get_referred_user_reward_kopeks()
+
         return {
             "minimum_topup_kopeks": self.REFERRAL_MINIMUM_TOPUP_KOPEKS,
             "first_topup_bonus_kopeks": self.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
             "inviter_bonus_kopeks": self.REFERRAL_INVITER_BONUS_KOPEKS,
             "commission_percent": self.REFERRAL_COMMISSION_PERCENT,
             "notifications_enabled": self.REFERRAL_NOTIFICATIONS_ENABLED,
-            "referred_user_reward": self.REFERRED_USER_REWARD
+            "referred_user_reward": referred_reward_kopeks,
+            "referred_user_reward_kopeks": referred_reward_kopeks,
         }
     
     def is_referral_notifications_enabled(self) -> bool:
