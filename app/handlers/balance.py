@@ -569,10 +569,33 @@ async def process_topup_amount(
     state: FSMContext
 ):
     texts = get_texts(db_user.language)
-    
+
     try:
-        amount_rubles = float(message.text.replace(',', '.'))
-        
+        if not message.text:
+            if message.successful_payment:
+                logger.info(
+                    "Получено сообщение об успешном платеже без текста, "
+                    "обработчик суммы пополнения завершает работу"
+                )
+                await state.clear()
+                return
+
+            await message.answer(
+                texts.INVALID_AMOUNT,
+                reply_markup=get_back_keyboard(db_user.language)
+            )
+            return
+
+        amount_text = message.text.strip()
+        if not amount_text:
+            await message.answer(
+                texts.INVALID_AMOUNT,
+                reply_markup=get_back_keyboard(db_user.language)
+            )
+            return
+
+        amount_rubles = float(amount_text.replace(',', '.'))
+
         if amount_rubles < 1:
             await message.answer("Минимальная сумма пополнения: 1 ₽")
             return
