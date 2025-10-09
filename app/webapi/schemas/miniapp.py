@@ -123,19 +123,6 @@ class MiniAppPromoOfferClaimResponse(BaseModel):
     code: Optional[str] = None
 
 
-class MiniAppPromoCodeActivationRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-    code: str
-
-
-class MiniAppPromoCodeActivationResponse(BaseModel):
-    success: bool
-    description: Optional[str] = None
-    code: Optional[str] = None
-    error_code: Optional[str] = Field(default=None, alias="errorCode")
-    message: Optional[str] = None
-
-
 class MiniAppFaqItem(BaseModel):
     id: int
     title: Optional[str] = None
