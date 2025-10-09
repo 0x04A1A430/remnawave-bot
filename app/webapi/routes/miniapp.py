@@ -9,10 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.server_squad import get_server_squad_by_uuid
-from app.database.crud.promo_group import get_auto_assign_promo_groups
-from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.database.crud.user import get_user_by_telegram_id
-from app.database.models import PromoGroup, Subscription, Transaction, User
+from app.database.models import Subscription, Transaction, User
 from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
@@ -28,7 +26,6 @@ from ..dependencies import get_db_session
 from ..schemas.miniapp import (
     MiniAppConnectedServer,
     MiniAppDevice,
-    MiniAppAutoPromoGroupLevel,
     MiniAppPromoGroup,
     MiniAppSubscriptionRequest,
     MiniAppSubscriptionResponse,
@@ -339,27 +336,6 @@ async def get_subscription_details(
         balance_currency = balance_currency.upper()
 
     promo_group = getattr(user, "promo_group", None)
-    total_spent_kopeks = await get_user_total_spent_kopeks(db, user.id)
-    auto_assign_groups = await get_auto_assign_promo_groups(db)
-
-    auto_promo_levels: List[MiniAppAutoPromoGroupLevel] = []
-    for group in auto_assign_groups:
-        threshold = group.auto_assign_total_spent_kopeks or 0
-        if threshold <= 0:
-            continue
-
-        auto_promo_levels.append(
-            MiniAppAutoPromoGroupLevel(
-                id=group.id,
-                name=group.name,
-                threshold_kopeks=threshold,
-                threshold_rubles=round(threshold / 100, 2),
-                threshold_label=settings.format_price(threshold),
-                is_reached=total_spent_kopeks >= threshold,
-                is_current=bool(promo_group and promo_group.id == group.id),
-                **_extract_promo_discounts(group),
-            )
-        )
 
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
@@ -410,66 +386,11 @@ async def get_subscription_details(
         balance_rubles=round(user.balance_rubles, 2),
         balance_currency=balance_currency,
         transactions=[_serialize_transaction(tx) for tx in transactions],
-        promo_group=(
-            MiniAppPromoGroup(
-                id=promo_group.id,
-                name=promo_group.name,
-                **_extract_promo_discounts(promo_group),
-            )
-            if promo_group
-            else None
-        ),
-        auto_assign_promo_groups=auto_promo_levels,
-        total_spent_kopeks=total_spent_kopeks,
-        total_spent_rubles=round(total_spent_kopeks / 100, 2),
-        total_spent_label=settings.format_price(total_spent_kopeks),
+        promo_group=MiniAppPromoGroup(id=promo_group.id, name=promo_group.name)
+        if promo_group
+        else None,
         subscription_type="trial" if subscription.is_trial else "paid",
         autopay_enabled=bool(subscription.autopay_enabled),
         branding=settings.get_miniapp_branding(),
     )
-
-def _safe_int(value: Any) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
-
-
-def _normalize_period_discounts(
-    raw: Optional[Dict[Any, Any]]
-) -> Dict[int, int]:
-    if not isinstance(raw, dict):
-        return {}
-
-    normalized: Dict[int, int] = {}
-    for key, value in raw.items():
-        try:
-            period = int(key)
-            normalized[period] = int(value)
-        except (TypeError, ValueError):
-            continue
-
-    return normalized
-
-
-def _extract_promo_discounts(group: Optional[PromoGroup]) -> Dict[str, Any]:
-    if not group:
-        return {
-            "server_discount_percent": 0,
-            "traffic_discount_percent": 0,
-            "device_discount_percent": 0,
-            "period_discounts": {},
-            "apply_discounts_to_addons": True,
-        }
-
-    return {
-        "server_discount_percent": max(0, _safe_int(getattr(group, "server_discount_percent", 0))),
-        "traffic_discount_percent": max(0, _safe_int(getattr(group, "traffic_discount_percent", 0))),
-        "device_discount_percent": max(0, _safe_int(getattr(group, "device_discount_percent", 0))),
-        "period_discounts": _normalize_period_discounts(getattr(group, "period_discounts", None)),
-        "apply_discounts_to_addons": bool(
-            getattr(group, "apply_discounts_to_addons", True)
-        ),
-    }
-
 
