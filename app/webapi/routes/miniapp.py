@@ -9,8 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.server_squad import get_server_squad_by_uuid
+from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.database.crud.user import get_user_by_telegram_id
-from app.database.models import Subscription, Transaction, User
+from app.database.models import PromoGroup, Subscription, Transaction, User
 from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
@@ -26,6 +27,7 @@ from ..dependencies import get_db_session
 from ..schemas.miniapp import (
     MiniAppConnectedServer,
     MiniAppDevice,
+    MiniAppAutoPromoLevel,
     MiniAppPromoGroup,
     MiniAppSubscriptionRequest,
     MiniAppSubscriptionResponse,
@@ -61,6 +63,25 @@ def _format_limit_label(limit: Optional[int]) -> str:
     if not limit:
         return "Unlimited"
     return f"{limit} GB"
+
+
+def _format_price_label(value: Optional[int]) -> str:
+    try:
+        kopeks = int(value or 0)
+    except (TypeError, ValueError):
+        kopeks = 0
+
+    formatter = getattr(settings, "format_price", None)
+    if callable(formatter):
+        try:
+            return str(formatter(kopeks))
+        except Exception:  # pragma: no cover - defensive formatting
+            logger.debug("Failed to format price via settings.format_price", exc_info=True)
+
+    symbol = getattr(settings, "CURRENCY_SYMBOL", None) or getattr(settings, "BALANCE_CURRENCY_SYMBOL", None)
+    symbol = (symbol or "₽").strip()
+    amount = kopeks / 100
+    return f"{amount:.2f} {symbol}".strip()
 
 
 def _bytes_to_gb(bytes_value: Optional[int]) -> float:
@@ -193,6 +214,42 @@ async def _load_devices_info(user: User) -> Tuple[int, List[MiniAppDevice]]:
         total_devices = len(devices)
 
     return total_devices, devices
+
+
+async def _load_auto_promo_levels(
+    db: AsyncSession,
+    user: User,
+    promo_group: Optional[PromoGroup],
+) -> Tuple[int, List[MiniAppAutoPromoLevel], Optional[str]]:
+    total_spent_kopeks = await get_user_total_spent_kopeks(db, user.id) or 0
+
+    result = await db.execute(
+        select(PromoGroup)
+        .where(PromoGroup.auto_assign_total_spent_kopeks.is_not(None))
+        .where(PromoGroup.auto_assign_total_spent_kopeks > 0)
+        .order_by(
+            PromoGroup.auto_assign_total_spent_kopeks.asc(),
+            PromoGroup.id.asc(),
+        )
+    )
+    groups = list(result.scalars().all())
+
+    levels: List[MiniAppAutoPromoLevel] = []
+    for group in groups:
+        threshold = group.auto_assign_total_spent_kopeks or 0
+        levels.append(
+            MiniAppAutoPromoLevel(
+                id=group.id,
+                name=group.name,
+                threshold_kopeks=threshold,
+                threshold_label=_format_price_label(threshold) if threshold > 0 else None,
+                is_unlocked=bool(threshold and total_spent_kopeks >= threshold),
+                is_current=bool(promo_group and group.id == promo_group.id),
+            )
+        )
+
+    total_spent_label = _format_price_label(total_spent_kopeks) if total_spent_kopeks else None
+    return total_spent_kopeks, levels, total_spent_label
 
 
 def _resolve_display_name(user_data: Dict[str, Any]) -> str:
@@ -336,6 +393,11 @@ async def get_subscription_details(
         balance_currency = balance_currency.upper()
 
     promo_group = getattr(user, "promo_group", None)
+    total_spent_kopeks, auto_promo_levels, total_spent_label = await _load_auto_promo_levels(
+        db,
+        user,
+        promo_group,
+    )
 
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
@@ -389,6 +451,9 @@ async def get_subscription_details(
         promo_group=MiniAppPromoGroup(id=promo_group.id, name=promo_group.name)
         if promo_group
         else None,
+        auto_promo_levels=auto_promo_levels,
+        total_spent_kopeks=total_spent_kopeks,
+        total_spent_label=total_spent_label,
         subscription_type="trial" if subscription.is_trial else "paid",
         autopay_enabled=bool(subscription.autopay_enabled),
         branding=settings.get_miniapp_branding(),

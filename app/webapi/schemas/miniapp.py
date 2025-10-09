@@ -41,6 +41,15 @@ class MiniAppPromoGroup(BaseModel):
     name: str
 
 
+class MiniAppAutoPromoLevel(BaseModel):
+    id: int
+    name: str
+    threshold_kopeks: int
+    threshold_label: Optional[str] = None
+    is_unlocked: bool = False
+    is_current: bool = False
+
+
 class MiniAppConnectedServer(BaseModel):
     uuid: str
     name: str
@@ -90,6 +99,9 @@ class MiniAppSubscriptionResponse(BaseModel):
     balance_currency: Optional[str] = None
     transactions: List[MiniAppTransaction] = Field(default_factory=list)
     promo_group: Optional[MiniAppPromoGroup] = None
+    auto_promo_levels: List[MiniAppAutoPromoLevel] = Field(default_factory=list)
+    total_spent_kopeks: int = 0
+    total_spent_label: Optional[str] = None
     subscription_type: str
     autopay_enabled: bool = False
     branding: Optional[MiniAppBranding] = None
