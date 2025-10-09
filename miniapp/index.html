@@ -1243,293 +1243,6 @@
             font-size: 18px;
         }
 
-        /* Referral Section */
-        .referral-card-summary {
-            margin-left: auto;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-        }
-
-        .referral-card-summary-item {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            align-items: flex-end;
-            padding: 8px 12px;
-            border-radius: var(--radius-sm);
-            background: rgba(var(--primary-rgb), 0.08);
-        }
-
-        .referral-card-summary-label {
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-secondary);
-        }
-
-        .referral-card-summary-value {
-            font-size: 15px;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-
-        .referral-content {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            margin-top: 16px;
-        }
-
-        .referral-link-section {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            padding: 16px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            background: rgba(var(--primary-rgb), 0.04);
-        }
-
-        .referral-link-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        }
-
-        .referral-link-label {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-        }
-
-        .referral-link-value {
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--primary);
-            word-break: break-word;
-        }
-
-        .referral-copy-btn {
-            border: none;
-            border-radius: var(--radius-sm);
-            padding: 8px 12px;
-            background: var(--primary);
-            color: var(--tg-theme-button-text-color);
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .referral-copy-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .referral-copy-btn:not(:disabled):active {
-            transform: scale(0.98);
-        }
-
-        .referral-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-            gap: 12px;
-        }
-
-        .referral-stat-card {
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            padding: 12px;
-            background: rgba(var(--primary-rgb), 0.03);
-        }
-
-        .referral-stat-label {
-            font-size: 12px;
-            text-transform: uppercase;
-            color: var(--text-secondary);
-            letter-spacing: 0.04em;
-            margin-bottom: 6px;
-            display: block;
-        }
-
-        .referral-stat-value {
-            font-size: 18px;
-            font-weight: 700;
-        }
-
-        .referral-terms {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .referral-section-title {
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .referral-terms-list {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin: 0;
-            padding: 0;
-        }
-
-        .referral-term-item {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 12px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            background: rgba(var(--primary-rgb), 0.02);
-        }
-
-        .referral-term-label {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
-        .referral-term-value {
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .referral-toggle-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            padding: 10px 14px;
-            background: transparent;
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-            cursor: pointer;
-            transition: background 0.2s ease, transform 0.2s ease;
-        }
-
-        .referral-toggle-btn:hover {
-            background: rgba(var(--primary-rgb), 0.06);
-        }
-
-        .referral-toggle-btn:active {
-            transform: scale(0.98);
-        }
-
-        .referral-list {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin: 0;
-            padding: 0;
-        }
-
-        .referral-item {
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            padding: 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            background: rgba(var(--primary-rgb), 0.02);
-        }
-
-        .referral-item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .referral-item-name {
-            font-size: 15px;
-            font-weight: 600;
-        }
-
-        .referral-item-username {
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin-top: 2px;
-        }
-
-        .referral-status {
-            font-size: 12px;
-            font-weight: 600;
-            padding: 4px 8px;
-            border-radius: 999px;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-
-        .referral-status.active {
-            background: rgba(16, 185, 129, 0.12);
-            color: #047857;
-        }
-
-        .referral-status.inactive {
-            background: rgba(148, 163, 184, 0.12);
-            color: #475569;
-        }
-
-        .referral-status.new {
-            background: rgba(59, 130, 246, 0.12);
-            color: #1d4ed8;
-        }
-
-        .referral-item-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 10px;
-        }
-
-        .referral-item-metric {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .referral-item-label {
-            font-size: 12px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .referral-item-value {
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .referral-item-dates {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .referral-item-date {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .referral-item-date strong {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-
         /* Transaction History */
         .history-list {
             list-style: none;
@@ -2342,11 +2055,6 @@
                 grid-template-columns: repeat(2, 1fr);
             }
 
-            .referral-card-summary {
-                margin-left: 0;
-                justify-content: space-between;
-            }
-
             .user-header {
                 padding: 16px;
             }
@@ -2449,10 +2157,6 @@
             background: rgba(148, 163, 184, 0.15);
             border-color: rgba(148, 163, 184, 0.25);
             color: rgba(226, 232, 240, 0.75);
-        }
-
-        :root[data-theme="dark"] .referral-card-summary-item {
-            background: rgba(var(--primary-rgb), 0.2);
         }
 
         :root[data-theme="dark"] .promo-discount-badge.muted .promo-discount-value {
@@ -2749,52 +2453,6 @@
                 </div>
             </div>
 
-            <!-- Referral Card (Expandable) -->
-            <div class="card expandable" id="referralCard">
-                <div class="card-header">
-                    <div class="card-title">
-                        <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z" />
-                        </svg>
-                        <span data-i18n="card.referral.title">Referral Program</span>
-                    </div>
-                    <div class="referral-card-summary hidden" id="referralCardSummary">
-                        <div class="referral-card-summary-item">
-                            <span class="referral-card-summary-label" data-i18n="referral.stats.invited">Invited</span>
-                            <span class="referral-card-summary-value" id="referralSummaryInvited">0</span>
-                        </div>
-                        <div class="referral-card-summary-item">
-                            <span class="referral-card-summary-label" data-i18n="referral.stats.total">Total earned</span>
-                            <span class="referral-card-summary-value" id="referralSummaryEarned">—</span>
-                        </div>
-                    </div>
-                    <svg class="expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </div>
-                <div class="card-content">
-                    <div class="referral-content hidden" id="referralContent">
-                        <div class="referral-link-section">
-                            <div class="referral-link-header">
-                                <span class="referral-link-label" data-i18n="referral.link.label">Your referral link</span>
-                                <button class="referral-copy-btn" type="button" id="referralCopyBtn" data-i18n="referral.link.copy">Copy link</button>
-                            </div>
-                            <div class="referral-link-value" id="referralLinkValue">—</div>
-                        </div>
-                        <div class="referral-stats" id="referralStats"></div>
-                        <div class="referral-terms">
-                            <div class="referral-section-title" data-i18n="referral.terms.title">Program terms</div>
-                            <ul class="referral-terms-list" id="referralTermsList"></ul>
-                        </div>
-                        <button class="referral-toggle-btn" type="button" id="referralToggleBtn" data-i18n="referral.toggle.open">My referrals</button>
-                        <ul class="referral-list hidden" id="referralList"></ul>
-                        <div class="empty-state hidden" id="referralListEmpty" data-i18n="referral.list.empty">You have no referrals yet</div>
-                    </div>
-                    <div class="empty-state hidden" id="referralEmpty" data-i18n="referral.empty">Referral information is unavailable</div>
-                </div>
-            </div>
-
             <!-- History Card (Expandable) -->
             <div class="card expandable" id="historyCard">
                 <div class="card-header">
@@ -2919,8 +2577,6 @@
         let hasAnimatedCards = false;
         let promoOfferTimers = [];
         let promoOfferTimerHandle = null;
-        let referralListExpanded = false;
-        let referralCopyResetHandle = null;
 
         if (typeof tg.expand === 'function') {
             tg.expand();
@@ -3095,7 +2751,6 @@
                 'promo_code.error.generic': 'Unable to activate the promo code.',
                 'promo_code.error.unauthorized': 'Authorization failed. Please reopen the mini app from Telegram.',
                 'promo_code.error.network': 'Network error. Please try again later.',
-                'card.referral.title': 'Referral Program',
                 'card.history.title': 'Transaction History',
                 'card.servers.title': 'Connected Servers',
                 'card.devices.title': 'Connected Devices',
@@ -3132,36 +2787,6 @@
                 'history.type.subscription_payment': 'Subscription payment',
                 'history.type.refund': 'Refund',
                 'history.type.referral_reward': 'Referral reward',
-                'referral.link.label': 'Your referral link',
-                'referral.link.copy': 'Copy link',
-                'referral.link.copied': 'Link copied',
-                'referral.empty': 'Referral information is unavailable',
-                'referral.stats.invited': 'Invited',
-                'referral.stats.active': 'Active referrals',
-                'referral.stats.paid': 'Paying referrals',
-                'referral.stats.total': 'Total earned',
-                'referral.stats.month': 'Earned this month',
-                'referral.stats.conversion': 'Conversion',
-                'referral.terms.title': 'Program terms',
-                'referral.terms.minimum_topup': 'Minimum top-up for rewards',
-                'referral.terms.first_topup': 'Referral first top-up bonus',
-                'referral.terms.inviter_bonus': 'Your first top-up bonus',
-                'referral.terms.referred_bonus': 'Bonus for invited friend',
-                'referral.terms.commission': 'Commission from each top-up',
-                'referral.toggle.open': 'My referrals',
-                'referral.toggle.close': 'Hide referrals',
-                'referral.list.empty': 'You have no referrals yet',
-                'referral.meta.earned': 'Earned',
-                'referral.meta.topups': 'Top-ups',
-                'referral.meta.joined': 'Joined',
-                'referral.meta.last_activity': 'Last activity',
-                'referral.copy.success': 'Referral link copied to clipboard.',
-                'referral.copy.failure': 'Unable to copy the referral link automatically. Please copy it manually: {value}',
-                'referral.copy.unavailable': 'Copying is unavailable. Please copy the link manually.',
-                'referral.status.active': 'Active',
-                'referral.status.inactive': 'Inactive',
-                'referral.status.paying': 'Paying',
-                'referral.referrals.unknown': 'Referral',
                 'servers.empty': 'No servers connected yet',
                 'devices.empty': 'No devices connected yet',
                 'promo_levels.total_spent': 'Total spent',
@@ -3267,7 +2892,6 @@
                 'promo_code.error.generic': 'Не удалось активировать промокод.',
                 'promo_code.error.unauthorized': 'Ошибка авторизации. Откройте мини-приложение из Telegram.',
                 'promo_code.error.network': 'Ошибка сети. Попробуйте ещё раз.',
-                'card.referral.title': 'Реферальная программа',
                 'card.history.title': 'История операций',
                 'card.servers.title': 'Подключённые серверы',
                 'card.devices.title': 'Подключенные устройства',
@@ -3304,36 +2928,6 @@
                 'history.type.subscription_payment': 'Оплата подписки',
                 'history.type.refund': 'Возврат',
                 'history.type.referral_reward': 'Реферальное вознаграждение',
-                'referral.link.label': 'Ваша реферальная ссылка',
-                'referral.link.copy': 'Скопировать ссылку',
-                'referral.link.copied': 'Ссылка скопирована',
-                'referral.empty': 'Данные по партнёрской программе недоступны',
-                'referral.stats.invited': 'Приглашено',
-                'referral.stats.active': 'Активных',
-                'referral.stats.paid': 'Платящих',
-                'referral.stats.total': 'Всего заработано',
-                'referral.stats.month': 'Заработано за месяц',
-                'referral.stats.conversion': 'Конверсия',
-                'referral.terms.title': 'Условия программы',
-                'referral.terms.minimum_topup': 'Минимальное пополнение для бонусов',
-                'referral.terms.first_topup': 'Бонус за первое пополнение друга',
-                'referral.terms.inviter_bonus': 'Ваш бонус за его первое пополнение',
-                'referral.terms.referred_bonus': 'Бонус приглашённому другу',
-                'referral.terms.commission': 'Комиссия с каждого пополнения',
-                'referral.toggle.open': 'Мои рефералы',
-                'referral.toggle.close': 'Скрыть список',
-                'referral.list.empty': 'У вас пока нет рефералов',
-                'referral.meta.earned': 'Заработано',
-                'referral.meta.topups': 'Пополнения',
-                'referral.meta.joined': 'Регистрация',
-                'referral.meta.last_activity': 'Последняя активность',
-                'referral.copy.success': 'Реферальная ссылка скопирована в буфер.',
-                'referral.copy.failure': 'Не удалось скопировать ссылку автоматически. Скопируйте вручную: {value}',
-                'referral.copy.unavailable': 'Копирование недоступно. Скопируйте ссылку вручную.',
-                'referral.status.active': 'Активен',
-                'referral.status.inactive': 'Неактивен',
-                'referral.status.paying': 'Оплачивает',
-                'referral.referrals.unknown': 'Реферал',
                 'servers.empty': 'Подключённых серверов пока нет',
                 'devices.empty': 'Подключённых устройств пока нет',
                 'promo_levels.total_spent': 'Всего потрачено',
@@ -3787,7 +3381,6 @@
             userData = payload;
             userData.subscriptionUrl = userData.subscription_url || null;
             userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
-            userData.referral = userData.referral || null;
 
             const normalizedPurchaseUrl = normalizeUrl(
                 userData.subscription_purchase_url
@@ -3998,7 +3591,6 @@
             renderPromoOffers();
             renderPromoSection();
             renderBalanceSection();
-            renderReferralSection();
             renderTransactionHistory();
             renderServersList();
             renderDevicesList();
@@ -5168,312 +4760,6 @@
             amountElement.textContent = formatCurrency(balanceRubles, currency);
         }
 
-        function updateReferralToggleState() {
-            const list = document.getElementById('referralList');
-            const empty = document.getElementById('referralListEmpty');
-            const toggle = document.getElementById('referralToggleBtn');
-            const hasItems = Boolean(list && list.childElementCount);
-            const shouldShowList = hasItems && referralListExpanded;
-            const shouldShowEmpty = !hasItems && referralListExpanded;
-
-            if (list) {
-                list.classList.toggle('hidden', !shouldShowList);
-            }
-            if (empty) {
-                empty.classList.toggle('hidden', !shouldShowEmpty);
-            }
-            if (toggle) {
-                const labelKey = referralListExpanded ? 'referral.toggle.close' : 'referral.toggle.open';
-                const label = t(labelKey);
-                toggle.textContent = label === labelKey ? (referralListExpanded ? 'Hide referrals' : 'My referrals') : label;
-                toggle.disabled = false;
-            }
-        }
-
-        function renderReferralSection() {
-            const card = document.getElementById('referralCard');
-            const content = document.getElementById('referralContent');
-            const emptyState = document.getElementById('referralEmpty');
-            const data = userData?.referral;
-            const summaryContainer = document.getElementById('referralCardSummary');
-            const summaryInvited = document.getElementById('referralSummaryInvited');
-            const summaryEarned = document.getElementById('referralSummaryEarned');
-
-            if (!card || !content || !emptyState) {
-                return;
-            }
-
-            referralListExpanded = false;
-            if (referralCopyResetHandle) {
-                clearTimeout(referralCopyResetHandle);
-                referralCopyResetHandle = null;
-            }
-
-            const copyBtn = document.getElementById('referralCopyBtn');
-            if (copyBtn) {
-                copyBtn.disabled = !navigator.clipboard;
-                copyBtn.dataset.copyValue = '';
-                copyBtn.textContent = t('referral.link.copy');
-            }
-
-            if (summaryContainer && summaryInvited && summaryEarned) {
-                summaryContainer.classList.add('hidden');
-                summaryInvited.textContent = '0';
-                summaryEarned.textContent = '—';
-            }
-
-            if (!data) {
-                content.classList.add('hidden');
-                emptyState.classList.remove('hidden');
-                emptyState.textContent = t('referral.empty');
-                updateReferralToggleState();
-                card.classList.remove('hidden');
-                return;
-            }
-
-            emptyState.classList.add('hidden');
-            content.classList.remove('hidden');
-            card.classList.remove('hidden');
-
-            const linkValue = document.getElementById('referralLinkValue');
-            const link = data.referral_link || '';
-            const code = data.referral_code || '';
-            let copyTarget = '';
-            if (link) {
-                copyTarget = link;
-            } else if (code) {
-                copyTarget = code;
-            }
-            if (linkValue) {
-                linkValue.textContent = copyTarget || '—';
-            }
-            if (copyBtn) {
-                copyBtn.disabled = !navigator.clipboard || !copyTarget;
-                copyBtn.dataset.copyValue = copyTarget;
-                copyBtn.textContent = t('referral.link.copy');
-            }
-
-            const statsData = data.stats || null;
-            const statsContainer = document.getElementById('referralStats');
-            if (statsContainer) {
-                statsContainer.innerHTML = '';
-                const stats = statsData || {};
-                const entries = [
-                    { key: 'invited_count', label: 'referral.stats.invited', formatter: value => String(value ?? 0) },
-                    { key: 'active_referrals_count', label: 'referral.stats.active', formatter: value => String(value ?? 0) },
-                    { key: 'paid_referrals_count', label: 'referral.stats.paid', formatter: value => String(value ?? 0) },
-                    {
-                        key: 'total_earned_label',
-                        label: 'referral.stats.total',
-                        formatter: (_, full) => full.total_earned_label
-                            || formatPriceFromKopeks(full.total_earned_kopeks || 0),
-                    },
-                    {
-                        key: 'month_earned_label',
-                        label: 'referral.stats.month',
-                        formatter: (_, full) => full.month_earned_label
-                            || formatPriceFromKopeks(full.month_earned_kopeks || 0),
-                    },
-                    {
-                        key: 'conversion_rate',
-                        label: 'referral.stats.conversion',
-                        formatter: value => `${Number.parseFloat(value ?? 0).toFixed(1)}%`,
-                    },
-                ];
-
-                entries.forEach(entry => {
-                    const { key, label, formatter } = entry;
-                    const rawValue = key === 'total_earned_label' || key === 'month_earned_label'
-                        ? stats
-                        : stats[key];
-                    const hasValue = key === 'total_earned_label' || key === 'month_earned_label'
-                        ? Boolean((stats[key] ?? stats[key.replace('_label', '_kopeks')]) !== undefined)
-                        : rawValue !== undefined && rawValue !== null;
-                    if (!hasValue) {
-                        if (key === 'conversion_rate') {
-                            // Show conversion even if zero
-                        } else if (key === 'total_earned_label' || key === 'month_earned_label') {
-                            // always display totals
-                        } else {
-                            return;
-                        }
-                    }
-                    const cardElement = document.createElement('div');
-                    cardElement.className = 'referral-stat-card';
-
-                    const labelElement = document.createElement('span');
-                    labelElement.className = 'referral-stat-label';
-                    labelElement.textContent = t(label);
-
-                    const valueElement = document.createElement('span');
-                    valueElement.className = 'referral-stat-value';
-                    const formatted = formatter(rawValue, stats);
-                    valueElement.textContent = formatted;
-
-                    cardElement.appendChild(labelElement);
-                    cardElement.appendChild(valueElement);
-                    statsContainer.appendChild(cardElement);
-                });
-            }
-
-            if (summaryContainer && summaryInvited && summaryEarned) {
-                if (statsData) {
-                    summaryInvited.textContent = String(statsData.invited_count ?? 0);
-                    const totalLabel = statsData.total_earned_label
-                        || formatPriceFromKopeks(statsData.total_earned_kopeks || 0);
-                    summaryEarned.textContent = totalLabel;
-                    summaryContainer.classList.remove('hidden');
-                } else {
-                    summaryContainer.classList.add('hidden');
-                }
-            }
-
-            const termsList = document.getElementById('referralTermsList');
-            if (termsList) {
-                termsList.innerHTML = '';
-                const terms = data.terms || {};
-                const entries = [
-                    { label: 'referral.terms.minimum_topup', value: terms.minimum_topup_label },
-                    { label: 'referral.terms.first_topup', value: terms.first_topup_bonus_label },
-                    { label: 'referral.terms.inviter_bonus', value: terms.inviter_bonus_label },
-                    { label: 'referral.terms.referred_bonus', value: terms.referred_user_reward_label },
-                    {
-                        label: 'referral.terms.commission',
-                        value: `${Number.parseFloat(terms.commission_percent ?? 0).toFixed(1).replace(/\.0$/, '')}%`,
-                    },
-                ];
-
-                entries
-                    .filter(entry => entry.value !== undefined && entry.value !== null)
-                    .forEach(entry => {
-                        const item = document.createElement('li');
-                        item.className = 'referral-term-item';
-
-                        const label = document.createElement('span');
-                        label.className = 'referral-term-label';
-                        const labelKey = t(entry.label);
-                        label.textContent = labelKey === entry.label ? entry.label : labelKey;
-
-                        const value = document.createElement('span');
-                        value.className = 'referral-term-value';
-                        value.textContent = entry.value;
-
-                        item.appendChild(label);
-                        item.appendChild(value);
-                        termsList.appendChild(item);
-                    });
-            }
-
-            const list = document.getElementById('referralList');
-            const emptyListState = document.getElementById('referralListEmpty');
-            if (list && emptyListState) {
-                list.innerHTML = '';
-                const referrals = Array.isArray(data?.referrals?.items) ? data.referrals.items : [];
-                referrals.forEach(referral => {
-                    const item = document.createElement('li');
-                    item.className = 'referral-item';
-
-                    const header = document.createElement('div');
-                    header.className = 'referral-item-header';
-
-                    const displayName = referral.full_name
-                        || referral.username
-                        || (referral.telegram_id ? `ID ${referral.telegram_id}` : t('referral.referrals.unknown'));
-                    const titleWrapper = document.createElement('div');
-                    titleWrapper.className = 'referral-item-name';
-                    titleWrapper.textContent = displayName;
-
-                    const statusBadge = document.createElement('span');
-                    const status = (referral.status || '').toLowerCase();
-                    let statusKey = `referral.status.${status}`;
-                    if (!status || !t(statusKey) || t(statusKey) === statusKey) {
-                        if (referral.has_made_first_topup) {
-                            statusKey = 'referral.status.paying';
-                        } else if (status === 'active') {
-                            statusKey = 'referral.status.active';
-                        } else {
-                            statusKey = 'referral.status.inactive';
-                        }
-                    }
-                    const resolved = t(statusKey);
-                    statusBadge.textContent = resolved === statusKey ? statusKey.split('.').pop() : resolved;
-                    statusBadge.className = 'referral-status';
-                    const statusText = statusBadge.textContent?.toLowerCase() || '';
-                    if (statusText.includes('inactive') || statusText.includes('неактив')) {
-                        statusBadge.classList.remove('active');
-                        statusBadge.classList.add('inactive');
-                    } else if (statusText.includes('active') || statusText.includes('актив')) {
-                        statusBadge.classList.add('active');
-                    } else if (statusKey === 'referral.status.paying') {
-                        statusBadge.classList.add('new');
-                    }
-
-                    header.appendChild(titleWrapper);
-                    header.appendChild(statusBadge);
-                    item.appendChild(header);
-
-                    if (referral.username && referral.username !== displayName) {
-                        const username = document.createElement('div');
-                        username.className = 'referral-item-username';
-                        username.textContent = `@${referral.username.replace(/^@/, '')}`;
-                        item.appendChild(username);
-                    }
-
-                    const metrics = document.createElement('div');
-                    metrics.className = 'referral-item-grid';
-
-                    const earnedMetric = document.createElement('div');
-                    earnedMetric.className = 'referral-item-metric';
-                    const earnedLabel = document.createElement('span');
-                    earnedLabel.className = 'referral-item-label';
-                    earnedLabel.textContent = t('referral.meta.earned');
-                    const earnedValue = document.createElement('span');
-                    earnedValue.className = 'referral-item-value';
-                    earnedValue.textContent = referral.total_earned_label
-                        || formatPriceFromKopeks(referral.total_earned_kopeks || 0);
-                    earnedMetric.appendChild(earnedLabel);
-                    earnedMetric.appendChild(earnedValue);
-
-                    const topupsMetric = document.createElement('div');
-                    topupsMetric.className = 'referral-item-metric';
-                    const topupsLabel = document.createElement('span');
-                    topupsLabel.className = 'referral-item-label';
-                    topupsLabel.textContent = t('referral.meta.topups');
-                    const topupsValue = document.createElement('span');
-                    topupsValue.className = 'referral-item-value';
-                    topupsValue.textContent = String(referral.topups_count ?? 0);
-                    topupsMetric.appendChild(topupsLabel);
-                    topupsMetric.appendChild(topupsValue);
-
-                    metrics.appendChild(earnedMetric);
-                    metrics.appendChild(topupsMetric);
-
-                    const dates = document.createElement('div');
-                    dates.className = 'referral-item-dates';
-                    const joined = document.createElement('span');
-                    joined.className = 'referral-item-date';
-                    const joinedLabel = t('referral.meta.joined');
-                    joined.innerHTML = `<strong>${joinedLabel === 'referral.meta.joined' ? 'Joined' : joinedLabel}:</strong> ${escapeHtml(formatDate(referral.created_at))}`;
-
-                    const lastActivity = document.createElement('span');
-                    lastActivity.className = 'referral-item-date';
-                    const lastActivityLabel = t('referral.meta.last_activity');
-                    const lastActivityValue = formatDate(referral.last_activity) || '—';
-                    lastActivity.innerHTML = `<strong>${lastActivityLabel === 'referral.meta.last_activity' ? 'Last activity' : lastActivityLabel}:</strong> ${escapeHtml(lastActivityValue)}`;
-
-                    dates.appendChild(joined);
-                    dates.appendChild(lastActivity);
-
-                    item.appendChild(metrics);
-                    item.appendChild(dates);
-
-                    list.appendChild(item);
-                });
-
-                updateReferralToggleState();
-            }
-        }
-
         function renderTransactionHistory() {
             const list = document.getElementById('historyList');
             const emptyState = document.getElementById('historyEmpty');
@@ -6468,67 +5754,6 @@
             } catch (error) {
                 console.warn('Clipboard copy failed:', error);
                 showPopup(t('notifications.copy.failure'), t('notifications.copy.title.failure'));
-            }
-        });
-
-        document.getElementById('referralToggleBtn')?.addEventListener('click', () => {
-            referralListExpanded = !referralListExpanded;
-            updateReferralToggleState();
-        });
-
-        document.getElementById('referralCopyBtn')?.addEventListener('click', async () => {
-            const button = document.getElementById('referralCopyBtn');
-            const value = button?.dataset.copyValue || '';
-
-            if (!button || !value) {
-                showPopup(
-                    t('referral.copy.unavailable') || 'Copying is unavailable. Please copy the link manually.',
-                    t('notifications.copy.title.failure') || 'Copy failed'
-                );
-                return;
-            }
-
-            try {
-                if (navigator.clipboard && window.isSecureContext) {
-                    await navigator.clipboard.writeText(value);
-                } else {
-                    const textArea = document.createElement('textarea');
-                    textArea.value = value;
-                    textArea.style.position = 'fixed';
-                    textArea.style.left = '-999999px';
-                    document.body.appendChild(textArea);
-                    textArea.focus();
-                    textArea.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(textArea);
-                }
-
-                showPopup(
-                    t('referral.copy.success') || 'Referral link copied to clipboard.',
-                    t('notifications.copy.title.success') || 'Copied'
-                );
-
-                const copiedLabel = t('referral.link.copied');
-                button.textContent = copiedLabel === 'referral.link.copied' ? 'Link copied' : copiedLabel;
-                clearTimeout(referralCopyResetHandle);
-                referralCopyResetHandle = setTimeout(() => {
-                    const defaultLabel = t('referral.link.copy');
-                    button.textContent = defaultLabel === 'referral.link.copy' ? 'Copy link' : defaultLabel;
-                }, 2000);
-            } catch (error) {
-                console.warn('Clipboard copy failed:', error);
-                let failureMessage = t('referral.copy.failure');
-                if (!failureMessage || failureMessage === 'referral.copy.failure') {
-                    const fallback = t('notifications.copy.failure') || 'Unable to copy automatically.';
-                    failureMessage = `${fallback} ${value}`;
-                } else {
-                    failureMessage = failureMessage.replace('{value}', value);
-                }
-
-                showPopup(
-                    failureMessage,
-                    t('notifications.copy.title.failure') || 'Copy failed'
-                );
             }
         });
 

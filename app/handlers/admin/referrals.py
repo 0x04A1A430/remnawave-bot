@@ -68,7 +68,7 @@ async def show_referral_statistics(
 - Минимальное пополнение: {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)}
 - Бонус за первое пополнение: {settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}
 - Бонус пригласившему: {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)}
-- Бонус новому пользователю: {settings.format_price(settings.get_referred_user_reward_kopeks())}
+- Бонус новому пользователю: {settings.format_price(settings.REFERRED_USER_REWARD)}
 - Комиссия с покупок: {settings.REFERRAL_COMMISSION_PERCENT}%
 - Уведомления: {'✅ Включены' if settings.REFERRAL_NOTIFICATIONS_ENABLED else '❌ Отключены'}
 
@@ -105,7 +105,7 @@ async def show_referral_statistics(
 - Минимальное пополнение: {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)}
 - Бонус за первое пополнение: {settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}
 - Бонус пригласившему: {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)}
-- Бонус новому пользователю: {settings.format_price(settings.get_referred_user_reward_kopeks())}
+- Бонус новому пользователю: {settings.format_price(settings.REFERRED_USER_REWARD)}
 - Комиссия с покупок: {settings.REFERRAL_COMMISSION_PERCENT}%
 
 <i>🕐 Время: {current_time}</i>
@@ -190,7 +190,7 @@ async def show_referral_settings(
 • Минимальная сумма пополнения для участия: {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)}
 • Бонус за первое пополнение реферала: {settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}
 • Бонус пригласившему за первое пополнение: {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)}
-• Бонус новому пользователю при регистрации: {settings.format_price(settings.get_referred_user_reward_kopeks())}
+• Бонус новому пользователю при регистрации: {settings.format_price(settings.REFERRED_USER_REWARD)}
 
 <b>Комиссионные:</b>
 • Процент с каждой покупки реферала: {settings.REFERRAL_COMMISSION_PERCENT}%

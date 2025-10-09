@@ -279,7 +279,7 @@ def _get_group_status(group_key: str) -> Tuple[str, str]:
             settings.REFERRAL_COMMISSION_PERCENT
             or settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS
             or settings.REFERRAL_INVITER_BONUS_KOPEKS
-            or settings.get_referred_user_reward_kopeks()
+            or settings.REFERRED_USER_REWARD
         )
         return ("🟢", "Программа активна") if active else ("⚪", "Бонусы не заданы")
 
