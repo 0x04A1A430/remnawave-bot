@@ -18,6 +18,7 @@ from app.database.crud.discount_offer import (
     mark_offer_claimed,
 )
 from app.database.crud.promo_group import get_auto_assign_promo_groups
+from app.database.crud.rules import get_rules_by_language
 from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.crud.server_squad import get_server_squad_by_uuid
 from app.database.crud.transaction import get_user_total_spent_kopeks
@@ -30,6 +31,9 @@ from app.database.models import (
     Transaction,
     User,
 )
+from app.services.faq_service import FaqService
+from app.services.privacy_policy_service import PrivacyPolicyService
+from app.services.public_offer_service import PublicOfferService
 from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
@@ -47,10 +51,14 @@ from ..schemas.miniapp import (
     MiniAppAutoPromoGroupLevel,
     MiniAppConnectedServer,
     MiniAppDevice,
+    MiniAppFaq,
+    MiniAppFaqItem,
+    MiniAppLegalDocuments,
     MiniAppPromoGroup,
     MiniAppPromoOffer,
     MiniAppPromoOfferClaimRequest,
     MiniAppPromoOfferClaimResponse,
+    MiniAppRichTextDocument,
     MiniAppSubscriptionRequest,
     MiniAppSubscriptionResponse,
     MiniAppSubscriptionUser,
@@ -848,6 +856,123 @@ async def get_subscription_details(
         user=user,
     )
 
+    content_language_preference = user.language or settings.DEFAULT_LANGUAGE or "ru"
+
+    def _normalize_language_code(language: Optional[str]) -> str:
+        base_language = language or settings.DEFAULT_LANGUAGE or "ru"
+        return base_language.split("-")[0].lower()
+
+    faq_payload: Optional[MiniAppFaq] = None
+    requested_faq_language = FaqService.normalize_language(content_language_preference)
+    faq_pages = await FaqService.get_pages(
+        db,
+        requested_faq_language,
+        include_inactive=False,
+        fallback=True,
+    )
+
+    if faq_pages:
+        faq_setting = await FaqService.get_setting(
+            db,
+            requested_faq_language,
+            fallback=True,
+        )
+        is_enabled = bool(faq_setting.is_enabled) if faq_setting else True
+
+        if is_enabled:
+            ordered_pages = sorted(
+                faq_pages,
+                key=lambda page: (
+                    (page.display_order or 0),
+                    page.id,
+                ),
+            )
+            faq_items: List[MiniAppFaqItem] = []
+            for page in ordered_pages:
+                raw_content = (page.content or "").strip()
+                if not raw_content:
+                    continue
+                if not re.sub(r"<[^>]+>", "", raw_content).strip():
+                    continue
+                faq_items.append(
+                    MiniAppFaqItem(
+                        id=page.id,
+                        title=page.title or None,
+                        content=page.content or "",
+                        display_order=getattr(page, "display_order", None),
+                    )
+            )
+
+            if faq_items:
+                resolved_language = (
+                    faq_setting.language
+                    if faq_setting and faq_setting.language
+                    else ordered_pages[0].language
+                )
+                faq_payload = MiniAppFaq(
+                    requested_language=requested_faq_language,
+                    language=resolved_language or requested_faq_language,
+                    is_enabled=is_enabled,
+                    total=len(faq_items),
+                    items=faq_items,
+                )
+
+    legal_documents_payload: Optional[MiniAppLegalDocuments] = None
+
+    requested_offer_language = PublicOfferService.normalize_language(content_language_preference)
+    public_offer = await PublicOfferService.get_active_offer(
+        db,
+        requested_offer_language,
+    )
+    if public_offer and (public_offer.content or "").strip():
+        legal_documents_payload = legal_documents_payload or MiniAppLegalDocuments()
+        legal_documents_payload.public_offer = MiniAppRichTextDocument(
+            requested_language=requested_offer_language,
+            language=public_offer.language,
+            title=None,
+            is_enabled=bool(public_offer.is_enabled),
+            content=public_offer.content or "",
+            created_at=public_offer.created_at,
+            updated_at=public_offer.updated_at,
+        )
+
+    requested_policy_language = PrivacyPolicyService.normalize_language(
+        content_language_preference
+    )
+    privacy_policy = await PrivacyPolicyService.get_active_policy(
+        db,
+        requested_policy_language,
+    )
+    if privacy_policy and (privacy_policy.content or "").strip():
+        legal_documents_payload = legal_documents_payload or MiniAppLegalDocuments()
+        legal_documents_payload.privacy_policy = MiniAppRichTextDocument(
+            requested_language=requested_policy_language,
+            language=privacy_policy.language,
+            title=None,
+            is_enabled=bool(privacy_policy.is_enabled),
+            content=privacy_policy.content or "",
+            created_at=privacy_policy.created_at,
+            updated_at=privacy_policy.updated_at,
+        )
+
+    requested_rules_language = _normalize_language_code(content_language_preference)
+    default_rules_language = _normalize_language_code(settings.DEFAULT_LANGUAGE)
+    service_rules = await get_rules_by_language(db, requested_rules_language)
+    if not service_rules and requested_rules_language != default_rules_language:
+        service_rules = await get_rules_by_language(db, default_rules_language)
+
+    if service_rules and (service_rules.content or "").strip():
+        legal_documents_payload = legal_documents_payload or MiniAppLegalDocuments()
+        legal_documents_payload.service_rules = MiniAppRichTextDocument(
+            requested_language=requested_rules_language,
+            language=service_rules.language,
+            title=getattr(service_rules, "title", None),
+            is_enabled=bool(getattr(service_rules, "is_active", True)),
+            content=service_rules.content or "",
+            created_at=getattr(service_rules, "created_at", None),
+            updated_at=getattr(service_rules, "updated_at", None),
+        )
+
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
         username=user.username,
@@ -917,6 +1042,8 @@ async def get_subscription_details(
         subscription_type="trial" if subscription.is_trial else "paid",
         autopay_enabled=bool(subscription.autopay_enabled),
         branding=settings.get_miniapp_branding(),
+        faq=faq_payload,
+        legal_documents=legal_documents_payload,
     )
 
 
