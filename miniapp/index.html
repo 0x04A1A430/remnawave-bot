@@ -9751,56 +9751,28 @@
                 return false;
             }
 
+            const typeRaw = String(userData.subscription_type || '').toLowerCase();
+            if (typeRaw === 'trial') {
+                return false;
+            }
+            if (typeRaw === 'paid') {
+                return true;
+            }
+
+            if (userData.user.has_active_subscription === false) {
+                return false;
+            }
+
             const statusRaw = String(
                 userData.user.subscription_actual_status
                 || userData.user.subscription_status
-                || userData.subscription_status
                 || ''
             ).toLowerCase();
-            const inactiveStatuses = new Set([
-                'trial',
-                'expired',
-                'disabled',
-                'inactive',
-                'stopped',
-                'ended',
-                'cancelled',
-                'canceled',
-                'pending',
-                'pending_payment',
-                'awaiting_payment',
-                'none',
-            ]);
-            if (statusRaw && inactiveStatuses.has(statusRaw)) {
+            if (['trial', 'expired', 'disabled'].includes(statusRaw)) {
                 return false;
             }
 
-            const hasActiveFlag = userData.user.has_active_subscription;
-            if (hasActiveFlag === true) {
-                return true;
-            }
-            if (hasActiveFlag === false) {
-                return false;
-            }
-
-            const activeStatuses = new Set(['active', 'running', 'enabled']);
-            if (statusRaw && activeStatuses.has(statusRaw)) {
-                return true;
-            }
-
-            const typeRaw = String(
-                userData.subscription_type
-                || userData.subscriptionType
-                || ''
-            ).toLowerCase();
-            if (['trial', 'free', 'none'].includes(typeRaw)) {
-                return false;
-            }
-            if (['paid', 'active'].includes(typeRaw)) {
-                return true;
-            }
-
-            return false;
+            return true;
         }
 
         function normalizeServerEntry(entry) {
