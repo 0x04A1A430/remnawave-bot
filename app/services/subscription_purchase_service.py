@@ -814,71 +814,60 @@ class MiniAppSubscriptionPurchaseService:
 
         discount_lines: List[str] = []
 
-        def build_discount_line(key: str, default: str, amount: int, percent: int) -> Optional[str]:
-            if not amount:
-                return None
-            return texts.t(key, default).format(
-                amount=texts.format_price(amount),
-                percent=percent,
+        if details.get("base_discount_total"):
+            discount_lines.append(
+                texts.t(
+                    "MINIAPP_PURCHASE_DISCOUNT_PERIOD",
+                    "Period discount: -{amount} ({percent}%)",
+                ).format(
+                    amount=texts.format_price(details["base_discount_total"]),
+                    percent=details.get("base_discount_percent", 0),
+                )
             )
 
-        def build_discount_note(amount: int, percent: int) -> Optional[str]:
-            if not amount:
-                return None
-            return texts.t(
-                "MINIAPP_PURCHASE_BREAKDOWN_DISCOUNT_NOTE",
-                "Discount: -{amount} ({percent}%)",
-            ).format(
-                amount=texts.format_price(amount),
-                percent=percent,
+        if details.get("traffic_discount_total"):
+            discount_lines.append(
+                texts.t(
+                    "MINIAPP_PURCHASE_DISCOUNT_TRAFFIC",
+                    "Traffic discount: -{amount} ({percent}%)",
+                ).format(
+                    amount=texts.format_price(details["traffic_discount_total"]),
+                    percent=details.get("traffic_discount_percent", 0),
+                )
             )
 
-        base_discount_line = build_discount_line(
-            "MINIAPP_PURCHASE_DISCOUNT_PERIOD",
-            "Period discount: -{amount} ({percent}%)",
-            details.get("base_discount_total", 0),
-            details.get("base_discount_percent", 0),
-        )
-        if base_discount_line:
-            discount_lines.append(base_discount_line)
+        if details.get("servers_discount_total"):
+            discount_lines.append(
+                texts.t(
+                    "MINIAPP_PURCHASE_DISCOUNT_SERVERS",
+                    "Servers discount: -{amount} ({percent}%)",
+                ).format(
+                    amount=texts.format_price(details["servers_discount_total"]),
+                    percent=details.get("servers_discount_percent", 0),
+                )
+            )
 
-        traffic_discount_line = build_discount_line(
-            "MINIAPP_PURCHASE_DISCOUNT_TRAFFIC",
-            "Traffic discount: -{amount} ({percent}%)",
-            details.get("traffic_discount_total", 0),
-            details.get("traffic_discount_percent", 0),
-        )
-        if traffic_discount_line:
-            discount_lines.append(traffic_discount_line)
+        if details.get("devices_discount_total"):
+            discount_lines.append(
+                texts.t(
+                    "MINIAPP_PURCHASE_DISCOUNT_DEVICES",
+                    "Devices discount: -{amount} ({percent}%)",
+                ).format(
+                    amount=texts.format_price(details["devices_discount_total"]),
+                    percent=details.get("devices_discount_percent", 0),
+                )
+            )
 
-        servers_discount_line = build_discount_line(
-            "MINIAPP_PURCHASE_DISCOUNT_SERVERS",
-            "Servers discount: -{amount} ({percent}%)",
-            details.get("servers_discount_total", 0),
-            details.get("servers_discount_percent", 0),
-        )
-        if servers_discount_line:
-            discount_lines.append(servers_discount_line)
-
-        devices_discount_line = build_discount_line(
-            "MINIAPP_PURCHASE_DISCOUNT_DEVICES",
-            "Devices discount: -{amount} ({percent}%)",
-            details.get("devices_discount_total", 0),
-            details.get("devices_discount_percent", 0),
-        )
-        if devices_discount_line:
-            discount_lines.append(devices_discount_line)
-
-        promo_discount_line = None
         if pricing.promo_discount_value:
-            promo_discount_line = texts.t(
-                "MINIAPP_PURCHASE_DISCOUNT_PROMO",
-                "Promo offer: -{amount} ({percent}%)",
-            ).format(
-                amount=texts.format_price(pricing.promo_discount_value),
-                percent=pricing.promo_discount_percent,
+            discount_lines.append(
+                texts.t(
+                    "MINIAPP_PURCHASE_DISCOUNT_PROMO",
+                    "Promo offer: -{amount} ({percent}%)",
+                ).format(
+                    amount=texts.format_price(pricing.promo_discount_value),
+                    percent=pricing.promo_discount_percent,
+                )
             )
-            discount_lines.append(promo_discount_line)
 
         breakdown = [
             {
@@ -890,77 +879,49 @@ class MiniAppSubscriptionPurchaseService:
             }
         ]
 
-        base_discount_note = build_discount_note(
-            details.get("base_discount_total", 0),
-            details.get("base_discount_percent", 0),
-        )
-        if base_discount_note:
-            breakdown[0]["discount_label"] = base_discount_note
-            breakdown[0]["discountLabel"] = base_discount_note
-
         if details.get("total_traffic_price"):
-            traffic_item = {
-                "label": texts.t(
-                    "MINIAPP_PURCHASE_BREAKDOWN_TRAFFIC",
-                    "Traffic",
-                ),
-                "value": texts.format_price(details["total_traffic_price"]),
-            }
-            traffic_discount_note = build_discount_note(
-                details.get("traffic_discount_total", 0),
-                details.get("traffic_discount_percent", 0),
+            breakdown.append(
+                {
+                    "label": texts.t(
+                        "MINIAPP_PURCHASE_BREAKDOWN_TRAFFIC",
+                        "Traffic",
+                    ),
+                    "value": texts.format_price(details["total_traffic_price"]),
+                }
             )
-            if traffic_discount_note:
-                traffic_item["discount_label"] = traffic_discount_note
-                traffic_item["discountLabel"] = traffic_discount_note
-            breakdown.append(traffic_item)
 
         if details.get("total_servers_price"):
-            servers_item = {
-                "label": texts.t(
-                    "MINIAPP_PURCHASE_BREAKDOWN_SERVERS",
-                    "Servers",
-                ),
-                "value": texts.format_price(details["total_servers_price"]),
-            }
-            servers_discount_note = build_discount_note(
-                details.get("servers_discount_total", 0),
-                details.get("servers_discount_percent", 0),
+            breakdown.append(
+                {
+                    "label": texts.t(
+                        "MINIAPP_PURCHASE_BREAKDOWN_SERVERS",
+                        "Servers",
+                    ),
+                    "value": texts.format_price(details["total_servers_price"]),
+                }
             )
-            if servers_discount_note:
-                servers_item["discount_label"] = servers_discount_note
-                servers_item["discountLabel"] = servers_discount_note
-            breakdown.append(servers_item)
 
         if details.get("total_devices_price"):
-            devices_item = {
-                "label": texts.t(
-                    "MINIAPP_PURCHASE_BREAKDOWN_DEVICES",
-                    "Devices",
-                ),
-                "value": texts.format_price(details["total_devices_price"]),
-            }
-            devices_discount_note = build_discount_note(
-                details.get("devices_discount_total", 0),
-                details.get("devices_discount_percent", 0),
+            breakdown.append(
+                {
+                    "label": texts.t(
+                        "MINIAPP_PURCHASE_BREAKDOWN_DEVICES",
+                        "Devices",
+                    ),
+                    "value": texts.format_price(details["total_devices_price"]),
+                }
             )
-            if devices_discount_note:
-                devices_item["discount_label"] = devices_discount_note
-                devices_item["discountLabel"] = devices_discount_note
-            breakdown.append(devices_item)
 
         if pricing.promo_discount_value:
-            promo_item = {
-                "label": texts.t(
-                    "MINIAPP_PURCHASE_BREAKDOWN_PROMO",
-                    "Promo discount",
-                ),
-                "value": f"- {texts.format_price(pricing.promo_discount_value)}",
-            }
-            if promo_discount_line:
-                promo_item["discount_label"] = promo_discount_line
-                promo_item["discountLabel"] = promo_discount_line
-            breakdown.append(promo_item)
+            breakdown.append(
+                {
+                    "label": texts.t(
+                        "MINIAPP_PURCHASE_BREAKDOWN_PROMO",
+                        "Promo discount",
+                    ),
+                    "value": f"- {texts.format_price(pricing.promo_discount_value)}",
+                }
+            )
 
         missing = max(0, pricing.final_total - context.balance_kopeks)
         status_message = ""
@@ -987,18 +948,6 @@ class MiniAppSubscriptionPurchaseService:
             else None,
             "discount_percent": overall_discount_percent,
             "discountPercent": overall_discount_percent,
-            "discount_label": texts.t(
-                "MINIAPP_PURCHASE_SUMMARY_DISCOUNT",
-                "You save {amount}",
-            ).format(amount=texts.format_price(total_discount))
-            if total_discount
-            else None,
-            "discountLabel": texts.t(
-                "MINIAPP_PURCHASE_SUMMARY_DISCOUNT",
-                "You save {amount}",
-            ).format(amount=texts.format_price(total_discount))
-            if total_discount
-            else None,
             "discount_lines": discount_lines,
             "discountLines": discount_lines,
             "per_month_price_kopeks": per_month_price,
