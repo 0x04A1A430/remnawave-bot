@@ -381,18 +381,9 @@ class MiniAppPaymentStatusResponse(BaseModel):
     results: List[MiniAppPaymentStatusResult] = Field(default_factory=list)
 
 
-class MiniAppEmptyState(BaseModel):
-    code: str
-    title: Optional[str] = None
-    message: Optional[str] = None
-    purchase_url: Optional[str] = Field(default=None, alias="purchaseUrl")
-    trial_available: bool = Field(default=False, alias="trialAvailable")
-
-
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
-    state: str = "subscription"
-    subscription_id: Optional[int] = None
+    subscription_id: int
     remnawave_short_uuid: Optional[str] = None
     user: MiniAppSubscriptionUser
     subscription_url: Optional[str] = None
@@ -424,7 +415,6 @@ class MiniAppSubscriptionResponse(BaseModel):
     faq: Optional[MiniAppFaq] = None
     legal_documents: Optional[MiniAppLegalDocuments] = None
     referral: Optional[MiniAppReferralInfo] = None
-    empty_state: Optional[MiniAppEmptyState] = Field(default=None, alias="emptyState")
 
 
 class MiniAppSubscriptionServerOption(BaseModel):
