@@ -705,6 +705,247 @@
             color: #fff;
         }
 
+        .subscription-purchase-card {
+            position: relative;
+            margin-top: 16px;
+        }
+
+        .subscription-purchase-card.as-modal {
+            margin: 0;
+            border: none;
+            box-shadow: none;
+            background: transparent;
+        }
+
+        .subscription-purchase-card.as-modal .card-content {
+            padding: 0;
+        }
+
+        .subscription-purchase-status {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .subscription-purchase-content {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            padding-top: 12px;
+        }
+
+        .subscription-purchase-loading {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 8px 0 12px;
+        }
+
+        .subscription-purchase-error {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px 0;
+            color: var(--danger);
+            font-size: 14px;
+        }
+
+        .subscription-purchase-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .subscription-purchase-section:last-child {
+            border-bottom: none;
+        }
+
+        .subscription-purchase-section-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .subscription-purchase-section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .subscription-purchase-section-description {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.45;
+        }
+
+        .subscription-purchase-section-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .subscription-purchase-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .subscription-purchase-option-description {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .subscription-purchase-option-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: baseline;
+        }
+
+        .subscription-purchase-option-price {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .subscription-purchase-option-price-current {
+            color: var(--primary);
+        }
+
+        .subscription-purchase-option-price-original {
+            text-decoration: line-through;
+            color: var(--text-secondary);
+            opacity: 0.8;
+        }
+
+        .subscription-purchase-section-hint {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .subscription-purchase-empty {
+            font-size: 13px;
+            color: var(--text-secondary);
+            padding: 6px 0;
+        }
+
+        .subscription-purchase-summary {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 16px;
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(var(--primary-rgb), 0.15);
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.08), rgba(var(--primary-rgb), 0.02));
+        }
+
+        .subscription-purchase-summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 12px;
+        }
+
+        .subscription-purchase-summary-prices {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+
+        .subscription-purchase-summary-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .subscription-purchase-price-current {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+
+        .subscription-purchase-price-original {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-decoration: line-through;
+        }
+
+        .subscription-purchase-price-discount {
+            font-size: 13px;
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .subscription-purchase-breakdown {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .subscription-purchase-breakdown-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .subscription-purchase-breakdown-item strong {
+            color: var(--text-primary);
+        }
+
+        .subscription-purchase-balance {
+            padding: 12px;
+            border-radius: var(--radius);
+            background: rgba(var(--danger-rgb), 0.08);
+            color: var(--danger);
+            font-size: 13px;
+        }
+
+        .subscription-purchase-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .subscription-purchase-card .btn-secondary {
+            justify-content: center;
+        }
+
+        .subscription-purchase-card .subscription-settings-toggle-label {
+            gap: 6px;
+        }
+
+        .subscription-purchase-card .subscription-settings-toggle-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .subscription-purchase-card .subscription-settings-toggle-meta span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        :root[data-theme="dark"] .subscription-purchase-summary {
+            border-color: rgba(var(--primary-rgb), 0.22);
+            background: rgba(37, 99, 235, 0.08);
+        }
+
+        :root[data-theme="dark"] .subscription-purchase-balance {
+            background: rgba(var(--danger-rgb), 0.16);
+        }
+
         .promo-offers {
             display: flex;
             flex-direction: column;
@@ -3408,6 +3649,99 @@
                 </div>
             </div>
 
+            <div id="subscriptionPurchaseCardWrapper">
+                <div class="card subscription-purchase-card hidden" id="subscriptionPurchaseCard">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h11l2-7H5.4M7 13L5.4 5M7 13l-1.2 6M16 17a2 2 0 11-4 0m6 0a2 2 0 11-4 0"/>
+                            </svg>
+                            <span data-i18n="subscription_purchase.title">Оформление подписки</span>
+                        </div>
+                        <div class="subscription-purchase-status" id="subscriptionPurchaseStatus"></div>
+                    </div>
+                    <div class="card-content">
+                        <div class="subscription-purchase-loading hidden" id="subscriptionPurchaseLoading">
+                            <div class="subscription-settings-loading-line"></div>
+                            <div class="subscription-settings-loading-line" style="width: 70%;"></div>
+                            <div class="subscription-settings-loading-line" style="width: 55%;"></div>
+                        </div>
+                        <div class="subscription-purchase-error hidden" id="subscriptionPurchaseError">
+                            <div id="subscriptionPurchaseErrorText" data-i18n="subscription_purchase.error.default">Не удалось загрузить параметры подписки.</div>
+                            <button class="subscription-settings-retry" id="subscriptionPurchaseRetry" type="button" data-i18n="subscription_purchase.action.retry">Повторить</button>
+                        </div>
+                        <div class="subscription-purchase-content hidden" id="subscriptionPurchaseContent">
+                            <div class="subscription-purchase-section" id="subscriptionPurchasePeriodSection">
+                                <div class="subscription-purchase-section-header">
+                                    <div>
+                                        <div class="subscription-purchase-section-title" data-i18n="subscription_purchase.period.title">Период подписки</div>
+                                        <div class="subscription-purchase-section-description" data-i18n="subscription_purchase.period.subtitle">Выберите длительность доступа.</div>
+                                    </div>
+                                    <div class="subscription-purchase-section-meta" id="subscriptionPurchasePeriodMeta"></div>
+                                </div>
+                                <div class="subscription-purchase-options" id="subscriptionPurchasePeriodOptions"></div>
+                            </div>
+                            <div class="subscription-purchase-section" id="subscriptionPurchaseTrafficSection">
+                                <div class="subscription-purchase-section-header">
+                                    <div>
+                                        <div class="subscription-purchase-section-title" data-i18n="subscription_purchase.traffic.title">Трафик</div>
+                                        <div class="subscription-purchase-section-description" data-i18n="subscription_purchase.traffic.subtitle">Месячный лимит трафика.</div>
+                                    </div>
+                                    <div class="subscription-purchase-section-meta" id="subscriptionPurchaseTrafficMeta"></div>
+                                </div>
+                                <div class="subscription-purchase-options" id="subscriptionPurchaseTrafficOptions"></div>
+                                <div class="subscription-purchase-section-hint hidden" id="subscriptionPurchaseTrafficHint"></div>
+                                <div class="subscription-purchase-empty hidden" id="subscriptionPurchaseTrafficEmpty" data-i18n="subscription_purchase.traffic.empty">Нет доступных опций</div>
+                            </div>
+                            <div class="subscription-purchase-section" id="subscriptionPurchaseServersSection">
+                                <div class="subscription-purchase-section-header">
+                                    <div>
+                                        <div class="subscription-purchase-section-title" data-i18n="subscription_purchase.servers.title">Серверы</div>
+                                        <div class="subscription-purchase-section-description" data-i18n="subscription_purchase.servers.subtitle">Выберите регионы подключения.</div>
+                                    </div>
+                                    <div class="subscription-purchase-section-meta" id="subscriptionPurchaseServersMeta"></div>
+                                </div>
+                                <div class="subscription-purchase-options" id="subscriptionPurchaseServersOptions"></div>
+                                <div class="subscription-purchase-section-hint hidden" id="subscriptionPurchaseServersHint"></div>
+                                <div class="subscription-purchase-empty hidden" id="subscriptionPurchaseServersEmpty" data-i18n="subscription_purchase.servers.empty">Нет доступных серверов</div>
+                            </div>
+                            <div class="subscription-purchase-section" id="subscriptionPurchaseDevicesSection">
+                                <div class="subscription-purchase-section-header">
+                                    <div>
+                                        <div class="subscription-purchase-section-title" data-i18n="subscription_purchase.devices.title">Устройства</div>
+                                        <div class="subscription-purchase-section-description" data-i18n="subscription_purchase.devices.subtitle">Количество подключений одновременно.</div>
+                                    </div>
+                                    <div class="subscription-purchase-section-meta" id="subscriptionPurchaseDevicesMeta"></div>
+                                </div>
+                                <div class="subscription-settings-stepper">
+                                    <button type="button" id="subscriptionPurchaseDevicesDecrease">−</button>
+                                    <div class="subscription-settings-stepper-value" id="subscriptionPurchaseDevicesValue">0</div>
+                                    <button type="button" id="subscriptionPurchaseDevicesIncrease">+</button>
+                                </div>
+                                <div class="subscription-settings-price-note" id="subscriptionPurchaseDevicesPrice"></div>
+                                <div class="subscription-purchase-section-hint hidden" id="subscriptionPurchaseDevicesHint"></div>
+                            </div>
+                            <div class="subscription-purchase-summary" id="subscriptionPurchaseSummary">
+                                <div class="subscription-purchase-summary-header">
+                                    <div class="subscription-purchase-summary-label" data-i18n="subscription_purchase.summary.total">Итого</div>
+                                    <div class="subscription-purchase-summary-prices">
+                                        <div class="subscription-purchase-price-original hidden" id="subscriptionPurchasePriceOriginal">—</div>
+                                        <div class="subscription-purchase-price-current" id="subscriptionPurchasePriceCurrent">—</div>
+                                    </div>
+                                </div>
+                                <div class="subscription-purchase-price-discount hidden" id="subscriptionPurchaseDiscount"></div>
+                                <div class="subscription-purchase-breakdown" id="subscriptionPurchaseBreakdown"></div>
+                                <div class="subscription-purchase-balance hidden" id="subscriptionPurchaseBalanceWarning"></div>
+                            </div>
+                            <div class="subscription-purchase-actions">
+                                <button class="btn btn-primary" id="subscriptionPurchaseSubmit" type="button" data-i18n="subscription_purchase.action.submit">Оформить подписку</button>
+                                <button class="btn btn-secondary hidden" id="subscriptionPurchaseTopupBtn" type="button" data-i18n="subscription_purchase.action.topup">Пополнить баланс</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Subscription Settings -->
             <div class="card expandable subscription-settings-card hidden" id="subscriptionSettingsCard">
                 <div class="card-header">
@@ -3575,6 +3909,19 @@
                     <div class="modal-error hidden" id="topupModalError"></div>
                     <div class="modal-actions" id="topupModalFooter">
                         <button class="modal-button secondary" type="button" id="topupModalCancelBtn" data-i18n="topup.cancel">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-backdrop hidden" id="subscriptionPurchaseModal">
+                <div class="modal" role="dialog" aria-modal="true" aria-labelledby="subscriptionPurchaseModalTitle">
+                    <div class="modal-header">
+                        <div class="modal-title" id="subscriptionPurchaseModalTitle" data-i18n="subscription_purchase.title">Оформление подписки</div>
+                        <div class="modal-subtitle" id="subscriptionPurchaseModalSubtitle" data-i18n="subscription_purchase.subtitle">Настройте параметры и подтвердите покупку.</div>
+                    </div>
+                    <div id="subscriptionPurchaseModalBody"></div>
+                    <div class="modal-actions">
+                        <button class="modal-button secondary" type="button" id="subscriptionPurchaseModalCloseBtn" data-i18n="subscription_purchase.action.close">Закрыть</button>
                     </div>
                 </div>
             </div>
@@ -3802,6 +4149,7 @@
         });
 
         setupSubscriptionSettingsEvents();
+        setupSubscriptionPurchaseEvents();
 
         const themeToggle = document.getElementById('themeToggle');
         const THEME_STORAGE_KEY = 'remnawave-miniapp-theme';
@@ -3977,6 +4325,51 @@
                 'topup.status.retry': 'Try again',
                 'topup.done': 'Done',
                 'button.buy_subscription': 'Buy Subscription',
+                'subscription_purchase.title': 'Purchase subscription',
+                'subscription_purchase.subtitle': 'Configure the plan before completing the purchase.',
+                'subscription_purchase.status.loading': 'Loading subscription options…',
+                'subscription_purchase.error.default': 'Failed to load subscription options. Please try again later.',
+                'subscription_purchase.error.unavailable': 'Subscription configurator is temporarily unavailable.',
+                'subscription_purchase.action.retry': 'Try again',
+                'subscription_purchase.action.submit': 'Buy subscription',
+                'subscription_purchase.action.topup': 'Top up balance',
+                'subscription_purchase.action.close': 'Close',
+                'subscription_purchase.period.title': 'Subscription period',
+                'subscription_purchase.period.subtitle': 'Select how long you need access.',
+                'subscription_purchase.period.per_month': '{amount}/month',
+                'subscription_purchase.traffic.title': 'Traffic',
+                'subscription_purchase.traffic.subtitle': 'Monthly traffic limit.',
+                'subscription_purchase.traffic.fixed': 'Included traffic: {amount}',
+                'subscription_purchase.traffic.unlimited': 'Unlimited traffic included',
+                'subscription_purchase.traffic.empty': 'No traffic options available',
+                'subscription_purchase.servers.title': 'Servers',
+                'subscription_purchase.servers.subtitle': 'Choose connection regions.',
+                'subscription_purchase.servers.empty': 'No servers available',
+                'subscription_purchase.servers.single': 'Included server: {name}',
+                'subscription_purchase.servers.limit': 'Select up to {count}',
+                'subscription_purchase.servers.selected': 'Selected: {count}',
+                'subscription_purchase.devices.title': 'Devices',
+                'subscription_purchase.devices.subtitle': 'Simultaneous connections.',
+                'subscription_purchase.devices.unlimited': 'Unlimited devices',
+                'subscription_purchase.devices.limit': 'From {min} to {max} devices',
+                'subscription_purchase.summary.total': 'Total',
+                'subscription_purchase.summary.discount': 'Discount',
+                'subscription_purchase.summary.per_month': '{amount}/month',
+                'subscription_purchase.summary.note': 'The total already includes all discounts.',
+                'subscription_purchase.price.included': 'Included',
+                'subscription_purchase.balance.warning': 'Required: {required}. Balance: {balance}.',
+                'subscription_purchase.balance.hint': 'Top up your balance to continue.',
+                'subscription_purchase.balance.open_topup': 'Open top up methods',
+                'subscription_purchase.selection.invalid': 'Please select available options.',
+                'subscription_purchase.submit.success': 'Purchase request sent successfully.',
+                'subscription_purchase.submit.title': 'Subscription purchase',
+                'subscription_purchase.submit.insufficient': 'Not enough funds to complete the purchase.',
+                'subscription_purchase.breakdown.base': 'Base plan',
+                'subscription_purchase.breakdown.traffic': 'Traffic',
+                'subscription_purchase.breakdown.servers': 'Servers',
+                'subscription_purchase.breakdown.devices': 'Devices',
+                'subscription_purchase.breakdown.promo': 'Promo discount',
+                'subscription_purchase.breakdown.total': 'Total',
                 'card.balance.title': 'Balance',
                 'subscription_settings.title': 'Subscription settings',
                 'subscription_settings.summary.servers': 'Servers: {count}',
@@ -4258,6 +4651,51 @@
                 'topup.status.retry': 'Повторить попытку',
                 'topup.done': 'Готово',
                 'button.buy_subscription': 'Купить подписку',
+                'subscription_purchase.title': 'Оформление подписки',
+                'subscription_purchase.subtitle': 'Настройте параметры перед покупкой.',
+                'subscription_purchase.status.loading': 'Загружаем доступные варианты…',
+                'subscription_purchase.error.default': 'Не удалось загрузить параметры подписки. Попробуйте позже.',
+                'subscription_purchase.error.unavailable': 'Конфигуратор временно недоступен.',
+                'subscription_purchase.action.retry': 'Повторить',
+                'subscription_purchase.action.submit': 'Оформить подписку',
+                'subscription_purchase.action.topup': 'Пополнить баланс',
+                'subscription_purchase.action.close': 'Закрыть',
+                'subscription_purchase.period.title': 'Период подписки',
+                'subscription_purchase.period.subtitle': 'Выберите длительность доступа.',
+                'subscription_purchase.period.per_month': '{amount}/мес',
+                'subscription_purchase.traffic.title': 'Трафик',
+                'subscription_purchase.traffic.subtitle': 'Месячный лимит трафика.',
+                'subscription_purchase.traffic.fixed': 'Включено трафика: {amount}',
+                'subscription_purchase.traffic.unlimited': 'Безлимитный трафик включён',
+                'subscription_purchase.traffic.empty': 'Нет доступных вариантов',
+                'subscription_purchase.servers.title': 'Серверы',
+                'subscription_purchase.servers.subtitle': 'Выберите регионы подключения.',
+                'subscription_purchase.servers.empty': 'Нет доступных серверов',
+                'subscription_purchase.servers.single': 'Включён сервер: {name}',
+                'subscription_purchase.servers.limit': 'Можно выбрать до {count}',
+                'subscription_purchase.servers.selected': 'Выбрано: {count}',
+                'subscription_purchase.devices.title': 'Устройства',
+                'subscription_purchase.devices.subtitle': 'Одновременные подключения.',
+                'subscription_purchase.devices.unlimited': 'Безлимитное число устройств',
+                'subscription_purchase.devices.limit': 'От {min} до {max} устройств',
+                'subscription_purchase.summary.total': 'Итого',
+                'subscription_purchase.summary.discount': 'Скидка',
+                'subscription_purchase.summary.per_month': '{amount}/мес',
+                'subscription_purchase.summary.note': 'Все скидки уже учтены в итоговой стоимости.',
+                'subscription_purchase.price.included': 'Включено',
+                'subscription_purchase.balance.warning': 'Нужно: {required}. Баланс: {balance}.',
+                'subscription_purchase.balance.hint': 'Пополните баланс, чтобы продолжить.',
+                'subscription_purchase.balance.open_topup': 'Открыть способы пополнения',
+                'subscription_purchase.selection.invalid': 'Выберите доступные параметры.',
+                'subscription_purchase.submit.success': 'Заявка на покупку отправлена.',
+                'subscription_purchase.submit.title': 'Покупка подписки',
+                'subscription_purchase.submit.insufficient': 'Недостаточно средств для покупки.',
+                'subscription_purchase.breakdown.base': 'Базовый план',
+                'subscription_purchase.breakdown.traffic': 'Трафик',
+                'subscription_purchase.breakdown.servers': 'Серверы',
+                'subscription_purchase.breakdown.devices': 'Устройства',
+                'subscription_purchase.breakdown.promo': 'Промо скидка',
+                'subscription_purchase.breakdown.total': 'Итого',
                 'card.balance.title': 'Баланс',
                 'subscription_settings.title': 'Настройка подписки',
                 'subscription_settings.summary.servers': 'Серверов: {count}',
@@ -4601,6 +5039,25 @@
         const subscriptionSettingsSelections = {
             servers: new Set(),
             traffic: null,
+            devices: null,
+        };
+
+        let subscriptionPurchaseData = null;
+        let subscriptionPurchasePreview = null;
+        let subscriptionPurchasePromise = null;
+        let subscriptionPurchasePreviewPromise = null;
+        let subscriptionPurchaseError = null;
+        let subscriptionPurchasePreviewError = null;
+        let subscriptionPurchaseLoading = false;
+        let subscriptionPurchasePreviewLoading = false;
+        let subscriptionPurchaseSubmitting = false;
+        let subscriptionPurchaseFeatureEnabled = false;
+        let subscriptionPurchaseModalOpen = false;
+        let subscriptionPurchasePreviewUpdateHandle = null;
+        const subscriptionPurchaseSelections = {
+            periodId: null,
+            trafficValue: null,
+            servers: new Set(),
             devices: null,
         };
 
@@ -5646,6 +6103,7 @@
                     : autopayLabel;
             }
 
+            renderSubscriptionPurchaseCard();
             renderSubscriptionSettingsCard();
             renderPromoOffers();
             renderPromoSection();
@@ -9874,6 +10332,39 @@
             document.getElementById('subscriptionSettingsDevicesApply')?.addEventListener('click', submitSubscriptionDevicesChange);
         }
 
+        function setupSubscriptionPurchaseEvents() {
+            document.getElementById('subscriptionPurchaseRetry')?.addEventListener('click', () => {
+                ensureSubscriptionPurchaseData({ force: true }).catch(error => {
+                    console.warn('Failed to reload purchase options:', error);
+                });
+            });
+
+            document.getElementById('subscriptionPurchaseSubmit')?.addEventListener('click', submitSubscriptionPurchase);
+            document.getElementById('subscriptionPurchaseTopupBtn')?.addEventListener('click', () => {
+                closeSubscriptionPurchaseModal();
+                openTopupModal();
+            });
+
+            document.getElementById('subscriptionPurchaseDevicesDecrease')?.addEventListener('click', () => {
+                handleSubscriptionPurchaseDevicesChange(-1);
+            });
+
+            document.getElementById('subscriptionPurchaseDevicesIncrease')?.addEventListener('click', () => {
+                handleSubscriptionPurchaseDevicesChange(1);
+            });
+
+            const modalBackdrop = document.getElementById('subscriptionPurchaseModal');
+            if (modalBackdrop) {
+                modalBackdrop.addEventListener('click', event => {
+                    if (event.target === modalBackdrop) {
+                        closeSubscriptionPurchaseModal();
+                    }
+                });
+            }
+
+            document.getElementById('subscriptionPurchaseModalCloseBtn')?.addEventListener('click', closeSubscriptionPurchaseModal);
+        }
+
         function resolveServerPriceLabel(option, currency) {
             if (!option) {
                 return '';
@@ -10443,6 +10934,1880 @@
             }
         }
 
+        function restoreSubscriptionPurchaseCard() {
+            const wrapper = document.getElementById('subscriptionPurchaseCardWrapper');
+            const card = document.getElementById('subscriptionPurchaseCard');
+            if (!card || !wrapper) {
+                return;
+            }
+            if (!wrapper.contains(card)) {
+                wrapper.appendChild(card);
+                card.classList.remove('as-modal');
+            }
+        }
+
+        function shouldShowPurchaseConfigurator() {
+            if (subscriptionPurchaseModalOpen) {
+                return true;
+            }
+            return Boolean(userData?.user) && !hasPaidSubscription();
+        }
+
+        function resolvePurchasePeriodId(period) {
+            if (!period || typeof period !== 'object') {
+                return null;
+            }
+            if (period.id !== undefined && period.id !== null) {
+                return String(period.id);
+            }
+            if (period.period_id !== undefined && period.period_id !== null) {
+                return String(period.period_id);
+            }
+            if (period.periodId !== undefined && period.periodId !== null) {
+                return String(period.periodId);
+            }
+            if (period.code !== undefined && period.code !== null) {
+                return String(period.code);
+            }
+            if (period.key !== undefined && period.key !== null) {
+                return String(period.key);
+            }
+            const days = resolvePurchasePeriodDays(period);
+            if (days !== null) {
+                return `days:${days}`;
+            }
+            return null;
+        }
+
+        function resolvePurchasePeriodDays(period) {
+            if (!period || typeof period !== 'object') {
+                return null;
+            }
+
+            const dayFields = ['days', 'period_days', 'periodDays', 'duration_days', 'durationDays'];
+            for (const field of dayFields) {
+                const value = coercePositiveInt(period[field], null);
+                if (value !== null) {
+                    return value;
+                }
+            }
+
+            const monthFields = ['months', 'period_months', 'periodMonths', 'period'];
+            for (const field of monthFields) {
+                const value = coercePositiveInt(period[field], null);
+                if (value !== null && value > 0) {
+                    return value * 30;
+                }
+            }
+
+            return null;
+        }
+
+        function resolvePurchasePeriodLabel(period) {
+            if (!period) {
+                return '';
+            }
+            if (typeof period.label === 'string' && period.label.trim().length) {
+                return period.label;
+            }
+            if (typeof period.title === 'string' && period.title.trim().length) {
+                return period.title;
+            }
+            const months = coercePositiveInt(period.months ?? period.period ?? period.period_months ?? period.periodMonths, null);
+            if (months) {
+                return formatPeriodLabel(months);
+            }
+            const days = resolvePurchasePeriodDays(period);
+            if (days) {
+                const approxMonths = Math.max(1, Math.round(days / 30));
+                return formatPeriodLabel(approxMonths);
+            }
+            return '';
+        }
+
+        function resolvePurchasePrice(valueSources, labelSources, currency) {
+            for (const source of valueSources) {
+                const value = coercePositiveInt(source, null);
+                if (value !== null) {
+                    return {
+                        kopeks: value,
+                        label: formatPriceFromKopeks(value, currency),
+                    };
+                }
+            }
+
+            for (const label of labelSources) {
+                if (typeof label === 'string' && label.trim().length) {
+                    return {
+                        kopeks: null,
+                        label,
+                    };
+                }
+            }
+
+            return { kopeks: null, label: '' };
+        }
+
+        function formatPurchaseTrafficLabel(option) {
+            if (option == null) {
+                return '';
+            }
+            if (typeof option === 'string') {
+                return option;
+            }
+            if (typeof option.label === 'string' && option.label.trim().length) {
+                return option.label;
+            }
+            const rawValue = option.value ?? option.traffic ?? option.limit ?? option.amount ?? option.gigabytes ?? option.gb ?? null;
+            const numeric = coerceNumber(rawValue, null);
+            if (numeric === null) {
+                return rawValue != null ? String(rawValue) : '';
+            }
+            if (numeric <= 0) {
+                const unlimited = t('subscription_purchase.traffic.unlimited');
+                return unlimited === 'subscription_purchase.traffic.unlimited' ? 'Unlimited' : unlimited;
+            }
+            return formatTrafficLimit(numeric);
+        }
+
+        function normalizePurchaseServerOption(option, currency) {
+            if (!option) {
+                return null;
+            }
+            const base = normalizeServerEntry(option);
+            if (!base) {
+                return null;
+            }
+            const uuid = base.uuid ? String(base.uuid) : null;
+            const priceInfo = resolvePurchasePrice(
+                [
+                    option.final_price_kopeks,
+                    option.finalPriceKopeks,
+                    option.total_price_kopeks,
+                    option.totalPriceKopeks,
+                    option.price_kopeks,
+                    option.priceKopeks,
+                    option.price,
+                    option.cost_kopeks,
+                    option.cost,
+                ],
+                [option.price_label, option.priceLabel],
+                currency
+            );
+            const originalInfo = resolvePurchasePrice(
+                [
+                    option.original_price_kopeks,
+                    option.originalPriceKopeks,
+                    option.base_price_kopeks,
+                    option.basePriceKopeks,
+                ],
+                [option.original_price_label, option.originalPriceLabel],
+                currency
+            );
+            return {
+                uuid,
+                name: option.name || base.name || uuid || '',
+                priceKopeks: priceInfo.kopeks,
+                priceLabel: priceInfo.label,
+                originalPriceKopeks: originalInfo.kopeks,
+                originalPriceLabel: originalInfo.label,
+                discountPercent: coercePositiveInt(option.discount_percent ?? option.discountPercent, null),
+                isAvailable: coerceBoolean(option.is_available ?? option.available ?? option.enabled ?? option.selectable ?? true, true),
+                description: option.description || '',
+            };
+        }
+
+        function getSelectedSubscriptionPurchasePeriod() {
+            const data = subscriptionPurchaseData;
+            const periods = ensureArray(data?.periods);
+            if (!periods.length) {
+                subscriptionPurchaseSelections.periodId = null;
+                return null;
+            }
+            const selectedId = subscriptionPurchaseSelections.periodId;
+            if (selectedId != null) {
+                const matched = periods.find(period => {
+                    const id = resolvePurchasePeriodId(period);
+                    return id !== null && String(id) === String(selectedId);
+                });
+                if (matched) {
+                    return matched;
+                }
+            }
+            const fallback = periods[0];
+            subscriptionPurchaseSelections.periodId = resolvePurchasePeriodId(fallback);
+            return fallback;
+        }
+
+        function getSubscriptionPurchaseTrafficConfig(period) {
+            const base = subscriptionPurchaseData?.traffic || {};
+            const override = period && (period.traffic || period.traffic_options || period.trafficOptions);
+            const result = { ...base };
+            if (override && typeof override === 'object') {
+                Object.assign(result, override);
+                if (override.options || override.available) {
+                    result.options = ensureArray(override.options || override.available);
+                }
+            }
+            if (!Array.isArray(result.options) && base.options) {
+                result.options = ensureArray(base.options);
+            }
+            return result;
+        }
+
+        function getSubscriptionPurchaseServersConfig(period) {
+            const base = subscriptionPurchaseData?.servers || subscriptionPurchaseData?.countries || {};
+            const override = period && (period.servers || period.countries);
+            const result = { ...base };
+            if (override && typeof override === 'object') {
+                Object.assign(result, override);
+                if (override.options || override.available) {
+                    result.options = ensureArray(override.options || override.available);
+                }
+            }
+            if (!Array.isArray(result.options)) {
+                result.options = ensureArray(base.options || base.available || []);
+            }
+            return result;
+        }
+
+        function getSubscriptionPurchaseDevicesConfig(period) {
+            const base = subscriptionPurchaseData?.devices || {};
+            const override = period && (period.devices || period.device_options || period.deviceOptions);
+            const result = { ...base };
+            if (override && typeof override === 'object') {
+                Object.assign(result, override);
+                if (override.options) {
+                    result.options = ensureArray(override.options);
+                }
+            }
+            if (!Array.isArray(result.options) && base.options) {
+                result.options = ensureArray(base.options);
+            }
+            return result;
+        }
+
+        function ensurePurchaseTrafficSelection(config) {
+            const selectable = config && config.selectable !== false && String(config.mode || '').toLowerCase() !== 'fixed';
+            const options = ensureArray(config?.options || config?.available || []);
+            if (!selectable || !options.length) {
+                if (config && (config.current !== undefined || config.default !== undefined)) {
+                    const fixedValue = config.current ?? config.default ?? null;
+                    if (fixedValue !== undefined) {
+                        subscriptionPurchaseSelections.trafficValue = fixedValue;
+                    }
+                }
+                return;
+            }
+
+            const normalizedOptions = options
+                .map(option => ({
+                    raw: option,
+                    value: option?.value ?? option?.traffic ?? option?.limit ?? option?.amount ?? option?.id ?? option?.code ?? null,
+                }))
+                .filter(option => option.value !== null && option.value !== undefined);
+
+            let selectedValue = subscriptionPurchaseSelections.trafficValue;
+            if (selectedValue !== null && selectedValue !== undefined) {
+                const exists = normalizedOptions.some(option => String(option.value) === String(selectedValue));
+                if (!exists) {
+                    selectedValue = null;
+                }
+            }
+
+            if (selectedValue === null) {
+                const defaultOption = normalizedOptions.find(option => coerceBoolean(option.raw?.is_default ?? option.raw?.isDefault, false));
+                const fallback = defaultOption || normalizedOptions[0];
+                selectedValue = fallback ? fallback.value : null;
+            }
+
+            subscriptionPurchaseSelections.trafficValue = selectedValue;
+        }
+
+        function ensurePurchaseServersSelection(config) {
+            const currency = (subscriptionPurchaseData?.currency || userData?.balance_currency || 'RUB').toString().toUpperCase();
+            const options = ensureArray(config?.options || config?.available || []);
+            const normalizedOptions = options.map(option => normalizePurchaseServerOption(option, currency)).filter(Boolean);
+            const availableUuids = normalizedOptions.map(option => option.uuid).filter(Boolean);
+            const minSelectable = coercePositiveInt(config?.min ?? config?.min_selectable ?? config?.minRequired, 0) || 0;
+            const maxSelectable = coercePositiveInt(config?.max ?? config?.max_selectable ?? config?.maxAllowed, 0) || 0;
+            const selection = subscriptionPurchaseSelections.servers instanceof Set
+                ? new Set(subscriptionPurchaseSelections.servers)
+                : new Set();
+
+            Array.from(selection).forEach(value => {
+                if (!availableUuids.includes(String(value))) {
+                    selection.delete(value);
+                }
+            });
+
+            const selectable = config?.selectable !== false && availableUuids.length > 1 && (maxSelectable === 0 || maxSelectable > 1 || minSelectable === 0);
+            if (!selectable) {
+                selection.clear();
+                if (availableUuids[0]) {
+                    selection.add(availableUuids[0]);
+                }
+                subscriptionPurchaseSelections.servers = selection;
+                return;
+            }
+
+            if (!selection.size) {
+                const defaults = ensureArray(config?.selected || config?.default || config?.current || config?.preselected || []);
+                defaults.map(String).forEach(uuid => {
+                    if (availableUuids.includes(uuid)) {
+                        selection.add(uuid);
+                    }
+                });
+            }
+
+            if (!selection.size && minSelectable > 0) {
+                availableUuids.slice(0, minSelectable).forEach(uuid => selection.add(uuid));
+            }
+
+            subscriptionPurchaseSelections.servers = selection;
+        }
+
+        function ensurePurchaseDevicesSelection(config) {
+            const min = coercePositiveInt(config?.min ?? config?.minimum ?? 0, 0) || 0;
+            const max = coercePositiveInt(config?.max ?? config?.maximum ?? 0, 0) || 0;
+            const defaults = [
+                config?.current,
+                config?.default,
+                config?.included,
+                config?.base,
+            ];
+
+            let value = coercePositiveInt(subscriptionPurchaseSelections.devices, null);
+            if (value === null) {
+                for (const candidate of defaults) {
+                    const normalized = coercePositiveInt(candidate, null);
+                    if (normalized !== null) {
+                        value = normalized;
+                        break;
+                    }
+                }
+            }
+
+            if (value === null) {
+                value = min > 0 ? min : 1;
+            }
+
+            value = Math.max(min, value);
+            if (max && value > max) {
+                value = max;
+            }
+
+            subscriptionPurchaseSelections.devices = value;
+        }
+
+        function ensureSubscriptionPurchaseSelectionsValidForPeriod(period) {
+            const trafficConfig = getSubscriptionPurchaseTrafficConfig(period);
+            ensurePurchaseTrafficSelection(trafficConfig);
+            const serversConfig = getSubscriptionPurchaseServersConfig(period);
+            ensurePurchaseServersSelection(serversConfig);
+            const devicesConfig = getSubscriptionPurchaseDevicesConfig(period);
+            ensurePurchaseDevicesSelection(devicesConfig);
+        }
+
+        function normalizeSubscriptionPurchasePayload(payload) {
+            if (!payload || typeof payload !== 'object') {
+                return null;
+            }
+
+            const root = payload.data || payload.config || payload;
+            const currency = (root.currency || payload.currency || userData?.balance_currency || 'RUB').toString().toUpperCase();
+            const balanceKopeks = coercePositiveInt(
+                root.balance_kopeks
+                ?? root.balanceKopeks
+                ?? payload.balance_kopeks
+                ?? payload.balanceKopeks
+                ?? userData?.balance_kopeks,
+                null
+            );
+
+            return {
+                raw: payload,
+                currency,
+                balanceKopeks,
+                balanceLabel: root.balance_label || payload.balance_label || (balanceKopeks !== null ? formatPriceFromKopeks(balanceKopeks, currency) : ''),
+                periods: ensureArray(root.periods || root.available_periods || root.options?.periods || []),
+                traffic: root.traffic || root.traffic_options || root.trafficOptions || {},
+                servers: root.servers || root.countries || {},
+                devices: root.devices || root.device_options || root.deviceOptions || {},
+                selection: root.selection || root.defaultSelection || root.defaults || {},
+                summary: root.summary || payload.summary || null,
+                promo: root.promo || root.discounts || null,
+                subscriptionId: root.subscription_id || root.subscriptionId || payload.subscription_id || payload.subscriptionId || null,
+            };
+        }
+
+        function resetSubscriptionPurchaseSelections(data) {
+            subscriptionPurchaseSelections.periodId = null;
+            subscriptionPurchaseSelections.trafficValue = null;
+            subscriptionPurchaseSelections.servers = new Set();
+            subscriptionPurchaseSelections.devices = null;
+
+            if (!data) {
+                return;
+            }
+
+            const periods = ensureArray(data.periods);
+            const selection = data.selection || {};
+            const periodId = selection.period_id ?? selection.periodId ?? selection.period ?? null;
+            if (periodId !== null && periodId !== undefined) {
+                subscriptionPurchaseSelections.periodId = String(periodId);
+            } else if (periods[0]) {
+                subscriptionPurchaseSelections.periodId = resolvePurchasePeriodId(periods[0]);
+            }
+
+            const trafficValue = selection.traffic_value
+                ?? selection.traffic
+                ?? selection.traffic_gb
+                ?? data.traffic?.current
+                ?? data.traffic?.default
+                ?? null;
+            if (trafficValue !== undefined) {
+                subscriptionPurchaseSelections.trafficValue = trafficValue;
+            }
+
+            const servers = ensureArray(
+                selection.servers
+                || selection.countries
+                || selection.server_uuids
+                || data.servers?.selected
+                || data.servers?.default
+                || []
+            );
+            subscriptionPurchaseSelections.servers = new Set(servers.map(value => String(value)).filter(Boolean));
+
+            const devices = coercePositiveInt(
+                selection.devices
+                ?? selection.device_limit
+                ?? selection.deviceLimit
+                ?? data.devices?.current
+                ?? data.devices?.default
+                ?? null,
+                null
+            );
+            if (devices !== null) {
+                subscriptionPurchaseSelections.devices = devices;
+            }
+
+            const period = getSelectedSubscriptionPurchasePeriod();
+            if (period) {
+                ensureSubscriptionPurchaseSelectionsValidForPeriod(period);
+            }
+        }
+
+        function extractPurchaseErrorMessage(payload, status) {
+            if (!payload || typeof payload !== 'object') {
+                return status === 401
+                    ? t('subscription_settings.error.unauthorized')
+                    : t('subscription_purchase.error.default');
+            }
+            if (typeof payload.detail === 'string') {
+                return payload.detail;
+            }
+            if (payload.detail && typeof payload.detail === 'object' && typeof payload.detail.message === 'string') {
+                return payload.detail.message;
+            }
+            if (typeof payload.message === 'string') {
+                return payload.message;
+            }
+            return t('subscription_purchase.error.default');
+        }
+
+        function ensureSubscriptionPurchaseData(options = {}) {
+            const { force = false } = options;
+
+            if (!force) {
+                if (subscriptionPurchasePromise) {
+                    return subscriptionPurchasePromise;
+                }
+                if (subscriptionPurchaseData && !subscriptionPurchaseError) {
+                    return Promise.resolve(subscriptionPurchaseData);
+                }
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                const error = createError('Authorization Error', t('subscription_settings.error.unauthorized'));
+                subscriptionPurchaseError = error;
+                subscriptionPurchaseLoading = false;
+                renderSubscriptionPurchaseCard();
+                return Promise.reject(error);
+            }
+
+            subscriptionPurchaseLoading = true;
+            subscriptionPurchaseError = null;
+            renderSubscriptionPurchaseCard();
+
+            const payload = { initData };
+            const request = fetch('/miniapp/subscription/purchase/options', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }).then(async response => {
+                const body = await parseJsonSafe(response);
+                if (!response.ok || (body && body.success === false)) {
+                    const message = extractPurchaseErrorMessage(body, response.status);
+                    throw createError('Subscription purchase error', message, response.status);
+                }
+
+                const normalized = normalizeSubscriptionPurchasePayload(body);
+                subscriptionPurchaseData = normalized;
+                subscriptionPurchaseError = null;
+                subscriptionPurchaseLoading = false;
+                subscriptionPurchasePromise = null;
+                subscriptionPurchaseFeatureEnabled = true;
+                resetSubscriptionPurchaseSelections(normalized);
+                renderSubscriptionPurchaseCard();
+                const period = getSelectedSubscriptionPurchasePeriod();
+                if (period) {
+                    ensureSubscriptionPurchaseSelectionsValidForPeriod(period);
+                }
+                updateSubscriptionPurchasePreview({ immediate: true }).catch(error => {
+                    console.warn('Failed to update subscription purchase preview:', error);
+                });
+                return normalized;
+            }).catch(error => {
+                subscriptionPurchaseError = error;
+                subscriptionPurchaseLoading = false;
+                subscriptionPurchasePromise = null;
+                console.warn('Failed to load subscription purchase options:', error);
+                renderSubscriptionPurchaseCard();
+                throw error;
+            });
+
+            subscriptionPurchasePromise = request;
+            return request;
+        }
+
+        function getSubscriptionPurchaseCurrency() {
+            return (
+                subscriptionPurchaseData?.currency
+                || userData?.balance_currency
+                || 'RUB'
+            ).toString().toUpperCase();
+        }
+
+        function buildSubscriptionPurchaseSelectionPayload(period) {
+            const selection = {};
+            const periodId = resolvePurchasePeriodId(period);
+            if (periodId !== null && periodId !== undefined) {
+                const idString = String(periodId);
+                selection.period_id = idString;
+                selection.periodId = idString;
+                selection.period_key = idString;
+                selection.periodKey = idString;
+                selection.period = idString;
+                selection.code = idString;
+            }
+
+            const periodDays = resolvePurchasePeriodDays(period);
+            if (periodDays !== null) {
+                selection.period_days = periodDays;
+                selection.periodDays = periodDays;
+                selection.duration_days = periodDays;
+                selection.durationDays = periodDays;
+            }
+
+            const periodMonths = coercePositiveInt(
+                period?.months
+                ?? period?.period
+                ?? period?.period_months
+                ?? period?.periodMonths,
+                null,
+            );
+            if (periodMonths !== null) {
+                selection.months = periodMonths;
+                selection.period_months = periodMonths;
+                selection.periodMonths = periodMonths;
+            }
+
+            const trafficValue = subscriptionPurchaseSelections.trafficValue;
+            if (trafficValue !== null && trafficValue !== undefined) {
+                selection.traffic_value = trafficValue;
+                selection.traffic = trafficValue;
+                selection.traffic_gb = trafficValue;
+                selection.trafficGb = trafficValue;
+                selection.limit = trafficValue;
+            }
+
+            const servers = Array.from(
+                subscriptionPurchaseSelections.servers instanceof Set
+                    ? subscriptionPurchaseSelections.servers
+                    : []
+            );
+            if (servers.length) {
+                selection.servers = servers;
+                selection.countries = servers;
+                selection.server_uuids = servers;
+                selection.serverUuids = servers;
+            }
+
+            const devices = coercePositiveInt(subscriptionPurchaseSelections.devices, null);
+            if (devices !== null) {
+                selection.devices = devices;
+                selection.device_limit = devices;
+                selection.deviceLimit = devices;
+            }
+
+            return selection;
+        }
+
+        function normalizeSubscriptionPurchasePreview(payload) {
+            if (!payload || typeof payload !== 'object') {
+                return null;
+            }
+
+            const currency = getSubscriptionPurchaseCurrency();
+            const root = payload.preview || payload.data || payload.summary || payload;
+
+            const totalInfo = resolvePurchasePrice(
+                [
+                    root.total_price_kopeks,
+                    root.totalPriceKopeks,
+                    root.final_price_kopeks,
+                    root.finalPriceKopeks,
+                    root.price_kopeks,
+                    root.priceKopeks,
+                    root.amount_kopeks,
+                    root.amountKopeks,
+                ],
+                [
+                    root.total_price_label,
+                    root.totalPriceLabel,
+                    root.final_price_label,
+                    root.finalPriceLabel,
+                    root.price_label,
+                    root.priceLabel,
+                    root.amount_label,
+                    root.amountLabel,
+                ],
+                currency,
+            );
+
+            const originalInfo = resolvePurchasePrice(
+                [
+                    root.original_price_kopeks,
+                    root.originalPriceKopeks,
+                    root.base_price_kopeks,
+                    root.basePriceKopeks,
+                ],
+                [
+                    root.original_price_label,
+                    root.originalPriceLabel,
+                    root.base_price_label,
+                    root.basePriceLabel,
+                ],
+                currency,
+            );
+
+            const perMonthInfo = resolvePurchasePrice(
+                [
+                    root.per_month_price_kopeks,
+                    root.perMonthPriceKopeks,
+                    root.monthly_price_kopeks,
+                    root.monthlyPriceKopeks,
+                ],
+                [
+                    root.per_month_price_label,
+                    root.perMonthPriceLabel,
+                    root.monthly_price_label,
+                    root.monthlyPriceLabel,
+                ],
+                currency,
+            );
+
+            const discountPercent = coercePositiveInt(
+                root.discount_percent ?? root.discountPercent,
+                null,
+            );
+            const discountLabel = root.discount_label || root.discountLabel || null;
+            const discountLines = ensureArray(
+                root.discount_lines
+                || root.discountLines
+                || root.promo
+                || root.discounts
+                || [],
+            ).map(line => (typeof line === 'string' ? line : line?.label)).filter(Boolean);
+
+            const breakdown = ensureArray(root.breakdown || root.items || []).map(item => {
+                if (!item) {
+                    return null;
+                }
+                const label = item.label || item.title || '';
+                const value = item.value_label || item.valueLabel || item.value || '';
+                if (!label && !value) {
+                    return null;
+                }
+                return {
+                    label,
+                    value,
+                    highlight: coerceBoolean(item.highlight ?? item.emphasis ?? item.isImportant, false),
+                };
+            }).filter(Boolean);
+
+            const balanceKopeks = coercePositiveInt(
+                root.balance_kopeks
+                ?? root.balanceKopeks
+                ?? payload.balance_kopeks
+                ?? payload.balanceKopeks
+                ?? subscriptionPurchaseData?.balanceKopeks
+                ?? userData?.balance_kopeks,
+                null,
+            );
+            const balanceLabel = root.balance_label
+                || root.balanceLabel
+                || (balanceKopeks !== null ? formatPriceFromKopeks(balanceKopeks, currency) : '');
+
+            const missingAmountKopeks = coercePositiveInt(
+                root.missing_amount_kopeks
+                ?? root.missingAmountKopeks
+                ?? root.balance_needed_kopeks
+                ?? root.balanceNeededKopeks
+                ?? root.amount_due_kopeks
+                ?? root.amountDueKopeks,
+                null,
+            );
+            const missingAmountLabel = root.missing_amount_label
+                || root.missingAmountLabel
+                || (missingAmountKopeks !== null ? formatPriceFromKopeks(missingAmountKopeks, currency) : '');
+
+            return {
+                raw: payload,
+                totalPriceKopeks: totalInfo.kopeks,
+                totalPriceLabel: totalInfo.label,
+                originalPriceKopeks: originalInfo.kopeks,
+                originalPriceLabel: originalInfo.label,
+                perMonthLabel: perMonthInfo.label,
+                discountPercent,
+                discountLabel,
+                discountLines,
+                breakdown,
+                balanceKopeks,
+                balanceLabel,
+                missingAmountKopeks,
+                missingAmountLabel,
+                canPurchase: coerceBoolean(
+                    root.can_purchase
+                    ?? root.canPurchase
+                    ?? (missingAmountKopeks === null || missingAmountKopeks <= 0),
+                    true,
+                ),
+                statusMessage: root.status_message
+                    || root.statusMessage
+                    || payload.status_message
+                    || payload.statusMessage
+                    || '',
+            };
+        }
+
+        function renderSubscriptionPurchaseStatus(message) {
+            const status = document.getElementById('subscriptionPurchaseStatus');
+            if (!status) {
+                return;
+            }
+            const normalized = (message || '').toString().trim();
+            if (normalized) {
+                status.textContent = normalized;
+                status.classList.remove('hidden');
+            } else {
+                status.textContent = '';
+                status.classList.add('hidden');
+            }
+        }
+
+        function renderSubscriptionPurchasePeriods(data) {
+            const container = document.getElementById('subscriptionPurchasePeriodOptions');
+            const metaElement = document.getElementById('subscriptionPurchasePeriodMeta');
+            if (!container) {
+                return;
+            }
+
+            const currency = getSubscriptionPurchaseCurrency();
+            const periods = ensureArray(data?.periods);
+            const selectedId = subscriptionPurchaseSelections.periodId;
+
+            container.innerHTML = '';
+
+            if (!periods.length) {
+                if (metaElement) {
+                    metaElement.textContent = '';
+                }
+                return;
+            }
+
+            let perMonthMeta = '';
+
+            periods.forEach(period => {
+                if (!period) {
+                    return;
+                }
+                const periodId = resolvePurchasePeriodId(period);
+                const isAvailable = coerceBoolean(
+                    period.is_available
+                    ?? period.isAvailable
+                    ?? period.available
+                    ?? period.enabled
+                    ?? true,
+                    true,
+                );
+                const isSelected = periodId !== null && periodId !== undefined
+                    && String(periodId) === String(selectedId);
+
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'subscription-settings-toggle';
+                if (isSelected) {
+                    button.classList.add('active');
+                }
+                if (!isAvailable) {
+                    button.classList.add('disabled');
+                }
+
+                const labelContainer = document.createElement('div');
+                labelContainer.className = 'subscription-settings-toggle-label';
+
+                const title = document.createElement('div');
+                title.className = 'subscription-settings-toggle-title';
+                title.textContent = resolvePurchasePeriodLabel(period) || t('values.not_available');
+                labelContainer.appendChild(title);
+
+                const description = period.description || period.note || period.tagline;
+                if (description) {
+                    const descriptionEl = document.createElement('div');
+                    descriptionEl.className = 'subscription-purchase-option-description';
+                    descriptionEl.textContent = description;
+                    labelContainer.appendChild(descriptionEl);
+                }
+
+                const priceInfo = resolvePurchasePrice(
+                    [
+                        period.final_price_kopeks,
+                        period.finalPriceKopeks,
+                        period.total_price_kopeks,
+                        period.totalPriceKopeks,
+                        period.price_kopeks,
+                        period.priceKopeks,
+                        period.amount_kopeks,
+                        period.amountKopeks,
+                    ],
+                    [
+                        period.final_price_label,
+                        period.finalPriceLabel,
+                        period.price_label,
+                        period.priceLabel,
+                        period.total_label,
+                        period.totalLabel,
+                    ],
+                    currency,
+                );
+
+                const originalInfo = resolvePurchasePrice(
+                    [
+                        period.original_price_kopeks,
+                        period.originalPriceKopeks,
+                        period.base_price_kopeks,
+                        period.basePriceKopeks,
+                    ],
+                    [
+                        period.original_price_label,
+                        period.originalPriceLabel,
+                        period.base_price_label,
+                        period.basePriceLabel,
+                    ],
+                    currency,
+                );
+
+                let perMonthLabel = '';
+                const perMonthInfo = resolvePurchasePrice(
+                    [
+                        period.per_month_price_kopeks,
+                        period.perMonthPriceKopeks,
+                        period.monthly_price_kopeks,
+                        period.monthlyPriceKopeks,
+                    ],
+                    [
+                        period.per_month_price_label,
+                        period.perMonthPriceLabel,
+                        period.monthly_price_label,
+                        period.monthlyPriceLabel,
+                    ],
+                    currency,
+                );
+                if (perMonthInfo.label) {
+                    perMonthLabel = perMonthInfo.label;
+                } else if (priceInfo.kopeks !== null) {
+                    const months = coercePositiveInt(
+                        period.months
+                        ?? period.period
+                        ?? period.period_months
+                        ?? period.periodMonths,
+                        null,
+                    );
+                    const resolvedMonths = months || Math.max(1, Math.round((resolvePurchasePeriodDays(period) || 30) / 30));
+                    if (resolvedMonths > 0) {
+                        const perMonthValue = Math.round(priceInfo.kopeks / resolvedMonths);
+                        perMonthLabel = formatPriceFromKopeks(perMonthValue, currency);
+                    }
+                }
+
+                if (isSelected && perMonthLabel) {
+                    perMonthMeta = perMonthLabel;
+                }
+
+                const meta = document.createElement('div');
+                meta.className = 'subscription-settings-toggle-meta';
+
+                if (priceInfo.label) {
+                    const priceWrapper = document.createElement('span');
+                    priceWrapper.className = 'subscription-purchase-option-price';
+
+                    if (originalInfo.label && originalInfo.label !== priceInfo.label) {
+                        const originalEl = document.createElement('span');
+                        originalEl.className = 'subscription-purchase-option-price-original';
+                        originalEl.textContent = originalInfo.label;
+                        priceWrapper.appendChild(originalEl);
+                    }
+
+                    const currentEl = document.createElement('span');
+                    currentEl.className = 'subscription-purchase-option-price-current';
+                    currentEl.textContent = priceInfo.label;
+                    priceWrapper.appendChild(currentEl);
+                    meta.appendChild(priceWrapper);
+                }
+
+                if (perMonthLabel) {
+                    const perMonthEl = document.createElement('span');
+                    perMonthEl.textContent = t('subscription_purchase.period.per_month').replace('{amount}', perMonthLabel);
+                    meta.appendChild(perMonthEl);
+                }
+
+                if (meta.childNodes.length) {
+                    labelContainer.appendChild(meta);
+                }
+
+                button.appendChild(labelContainer);
+
+                if (isAvailable && periodId !== null && periodId !== undefined) {
+                    button.addEventListener('click', () => {
+                        handleSubscriptionPurchasePeriodSelect(periodId);
+                    });
+                }
+
+                container.appendChild(button);
+            });
+
+            if (metaElement) {
+                metaElement.textContent = perMonthMeta
+                    ? t('subscription_purchase.period.per_month').replace('{amount}', perMonthMeta)
+                    : '';
+            }
+        }
+
+        function renderSubscriptionPurchaseTraffic(data, period) {
+            const optionsContainer = document.getElementById('subscriptionPurchaseTrafficOptions');
+            const metaElement = document.getElementById('subscriptionPurchaseTrafficMeta');
+            const hintElement = document.getElementById('subscriptionPurchaseTrafficHint');
+            const emptyElement = document.getElementById('subscriptionPurchaseTrafficEmpty');
+
+            if (!optionsContainer) {
+                return;
+            }
+
+            const config = getSubscriptionPurchaseTrafficConfig(period);
+            const selectable = config && config.selectable !== false && String(config.mode || '').toLowerCase() !== 'fixed';
+            const options = ensureArray(config?.options || config?.available || []);
+
+            optionsContainer.innerHTML = '';
+
+            if (!selectable) {
+                const value = subscriptionPurchaseSelections.trafficValue;
+                const label = formatPurchaseTrafficLabel({ value });
+                if (metaElement) {
+                    metaElement.textContent = label
+                        ? t('subscription_purchase.traffic.fixed').replace('{amount}', label)
+                        : '';
+                }
+                if (hintElement) {
+                    const hint = config?.hint || '';
+                    hintElement.textContent = hint;
+                    hintElement.classList.toggle('hidden', !hint);
+                }
+                emptyElement?.classList.add('hidden');
+                return;
+            }
+
+            const selectedValue = subscriptionPurchaseSelections.trafficValue;
+            const currency = getSubscriptionPurchaseCurrency();
+
+            if (!options.length) {
+                emptyElement?.classList.remove('hidden');
+                if (metaElement) {
+                    metaElement.textContent = '';
+                }
+                if (hintElement) {
+                    const hint = config?.hint || '';
+                    hintElement.textContent = hint;
+                    hintElement.classList.toggle('hidden', !hint);
+                }
+                return;
+            }
+
+            emptyElement?.classList.add('hidden');
+
+            options.forEach(option => {
+                if (!option) {
+                    return;
+                }
+                const value = option.value ?? option.traffic ?? option.limit ?? option.amount;
+                const isSelected = value !== undefined && String(value) === String(selectedValue);
+                const isAvailable = coerceBoolean(
+                    option.is_available
+                    ?? option.available
+                    ?? option.enabled
+                    ?? true,
+                    true,
+                );
+
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'subscription-settings-toggle';
+                if (isSelected) {
+                    button.classList.add('active');
+                }
+                if (!isAvailable) {
+                    button.classList.add('disabled');
+                }
+
+                const labelContainer = document.createElement('div');
+                labelContainer.className = 'subscription-settings-toggle-label';
+
+                const title = document.createElement('div');
+                title.className = 'subscription-settings-toggle-title';
+                title.textContent = formatPurchaseTrafficLabel(option);
+                labelContainer.appendChild(title);
+
+                const priceInfo = resolvePurchasePrice(
+                    [
+                        option.final_price_kopeks,
+                        option.finalPriceKopeks,
+                        option.price_kopeks,
+                        option.priceKopeks,
+                    ],
+                    [
+                        option.final_price_label,
+                        option.finalPriceLabel,
+                        option.price_label,
+                        option.priceLabel,
+                    ],
+                    currency,
+                );
+
+                const originalInfo = resolvePurchasePrice(
+                    [option.original_price_kopeks, option.originalPriceKopeks],
+                    [option.original_price_label, option.originalPriceLabel],
+                    currency,
+                );
+
+                if (priceInfo.label || originalInfo.label) {
+                    const meta = document.createElement('div');
+                    meta.className = 'subscription-settings-toggle-meta';
+
+                    const priceWrapper = document.createElement('span');
+                    priceWrapper.className = 'subscription-purchase-option-price';
+
+                    if (originalInfo.label && originalInfo.label !== priceInfo.label) {
+                        const originalEl = document.createElement('span');
+                        originalEl.className = 'subscription-purchase-option-price-original';
+                        originalEl.textContent = originalInfo.label;
+                        priceWrapper.appendChild(originalEl);
+                    }
+
+                    if (priceInfo.label) {
+                        const currentEl = document.createElement('span');
+                        currentEl.className = 'subscription-purchase-option-price-current';
+                        currentEl.textContent = priceInfo.label;
+                        priceWrapper.appendChild(currentEl);
+                    }
+
+                    meta.appendChild(priceWrapper);
+                    labelContainer.appendChild(meta);
+                }
+
+                button.appendChild(labelContainer);
+
+                if (isAvailable && value !== undefined) {
+                    button.addEventListener('click', () => {
+                        handleSubscriptionPurchaseTrafficSelect(value);
+                    });
+                }
+
+                optionsContainer.appendChild(button);
+            });
+
+            if (metaElement) {
+                metaElement.textContent = '';
+            }
+            if (hintElement) {
+                const hint = config?.hint || '';
+                hintElement.textContent = hint;
+                hintElement.classList.toggle('hidden', !hint);
+            }
+        }
+
+        function renderSubscriptionPurchaseServers(data, period) {
+            const optionsContainer = document.getElementById('subscriptionPurchaseServersOptions');
+            const metaElement = document.getElementById('subscriptionPurchaseServersMeta');
+            const hintElement = document.getElementById('subscriptionPurchaseServersHint');
+            const emptyElement = document.getElementById('subscriptionPurchaseServersEmpty');
+
+            if (!optionsContainer) {
+                return;
+            }
+
+            const config = getSubscriptionPurchaseServersConfig(period);
+            const options = ensureArray(config?.options || config?.available || []);
+            const selection = subscriptionPurchaseSelections.servers instanceof Set
+                ? new Set(subscriptionPurchaseSelections.servers)
+                : new Set();
+
+            optionsContainer.innerHTML = '';
+
+            const minSelectable = coercePositiveInt(config?.min ?? config?.min_selectable ?? config?.minRequired, 0) || 0;
+            const maxSelectable = coercePositiveInt(config?.max ?? config?.max_selectable ?? config?.maxAllowed, 0) || 0;
+            const selectable = config?.selectable !== false && options.length > 1;
+
+            const currency = getSubscriptionPurchaseCurrency();
+            const normalizedOptions = options.map(option => normalizePurchaseServerOption(option, currency)).filter(Boolean);
+
+            if (!normalizedOptions.length) {
+                emptyElement?.classList.remove('hidden');
+                if (metaElement) {
+                    metaElement.textContent = '';
+                }
+                if (hintElement) {
+                    const hint = config?.hint || '';
+                    hintElement.textContent = hint;
+                    hintElement.classList.toggle('hidden', !hint);
+                }
+                return;
+            }
+
+            emptyElement?.classList.add('hidden');
+
+            if (!selectable) {
+                const selected = normalizedOptions.find(option => selection.has(option.uuid)) || normalizedOptions[0];
+                selection.clear();
+                if (selected?.uuid) {
+                    selection.add(selected.uuid);
+                }
+                subscriptionPurchaseSelections.servers = selection;
+                if (metaElement && selected) {
+                    metaElement.textContent = t('subscription_purchase.servers.single')
+                        .replace('{name}', selected.name || selected.uuid || '');
+                }
+                if (hintElement) {
+                    const hint = config?.hint || '';
+                    hintElement.textContent = hint;
+                    hintElement.classList.toggle('hidden', !hint);
+                }
+                return;
+            }
+
+            normalizedOptions.forEach(option => {
+                if (!option?.uuid) {
+                    return;
+                }
+                const isSelected = selection.has(option.uuid);
+                const isAvailable = coerceBoolean(option.isAvailable ?? true, true);
+
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'subscription-settings-toggle';
+                if (isSelected) {
+                    button.classList.add('active');
+                }
+                if (!isAvailable) {
+                    button.classList.add('disabled');
+                }
+
+                const labelContainer = document.createElement('div');
+                labelContainer.className = 'subscription-settings-toggle-label';
+
+                const title = document.createElement('div');
+                title.className = 'subscription-settings-toggle-title';
+                title.textContent = option.name || option.uuid;
+                labelContainer.appendChild(title);
+
+                if (option.description) {
+                    const descriptionEl = document.createElement('div');
+                    descriptionEl.className = 'subscription-purchase-option-description';
+                    descriptionEl.textContent = option.description;
+                    labelContainer.appendChild(descriptionEl);
+                }
+
+                const meta = document.createElement('div');
+                meta.className = 'subscription-settings-toggle-meta';
+
+                if (option.priceLabel) {
+                    const currentEl = document.createElement('span');
+                    currentEl.className = 'subscription-purchase-option-price-current';
+                    currentEl.textContent = option.priceLabel;
+                    meta.appendChild(currentEl);
+                }
+                if (option.originalPriceLabel && option.originalPriceLabel !== option.priceLabel) {
+                    const originalEl = document.createElement('span');
+                    originalEl.className = 'subscription-purchase-option-price-original';
+                    originalEl.textContent = option.originalPriceLabel;
+                    meta.appendChild(originalEl);
+                }
+                if (option.discountPercent) {
+                    const discountEl = document.createElement('span');
+                    discountEl.className = 'subscription-purchase-price-discount';
+                    discountEl.textContent = `-${option.discountPercent}%`;
+                    meta.appendChild(discountEl);
+                }
+
+                if (meta.childNodes.length) {
+                    labelContainer.appendChild(meta);
+                }
+
+                button.appendChild(labelContainer);
+
+                if (isAvailable) {
+                    button.addEventListener('click', () => {
+                        handleSubscriptionPurchaseServerToggle(option.uuid);
+                    });
+                }
+
+                optionsContainer.appendChild(button);
+            });
+
+            const selectedCount = subscriptionPurchaseSelections.servers instanceof Set
+                ? subscriptionPurchaseSelections.servers.size
+                : 0;
+
+            if (metaElement) {
+                let metaText = '';
+                if (maxSelectable && maxSelectable !== minSelectable) {
+                    metaText = t('subscription_purchase.servers.limit').replace('{count}', String(maxSelectable));
+                } else if (selectedCount) {
+                    metaText = t('subscription_purchase.servers.selected').replace('{count}', String(selectedCount));
+                }
+                metaElement.textContent = metaText;
+            }
+
+            if (hintElement) {
+                const hintParts = [];
+                if (config?.hint) {
+                    hintParts.push(config.hint);
+                }
+                if (!config?.hint && minSelectable > 0) {
+                    hintParts.push(t('subscription_purchase.servers.limit').replace('{count}', String(minSelectable)));
+                }
+                const hintText = hintParts.join(' ');
+                hintElement.textContent = hintText;
+                hintElement.classList.toggle('hidden', !hintText);
+            }
+        }
+
+        function renderSubscriptionPurchaseDevices(data, period) {
+            const valueElement = document.getElementById('subscriptionPurchaseDevicesValue');
+            const priceElement = document.getElementById('subscriptionPurchaseDevicesPrice');
+            const metaElement = document.getElementById('subscriptionPurchaseDevicesMeta');
+            const hintElement = document.getElementById('subscriptionPurchaseDevicesHint');
+            const decreaseButton = document.getElementById('subscriptionPurchaseDevicesDecrease');
+            const increaseButton = document.getElementById('subscriptionPurchaseDevicesIncrease');
+
+            const config = getSubscriptionPurchaseDevicesConfig(period);
+            const min = coercePositiveInt(config?.min ?? config?.minimum ?? 0, 0) || 0;
+            const max = coercePositiveInt(config?.max ?? config?.maximum ?? 0, 0) || 0;
+
+            let value = coercePositiveInt(subscriptionPurchaseSelections.devices, null);
+            if (value === null) {
+                value = min > 0 ? min : 1;
+            }
+            if (min && value < min) {
+                value = min;
+            }
+            if (max && value > max) {
+                value = max;
+            }
+            subscriptionPurchaseSelections.devices = value;
+
+            if (valueElement) {
+                valueElement.textContent = String(value);
+            }
+
+            if (decreaseButton) {
+                decreaseButton.disabled = subscriptionPurchaseSubmitting || (min ? value <= min : value <= 1);
+            }
+            if (increaseButton) {
+                increaseButton.disabled = subscriptionPurchaseSubmitting || (max ? value >= max : false);
+            }
+
+            if (metaElement) {
+                let metaText = '';
+                if (min && max) {
+                    metaText = t('subscription_purchase.devices.limit')
+                        .replace('{min}', String(min))
+                        .replace('{max}', String(max));
+                } else if (max) {
+                    metaText = t('subscription_purchase.devices.limit')
+                        .replace('{min}', String(min || 1))
+                        .replace('{max}', String(max));
+                } else {
+                    metaText = t('subscription_purchase.devices.unlimited');
+                }
+                metaElement.textContent = metaText;
+            }
+
+            if (priceElement) {
+                const currency = getSubscriptionPurchaseCurrency();
+                const priceInfo = resolvePurchasePrice(
+                    [
+                        config.price_per_device_kopeks,
+                        config.pricePerDeviceKopeks,
+                        config.extra_device_price_kopeks,
+                        config.extraDevicePriceKopeks,
+                        config.price_kopeks,
+                        config.priceKopeks,
+                    ],
+                    [
+                        config.price_per_device_label,
+                        config.pricePerDeviceLabel,
+                        config.extra_device_price_label,
+                        config.extraDevicePriceLabel,
+                        config.price_label,
+                        config.priceLabel,
+                    ],
+                    currency,
+                );
+                priceElement.textContent = priceInfo.label || '';
+            }
+
+            if (hintElement) {
+                const hint = config?.hint || '';
+                hintElement.textContent = hint;
+                hintElement.classList.toggle('hidden', !hint);
+            }
+        }
+
+        function renderSubscriptionPurchaseSummary(preview, options = {}) {
+            const { loading = false } = options;
+            const priceCurrent = document.getElementById('subscriptionPurchasePriceCurrent');
+            const priceOriginal = document.getElementById('subscriptionPurchasePriceOriginal');
+            const discountElement = document.getElementById('subscriptionPurchaseDiscount');
+            const breakdownContainer = document.getElementById('subscriptionPurchaseBreakdown');
+            const balanceWarning = document.getElementById('subscriptionPurchaseBalanceWarning');
+            const submitButton = document.getElementById('subscriptionPurchaseSubmit');
+            const topupButton = document.getElementById('subscriptionPurchaseTopupBtn');
+
+            if (breakdownContainer) {
+                breakdownContainer.innerHTML = '';
+            }
+
+            if (priceCurrent) {
+                priceCurrent.textContent = loading
+                    ? '…'
+                    : (preview?.totalPriceLabel || '—');
+            }
+
+            if (priceOriginal) {
+                const showOriginal = !loading
+                    && preview?.originalPriceLabel
+                    && preview.originalPriceLabel !== preview.totalPriceLabel;
+                priceOriginal.textContent = showOriginal ? preview.originalPriceLabel : '—';
+                priceOriginal.classList.toggle('hidden', !showOriginal);
+            }
+
+            if (discountElement) {
+                const lines = [];
+                if (preview?.discountLabel) {
+                    lines.push(preview.discountLabel);
+                }
+                if (preview?.discountPercent) {
+                    lines.push(`-${preview.discountPercent}%`);
+                }
+                if (preview?.discountLines?.length) {
+                    preview.discountLines.forEach(line => {
+                        if (lines.indexOf(line) === -1) {
+                            lines.push(line);
+                        }
+                    });
+                }
+                const discountText = loading ? '' : lines.join(' · ');
+                discountElement.textContent = discountText;
+                discountElement.classList.toggle('hidden', !discountText);
+            }
+
+            if (breakdownContainer && preview?.breakdown?.length && !loading) {
+                preview.breakdown.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = 'subscription-purchase-breakdown-item';
+                    const label = document.createElement('span');
+                    label.textContent = item.label || '';
+                    const value = document.createElement('strong');
+                    value.textContent = item.value || '';
+                    row.appendChild(label);
+                    row.appendChild(value);
+                    breakdownContainer.appendChild(row);
+                });
+            }
+
+            if (balanceWarning) {
+                const hasMissingFunds = !loading && (preview?.missingAmountKopeks || 0) > 0;
+                if (hasMissingFunds) {
+                    const required = preview?.totalPriceLabel || '';
+                    const balance = preview?.balanceLabel || '';
+                    let warningText = t('subscription_purchase.balance.warning')
+                        .replace('{required}', required || '—')
+                        .replace('{balance}', balance || '—');
+                    const hint = t('subscription_purchase.balance.hint');
+                    if (hint && hint !== 'subscription_purchase.balance.hint') {
+                        warningText = `${warningText} ${hint}`;
+                    }
+                    balanceWarning.textContent = warningText;
+                }
+                balanceWarning.classList.toggle('hidden', !hasMissingFunds);
+            }
+
+            if (topupButton) {
+                const showTopup = !loading && (preview?.missingAmountKopeks || 0) > 0;
+                topupButton.classList.toggle('hidden', !showTopup);
+            }
+
+            if (submitButton) {
+                const disabled = loading
+                    || subscriptionPurchaseSubmitting
+                    || !preview
+                    || preview.canPurchase === false
+                    || (preview?.missingAmountKopeks || 0) > 0;
+                submitButton.disabled = disabled;
+            }
+        }
+
+        function requestSubscriptionPurchasePreviewUpdate(options = {}) {
+            const { delay = 250 } = options;
+            if (subscriptionPurchasePreviewUpdateHandle) {
+                clearTimeout(subscriptionPurchasePreviewUpdateHandle);
+            }
+            subscriptionPurchasePreviewUpdateHandle = setTimeout(() => {
+                updateSubscriptionPurchasePreview({ immediate: true });
+            }, Math.max(0, Number.isFinite(delay) ? delay : 250));
+        }
+
+        async function updateSubscriptionPurchasePreview(options = {}) {
+            const { immediate = false, force = false, delay = 250 } = options;
+
+            if (!immediate) {
+                requestSubscriptionPurchasePreviewUpdate({ delay });
+                return null;
+            }
+
+            if (subscriptionPurchasePreviewUpdateHandle) {
+                clearTimeout(subscriptionPurchasePreviewUpdateHandle);
+                subscriptionPurchasePreviewUpdateHandle = null;
+            }
+
+            if (!shouldShowPurchaseConfigurator()) {
+                return null;
+            }
+
+            if (!subscriptionPurchaseData) {
+                return null;
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                return null;
+            }
+
+            if (subscriptionPurchasePreviewLoading && !force) {
+                return subscriptionPurchasePreviewPromise || Promise.resolve(subscriptionPurchasePreview);
+            }
+
+            const period = getSelectedSubscriptionPurchasePeriod();
+            if (!period) {
+                return null;
+            }
+
+            ensureSubscriptionPurchaseSelectionsValidForPeriod(period);
+            const selection = buildSubscriptionPurchaseSelectionPayload(period);
+            if (!selection.period_id && !selection.periodId) {
+                return null;
+            }
+
+            const subscriptionId = subscriptionPurchaseData?.subscriptionId
+                || userData?.subscription_id
+                || userData?.subscriptionId
+                || null;
+
+            const payload = {
+                initData,
+                subscription_id: subscriptionId,
+                subscriptionId,
+                selection,
+                ...selection,
+            };
+
+            subscriptionPurchasePreviewLoading = true;
+            subscriptionPurchasePreviewError = null;
+            renderSubscriptionPurchaseCard();
+
+            const request = fetch('/miniapp/subscription/purchase/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }).then(async response => {
+                const body = await parseJsonSafe(response);
+                if (!response.ok || (body && body.success === false)) {
+                    const message = extractPurchaseErrorMessage(body, response.status);
+                    throw createError('Subscription purchase preview error', message, response.status);
+                }
+                const normalized = normalizeSubscriptionPurchasePreview(body);
+                subscriptionPurchasePreview = normalized;
+                subscriptionPurchasePreviewError = null;
+                subscriptionPurchasePreviewLoading = false;
+                subscriptionPurchasePreviewPromise = null;
+                renderSubscriptionPurchaseCard();
+                return normalized;
+            }).catch(error => {
+                subscriptionPurchasePreview = null;
+                subscriptionPurchasePreviewError = error;
+                subscriptionPurchasePreviewLoading = false;
+                subscriptionPurchasePreviewPromise = null;
+                console.warn('Failed to fetch subscription purchase preview:', error);
+                renderSubscriptionPurchaseCard();
+                throw error;
+            });
+
+            subscriptionPurchasePreviewPromise = request;
+            return request;
+        }
+
+        function renderSubscriptionPurchaseCard() {
+            const wrapper = document.getElementById('subscriptionPurchaseCardWrapper');
+            const card = document.getElementById('subscriptionPurchaseCard');
+            if (!card || !wrapper) {
+                return;
+            }
+
+            const shouldShow = shouldShowPurchaseConfigurator();
+            wrapper.classList.toggle('hidden', !shouldShow);
+            card.classList.toggle('hidden', !shouldShow);
+
+            if (!shouldShow) {
+                renderSubscriptionPurchaseStatus('');
+                if (subscriptionPurchaseModalOpen) {
+                    subscriptionPurchaseModalOpen = false;
+                    const modal = document.getElementById('subscriptionPurchaseModal');
+                    modal?.classList.add('hidden');
+                    document.body.classList.remove('modal-open');
+                    restoreSubscriptionPurchaseCard();
+                }
+                return;
+            }
+
+            if (subscriptionPurchaseModalOpen) {
+                const modal = document.getElementById('subscriptionPurchaseModal');
+                const modalBody = document.getElementById('subscriptionPurchaseModalBody');
+                if (modal && modalBody && !modalBody.contains(card)) {
+                    modalBody.appendChild(card);
+                }
+                card.classList.add('as-modal');
+                modal?.classList.remove('hidden');
+                document.body.classList.add('modal-open');
+            } else {
+                const modal = document.getElementById('subscriptionPurchaseModal');
+                modal?.classList.add('hidden');
+                document.body.classList.remove('modal-open');
+                restoreSubscriptionPurchaseCard();
+            }
+
+            const loadingBlock = document.getElementById('subscriptionPurchaseLoading');
+            const errorBlock = document.getElementById('subscriptionPurchaseError');
+            const contentBlock = document.getElementById('subscriptionPurchaseContent');
+
+            if (!subscriptionPurchaseData && !subscriptionPurchaseLoading && !subscriptionPurchaseError) {
+                ensureSubscriptionPurchaseData().catch(error => {
+                    console.warn('Failed to load subscription purchase data:', error);
+                });
+            }
+
+            if (subscriptionPurchaseLoading) {
+                loadingBlock?.classList.remove('hidden');
+                errorBlock?.classList.add('hidden');
+                contentBlock?.classList.add('hidden');
+                renderSubscriptionPurchaseStatus(t('subscription_purchase.status.loading'));
+                return;
+            }
+
+            if (subscriptionPurchaseError) {
+                loadingBlock?.classList.add('hidden');
+                contentBlock?.classList.add('hidden');
+                if (errorBlock) {
+                    const errorText = document.getElementById('subscriptionPurchaseErrorText');
+                    if (errorText) {
+                        errorText.textContent = subscriptionPurchaseError.message
+                            || t('subscription_purchase.error.default');
+                    }
+                    errorBlock.classList.remove('hidden');
+                }
+                renderSubscriptionPurchaseStatus(subscriptionPurchaseError.message || t('subscription_purchase.error.default'));
+                return;
+            }
+
+            if (!subscriptionPurchaseData) {
+                loadingBlock?.classList.remove('hidden');
+                errorBlock?.classList.add('hidden');
+                contentBlock?.classList.add('hidden');
+                renderSubscriptionPurchaseStatus(t('subscription_purchase.status.loading'));
+                return;
+            }
+
+            loadingBlock?.classList.add('hidden');
+            errorBlock?.classList.add('hidden');
+            contentBlock?.classList.remove('hidden');
+
+            const period = getSelectedSubscriptionPurchasePeriod();
+            if (period) {
+                ensureSubscriptionPurchaseSelectionsValidForPeriod(period);
+            }
+
+            renderSubscriptionPurchasePeriods(subscriptionPurchaseData);
+            renderSubscriptionPurchaseTraffic(subscriptionPurchaseData, period);
+            renderSubscriptionPurchaseServers(subscriptionPurchaseData, period);
+            renderSubscriptionPurchaseDevices(subscriptionPurchaseData, period);
+            renderSubscriptionPurchaseSummary(subscriptionPurchasePreview, { loading: subscriptionPurchasePreviewLoading });
+
+            let statusMessage = '';
+            if (subscriptionPurchasePreviewLoading) {
+                statusMessage = t('subscription_purchase.status.loading');
+            } else if (subscriptionPurchasePreviewError) {
+                statusMessage = subscriptionPurchasePreviewError.message || t('subscription_purchase.error.default');
+            } else if (subscriptionPurchasePreview?.statusMessage) {
+                statusMessage = subscriptionPurchasePreview.statusMessage;
+            }
+
+            renderSubscriptionPurchaseStatus(statusMessage);
+
+            if (!subscriptionPurchasePreview && !subscriptionPurchasePreviewLoading && !subscriptionPurchasePreviewError) {
+                updateSubscriptionPurchasePreview();
+            }
+        }
+
+        function handleSubscriptionPurchasePeriodSelect(periodId) {
+            if (subscriptionPurchaseLoading || subscriptionPurchaseSubmitting) {
+                return;
+            }
+            if (periodId === null || periodId === undefined) {
+                return;
+            }
+            const idString = String(periodId);
+            if (subscriptionPurchaseSelections.periodId === idString) {
+                return;
+            }
+            subscriptionPurchaseSelections.periodId = idString;
+            const period = getSelectedSubscriptionPurchasePeriod();
+            if (period) {
+                ensureSubscriptionPurchaseSelectionsValidForPeriod(period);
+            }
+            renderSubscriptionPurchaseCard();
+            requestSubscriptionPurchasePreviewUpdate();
+        }
+
+        function handleSubscriptionPurchaseTrafficSelect(value) {
+            if (subscriptionPurchaseLoading || subscriptionPurchaseSubmitting) {
+                return;
+            }
+            subscriptionPurchaseSelections.trafficValue = value;
+            renderSubscriptionPurchaseCard();
+            requestSubscriptionPurchasePreviewUpdate();
+        }
+
+        function handleSubscriptionPurchaseServerToggle(uuid) {
+            if (subscriptionPurchaseLoading || subscriptionPurchaseSubmitting) {
+                return;
+            }
+            if (!uuid) {
+                return;
+            }
+            const selection = subscriptionPurchaseSelections.servers instanceof Set
+                ? new Set(subscriptionPurchaseSelections.servers)
+                : new Set();
+            if (selection.has(uuid)) {
+                selection.delete(uuid);
+            } else {
+                selection.add(uuid);
+            }
+            subscriptionPurchaseSelections.servers = selection;
+            const period = getSelectedSubscriptionPurchasePeriod();
+            const config = getSubscriptionPurchaseServersConfig(period);
+            ensurePurchaseServersSelection(config);
+            renderSubscriptionPurchaseCard();
+            requestSubscriptionPurchasePreviewUpdate();
+        }
+
+        function handleSubscriptionPurchaseDevicesChange(delta) {
+            if (!Number.isFinite(delta) || subscriptionPurchaseLoading || subscriptionPurchaseSubmitting) {
+                return;
+            }
+            const period = getSelectedSubscriptionPurchasePeriod();
+            const config = getSubscriptionPurchaseDevicesConfig(period);
+            const min = coercePositiveInt(config?.min ?? config?.minimum ?? 0, 0) || 0;
+            const max = coercePositiveInt(config?.max ?? config?.maximum ?? 0, 0) || 0;
+            let value = coercePositiveInt(subscriptionPurchaseSelections.devices, null);
+            if (value === null) {
+                value = min > 0 ? min : 1;
+            }
+            value += delta;
+            if (min && value < min) {
+                value = min;
+            }
+            if (max && value > max) {
+                value = max;
+            }
+            if (value === subscriptionPurchaseSelections.devices) {
+                return;
+            }
+            subscriptionPurchaseSelections.devices = value;
+            renderSubscriptionPurchaseCard();
+            requestSubscriptionPurchasePreviewUpdate();
+        }
+
+        function openSubscriptionPurchaseModal() {
+            if (subscriptionPurchaseModalOpen) {
+                return;
+            }
+            if (!shouldShowPurchaseConfigurator()) {
+                const link = getEffectivePurchaseUrl();
+                if (link) {
+                    openExternalLink(link, { openInMiniApp: true });
+                }
+                return;
+            }
+            subscriptionPurchaseModalOpen = true;
+            renderSubscriptionPurchaseCard();
+            ensureSubscriptionPurchaseData().catch(error => {
+                console.warn('Failed to prepare subscription purchase data:', error);
+            });
+        }
+
+        function closeSubscriptionPurchaseModal() {
+            if (!subscriptionPurchaseModalOpen) {
+                restoreSubscriptionPurchaseCard();
+                return;
+            }
+            subscriptionPurchaseModalOpen = false;
+            const modal = document.getElementById('subscriptionPurchaseModal');
+            modal?.classList.add('hidden');
+            document.body.classList.remove('modal-open');
+            restoreSubscriptionPurchaseCard();
+            renderSubscriptionPurchaseCard();
+        }
+
+        async function submitSubscriptionPurchase() {
+            if (subscriptionPurchaseSubmitting) {
+                return;
+            }
+
+            if (!shouldShowPurchaseConfigurator()) {
+                const link = getEffectivePurchaseUrl();
+                if (link) {
+                    openExternalLink(link, { openInMiniApp: true });
+                }
+                return;
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                showPopup(t('subscription_settings.error.unauthorized'), t('subscription_purchase.submit.title'));
+                return;
+            }
+
+            if (!subscriptionPurchaseData) {
+                try {
+                    await ensureSubscriptionPurchaseData({ force: true });
+                } catch (error) {
+                    console.warn('Unable to refresh purchase options before submit:', error);
+                    showPopup(error.message || t('subscription_purchase.error.default'), t('subscription_purchase.submit.title'));
+                    return;
+                }
+            }
+
+            const period = getSelectedSubscriptionPurchasePeriod();
+            if (!period) {
+                showPopup(t('subscription_purchase.selection.invalid'), t('subscription_purchase.submit.title'));
+                return;
+            }
+
+            ensureSubscriptionPurchaseSelectionsValidForPeriod(period);
+            const selection = buildSubscriptionPurchaseSelectionPayload(period);
+            if (!selection.period_id && !selection.periodId) {
+                showPopup(t('subscription_purchase.selection.invalid'), t('subscription_purchase.submit.title'));
+                return;
+            }
+
+            const subscriptionId = subscriptionPurchaseData?.subscriptionId
+                || userData?.subscription_id
+                || userData?.subscriptionId
+                || null;
+
+            const payload = {
+                initData,
+                subscription_id: subscriptionId,
+                subscriptionId,
+                selection,
+                ...selection,
+            };
+
+            subscriptionPurchaseSubmitting = true;
+            subscriptionPurchasePreviewError = null;
+            renderSubscriptionPurchaseCard();
+
+            try {
+                const response = await fetch('/miniapp/subscription/purchase', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const body = await parseJsonSafe(response);
+                if (!response.ok || (body && body.success === false)) {
+                    const message = extractPurchaseErrorMessage(body, response.status);
+                    throw createError('Subscription purchase error', message, response.status);
+                }
+
+                const successMessage = body?.message
+                    || t('subscription_purchase.submit.success');
+                showPopup(successMessage, t('subscription_purchase.submit.title'));
+
+                subscriptionPurchasePreview = null;
+                subscriptionPurchasePreviewError = null;
+
+                await refreshSubscriptionData({ silent: true });
+                await ensureSubscriptionPurchaseData({ force: true }).catch(error => {
+                    console.warn('Failed to refresh purchase data after submission:', error);
+                });
+
+                closeSubscriptionPurchaseModal();
+            } catch (error) {
+                subscriptionPurchasePreviewError = error;
+                console.warn('Subscription purchase request failed:', error);
+                const errorMessage = error?.message || t('subscription_purchase.submit.insufficient');
+                showPopup(errorMessage, t('subscription_purchase.submit.title'));
+                if (error?.status === 402 || /insufficient/i.test(errorMessage)) {
+                    requestSubscriptionPurchasePreviewUpdate({ delay: 0 });
+                }
+            } finally {
+                subscriptionPurchaseSubmitting = false;
+                renderSubscriptionPurchaseCard();
+            }
+        }
+
         function getCurrentSubscriptionUrl() {
             return userData?.subscription_url || userData?.subscriptionUrl || '';
         }
@@ -10736,6 +13101,10 @@
                 const { backdrop } = getTopupElements();
                 if (backdrop && !backdrop.classList.contains('hidden')) {
                     closeTopupModal();
+                    return;
+                }
+                if (subscriptionPurchaseModalOpen) {
+                    closeSubscriptionPurchaseModal();
                 }
             }
         });
@@ -10816,7 +13185,12 @@
             }
         });
 
-        document.getElementById('purchaseBtn')?.addEventListener('click', () => {
+        document.getElementById('purchaseBtn')?.addEventListener('click', event => {
+            if (shouldShowPurchaseConfigurator()) {
+                event.preventDefault();
+                openSubscriptionPurchaseModal();
+                return;
+            }
             const link = getEffectivePurchaseUrl();
             if (!link) {
                 return;
