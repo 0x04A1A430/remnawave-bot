@@ -331,6 +331,16 @@
             min-width: 220px;
         }
 
+        .error.error-user-missing {
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.14), rgba(var(--primary-rgb), 0.08));
+            box-shadow: var(--shadow-md);
+            border: 1px solid rgba(var(--primary-rgb), 0.25);
+        }
+
+        .error.error-user-missing .error-text {
+            color: var(--text-primary);
+        }
+
         /* Cards */
         .card {
             background: var(--bg-secondary);
@@ -1781,6 +1791,21 @@
             background: rgba(255, 255, 255, 0.2);
         }
 
+        :root[data-theme="dark"] .subscription-missing-card {
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.28), rgba(var(--primary-rgb), 0.12));
+            border-color: rgba(var(--primary-rgb), 0.5);
+        }
+
+        :root[data-theme="dark"] .subscription-missing-icon {
+            background: rgba(var(--primary-rgb), 0.3);
+            color: #bfdbfe;
+        }
+
+        :root[data-theme="dark"] .status-missing {
+            background: rgba(59, 130, 246, 0.18);
+            color: #bfdbfe;
+        }
+
         :root[data-theme="dark"] .promo-offer-chip {
             background: rgba(255, 255, 255, 0.08);
             color: rgba(255, 255, 255, 0.9);
@@ -1832,6 +1857,64 @@
             min-width: 0;
         }
 
+        .subscription-missing-card {
+            display: flex;
+            gap: 16px;
+            padding: 20px;
+            align-items: center;
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.06), rgba(var(--primary-rgb), 0.12));
+            border: 2px dashed rgba(var(--primary-rgb), 0.35);
+        }
+
+        .subscription-missing-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: rgba(var(--primary-rgb), 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            flex-shrink: 0;
+            color: var(--primary);
+        }
+
+        .subscription-missing-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .subscription-missing-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: var(--text-primary);
+        }
+
+        .subscription-missing-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .subscription-missing-hint {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .subscription-missing-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .subscription-missing-actions .btn-primary,
+        .subscription-missing-actions .btn-secondary {
+            flex: 1;
+            min-width: 140px;
+        }
+
         .user-name {
             font-size: 20px;
             font-weight: 700;
@@ -1880,6 +1963,11 @@
         .status-disabled {
             background: linear-gradient(135deg, #e2e3e5, #eeeff1);
             color: #41464b;
+        }
+
+        .status-missing {
+            background: linear-gradient(135deg, #e0e7ff, #eef2ff);
+            color: #1e3a8a;
         }
 
         /* Stats Grid */
@@ -4210,7 +4298,7 @@
 
         <!-- Error State -->
         <div id="errorState" class="error hidden">
-            <div class="error-icon">⚠️</div>
+            <div class="error-icon" id="errorIcon">⚠️</div>
             <div class="error-title" id="errorTitle" data-i18n="error.default.title">Subscription Not Found</div>
             <div class="error-text" id="errorText" data-i18n="error.default.message">Please contact support to activate your subscription</div>
             <div class="error-actions">
@@ -4228,8 +4316,22 @@
             <!-- Promo Offers -->
             <div id="promoOffersContainer" class="promo-offers hidden"></div>
 
+            <!-- Subscription Missing -->
+            <div class="card subscription-missing-card hidden animate-in" id="subscriptionMissingCard">
+                <div class="subscription-missing-icon" aria-hidden="true">🛡️</div>
+                <div class="subscription-missing-content">
+                    <div class="subscription-missing-title" id="subscriptionMissingTitle" data-i18n="subscription_missing.title">No active subscription</div>
+                    <div class="subscription-missing-description" id="subscriptionMissingDescription" data-i18n="subscription_missing.description.default">Purchase a plan or activate a trial to continue.</div>
+                    <div class="subscription-missing-hint" id="subscriptionMissingHint" data-i18n="subscription_missing.hint">Top up your balance after activation to stay connected.</div>
+                    <div class="subscription-missing-actions">
+                        <button class="btn btn-primary" type="button" id="subscriptionMissingPurchaseBtn" data-i18n="subscription_missing.action.buy">Buy subscription</button>
+                        <button class="btn btn-secondary hidden" type="button" id="subscriptionMissingTrialBtn" data-i18n="subscription_missing.action.trial">Activate trial</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- User Card -->
-            <div class="card user-card animate-in">
+            <div class="card user-card animate-in" id="userCard">
                 <div class="user-header">
                     <div class="user-avatar" id="userAvatar">U</div>
                     <div class="user-info">
@@ -4972,6 +5074,8 @@
                 'app.loading': 'Loading your subscription...',
                 'error.default.title': 'Subscription Not Found',
                 'error.default.message': 'Please contact support to activate your subscription.',
+                'error.user_not_found.title': 'Register in the bot',
+                'error.user_not_found.message': 'Open the Telegram bot to register before using the mini app.',
                 'stats.days_left': 'Days left',
                 'stats.servers': 'Servers',
                 'stats.devices': 'Devices',
@@ -5031,6 +5135,7 @@
                 'topup.status.retry': 'Try again',
                 'topup.done': 'Done',
                 'button.buy_subscription': 'Buy Subscription',
+                'button.open_bot': 'Open Telegram bot',
                 'subscription_purchase.title': 'Purchase subscription',
                 'subscription_purchase.subtitle': 'Configure the plan before completing the purchase.',
                 'subscription_purchase.status.loading': 'Loading subscription options…',
@@ -5280,9 +5385,19 @@
                 'status.trial': 'Trial',
                 'status.expired': 'Expired',
                 'status.disabled': 'Disabled',
+                'status.missing': 'Inactive',
                 'status.unknown': 'Unknown',
                 'subscription.type.trial': 'Trial',
                 'subscription.type.paid': 'Paid',
+                'subscription.type.none': 'No subscription',
+                'subscription_missing.title': 'No active subscription',
+                'subscription_missing.description.default': 'You do not have an active subscription yet. Purchase a plan to get access.',
+                'subscription_missing.description.trial': 'Activate your free {days}-day trial or choose a plan to continue.',
+                'subscription_missing.description.trial_short': 'Activate your free trial or choose a plan to continue.',
+                'subscription_missing.description.no_trial': 'Your trial is no longer available. Purchase a plan to continue.',
+                'subscription_missing.hint': 'After activation you can top up your balance here to stay connected.',
+                'subscription_missing.action.buy': 'Buy subscription',
+                'subscription_missing.action.trial': 'Activate trial',
                 'autopay.enabled': 'Enabled',
                 'autopay.disabled': 'Disabled',
                 'platform.ios': 'iOS',
@@ -5327,6 +5442,8 @@
                 'app.loading': 'Загружаем вашу подписку...',
                 'error.default.title': 'Подписка не найдена',
                 'error.default.message': 'Свяжитесь с поддержкой, чтобы активировать подписку.',
+                'error.user_not_found.title': 'Зарегистрируйтесь в боте',
+                'error.user_not_found.message': 'Откройте телеграм-бота, чтобы зарегистрироваться перед использованием мини-приложения.',
                 'stats.days_left': 'Осталось дней',
                 'stats.servers': 'Серверы',
                 'stats.devices': 'Устройства',
@@ -5386,6 +5503,7 @@
                 'topup.status.retry': 'Повторить попытку',
                 'topup.done': 'Готово',
                 'button.buy_subscription': 'Купить подписку',
+                'button.open_bot': 'Открыть бота',
                 'subscription_purchase.title': 'Оформление подписки',
                 'subscription_purchase.subtitle': 'Настройте параметры перед покупкой.',
                 'subscription_purchase.status.loading': 'Загружаем доступные варианты…',
@@ -5635,9 +5753,19 @@
                 'status.trial': 'Пробная',
                 'status.expired': 'Истекла',
                 'status.disabled': 'Отключена',
+                'status.missing': 'Неактивна',
                 'status.unknown': 'Неизвестно',
                 'subscription.type.trial': 'Триал',
                 'subscription.type.paid': 'Платная',
+                'subscription.type.none': 'Нет подписки',
+                'subscription_missing.title': 'Нет активной подписки',
+                'subscription_missing.description.default': 'У вас ещё нет активной подписки. Оформите тариф, чтобы получить доступ.',
+                'subscription_missing.description.trial': 'Активируйте бесплатный триал на {days} дн. или выберите тариф, чтобы продолжить.',
+                'subscription_missing.description.trial_short': 'Активируйте бесплатный триал или выберите тариф, чтобы продолжить.',
+                'subscription_missing.description.no_trial': 'Пробный период недоступен. Оформите подписку, чтобы продолжить.',
+                'subscription_missing.hint': 'После активации вы сможете пополнить баланс здесь для бесперебойной работы.',
+                'subscription_missing.action.buy': 'Купить подписку',
+                'subscription_missing.action.trial': 'Активировать триал',
                 'autopay.enabled': 'Включен',
                 'autopay.disabled': 'Выключен',
                 'platform.ios': 'iOS',
@@ -6480,16 +6608,66 @@
             if (!titleElement || !textElement) {
                 return;
             }
-            const title = currentErrorState?.title || t('error.default.title');
-            const message = currentErrorState?.message || t('error.default.message');
+            const code = typeof currentErrorState?.code === 'string'
+                ? currentErrorState.code.toLowerCase()
+                : null;
+
+            let title = currentErrorState?.title || null;
+            let message = currentErrorState?.message || null;
+
+            if (code) {
+                const titleKey = `error.${code}.title`;
+                const translatedTitle = t(titleKey);
+                if (translatedTitle && translatedTitle !== titleKey) {
+                    title = translatedTitle;
+                }
+
+                const messageKey = `error.${code}.message`;
+                const translatedMessage = t(messageKey);
+                if (translatedMessage && translatedMessage !== messageKey) {
+                    message = translatedMessage;
+                }
+            }
+
+            const defaultTitle = t('error.default.title');
+            if (!title) {
+                title = defaultTitle === 'error.default.title'
+                    ? (currentErrorState?.title || 'Subscription Not Found')
+                    : defaultTitle;
+            }
+
+            const defaultMessage = t('error.default.message');
+            if (!message) {
+                message = defaultMessage === 'error.default.message'
+                    ? (currentErrorState?.message || 'Please contact support to activate your subscription.')
+                    : defaultMessage;
+            }
+
             titleElement.textContent = title;
             textElement.textContent = message;
+
+            const errorStateElement = document.getElementById('errorState');
+            if (errorStateElement) {
+                errorStateElement.classList.toggle('error-user-missing', code === 'user_not_found');
+            }
+
+            const iconElement = document.getElementById('errorIcon');
+            if (iconElement) {
+                iconElement.textContent = code === 'user_not_found' ? '🤖' : '⚠️';
+            }
 
             const purchaseButton = document.getElementById('purchaseBtn');
             if (purchaseButton) {
                 const link = getEffectivePurchaseUrl();
                 purchaseButton.classList.toggle('hidden', !link);
                 purchaseButton.disabled = !link;
+
+                const buttonKey = code === 'user_not_found'
+                    ? 'button.open_bot'
+                    : 'button.buy_subscription';
+                const label = t(buttonKey);
+                const fallback = code === 'user_not_found' ? 'Open bot' : 'Buy subscription';
+                purchaseButton.textContent = label === buttonKey ? fallback : label;
             }
         }
 
@@ -6623,6 +6801,7 @@
             let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
             let purchaseUrl = null;
 
+            let code = null;
             try {
                 const errorPayload = await response.json();
                 if (errorPayload?.detail) {
@@ -6631,6 +6810,12 @@
                     } else if (typeof errorPayload.detail === 'object') {
                         if (typeof errorPayload.detail.message === 'string') {
                             detail = errorPayload.detail.message;
+                        }
+                        if (typeof errorPayload.detail.title === 'string') {
+                            title = errorPayload.detail.title;
+                        }
+                        if (typeof errorPayload.detail.code === 'string') {
+                            code = errorPayload.detail.code;
                         }
                         purchaseUrl = errorPayload.detail.purchase_url
                             || errorPayload.detail.purchaseUrl
@@ -6644,6 +6829,10 @@
                     title = errorPayload.title;
                 }
 
+                if (!code && typeof errorPayload?.code === 'string') {
+                    code = errorPayload.code;
+                }
+
                 purchaseUrl = purchaseUrl
                     || errorPayload?.purchase_url
                     || errorPayload?.purchaseUrl
@@ -6653,6 +6842,9 @@
             }
 
             const errorObject = createError(title, detail, response.status);
+            if (code) {
+                errorObject.code = code;
+            }
             const normalizedPurchaseUrl = normalizeUrl(purchaseUrl);
             if (normalizedPurchaseUrl) {
                 errorObject.purchaseUrl = normalizedPurchaseUrl;
@@ -6679,6 +6871,33 @@
             );
             subscriptionPurchaseUrl = normalizedPurchaseUrl;
             userData.subscriptionPurchaseUrl = normalizedPurchaseUrl || null;
+
+            const subscriptionMissingValue = Boolean(
+                userData.subscription_missing ?? userData.subscriptionMissing
+            );
+            userData.subscription_missing = subscriptionMissingValue;
+            userData.subscriptionMissing = subscriptionMissingValue;
+
+            const trialAvailableValue = Boolean(
+                userData.trial_available ?? userData.trialAvailable
+            );
+            userData.trial_available = trialAvailableValue;
+            userData.trialAvailable = trialAvailableValue;
+
+            const trialDuration = coercePositiveInt(
+                userData.trial_duration_days ?? userData.trialDurationDays ?? null,
+                null,
+            );
+            userData.trial_duration_days = trialDuration;
+            userData.trialDurationDays = trialDuration;
+
+            const missingReason = (
+                userData.subscription_missing_reason
+                ?? userData.subscriptionMissingReason
+                ?? null
+            );
+            userData.subscription_missing_reason = missingReason;
+            userData.subscriptionMissingReason = missingReason;
 
             if (userData.branding) {
                 applyBrandingOverrides(userData.branding);
@@ -6796,12 +7015,24 @@
                 || `User ${user.telegram_id || ''}`.trim();
             const avatarChar = (fallbackName.replace(/^@/, '')[0] || 'U').toUpperCase();
 
+            const subscriptionMissing = Boolean(
+                userData?.subscription_missing ?? userData?.subscriptionMissing
+            );
+
             document.getElementById('userAvatar').textContent = avatarChar;
             document.getElementById('userName').textContent = fallbackName;
 
-            const knownStatuses = ['active', 'trial', 'expired', 'disabled'];
+            const userCard = document.getElementById('userCard');
+            if (userCard) {
+                userCard.classList.toggle('hidden', subscriptionMissing);
+            }
+
+            const knownStatuses = ['active', 'trial', 'expired', 'disabled', 'missing'];
             const statusValueRaw = (user.subscription_actual_status || user.subscription_status || 'active').toLowerCase();
-            const statusClass = knownStatuses.includes(statusValueRaw) ? statusValueRaw : 'unknown';
+            let statusClass = knownStatuses.includes(statusValueRaw) ? statusValueRaw : 'unknown';
+            if (subscriptionMissing && statusClass !== 'missing') {
+                statusClass = 'missing';
+            }
             const statusBadge = document.getElementById('statusBadge');
             const statusKey = `status.${statusClass}`;
             const statusLabel = t(statusKey);
@@ -6879,6 +7110,7 @@
                     : autopayLabel;
             }
 
+            renderSubscriptionMissingCard();
             renderSubscriptionPurchaseCard();
             renderSubscriptionRenewalCard();
             renderSubscriptionSettingsCard();
@@ -6893,6 +7125,102 @@
             renderLegalDocuments();
             updateConnectButtonLabel();
             updateActionButtons();
+        }
+
+        function renderSubscriptionMissingCard() {
+            const card = document.getElementById('subscriptionMissingCard');
+            if (!card) {
+                return;
+            }
+
+            const subscriptionMissing = Boolean(
+                userData?.subscription_missing ?? userData?.subscriptionMissing
+            );
+            card.classList.toggle('hidden', !subscriptionMissing);
+
+            if (!subscriptionMissing) {
+                return;
+            }
+
+            const titleElement = document.getElementById('subscriptionMissingTitle');
+            if (titleElement) {
+                const titleValue = t('subscription_missing.title');
+                titleElement.textContent = titleValue && titleValue !== 'subscription_missing.title'
+                    ? titleValue
+                    : 'No active subscription';
+            }
+
+            const trialAvailable = Boolean(
+                userData?.trial_available ?? userData?.trialAvailable
+            );
+            const trialDuration = coercePositiveInt(
+                userData?.trial_duration_days ?? userData?.trialDurationDays ?? null,
+                null,
+            );
+            const missingReason = String(
+                userData?.subscription_missing_reason ?? userData?.subscriptionMissingReason ?? ''
+            ).toLowerCase();
+
+            const descriptionElement = document.getElementById('subscriptionMissingDescription');
+            if (descriptionElement) {
+                let descriptionKey = 'subscription_missing.description.default';
+                if (trialAvailable) {
+                    descriptionKey = trialDuration
+                        ? 'subscription_missing.description.trial'
+                        : 'subscription_missing.description.trial_short';
+                } else if (missingReason === 'trial_expired') {
+                    descriptionKey = 'subscription_missing.description.no_trial';
+                }
+
+                let descriptionValue = t(descriptionKey);
+                if (!descriptionValue || descriptionValue === descriptionKey) {
+                    if (trialAvailable) {
+                        descriptionValue = trialDuration
+                            ? `Activate your free ${trialDuration}-day trial or choose a plan to continue.`
+                            : 'Activate your free trial or choose a plan to continue.';
+                    } else if (missingReason === 'trial_expired') {
+                        descriptionValue = 'Your trial is no longer available. Purchase a plan to continue.';
+                    } else {
+                        descriptionValue = 'You do not have an active subscription yet. Purchase a plan to get access.';
+                    }
+                }
+
+                if (trialDuration && descriptionValue.includes('{days}')) {
+                    descriptionValue = descriptionValue.replace('{days}', String(trialDuration));
+                }
+
+                descriptionElement.textContent = descriptionValue;
+            }
+
+            const hintElement = document.getElementById('subscriptionMissingHint');
+            if (hintElement) {
+                const hintValue = t('subscription_missing.hint');
+                hintElement.textContent = hintValue && hintValue !== 'subscription_missing.hint'
+                    ? hintValue
+                    : 'After activation you can top up your balance here to stay connected.';
+            }
+
+            const purchaseButton = document.getElementById('subscriptionMissingPurchaseBtn');
+            if (purchaseButton) {
+                const label = t('subscription_missing.action.buy');
+                purchaseButton.textContent = label && label !== 'subscription_missing.action.buy'
+                    ? label
+                    : 'Buy subscription';
+
+                const hasPurchaseFlow = shouldShowPurchaseConfigurator() || Boolean(getEffectivePurchaseUrl());
+                purchaseButton.classList.toggle('hidden', !hasPurchaseFlow);
+                purchaseButton.disabled = !hasPurchaseFlow;
+            }
+
+            const trialButton = document.getElementById('subscriptionMissingTrialBtn');
+            if (trialButton) {
+                const label = t('subscription_missing.action.trial');
+                trialButton.textContent = label && label !== 'subscription_missing.action.trial'
+                    ? label
+                    : 'Activate trial';
+                trialButton.classList.toggle('hidden', !trialAvailable);
+                trialButton.disabled = !trialAvailable;
+            }
         }
 
         function resolvePromoOfferIcon(offer) {
@@ -15204,7 +15532,7 @@
 
         async function copySubscriptionUrl(url) {
             if (!url) return;
-            
+
             try {
                 if (navigator.clipboard && window.isSecureContext) {
                     await navigator.clipboard.writeText(url);
@@ -15243,6 +15571,39 @@
             }
         }
 
+        function handlePurchaseAction(event) {
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+
+            if (shouldShowPurchaseConfigurator()) {
+                openSubscriptionPurchaseModal();
+                return true;
+            }
+
+            const link = getEffectivePurchaseUrl();
+            if (link) {
+                openExternalLink(link, { openInMiniApp: true });
+                return true;
+            }
+
+            return false;
+        }
+
+        function handleTrialAction(event) {
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+
+            const link = getEffectivePurchaseUrl();
+            if (link) {
+                openExternalLink(link, { openInMiniApp: true });
+                return true;
+            }
+
+            return handlePurchaseAction();
+        }
+
         function updateActionButtons() {
             const connectBtn = document.getElementById('connectBtn');
             const copyBtn = document.getElementById('copyBtn');
@@ -15279,6 +15640,7 @@
             currentErrorState = {
                 title: error?.title,
                 message: error?.message,
+                code: typeof error?.code === 'string' ? error.code : null,
                 purchaseUrl: normalizeUrl(error?.purchaseUrl) || null,
             };
             updateErrorTexts();
@@ -15405,18 +15767,9 @@
             }
         });
 
-        document.getElementById('purchaseBtn')?.addEventListener('click', event => {
-            if (shouldShowPurchaseConfigurator()) {
-                event.preventDefault();
-                openSubscriptionPurchaseModal();
-                return;
-            }
-            const link = getEffectivePurchaseUrl();
-            if (!link) {
-                return;
-            }
-            openExternalLink(link, { openInMiniApp: true });
-        });
+        document.getElementById('purchaseBtn')?.addEventListener('click', handlePurchaseAction);
+        document.getElementById('subscriptionMissingPurchaseBtn')?.addEventListener('click', handlePurchaseAction);
+        document.getElementById('subscriptionMissingTrialBtn')?.addEventListener('click', handleTrialAction);
 
         initializePromoCodeForm();
 
