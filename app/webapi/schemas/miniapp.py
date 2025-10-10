@@ -609,3 +609,78 @@ class MiniAppSubscriptionPurchaseResponse(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+
+class MiniAppSubscriptionRenewalPromoOffer(BaseModel):
+    percent: int
+    expires_at: Optional[datetime] = Field(default=None, alias="expiresAt")
+    title: Optional[str] = None
+    message: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionRenewalOption(BaseModel):
+    id: str
+    days: Optional[int] = None
+    period_days: Optional[int] = Field(default=None, alias="periodDays")
+    months: Optional[int] = None
+    price_kopeks: Optional[int] = Field(default=None, alias="priceKopeks")
+    price_label: Optional[str] = Field(default=None, alias="priceLabel")
+    original_price_kopeks: Optional[int] = Field(default=None, alias="originalPriceKopeks")
+    original_price_label: Optional[str] = Field(default=None, alias="originalPriceLabel")
+    discount_percent: Optional[int] = Field(default=None, alias="discountPercent")
+    per_month_kopeks: Optional[int] = Field(default=None, alias="perMonthKopeks")
+    per_month_label: Optional[str] = Field(default=None, alias="perMonthLabel")
+    is_recommended: bool = Field(default=False, alias="isRecommended")
+    badge: Optional[str] = None
+    description: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionRenewalOptions(BaseModel):
+    currency: str
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+    periods: List[MiniAppSubscriptionRenewalOption] = Field(default_factory=list)
+    default_period_id: Optional[str] = Field(default=None, alias="defaultPeriodId")
+    promo_group: Optional[MiniAppPromoGroup] = Field(default=None, alias="promoGroup")
+    promo_offer: Optional[MiniAppSubscriptionRenewalPromoOffer] = Field(default=None, alias="promoOffer")
+    missing_amount_kopeks: Optional[int] = Field(default=None, alias="missingAmountKopeks")
+    status_message: Optional[str] = Field(default=None, alias="statusMessage")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionRenewalOptionsRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionRenewalOptionsResponse(MiniAppSubscriptionRenewalOptions):
+    success: bool = True
+
+
+class MiniAppSubscriptionRenewalRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    period_id: Optional[str] = Field(default=None, alias="periodId")
+    period_days: Optional[int] = Field(default=None, alias="periodDays")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionRenewalResponse(BaseModel):
+    success: bool = True
+    message: Optional[str] = None
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    period_days: Optional[int] = Field(default=None, alias="periodDays")
+    renewed_until: Optional[datetime] = Field(default=None, alias="renewedUntil")
+
+    model_config = ConfigDict(populate_by_name=True)
+
