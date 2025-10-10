@@ -4014,6 +4014,24 @@
                 'subscription_settings.error.unauthorized': 'Authorization failed. Please reopen the mini app from Telegram.',
                 'subscription_settings.error.validation': 'Please review your selection and try again.',
                 'subscription_settings.pending_action': 'Saving…',
+                'subscription_settings.confirm.title.charge': 'Confirm payment',
+                'subscription_settings.confirm.title.free': 'Confirm changes',
+                'subscription_settings.confirm.action.pay': 'Pay',
+                'subscription_settings.confirm.action.apply': 'Apply',
+                'subscription_settings.confirm.action.cancel': 'Cancel',
+                'subscription_settings.confirm.total.charge': 'You will be charged {amount}.',
+                'subscription_settings.confirm.total.charge_period': 'You will be charged {amount} for {period}.',
+                'subscription_settings.confirm.total.free': 'No charges will be made.',
+                'subscription_settings.confirm.servers.add': 'The following servers will be connected:',
+                'subscription_settings.confirm.servers.remove': 'The following servers will be disconnected without refunds:',
+                'subscription_settings.confirm.servers.entry_paid': '{name} — {amount}',
+                'subscription_settings.confirm.servers.entry_free': '{name} — included',
+                'subscription_settings.confirm.traffic.increase': 'Traffic limit will change to {value}.',
+                'subscription_settings.confirm.traffic.decrease': 'Traffic limit will change to {value}. No charges apply.',
+                'subscription_settings.confirm.devices.increase': 'Device limit will change to {value}.',
+                'subscription_settings.confirm.devices.decrease': 'Device limit will change to {value}. No charges apply.',
+                'subscription_settings.confirm.months.one': '{count} month',
+                'subscription_settings.confirm.months.other': '{count} months',
                 'promo_code.title': 'Activate promo code',
                 'promo_code.subtitle': 'Enter a promo code to unlock rewards instantly.',
                 'promo_code.placeholder': 'Enter promo code',
@@ -4277,6 +4295,24 @@
                 'subscription_settings.error.unauthorized': 'Не удалось пройти авторизацию. Откройте мини-приложение заново из Telegram.',
                 'subscription_settings.error.validation': 'Проверьте выбранные параметры и попробуйте ещё раз.',
                 'subscription_settings.pending_action': 'Сохраняем…',
+                'subscription_settings.confirm.title.charge': 'Подтвердите оплату',
+                'subscription_settings.confirm.title.free': 'Подтвердите изменения',
+                'subscription_settings.confirm.action.pay': 'Оплатить',
+                'subscription_settings.confirm.action.apply': 'Применить',
+                'subscription_settings.confirm.action.cancel': 'Отменить',
+                'subscription_settings.confirm.total.charge': 'Будет списано {amount}.',
+                'subscription_settings.confirm.total.charge_period': 'Будет списано {amount} за {period}.',
+                'subscription_settings.confirm.total.free': 'Списаний не будет.',
+                'subscription_settings.confirm.servers.add': 'Будут подключены серверы:',
+                'subscription_settings.confirm.servers.remove': 'Будут отключены серверы без возврата средств:',
+                'subscription_settings.confirm.servers.entry_paid': '{name} — {amount}',
+                'subscription_settings.confirm.servers.entry_free': '{name} — включено',
+                'subscription_settings.confirm.traffic.increase': 'Лимит трафика изменится на {value}.',
+                'subscription_settings.confirm.traffic.decrease': 'Лимит трафика изменится на {value}. Дополнительная оплата не требуется.',
+                'subscription_settings.confirm.devices.increase': 'Лимит устройств изменится на {value}.',
+                'subscription_settings.confirm.devices.decrease': 'Лимит устройств изменится на {value}. Дополнительная оплата не требуется.',
+                'subscription_settings.confirm.months.one': '{count} месяц',
+                'subscription_settings.confirm.months.other': '{count} месяцев',
                 'promo_code.title': 'Активировать промокод',
                 'promo_code.subtitle': 'Введите промокод и сразу получите бонусы.',
                 'promo_code.placeholder': 'Введите промокод',
@@ -6790,6 +6826,435 @@
             return formatCurrency(normalized / 100, currencyCode);
         }
 
+        function formatDeviceCountLabel(count) {
+            const normalized = coercePositiveInt(count, null);
+            if (normalized === null) {
+                return '';
+            }
+            if (normalized <= 0) {
+                return t('subscription_settings.devices.unlimited');
+            }
+            const key = normalized === 1
+                ? 'subscription_settings.devices.value_one'
+                : 'subscription_settings.devices.value';
+            const template = t(key);
+            if (!template || template === key) {
+                return String(normalized);
+            }
+            return template.replace('{count}', String(normalized));
+        }
+
+        function formatMonthsLabel(months) {
+            const normalized = coercePositiveInt(months, null);
+            if (!normalized) {
+                return '';
+            }
+
+            const language = (preferredLanguage || '').toLowerCase();
+            if (language.startsWith('ru')) {
+                const mod10 = normalized % 10;
+                const mod100 = normalized % 100;
+                let word = 'месяцев';
+                if (mod10 === 1 && mod100 !== 11) {
+                    word = 'месяц';
+                } else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+                    word = 'месяца';
+                }
+                return `${normalized} ${word}`;
+            }
+
+            const key = normalized === 1
+                ? 'subscription_settings.confirm.months.one'
+                : 'subscription_settings.confirm.months.other';
+            const template = t(key);
+            if (!template || template === key) {
+                return normalized === 1
+                    ? `${normalized} month`
+                    : `${normalized} months`;
+            }
+            return template.replace('{count}', String(normalized));
+        }
+
+        async function showConfirmationPopup({ title, message, confirmText, cancelText, destructive = false } = {}) {
+            const fallbackCancel = cancelText || (() => {
+                const cancelValue = t('subscription_settings.confirm.action.cancel');
+                return cancelValue && cancelValue !== 'subscription_settings.confirm.action.cancel'
+                    ? cancelValue
+                    : 'Cancel';
+            })();
+            const fallbackConfirm = confirmText || 'OK';
+            const popupMessage = message && message.trim().length ? message : '';
+
+            if (typeof tg.showPopup === 'function') {
+                const params = {
+                    title: title || undefined,
+                    message: popupMessage || ' ',
+                    buttons: [
+                        { id: 'cancel', type: 'cancel', text: fallbackCancel },
+                        { id: 'confirm', type: destructive ? 'destructive' : 'default', text: fallbackConfirm },
+                    ],
+                };
+
+                try {
+                    const buttonId = await new Promise(resolve => {
+                        let resolved = false;
+                        let timeoutId = null;
+
+                        const finalize = id => {
+                            if (resolved) {
+                                return;
+                            }
+                            resolved = true;
+                            if (timeoutId) {
+                                clearTimeout(timeoutId);
+                            }
+                            if (typeof tg.offEvent === 'function' && typeof popupClosedHandler === 'function') {
+                                tg.offEvent('popupClosed', popupClosedHandler);
+                            }
+                            resolve(id);
+                        };
+
+                        const popupClosedHandler = typeof tg.onEvent === 'function'
+                            ? event => {
+                                const id = event && (event.button_id || event.buttonId || event.id || event);
+                                finalize(id ?? null);
+                            }
+                            : null;
+
+                        if (popupClosedHandler) {
+                            tg.onEvent('popupClosed', popupClosedHandler);
+                        }
+
+                        const callback = id => finalize(id ?? null);
+
+                        try {
+                            if (tg.showPopup.length >= 2) {
+                                tg.showPopup(params, callback);
+                            } else {
+                                const result = tg.showPopup(params);
+                                if (result && typeof result.then === 'function') {
+                                    result
+                                        .then(data => {
+                                            const id = data && (data.button_id || data.buttonId || data.id || data);
+                                            finalize(id ?? null);
+                                        })
+                                        .catch(error => {
+                                            console.error('Popup promise rejected', error);
+                                            finalize(null);
+                                        });
+                                } else if (!popupClosedHandler) {
+                                    // No callback or events available – resolve on next tick to fall back.
+                                    setTimeout(() => finalize(null), 0);
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Failed to show confirmation popup', error);
+                            finalize(null);
+                            return;
+                        }
+
+                        timeoutId = setTimeout(() => finalize(null), 15000);
+                    });
+
+                    if (buttonId === 'confirm') {
+                        return true;
+                    }
+                    if (buttonId) {
+                        return false;
+                    }
+                    // If buttonId is null/undefined fall through to native confirm.
+                } catch (error) {
+                    console.error('Failed to await confirmation popup result', error);
+                }
+            }
+
+            const titlePart = title ? `${title}\n\n` : '';
+            return window.confirm(`${titlePart}${popupMessage || ''}`);
+        }
+
+        async function confirmSubscriptionSettingsChange({
+            lines = [],
+            chargeAmount = 0,
+            currency = 'RUB',
+            months = 0,
+            addTotalLine = true,
+            destructive = false,
+        } = {}) {
+            const normalizedLines = Array.isArray(lines)
+                ? lines.filter(line => typeof line === 'string' && line.trim().length)
+                : [];
+            const hasCharge = typeof chargeAmount === 'number' && chargeAmount > 0;
+            const normalizedMonths = coercePositiveInt(months, null);
+            const effectiveMonths = hasCharge ? (normalizedMonths || 1) : (normalizedMonths || 0);
+
+            if (addTotalLine) {
+                if (hasCharge) {
+                    const amountLabel = formatPriceFromKopeks(chargeAmount, currency);
+                    const periodLabel = effectiveMonths ? formatMonthsLabel(effectiveMonths) : '';
+                    const templateKey = periodLabel
+                        ? 'subscription_settings.confirm.total.charge_period'
+                        : 'subscription_settings.confirm.total.charge';
+                    const template = t(templateKey);
+                    let line;
+                    if (template && template !== templateKey) {
+                        line = template
+                            .replace('{amount}', amountLabel)
+                            .replace('{period}', periodLabel || '');
+                    } else if (periodLabel) {
+                        line = `You will be charged ${amountLabel} for ${periodLabel}.`;
+                    } else {
+                        line = `You will be charged ${amountLabel}.`;
+                    }
+                    normalizedLines.push(line);
+                } else {
+                    const template = t('subscription_settings.confirm.total.free');
+                    normalizedLines.push(
+                        template && template !== 'subscription_settings.confirm.total.free'
+                            ? template
+                            : 'No charges will be made.'
+                    );
+                }
+            }
+
+            const titleKey = hasCharge
+                ? 'subscription_settings.confirm.title.charge'
+                : 'subscription_settings.confirm.title.free';
+            const titleValue = t(titleKey);
+            const title = titleValue && titleValue !== titleKey
+                ? titleValue
+                : (hasCharge ? 'Confirm payment' : 'Confirm changes');
+
+            const confirmKey = hasCharge
+                ? 'subscription_settings.confirm.action.pay'
+                : 'subscription_settings.confirm.action.apply';
+            const confirmValue = t(confirmKey);
+            const confirmText = confirmValue && confirmValue !== confirmKey
+                ? confirmValue
+                : (hasCharge ? 'Pay' : 'Apply');
+
+            const cancelValue = t('subscription_settings.confirm.action.cancel');
+            const cancelText = cancelValue && cancelValue !== 'subscription_settings.confirm.action.cancel'
+                ? cancelValue
+                : 'Cancel';
+
+            const message = normalizedLines.join('\n\n').trim();
+            const fallbackMessage = hasCharge
+                ? `You will be charged ${formatPriceFromKopeks(chargeAmount, currency)}.`
+                : 'No charges will be made.';
+
+            return showConfirmationPopup({
+                title,
+                message: message || fallbackMessage,
+                confirmText,
+                cancelText,
+                destructive,
+            });
+        }
+
+        async function confirmSubscriptionServersUpdate(data, { added = [], removed = [] } = {}) {
+            const currency = data?.currency || userData?.balance_currency || 'RUB';
+            const months = coercePositiveInt(
+                data?.billing?.monthsRemaining
+                ?? data?.billing?.months_remaining
+                ?? data?.billing?.months,
+                null,
+            ) || 1;
+
+            const available = ensureArray(data?.servers?.available);
+            const currentServers = ensureArray(data?.current?.servers);
+            const findOption = uuid => available.find(option => option?.uuid === uuid) || null;
+            const findName = uuid => {
+                const option = findOption(uuid);
+                if (option?.name) {
+                    return option.name;
+                }
+                const current = currentServers.find(server => server?.uuid === uuid);
+                if (current?.name) {
+                    return current.name;
+                }
+                return uuid;
+            };
+
+            let totalCharge = 0;
+            const lines = [];
+
+            if (added.length) {
+                const headerTemplate = t('subscription_settings.confirm.servers.add');
+                lines.push(
+                    headerTemplate && headerTemplate !== 'subscription_settings.confirm.servers.add'
+                        ? headerTemplate
+                        : 'The following servers will be connected:'
+                );
+
+                const details = [];
+                for (const uuid of added) {
+                    const option = findOption(uuid);
+                    const name = findName(uuid);
+                    const monthlyPrice = coercePositiveInt(option?.priceKopeks, 0) || 0;
+                    const charge = monthlyPrice * months;
+                    totalCharge += charge;
+                    if (monthlyPrice > 0) {
+                        const template = t('subscription_settings.confirm.servers.entry_paid');
+                        const formatted = formatPriceFromKopeks(charge, currency);
+                        details.push(
+                            template && template !== 'subscription_settings.confirm.servers.entry_paid'
+                                ? template.replace('{name}', name).replace('{amount}', formatted)
+                                : `• ${name} — ${formatted}`
+                        );
+                    } else {
+                        const template = t('subscription_settings.confirm.servers.entry_free');
+                        const includedLabel = t('subscription_settings.price.included');
+                        const label = includedLabel && includedLabel !== 'subscription_settings.price.included'
+                            ? includedLabel
+                            : 'Included';
+                        details.push(
+                            template && template !== 'subscription_settings.confirm.servers.entry_free'
+                                ? template.replace('{name}', name).replace('{amount}', label)
+                                : `• ${name} — ${label}`
+                        );
+                    }
+                }
+
+                if (details.length) {
+                    lines.push(details.join('\n'));
+                }
+            }
+
+            if (removed.length) {
+                const names = removed.map(findName).filter(Boolean);
+                if (names.length) {
+                    const template = t('subscription_settings.confirm.servers.remove');
+                    if (template && template !== 'subscription_settings.confirm.servers.remove' && template.includes('{list}')) {
+                        lines.push(template.replace('{list}', names.join(', ')));
+                    } else {
+                        const header = template && template !== 'subscription_settings.confirm.servers.remove'
+                            ? template.replace('{list}', '').trim()
+                            : 'The following servers will be disconnected without refunds:';
+                        if (header) {
+                            lines.push(header);
+                        }
+                        lines.push(names.map(name => `• ${name}`).join('\n'));
+                    }
+                }
+            }
+
+            return confirmSubscriptionSettingsChange({
+                lines,
+                chargeAmount: totalCharge,
+                currency,
+                months,
+                destructive: removed.length > 0 && totalCharge === 0,
+            });
+        }
+
+        async function confirmSubscriptionTrafficUpdate(data, currentValue, nextValue) {
+            const currency = data?.currency || userData?.balance_currency || 'RUB';
+            const months = coercePositiveInt(
+                data?.billing?.monthsRemaining
+                ?? data?.billing?.months_remaining
+                ?? data?.billing?.months,
+                null,
+            ) || 1;
+
+            const options = ensureArray(data?.traffic?.options);
+            const findOption = value => options.find(option => Number(option?.value) === Number(value)) || null;
+            const currentOption = findOption(currentValue);
+            const nextOption = findOption(nextValue);
+
+            const currentPrice = coercePositiveInt(currentOption?.priceKopeks, 0) || 0;
+            const nextPrice = coercePositiveInt(nextOption?.priceKopeks, 0) || 0;
+            const priceDiffPerMonth = nextPrice - currentPrice;
+            const chargeAmount = priceDiffPerMonth > 0 ? priceDiffPerMonth * months : 0;
+
+            const valueLabel = (nextOption?.label && nextOption.label.trim().length)
+                ? nextOption.label
+                : formatTrafficLimit(nextValue);
+
+            const lines = [];
+            if (priceDiffPerMonth > 0) {
+                const template = t('subscription_settings.confirm.traffic.increase');
+                lines.push(
+                    template && template !== 'subscription_settings.confirm.traffic.increase'
+                        ? template.replace('{value}', valueLabel)
+                        : `Traffic limit will change to ${valueLabel}.`
+                );
+                return confirmSubscriptionSettingsChange({
+                    lines,
+                    chargeAmount,
+                    currency,
+                    months,
+                });
+            }
+
+            const decreaseTemplate = t('subscription_settings.confirm.traffic.decrease');
+            lines.push(
+                decreaseTemplate && decreaseTemplate !== 'subscription_settings.confirm.traffic.decrease'
+                    ? decreaseTemplate.replace('{value}', valueLabel)
+                    : `Traffic limit will change to ${valueLabel}. No charges apply.`
+            );
+
+            return confirmSubscriptionSettingsChange({
+                lines,
+                chargeAmount: 0,
+                currency,
+                months,
+                addTotalLine: false,
+            });
+        }
+
+        async function confirmSubscriptionDevicesUpdate(data, currentValue, nextValue) {
+            const currency = data?.currency || userData?.balance_currency || 'RUB';
+            const months = coercePositiveInt(
+                data?.billing?.monthsRemaining
+                ?? data?.billing?.months_remaining
+                ?? data?.billing?.months,
+                null,
+            ) || 1;
+
+            const options = ensureArray(data?.devices?.options);
+            const findOption = value => options.find(option => coercePositiveInt(option?.value, null) === value) || null;
+            const currentOption = findOption(currentValue);
+            const nextOption = findOption(nextValue);
+
+            const currentPrice = coercePositiveInt(currentOption?.priceKopeks, 0) || 0;
+            const nextPrice = coercePositiveInt(nextOption?.priceKopeks, 0) || 0;
+            const priceDiffPerMonth = nextPrice - currentPrice;
+            const chargeAmount = priceDiffPerMonth > 0 ? priceDiffPerMonth * months : 0;
+
+            const valueLabel = formatDeviceCountLabel(nextValue);
+
+            const lines = [];
+            if (priceDiffPerMonth > 0) {
+                const template = t('subscription_settings.confirm.devices.increase');
+                lines.push(
+                    template && template !== 'subscription_settings.confirm.devices.increase'
+                        ? template.replace('{value}', valueLabel)
+                        : `Device limit will change to ${valueLabel}.`
+                );
+                return confirmSubscriptionSettingsChange({
+                    lines,
+                    chargeAmount,
+                    currency,
+                    months,
+                });
+            }
+
+            const decreaseTemplate = t('subscription_settings.confirm.devices.decrease');
+            lines.push(
+                decreaseTemplate && decreaseTemplate !== 'subscription_settings.confirm.devices.decrease'
+                    ? decreaseTemplate.replace('{value}', valueLabel)
+                    : `Device limit will change to ${valueLabel}. No charges apply.`
+            );
+
+            return confirmSubscriptionSettingsChange({
+                lines,
+                chargeAmount: 0,
+                currency,
+                months,
+                addTotalLine: false,
+            });
+        }
+
         function formatDate(value) {
             if (!value) {
                 return '—';
@@ -8996,7 +9461,8 @@
                         description: option.description || null,
                     };
                 })
-                .filter(option => option.value !== null || option.label);
+                .filter(option => option.value !== null || option.label)
+                .filter(option => option.isAvailable !== false || option.isCurrent);
 
             const currentTrafficLimit = coerceNumber(
                 currentInfo.traffic_limit_gb
@@ -9053,6 +9519,24 @@
                     ?? userData?.subscriptionId
                     ?? null,
                 currency: (root.currency || payload.currency || userData?.balance_currency || 'RUB').toString().toUpperCase(),
+                billing: {
+                    monthsRemaining: coercePositiveInt(
+                        root.billing?.months_remaining
+                        ?? root.billing?.monthsRemaining
+                        ?? root.billing?.months,
+                        null
+                    ),
+                    periodDays: coercePositiveInt(
+                        root.billing?.period_hint_days
+                        ?? root.billing?.periodHintDays
+                        ?? null,
+                        null
+                    ),
+                    renewsAt: root.billing?.renews_at
+                        ?? root.billing?.renewsAt
+                        ?? root.billing?.renewal
+                        ?? null,
+                },
                 current: {
                     servers: normalizedCurrentServers,
                     serverSet,
@@ -9772,6 +10256,13 @@
                 return;
             }
 
+            const added = selected.filter(uuid => !currentSet.has(uuid));
+            const removed = Array.from(currentSet).filter(uuid => !selected.includes(uuid));
+            const proceedServers = await confirmSubscriptionServersUpdate(data, { added, removed });
+            if (!proceedServers) {
+                return;
+            }
+
             const payload = {
                 initData,
                 squads: selected,
@@ -9834,6 +10325,11 @@
             const initData = tg.initData || '';
             if (!initData) {
                 handleSubscriptionSettingsError(createError('Auth', t('subscription_settings.error.unauthorized')));
+                return;
+            }
+
+            const proceedTraffic = await confirmSubscriptionTrafficUpdate(data, currentValue, selected);
+            if (!proceedTraffic) {
                 return;
             }
 
@@ -9905,6 +10401,11 @@
             const initData = tg.initData || '';
             if (!initData) {
                 handleSubscriptionSettingsError(createError('Auth', t('subscription_settings.error.unauthorized')));
+                return;
+            }
+
+            const proceedDevices = await confirmSubscriptionDevicesUpdate(data, current, selected);
+            if (!proceedDevices) {
                 return;
             }
 
