@@ -828,6 +828,7 @@ class PaymentService:
         language: str,
         ttl_seconds: Optional[int] = None,
         payer_email: Optional[str] = None,
+        payment_method: str = "SBP",
     ) -> Optional[Dict[str, Any]]:
 
         if not self.pal24_service or not self.pal24_service.is_configured:
@@ -867,7 +868,7 @@ class PaymentService:
                 ttl_seconds=ttl_seconds,
                 custom_payload=custom_payload,
                 payer_email=payer_email,
-                payment_method="SBP",
+                payment_method=payment_method,
             )
         except Pal24APIError as error:
             logger.error("Ошибка Pal24 API при создании счета: %s", error)
