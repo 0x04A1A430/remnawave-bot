@@ -15,6 +15,33 @@ class MiniAppSubscriptionRequest(BaseModel):
     init_data: str = Field(..., alias="initData")
 
 
+class MiniAppSubscriptionSettingsRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+
+class MiniAppSubscriptionServersUpdateRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    squads: List[str] = Field(default_factory=list)
+    servers: List[str] = Field(default_factory=list)
+    squad_uuids: List[str] = Field(default_factory=list)
+    server_uuids: List[str] = Field(default_factory=list)
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+
+class MiniAppSubscriptionTrafficUpdateRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    traffic: Optional[int] = None
+    traffic_gb: Optional[int] = Field(default=None, alias="trafficGb")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+
+class MiniAppSubscriptionDevicesUpdateRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    devices: Optional[int] = None
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+
 class MiniAppSubscriptionUser(BaseModel):
     telegram_id: int
     username: Optional[str] = None
@@ -86,6 +113,85 @@ class MiniAppDeviceRemovalRequest(BaseModel):
 class MiniAppDeviceRemovalResponse(BaseModel):
     success: bool = True
     message: Optional[str] = None
+
+
+class MiniAppSubscriptionSettingsServer(BaseModel):
+    uuid: str
+    name: str
+    price_kopeks: Optional[int] = None
+    price_label: Optional[str] = None
+    discount_percent: int = 0
+    is_connected: bool = False
+    is_available: bool = True
+    disabled_reason: Optional[str] = None
+
+
+class MiniAppSubscriptionSettingsTrafficOption(BaseModel):
+    value: Optional[int] = None
+    label: str = ""
+    price_kopeks: Optional[int] = None
+    price_label: Optional[str] = None
+    is_current: bool = False
+    is_available: bool = True
+    description: Optional[str] = None
+
+
+class MiniAppSubscriptionSettingsDeviceOption(BaseModel):
+    value: int
+    label: str
+    price_kopeks: Optional[int] = None
+    price_label: Optional[str] = None
+
+
+class MiniAppSubscriptionSettingsCurrent(BaseModel):
+    servers: List[MiniAppConnectedServer] = Field(default_factory=list)
+    traffic_limit_gb: Optional[int] = None
+    traffic_limit_label: Optional[str] = None
+    device_limit: Optional[int] = None
+
+
+class MiniAppSubscriptionSettingsServers(BaseModel):
+    available: List[MiniAppSubscriptionSettingsServer] = Field(default_factory=list)
+    min: int = 0
+    max: int = 0
+    can_update: bool = True
+    hint: Optional[str] = None
+
+
+class MiniAppSubscriptionSettingsTraffic(BaseModel):
+    options: List[MiniAppSubscriptionSettingsTrafficOption] = Field(default_factory=list)
+    can_update: bool = True
+    current_value: Optional[int] = None
+
+
+class MiniAppSubscriptionSettingsDevices(BaseModel):
+    options: List[MiniAppSubscriptionSettingsDeviceOption] = Field(default_factory=list)
+    can_update: bool = True
+    min: int = 0
+    max: int = 0
+    step: int = 1
+    current: Optional[int] = None
+    price_kopeks: Optional[int] = None
+
+
+class MiniAppSubscriptionSettingsData(BaseModel):
+    subscription_id: Optional[int] = None
+    currency: str = "RUB"
+    current: MiniAppSubscriptionSettingsCurrent
+    servers: MiniAppSubscriptionSettingsServers
+    traffic: MiniAppSubscriptionSettingsTraffic
+    devices: MiniAppSubscriptionSettingsDevices
+
+
+class MiniAppSubscriptionSettingsResponse(BaseModel):
+    settings: MiniAppSubscriptionSettingsData
+
+
+class MiniAppSubscriptionSettingsActionResponse(BaseModel):
+    success: bool = True
+    message: Optional[str] = None
+    balance_kopeks: Optional[int] = None
+    charged_kopeks: int = 0
 
 
 class MiniAppTransaction(BaseModel):
