@@ -253,69 +253,6 @@ class MiniAppReferralInfo(BaseModel):
     referrals: Optional[MiniAppReferralList] = None
 
 
-class MiniAppPaymentMethodsRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-
-
-class MiniAppPaymentOption(BaseModel):
-    id: str
-    label: Optional[str] = None
-    icon: Optional[str] = None
-
-
-class MiniAppPaymentMethod(BaseModel):
-    id: str
-    icon: Optional[str] = None
-    requires_amount: bool = False
-    currency: str = "RUB"
-    min_amount_kopeks: Optional[int] = None
-    max_amount_kopeks: Optional[int] = None
-    amount_step_kopeks: Optional[int] = None
-    options: List[MiniAppPaymentOption] = Field(default_factory=list)
-
-
-class MiniAppPaymentMethodsResponse(BaseModel):
-    methods: List[MiniAppPaymentMethod] = Field(default_factory=list)
-
-
-class MiniAppPaymentCreateRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-    method: str
-    amount_rubles: Optional[float] = Field(default=None, alias="amountRubles")
-    amount_kopeks: Optional[int] = Field(default=None, alias="amountKopeks")
-    payment_option: Optional[str] = Field(default=None, alias="paymentOption")
-
-
-class MiniAppPaymentCreateResponse(BaseModel):
-    success: bool = True
-    method: str
-    payment_url: Optional[str] = None
-    amount_kopeks: Optional[int] = None
-    extra: Dict[str, Any] = Field(default_factory=dict)
-
-
-class MiniAppPaymentStatusRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-    method: str
-    local_payment_id: Optional[int] = Field(default=None, alias="localPaymentId")
-    provider_payment_id: Optional[str] = Field(default=None, alias="providerPaymentId")
-    invoice_id: Optional[str] = Field(default=None, alias="invoiceId")
-    amount_kopeks: Optional[int] = Field(default=None, alias="amountKopeks")
-    started_at: Optional[datetime] = Field(default=None, alias="startedAt")
-
-
-class MiniAppPaymentStatusResponse(BaseModel):
-    success: bool = True
-    method: str
-    status: str
-    status_label: Optional[str] = None
-    is_paid: bool = False
-    is_failed: bool = False
-    is_final: bool = False
-    updated_at: Optional[datetime] = None
-    details: Dict[str, Any] = Field(default_factory=dict)
-
-
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: int
