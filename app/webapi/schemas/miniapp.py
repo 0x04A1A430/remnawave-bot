@@ -383,7 +383,7 @@ class MiniAppPaymentStatusResponse(BaseModel):
 
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
-    subscription_id: int
+    subscription_id: Optional[int] = None
     remnawave_short_uuid: Optional[str] = None
     user: MiniAppSubscriptionUser
     subscription_url: Optional[str] = None
@@ -415,6 +415,11 @@ class MiniAppSubscriptionResponse(BaseModel):
     faq: Optional[MiniAppFaq] = None
     legal_documents: Optional[MiniAppLegalDocuments] = None
     referral: Optional[MiniAppReferralInfo] = None
+    subscription_missing: bool = False
+    subscription_missing_reason: Optional[str] = None
+    trial_available: bool = False
+    trial_duration_days: Optional[int] = None
+    trial_status: Optional[str] = None
 
 
 class MiniAppSubscriptionServerOption(BaseModel):
@@ -668,6 +673,30 @@ class MiniAppSubscriptionPurchaseResponse(BaseModel):
     balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
     balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
     subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionTrialRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionTrialResponse(BaseModel):
+    success: bool = True
+    message: Optional[str] = None
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    subscription_url: Optional[str] = Field(default=None, alias="subscriptionUrl")
+    subscription_crypto_link: Optional[str] = Field(default=None, alias="subscriptionCryptoLink")
+    happ_crypto_link: Optional[str] = Field(default=None, alias="happCryptoLink")
+    happ_cryptolink_redirect_link: Optional[str] = Field(
+        default=None,
+        alias="happCryptolinkRedirectLink",
+    )
+    trial_duration_days: Optional[int] = Field(default=None, alias="trialDurationDays")
+    trial_available: Optional[bool] = Field(default=None, alias="trialAvailable")
+    trial_status: Optional[str] = Field(default=None, alias="trialStatus")
 
     model_config = ConfigDict(populate_by_name=True)
 
