@@ -4347,6 +4347,9 @@
                 'subscription_purchase.servers.empty': 'No servers available',
                 'subscription_purchase.servers.single': 'Included server: {name}',
                 'subscription_purchase.servers.limit': 'Select up to {count}',
+                'subscription_purchase.servers.range': 'Select {min}–{max} servers',
+                'subscription_purchase.servers.minimum': 'Select at least {count} servers',
+                'subscription_purchase.servers.exact': 'Select {count} servers',
                 'subscription_purchase.servers.selected': 'Selected: {count}',
                 'subscription_purchase.devices.title': 'Devices',
                 'subscription_purchase.devices.subtitle': 'Simultaneous connections.',
@@ -4673,6 +4676,9 @@
                 'subscription_purchase.servers.empty': 'Нет доступных серверов',
                 'subscription_purchase.servers.single': 'Включён сервер: {name}',
                 'subscription_purchase.servers.limit': 'Можно выбрать до {count}',
+                'subscription_purchase.servers.range': 'Выберите от {min} до {max} серверов',
+                'subscription_purchase.servers.minimum': 'Нужно выбрать минимум {count} сервер(ов)',
+                'subscription_purchase.servers.exact': 'Нужно выбрать {count} сервер(ов)',
                 'subscription_purchase.servers.selected': 'Выбрано: {count}',
                 'subscription_purchase.devices.title': 'Устройства',
                 'subscription_purchase.devices.subtitle': 'Одновременные подключения.',
@@ -5798,13 +5804,16 @@
             setLanguage(event.target.value, { persist: true });
         });
 
-        function createError(title, message, status) {
+        function createError(title, message, status, code) {
             const error = new Error(message || title);
             if (title) {
                 error.title = title;
             }
-            if (status) {
+            if (status !== undefined && status !== null) {
                 error.status = status;
+            }
+            if (code !== undefined && code !== null) {
+                error.code = code;
             }
             return error;
         }
@@ -11070,6 +11079,21 @@
             return formatTrafficLimit(numeric);
         }
 
+        function formatPurchaseServersLimit(key, replacements, fallback = '') {
+            let template = t(key);
+            if (!template || template === key) {
+                template = fallback || '';
+            }
+            if (!template) {
+                return '';
+            }
+            let formatted = template;
+            Object.entries(replacements || {}).forEach(([token, value]) => {
+                formatted = formatted.split(`{${token}}`).join(String(value));
+            });
+            return formatted;
+        }
+
         function normalizePurchaseServerOption(option, currency) {
             if (!option) {
                 return null;
@@ -11399,22 +11423,40 @@
             }
         }
 
-        function extractPurchaseErrorMessage(payload, status) {
+        function extractPurchaseError(payload, status) {
+            const defaultMessage = t('subscription_purchase.error.default');
             if (!payload || typeof payload !== 'object') {
-                return status === 401
+                const message = status === 401
                     ? t('subscription_settings.error.unauthorized')
-                    : t('subscription_purchase.error.default');
+                    : defaultMessage;
+                return { message, code: null };
             }
+
+            let code = null;
+            let message = defaultMessage;
+
             if (typeof payload.detail === 'string') {
-                return payload.detail;
+                message = payload.detail;
+            } else if (payload.detail && typeof payload.detail === 'object') {
+                if (typeof payload.detail.message === 'string') {
+                    message = payload.detail.message;
+                }
+                if (payload.detail.code !== undefined && payload.detail.code !== null) {
+                    code = payload.detail.code;
+                }
+            } else if (typeof payload.message === 'string') {
+                message = payload.message;
             }
-            if (payload.detail && typeof payload.detail === 'object' && typeof payload.detail.message === 'string') {
-                return payload.detail.message;
+
+            if ((message == null || String(message).trim() === '') && typeof payload.error === 'string') {
+                message = payload.error;
             }
-            if (typeof payload.message === 'string') {
-                return payload.message;
+
+            if (code == null && typeof payload.code !== 'undefined') {
+                code = payload.code;
             }
-            return t('subscription_purchase.error.default');
+
+            return { message: message || defaultMessage, code };
         }
 
         function ensureSubscriptionPurchaseData(options = {}) {
@@ -11450,8 +11492,8 @@
             }).then(async response => {
                 const body = await parseJsonSafe(response);
                 if (!response.ok || (body && body.success === false)) {
-                    const message = extractPurchaseErrorMessage(body, response.status);
-                    throw createError('Subscription purchase error', message, response.status);
+                    const { message, code } = extractPurchaseError(body, response.status);
+                    throw createError('Subscription purchase error', message, response.status, code);
                 }
 
                 const normalized = normalizeSubscriptionPurchasePayload(body);
@@ -11504,7 +11546,18 @@
                 selection.code = idString;
             }
 
-            const periodDays = resolvePurchasePeriodDays(period);
+            let periodDays = resolvePurchasePeriodDays(period);
+            if (periodDays === null) {
+                const parsedDays = coercePositiveInt(
+                    period?.period_days
+                    ?? period?.periodDays
+                    ?? periodId,
+                    null,
+                );
+                if (parsedDays !== null) {
+                    periodDays = parsedDays;
+                }
+            }
             if (periodDays !== null) {
                 selection.period_days = periodDays;
                 selection.periodDays = periodDays;
@@ -11512,21 +11565,26 @@
                 selection.durationDays = periodDays;
             }
 
-            const periodMonths = coercePositiveInt(
+            let periodMonths = coercePositiveInt(
                 period?.months
                 ?? period?.period
                 ?? period?.period_months
                 ?? period?.periodMonths,
                 null,
             );
+            if (periodMonths === null && periodDays !== null) {
+                periodMonths = Math.max(1, Math.round(periodDays / 30));
+            }
             if (periodMonths !== null) {
                 selection.months = periodMonths;
                 selection.period_months = periodMonths;
                 selection.periodMonths = periodMonths;
             }
 
-            const trafficValue = subscriptionPurchaseSelections.trafficValue;
-            if (trafficValue !== null && trafficValue !== undefined) {
+            const trafficRaw = subscriptionPurchaseSelections.trafficValue;
+            if (trafficRaw !== null && trafficRaw !== undefined) {
+                const numericTraffic = coercePositiveInt(trafficRaw, null);
+                const trafficValue = numericTraffic !== null ? numericTraffic : trafficRaw;
                 selection.traffic_value = trafficValue;
                 selection.traffic = trafficValue;
                 selection.traffic_gb = trafficValue;
@@ -12192,10 +12250,30 @@
 
             if (metaElement) {
                 let metaText = '';
-                if (maxSelectable && maxSelectable !== minSelectable) {
-                    metaText = t('subscription_purchase.servers.limit').replace('{count}', String(maxSelectable));
+                if (maxSelectable && minSelectable && maxSelectable === minSelectable) {
+                    metaText = formatPurchaseServersLimit(
+                        'subscription_purchase.servers.exact',
+                        { count: String(maxSelectable) },
+                        `Select ${maxSelectable} servers`
+                    );
+                } else if (maxSelectable && minSelectable && maxSelectable > minSelectable) {
+                    metaText = formatPurchaseServersLimit(
+                        'subscription_purchase.servers.range',
+                        { min: String(minSelectable), max: String(maxSelectable) },
+                        `Select ${minSelectable}–${maxSelectable} servers`
+                    );
+                } else if (maxSelectable) {
+                    metaText = formatPurchaseServersLimit(
+                        'subscription_purchase.servers.limit',
+                        { count: String(maxSelectable) },
+                        `Select up to ${maxSelectable}`
+                    );
                 } else if (selectedCount) {
-                    metaText = t('subscription_purchase.servers.selected').replace('{count}', String(selectedCount));
+                    metaText = formatPurchaseServersLimit(
+                        'subscription_purchase.servers.selected',
+                        { count: String(selectedCount) },
+                        `Selected: ${selectedCount}`
+                    );
                 }
                 metaElement.textContent = metaText;
             }
@@ -12205,8 +12283,15 @@
                 if (config?.hint) {
                     hintParts.push(config.hint);
                 }
-                if (!config?.hint && minSelectable > 0) {
-                    hintParts.push(t('subscription_purchase.servers.limit').replace('{count}', String(minSelectable)));
+                if (minSelectable > 0) {
+                    const minimumHint = formatPurchaseServersLimit(
+                        'subscription_purchase.servers.minimum',
+                        { count: String(minSelectable) },
+                        `Select at least ${minSelectable}`
+                    );
+                    if (minimumHint && !hintParts.includes(minimumHint)) {
+                        hintParts.push(minimumHint);
+                    }
                 }
                 const hintText = hintParts.join(' ');
                 hintElement.textContent = hintText;
@@ -12465,8 +12550,8 @@
             }).then(async response => {
                 const body = await parseJsonSafe(response);
                 if (!response.ok || (body && body.success === false)) {
-                    const message = extractPurchaseErrorMessage(body, response.status);
-                    throw createError('Subscription purchase preview error', message, response.status);
+                    const { message, code } = extractPurchaseError(body, response.status);
+                    throw createError('Subscription purchase preview error', message, response.status, code);
                 }
                 const normalized = normalizeSubscriptionPurchasePreview(body);
                 subscriptionPurchasePreview = normalized;
@@ -12476,10 +12561,29 @@
                 renderSubscriptionPurchaseCard();
                 return normalized;
             }).catch(error => {
-                subscriptionPurchasePreview = null;
-                subscriptionPurchasePreviewError = error;
                 subscriptionPurchasePreviewLoading = false;
                 subscriptionPurchasePreviewPromise = null;
+
+                const currentPeriodId = subscriptionPurchaseSelections.periodId;
+                const fallbackPeriod = Array.isArray(subscriptionPurchaseData?.periods)
+                    ? subscriptionPurchaseData.periods.find(Boolean)
+                    : null;
+                const fallbackId = resolvePurchasePeriodId(fallbackPeriod);
+
+                if (error?.code === 'invalid_period' && fallbackId && String(fallbackId) !== String(currentPeriodId)) {
+                    console.warn('Preview returned invalid period. Resetting selection to default.', error);
+                    subscriptionPurchaseSelections.periodId = String(fallbackId);
+                    if (fallbackPeriod) {
+                        ensureSubscriptionPurchaseSelectionsValidForPeriod(fallbackPeriod);
+                    }
+                    subscriptionPurchasePreview = null;
+                    subscriptionPurchasePreviewError = null;
+                    renderSubscriptionPurchaseCard();
+                    return updateSubscriptionPurchasePreview({ immediate: true, force: true });
+                }
+
+                subscriptionPurchasePreview = null;
+                subscriptionPurchasePreviewError = error;
                 console.warn('Failed to fetch subscription purchase preview:', error);
                 renderSubscriptionPurchaseCard();
                 throw error;
@@ -12777,8 +12881,8 @@
                 });
                 const body = await parseJsonSafe(response);
                 if (!response.ok || (body && body.success === false)) {
-                    const message = extractPurchaseErrorMessage(body, response.status);
-                    throw createError('Subscription purchase error', message, response.status);
+                    const { message, code } = extractPurchaseError(body, response.status);
+                    throw createError('Subscription purchase error', message, response.status, code);
                 }
 
                 const successMessage = body?.message
