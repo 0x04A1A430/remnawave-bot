@@ -86,7 +86,7 @@
             max-width: 480px;
             margin: 0 auto;
             padding: 16px;
-            padding-bottom: 32px;
+            padding-bottom: calc(48px + env(safe-area-inset-bottom, 0));
         }
 
         /* Animations */
@@ -987,6 +987,10 @@
             margin-top: 8px;
         }
 
+        #subscriptionPurchaseCardWrapper {
+            margin-bottom: calc(32px + env(safe-area-inset-bottom, 0));
+        }
+
         .subscription-purchase-card .btn-secondary {
             justify-content: center;
         }
@@ -1023,6 +1027,10 @@
 
             .subscription-purchase-actions {
                 gap: 14px;
+            }
+
+            #subscriptionPurchaseCardWrapper {
+                margin-bottom: calc(40px + env(safe-area-inset-bottom, 0));
             }
 
             .subscription-purchase-card .btn-primary {
