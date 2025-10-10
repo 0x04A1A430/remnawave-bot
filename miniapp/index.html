@@ -3579,20 +3579,6 @@
                 </div>
             </div>
 
-            <div class="modal-backdrop hidden" id="confirmationModal">
-                <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmationModalTitle">
-                    <div class="modal-header">
-                        <div class="modal-title" id="confirmationModalTitle"></div>
-                        <div class="modal-subtitle" id="confirmationModalSubtitle"></div>
-                    </div>
-                    <div class="modal-body" id="confirmationModalBody"></div>
-                    <div class="modal-actions">
-                        <button class="modal-button secondary" type="button" id="confirmationModalCancel"></button>
-                        <button class="modal-button primary" type="button" id="confirmationModalConfirm"></button>
-                    </div>
-                </div>
-            </div>
-
             <div class="card promo-code-card" id="promoCodeCard">
                 <div class="promo-code-header">
                     <div class="promo-code-title" data-i18n="promo_code.title">Activate promo code</div>
@@ -3946,8 +3932,6 @@
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
                 'button.topup_balance': 'Top up balance',
-                'button.confirm': 'Confirm',
-                'button.cancel': 'Cancel',
                 'topup.title': 'Top up balance',
                 'topup.subtitle': 'Choose a payment method',
                 'topup.methods.subtitle': 'Select how you want to pay',
@@ -4211,8 +4195,6 @@
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
                 'button.topup_balance': 'Пополнить баланс',
-                'button.confirm': 'Подтвердить',
-                'button.cancel': 'Отмена',
                 'topup.title': 'Пополнение баланса',
                 'topup.subtitle': 'Выберите способ оплаты',
                 'topup.methods.subtitle': 'Выберите удобный способ оплаты',
@@ -6848,32 +6830,6 @@
             }
         }
 
-        function resolveLocalizedText(source, fallback = '') {
-            if (!source) {
-                return fallback || '';
-            }
-            if (typeof source === 'string') {
-                return source;
-            }
-            if (typeof source === 'object') {
-                const language = (preferredLanguage || '').toLowerCase();
-                if (language && typeof source[language] === 'string' && source[language].trim()) {
-                    return source[language];
-                }
-                if (language.startsWith('ru') && typeof source.ru === 'string' && source.ru.trim()) {
-                    return source.ru;
-                }
-                if (language.startsWith('en') && typeof source.en === 'string' && source.en.trim()) {
-                    return source.en;
-                }
-                const values = Object.values(source).filter(value => typeof value === 'string' && value.trim());
-                if (values.length) {
-                    return values[0];
-                }
-            }
-            return fallback || '';
-        }
-
         function formatLegalUpdatedLabel(value) {
             const formatted = formatDateTime(value);
             if (!formatted) {
@@ -6910,108 +6866,6 @@
                 error: document.getElementById('topupModalError'),
                 footer: document.getElementById('topupModalFooter'),
             };
-        }
-
-        function getConfirmationElements() {
-            return {
-                backdrop: document.getElementById('confirmationModal'),
-                title: document.getElementById('confirmationModalTitle'),
-                subtitle: document.getElementById('confirmationModalSubtitle'),
-                body: document.getElementById('confirmationModalBody'),
-                confirm: document.getElementById('confirmationModalConfirm'),
-                cancel: document.getElementById('confirmationModalCancel'),
-            };
-        }
-
-        function closeConfirmationModal() {
-            const { backdrop, body, subtitle, confirm, cancel } = getConfirmationElements();
-            if (backdrop) {
-                backdrop.classList.add('hidden');
-            }
-            document.body.classList.remove('modal-open');
-            if (body) {
-                body.innerHTML = '';
-            }
-            if (subtitle) {
-                subtitle.textContent = '';
-            }
-            if (confirm) {
-                confirm.disabled = false;
-            }
-            if (cancel) {
-                cancel.disabled = false;
-            }
-        }
-
-        function showSubscriptionConfirmationDialog(confirmation) {
-            const elements = getConfirmationElements();
-            const { backdrop, title, subtitle, body, confirm, cancel } = elements;
-            if (!backdrop || !confirm || !cancel || !body) {
-                return Promise.resolve(false);
-            }
-
-            const titleText = resolveLocalizedText(confirmation?.title, t('subscription_settings.title'));
-            if (title) {
-                title.textContent = titleText || t('subscription_settings.title');
-            }
-
-            const subtitleText = resolveLocalizedText(confirmation?.subtitle || confirmation?.hint, '');
-            if (subtitle) {
-                subtitle.textContent = subtitleText;
-                subtitle.classList.toggle('hidden', !subtitleText);
-            }
-
-            const message = resolveLocalizedText(confirmation?.message, '');
-            body.innerHTML = '';
-            if (message) {
-                const lines = String(message).split('\n');
-                lines.forEach(line => {
-                    if (!line.trim()) {
-                        return;
-                    }
-                    const paragraph = document.createElement('p');
-                    paragraph.textContent = line.trim();
-                    body.appendChild(paragraph);
-                });
-            }
-
-            const confirmLabel = resolveLocalizedText(confirmation?.confirm_label, t('button.confirm') || 'Confirm');
-            const cancelLabel = resolveLocalizedText(confirmation?.cancel_label, t('button.cancel') || t('topup.cancel') || 'Cancel');
-
-            confirm.textContent = confirmLabel;
-            cancel.textContent = cancelLabel;
-
-            backdrop.classList.remove('hidden');
-            document.body.classList.add('modal-open');
-
-            return new Promise(resolve => {
-                const cleanup = () => {
-                    confirm.removeEventListener('click', handleConfirm);
-                    cancel.removeEventListener('click', handleCancel);
-                    document.removeEventListener('keydown', handleKeydown);
-                    closeConfirmationModal();
-                };
-
-                const handleConfirm = () => {
-                    cleanup();
-                    resolve(true);
-                };
-
-                const handleCancel = () => {
-                    cleanup();
-                    resolve(false);
-                };
-
-                const handleKeydown = event => {
-                    if (event.key === 'Escape') {
-                        handleCancel();
-                    }
-                };
-
-                confirm.addEventListener('click', handleConfirm);
-                cancel.addEventListener('click', handleCancel);
-                document.addEventListener('keydown', handleKeydown);
-            });
         }
 
         function setTopupModalTitle(key, fallback) {
@@ -9883,8 +9737,7 @@
             }
         }
 
-        async function submitSubscriptionServersChange(options = {}) {
-            const { confirm = false } = options;
+        async function submitSubscriptionServersChange() {
             if (subscriptionSettingsAction) {
                 return;
             }
@@ -9927,10 +9780,6 @@
                 server_uuids: selected,
                 subscription_id: data.subscriptionId || userData?.subscription_id || userData?.subscriptionId || null,
             };
-            if (confirm) {
-                payload.confirm = true;
-                payload.confirmed = true;
-            }
 
             subscriptionSettingsAction = 'servers';
             setSubscriptionSettingsActionLoading('servers', true);
@@ -9942,25 +9791,7 @@
                     body: JSON.stringify(payload),
                 });
                 const body = await parseJsonSafe(response);
-                if (!response.ok) {
-                    const message = extractSettingsError(body, response.status);
-                    throw createError('Subscription settings error', message, response.status);
-                }
-
-                const confirmationRequired = coerceBoolean(
-                    body?.confirmation_required ?? body?.confirmationRequired ?? body?.needConfirmation,
-                    false
-                );
-                if (confirmationRequired && !confirm) {
-                    const confirmationData = body?.confirmation ?? body?.confirmationData ?? null;
-                    const proceed = await showSubscriptionConfirmationDialog(confirmationData || {});
-                    if (proceed) {
-                        await submitSubscriptionServersChange({ confirm: true });
-                    }
-                    return;
-                }
-
-                if (body && body.success === false) {
+                if (!response.ok || (body && body.success === false)) {
                     const message = extractSettingsError(body, response.status);
                     throw createError('Subscription settings error', message, response.status);
                 }
@@ -9976,8 +9807,7 @@
             }
         }
 
-        async function submitSubscriptionTrafficChange(options = {}) {
-            const { confirm = false } = options;
+        async function submitSubscriptionTrafficChange() {
             if (subscriptionSettingsAction) {
                 return;
             }
@@ -10014,10 +9844,6 @@
                 trafficGb: selected,
                 subscription_id: data.subscriptionId || userData?.subscription_id || userData?.subscriptionId || null,
             };
-            if (confirm) {
-                payload.confirm = true;
-                payload.confirmed = true;
-            }
 
             subscriptionSettingsAction = 'traffic';
             setSubscriptionSettingsActionLoading('traffic', true);
@@ -10029,25 +9855,7 @@
                     body: JSON.stringify(payload),
                 });
                 const body = await parseJsonSafe(response);
-                if (!response.ok) {
-                    const message = extractSettingsError(body, response.status);
-                    throw createError('Subscription settings error', message, response.status);
-                }
-
-                const confirmationRequired = coerceBoolean(
-                    body?.confirmation_required ?? body?.confirmationRequired ?? body?.needConfirmation,
-                    false
-                );
-                if (confirmationRequired && !confirm) {
-                    const confirmationData = body?.confirmation ?? body?.confirmationData ?? null;
-                    const proceed = await showSubscriptionConfirmationDialog(confirmationData || {});
-                    if (proceed) {
-                        await submitSubscriptionTrafficChange({ confirm: true });
-                    }
-                    return;
-                }
-
-                if (body && body.success === false) {
+                if (!response.ok || (body && body.success === false)) {
                     const message = extractSettingsError(body, response.status);
                     throw createError('Subscription settings error', message, response.status);
                 }
@@ -10063,8 +9871,7 @@
             }
         }
 
-        async function submitSubscriptionDevicesChange(options = {}) {
-            const { confirm = false } = options;
+        async function submitSubscriptionDevicesChange() {
             if (subscriptionSettingsAction) {
                 return;
             }
@@ -10108,10 +9915,6 @@
                 deviceLimit: selected,
                 subscription_id: data.subscriptionId || userData?.subscription_id || userData?.subscriptionId || null,
             };
-            if (confirm) {
-                payload.confirm = true;
-                payload.confirmed = true;
-            }
 
             subscriptionSettingsAction = 'devices';
             setSubscriptionSettingsActionLoading('devices', true);
@@ -10123,25 +9926,7 @@
                     body: JSON.stringify(payload),
                 });
                 const body = await parseJsonSafe(response);
-                if (!response.ok) {
-                    const message = extractSettingsError(body, response.status);
-                    throw createError('Subscription settings error', message, response.status);
-                }
-
-                const confirmationRequired = coerceBoolean(
-                    body?.confirmation_required ?? body?.confirmationRequired ?? body?.needConfirmation,
-                    false
-                );
-                if (confirmationRequired && !confirm) {
-                    const confirmationData = body?.confirmation ?? body?.confirmationData ?? null;
-                    const proceed = await showSubscriptionConfirmationDialog(confirmationData || {});
-                    if (proceed) {
-                        await submitSubscriptionDevicesChange({ confirm: true });
-                    }
-                    return;
-                }
-
-                if (body && body.success === false) {
+                if (!response.ok || (body && body.success === false)) {
                     const message = extractSettingsError(body, response.status);
                     throw createError('Subscription settings error', message, response.status);
                 }
