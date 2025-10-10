@@ -57,6 +57,11 @@ from app.services.payment_service import PaymentService
 from app.services.promo_offer_service import promo_offer_service
 from app.services.promocode_service import PromoCodeService
 from app.services.subscription_service import SubscriptionService
+from app.services.subscription_purchase_service import (
+    purchase_service,
+    PurchaseBalanceError,
+    PurchaseValidationError,
+)
 from app.services.tribute_service import TributeService
 from app.utils.currency_converter import currency_converter
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
@@ -126,6 +131,12 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionTrafficUpdateRequest,
     MiniAppSubscriptionDevicesUpdateRequest,
     MiniAppSubscriptionUpdateResponse,
+    MiniAppSubscriptionPurchaseOptionsRequest,
+    MiniAppSubscriptionPurchaseOptionsResponse,
+    MiniAppSubscriptionPurchasePreviewRequest,
+    MiniAppSubscriptionPurchasePreviewResponse,
+    MiniAppSubscriptionPurchaseRequest,
+    MiniAppSubscriptionPurchaseResponse,
 )
 
 
@@ -230,6 +241,45 @@ def _normalize_stars_amount(amount_kopeks: int) -> Tuple[int, int]:
 def _build_balance_invoice_payload(user_id: int, amount_kopeks: int) -> str:
     suffix = uuid4().hex[:8]
     return f"balance_{user_id}_{amount_kopeks}_{suffix}"
+
+
+def _merge_purchase_selection_from_request(
+    payload: Union[
+        "MiniAppSubscriptionPurchasePreviewRequest",
+        "MiniAppSubscriptionPurchaseRequest",
+    ]
+) -> Dict[str, Any]:
+    base: Dict[str, Any] = {}
+    if payload.selection:
+        base.update(payload.selection)
+
+    def _maybe_set(key: str, value: Any) -> None:
+        if value is None:
+            return
+        if key not in base:
+            base[key] = value
+
+    _maybe_set("period_id", getattr(payload, "period_id", None))
+    _maybe_set("period_days", getattr(payload, "period_days", None))
+
+    _maybe_set("traffic_value", getattr(payload, "traffic_value", None))
+    _maybe_set("traffic", getattr(payload, "traffic", None))
+    _maybe_set("traffic_gb", getattr(payload, "traffic_gb", None))
+
+    servers = getattr(payload, "servers", None)
+    if servers is not None and "servers" not in base:
+        base["servers"] = servers
+    countries = getattr(payload, "countries", None)
+    if countries is not None and "countries" not in base:
+        base["countries"] = countries
+    server_uuids = getattr(payload, "server_uuids", None)
+    if server_uuids is not None and "server_uuids" not in base:
+        base["server_uuids"] = server_uuids
+
+    _maybe_set("devices", getattr(payload, "devices", None))
+    _maybe_set("device_limit", getattr(payload, "device_limit", None))
+
+    return base
 
 
 def _parse_client_timestamp(value: Optional[Union[str, int, float]]) -> Optional[datetime]:
@@ -3092,6 +3142,113 @@ async def _build_subscription_settings(
     )
 
     return settings_payload
+
+
+@router.post(
+    "/subscription/purchase/options",
+    response_model=MiniAppSubscriptionPurchaseOptionsResponse,
+)
+async def get_subscription_purchase_options_endpoint(
+    payload: MiniAppSubscriptionPurchaseOptionsRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionPurchaseOptionsResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    context = await purchase_service.build_options(db, user)
+
+    data_payload = dict(context.payload)
+    data_payload.setdefault("currency", context.currency)
+    data_payload.setdefault("balance_kopeks", context.balance_kopeks)
+    data_payload.setdefault("balanceKopeks", context.balance_kopeks)
+    data_payload.setdefault("balance_label", settings.format_price(context.balance_kopeks))
+    data_payload.setdefault("balanceLabel", settings.format_price(context.balance_kopeks))
+
+    return MiniAppSubscriptionPurchaseOptionsResponse(
+        currency=context.currency,
+        balance_kopeks=context.balance_kopeks,
+        balance_label=settings.format_price(context.balance_kopeks),
+        subscription_id=data_payload.get("subscription_id") or data_payload.get("subscriptionId"),
+        data=data_payload,
+    )
+
+
+@router.post(
+    "/subscription/purchase/preview",
+    response_model=MiniAppSubscriptionPurchasePreviewResponse,
+)
+async def subscription_purchase_preview_endpoint(
+    payload: MiniAppSubscriptionPurchasePreviewRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionPurchasePreviewResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    context = await purchase_service.build_options(db, user)
+
+    selection_payload = _merge_purchase_selection_from_request(payload)
+    try:
+        selection = purchase_service.parse_selection(context, selection_payload)
+    except PurchaseValidationError as error:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": error.code, "message": str(error)},
+        ) from error
+
+    pricing = await purchase_service.calculate_pricing(db, context, selection)
+    preview_payload = purchase_service.build_preview_payload(context, pricing)
+
+    balance_label = settings.format_price(getattr(user, "balance_kopeks", 0))
+
+    return MiniAppSubscriptionPurchasePreviewResponse(
+        preview=preview_payload,
+        balance_kopeks=user.balance_kopeks,
+        balance_label=balance_label,
+    )
+
+
+@router.post(
+    "/subscription/purchase",
+    response_model=MiniAppSubscriptionPurchaseResponse,
+)
+async def subscription_purchase_endpoint(
+    payload: MiniAppSubscriptionPurchaseRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionPurchaseResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    context = await purchase_service.build_options(db, user)
+
+    selection_payload = _merge_purchase_selection_from_request(payload)
+    try:
+        selection = purchase_service.parse_selection(context, selection_payload)
+    except PurchaseValidationError as error:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": error.code, "message": str(error)},
+        ) from error
+
+    pricing = await purchase_service.calculate_pricing(db, context, selection)
+
+    try:
+        result = await purchase_service.submit_purchase(db, context, pricing)
+    except PurchaseBalanceError as error:
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            detail={"code": "insufficient_funds", "message": str(error)},
+        ) from error
+    except PurchaseValidationError as error:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": error.code, "message": str(error)},
+        ) from error
+
+    await db.refresh(user)
+
+    subscription = result.get("subscription")
+    balance_label = settings.format_price(getattr(user, "balance_kopeks", 0))
+
+    return MiniAppSubscriptionPurchaseResponse(
+        message=result.get("message"),
+        balance_kopeks=user.balance_kopeks,
+        balance_label=balance_label,
+        subscription_id=getattr(subscription, "id", None),
+    )
 
 
 @router.post(

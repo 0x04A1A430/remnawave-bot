@@ -524,3 +524,88 @@ class MiniAppSubscriptionUpdateResponse(BaseModel):
     success: bool = True
     message: Optional[str] = None
 
+
+class MiniAppSubscriptionPurchaseOptionsRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionPurchaseOptionsResponse(BaseModel):
+    success: bool = True
+    currency: str
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionPurchasePreviewRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    selection: Optional[Dict[str, Any]] = None
+    period_id: Optional[str] = Field(default=None, alias="periodId")
+    period_days: Optional[int] = Field(default=None, alias="periodDays")
+    period: Optional[str] = None
+    traffic_value: Optional[int] = Field(default=None, alias="trafficValue")
+    traffic: Optional[int] = None
+    traffic_gb: Optional[int] = Field(default=None, alias="trafficGb")
+    servers: Optional[List[str]] = None
+    countries: Optional[List[str]] = None
+    server_uuids: Optional[List[str]] = Field(default=None, alias="serverUuids")
+    devices: Optional[int] = None
+    device_limit: Optional[int] = Field(default=None, alias="deviceLimit")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _merge_selection(cls, values: Any) -> Any:
+        if not isinstance(values, dict):
+            return values
+        selection = values.get("selection")
+        if isinstance(selection, dict):
+            merged = {**selection, **values}
+        else:
+            merged = dict(values)
+        aliases = {
+            "period_id": ("periodId", "period", "code"),
+            "period_days": ("periodDays",),
+            "traffic_value": ("trafficValue", "traffic", "trafficGb"),
+            "servers": ("countries", "server_uuids", "serverUuids"),
+            "devices": ("deviceLimit",),
+        }
+        for target, sources in aliases.items():
+            if merged.get(target) is not None:
+                continue
+            for source in sources:
+                if source in merged and merged[source] is not None:
+                    merged[target] = merged[source]
+                    break
+        return merged
+
+
+class MiniAppSubscriptionPurchasePreviewResponse(BaseModel):
+    success: bool = True
+    preview: Dict[str, Any] = Field(default_factory=dict)
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionPurchaseRequest(MiniAppSubscriptionPurchasePreviewRequest):
+    pass
+
+
+class MiniAppSubscriptionPurchaseResponse(BaseModel):
+    success: bool = True
+    message: Optional[str] = None
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+    model_config = ConfigDict(populate_by_name=True)
+
