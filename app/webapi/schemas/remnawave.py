@@ -169,3 +169,34 @@ class RemnaWaveGenericSyncResponse(BaseModel):
     success: bool
     detail: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
+
+
+class RemnaWaveSquadMigrationPreviewResponse(BaseModel):
+    squad_uuid: str
+    squad_name: str
+    current_users: int
+    max_users: Optional[int] = None
+    users_to_migrate: int
+
+
+class RemnaWaveSquadMigrationRequest(BaseModel):
+    source_uuid: str
+    target_uuid: str
+
+
+class RemnaWaveSquadMigrationStats(BaseModel):
+    source_uuid: str
+    target_uuid: str
+    total: int = 0
+    updated: int = 0
+    panel_updated: int = 0
+    panel_failed: int = 0
+    source_removed: int = 0
+    target_added: int = 0
+
+
+class RemnaWaveSquadMigrationResponse(BaseModel):
+    success: bool
+    detail: Optional[str] = None
+    error: Optional[str] = None
+    data: Optional[RemnaWaveSquadMigrationStats] = None

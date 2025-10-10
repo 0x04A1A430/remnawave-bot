@@ -1,18 +1,24 @@
 import logging
+import math
 from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
-from app.states import SquadRenameStates, SquadCreateStates
+from app.states import SquadRenameStates, SquadCreateStates, SquadMigrationStates
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.database.crud.server_squad import (
+    count_active_users_for_squad,
+    get_all_server_squads,
+    get_server_squad_by_uuid,
+)
 from app.keyboards.admin import (
    get_admin_remnawave_keyboard, get_sync_options_keyboard,
    get_node_management_keyboard, get_confirmation_keyboard,
    get_squad_management_keyboard, get_squad_edit_keyboard
 )
 from app.localization.texts import get_texts
-from app.services.remnawave_service import RemnaWaveService
+from app.services.remnawave_service import RemnaWaveService, RemnaWaveConfigurationError
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_bytes, format_datetime
 
@@ -20,6 +26,769 @@ logger = logging.getLogger(__name__)
 
 squad_inbound_selections = {}
 squad_create_data = {}
+
+MIGRATION_PAGE_SIZE = 8
+
+
+def _format_migration_server_label(texts, server) -> str:
+    status = (
+        texts.t("ADMIN_SQUAD_MIGRATION_STATUS_AVAILABLE", "✅ Доступен")
+        if getattr(server, "is_available", True)
+        else texts.t("ADMIN_SQUAD_MIGRATION_STATUS_UNAVAILABLE", "🚫 Недоступен")
+    )
+    return texts.t(
+        "ADMIN_SQUAD_MIGRATION_SERVER_LABEL",
+        "{name} — 👥 {users} ({status})",
+    ).format(name=server.display_name, users=server.current_users, status=status)
+
+
+def _build_migration_keyboard(
+    texts,
+    squads,
+    page: int,
+    total_pages: int,
+    stage: str,
+    *,
+    exclude_uuid: str = None,
+):
+    prefix = "admin_migration_source" if stage == "source" else "admin_migration_target"
+    rows = []
+    has_items = False
+
+    button_template = texts.t(
+        "ADMIN_SQUAD_MIGRATION_SQUAD_BUTTON",
+        "🌍 {name} — 👥 {users} ({status})",
+    )
+
+    for squad in squads:
+        if exclude_uuid and squad.squad_uuid == exclude_uuid:
+            continue
+
+        has_items = True
+        status = (
+            texts.t("ADMIN_SQUAD_MIGRATION_STATUS_AVAILABLE_SHORT", "✅")
+            if getattr(squad, "is_available", True)
+            else texts.t("ADMIN_SQUAD_MIGRATION_STATUS_UNAVAILABLE_SHORT", "🚫")
+        )
+        rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=button_template.format(
+                        name=squad.display_name,
+                        users=squad.current_users,
+                        status=status,
+                    ),
+                    callback_data=f"{prefix}_{squad.squad_uuid}",
+                )
+            ]
+        )
+
+    if total_pages > 1:
+        nav_buttons = []
+        if page > 1:
+            nav_buttons.append(
+                types.InlineKeyboardButton(
+                    text="⬅️",
+                    callback_data=f"{prefix}_page_{page - 1}",
+                )
+            )
+        nav_buttons.append(
+            types.InlineKeyboardButton(
+                text=texts.t(
+                    "ADMIN_SQUAD_MIGRATION_PAGE",
+                    "Стр. {page}/{pages}",
+                ).format(page=page, pages=total_pages),
+                callback_data="admin_migration_page_info",
+            )
+        )
+        if page < total_pages:
+            nav_buttons.append(
+                types.InlineKeyboardButton(
+                    text="➡️",
+                    callback_data=f"{prefix}_page_{page + 1}",
+                )
+            )
+        rows.append(nav_buttons)
+
+    rows.append(
+        [
+            types.InlineKeyboardButton(
+                text=texts.CANCEL,
+                callback_data="admin_migration_cancel",
+            )
+        ]
+    )
+
+    return types.InlineKeyboardMarkup(inline_keyboard=rows), has_items
+
+
+async def _fetch_migration_page(
+    db: AsyncSession,
+    page: int,
+):
+    squads, total = await get_all_server_squads(
+        db,
+        page=max(1, page),
+        limit=MIGRATION_PAGE_SIZE,
+    )
+    total_pages = max(1, math.ceil(total / MIGRATION_PAGE_SIZE))
+
+    if page < 1:
+        page = 1
+    if page > total_pages:
+        page = total_pages
+        squads, total = await get_all_server_squads(
+            db,
+            page=page,
+            limit=MIGRATION_PAGE_SIZE,
+        )
+        total_pages = max(1, math.ceil(total / MIGRATION_PAGE_SIZE))
+
+    return squads, page, total_pages
+
+
+@admin_required
+@error_handler
+async def show_squad_migration_menu(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    texts = get_texts(db_user.language)
+
+    await state.clear()
+
+    squads, page, total_pages = await _fetch_migration_page(db, page=1)
+    keyboard, has_items = _build_migration_keyboard(
+        texts,
+        squads,
+        page,
+        total_pages,
+        "source",
+    )
+
+    message = (
+        texts.t("ADMIN_SQUAD_MIGRATION_TITLE", "🚚 <b>Переезд сквадов</b>")
+        + "\n\n"
+        + texts.t(
+            "ADMIN_SQUAD_MIGRATION_SELECT_SOURCE",
+            "Выберите сквад, из которого нужно переехать:",
+        )
+    )
+
+    if not has_items:
+        message += (
+            "\n\n"
+            + texts.t(
+                "ADMIN_SQUAD_MIGRATION_NO_OPTIONS",
+                "Нет доступных сквадов. Добавьте новые или отмените операцию.",
+            )
+        )
+
+    await state.set_state(SquadMigrationStates.selecting_source)
+
+    await callback.message.edit_text(
+        message,
+        reply_markup=keyboard,
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def paginate_migration_source(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    if await state.get_state() != SquadMigrationStates.selecting_source:
+        await callback.answer()
+        return
+
+    try:
+        page = int(callback.data.split("_page_")[-1])
+    except (ValueError, IndexError):
+        await callback.answer()
+        return
+
+    squads, page, total_pages = await _fetch_migration_page(db, page=page)
+    texts = get_texts(db_user.language)
+    keyboard, has_items = _build_migration_keyboard(
+        texts,
+        squads,
+        page,
+        total_pages,
+        "source",
+    )
+
+    message = (
+        texts.t("ADMIN_SQUAD_MIGRATION_TITLE", "🚚 <b>Переезд сквадов</b>")
+        + "\n\n"
+        + texts.t(
+            "ADMIN_SQUAD_MIGRATION_SELECT_SOURCE",
+            "Выберите сквад, из которого нужно переехать:",
+        )
+    )
+
+    if not has_items:
+        message += (
+            "\n\n"
+            + texts.t(
+                "ADMIN_SQUAD_MIGRATION_NO_OPTIONS",
+                "Нет доступных сквадов. Добавьте новые или отмените операцию.",
+            )
+        )
+
+    await callback.message.edit_text(
+        message,
+        reply_markup=keyboard,
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def handle_migration_source_selection(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    if await state.get_state() != SquadMigrationStates.selecting_source:
+        await callback.answer()
+        return
+
+    if "_page_" in callback.data:
+        await callback.answer()
+        return
+
+    source_uuid = callback.data.replace("admin_migration_source_", "", 1)
+
+    texts = get_texts(db_user.language)
+    server = await get_server_squad_by_uuid(db, source_uuid)
+
+    if not server:
+        await callback.answer(
+            texts.t(
+                "ADMIN_SQUAD_MIGRATION_SQUAD_NOT_FOUND",
+                "Сквад не найден или недоступен.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    await state.update_data(
+        source_uuid=server.squad_uuid,
+        source_display=_format_migration_server_label(texts, server),
+    )
+
+    squads, page, total_pages = await _fetch_migration_page(db, page=1)
+    keyboard, has_items = _build_migration_keyboard(
+        texts,
+        squads,
+        page,
+        total_pages,
+        "target",
+        exclude_uuid=server.squad_uuid,
+    )
+
+    message = (
+        texts.t("ADMIN_SQUAD_MIGRATION_TITLE", "🚚 <b>Переезд сквадов</b>")
+        + "\n\n"
+        + texts.t(
+            "ADMIN_SQUAD_MIGRATION_SELECTED_SOURCE",
+            "Источник: {source}",
+        ).format(source=_format_migration_server_label(texts, server))
+        + "\n\n"
+        + texts.t(
+            "ADMIN_SQUAD_MIGRATION_SELECT_TARGET",
+            "Выберите сквад, в который нужно переехать:",
+        )
+    )
+
+    if not has_items:
+        message += (
+            "\n\n"
+            + texts.t(
+                "ADMIN_SQUAD_MIGRATION_TARGET_EMPTY",
+                "Нет других сквадов для переезда. Отмените операцию или создайте новые сквады.",
+            )
+        )
+
+    await state.set_state(SquadMigrationStates.selecting_target)
+
+    await callback.message.edit_text(
+        message,
+        reply_markup=keyboard,
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def paginate_migration_target(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    if await state.get_state() != SquadMigrationStates.selecting_target:
+        await callback.answer()
+        return
+
+    try:
+        page = int(callback.data.split("_page_")[-1])
+    except (ValueError, IndexError):
+        await callback.answer()
+        return
+
+    data = await state.get_data()
+    source_uuid = data.get("source_uuid")
+    if not source_uuid:
+        await callback.answer()
+        return
+
+    texts = get_texts(db_user.language)
+
+    squads, page, total_pages = await _fetch_migration_page(db, page=page)
+    keyboard, has_items = _build_migration_keyboard(
+        texts,
+        squads,
+        page,
+        total_pages,
+        "target",
+        exclude_uuid=source_uuid,
+    )
+
+    source_display = data.get("source_display") or source_uuid
+
+    message = (
+        texts.t("ADMIN_SQUAD_MIGRATION_TITLE", "🚚 <b>Переезд сквадов</b>")
+        + "\n\n"
+        + texts.t(
+            "ADMIN_SQUAD_MIGRATION_SELECTED_SOURCE",
+            "Источник: {source}",
+        ).format(source=source_display)
+        + "\n\n"
+        + texts.t(
+            "ADMIN_SQUAD_MIGRATION_SELECT_TARGET",
+            "Выберите сквад, в который нужно переехать:",
+        )
+    )
+
+    if not has_items:
+        message += (
+            "\n\n"
+            + texts.t(
+                "ADMIN_SQUAD_MIGRATION_TARGET_EMPTY",
+                "Нет других сквадов для переезда. Отмените операцию или создайте новые сквады.",
+            )
+        )
+
+    await callback.message.edit_text(
+        message,
+        reply_markup=keyboard,
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def handle_migration_target_selection(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    current_state = await state.get_state()
+    if current_state != SquadMigrationStates.selecting_target:
+        await callback.answer()
+        return
+
+    if "_page_" in callback.data:
+        await callback.answer()
+        return
+
+    data = await state.get_data()
+    source_uuid = data.get("source_uuid")
+
+    if not source_uuid:
+        await callback.answer()
+        return
+
+    target_uuid = callback.data.replace("admin_migration_target_", "", 1)
+
+    texts = get_texts(db_user.language)
+
+    if target_uuid == source_uuid:
+        await callback.answer(
+            texts.t(
+                "ADMIN_SQUAD_MIGRATION_SAME_SQUAD",
+                "Нельзя выбрать тот же сквад.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    target_server = await get_server_squad_by_uuid(db, target_uuid)
+    if not target_server:
+        await callback.answer(
+            texts.t(
+                "ADMIN_SQUAD_MIGRATION_SQUAD_NOT_FOUND",
+                "Сквад не найден или недоступен.",
+            ),
+            show_alert=True,
+        )
+        return
+
+    source_display = data.get("source_display") or source_uuid
+
+    users_to_move = await count_active_users_for_squad(db, source_uuid)
+
+    await state.update_data(
+        target_uuid=target_server.squad_uuid,
+        target_display=_format_migration_server_label(texts, target_server),
+        migration_count=users_to_move,
+    )
+
+    await state.set_state(SquadMigrationStates.confirming)
+
+    message_lines = [
+        texts.t("ADMIN_SQUAD_MIGRATION_TITLE", "🚚 <b>Переезд сквадов</b>"),
+        "",
+        texts.t(
+            "ADMIN_SQUAD_MIGRATION_CONFIRM_DETAILS",
+            "Проверьте параметры переезда:",
+        ),
+        texts.t(
+            "ADMIN_SQUAD_MIGRATION_CONFIRM_SOURCE",
+            "• Из: {source}",
+        ).format(source=source_display),
+        texts.t(
+            "ADMIN_SQUAD_MIGRATION_CONFIRM_TARGET",
+            "• В: {target}",
+        ).format(target=_format_migration_server_label(texts, target_server)),
+        texts.t(
+            "ADMIN_SQUAD_MIGRATION_CONFIRM_COUNT",
+            "• Пользователей к переносу: {count}",
+        ).format(count=users_to_move),
+        "",
+        texts.t(
+            "ADMIN_SQUAD_MIGRATION_CONFIRM_PROMPT",
+            "Подтвердите выполнение операции.",
+        ),
+    ]
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t(
+                        "ADMIN_SQUAD_MIGRATION_CONFIRM_BUTTON",
+                        "✅ Подтвердить",
+                    ),
+                    callback_data="admin_migration_confirm",
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t(
+                        "ADMIN_SQUAD_MIGRATION_CHANGE_TARGET",
+                        "🔄 Изменить сервер назначения",
+                    ),
+                    callback_data="admin_migration_change_target",
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.CANCEL,
+                    callback_data="admin_migration_cancel",
+                )
+            ],
+        ]
+    )
+
+    await callback.message.edit_text(
+        "\n".join(message_lines),
+        reply_markup=keyboard,
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def change_migration_target(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    data = await state.get_data()
+    source_uuid = data.get("source_uuid")
+
+    if not source_uuid:
+        await callback.answer()
+        return
+
+    await state.set_state(SquadMigrationStates.selecting_target)
+
+    texts = get_texts(db_user.language)
+    squads, page, total_pages = await _fetch_migration_page(db, page=1)
+    keyboard, has_items = _build_migration_keyboard(
+        texts,
+        squads,
+        page,
+        total_pages,
+        "target",
+        exclude_uuid=source_uuid,
+    )
+
+    source_display = data.get("source_display") or source_uuid
+
+    message = (
+        texts.t("ADMIN_SQUAD_MIGRATION_TITLE", "🚚 <b>Переезд сквадов</b>")
+        + "\n\n"
+        + texts.t(
+            "ADMIN_SQUAD_MIGRATION_SELECTED_SOURCE",
+            "Источник: {source}",
+        ).format(source=source_display)
+        + "\n\n"
+        + texts.t(
+            "ADMIN_SQUAD_MIGRATION_SELECT_TARGET",
+            "Выберите сквад, в который нужно переехать:",
+        )
+    )
+
+    if not has_items:
+        message += (
+            "\n\n"
+            + texts.t(
+                "ADMIN_SQUAD_MIGRATION_TARGET_EMPTY",
+                "Нет других сквадов для переезда. Отмените операцию или создайте новые сквады.",
+            )
+        )
+
+    await callback.message.edit_text(
+        message,
+        reply_markup=keyboard,
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def confirm_squad_migration(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    current_state = await state.get_state()
+    if current_state != SquadMigrationStates.confirming:
+        await callback.answer()
+        return
+
+    data = await state.get_data()
+    source_uuid = data.get("source_uuid")
+    target_uuid = data.get("target_uuid")
+
+    if not source_uuid or not target_uuid:
+        await callback.answer()
+        return
+
+    texts = get_texts(db_user.language)
+    remnawave_service = RemnaWaveService()
+
+    await callback.answer(texts.t("ADMIN_SQUAD_MIGRATION_IN_PROGRESS", "Запускаю переезд..."))
+
+    try:
+        result = await remnawave_service.migrate_squad_users(
+            db,
+            source_uuid=source_uuid,
+            target_uuid=target_uuid,
+        )
+    except RemnaWaveConfigurationError as error:
+        message = texts.t(
+            "ADMIN_SQUAD_MIGRATION_API_ERROR",
+            "❌ RemnaWave API не настроен: {error}",
+        ).format(error=str(error))
+        reply_markup = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t(
+                            "ADMIN_SQUAD_MIGRATION_BACK_BUTTON",
+                            "⬅️ В Remnawave",
+                        ),
+                        callback_data="admin_remnawave",
+                    )
+                ]
+            ]
+        )
+        await callback.message.edit_text(message, reply_markup=reply_markup)
+        await state.clear()
+        return
+
+    source_display = data.get("source_display") or source_uuid
+    target_display = data.get("target_display") or target_uuid
+
+    if not result.get("success"):
+        error_message = result.get("message") or ""
+        error_code = result.get("error") or "unexpected"
+        message = texts.t(
+            "ADMIN_SQUAD_MIGRATION_ERROR",
+            "❌ Не удалось выполнить переезд (код: {code}). {details}",
+        ).format(code=error_code, details=error_message)
+        reply_markup = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t(
+                            "ADMIN_SQUAD_MIGRATION_BACK_BUTTON",
+                            "⬅️ В Remnawave",
+                        ),
+                        callback_data="admin_remnawave",
+                    )
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t(
+                            "ADMIN_SQUAD_MIGRATION_NEW_BUTTON",
+                            "🔁 Новый переезд",
+                        ),
+                        callback_data="admin_rw_migration",
+                    )
+                ],
+            ]
+        )
+        await callback.message.edit_text(message, reply_markup=reply_markup)
+        await state.clear()
+        return
+
+    message_lines = [
+        texts.t("ADMIN_SQUAD_MIGRATION_SUCCESS_TITLE", "✅ Переезд завершен"),
+        "",
+        texts.t("ADMIN_SQUAD_MIGRATION_CONFIRM_SOURCE", "• Из: {source}").format(
+            source=source_display
+        ),
+        texts.t("ADMIN_SQUAD_MIGRATION_CONFIRM_TARGET", "• В: {target}").format(
+            target=target_display
+        ),
+        "",
+        texts.t(
+            "ADMIN_SQUAD_MIGRATION_RESULT_TOTAL",
+            "Найдено подписок: {count}",
+        ).format(count=result.get("total", 0)),
+        texts.t(
+            "ADMIN_SQUAD_MIGRATION_RESULT_UPDATED",
+            "Перенесено: {count}",
+        ).format(count=result.get("updated", 0)),
+    ]
+
+    panel_updated = result.get("panel_updated", 0)
+    panel_failed = result.get("panel_failed", 0)
+
+    if panel_updated:
+        message_lines.append(
+            texts.t(
+                "ADMIN_SQUAD_MIGRATION_RESULT_PANEL_UPDATED",
+                "Обновлено в панели: {count}",
+            ).format(count=panel_updated)
+        )
+    if panel_failed:
+        message_lines.append(
+            texts.t(
+                "ADMIN_SQUAD_MIGRATION_RESULT_PANEL_FAILED",
+                "Не удалось обновить в панели: {count}",
+            ).format(count=panel_failed)
+        )
+
+    reply_markup = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t(
+                        "ADMIN_SQUAD_MIGRATION_NEW_BUTTON",
+                        "🔁 Новый переезд",
+                    ),
+                    callback_data="admin_rw_migration",
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t(
+                        "ADMIN_SQUAD_MIGRATION_BACK_BUTTON",
+                        "⬅️ В Remnawave",
+                    ),
+                    callback_data="admin_remnawave",
+                )
+            ],
+        ]
+    )
+
+    await callback.message.edit_text(
+        "\n".join(message_lines),
+        reply_markup=reply_markup,
+        disable_web_page_preview=True,
+    )
+    await state.clear()
+
+
+@admin_required
+@error_handler
+async def cancel_squad_migration(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    texts = get_texts(db_user.language)
+    await state.clear()
+
+    message = texts.t(
+        "ADMIN_SQUAD_MIGRATION_CANCELLED",
+        "❌ Переезд отменен.",
+    )
+
+    reply_markup = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t(
+                        "ADMIN_SQUAD_MIGRATION_BACK_BUTTON",
+                        "⬅️ В Remnawave",
+                    ),
+                    callback_data="admin_remnawave",
+                )
+            ]
+        ]
+    )
+
+    await callback.message.edit_text(message, reply_markup=reply_markup)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def handle_migration_page_info(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    texts = get_texts(db_user.language)
+    await callback.answer(
+        texts.t("ADMIN_SQUAD_MIGRATION_PAGE_HINT", "Это текущая страница."),
+        show_alert=False,
+    )
 
 @admin_required
 @error_handler
@@ -1920,6 +2689,15 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(restart_all_nodes, F.data == "admin_restart_all_nodes")
     dp.callback_query.register(show_sync_options, F.data == "admin_rw_sync")
     dp.callback_query.register(sync_all_users, F.data == "sync_all_users")
+    dp.callback_query.register(show_squad_migration_menu, F.data == "admin_rw_migration")
+    dp.callback_query.register(paginate_migration_source, F.data.startswith("admin_migration_source_page_"))
+    dp.callback_query.register(handle_migration_source_selection, F.data.startswith("admin_migration_source_"))
+    dp.callback_query.register(paginate_migration_target, F.data.startswith("admin_migration_target_page_"))
+    dp.callback_query.register(handle_migration_target_selection, F.data.startswith("admin_migration_target_"))
+    dp.callback_query.register(change_migration_target, F.data == "admin_migration_change_target")
+    dp.callback_query.register(confirm_squad_migration, F.data == "admin_migration_confirm")
+    dp.callback_query.register(cancel_squad_migration, F.data == "admin_migration_cancel")
+    dp.callback_query.register(handle_migration_page_info, F.data == "admin_migration_page_info")
     dp.callback_query.register(show_squads_management, F.data == "admin_rw_squads")
     dp.callback_query.register(show_squad_details, F.data.startswith("admin_squad_manage_"))
     dp.callback_query.register(manage_squad_action, F.data.startswith("squad_add_users_"))
