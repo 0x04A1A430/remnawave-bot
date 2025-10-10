@@ -705,6 +705,393 @@
             color: #fff;
         }
 
+        /* Purchase Configurator */
+        .purchase-card {
+            position: relative;
+        }
+
+        .purchase-card .card-header {
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .purchase-card .card-title {
+            text-transform: none;
+            letter-spacing: 0;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .purchase-card .card-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .purchase-sections {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding-top: 12px;
+        }
+
+        .purchase-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .purchase-section + .purchase-section {
+            padding-top: 4px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .purchase-section-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .purchase-section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .purchase-section-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .purchase-section-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .purchase-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .purchase-option-button {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .purchase-option-button:hover {
+            border-color: rgba(var(--primary-rgb), 0.4);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .purchase-option-button.active {
+            border-color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.08);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .purchase-option-button.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .purchase-option-label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .purchase-option-title {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .purchase-option-description {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .purchase-option-prices {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+            font-weight: 700;
+        }
+
+        .purchase-option-price {
+            font-size: 15px;
+        }
+
+        .purchase-option-old-price {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-decoration: line-through;
+        }
+
+        .purchase-option-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: rgba(var(--primary-rgb), 0.12);
+            color: var(--primary);
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .purchase-server-option {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .purchase-server-option:hover:not(.disabled) {
+            border-color: rgba(var(--primary-rgb), 0.4);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .purchase-server-option.selected {
+            border-color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.08);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .purchase-server-option.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .purchase-server-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 14px;
+        }
+
+        .purchase-server-name {
+            font-weight: 600;
+        }
+
+        .purchase-server-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .purchase-devices-stepper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .purchase-devices-stepper button {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .purchase-devices-stepper button:hover:not(:disabled) {
+            border-color: rgba(var(--primary-rgb), 0.4);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .purchase-devices-stepper button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .purchase-devices-value {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .purchase-devices-note {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .purchase-summary {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+            border-radius: var(--radius-lg);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .purchase-summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .purchase-summary-title {
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .purchase-summary-lines {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .purchase-summary-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .purchase-summary-line strong {
+            font-weight: 600;
+        }
+
+        .purchase-summary-total {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+
+        .purchase-summary-total .purchase-total-value {
+            font-size: 20px;
+            font-weight: 800;
+        }
+
+        .purchase-summary-total .purchase-old-total {
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-decoration: line-through;
+        }
+
+        .purchase-summary-total .purchase-discount-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: rgba(var(--primary-rgb), 0.12);
+            color: var(--primary);
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .purchase-summary-footnote {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .purchase-balance-warning {
+            padding: 12px 14px;
+            border-radius: var(--radius);
+            border: 1px solid rgba(var(--danger-rgb), 0.2);
+            background: rgba(var(--danger-rgb), 0.08);
+            color: var(--danger);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .purchase-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .purchase-actions .btn {
+            width: 100%;
+        }
+
+        .purchase-loading {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .purchase-loading-line {
+            height: 16px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(0, 0, 0, 0.05), rgba(0,0,0,0.12), rgba(0,0,0,0.05));
+            animation: shimmer 1.2s infinite;
+        }
+
+        :root[data-theme="dark"] .purchase-option-button,
+        :root[data-theme="dark"] .purchase-server-option,
+        :root[data-theme="dark"] .purchase-summary {
+            background: rgba(15, 23, 42, 0.6);
+        }
+
+        :root[data-theme="dark"] .purchase-summary {
+            border-color: rgba(148, 163, 184, 0.28);
+        }
+
+        :root[data-theme="dark"] .purchase-loading-line {
+            background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+        }
+
+        .purchase-empty {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .purchase-error {
+            font-size: 13px;
+            color: var(--danger);
+            padding: 12px 14px;
+            border-radius: var(--radius);
+            border: 1px solid rgba(var(--danger-rgb), 0.25);
+            background: rgba(var(--danger-rgb), 0.08);
+        }
+
+        .purchase-retry {
+            align-self: flex-start;
+            padding: 10px 16px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .purchase-retry:hover {
+            border-color: rgba(var(--primary-rgb), 0.4);
+            color: var(--primary);
+        }
+
         .promo-offers {
             display: flex;
             flex-direction: column;
@@ -3345,6 +3732,105 @@
             </div>
         </div>
 
+        <!-- Purchase Configurator -->
+        <div id="purchaseConfiguratorWrapper" class="hidden">
+            <div class="card purchase-card" id="purchaseConfiguratorCard">
+                <div class="card-header">
+                    <div class="card-title">
+                        <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 6h15l-1.5 12a2 2 0 01-2 1.8H7.5a2 2 0 01-2-1.8L4 4H2"/>
+                        </svg>
+                        <span data-i18n="purchase.title">Configure your subscription</span>
+                    </div>
+                </div>
+                <div class="card-content">
+                    <div class="card-subtitle" data-i18n="purchase.subtitle">Build a subscription that fits your needs.</div>
+                    <div class="purchase-loading hidden" id="purchaseConfiguratorLoading">
+                        <div class="purchase-loading-line" style="width: 70%;"></div>
+                        <div class="purchase-loading-line" style="width: 55%;"></div>
+                        <div class="purchase-loading-line" style="width: 80%;"></div>
+                    </div>
+                    <div class="purchase-error hidden" id="purchaseConfiguratorError"></div>
+                    <button class="purchase-retry hidden" id="purchaseConfiguratorRetry" type="button" data-i18n="purchase.action.retry">Try again</button>
+                    <div class="purchase-sections hidden" id="purchaseConfiguratorContent">
+                        <div class="purchase-section" id="purchasePeriodSection">
+                            <div class="purchase-section-header">
+                                <div>
+                                    <div class="purchase-section-title" data-i18n="purchase.period.title">Subscription period</div>
+                                    <div class="purchase-section-subtitle" data-i18n="purchase.period.subtitle">Choose the billing period.</div>
+                                </div>
+                                <div class="purchase-section-meta" id="purchasePeriodMeta"></div>
+                            </div>
+                            <div class="purchase-options" id="purchasePeriodOptions"></div>
+                            <div class="purchase-empty hidden" id="purchasePeriodEmpty" data-i18n="purchase.period.empty">No periods available</div>
+                        </div>
+
+                        <div class="purchase-section" id="purchaseTrafficSection">
+                            <div class="purchase-section-header">
+                                <div>
+                                    <div class="purchase-section-title" data-i18n="purchase.traffic.title">Traffic</div>
+                                    <div class="purchase-section-subtitle" id="purchaseTrafficSubtitle" data-i18n="purchase.traffic.subtitle">Select the monthly traffic limit.</div>
+                                </div>
+                                <div class="purchase-section-meta" id="purchaseTrafficMeta"></div>
+                            </div>
+                            <div class="purchase-options" id="purchaseTrafficOptions"></div>
+                            <div class="purchase-empty hidden" id="purchaseTrafficFixedValue"></div>
+                        </div>
+
+                        <div class="purchase-section" id="purchaseServersSection">
+                            <div class="purchase-section-header">
+                                <div>
+                                    <div class="purchase-section-title" data-i18n="purchase.servers.title">Servers</div>
+                                    <div class="purchase-section-subtitle" id="purchaseServersSubtitle" data-i18n="purchase.servers.subtitle">Choose the regions you need.</div>
+                                </div>
+                                <div class="purchase-section-meta" id="purchaseServersMeta"></div>
+                            </div>
+                            <div class="purchase-section-subtitle hidden" id="purchaseServersNote"></div>
+                            <div class="purchase-options" id="purchaseServersOptions"></div>
+                            <div class="purchase-empty hidden" id="purchaseServersEmpty" data-i18n="purchase.servers.empty">No servers available</div>
+                        </div>
+
+                        <div class="purchase-section" id="purchaseDevicesSection">
+                            <div class="purchase-section-header">
+                                <div>
+                                    <div class="purchase-section-title" data-i18n="purchase.devices.title">Devices</div>
+                                    <div class="purchase-section-subtitle" data-i18n="purchase.devices.subtitle">Number of simultaneously connected devices.</div>
+                                </div>
+                                <div class="purchase-section-meta" id="purchaseDevicesMeta"></div>
+                            </div>
+                            <div class="purchase-devices-stepper">
+                                <button type="button" id="purchaseDevicesDecrease">−</button>
+                                <div class="purchase-devices-value" id="purchaseDevicesValue">0</div>
+                                <button type="button" id="purchaseDevicesIncrease">+</button>
+                            </div>
+                            <div class="purchase-devices-note" id="purchaseDevicesNote"></div>
+                        </div>
+
+                        <div class="purchase-section" id="purchaseSummarySection">
+                            <div class="purchase-summary" id="purchaseSummaryContainer">
+                                <div class="purchase-summary-header">
+                                    <div class="purchase-summary-title" data-i18n="purchase.summary.title">Summary</div>
+                                    <div class="purchase-summary-total">
+                                        <div class="purchase-total-value" id="purchaseSummaryTotalValue">—</div>
+                                        <div class="purchase-old-total hidden" id="purchaseSummaryOldValue">—</div>
+                                        <div class="purchase-discount-chip hidden" id="purchaseSummaryDiscountChip"></div>
+                                    </div>
+                                </div>
+                                <div class="purchase-summary-lines" id="purchaseSummaryLines"></div>
+                                <div class="purchase-error hidden" id="purchaseSummaryError"></div>
+                                <div class="purchase-summary-footnote" id="purchaseSummaryFootnote"></div>
+                                <div class="purchase-balance-warning hidden" id="purchaseBalanceWarning"></div>
+                            </div>
+                            <div class="purchase-actions">
+                                <button class="btn btn-primary" type="button" id="purchaseSubmitBtn" data-i18n="purchase.action.buy">Buy subscription</button>
+                                <button class="btn btn-secondary hidden" type="button" id="purchaseTopupBtn" data-i18n="purchase.action.topup">Top up balance</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Content -->
         <div id="mainContent" class="hidden">
             <!-- Promo Offers -->
@@ -3779,6 +4265,24 @@
         let promoOfferTimerHandle = null;
         let referralListExpanded = false;
         let referralCopyResetHandle = null;
+        let purchaseConfiguratorMode = null;
+        let purchaseConfiguratorData = null;
+        let purchaseConfiguratorPromise = null;
+        let purchaseConfiguratorLoading = false;
+        let purchaseConfiguratorError = null;
+        let purchaseSelections = {
+            period: null,
+            traffic: null,
+            servers: new Set(),
+            devices: null,
+        };
+        let purchaseSummary = null;
+        let purchaseSummaryPromise = null;
+        let purchaseSummaryLoading = false;
+        let purchaseSummaryError = null;
+        let purchaseSummaryDebounceHandle = null;
+        let purchaseSummaryRequestId = 0;
+        let purchaseSubmitInProgress = false;
 
         if (typeof tg.expand === 'function') {
             tg.expand();
@@ -4157,6 +4661,62 @@
                 'subscription.type.paid': 'Paid',
                 'autopay.enabled': 'Enabled',
                 'autopay.disabled': 'Disabled',
+                'purchase.title': 'Configure your subscription',
+                'purchase.subtitle': 'Build a subscription that fits your needs.',
+                'purchase.period.title': 'Subscription period',
+                'purchase.period.subtitle': 'Choose the billing period.',
+                'purchase.period.empty': 'No periods available',
+                'purchase.traffic.title': 'Traffic',
+                'purchase.traffic.subtitle': 'Select the monthly traffic limit.',
+                'purchase.traffic.subtitle.fixed': 'Traffic volume is fixed for this plan.',
+                'purchase.traffic.fixed': '{value} per month included',
+                'purchase.traffic.unlimited': 'Unlimited traffic',
+                'purchase.traffic.empty': 'No traffic options available',
+                'purchase.servers.title': 'Servers',
+                'purchase.servers.subtitle': 'Choose the regions you need.',
+                'purchase.servers.empty': 'No servers available',
+                'purchase.servers.auto': 'Servers will be connected automatically.',
+                'purchase.servers.single': 'Included server: {name}',
+                'purchase.servers.limit': 'Selected {current}/{total}',
+                'purchase.devices.title': 'Devices',
+                'purchase.devices.subtitle': 'Number of simultaneously connected devices.',
+                'purchase.devices.note': 'Included devices: {count}',
+                'purchase.devices.unlimited': 'Unlimited devices',
+                'purchase.devices.price': 'Additional devices: {amount}/mo',
+                'purchase.summary.title': 'Summary',
+                'purchase.summary.period': 'Period',
+                'purchase.summary.traffic': 'Traffic',
+                'purchase.summary.servers': 'Servers',
+                'purchase.summary.devices': 'Devices',
+                'purchase.summary.discount': 'Discount',
+                'purchase.summary.balance': 'Balance',
+                'purchase.summary.balance_after': 'Balance after purchase',
+                'purchase.summary.total': 'Total due',
+                'purchase.summary.original': 'Original price',
+                'purchase.summary.promo_offer': 'Promo offer discount',
+                'purchase.summary.promo_group': 'Promo group discount',
+                'purchase.summary.pay_now': 'Charged today',
+                'purchase.summary.per_month': '{amount}/mo',
+                'purchase.summary.missing': 'You need to top up {amount}',
+                'purchase.action.buy': 'Buy subscription',
+                'purchase.action.processing': 'Processing…',
+                'purchase.action.topup': 'Top up balance',
+                'purchase.action.retry': 'Try again',
+                'purchase.loading': 'Loading purchase options…',
+                'purchase.error.generic': 'Unable to load purchase options right now.',
+                'purchase.error.unauthorized': 'Authorization failed. Please reopen the mini app from Telegram.',
+                'purchase.submit.success': 'Subscription purchased successfully!',
+                'purchase.submit.title': 'Purchase complete',
+                'purchase.submit.error': 'Unable to complete the purchase. Please try again later.',
+                'purchase.validation.period': 'Please select a subscription period.',
+                'purchase.validation.servers': 'Please select at least {min} server(s).',
+                'purchase.validation.balance': 'Not enough funds on your balance.',
+                'purchase.promotions.total_discount': 'Total discount {percent}%',
+                'purchase.promotions.promo_offer': 'Promo offer discount {percent}%',
+                'purchase.promotions.promo_group': 'Promo group discount {percent}%',
+                'purchase.traffic.price': 'Traffic add-on: {amount}/mo',
+                'purchase.servers.price': 'Server add-on: {amount}/mo',
+                'purchase.devices.unavailable': 'Device configuration unavailable',
                 'platform.ios': 'iOS',
                 'platform.android': 'Android',
                 'platform.pc': 'PC',
@@ -4438,6 +4998,62 @@
                 'subscription.type.paid': 'Платная',
                 'autopay.enabled': 'Включен',
                 'autopay.disabled': 'Выключен',
+                'purchase.title': 'Оформление подписки',
+                'purchase.subtitle': 'Соберите подходящую конфигурацию подписки.',
+                'purchase.period.title': 'Период подписки',
+                'purchase.period.subtitle': 'Выберите срок оплаты.',
+                'purchase.period.empty': 'Нет доступных периодов',
+                'purchase.traffic.title': 'Трафик',
+                'purchase.traffic.subtitle': 'Выберите месячный лимит трафика.',
+                'purchase.traffic.subtitle.fixed': 'Лимит трафика фиксирован для этого плана.',
+                'purchase.traffic.fixed': 'Включено {value} в месяц',
+                'purchase.traffic.unlimited': 'Безлимитный трафик',
+                'purchase.traffic.empty': 'Нет вариантов трафика',
+                'purchase.servers.title': 'Серверы',
+                'purchase.servers.subtitle': 'Выберите нужные регионы подключения.',
+                'purchase.servers.empty': 'Нет доступных серверов',
+                'purchase.servers.auto': 'Серверы подключатся автоматически.',
+                'purchase.servers.single': 'Входит сервер: {name}',
+                'purchase.servers.limit': 'Выбрано {current} из {total}',
+                'purchase.devices.title': 'Устройства',
+                'purchase.devices.subtitle': 'Количество одновременно подключённых устройств.',
+                'purchase.devices.note': 'Включено устройств: {count}',
+                'purchase.devices.unlimited': 'Без ограничений',
+                'purchase.devices.price': 'Доп. устройства: {amount}/мес',
+                'purchase.summary.title': 'Итог',
+                'purchase.summary.period': 'Период',
+                'purchase.summary.traffic': 'Трафик',
+                'purchase.summary.servers': 'Серверы',
+                'purchase.summary.devices': 'Устройства',
+                'purchase.summary.discount': 'Скидка',
+                'purchase.summary.balance': 'Баланс',
+                'purchase.summary.balance_after': 'Баланс после списания',
+                'purchase.summary.total': 'К оплате',
+                'purchase.summary.original': 'Без скидки',
+                'purchase.summary.promo_offer': 'Скидка по акции',
+                'purchase.summary.promo_group': 'Скидка промогруппы',
+                'purchase.summary.pay_now': 'Списывается сейчас',
+                'purchase.summary.per_month': '{amount}/мес',
+                'purchase.summary.missing': 'Не хватает {amount}',
+                'purchase.action.buy': 'Оформить подписку',
+                'purchase.action.processing': 'Оформляем…',
+                'purchase.action.topup': 'Пополнить баланс',
+                'purchase.action.retry': 'Повторить',
+                'purchase.loading': 'Загружаем варианты подписки…',
+                'purchase.error.generic': 'Не удалось загрузить конфигуратор. Попробуйте позже.',
+                'purchase.error.unauthorized': 'Не удалось подтвердить авторизацию. Откройте мини-приложение из Telegram.',
+                'purchase.submit.success': 'Подписка успешно оформлена!',
+                'purchase.submit.title': 'Оплата завершена',
+                'purchase.submit.error': 'Не удалось завершить покупку. Попробуйте ещё раз позже.',
+                'purchase.validation.period': 'Выберите период подписки.',
+                'purchase.validation.servers': 'Выберите минимум {min} сервер(ов).',
+                'purchase.validation.balance': 'Недостаточно средств на балансе.',
+                'purchase.promotions.total_discount': 'Суммарная скидка {percent}%',
+                'purchase.promotions.promo_offer': 'Скидка по акции {percent}%',
+                'purchase.promotions.promo_group': 'Скидка промогруппы {percent}%',
+                'purchase.traffic.price': 'Трафик: {amount}/мес',
+                'purchase.servers.price': 'Серверы: {amount}/мес',
+                'purchase.devices.unavailable': 'Настройка устройств недоступна',
                 'platform.ios': 'iOS',
                 'platform.android': 'Android',
                 'platform.pc': 'ПК',
@@ -5650,6 +6266,7 @@
             renderPromoOffers();
             renderPromoSection();
             renderBalanceSection();
+            renderPurchaseConfiguratorCard();
             renderReferralSection();
             renderTransactionHistory();
             renderServersList();
@@ -6875,6 +7492,1829 @@
             return template.replace('{count}', String(normalized));
         }
 
+        function normalizeCurrencyCode(value) {
+            if (!value) {
+                return String(userData?.balance_currency || 'RUB').toUpperCase();
+            }
+            try {
+                return String(value).toUpperCase();
+            } catch (error) {
+                return 'RUB';
+            }
+        }
+
+        function resolvePurchaseConfiguratorMode() {
+            if (userData?.user && !hasPaidSubscription()) {
+                return 'user';
+            }
+            if (!userData?.user && currentErrorState) {
+                const statusRaw = currentErrorState.status ?? currentErrorState.code ?? currentErrorState.httpStatus ?? null;
+                const statusNumber = Number(statusRaw);
+                if (Number.isFinite(statusNumber) && [401, 402, 403, 404, 410].includes(statusNumber)) {
+                    return 'error';
+                }
+                if (typeof statusRaw === 'string') {
+                    const normalized = statusRaw.toLowerCase();
+                    if (['not_found', 'missing', 'subscription_not_found'].includes(normalized)) {
+                        return 'error';
+                    }
+                }
+            }
+            return null;
+        }
+
+        function resetPurchaseConfiguratorState() {
+            purchaseConfiguratorData = null;
+            purchaseConfiguratorPromise = null;
+            purchaseConfiguratorLoading = false;
+            purchaseConfiguratorError = null;
+            purchaseSummary = null;
+            purchaseSummaryPromise = null;
+            purchaseSummaryLoading = false;
+            purchaseSummaryError = null;
+            purchaseSelections = {
+                period: null,
+                traffic: null,
+                servers: new Set(),
+                devices: null,
+            };
+            purchaseSubmitInProgress = false;
+            purchaseSummaryRequestId = 0;
+            if (purchaseSummaryDebounceHandle) {
+                clearTimeout(purchaseSummaryDebounceHandle);
+                purchaseSummaryDebounceHandle = null;
+            }
+        }
+
+        function normalizePurchasePeriodOptions(source, currency) {
+            const container = Array.isArray(source)
+                ? { options: source }
+                : (source && typeof source === 'object' ? source : {});
+            const optionsArray = ensureArray(container.options || container.values || container.items || []);
+            const options = optionsArray.map(option => {
+                if (!option) {
+                    return null;
+                }
+                const rawId = option.id ?? option.value ?? option.period_days ?? option.days ?? option.months ?? option.period;
+                const id = rawId != null ? String(rawId) : null;
+                const periodDays = coercePositiveInt(option.period_days ?? option.days ?? option.period ?? option.value, null);
+                const months = coercePositiveInt(option.months ?? option.month_count ?? (periodDays !== null ? Math.max(1, Math.round(periodDays / 30)) : null), null);
+                let label = option.label || option.title || option.name || '';
+                if (!label) {
+                    if (months) {
+                        label = formatPeriodLabel(months);
+                    } else if (periodDays) {
+                        label = `${periodDays} d`;
+                    }
+                }
+                const description = option.description || '';
+                const priceKopeks = coercePositiveInt(option.price_kopeks ?? option.priceKopeks ?? option.price ?? option.amount_kopeks ?? option.amountKopeks, null);
+                const originalPriceKopeks = coercePositiveInt(option.original_price_kopeks ?? option.originalPriceKopeks ?? option.price_before_discount ?? option.priceBeforeDiscount ?? option.base_price_kopeks ?? null, null);
+                const discountPercent = coercePositiveInt(option.discount_percent ?? option.discountPercent ?? null, null);
+                const isDefault = coerceBoolean(option.is_default ?? option.default ?? option.isCurrent ?? option.is_current ?? option.selected, false);
+                const priceLabel = option.price_label || option.priceLabel || (priceKopeks !== null ? formatPriceFromKopeks(priceKopeks, currency) : '');
+                const oldPriceLabel = originalPriceKopeks && originalPriceKopeks > (priceKopeks ?? 0)
+                    ? formatPriceFromKopeks(originalPriceKopeks, currency)
+                    : null;
+                return {
+                    id: id || label || (months !== null ? `${months}` : null),
+                    periodDays,
+                    months,
+                    label: label || '',
+                    description,
+                    priceKopeks,
+                    originalPriceKopeks,
+                    discountPercent,
+                    priceLabel,
+                    oldPriceLabel,
+                    isDefault,
+                    raw: option,
+                };
+            }).filter(Boolean);
+
+            let defaultOption = options.find(option => option.isDefault) || options[0] || null;
+            return {
+                options,
+                defaultId: defaultOption?.id ?? null,
+                raw: container,
+            };
+        }
+
+        function normalizePurchaseConfiguratorPayload(payload) {
+            if (!payload || typeof payload !== 'object') {
+                return null;
+            }
+
+            const currency = normalizeCurrencyCode(payload.currency || payload.currency_code || payload.currencyCode);
+            const balanceKopeks = coercePositiveInt(
+                payload.balance_kopeks
+                ?? payload.balanceKopeks
+                ?? payload.balance
+                ?? userData?.balance_kopeks,
+                coercePositiveInt(userData?.balance_kopeks, 0) || 0,
+            );
+
+            const result = {
+                raw: payload,
+                currency,
+                balanceKopeks,
+                period: normalizePurchasePeriodOptions(payload.periods ?? payload.period_options ?? payload.periodOptions ?? payload.period ?? [], currency),
+                traffic: normalizePurchaseTrafficOptions(payload.traffic ?? payload.traffic_options ?? payload.trafficOptions ?? [], currency),
+                servers: normalizePurchaseServerOptions(payload.servers ?? payload.countries ?? payload.server_options ?? [], currency),
+                devices: normalizePurchaseDeviceOptions(payload.devices ?? payload.device_options ?? payload.deviceOptions ?? [], currency),
+                summary: null,
+            };
+
+            const summarySource = payload.summary
+                ?? payload.quote
+                ?? payload.initial_summary
+                ?? payload.purchase_summary
+                ?? null;
+            if (summarySource) {
+                result.summary = normalizePurchaseSummaryPayload(summarySource, result);
+            }
+
+            return result;
+        }
+
+        function getSelectedPurchasePeriodOption() {
+            const options = purchaseConfiguratorData?.period?.options || [];
+            if (!options.length) {
+                return null;
+            }
+            const selectedId = purchaseSelections.period ?? purchaseConfiguratorData?.period?.defaultId ?? options[0].id;
+            return options.find(option => option.id === selectedId) || options[0] || null;
+        }
+
+        function getSelectedPurchaseTrafficOption() {
+            const data = purchaseConfiguratorData?.traffic;
+            if (!data || data.mode !== 'selectable') {
+                return null;
+            }
+            const options = data.options || [];
+            const selectedId = purchaseSelections.traffic ?? data.defaultId ?? (options[0]?.id ?? null);
+            return options.find(option => option.id === selectedId) || options[0] || null;
+        }
+
+        function getSelectedPurchaseDeviceValue() {
+            if (!purchaseConfiguratorData?.devices) {
+                return null;
+            }
+            const value = coercePositiveInt(purchaseSelections.devices, null);
+            if (value !== null) {
+                return value;
+            }
+            if (purchaseConfiguratorData.devices.defaultValue !== undefined && purchaseConfiguratorData.devices.defaultValue !== null) {
+                return purchaseConfiguratorData.devices.defaultValue;
+            }
+            if (purchaseConfiguratorData.devices.min !== undefined && purchaseConfiguratorData.devices.min !== null) {
+                return purchaseConfiguratorData.devices.min;
+            }
+            return null;
+        }
+
+        function buildFallbackPurchaseSummaryLines() {
+            const lines = [];
+            const period = getSelectedPurchasePeriodOption();
+            if (period) {
+                const labelKey = 'purchase.summary.period';
+                const labelText = t(labelKey);
+                lines.push({
+                    label: labelText === labelKey ? 'Period' : labelText,
+                    value: period.label || '',
+                });
+            }
+            const trafficOption = getSelectedPurchaseTrafficOption();
+            if (trafficOption) {
+                const labelKey = 'purchase.summary.traffic';
+                const labelText = t(labelKey);
+                lines.push({
+                    label: labelText === labelKey ? 'Traffic' : labelText,
+                    value: trafficOption.label || '',
+                });
+            } else if (purchaseConfiguratorData?.traffic?.fixedLabel) {
+                const labelKey = 'purchase.summary.traffic';
+                const labelText = t(labelKey);
+                lines.push({
+                    label: labelText === labelKey ? 'Traffic' : labelText,
+                    value: purchaseConfiguratorData.traffic.fixedLabel,
+                });
+            }
+            if (purchaseConfiguratorData?.servers) {
+                const labelKey = 'purchase.summary.servers';
+                const labelText = t(labelKey);
+                let value = '';
+                if (purchaseConfiguratorData.servers.auto && purchaseConfiguratorData.servers.fixed?.length) {
+                    value = purchaseConfiguratorData.servers.fixed.join(', ');
+                } else if (purchaseSelections.servers instanceof Set && purchaseSelections.servers.size) {
+                    const selectedNames = (purchaseConfiguratorData.servers.options || [])
+                        .filter(option => purchaseSelections.servers.has(option.id))
+                        .map(option => option.name || option.id);
+                    value = selectedNames.join(', ');
+                } else {
+                    value = purchaseConfiguratorData.servers.fixed?.join(', ') || '';
+                }
+                lines.push({
+                    label: labelText === labelKey ? 'Servers' : labelText,
+                    value: value || t('values.not_available'),
+                });
+            }
+            if (purchaseConfiguratorData?.devices) {
+                const labelKey = 'purchase.summary.devices';
+                const labelText = t(labelKey);
+                const deviceValue = getSelectedPurchaseDeviceValue();
+                let value = '';
+                if (deviceValue === 0) {
+                    value = t('purchase.devices.unlimited');
+                } else if (deviceValue !== null) {
+                    value = formatDeviceCountLabel(deviceValue);
+                }
+                lines.push({
+                    label: labelText === labelKey ? 'Devices' : labelText,
+                    value: value || t('values.not_available'),
+                });
+            }
+            return lines;
+        }
+
+        function normalizePurchaseSummaryPayload(payload, context) {
+            if (!payload || typeof payload !== 'object') {
+                return null;
+            }
+
+            const currency = context?.currency || normalizeCurrencyCode();
+            const totalKopeks = coercePositiveInt(
+                payload.total_price
+                ?? payload.totalPrice
+                ?? payload.total
+                ?? payload.amount_kopeks
+                ?? payload.amountKopeks,
+                null,
+            );
+            const originalKopeks = coercePositiveInt(
+                payload.total_price_before_discount
+                ?? payload.total_price_before_discounts
+                ?? payload.total_before_discount
+                ?? payload.original_total_price
+                ?? payload.originalTotalPrice
+                ?? payload.before_discount_kopeks
+                ?? payload.beforeDiscountKopeks,
+                null,
+            );
+            const discountValue = coercePositiveInt(
+                payload.discount_value
+                ?? payload.discountValue
+                ?? payload.total_discount_value
+                ?? (originalKopeks !== null && totalKopeks !== null ? originalKopeks - totalKopeks : null),
+                null,
+            );
+            const discountPercent = coercePositiveInt(
+                payload.discount_percent
+                ?? payload.discountPercent
+                ?? payload.total_discount_percent
+                ?? null,
+                null,
+            );
+
+            if (payload.balance_kopeks != null) {
+                context.balanceKopeks = coercePositiveInt(payload.balance_kopeks, context.balanceKopeks);
+            } else if (payload.balance_after_purchase_kopeks != null) {
+                context.balanceKopeks = coercePositiveInt(payload.balance_after_purchase_kopeks, context.balanceKopeks);
+            }
+
+            const lines = [];
+            const detailsSource = payload.details || payload.components || payload.breakdown || [];
+            const detailsArray = Array.isArray(detailsSource)
+                ? detailsSource
+                : Object.entries(detailsSource).map(([key, value]) => ({ key, ...value }));
+
+            detailsArray.forEach(item => {
+                if (!item) {
+                    return;
+                }
+                const key = (item.key || item.id || item.type || '').toString().toLowerCase();
+                let label = item.label || '';
+                if (!label && key) {
+                    const translationKey = `purchase.summary.${key}`;
+                    const translated = t(translationKey);
+                    label = translated === translationKey ? key : translated;
+                }
+                if (!label && item.name) {
+                    label = item.name;
+                }
+                const valueLabel = item.value_label || item.valueLabel || item.value || item.description || '';
+                const priceKopeks = coercePositiveInt(item.price_kopeks ?? item.priceKopeks ?? item.amount_kopeks ?? item.amountKopeks ?? item.price ?? null, null);
+                lines.push({
+                    label,
+                    value: valueLabel,
+                    price: priceKopeks !== null ? formatPriceFromKopeks(priceKopeks, currency) : null,
+                });
+            });
+
+            if (!lines.length) {
+                buildFallbackPurchaseSummaryLines().forEach(line => lines.push(line));
+            }
+
+            const missingKopeks = coercePositiveInt(
+                payload.missing_amount_kopeks
+                ?? payload.missingAmountKopeks
+                ?? payload.missing
+                ?? null,
+                null,
+            );
+            let finalMissing = missingKopeks;
+            if ((finalMissing === null || finalMissing === undefined) && context.balanceKopeks !== null && totalKopeks !== null) {
+                const diff = totalKopeks - context.balanceKopeks;
+                if (diff > 0) {
+                    finalMissing = diff;
+                }
+            }
+
+            return {
+                raw: payload,
+                currency,
+                totalKopeks,
+                originalKopeks,
+                discountKopeks: discountValue,
+                discountPercent,
+                promoOfferPercent: coercePositiveInt(payload.promo_offer_discount_percent ?? payload.promoOfferDiscountPercent ?? null, null),
+                promoGroupPercent: coercePositiveInt(payload.promo_group_discount_percent ?? payload.promoGroupDiscountPercent ?? null, null),
+                lines,
+                footnote: payload.footnote || '',
+                missingKopeks: finalMissing,
+            };
+        }
+
+        function buildPurchaseSelectionPayload() {
+            const payload = {};
+            const periodOption = getSelectedPurchasePeriodOption();
+            if (periodOption) {
+                payload.period_id = periodOption.id;
+                if (periodOption.periodDays !== null && periodOption.periodDays !== undefined) {
+                    payload.period_days = periodOption.periodDays;
+                }
+                if (periodOption.months !== null && periodOption.months !== undefined) {
+                    payload.period_months = periodOption.months;
+                }
+            }
+            const trafficOption = getSelectedPurchaseTrafficOption();
+            if (trafficOption) {
+                payload.traffic_id = trafficOption.id;
+                if (trafficOption.value !== null && trafficOption.value !== undefined) {
+                    payload.traffic_gb = trafficOption.value;
+                }
+            } else if (purchaseConfiguratorData?.traffic?.mode !== 'selectable' && purchaseConfiguratorData?.traffic?.options?.length) {
+                const option = purchaseConfiguratorData.traffic.options[0];
+                if (option && option.value !== null && option.value !== undefined) {
+                    payload.traffic_gb = option.value;
+                }
+            }
+            if (purchaseSelections.servers instanceof Set) {
+                payload.servers = Array.from(purchaseSelections.servers);
+            }
+            const devicesValue = getSelectedPurchaseDeviceValue();
+            if (devicesValue !== null && devicesValue !== undefined) {
+                payload.devices = devicesValue;
+            }
+            return payload;
+        }
+
+        function initializePurchaseSelections(data) {
+            if (!data) {
+                return;
+            }
+            if (!purchaseSelections || typeof purchaseSelections !== 'object') {
+                purchaseSelections = {
+                    period: null,
+                    traffic: null,
+                    servers: new Set(),
+                    devices: null,
+                };
+            }
+            if (!(purchaseSelections.servers instanceof Set)) {
+                purchaseSelections.servers = new Set();
+            }
+
+            if (purchaseSelections.period == null && data.period?.defaultId) {
+                purchaseSelections.period = data.period.defaultId;
+            }
+            if (purchaseSelections.traffic == null && data.traffic?.defaultId && data.traffic.mode === 'selectable') {
+                purchaseSelections.traffic = data.traffic.defaultId;
+            }
+            if (!purchaseSelections.servers.size && data.servers?.defaultSelection instanceof Set) {
+                purchaseSelections.servers = new Set(data.servers.defaultSelection);
+            }
+            if (purchaseSelections.devices == null && data.devices) {
+                if (data.devices.defaultValue !== null && data.devices.defaultValue !== undefined) {
+                    purchaseSelections.devices = data.devices.defaultValue;
+                } else if (data.devices.min !== null && data.devices.min !== undefined) {
+                    purchaseSelections.devices = data.devices.min;
+                }
+            }
+        }
+
+        function updatePurchaseServersMeta() {
+            const metaElement = document.getElementById('purchaseServersMeta');
+            if (!metaElement) {
+                return;
+            }
+            const serversData = purchaseConfiguratorData?.servers;
+            if (!serversData || !serversData.options?.length) {
+                metaElement.textContent = '';
+                return;
+            }
+            if (!serversData.allowMultiple) {
+                metaElement.textContent = '';
+                return;
+            }
+            const selectedCount = purchaseSelections.servers instanceof Set ? purchaseSelections.servers.size : 0;
+            const total = serversData.max && serversData.max > 0
+                ? String(serversData.max)
+                : String(serversData.options.length);
+            const template = t('purchase.servers.limit');
+            if (template && template !== 'purchase.servers.limit') {
+                metaElement.textContent = template
+                    .replace('{current}', String(selectedCount))
+                    .replace('{total}', total);
+            } else {
+                metaElement.textContent = `Selected ${selectedCount}/${total}`;
+            }
+        }
+
+        function renderPurchasePeriodSection() {
+            const container = document.getElementById('purchasePeriodOptions');
+            const metaElement = document.getElementById('purchasePeriodMeta');
+            const emptyElement = document.getElementById('purchasePeriodEmpty');
+            if (!container) {
+                return;
+            }
+            container.innerHTML = '';
+            const data = purchaseConfiguratorData?.period;
+            if (!data || !Array.isArray(data.options) || !data.options.length) {
+                if (emptyElement) {
+                    emptyElement.classList.remove('hidden');
+                }
+                if (metaElement) {
+                    metaElement.textContent = '';
+                }
+                return;
+            }
+            if (emptyElement) {
+                emptyElement.classList.add('hidden');
+            }
+            const selectedId = purchaseSelections.period ?? data.defaultId ?? (data.options[0]?.id ?? null);
+            data.options.forEach(option => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'purchase-option-button';
+                button.dataset.optionId = option.id;
+                button.classList.toggle('active', option.id === selectedId);
+
+                const labelContainer = document.createElement('div');
+                labelContainer.className = 'purchase-option-label';
+
+                const title = document.createElement('div');
+                title.className = 'purchase-option-title';
+                title.textContent = option.label || '';
+                labelContainer.appendChild(title);
+
+                if (option.description) {
+                    const description = document.createElement('div');
+                    description.className = 'purchase-option-description';
+                    description.textContent = option.description;
+                    labelContainer.appendChild(description);
+                } else if (option.months) {
+                    const monthsLabel = formatMonthsLabel(option.months);
+                    if (monthsLabel && monthsLabel !== option.label) {
+                        const description = document.createElement('div');
+                        description.className = 'purchase-option-description';
+                        description.textContent = monthsLabel;
+                        labelContainer.appendChild(description);
+                    }
+                }
+
+                button.appendChild(labelContainer);
+
+                const priceContainer = document.createElement('div');
+                priceContainer.className = 'purchase-option-prices';
+
+                if (option.originalPriceKopeks && option.priceKopeks !== null && option.originalPriceKopeks > option.priceKopeks) {
+                    const oldPrice = document.createElement('div');
+                    oldPrice.className = 'purchase-option-old-price';
+                    oldPrice.textContent = formatPriceFromKopeks(option.originalPriceKopeks, purchaseConfiguratorData.currency);
+                    priceContainer.appendChild(oldPrice);
+                }
+
+                if (option.priceKopeks !== null) {
+                    const price = document.createElement('div');
+                    price.className = 'purchase-option-price';
+                    price.textContent = formatPriceFromKopeks(option.priceKopeks, purchaseConfiguratorData.currency);
+                    priceContainer.appendChild(price);
+                }
+
+                if (option.discountPercent) {
+                    const badge = document.createElement('div');
+                    badge.className = 'purchase-option-badge';
+                    badge.textContent = `-${option.discountPercent}%`;
+                    priceContainer.appendChild(badge);
+                }
+
+                button.appendChild(priceContainer);
+
+                button.addEventListener('click', () => {
+                    if (purchaseSelections.period === option.id) {
+                        return;
+                    }
+                    purchaseSelections.period = option.id;
+                    container.querySelectorAll('.purchase-option-button').forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.optionId === option.id);
+                    });
+                    schedulePurchaseSummaryUpdate();
+                });
+
+                container.appendChild(button);
+            });
+
+            if (metaElement) {
+                metaElement.textContent = '';
+            }
+        }
+
+        function renderPurchaseTrafficSection() {
+            const container = document.getElementById('purchaseTrafficOptions');
+            const metaElement = document.getElementById('purchaseTrafficMeta');
+            const subtitleElement = document.getElementById('purchaseTrafficSubtitle');
+            const fixedElement = document.getElementById('purchaseTrafficFixedValue');
+            if (!container) {
+                return;
+            }
+            container.innerHTML = '';
+            const data = purchaseConfiguratorData?.traffic;
+            if (metaElement) {
+                metaElement.textContent = '';
+            }
+            if (fixedElement) {
+                fixedElement.classList.add('hidden');
+                fixedElement.textContent = '';
+            }
+
+            if (!data) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            if (data.mode !== 'selectable' || !data.options?.length) {
+                container.classList.add('hidden');
+                if (subtitleElement) {
+                    const fixedKey = 'purchase.traffic.subtitle.fixed';
+                    const fixedText = t(fixedKey);
+                    subtitleElement.textContent = fixedText === fixedKey
+                        ? subtitleElement.textContent
+                        : fixedText;
+                }
+                if (fixedElement) {
+                    const option = data.options?.[0] || null;
+                    let label = data.fixedLabel || '';
+                    if (!label && option) {
+                        label = option.label || (option.value === 0
+                            ? t('purchase.traffic.unlimited')
+                            : option.value !== null
+                                ? `${option.value} ${t('units.gb')}`
+                                : '');
+                    }
+                    if (!label) {
+                        label = t('purchase.traffic.unlimited');
+                    }
+                    fixedElement.textContent = label;
+                    fixedElement.classList.remove('hidden');
+                }
+                return;
+            }
+
+            container.classList.remove('hidden');
+
+            const selectedId = purchaseSelections.traffic ?? data.defaultId ?? (data.options[0]?.id ?? null);
+            if (purchaseSelections.traffic == null && selectedId != null) {
+                purchaseSelections.traffic = selectedId;
+            }
+
+            data.options.forEach(option => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'purchase-option-button';
+                button.dataset.optionId = option.id;
+                button.classList.toggle('active', option.id === purchaseSelections.traffic);
+                if (!option.available) {
+                    button.classList.add('disabled');
+                    button.disabled = true;
+                }
+
+                const labelContainer = document.createElement('div');
+                labelContainer.className = 'purchase-option-label';
+
+                const title = document.createElement('div');
+                title.className = 'purchase-option-title';
+                title.textContent = option.label || (option.value === 0
+                    ? t('purchase.traffic.unlimited')
+                    : option.value !== null
+                        ? `${option.value} ${t('units.gb')}`
+                        : '');
+                labelContainer.appendChild(title);
+
+                if (option.description) {
+                    const description = document.createElement('div');
+                    description.className = 'purchase-option-description';
+                    description.textContent = option.description;
+                    labelContainer.appendChild(description);
+                }
+
+                button.appendChild(labelContainer);
+
+                const priceContainer = document.createElement('div');
+                priceContainer.className = 'purchase-option-prices';
+
+                if (option.originalPriceKopeks && option.priceKopeks !== null && option.originalPriceKopeks > option.priceKopeks) {
+                    const oldPrice = document.createElement('div');
+                    oldPrice.className = 'purchase-option-old-price';
+                    oldPrice.textContent = formatPriceFromKopeks(option.originalPriceKopeks, purchaseConfiguratorData.currency);
+                    priceContainer.appendChild(oldPrice);
+                }
+
+                if (option.priceKopeks !== null) {
+                    const price = document.createElement('div');
+                    price.className = 'purchase-option-price';
+                    if (option.priceKopeks === 0) {
+                        const includedText = t('subscription_settings.price.included');
+                        price.textContent = includedText === 'subscription_settings.price.included'
+                            ? formatPriceFromKopeks(0, purchaseConfiguratorData.currency)
+                            : includedText;
+                    } else {
+                        price.textContent = formatPriceFromKopeks(option.priceKopeks, purchaseConfiguratorData.currency);
+                    }
+                    priceContainer.appendChild(price);
+                }
+
+                if (option.discountPercent) {
+                    const badge = document.createElement('div');
+                    badge.className = 'purchase-option-badge';
+                    badge.textContent = `-${option.discountPercent}%`;
+                    priceContainer.appendChild(badge);
+                }
+
+                button.appendChild(priceContainer);
+
+                button.addEventListener('click', () => {
+                    if (button.classList.contains('disabled') || purchaseSelections.traffic === option.id) {
+                        return;
+                    }
+                    purchaseSelections.traffic = option.id;
+                    container.querySelectorAll('.purchase-option-button').forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.optionId === option.id);
+                    });
+                    schedulePurchaseSummaryUpdate();
+                });
+
+                container.appendChild(button);
+            });
+        }
+
+        function renderPurchaseServersSection() {
+            const container = document.getElementById('purchaseServersOptions');
+            const emptyElement = document.getElementById('purchaseServersEmpty');
+            const noteElement = document.getElementById('purchaseServersNote');
+            if (!container) {
+                return;
+            }
+            container.innerHTML = '';
+            const data = purchaseConfiguratorData?.servers;
+            if (emptyElement) {
+                emptyElement.classList.add('hidden');
+            }
+            if (noteElement) {
+                noteElement.classList.add('hidden');
+                noteElement.textContent = '';
+            }
+
+            if (!data) {
+                updatePurchaseServersMeta();
+                return;
+            }
+
+            if (data.auto && (!data.options?.length || data.fixed?.length)) {
+                container.classList.add('hidden');
+                if (noteElement) {
+                    const autoText = t('purchase.servers.auto');
+                    noteElement.textContent = autoText === 'purchase.servers.auto'
+                        ? 'Servers will be connected automatically.'
+                        : autoText;
+                    noteElement.classList.remove('hidden');
+                }
+                updatePurchaseServersMeta();
+                return;
+            }
+
+            if (!data.options?.length) {
+                container.classList.add('hidden');
+                if (emptyElement) {
+                    emptyElement.classList.remove('hidden');
+                }
+                updatePurchaseServersMeta();
+                return;
+            }
+
+            container.classList.remove('hidden');
+            if (!(purchaseSelections.servers instanceof Set)) {
+                purchaseSelections.servers = new Set();
+            }
+            if (!purchaseSelections.servers.size && data.defaultSelection instanceof Set) {
+                purchaseSelections.servers = new Set(data.defaultSelection);
+            }
+            if (!purchaseSelections.servers.size && !data.allowMultiple && data.options.length) {
+                purchaseSelections.servers.add(data.options[0].id);
+            }
+
+            data.options.forEach(option => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'purchase-server-option';
+                item.dataset.optionId = option.id;
+                const isSelected = purchaseSelections.servers.has(option.id);
+                item.classList.toggle('selected', isSelected);
+                if (!option.available) {
+                    item.classList.add('disabled');
+                }
+
+                const info = document.createElement('div');
+                info.className = 'purchase-server-info';
+
+                const name = document.createElement('div');
+                name.className = 'purchase-server-name';
+                name.textContent = option.name || option.id;
+                info.appendChild(name);
+
+                if (option.disabledReason) {
+                    const meta = document.createElement('div');
+                    meta.className = 'purchase-server-meta';
+                    meta.textContent = option.disabledReason;
+                    info.appendChild(meta);
+                }
+
+                item.appendChild(info);
+
+                const priceContainer = document.createElement('div');
+                priceContainer.className = 'purchase-option-prices';
+
+                if (option.originalPriceKopeks && option.priceKopeks !== null && option.originalPriceKopeks > option.priceKopeks) {
+                    const oldPrice = document.createElement('div');
+                    oldPrice.className = 'purchase-option-old-price';
+                    oldPrice.textContent = formatPriceFromKopeks(option.originalPriceKopeks, purchaseConfiguratorData.currency);
+                    priceContainer.appendChild(oldPrice);
+                }
+
+                if (option.priceKopeks !== null) {
+                    const price = document.createElement('div');
+                    price.className = 'purchase-option-price';
+                    if (option.priceKopeks === 0) {
+                        const includedText = t('subscription_settings.price.included');
+                        price.textContent = includedText === 'subscription_settings.price.included'
+                            ? formatPriceFromKopeks(0, purchaseConfiguratorData.currency)
+                            : includedText;
+                    } else {
+                        price.textContent = formatPriceFromKopeks(option.priceKopeks, purchaseConfiguratorData.currency);
+                    }
+                    priceContainer.appendChild(price);
+                }
+
+                item.appendChild(priceContainer);
+
+                item.addEventListener('click', () => {
+                    if (!option.available) {
+                        return;
+                    }
+                    const current = purchaseSelections.servers instanceof Set ? new Set(purchaseSelections.servers) : new Set();
+                    if (data.allowMultiple) {
+                        if (current.has(option.id)) {
+                            current.delete(option.id);
+                            if (data.min && current.size < data.min) {
+                                // Enforce minimum selection
+                                current.add(option.id);
+                            }
+                        } else {
+                            if (data.max && data.max > 0 && current.size >= data.max) {
+                                return;
+                            }
+                            current.add(option.id);
+                        }
+                    } else {
+                        current.clear();
+                        current.add(option.id);
+                    }
+                    purchaseSelections.servers = current;
+                    container.querySelectorAll('.purchase-server-option').forEach(btn => {
+                        btn.classList.toggle('selected', current.has(btn.dataset.optionId));
+                    });
+                    updatePurchaseServersMeta();
+                    schedulePurchaseSummaryUpdate();
+                });
+
+                container.appendChild(item);
+            });
+
+            updatePurchaseServersMeta();
+        }
+
+        function renderPurchaseDevicesSection() {
+            const decreaseBtn = document.getElementById('purchaseDevicesDecrease');
+            const increaseBtn = document.getElementById('purchaseDevicesIncrease');
+            const valueElement = document.getElementById('purchaseDevicesValue');
+            const noteElement = document.getElementById('purchaseDevicesNote');
+            const metaElement = document.getElementById('purchaseDevicesMeta');
+            const data = purchaseConfiguratorData?.devices;
+
+            if (!data) {
+                if (decreaseBtn) decreaseBtn.disabled = true;
+                if (increaseBtn) increaseBtn.disabled = true;
+                if (valueElement) valueElement.textContent = '0';
+                if (noteElement) {
+                    noteElement.textContent = t('purchase.devices.unavailable');
+                }
+                if (metaElement) {
+                    metaElement.textContent = '';
+                }
+                return;
+            }
+
+            let current = getSelectedPurchaseDeviceValue();
+            if (current === null) {
+                current = 0;
+            }
+            if (data.min !== null && data.min !== undefined && current < data.min) {
+                current = data.min;
+            }
+            if (data.max && data.max > 0 && current > data.max) {
+                current = data.max;
+            }
+            purchaseSelections.devices = current;
+
+            if (valueElement) {
+                valueElement.textContent = current === 0
+                    ? t('purchase.devices.unlimited')
+                    : String(current);
+            }
+
+            if (metaElement) {
+                if (data.included !== null && data.included !== undefined) {
+                    const template = t('purchase.devices.note');
+                    metaElement.textContent = template === 'purchase.devices.note'
+                        ? `Included devices: ${data.included}`
+                        : template.replace('{count}', String(data.included));
+                } else {
+                    metaElement.textContent = '';
+                }
+            }
+
+            if (noteElement) {
+                const option = data.options?.find(opt => opt.value === current) || null;
+                if (option && option.priceKopeks !== null) {
+                    if (option.priceKopeks === 0) {
+                        const includedText = t('subscription_settings.price.included');
+                        noteElement.textContent = includedText === 'subscription_settings.price.included'
+                            ? formatPriceFromKopeks(0, purchaseConfiguratorData.currency)
+                            : includedText;
+                    } else {
+                        const template = t('purchase.devices.price');
+                        const priceLabel = formatPriceFromKopeks(option.priceKopeks, purchaseConfiguratorData.currency);
+                        noteElement.textContent = template === 'purchase.devices.price'
+                            ? priceLabel
+                            : template.replace('{amount}', priceLabel);
+                    }
+                } else {
+                    noteElement.textContent = '';
+                }
+            }
+
+            if (decreaseBtn) {
+                decreaseBtn.disabled = purchaseSubmitInProgress
+                    || (data.min !== null && data.min !== undefined && current <= data.min);
+                decreaseBtn.onclick = () => {
+                    if (purchaseSubmitInProgress) {
+                        return;
+                    }
+                    let next = current - (data.step || 1);
+                    if (data.min !== null && data.min !== undefined && next < data.min) {
+                        next = data.min;
+                    }
+                    if (next < 0) {
+                        next = 0;
+                    }
+                    if (next === current) {
+                        return;
+                    }
+                    purchaseSelections.devices = next;
+                    renderPurchaseDevicesSection();
+                    schedulePurchaseSummaryUpdate();
+                };
+            }
+
+            if (increaseBtn) {
+                const max = data.max && data.max > 0 ? data.max : null;
+                increaseBtn.disabled = purchaseSubmitInProgress || (max !== null && current >= max);
+                increaseBtn.onclick = () => {
+                    if (purchaseSubmitInProgress) {
+                        return;
+                    }
+                    let next = current + (data.step || 1);
+                    if (max !== null && next > max) {
+                        next = max;
+                    }
+                    purchaseSelections.devices = next;
+                    renderPurchaseDevicesSection();
+                    schedulePurchaseSummaryUpdate();
+                };
+            }
+        }
+
+        function renderPurchaseSummarySection() {
+            const totalElement = document.getElementById('purchaseSummaryTotalValue');
+            const oldValueElement = document.getElementById('purchaseSummaryOldValue');
+            const discountChip = document.getElementById('purchaseSummaryDiscountChip');
+            const linesContainer = document.getElementById('purchaseSummaryLines');
+            const footnoteElement = document.getElementById('purchaseSummaryFootnote');
+            const warningElement = document.getElementById('purchaseBalanceWarning');
+            const errorElement = document.getElementById('purchaseSummaryError');
+            const buyButton = document.getElementById('purchaseSubmitBtn');
+            const topupButton = document.getElementById('purchaseTopupBtn');
+            if (!totalElement || !linesContainer || !buyButton) {
+                return;
+            }
+
+            linesContainer.innerHTML = '';
+            if (footnoteElement) {
+                footnoteElement.textContent = '';
+            }
+            if (warningElement) {
+                warningElement.classList.add('hidden');
+                warningElement.textContent = '';
+            }
+            if (errorElement) {
+                errorElement.classList.add('hidden');
+                errorElement.textContent = '';
+            }
+
+            const currency = purchaseConfiguratorData?.currency || normalizeCurrencyCode();
+
+            if (purchaseSummaryLoading) {
+                const loadingText = t('purchase.loading');
+                totalElement.textContent = formatPriceFromKopeks(0, currency);
+                oldValueElement?.classList.add('hidden');
+                discountChip?.classList.add('hidden');
+                if (footnoteElement) {
+                    footnoteElement.textContent = loadingText === 'purchase.loading' ? 'Loading…' : loadingText;
+                }
+                buyButton.disabled = true;
+                buyButton.classList.remove('hidden');
+                topupButton?.classList.add('hidden');
+                return;
+            }
+
+            if (purchaseSummaryError) {
+                const message = resolvePurchaseErrorMessage(purchaseSummaryError, 'purchase.error.generic');
+                if (errorElement) {
+                    errorElement.textContent = message;
+                    errorElement.classList.remove('hidden');
+                }
+                totalElement.textContent = '—';
+                oldValueElement?.classList.add('hidden');
+                discountChip?.classList.add('hidden');
+                buyButton.disabled = true;
+                buyButton.classList.remove('hidden');
+                topupButton?.classList.add('hidden');
+                return;
+            }
+
+            if (!purchaseSummary) {
+                buildFallbackPurchaseSummaryLines().forEach(line => {
+                    const row = document.createElement('div');
+                    row.className = 'purchase-summary-line';
+                    const labelSpan = document.createElement('span');
+                    labelSpan.textContent = line.label || '';
+                    const valueStrong = document.createElement('strong');
+                    valueStrong.textContent = line.value || '';
+                    row.appendChild(labelSpan);
+                    row.appendChild(valueStrong);
+                    linesContainer.appendChild(row);
+                });
+                totalElement.textContent = '—';
+                oldValueElement?.classList.add('hidden');
+                discountChip?.classList.add('hidden');
+                buyButton.disabled = true;
+                buyButton.classList.remove('hidden');
+                topupButton?.classList.add('hidden');
+                return;
+            }
+
+            const totalKopeks = coercePositiveInt(purchaseSummary.totalKopeks, null);
+            totalElement.textContent = totalKopeks !== null
+                ? formatPriceFromKopeks(totalKopeks, currency)
+                : '—';
+
+            const originalKopeks = coercePositiveInt(purchaseSummary.originalKopeks, null);
+            if (oldValueElement) {
+                if (originalKopeks !== null && totalKopeks !== null && originalKopeks > totalKopeks) {
+                    oldValueElement.textContent = formatPriceFromKopeks(originalKopeks, currency);
+                    oldValueElement.classList.remove('hidden');
+                } else {
+                    oldValueElement.classList.add('hidden');
+                }
+            }
+
+            if (discountChip) {
+                const percent = coercePositiveInt(purchaseSummary.discountPercent, null)
+                    || coercePositiveInt(purchaseSummary.promoOfferPercent, null)
+                    || coercePositiveInt(purchaseSummary.promoGroupPercent, null);
+                if (percent) {
+                    const template = t('purchase.promotions.total_discount');
+                    discountChip.textContent = template === 'purchase.promotions.total_discount'
+                        ? `-${percent}%`
+                        : template.replace('{percent}', String(percent));
+                    discountChip.classList.remove('hidden');
+                } else {
+                    discountChip.classList.add('hidden');
+                }
+            }
+
+            (purchaseSummary.lines || []).forEach(line => {
+                const row = document.createElement('div');
+                row.className = 'purchase-summary-line';
+                const labelSpan = document.createElement('span');
+                labelSpan.textContent = line.label || '';
+                row.appendChild(labelSpan);
+                const valueSpan = document.createElement('strong');
+                valueSpan.textContent = line.value || '';
+                row.appendChild(valueSpan);
+                if (line.price) {
+                    const priceSpan = document.createElement('span');
+                    priceSpan.textContent = line.price;
+                    priceSpan.style.marginLeft = 'auto';
+                    row.appendChild(priceSpan);
+                }
+                linesContainer.appendChild(row);
+            });
+
+            if (footnoteElement && purchaseSummary.footnote) {
+                footnoteElement.textContent = purchaseSummary.footnote;
+            }
+
+            const balanceKopeks = coercePositiveInt(purchaseConfiguratorData?.balanceKopeks, coercePositiveInt(userData?.balance_kopeks, 0) || 0);
+            const missing = coercePositiveInt(purchaseSummary.missingKopeks, null);
+            if (warningElement && missing && missing > 0) {
+                const template = t('purchase.summary.missing');
+                const label = template === 'purchase.summary.missing'
+                    ? `Need ${formatPriceFromKopeks(missing, currency)}`
+                    : template.replace('{amount}', formatPriceFromKopeks(missing, currency));
+                warningElement.textContent = label;
+                warningElement.classList.remove('hidden');
+            }
+
+            if (footnoteElement && balanceKopeks !== null && totalKopeks !== null) {
+                const balanceAfter = balanceKopeks - totalKopeks;
+                const template = t('purchase.summary.balance_after');
+                const label = template === 'purchase.summary.balance_after'
+                    ? `Balance after purchase: ${formatPriceFromKopeks(Math.max(0, balanceAfter), currency)}`
+                    : template.replace('{amount}', formatPriceFromKopeks(Math.max(0, balanceAfter), currency));
+                if (footnoteElement.textContent) {
+                    footnoteElement.textContent = `${footnoteElement.textContent} ${label}`;
+                } else {
+                    footnoteElement.textContent = label;
+                }
+            }
+
+            const canPurchase = totalKopeks !== null && (!missing || missing <= 0);
+            buyButton.disabled = !canPurchase || purchaseSubmitInProgress;
+            buyButton.classList.remove('hidden');
+            if (topupButton) {
+                if (missing && missing > 0) {
+                    topupButton.classList.remove('hidden');
+                    topupButton.disabled = purchaseSubmitInProgress;
+                } else {
+                    topupButton.classList.add('hidden');
+                    topupButton.disabled = purchaseSubmitInProgress;
+                }
+            }
+        }
+
+
+
+        function normalizePurchaseTrafficOptions(source, currency) {
+            const container = Array.isArray(source)
+                ? { options: source }
+                : (source && typeof source === 'object' ? source : {});
+            const optionsArray = ensureArray(container.options || container.values || container.items || []);
+            let modeRaw = String(container.mode || container.type || container.selection || '').toLowerCase();
+            let mode = 'selectable';
+            if (modeRaw === 'fixed' || modeRaw === 'single' || coerceBoolean(container.selectable ?? container.is_selectable, true) === false) {
+                mode = 'fixed';
+            }
+            const options = optionsArray.map(option => {
+                const idValue = option && (option.id ?? option.value ?? option.limit ?? option.traffic_id ?? option.trafficId);
+                const id = idValue != null ? String(idValue) : null;
+                const value = coercePositiveInt(option?.value ?? option?.limit ?? option?.traffic_gb ?? option?.trafficGb, null);
+                const label = option?.label
+                    || option?.title
+                    || (value === 0
+                        ? t('purchase.traffic.unlimited')
+                        : (value !== null ? `${value} ${t('units.gb')}` : ''));
+                const description = option?.description || '';
+                const priceKopeks = coercePositiveInt(option?.price_kopeks ?? option?.priceKopeks ?? option?.price ?? option?.amount_kopeks ?? option?.amountKopeks, null);
+                const originalPriceKopeks = coercePositiveInt(option?.original_price_kopeks ?? option?.originalPriceKopeks ?? null, null);
+                const discountPercent = coercePositiveInt(option?.discount_percent ?? option?.discountPercent ?? null, null);
+                const isDefault = coerceBoolean(option?.is_default ?? option?.default ?? option?.is_current ?? option?.current ?? option?.selected, false);
+                const available = coerceBoolean(option?.is_available ?? option?.available ?? option?.enabled ?? true, true);
+                return {
+                    id: id || label,
+                    value,
+                    label: label || '',
+                    description,
+                    priceKopeks,
+                    originalPriceKopeks,
+                    discountPercent,
+                    available,
+                    isDefault,
+                    raw: option,
+                };
+            }).filter(Boolean);
+
+            if (!options.length) {
+                mode = 'fixed';
+            }
+
+            let defaultOption = options.find(option => option.isDefault) || options[0] || null;
+            const fixedLabel = container.fixed_label
+                || container.label
+                || container.value_label
+                || (defaultOption ? defaultOption.label : '')
+                || (mode === 'fixed' ? t('purchase.traffic.unlimited') : '');
+            return {
+                mode,
+                options,
+                defaultId: defaultOption?.id ?? null,
+                fixedLabel,
+                raw: container,
+            };
+        }
+
+        function normalizePurchaseServerOptions(source, currency) {
+            const container = Array.isArray(source)
+                ? { options: source }
+                : (source && typeof source === 'object' ? source : {});
+            const optionsArray = ensureArray(container.options || container.available || container.items || []);
+            const options = optionsArray.map(option => {
+                if (!option) {
+                    return null;
+                }
+                const idValue = option.uuid
+                    ?? option.id
+                    ?? option.squad_uuid
+                    ?? option.short_uuid
+                    ?? option.shortUuid
+                    ?? option.value;
+                if (idValue == null) {
+                    return null;
+                }
+                const name = option.name
+                    || option.label
+                    || option.title
+                    || option.display_name
+                    || option.displayName
+                    || String(idValue);
+                const priceKopeks = coercePositiveInt(option.price_kopeks ?? option.price ?? option.priceKopeks ?? option.amount_kopeks ?? option.amountKopeks, null);
+                const originalPriceKopeks = coercePositiveInt(option.original_price_kopeks ?? option.originalPriceKopeks ?? null, null);
+                const available = coerceBoolean(option.is_available ?? option.available ?? option.enabled ?? true, true);
+                const isDefault = coerceBoolean(option.is_default ?? option.default ?? option.is_current ?? option.current ?? option.selected, false);
+                return {
+                    id: String(idValue),
+                    name,
+                    priceKopeks,
+                    originalPriceKopeks,
+                    priceLabel: priceKopeks !== null ? formatPriceFromKopeks(priceKopeks, currency) : '',
+                    available,
+                    disabledReason: option.disabled_reason || option.reason || null,
+                    isDefault,
+                    raw: option,
+                };
+            }).filter(Boolean);
+
+            const selectionMode = String(container.selection ?? container.mode ?? container.type ?? '').toLowerCase();
+            const allowMultiple = selectionMode === 'multiple'
+                || selectionMode === 'multi'
+                || coerceBoolean(container.multiple ?? container.allow_multiple ?? container.multi, options.length > 1);
+            const min = coercePositiveInt(container.min ?? container.min_required ?? container.min_selectable ?? 0, 0);
+            const max = coercePositiveInt(container.max ?? container.max_selectable ?? container.max_allowed ?? null, null);
+            const auto = coerceBoolean(container.auto ?? container.automatic ?? container.is_auto ?? false, false);
+            const fixed = ensureArray(container.fixed ?? container.default ?? container.included ?? []).map(item => {
+                if (typeof item === 'string') {
+                    return item;
+                }
+                if (item && typeof item === 'object') {
+                    return item.name || item.label || item.title || item.uuid || '';
+                }
+                return '';
+            }).filter(Boolean);
+            const defaultSelection = new Set();
+            options.forEach(option => {
+                if (option.isDefault) {
+                    defaultSelection.add(option.id);
+                }
+            });
+            if (!defaultSelection.size && !auto) {
+                if (!allowMultiple && options.length) {
+                    defaultSelection.add(options[0].id);
+                } else if (allowMultiple && min > 0 && options.length) {
+                    options.slice(0, Math.min(min, options.length)).forEach(option => defaultSelection.add(option.id));
+                }
+            }
+
+            return {
+                options,
+                allowMultiple,
+                min,
+                max: max && max > 0 ? max : null,
+                auto,
+                fixed,
+                defaultSelection,
+                raw: container,
+            };
+        }
+
+        function normalizePurchaseDeviceOptions(source, currency) {
+            const container = Array.isArray(source)
+                ? { options: source }
+                : (source && typeof source === 'object' ? source : {});
+            const optionsArray = ensureArray(container.options || container.values || container.items || []);
+            const options = optionsArray.map(option => {
+                const value = coercePositiveInt(option?.value ?? option?.devices ?? option?.count ?? option?.limit, null);
+                if (value === null) {
+                    return null;
+                }
+                const label = option?.label || option?.title || formatDeviceCountLabel(value);
+                const priceKopeks = coercePositiveInt(option?.price_kopeks ?? option?.price ?? option?.amount_kopeks ?? option?.amountKopeks, null);
+                const originalPriceKopeks = coercePositiveInt(option?.original_price_kopeks ?? option?.originalPriceKopeks ?? null, null);
+                const isDefault = coerceBoolean(option?.is_default ?? option?.default ?? option?.is_current ?? option?.current ?? option?.selected, false);
+                return {
+                    value,
+                    label,
+                    priceKopeks,
+                    originalPriceKopeks,
+                    priceLabel: priceKopeks !== null ? formatPriceFromKopeks(priceKopeks, currency) : '',
+                    isDefault,
+                    raw: option,
+                };
+            }).filter(Boolean).sort((a, b) => a.value - b.value);
+
+            const min = coercePositiveInt(container.min ?? container.min_devices ?? container.min_limit ?? (options[0]?.value ?? 0), 0);
+            const max = coercePositiveInt(container.max ?? container.max_devices ?? container.max_limit ?? (options[options.length - 1]?.value ?? 0), 0) || null;
+            const step = coercePositiveInt(container.step ?? container.increment ?? 1, 1) || 1;
+            const included = coercePositiveInt(container.included ?? container.base ?? container.base_devices ?? container.baseDevices ?? null, null);
+            let defaultValue = coercePositiveInt(container.current ?? container.default ?? container.value ?? null, null);
+            if (defaultValue === null) {
+                const defaultOption = options.find(option => option.isDefault) ?? null;
+                if (defaultOption) {
+                    defaultValue = defaultOption.value;
+                } else if (options.length) {
+                    defaultValue = options[0].value;
+                } else if (min) {
+                    defaultValue = min;
+                }
+            }
+
+            return {
+                options,
+                min,
+                max,
+                step,
+                defaultValue,
+                included,
+                raw: container,
+            };
+        }
+
+        function extractPurchaseError(payload, status) {
+            if (status === 401) {
+                const message = t('purchase.error.unauthorized');
+                return message === 'purchase.error.unauthorized'
+                    ? 'Authorization failed. Please reopen the mini app from Telegram.'
+                    : message;
+            }
+            if (!payload) {
+                const fallback = t('purchase.error.generic');
+                return fallback === 'purchase.error.generic'
+                    ? 'Unable to load purchase options right now.'
+                    : fallback;
+            }
+            if (typeof payload === 'string') {
+                return payload;
+            }
+            if (typeof payload.detail === 'string') {
+                return payload.detail;
+            }
+            if (Array.isArray(payload.detail)) {
+                return payload.detail.map(item => {
+                    if (typeof item === 'string') {
+                        return item;
+                    }
+                    if (item && typeof item === 'object') {
+                        return item.message || item.error || '';
+                    }
+                    return '';
+                }).filter(Boolean).join(', ');
+            }
+            if (payload.detail && typeof payload.detail === 'object') {
+                if (typeof payload.detail.message === 'string') {
+                    return payload.detail.message;
+                }
+                if (typeof payload.detail.error === 'string') {
+                    return payload.detail.error;
+                }
+            }
+            if (typeof payload.message === 'string') {
+                return payload.message;
+            }
+            if (typeof payload.error === 'string') {
+                return payload.error;
+            }
+            if (Array.isArray(payload.errors)) {
+                const normalized = payload.errors.map(item => {
+                    if (typeof item === 'string') {
+                        return item;
+                    }
+                    if (item && typeof item === 'object') {
+                        return item.message || item.error || '';
+                    }
+                    return '';
+                }).filter(Boolean);
+                if (normalized.length) {
+                    return normalized.join(', ');
+                }
+            }
+            const fallback = t('purchase.error.generic');
+            return fallback === 'purchase.error.generic'
+                ? 'Unable to complete the action right now.'
+                : fallback;
+        }
+
+        function resolvePurchaseErrorMessage(error, fallbackKey = 'purchase.error.generic') {
+            if (!error) {
+                return t(fallbackKey);
+            }
+            if (typeof error === 'string') {
+                return error;
+            }
+            if (typeof error.message === 'string' && error.message.trim()) {
+                return error.message;
+            }
+            if (error.detail) {
+                if (typeof error.detail === 'string' && error.detail.trim()) {
+                    return error.detail;
+                }
+                if (typeof error.detail.message === 'string' && error.detail.message.trim()) {
+                    return error.detail.message;
+                }
+                if (typeof error.detail.error === 'string' && error.detail.error.trim()) {
+                    return error.detail.error;
+                }
+            }
+            if (error.status === 401) {
+                const message = t('purchase.error.unauthorized');
+                return message === 'purchase.error.unauthorized'
+                    ? 'Authorization failed. Please reopen the mini app from Telegram.'
+                    : message;
+            }
+            return t(fallbackKey);
+        }
+
+        async function ensurePurchaseConfiguratorData({ force = false } = {}) {
+            if (!force && purchaseConfiguratorData) {
+                return purchaseConfiguratorData;
+            }
+            if (!force && purchaseConfiguratorPromise) {
+                return purchaseConfiguratorPromise;
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                throw createError('Authorization Error', t('purchase.error.unauthorized'), 401);
+            }
+
+            const payload = { initData };
+
+            const request = (async () => {
+                try {
+                    const response = await fetch('/miniapp/subscription/purchase/options', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    const body = await parseJsonSafe(response);
+                    if (!response.ok || !body) {
+                        const message = extractPurchaseError(body, response.status);
+                        throw createError('Purchase options error', message, response.status);
+                    }
+
+                    const normalized = normalizePurchaseConfiguratorPayload(body);
+                    if (!normalized) {
+                        throw createError('Purchase options error', t('purchase.error.generic'), response.status);
+                    }
+
+                    initializePurchaseSelections(normalized);
+                    purchaseConfiguratorData = normalized;
+                    purchaseConfiguratorError = null;
+                    if (normalized.summary) {
+                        purchaseSummary = normalized.summary;
+                        purchaseSummaryError = null;
+                        purchaseSummaryLoading = false;
+                    } else {
+                        purchaseSummary = null;
+                    }
+                    return normalized;
+                } catch (error) {
+                    purchaseConfiguratorError = error;
+                    purchaseConfiguratorData = null;
+                    purchaseSummary = null;
+                    purchaseSummaryError = error;
+                    throw error;
+                } finally {
+                    purchaseConfiguratorPromise = null;
+                }
+            })();
+
+            purchaseConfiguratorPromise = request;
+            return request;
+        }
+
+        async function renderPurchaseConfiguratorCard(options = {}) {
+            const { force = false } = options;
+            const wrapper = document.getElementById('purchaseConfiguratorWrapper');
+            if (!wrapper) {
+                return null;
+            }
+
+            const mode = resolvePurchaseConfiguratorMode();
+            const previousMode = purchaseConfiguratorMode;
+            purchaseConfiguratorMode = mode;
+
+            if (!mode) {
+                wrapper.classList.add('hidden');
+                if (previousMode) {
+                    resetPurchaseConfiguratorState();
+                }
+                return null;
+            }
+
+            wrapper.classList.remove('hidden');
+
+            if (force) {
+                resetPurchaseConfiguratorState();
+            }
+
+            const loadingElement = document.getElementById('purchaseConfiguratorLoading');
+            const errorElement = document.getElementById('purchaseConfiguratorError');
+            const retryButton = document.getElementById('purchaseConfiguratorRetry');
+            const contentElement = document.getElementById('purchaseConfiguratorContent');
+
+            const showLoading = () => {
+                if (loadingElement) {
+                    loadingElement.classList.remove('hidden');
+                }
+                if (contentElement) {
+                    contentElement.classList.add('hidden');
+                }
+                if (errorElement) {
+                    errorElement.classList.add('hidden');
+                    errorElement.textContent = '';
+                }
+                if (retryButton) {
+                    retryButton.classList.add('hidden');
+                    retryButton.disabled = false;
+                }
+            };
+
+            const showErrorState = message => {
+                if (loadingElement) {
+                    loadingElement.classList.add('hidden');
+                }
+                if (contentElement) {
+                    contentElement.classList.add('hidden');
+                }
+                if (errorElement) {
+                    errorElement.textContent = message;
+                    errorElement.classList.remove('hidden');
+                }
+                if (retryButton) {
+                    retryButton.classList.remove('hidden');
+                    retryButton.disabled = false;
+                }
+            };
+
+            try {
+                let data = purchaseConfiguratorData;
+                const hasOngoingRequest = Boolean(purchaseConfiguratorPromise);
+                const shouldFetch = force || !data || hasOngoingRequest;
+                if (shouldFetch) {
+                    purchaseConfiguratorLoading = true;
+                    showLoading();
+                    data = await ensurePurchaseConfiguratorData({ force });
+                }
+                if (!data) {
+                    const fallbackMessage = resolvePurchaseErrorMessage(
+                        purchaseConfiguratorError,
+                        'purchase.error.generic',
+                    );
+                    showErrorState(fallbackMessage);
+                    return null;
+                }
+
+                purchaseConfiguratorLoading = false;
+                if (loadingElement) {
+                    loadingElement.classList.add('hidden');
+                }
+                if (errorElement) {
+                    errorElement.classList.add('hidden');
+                    errorElement.textContent = '';
+                }
+                if (retryButton) {
+                    retryButton.classList.add('hidden');
+                }
+                if (contentElement) {
+                    contentElement.classList.remove('hidden');
+                }
+
+                renderPurchasePeriodSection();
+                renderPurchaseTrafficSection();
+                renderPurchaseServersSection();
+                renderPurchaseDevicesSection();
+
+                if (!purchaseSummaryLoading) {
+                    if (purchaseConfiguratorData?.summary) {
+                        purchaseSummary = purchaseConfiguratorData.summary;
+                        purchaseSummaryError = null;
+                    } else {
+                        purchaseSummary = null;
+                    }
+                }
+
+                renderPurchaseSummarySection();
+
+                if (!purchaseSummaryLoading && (!purchaseSummary || purchaseSummaryError)) {
+                    schedulePurchaseSummaryUpdate(shouldFetch ? 50 : 250);
+                }
+
+                return purchaseConfiguratorData;
+            } catch (error) {
+                console.error('Failed to render purchase configurator:', error);
+                purchaseConfiguratorLoading = false;
+                purchaseConfiguratorError = error;
+                purchaseSummary = null;
+                purchaseSummaryError = error;
+                const message = resolvePurchaseErrorMessage(error, 'purchase.error.generic');
+                showErrorState(message);
+                renderPurchaseSummarySection();
+                return null;
+            }
+        }
+
+        function schedulePurchaseSummaryUpdate(delay = 250) {
+            if (!purchaseConfiguratorData) {
+                return;
+            }
+            if (purchaseSummaryDebounceHandle) {
+                clearTimeout(purchaseSummaryDebounceHandle);
+            }
+            const timeout = Math.max(0, delay || 0);
+            purchaseSummaryDebounceHandle = setTimeout(() => {
+                purchaseSummaryDebounceHandle = null;
+                updatePurchaseSummary().catch(error => {
+                    console.warn('Failed to update purchase summary:', error);
+                });
+            }, timeout);
+        }
+
+        async function updatePurchaseSummary({ force = false } = {}) {
+            if (!purchaseConfiguratorData) {
+                return null;
+            }
+            if (purchaseSummaryPromise && !force) {
+                return purchaseSummaryPromise;
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                const error = createError('Authorization Error', t('purchase.error.unauthorized'), 401);
+                purchaseSummaryError = error;
+                purchaseSummary = null;
+                purchaseSummaryLoading = false;
+                renderPurchaseSummarySection();
+                throw error;
+            }
+
+            const payload = buildPurchaseSelectionPayload();
+            payload.initData = initData;
+
+            purchaseSummaryRequestId += 1;
+            const requestId = purchaseSummaryRequestId;
+
+            purchaseSummaryLoading = true;
+            purchaseSummaryError = null;
+            renderPurchaseSummarySection();
+
+            const request = (async () => {
+                try {
+                    const response = await fetch('/miniapp/subscription/purchase/summary', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    const body = await parseJsonSafe(response);
+                    if (!response.ok || !body) {
+                        const message = extractPurchaseError(body, response.status);
+                        throw createError('Purchase summary error', message, response.status);
+                    }
+
+                    const normalized = normalizePurchaseSummaryPayload(body, purchaseConfiguratorData);
+                    if (requestId === purchaseSummaryRequestId) {
+                        purchaseSummary = normalized;
+                        purchaseSummaryError = null;
+                        purchaseConfiguratorData.summary = normalized;
+                    }
+                    return normalized;
+                } catch (error) {
+                    if (requestId === purchaseSummaryRequestId) {
+                        purchaseSummaryError = error;
+                        purchaseSummary = null;
+                    }
+                    throw error;
+                } finally {
+                    if (requestId === purchaseSummaryRequestId) {
+                        purchaseSummaryLoading = false;
+                        purchaseSummaryPromise = null;
+                        renderPurchaseSummarySection();
+                    }
+                }
+            })();
+
+            purchaseSummaryPromise = request;
+            return request;
+        }
+
+        async function handlePurchaseSubmit() {
+            if (purchaseSubmitInProgress) {
+                return;
+            }
+            const data = purchaseConfiguratorData;
+            if (!data) {
+                await renderPurchaseConfiguratorCard({ force: true });
+                return;
+            }
+
+            const periodOption = getSelectedPurchasePeriodOption();
+            if (!periodOption) {
+                const messageKey = 'purchase.validation.period';
+                const message = t(messageKey);
+                const titleKey = 'purchase.title';
+                const title = t(titleKey);
+                showPopup(
+                    message === messageKey ? 'Please select a subscription period.' : message,
+                    title === titleKey ? 'Configure your subscription' : title,
+                );
+                return;
+            }
+
+            const serversData = data.servers;
+            if (serversData && !serversData.auto) {
+                const selectedCount = purchaseSelections.servers instanceof Set ? purchaseSelections.servers.size : 0;
+                const minRequired = coercePositiveInt(serversData.min, 0) || 0;
+                if (minRequired > 0 && selectedCount < minRequired) {
+                    const messageKey = 'purchase.validation.servers';
+                    const template = t(messageKey);
+                    const message = template === messageKey
+                        ? `Please select at least ${minRequired} server(s).`
+                        : template.replace('{min}', String(minRequired));
+                    const titleKey = 'purchase.servers.title';
+                    const title = t(titleKey);
+                    showPopup(
+                        message,
+                        title === titleKey ? 'Servers' : title,
+                    );
+                    return;
+                }
+            }
+
+            try {
+                await updatePurchaseSummary({ force: true });
+            } catch (error) {
+                console.warn('Unable to refresh purchase summary before submit:', error);
+            }
+
+            const missing = coercePositiveInt(purchaseSummary?.missingKopeks, null);
+            if (missing && missing > 0) {
+                const messageKey = 'purchase.validation.balance';
+                const message = t(messageKey);
+                const titleKey = 'purchase.summary.title';
+                const title = t(titleKey);
+                showPopup(
+                    message === messageKey ? 'Not enough funds on your balance.' : message,
+                    title === titleKey ? 'Summary' : title,
+                );
+                openTopupModal();
+                return;
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                const message = t('purchase.error.unauthorized');
+                const title = t('purchase.submit.title');
+                showPopup(
+                    message === 'purchase.error.unauthorized'
+                        ? 'Authorization failed. Please reopen the mini app from Telegram.'
+                        : message,
+                    title === 'purchase.submit.title' ? 'Purchase complete' : title,
+                );
+                return;
+            }
+
+            const buyButton = document.getElementById('purchaseSubmitBtn');
+            if (buyButton && !buyButton.dataset.originalLabel) {
+                buyButton.dataset.originalLabel = buyButton.textContent || '';
+            }
+
+            const processingLabel = t('purchase.action.processing');
+            if (buyButton) {
+                buyButton.textContent = processingLabel === 'purchase.action.processing'
+                    ? 'Processing…'
+                    : processingLabel;
+                buyButton.disabled = true;
+            }
+
+            purchaseSubmitInProgress = true;
+            renderPurchaseSummarySection();
+
+            const payload = buildPurchaseSelectionPayload();
+            payload.initData = initData;
+
+            try {
+                const response = await fetch('/miniapp/subscription/purchase/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const body = await parseJsonSafe(response);
+                if (!response.ok || (body && body.success === false)) {
+                    const message = extractPurchaseError(body, response.status);
+                    throw createError('Purchase submit error', message, response.status);
+                }
+
+                const successMessageKey = 'purchase.submit.success';
+                const successTitleKey = 'purchase.submit.title';
+                const successMessage = t(successMessageKey);
+                const successTitle = t(successTitleKey);
+                showPopup(
+                    successMessage === successMessageKey
+                        ? 'Subscription purchased successfully!'
+                        : successMessage,
+                    successTitle === successTitleKey ? 'Purchase complete' : successTitle,
+                );
+
+                await refreshSubscriptionData({ silent: true });
+                resetPurchaseConfiguratorState();
+                await renderPurchaseConfiguratorCard();
+            } catch (error) {
+                console.error('Purchase submission failed:', error);
+                const message = resolvePurchaseErrorMessage(error, 'purchase.submit.error');
+                const titleKey = 'purchase.submit.title';
+                const title = t(titleKey);
+                showPopup(
+                    message,
+                    title === titleKey ? 'Purchase complete' : title,
+                );
+                purchaseSummaryError = error;
+                renderPurchaseSummarySection();
+            } finally {
+                purchaseSubmitInProgress = false;
+                if (buyButton) {
+                    const labelKey = buyButton.getAttribute('data-i18n');
+                    const original = buyButton.dataset.originalLabel;
+                    if (original) {
+                        buyButton.textContent = original;
+                    } else if (labelKey) {
+                        const label = t(labelKey);
+                        buyButton.textContent = label === labelKey ? buyButton.textContent : label;
+                    }
+                    buyButton.disabled = false;
+                }
+                renderPurchaseSummarySection();
+            }
+        }
+
+
         async function showConfirmationPopup({ title, message, confirmText, cancelText, destructive = false } = {}) {
             const fallbackCancel = cancelText || (() => {
                 const cancelValue = t('subscription_settings.confirm.action.cancel');
@@ -7320,6 +9760,20 @@
                 : Number.parseFloat(userData?.balance_rubles ?? '0');
             const currency = (userData?.balance_currency || 'RUB').toUpperCase();
             amountElement.textContent = formatCurrency(balanceRubles, currency);
+
+            const balanceKopeksRaw = coercePositiveInt(userData?.balance_kopeks, null);
+            const calculatedKopeks = Number.isFinite(balanceRubles)
+                ? coercePositiveInt(Math.round(balanceRubles * 100), null)
+                : null;
+            if (purchaseConfiguratorData) {
+                const resolvedKopeks = balanceKopeksRaw !== null ? balanceKopeksRaw : calculatedKopeks;
+                if (resolvedKopeks !== null) {
+                    purchaseConfiguratorData.balanceKopeks = resolvedKopeks;
+                }
+                if (!purchaseSubmitInProgress) {
+                    schedulePurchaseSummaryUpdate(100);
+                }
+            }
         }
 
         function getTopupElements() {
@@ -10699,6 +13153,7 @@
             updateErrorTexts();
             document.getElementById('errorState').classList.remove('hidden');
             updateActionButtons();
+            renderPurchaseConfiguratorCard({ force: true });
         }
 
         document.querySelectorAll('.platform-btn').forEach(btn => {
@@ -10814,6 +13269,18 @@
                     t('notifications.copy.title.failure') || 'Copy failed'
                 );
             }
+        });
+
+        document.getElementById('purchaseConfiguratorRetry')?.addEventListener('click', () => {
+            renderPurchaseConfiguratorCard({ force: true });
+        });
+
+        document.getElementById('purchaseSubmitBtn')?.addEventListener('click', () => {
+            handlePurchaseSubmit();
+        });
+
+        document.getElementById('purchaseTopupBtn')?.addEventListener('click', () => {
+            openTopupModal();
         });
 
         document.getElementById('purchaseBtn')?.addEventListener('click', () => {
