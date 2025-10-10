@@ -319,6 +319,69 @@ class MiniAppPaymentStatusResponse(BaseModel):
     results: List[MiniAppPaymentStatusResult] = Field(default_factory=list)
 
 
+class MiniAppSubscriptionRenewalPromoOffer(BaseModel):
+    percent: int
+    expires_at: Optional[datetime] = Field(default=None, alias="expiresAt")
+    title: Optional[str] = None
+    message: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionRenewalPeriod(BaseModel):
+    id: str
+    period_id: Optional[str] = Field(default=None, alias="periodId")
+    days: Optional[int] = None
+    period_days: Optional[int] = Field(default=None, alias="periodDays")
+    months: Optional[int] = None
+    period_months: Optional[int] = Field(default=None, alias="periodMonths")
+    price_kopeks: Optional[int] = Field(default=None, alias="priceKopeks")
+    price_label: Optional[str] = Field(default=None, alias="priceLabel")
+    original_price_kopeks: Optional[int] = Field(default=None, alias="originalPriceKopeks")
+    original_price_label: Optional[str] = Field(default=None, alias="originalPriceLabel")
+    discount_percent: Optional[int] = Field(default=None, alias="discountPercent")
+    price_per_month_kopeks: Optional[int] = Field(default=None, alias="pricePerMonthKopeks")
+    price_per_month_label: Optional[str] = Field(default=None, alias="pricePerMonthLabel")
+    is_recommended: bool = Field(default=False, alias="isRecommended")
+    badge: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _ensure_aliases(cls, values: Any) -> Any:
+        if isinstance(values, dict):
+            if "id" in values and "periodId" not in values:
+                values.setdefault("periodId", values["id"])
+            if values.get("days") is None and values.get("periodDays") is not None:
+                values["days"] = values.get("periodDays")
+            if values.get("periodDays") is None and values.get("days") is not None:
+                values["periodDays"] = values.get("days")
+            if values.get("months") is None and values.get("periodMonths") is not None:
+                values["months"] = values.get("periodMonths")
+            if values.get("periodMonths") is None and values.get("months") is not None:
+                values["periodMonths"] = values.get("months")
+        return values
+
+
+class MiniAppSubscriptionRenewal(BaseModel):
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    currency: str = "RUB"
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+    periods: List[MiniAppSubscriptionRenewalPeriod] = Field(default_factory=list)
+    default_period_id: Optional[str] = Field(default=None, alias="defaultPeriodId")
+    promo_group: Optional[MiniAppPromoGroup] = Field(default=None, alias="promoGroup")
+    promo_offer: Optional[MiniAppSubscriptionRenewalPromoOffer] = Field(default=None, alias="promoOffer")
+    missing_amount_kopeks: Optional[int] = Field(default=None, alias="missingAmountKopeks")
+    missing_amount_label: Optional[str] = Field(default=None, alias="missingAmountLabel")
+    status_message: Optional[str] = Field(default=None, alias="statusMessage")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: int
@@ -353,6 +416,11 @@ class MiniAppSubscriptionResponse(BaseModel):
     faq: Optional[MiniAppFaq] = None
     legal_documents: Optional[MiniAppLegalDocuments] = None
     referral: Optional[MiniAppReferralInfo] = None
+    subscription_renewal: Optional[MiniAppSubscriptionRenewal] = Field(
+        default=None,
+        alias="subscriptionRenewal",
+    )
+    renewal: Optional[MiniAppSubscriptionRenewal] = None
 
 
 class MiniAppSubscriptionServerOption(BaseModel):
@@ -523,6 +591,61 @@ class MiniAppSubscriptionDevicesUpdateRequest(BaseModel):
 class MiniAppSubscriptionUpdateResponse(BaseModel):
     success: bool = True
     message: Optional[str] = None
+
+
+class MiniAppSubscriptionRenewalOptionsRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionRenewalOptionsResponse(BaseModel):
+    success: bool = True
+    currency: str
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    renewal: MiniAppSubscriptionRenewal
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionRenewalRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    period_id: Optional[str] = Field(default=None, alias="periodId")
+    period_days: Optional[int] = Field(default=None, alias="periodDays")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _populate_period_fields(cls, values: Any) -> Any:
+        if isinstance(values, dict):
+            alias_map = {
+                "period_id": ["periodId", "period"],
+                "period_days": ["periodDays", "days", "durationDays", "duration_days"],
+            }
+            for target, sources in alias_map.items():
+                if values.get(target) is not None:
+                    continue
+                for source in sources:
+                    if source in values and values[source] is not None:
+                        values[target] = values[source]
+                        break
+        return values
+
+
+class MiniAppSubscriptionRenewalResponse(BaseModel):
+    success: bool = True
+    message: Optional[str] = None
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    renewal: Optional[MiniAppSubscriptionRenewal] = None
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class MiniAppSubscriptionPurchaseOptionsRequest(BaseModel):
