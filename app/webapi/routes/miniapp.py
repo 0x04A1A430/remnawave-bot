@@ -2055,6 +2055,280 @@ async def _build_referral_info(
     )
 
 
+async def _build_subscription_missing_response(
+    db: AsyncSession,
+    user: User,
+    purchase_url: str,
+) -> MiniAppSubscriptionResponse:
+    transactions_query = (
+        select(Transaction)
+        .where(Transaction.user_id == user.id)
+        .order_by(Transaction.created_at.desc())
+        .limit(10)
+    )
+    transactions_result = await db.execute(transactions_query)
+    transactions = list(transactions_result.scalars().all())
+
+    balance_currency = getattr(user, "balance_currency", None)
+    if isinstance(balance_currency, str):
+        balance_currency = balance_currency.upper()
+
+    promo_group = getattr(user, "promo_group", None)
+    total_spent_kopeks = await get_user_total_spent_kopeks(db, user.id)
+    auto_assign_groups = await get_auto_assign_promo_groups(db)
+
+    auto_promo_levels: List[MiniAppAutoPromoGroupLevel] = []
+    for group in auto_assign_groups:
+        threshold = group.auto_assign_total_spent_kopeks or 0
+        if threshold <= 0:
+            continue
+
+        auto_promo_levels.append(
+            MiniAppAutoPromoGroupLevel(
+                id=group.id,
+                name=group.name,
+                threshold_kopeks=threshold,
+                threshold_rubles=round(threshold / 100, 2),
+                threshold_label=settings.format_price(threshold),
+                is_reached=total_spent_kopeks >= threshold,
+                is_current=bool(promo_group and promo_group.id == group.id),
+                **_extract_promo_discounts(group),
+            )
+        )
+
+    active_discount_percent = 0
+    try:
+        active_discount_percent = int(getattr(user, "promo_offer_discount_percent", 0) or 0)
+    except (TypeError, ValueError):
+        active_discount_percent = 0
+
+    active_discount_expires_at = getattr(user, "promo_offer_discount_expires_at", None)
+    now = datetime.utcnow()
+    if active_discount_expires_at and active_discount_expires_at <= now:
+        active_discount_expires_at = None
+        active_discount_percent = 0
+
+    available_promo_offers = await list_active_discount_offers_for_user(db, user.id)
+
+    promo_offer_source = getattr(user, "promo_offer_discount_source", None)
+    active_offer_contexts: List[ActiveOfferContext] = []
+    if promo_offer_source or active_discount_percent > 0:
+        active_discount_offer = await get_latest_claimed_offer_for_user(
+            db,
+            user.id,
+            promo_offer_source,
+        )
+        if active_discount_offer and active_discount_percent > 0:
+            active_offer_contexts.append(
+                (
+                    active_discount_offer,
+                    active_discount_percent,
+                    active_discount_expires_at,
+                )
+            )
+
+    promo_offers = await _build_promo_offer_models(
+        db,
+        available_promo_offers,
+        active_offer_contexts,
+        user=user,
+    )
+
+    content_language_preference = user.language or settings.DEFAULT_LANGUAGE or "ru"
+
+    requested_faq_language = FaqService.normalize_language(content_language_preference)
+    faq_pages = await FaqService.get_pages(
+        db,
+        requested_faq_language,
+        include_inactive=False,
+        fallback=True,
+    )
+
+    faq_payload: Optional[MiniAppFaq] = None
+    if faq_pages:
+        faq_setting = await FaqService.get_setting(
+            db,
+            requested_faq_language,
+            fallback=True,
+        )
+        is_enabled = bool(faq_setting.is_enabled) if faq_setting else True
+
+        if is_enabled:
+            ordered_pages = sorted(
+                faq_pages,
+                key=lambda page: (
+                    (page.display_order or 0),
+                    page.id,
+                ),
+            )
+            faq_items: List[MiniAppFaqItem] = []
+            for page in ordered_pages:
+                raw_content = (page.content or "").strip()
+                if not raw_content:
+                    continue
+                if not re.sub(r"<[^>]+>", "", raw_content).strip():
+                    continue
+                faq_items.append(
+                    MiniAppFaqItem(
+                        id=page.id,
+                        title=page.title or None,
+                        content=page.content or "",
+                        display_order=getattr(page, "display_order", None),
+                    )
+                )
+
+            if faq_items:
+                resolved_language = (
+                    faq_setting.language
+                    if faq_setting and faq_setting.language
+                    else ordered_pages[0].language
+                )
+                faq_payload = MiniAppFaq(
+                    requested_language=requested_faq_language,
+                    language=resolved_language or requested_faq_language,
+                    is_enabled=is_enabled,
+                    total=len(faq_items),
+                    items=faq_items,
+                )
+
+    legal_documents_payload: Optional[MiniAppLegalDocuments] = None
+
+    requested_offer_language = PublicOfferService.normalize_language(content_language_preference)
+    public_offer = await PublicOfferService.get_active_offer(
+        db,
+        requested_offer_language,
+    )
+    if public_offer and (public_offer.content or "").strip():
+        legal_documents_payload = legal_documents_payload or MiniAppLegalDocuments()
+        legal_documents_payload.public_offer = MiniAppRichTextDocument(
+            requested_language=requested_offer_language,
+            language=public_offer.language,
+            title=None,
+            is_enabled=bool(public_offer.is_enabled),
+            content=public_offer.content or "",
+            created_at=public_offer.created_at,
+            updated_at=public_offer.updated_at,
+        )
+
+    requested_policy_language = PrivacyPolicyService.normalize_language(
+        content_language_preference
+    )
+    privacy_policy = await PrivacyPolicyService.get_active_policy(
+        db,
+        requested_policy_language,
+    )
+    if privacy_policy and (privacy_policy.content or "").strip():
+        legal_documents_payload = legal_documents_payload or MiniAppLegalDocuments()
+        legal_documents_payload.privacy_policy = MiniAppRichTextDocument(
+            requested_language=requested_policy_language,
+            language=privacy_policy.language,
+            title=None,
+            is_enabled=bool(privacy_policy.is_enabled),
+            content=privacy_policy.content or "",
+            created_at=privacy_policy.created_at,
+            updated_at=privacy_policy.updated_at,
+        )
+
+    requested_rules_language = (content_language_preference or "ru").split("-")[0].lower()
+    default_rules_language = (settings.DEFAULT_LANGUAGE or "ru").split("-")[0].lower()
+    service_rules = await get_rules_by_language(db, requested_rules_language)
+    if not service_rules and requested_rules_language != default_rules_language:
+        service_rules = await get_rules_by_language(db, default_rules_language)
+
+    if service_rules and (service_rules.content or "").strip():
+        legal_documents_payload = legal_documents_payload or MiniAppLegalDocuments()
+        legal_documents_payload.service_rules = MiniAppRichTextDocument(
+            requested_language=requested_rules_language,
+            language=service_rules.language,
+            title=getattr(service_rules, "title", None),
+            is_enabled=bool(getattr(service_rules, "is_active", True)),
+            content=service_rules.content or "",
+            created_at=getattr(service_rules, "created_at", None),
+            updated_at=getattr(service_rules, "updated_at", None),
+        )
+
+    devices_count, devices = await _load_devices_info(user)
+    lifetime_used = _bytes_to_gb(getattr(user, "lifetime_used_traffic_bytes", 0))
+
+    default_device_limit = settings.DEFAULT_DEVICE_LIMIT if settings.DEFAULT_DEVICE_LIMIT > 0 else None
+
+    response_user = MiniAppSubscriptionUser(
+        telegram_id=user.telegram_id,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        display_name=_resolve_display_name(
+            {
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "telegram_id": user.telegram_id,
+            }
+        ),
+        language=user.language,
+        status=user.status,
+        subscription_status="inactive",
+        subscription_actual_status="inactive",
+        status_label=_status_label("inactive"),
+        expires_at=None,
+        device_limit=default_device_limit,
+        traffic_used_gb=0.0,
+        traffic_used_label=_format_gb_label(0.0),
+        traffic_limit_gb=None,
+        traffic_limit_label=_format_limit_label(None),
+        lifetime_used_traffic_gb=lifetime_used,
+        has_active_subscription=False,
+        promo_offer_discount_percent=active_discount_percent,
+        promo_offer_discount_expires_at=active_discount_expires_at,
+        promo_offer_discount_source=promo_offer_source,
+    )
+
+    referral_info = await _build_referral_info(db, user)
+
+    return MiniAppSubscriptionResponse(
+        subscription_id=0,
+        remnawave_short_uuid=None,
+        user=response_user,
+        subscription_url=None,
+        subscription_crypto_link=None,
+        subscription_purchase_url=purchase_url or None,
+        links=[],
+        ss_conf_links={},
+        connected_squads=[],
+        connected_servers=[],
+        connected_devices_count=devices_count,
+        connected_devices=devices,
+        happ=None,
+        happ_link=None,
+        happ_crypto_link=None,
+        happ_cryptolink_redirect_link=None,
+        balance_kopeks=user.balance_kopeks,
+        balance_rubles=round(getattr(user, "balance_rubles", user.balance_kopeks / 100), 2),
+        balance_currency=balance_currency,
+        transactions=[_serialize_transaction(tx) for tx in transactions],
+        promo_offers=promo_offers,
+        promo_group=(
+            MiniAppPromoGroup(
+                id=promo_group.id,
+                name=promo_group.name,
+                **_extract_promo_discounts(promo_group),
+            )
+            if promo_group
+            else None
+        ),
+        auto_assign_promo_groups=auto_promo_levels,
+        total_spent_kopeks=total_spent_kopeks,
+        total_spent_rubles=round(total_spent_kopeks / 100, 2),
+        total_spent_label=settings.format_price(total_spent_kopeks),
+        subscription_type="none",
+        autopay_enabled=False,
+        branding=settings.get_miniapp_branding(),
+        faq=faq_payload,
+        legal_documents=legal_documents_payload,
+        referral=referral_info,
+    )
+
+
 @router.post("/subscription", response_model=MiniAppSubscriptionResponse)
 async def get_subscription_details(
     payload: MiniAppSubscriptionRequest,
@@ -2085,17 +2359,25 @@ async def get_subscription_details(
 
     user = await get_user_by_telegram_id(db, telegram_id)
     purchase_url = (settings.MINIAPP_PURCHASE_URL or "").strip()
-    if not user or not user.subscription:
-        detail: Union[str, Dict[str, str]] = "Subscription not found"
+    bot_username = settings.get_bot_username()
+    bot_url = f"https://t.me/{bot_username}" if bot_username else None
+
+    if not user:
+        detail: Dict[str, Optional[str]] = {
+            "code": "user_not_registered",
+            "message": "User is not registered in the bot",
+        }
         if purchase_url:
-            detail = {
-                "message": "Subscription not found",
-                "purchase_url": purchase_url,
-            }
+            detail["purchase_url"] = purchase_url
+        if bot_url:
+            detail["bot_url"] = bot_url
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=detail,
         )
+
+    if not user.subscription:
+        return await _build_subscription_missing_response(db, user, purchase_url)
 
     subscription = user.subscription
     traffic_used = _format_gb(subscription.traffic_used_gb)
