@@ -1245,6 +1245,11 @@
             color: #41464b;
         }
 
+        .status-none {
+            background: linear-gradient(135deg, #e8e9eb, #f4f5f7);
+            color: var(--text-secondary);
+        }
+
         /* Stats Grid */
         .stats-grid {
             display: grid;
@@ -4546,8 +4551,10 @@
                 'status.expired': 'Expired',
                 'status.disabled': 'Disabled',
                 'status.unknown': 'Unknown',
+                'status.none': 'No subscription',
                 'subscription.type.trial': 'Trial',
                 'subscription.type.paid': 'Paid',
+                'subscription.type.none': 'No subscription',
                 'autopay.enabled': 'Enabled',
                 'autopay.disabled': 'Disabled',
                 'platform.ios': 'iOS',
@@ -4872,8 +4879,10 @@
                 'status.expired': 'Истекла',
                 'status.disabled': 'Отключена',
                 'status.unknown': 'Неизвестно',
+                'status.none': 'Нет подписки',
                 'subscription.type.trial': 'Триал',
                 'subscription.type.paid': 'Платная',
+                'subscription.type.none': 'Нет подписки',
                 'autopay.enabled': 'Включен',
                 'autopay.disabled': 'Выключен',
                 'platform.ios': 'iOS',
@@ -6023,7 +6032,7 @@
             document.getElementById('userAvatar').textContent = avatarChar;
             document.getElementById('userName').textContent = fallbackName;
 
-            const knownStatuses = ['active', 'trial', 'expired', 'disabled'];
+            const knownStatuses = ['active', 'trial', 'expired', 'disabled', 'none'];
             const statusValueRaw = (user.subscription_actual_status || user.subscription_status || 'active').toLowerCase();
             const statusClass = knownStatuses.includes(statusValueRaw) ? statusValueRaw : 'unknown';
             const statusBadge = document.getElementById('statusBadge');
@@ -6080,9 +6089,17 @@
 
             const subscriptionTypeElement = document.getElementById('subscriptionType');
             if (subscriptionTypeElement) {
-                const fallbackSubscriptionType = (user?.subscription_status || '').toLowerCase() === 'trial'
-                    ? 'trial'
-                    : 'paid';
+                const rawStatusValue = String(
+                    user?.subscription_actual_status || user?.subscription_status || ''
+                ).toLowerCase();
+                let fallbackSubscriptionType;
+                if (rawStatusValue === 'trial') {
+                    fallbackSubscriptionType = 'trial';
+                } else if (rawStatusValue === 'none') {
+                    fallbackSubscriptionType = 'none';
+                } else {
+                    fallbackSubscriptionType = 'paid';
+                }
                 const subscriptionTypeRaw = String(
                     userData?.subscription_type
                     || fallbackSubscriptionType
