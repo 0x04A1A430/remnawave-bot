@@ -90,6 +90,67 @@
             padding-bottom: 32px;
         }
 
+        body.state-subscription-missing .requires-subscription {
+            display: none !important;
+        }
+
+        body.state-subscription-missing .subscription-missing-notice {
+            display: block;
+        }
+
+        body.state-registration-required #registrationState {
+            display: block;
+        }
+
+        body.state-registration-required #mainContent,
+        body.state-registration-required #errorState,
+        body.state-registration-required #loadingState {
+            display: none !important;
+        }
+
+        .subscription-missing-notice {
+            display: none;
+        }
+
+        #registrationState {
+            display: none;
+        }
+
+        .empty-state-card {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: 24px 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-md);
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+
+        .empty-state-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+        }
+
+        .empty-state-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .empty-state-description {
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .empty-state-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
         /* Animations */
         @keyframes fadeIn {
             from {
@@ -4223,13 +4284,39 @@
             </div>
         </div>
 
+        <!-- Registration Required State -->
+        <div id="registrationState" class="empty-state-card">
+            <div class="empty-state-icon">🤖</div>
+            <div class="empty-state-title" data-i18n="state.registration.title">Register in the bot</div>
+            <div class="empty-state-description" data-i18n="state.registration.description">
+                To continue, please register in the Telegram bot. It only takes a few seconds.
+            </div>
+            <div class="empty-state-actions">
+                <button class="btn btn-primary" type="button" id="registrationOpenBotBtn" data-i18n="state.registration.button">
+                    Open bot
+                </button>
+            </div>
+        </div>
+
         <!-- Main Content -->
         <div id="mainContent" class="hidden">
+            <div class="card empty-state-card subscription-missing-notice" id="noSubscriptionNotice">
+                <div class="empty-state-icon">🛡️</div>
+                <div class="empty-state-title" data-i18n="state.no_subscription.title">Subscription not activated</div>
+                <div class="empty-state-description" data-i18n="state.no_subscription.description">
+                    Choose a plan and activate access to the VPN service.
+                </div>
+                <div class="empty-state-actions">
+                    <button class="btn btn-primary" type="button" id="noSubscriptionPurchaseBtn" data-i18n="state.no_subscription.button">
+                        Choose a subscription
+                    </button>
+                </div>
+            </div>
             <!-- Promo Offers -->
             <div id="promoOffersContainer" class="promo-offers hidden"></div>
 
             <!-- User Card -->
-            <div class="card user-card animate-in">
+            <div class="card user-card animate-in requires-subscription">
                 <div class="user-header">
                     <div class="user-avatar" id="userAvatar">U</div>
                     <div class="user-info">
@@ -4238,7 +4325,7 @@
                     </div>
                 </div>
 
-                <div class="stats-grid">
+                <div class="stats-grid requires-subscription">
                     <div class="stat-item">
                         <div class="stat-value" id="daysLeft">-</div>
                         <div class="stat-label" data-i18n="stats.days_left">Days Left</div>
@@ -4253,7 +4340,7 @@
                     </div>
                 </div>
 
-                <div class="info-list">
+                <div class="info-list requires-subscription">
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.expires">
                             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4574,7 +4661,7 @@
             </div>
 
             <!-- Action Buttons -->
-            <div class="btn-group">
+            <div class="btn-group requires-subscription" id="actionButtonsGroup">
                 <button class="btn btn-primary" id="connectBtn">
                     <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
@@ -4972,6 +5059,13 @@
                 'app.loading': 'Loading your subscription...',
                 'error.default.title': 'Subscription Not Found',
                 'error.default.message': 'Please contact support to activate your subscription.',
+                'state.registration.title': 'Register in the bot',
+                'state.registration.description': 'To continue, register in the Telegram bot and then reopen the mini app.',
+                'state.registration.button': 'Open bot',
+                'state.registration.button.fallback': 'Unable to open the bot automatically. Please open it in Telegram and press Start.',
+                'state.no_subscription.title': 'Subscription not activated',
+                'state.no_subscription.description': 'You are registered but do not have an active subscription yet. Choose a plan to get started.',
+                'state.no_subscription.button': 'Choose a subscription',
                 'stats.days_left': 'Days left',
                 'stats.servers': 'Servers',
                 'stats.devices': 'Devices',
@@ -5327,6 +5421,13 @@
                 'app.loading': 'Загружаем вашу подписку...',
                 'error.default.title': 'Подписка не найдена',
                 'error.default.message': 'Свяжитесь с поддержкой, чтобы активировать подписку.',
+                'state.registration.title': 'Зарегистрируйтесь в боте',
+                'state.registration.description': 'Чтобы продолжить, зарегистрируйтесь в Telegram-боте и заново откройте мини-приложение.',
+                'state.registration.button': 'Открыть бота',
+                'state.registration.button.fallback': 'Не удалось открыть бота автоматически. Пожалуйста, найдите бота в Telegram и нажмите «Старт».',
+                'state.no_subscription.title': 'Подписка не активна',
+                'state.no_subscription.description': 'Вы зарегистрированы, но подписка ещё не оформлена. Выберите подходящий тариф и активируйте доступ.',
+                'state.no_subscription.button': 'Выбрать подписку',
                 'stats.days_left': 'Осталось дней',
                 'stats.servers': 'Серверы',
                 'stats.devices': 'Устройства',
@@ -5784,10 +5885,13 @@
         let appsConfig = {};
         let currentPlatform = 'android';
         let configPurchaseUrl = null;
+        let configBotUsername = null;
         let subscriptionPurchaseUrl = null;
         let preferredLanguage = 'en';
         let languageLockedByUser = false;
         let currentErrorState = null;
+        let subscriptionMissing = false;
+        let registrationRequired = false;
         let paymentMethodsCache = null;
         let paymentMethodsPromise = null;
         let activePaymentMethod = null;
@@ -6684,6 +6788,10 @@
                 applyBrandingOverrides(userData.branding);
             }
 
+            subscriptionMissing = false;
+            registrationRequired = false;
+            updateSubscriptionStateUI();
+
             const responseLanguage = resolveLanguage(userData?.user?.language);
             if (responseLanguage && !languageLockedByUser) {
                 preferredLanguage = responseLanguage;
@@ -6730,8 +6838,47 @@
                 document.getElementById('loadingState')?.classList.remove('hidden');
             }
 
-            const payload = await fetchSubscriptionPayload(initData);
-            return applySubscriptionData(payload);
+            try {
+                const payload = await fetchSubscriptionPayload(initData);
+                return applySubscriptionData(payload);
+            } catch (error) {
+                if (error?.status === 404) {
+                    await handleSubscriptionNotFound(error, { silent });
+                    return null;
+                }
+                throw error;
+            }
+        }
+
+        async function handleSubscriptionNotFound(error, options = {}) {
+            const { silent = false } = options;
+
+            if (!silent) {
+                document.getElementById('loadingState')?.classList.add('hidden');
+            }
+
+            currentErrorState = null;
+            userData = null;
+            subscriptionMissing = true;
+            registrationRequired = false;
+            updateSubscriptionStateUI();
+
+            try {
+                await ensureSubscriptionPurchaseData({ force: true });
+                updateErrorTexts();
+                animateCardsOnce();
+            } catch (purchaseError) {
+                subscriptionMissing = false;
+                if (purchaseError?.status === 404) {
+                    registrationRequired = true;
+                    updateSubscriptionStateUI();
+                    return null;
+                }
+                updateSubscriptionStateUI();
+                throw error;
+            }
+
+            return null;
         }
 
         async function init() {
@@ -6777,6 +6924,15 @@
                 );
                 if (configUrl) {
                     configPurchaseUrl = configUrl;
+                }
+
+                const botUsernameCandidate = configData.botUsername
+                    || configData.bot_username
+                    || data?.botUsername
+                    || data?.bot_username
+                    || null;
+                if (botUsernameCandidate) {
+                    configBotUsername = String(botUsernameCandidate).trim().replace(/^@/, '');
                 }
             } catch (error) {
                 console.warn('Unable to load apps configuration:', error);
@@ -8687,11 +8843,130 @@
             if (!amountElement) {
                 return;
             }
+            if (subscriptionMissing) {
+                const balanceLabel = subscriptionPurchaseData?.balanceLabel
+                    || (subscriptionPurchaseData?.balanceKopeks !== null
+                        ? formatPriceFromKopeks(subscriptionPurchaseData.balanceKopeks, subscriptionPurchaseData?.currency)
+                        : null);
+                amountElement.textContent = balanceLabel || '—';
+                return;
+            }
+
+            if (!userData) {
+                amountElement.textContent = '—';
+                return;
+            }
+
             const balanceRubles = typeof userData?.balance_rubles === 'number'
                 ? userData.balance_rubles
                 : Number.parseFloat(userData?.balance_rubles ?? '0');
             const currency = (userData?.balance_currency || 'RUB').toUpperCase();
             amountElement.textContent = formatCurrency(balanceRubles, currency);
+        }
+
+        function getBotUsername() {
+            const candidates = [
+                configBotUsername,
+                subscriptionPurchaseData?.raw?.bot_username,
+                subscriptionPurchaseData?.raw?.botUsername,
+                userData?.branding?.bot_username,
+                userData?.branding?.botUsername,
+            ];
+
+            const referralLink = userData?.referral?.referral_link || userData?.referral?.referralLink;
+            if (referralLink && typeof referralLink === 'string') {
+                const match = referralLink.match(/t\.me\/([^?\s]+)/i);
+                if (match && match[1]) {
+                    candidates.push(match[1]);
+                }
+            }
+
+            for (const candidate of candidates) {
+                if (!candidate) {
+                    continue;
+                }
+                const normalized = String(candidate).trim().replace(/^@/, '');
+                if (normalized) {
+                    return normalized;
+                }
+            }
+
+            return null;
+        }
+
+        function openBotLink() {
+            const username = getBotUsername();
+            if (username) {
+                const link = `https://t.me/${username}`;
+                if (typeof tg.openTelegramLink === 'function') {
+                    try {
+                        tg.openTelegramLink(link);
+                        return;
+                    } catch (error) {
+                        console.warn('tg.openTelegramLink failed:', error);
+                    }
+                }
+                if (typeof tg.openLink === 'function') {
+                    try {
+                        tg.openLink(link, { try_instant_view: false });
+                        return;
+                    } catch (error) {
+                        console.warn('tg.openLink failed:', error);
+                    }
+                }
+                const newWindow = window.open(link, '_blank', 'noopener,noreferrer');
+                if (newWindow) {
+                    newWindow.opener = null;
+                    return;
+                }
+                window.location.href = link;
+                return;
+            }
+
+            const titleKey = 'state.registration.title';
+            const messageKey = 'state.registration.button.fallback';
+            const title = t(titleKey);
+            const message = t(messageKey);
+            const resolvedTitle = title === titleKey ? 'Telegram bot' : title;
+            const resolvedMessage = message === messageKey
+                ? 'Please open the Telegram bot manually and press Start.'
+                : message;
+            showPopup(resolvedMessage, resolvedTitle);
+        }
+
+        function updateSubscriptionStateUI() {
+            const body = document.body;
+            if (body) {
+                body.classList.toggle('state-subscription-missing', subscriptionMissing);
+                body.classList.toggle('state-registration-required', registrationRequired);
+            }
+
+            const registrationState = document.getElementById('registrationState');
+            if (registrationState) {
+                registrationState.classList.toggle('hidden', !registrationRequired);
+                registrationState.setAttribute('aria-hidden', registrationRequired ? 'false' : 'true');
+            }
+
+            const noSubscriptionNotice = document.getElementById('noSubscriptionNotice');
+            if (noSubscriptionNotice) {
+                noSubscriptionNotice.classList.toggle('hidden', !subscriptionMissing);
+                noSubscriptionNotice.setAttribute('aria-hidden', subscriptionMissing ? 'false' : 'true');
+            }
+
+            if (subscriptionMissing || registrationRequired) {
+                document.getElementById('loadingState')?.classList.add('hidden');
+                document.getElementById('errorState')?.classList.add('hidden');
+            }
+
+            const mainContent = document.getElementById('mainContent');
+            if (registrationRequired) {
+                mainContent?.classList.add('hidden');
+            } else if (subscriptionMissing) {
+                mainContent?.classList.remove('hidden');
+            }
+
+            updateActionButtons();
+            renderBalanceSection();
         }
 
         function getTopupElements() {
@@ -12944,6 +13219,9 @@
             if (subscriptionPurchaseModalOpen) {
                 return true;
             }
+            if (subscriptionMissing) {
+                return true;
+            }
             return Boolean(userData?.user) && !hasPaidSubscription();
         }
 
@@ -13482,6 +13760,7 @@
                 subscriptionPurchaseFeatureEnabled = true;
                 resetSubscriptionPurchaseSelections(normalized);
                 renderSubscriptionPurchaseCard();
+                renderBalanceSection();
                 const period = getSelectedSubscriptionPurchasePeriod();
                 if (period) {
                     ensureSubscriptionPurchaseSelectionsValidForPeriod(period);
@@ -15246,18 +15525,23 @@
         function updateActionButtons() {
             const connectBtn = document.getElementById('connectBtn');
             const copyBtn = document.getElementById('copyBtn');
+            const actionGroup = document.getElementById('actionButtonsGroup');
+
+            const shouldHideActions = subscriptionMissing || registrationRequired;
+            actionGroup?.classList.toggle('hidden', shouldHideActions);
 
             const connectLink = getConnectLink();
             if (connectBtn) {
-                const hasConnect = Boolean(connectLink);
+                const hasConnect = !shouldHideActions && Boolean(connectLink);
                 connectBtn.disabled = !hasConnect;
                 connectBtn.classList.toggle('hidden', !hasConnect);
             }
 
             const subscriptionUrl = getCurrentSubscriptionUrl();
             if (copyBtn) {
-                const hasUrl = Boolean(subscriptionUrl);
+                const hasUrl = !shouldHideActions && Boolean(subscriptionUrl);
                 copyBtn.disabled = !hasUrl || !navigator.clipboard;
+                copyBtn.classList.toggle('hidden', shouldHideActions);
             }
         }
 
@@ -15276,6 +15560,9 @@
         function showError(error) {
             document.getElementById('loadingState').classList.add('hidden');
             document.getElementById('mainContent').classList.add('hidden');
+            subscriptionMissing = false;
+            registrationRequired = false;
+            updateSubscriptionStateUI();
             currentErrorState = {
                 title: error?.title,
                 message: error?.message,
@@ -15342,6 +15629,14 @@
                 console.warn('Clipboard copy failed:', error);
                 showPopup(t('notifications.copy.failure'), t('notifications.copy.title.failure'));
             }
+        });
+
+        document.getElementById('registrationOpenBotBtn')?.addEventListener('click', () => {
+            openBotLink();
+        });
+
+        document.getElementById('noSubscriptionPurchaseBtn')?.addEventListener('click', () => {
+            openSubscriptionPurchaseModal();
         });
 
         document.getElementById('referralToggleBtn')?.addEventListener('click', () => {
