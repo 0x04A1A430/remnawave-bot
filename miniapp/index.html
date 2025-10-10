@@ -4347,6 +4347,9 @@
                 'subscription_purchase.servers.empty': 'No servers available',
                 'subscription_purchase.servers.single': 'Included server: {name}',
                 'subscription_purchase.servers.limit': 'Select up to {count}',
+                'subscription_purchase.servers.limit_max': 'Select up to {count}',
+                'subscription_purchase.servers.limit_exact': 'Select {count}',
+                'subscription_purchase.servers.limit_min': 'Select at least {count}',
                 'subscription_purchase.servers.selected': 'Selected: {count}',
                 'subscription_purchase.devices.title': 'Devices',
                 'subscription_purchase.devices.subtitle': 'Simultaneous connections.',
@@ -4673,6 +4676,9 @@
                 'subscription_purchase.servers.empty': 'Нет доступных серверов',
                 'subscription_purchase.servers.single': 'Включён сервер: {name}',
                 'subscription_purchase.servers.limit': 'Можно выбрать до {count}',
+                'subscription_purchase.servers.limit_max': 'Можно выбрать до {count}',
+                'subscription_purchase.servers.limit_exact': 'Выберите {count}',
+                'subscription_purchase.servers.limit_min': 'Нужно выбрать минимум {count}',
                 'subscription_purchase.servers.selected': 'Выбрано: {count}',
                 'subscription_purchase.devices.title': 'Устройства',
                 'subscription_purchase.devices.subtitle': 'Одновременные подключения.',
@@ -5054,6 +5060,8 @@
         let subscriptionPurchaseFeatureEnabled = false;
         let subscriptionPurchaseModalOpen = false;
         let subscriptionPurchasePreviewUpdateHandle = null;
+        let subscriptionPurchasePreviewRefreshQueued = false;
+        let subscriptionPurchasePreviewRefreshPromise = null;
         const subscriptionPurchaseSelections = {
             periodId: null,
             trafficValue: null,
@@ -11228,43 +11236,65 @@
             const currency = (subscriptionPurchaseData?.currency || userData?.balance_currency || 'RUB').toString().toUpperCase();
             const options = ensureArray(config?.options || config?.available || []);
             const normalizedOptions = options.map(option => normalizePurchaseServerOption(option, currency)).filter(Boolean);
-            const availableUuids = normalizedOptions.map(option => option.uuid).filter(Boolean);
+            const availableOptions = normalizedOptions.filter(option => option.isAvailable && option.uuid);
+            const availableUuids = availableOptions.map(option => String(option.uuid));
             const minSelectable = coercePositiveInt(config?.min ?? config?.min_selectable ?? config?.minRequired, 0) || 0;
             const maxSelectable = coercePositiveInt(config?.max ?? config?.max_selectable ?? config?.maxAllowed, 0) || 0;
-            const selection = subscriptionPurchaseSelections.servers instanceof Set
-                ? new Set(subscriptionPurchaseSelections.servers)
-                : new Set();
+            const selectable = config?.selectable !== false && availableUuids.length > 1;
 
-            Array.from(selection).forEach(value => {
-                if (!availableUuids.includes(String(value))) {
-                    selection.delete(value);
+            const selectionValues = [];
+            const selection = subscriptionPurchaseSelections.servers instanceof Set
+                ? Array.from(subscriptionPurchaseSelections.servers)
+                : [];
+
+            selection.map(value => String(value)).forEach(value => {
+                if (availableUuids.includes(value) && !selectionValues.includes(value)) {
+                    selectionValues.push(value);
                 }
             });
 
-            const selectable = config?.selectable !== false && availableUuids.length > 1 && (maxSelectable === 0 || maxSelectable > 1 || minSelectable === 0);
             if (!selectable) {
-                selection.clear();
+                selectionValues.length = 0;
                 if (availableUuids[0]) {
-                    selection.add(availableUuids[0]);
+                    selectionValues.push(availableUuids[0]);
                 }
-                subscriptionPurchaseSelections.servers = selection;
+                subscriptionPurchaseSelections.servers = new Set(selectionValues);
                 return;
             }
 
-            if (!selection.size) {
+            if (!selectionValues.length) {
                 const defaults = ensureArray(config?.selected || config?.default || config?.current || config?.preselected || []);
-                defaults.map(String).forEach(uuid => {
-                    if (availableUuids.includes(uuid)) {
-                        selection.add(uuid);
+                defaults.map(value => String(value)).forEach(uuid => {
+                    if (availableUuids.includes(uuid) && !selectionValues.includes(uuid)) {
+                        selectionValues.push(uuid);
                     }
                 });
             }
 
-            if (!selection.size && minSelectable > 0) {
-                availableUuids.slice(0, minSelectable).forEach(uuid => selection.add(uuid));
+            if (!selectionValues.length && minSelectable > 0) {
+                availableUuids.slice(0, minSelectable).forEach(uuid => {
+                    if (!selectionValues.includes(uuid)) {
+                        selectionValues.push(uuid);
+                    }
+                });
             }
 
-            subscriptionPurchaseSelections.servers = selection;
+            if (maxSelectable && selectionValues.length > maxSelectable) {
+                selectionValues.length = maxSelectable;
+            }
+
+            if (minSelectable && selectionValues.length < minSelectable) {
+                availableUuids.forEach(uuid => {
+                    if (selectionValues.length >= minSelectable) {
+                        return;
+                    }
+                    if (!selectionValues.includes(uuid)) {
+                        selectionValues.push(uuid);
+                    }
+                });
+            }
+
+            subscriptionPurchaseSelections.servers = new Set(selectionValues);
         }
 
         function ensurePurchaseDevicesSelection(config) {
@@ -12069,7 +12099,10 @@
             }
 
             const config = getSubscriptionPurchaseServersConfig(period);
+            const currency = getSubscriptionPurchaseCurrency();
             const options = ensureArray(config?.options || config?.available || []);
+            const normalizedOptions = options.map(option => normalizePurchaseServerOption(option, currency)).filter(Boolean);
+            const availableOptions = normalizedOptions.filter(option => option.isAvailable);
             const selection = subscriptionPurchaseSelections.servers instanceof Set
                 ? new Set(subscriptionPurchaseSelections.servers)
                 : new Set();
@@ -12078,10 +12111,7 @@
 
             const minSelectable = coercePositiveInt(config?.min ?? config?.min_selectable ?? config?.minRequired, 0) || 0;
             const maxSelectable = coercePositiveInt(config?.max ?? config?.max_selectable ?? config?.maxAllowed, 0) || 0;
-            const selectable = config?.selectable !== false && options.length > 1;
-
-            const currency = getSubscriptionPurchaseCurrency();
-            const normalizedOptions = options.map(option => normalizePurchaseServerOption(option, currency)).filter(Boolean);
+            const selectable = config?.selectable !== false && availableOptions.length > 1;
 
             if (!normalizedOptions.length) {
                 emptyElement?.classList.remove('hidden');
@@ -12099,7 +12129,9 @@
             emptyElement?.classList.add('hidden');
 
             if (!selectable) {
-                const selected = normalizedOptions.find(option => selection.has(option.uuid)) || normalizedOptions[0];
+                const selected = normalizedOptions.find(option => selection.has(option.uuid))
+                    || availableOptions[0]
+                    || normalizedOptions[0];
                 selection.clear();
                 if (selected?.uuid) {
                     selection.add(selected.uuid);
@@ -12192,8 +12224,10 @@
 
             if (metaElement) {
                 let metaText = '';
-                if (maxSelectable && maxSelectable !== minSelectable) {
-                    metaText = t('subscription_purchase.servers.limit').replace('{count}', String(maxSelectable));
+                if (maxSelectable && minSelectable && maxSelectable === minSelectable) {
+                    metaText = t('subscription_purchase.servers.limit_exact').replace('{count}', String(maxSelectable));
+                } else if (maxSelectable) {
+                    metaText = t('subscription_purchase.servers.limit_max').replace('{count}', String(maxSelectable));
                 } else if (selectedCount) {
                     metaText = t('subscription_purchase.servers.selected').replace('{count}', String(selectedCount));
                 }
@@ -12206,7 +12240,7 @@
                     hintParts.push(config.hint);
                 }
                 if (!config?.hint && minSelectable > 0) {
-                    hintParts.push(t('subscription_purchase.servers.limit').replace('{count}', String(minSelectable)));
+                    hintParts.push(t('subscription_purchase.servers.limit_min').replace('{count}', String(minSelectable)));
                 }
                 const hintText = hintParts.join(' ');
                 hintElement.textContent = hintText;
@@ -12392,6 +12426,7 @@
 
         function requestSubscriptionPurchasePreviewUpdate(options = {}) {
             const { delay = 250 } = options;
+            subscriptionPurchasePreviewRefreshQueued = true;
             if (subscriptionPurchasePreviewUpdateHandle) {
                 clearTimeout(subscriptionPurchasePreviewUpdateHandle);
             }
@@ -12414,30 +12449,46 @@
             }
 
             if (!shouldShowPurchaseConfigurator()) {
+                subscriptionPurchasePreviewRefreshQueued = false;
                 return null;
             }
 
             if (!subscriptionPurchaseData) {
+                subscriptionPurchasePreviewRefreshQueued = false;
                 return null;
             }
 
             const initData = tg.initData || '';
             if (!initData) {
+                subscriptionPurchasePreviewRefreshQueued = false;
                 return null;
             }
 
             if (subscriptionPurchasePreviewLoading && !force) {
-                return subscriptionPurchasePreviewPromise || Promise.resolve(subscriptionPurchasePreview);
+                if (!subscriptionPurchasePreviewRefreshPromise) {
+                    const pending = subscriptionPurchasePreviewPromise || Promise.resolve(subscriptionPurchasePreview);
+                    subscriptionPurchasePreviewRefreshPromise = pending.finally(() => {
+                        subscriptionPurchasePreviewRefreshPromise = null;
+                        if (subscriptionPurchasePreviewRefreshQueued) {
+                            updateSubscriptionPurchasePreview({ immediate: true, force: true });
+                        }
+                    });
+                }
+                return subscriptionPurchasePreviewPromise || subscriptionPurchasePreviewRefreshPromise;
             }
+
+            subscriptionPurchasePreviewRefreshQueued = false;
 
             const period = getSelectedSubscriptionPurchasePeriod();
             if (!period) {
+                subscriptionPurchasePreviewRefreshQueued = false;
                 return null;
             }
 
             ensureSubscriptionPurchaseSelectionsValidForPeriod(period);
             const selection = buildSubscriptionPurchaseSelectionPayload(period);
             if (!selection.period_id && !selection.periodId) {
+                subscriptionPurchasePreviewRefreshQueued = false;
                 return null;
             }
 
