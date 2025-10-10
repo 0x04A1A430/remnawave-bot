@@ -152,6 +152,7 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionRenewalPeriod,
     MiniAppSubscriptionRenewalRequest,
     MiniAppSubscriptionRenewalResponse,
+    MiniAppEmptyState,
 )
 
 
@@ -1739,6 +1740,7 @@ def _status_label(status: str) -> str:
         "trial": "Trial",
         "expired": "Expired",
         "disabled": "Disabled",
+        "none": "No subscription",
     }
     return mapping.get(status, status.title())
 
@@ -2085,35 +2087,44 @@ async def get_subscription_details(
 
     user = await get_user_by_telegram_id(db, telegram_id)
     purchase_url = (settings.MINIAPP_PURCHASE_URL or "").strip()
-    if not user or not user.subscription:
-        detail: Union[str, Dict[str, str]] = "Subscription not found"
+    if not user:
+        detail: Dict[str, str] = {
+            "code": "user_not_found",
+            "message": "User is not registered in the bot",
+        }
         if purchase_url:
-            detail = {
-                "message": "Subscription not found",
-                "purchase_url": purchase_url,
-            }
+            detail["purchase_url"] = purchase_url
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=detail,
         )
 
-    subscription = user.subscription
-    traffic_used = _format_gb(subscription.traffic_used_gb)
-    traffic_limit = subscription.traffic_limit_gb or 0
+    subscription: Optional[Subscription] = getattr(user, "subscription", None)
+    status_actual = subscription.actual_status if subscription else "none"
+    has_active_subscription = status_actual in {"active", "trial"}
+
+    traffic_used = _format_gb(subscription.traffic_used_gb) if subscription else 0.0
+    traffic_limit_value = subscription.traffic_limit_gb if subscription else None
     lifetime_used = _bytes_to_gb(getattr(user, "lifetime_used_traffic_bytes", 0))
 
-    status_actual = subscription.actual_status
-    links_payload = await _load_subscription_links(subscription)
+    links_payload: Dict[str, Any] = {}
+    if subscription:
+        links_payload = await _load_subscription_links(subscription)
 
-    subscription_url = links_payload.get("subscription_url") or subscription.subscription_url
-    subscription_crypto_link = (
-        links_payload.get("happ_crypto_link")
-        or subscription.subscription_crypto_link
-    )
+    subscription_url = links_payload.get("subscription_url") if subscription else None
+    if not subscription_url and subscription:
+        subscription_url = subscription.subscription_url
+
+    subscription_crypto_link = links_payload.get("happ_crypto_link") if subscription else None
+    if not subscription_crypto_link and subscription:
+        subscription_crypto_link = subscription.subscription_crypto_link
 
     happ_redirect_link = get_happ_cryptolink_redirect_link(subscription_crypto_link)
 
-    connected_squads: List[str] = list(subscription.connected_squads or [])
+    connected_squads: List[str] = []
+    if subscription and subscription.connected_squads:
+        connected_squads = list(subscription.connected_squads)
+
     connected_servers = await _resolve_connected_servers(db, connected_squads)
     devices_count, devices = await _load_devices_info(user)
     links: List[str] = links_payload.get("links") or connected_squads
@@ -2312,6 +2323,21 @@ async def get_subscription_details(
             updated_at=getattr(service_rules, "updated_at", None),
         )
 
+    subscription_status = subscription.status if subscription else "none"
+    expires_at = subscription.end_date if subscription else None
+    device_limit = subscription.device_limit if subscription else None
+    traffic_limit_label = (
+        _format_limit_label(traffic_limit_value)
+        if subscription and traffic_limit_value is not None
+        else "—"
+    )
+    traffic_limit_gb = traffic_limit_value if subscription else None
+    traffic_used_label = (
+        _format_gb_label(traffic_used)
+        if subscription
+        else "0 GB"
+    )
+
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
         username=user.username,
@@ -2327,17 +2353,17 @@ async def get_subscription_details(
         ),
         language=user.language,
         status=user.status,
-        subscription_status=subscription.status,
+        subscription_status=subscription_status,
         subscription_actual_status=status_actual,
         status_label=_status_label(status_actual),
-        expires_at=subscription.end_date,
-        device_limit=subscription.device_limit,
+        expires_at=expires_at,
+        device_limit=device_limit,
         traffic_used_gb=round(traffic_used, 2),
-        traffic_used_label=_format_gb_label(traffic_used),
-        traffic_limit_gb=traffic_limit,
-        traffic_limit_label=_format_limit_label(traffic_limit),
+        traffic_used_label=traffic_used_label,
+        traffic_limit_gb=traffic_limit_gb,
+        traffic_limit_label=traffic_limit_label,
         lifetime_used_traffic_gb=lifetime_used,
-        has_active_subscription=status_actual in {"active", "trial"},
+        has_active_subscription=has_active_subscription,
         promo_offer_discount_percent=active_discount_percent,
         promo_offer_discount_expires_at=active_discount_expires_at,
         promo_offer_discount_source=promo_offer_source,
@@ -2345,9 +2371,31 @@ async def get_subscription_details(
 
     referral_info = await _build_referral_info(db, user)
 
+    trial_available = not getattr(user, "has_had_paid_subscription", False)
+    empty_state_payload: Optional[MiniAppEmptyState] = None
+    if not has_active_subscription:
+        empty_state_payload = MiniAppEmptyState(
+            code="no_subscription",
+            title="Subscription not found",
+            message="Purchase a plan or activate a trial in the bot.",
+            purchase_url=purchase_url or None,
+            trial_available=trial_available,
+        )
+
+    subscription_id_value = subscription.id if subscription else None
+    remnawave_short_uuid = subscription.remnawave_short_uuid if subscription else None
+    subscription_type_value = (
+        "trial"
+        if subscription and subscription.is_trial
+        else ("paid" if has_active_subscription else "none")
+    )
+    autopay_enabled_value = bool(subscription.autopay_enabled) if subscription else False
+
     return MiniAppSubscriptionResponse(
-        subscription_id=subscription.id,
-        remnawave_short_uuid=subscription.remnawave_short_uuid,
+        success=has_active_subscription,
+        state="subscription" if has_active_subscription else "no_subscription",
+        subscription_id=subscription_id_value,
+        remnawave_short_uuid=remnawave_short_uuid,
         user=response_user,
         subscription_url=subscription_url,
         subscription_crypto_link=subscription_crypto_link,
@@ -2358,9 +2406,9 @@ async def get_subscription_details(
         connected_servers=connected_servers,
         connected_devices_count=devices_count,
         connected_devices=devices,
-        happ=links_payload.get("happ"),
-        happ_link=links_payload.get("happ_link"),
-        happ_crypto_link=links_payload.get("happ_crypto_link"),
+        happ=links_payload.get("happ") if subscription else None,
+        happ_link=links_payload.get("happ_link") if subscription else None,
+        happ_crypto_link=links_payload.get("happ_crypto_link") if subscription else None,
         happ_cryptolink_redirect_link=happ_redirect_link,
         balance_kopeks=user.balance_kopeks,
         balance_rubles=round(user.balance_rubles, 2),
@@ -2380,12 +2428,13 @@ async def get_subscription_details(
         total_spent_kopeks=total_spent_kopeks,
         total_spent_rubles=round(total_spent_kopeks / 100, 2),
         total_spent_label=settings.format_price(total_spent_kopeks),
-        subscription_type="trial" if subscription.is_trial else "paid",
-        autopay_enabled=bool(subscription.autopay_enabled),
+        subscription_type=subscription_type_value,
+        autopay_enabled=autopay_enabled_value,
         branding=settings.get_miniapp_branding(),
         faq=faq_payload,
         legal_documents=legal_documents_payload,
         referral=referral_info,
+        empty_state=empty_state_payload,
     )
 
 
