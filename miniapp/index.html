@@ -331,6 +331,31 @@
             min-width: 220px;
         }
 
+        .register-callout {
+            margin-top: 24px;
+            padding: 20px;
+            border-radius: var(--radius-xl);
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.12), rgba(var(--primary-rgb), 0.04));
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+            text-align: center;
+        }
+
+        .register-callout-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .register-callout-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
         /* Cards */
         .card {
             background: var(--bg-secondary);
@@ -344,6 +369,44 @@
         .card:hover {
             box-shadow: var(--shadow-md);
             transform: translateY(-2px);
+        }
+
+        .no-subscription-card {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding: 20px;
+            border: 1px solid rgba(var(--primary-rgb), 0.18);
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.1), rgba(var(--primary-rgb), 0.02));
+        }
+
+        .no-subscription-icon {
+            font-size: 32px;
+            line-height: 1;
+        }
+
+        .no-subscription-content {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .no-subscription-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .no-subscription-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .no-subscription-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
         .card-header {
@@ -704,6 +767,16 @@
         :root[data-theme="dark"] .subscription-settings-chip {
             background: rgba(var(--primary-rgb), 0.22);
             color: #fff;
+        }
+
+        :root[data-theme="dark"] .register-callout {
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.2), rgba(var(--primary-rgb), 0.08));
+            box-shadow: var(--shadow-md);
+        }
+
+        :root[data-theme="dark"] .no-subscription-card {
+            border-color: rgba(var(--primary-rgb), 0.32);
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.28), rgba(var(--primary-rgb), 0.1));
         }
 
         .subscription-purchase-card {
@@ -4213,6 +4286,11 @@
             <div class="error-icon">⚠️</div>
             <div class="error-title" id="errorTitle" data-i18n="error.default.title">Subscription Not Found</div>
             <div class="error-text" id="errorText" data-i18n="error.default.message">Please contact support to activate your subscription</div>
+            <div class="register-callout hidden" id="registerCallout">
+                <div class="register-callout-title" data-i18n="register.callout.title">Register in the bot</div>
+                <div class="register-callout-text" data-i18n="register.callout.text">Open the Telegram bot to finish setting up your account before purchasing a subscription.</div>
+                <button class="btn btn-primary" type="button" id="openBotBtn" data-i18n="register.callout.action">Open bot</button>
+            </div>
             <div class="error-actions">
                 <button
                     id="purchaseBtn"
@@ -4227,6 +4305,17 @@
         <div id="mainContent" class="hidden">
             <!-- Promo Offers -->
             <div id="promoOffersContainer" class="promo-offers hidden"></div>
+
+            <div class="card no-subscription-card hidden" id="noSubscriptionCard">
+                <div class="no-subscription-icon" aria-hidden="true">🛡️</div>
+                <div class="no-subscription-content">
+                    <div class="no-subscription-title" data-i18n="no_subscription.title">No active subscription</div>
+                    <div class="no-subscription-text" data-i18n="no_subscription.subtitle">Purchase a VPN plan to start using the service.</div>
+                    <div class="no-subscription-actions">
+                        <button class="btn btn-primary" type="button" id="noSubscriptionPurchaseBtn" data-i18n="no_subscription.action">Buy subscription</button>
+                    </div>
+                </div>
+            </div>
 
             <!-- User Card -->
             <div class="card user-card animate-in">
@@ -4972,6 +5061,8 @@
                 'app.loading': 'Loading your subscription...',
                 'error.default.title': 'Subscription Not Found',
                 'error.default.message': 'Please contact support to activate your subscription.',
+                'error.user_not_registered.title': 'Registration required',
+                'error.user_not_registered.message': 'Please open the Telegram bot and register to continue.',
                 'stats.days_left': 'Days left',
                 'stats.servers': 'Servers',
                 'stats.devices': 'Devices',
@@ -4985,6 +5076,12 @@
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
+                'register.callout.title': 'Register in the bot',
+                'register.callout.text': 'Open the Telegram bot to finish setting up your account before purchasing a subscription.',
+                'register.callout.action': 'Open bot',
+                'no_subscription.title': 'No active subscription',
+                'no_subscription.subtitle': 'Purchase a VPN plan to start using the service.',
+                'no_subscription.action': 'Buy subscription',
                 'button.topup_balance': 'Top up balance',
                 'topup.title': 'Top up balance',
                 'topup.subtitle': 'Choose a payment method',
@@ -5280,9 +5377,11 @@
                 'status.trial': 'Trial',
                 'status.expired': 'Expired',
                 'status.disabled': 'Disabled',
+                'status.inactive': 'Inactive',
                 'status.unknown': 'Unknown',
                 'subscription.type.trial': 'Trial',
                 'subscription.type.paid': 'Paid',
+                'subscription.type.none': 'Not active',
                 'autopay.enabled': 'Enabled',
                 'autopay.disabled': 'Disabled',
                 'platform.ios': 'iOS',
@@ -5327,6 +5426,8 @@
                 'app.loading': 'Загружаем вашу подписку...',
                 'error.default.title': 'Подписка не найдена',
                 'error.default.message': 'Свяжитесь с поддержкой, чтобы активировать подписку.',
+                'error.user_not_registered.title': 'Нужна регистрация',
+                'error.user_not_registered.message': 'Откройте Telegram-бота и завершите регистрацию, чтобы продолжить.',
                 'stats.days_left': 'Осталось дней',
                 'stats.servers': 'Серверы',
                 'stats.devices': 'Устройства',
@@ -5340,6 +5441,12 @@
                 'button.connect.default': 'Подключиться к VPN',
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
+                'register.callout.title': 'Зарегистрируйтесь в боте',
+                'register.callout.text': 'Откройте Telegram-бота, чтобы завершить регистрацию перед покупкой подписки.',
+                'register.callout.action': 'Открыть бота',
+                'no_subscription.title': 'Подписка не активирована',
+                'no_subscription.subtitle': 'Купите подписку, чтобы начать пользоваться VPN.',
+                'no_subscription.action': 'Купить подписку',
                 'button.topup_balance': 'Пополнить баланс',
                 'topup.title': 'Пополнение баланса',
                 'topup.subtitle': 'Выберите способ оплаты',
@@ -5635,9 +5742,11 @@
                 'status.trial': 'Пробная',
                 'status.expired': 'Истекла',
                 'status.disabled': 'Отключена',
+                'status.inactive': 'Неактивна',
                 'status.unknown': 'Неизвестно',
                 'subscription.type.trial': 'Триал',
                 'subscription.type.paid': 'Платная',
+                'subscription.type.none': 'Нет подписки',
                 'autopay.enabled': 'Включен',
                 'autopay.disabled': 'Выключен',
                 'platform.ios': 'iOS',
@@ -6480,16 +6589,47 @@
             if (!titleElement || !textElement) {
                 return;
             }
-            const title = currentErrorState?.title || t('error.default.title');
-            const message = currentErrorState?.message || t('error.default.message');
+
+            let title = currentErrorState?.title || t('error.default.title');
+            let message = currentErrorState?.message || t('error.default.message');
+            const isRegistrationError = currentErrorState?.code === 'user_not_registered';
+            if (isRegistrationError) {
+                const titleKey = 'error.user_not_registered.title';
+                const messageKey = 'error.user_not_registered.message';
+                const translatedTitle = t(titleKey);
+                const translatedMessage = t(messageKey);
+                if (translatedTitle && translatedTitle !== titleKey) {
+                    title = translatedTitle;
+                }
+                if (translatedMessage && translatedMessage !== messageKey) {
+                    message = translatedMessage;
+                }
+            }
             titleElement.textContent = title;
             textElement.textContent = message;
+
+            const registerCallout = document.getElementById('registerCallout');
+            const botButton = document.getElementById('openBotBtn');
+            const normalizedBotUrl = normalizeUrl(currentErrorState?.botUrl);
+            if (registerCallout) {
+                registerCallout.classList.toggle('hidden', !isRegistrationError);
+            }
+            if (botButton) {
+                const hasLink = Boolean(isRegistrationError && normalizedBotUrl);
+                if (hasLink) {
+                    botButton.dataset.botUrl = normalizedBotUrl;
+                } else {
+                    delete botButton.dataset.botUrl;
+                }
+                botButton.disabled = !hasLink;
+            }
 
             const purchaseButton = document.getElementById('purchaseBtn');
             if (purchaseButton) {
                 const link = getEffectivePurchaseUrl();
-                purchaseButton.classList.toggle('hidden', !link);
-                purchaseButton.disabled = !link;
+                const shouldHide = !link || isRegistrationError;
+                purchaseButton.classList.toggle('hidden', shouldHide);
+                purchaseButton.disabled = shouldHide;
             }
         }
 
@@ -6622,6 +6762,8 @@
                 : 'Subscription not found';
             let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
             let purchaseUrl = null;
+            let errorCode = null;
+            let botUrl = null;
 
             try {
                 const errorPayload = await response.json();
@@ -6632,9 +6774,16 @@
                         if (typeof errorPayload.detail.message === 'string') {
                             detail = errorPayload.detail.message;
                         }
+                        if (typeof errorPayload.detail.code === 'string') {
+                            errorCode = errorPayload.detail.code;
+                        }
                         purchaseUrl = errorPayload.detail.purchase_url
                             || errorPayload.detail.purchaseUrl
                             || purchaseUrl;
+                        botUrl = botUrl
+                            || errorPayload.detail.bot_url
+                            || errorPayload.detail.botUrl
+                            || botUrl;
                     }
                 } else if (typeof errorPayload?.message === 'string') {
                     detail = errorPayload.message;
@@ -6648,6 +6797,11 @@
                     || errorPayload?.purchase_url
                     || errorPayload?.purchaseUrl
                     || null;
+                errorCode = errorCode || (typeof errorPayload?.code === 'string' ? errorPayload.code : errorCode);
+                botUrl = botUrl
+                    || errorPayload?.bot_url
+                    || errorPayload?.botUrl
+                    || botUrl;
             } catch (parseError) {
                 // ignore JSON parsing errors
             }
@@ -6656,6 +6810,13 @@
             const normalizedPurchaseUrl = normalizeUrl(purchaseUrl);
             if (normalizedPurchaseUrl) {
                 errorObject.purchaseUrl = normalizedPurchaseUrl;
+            }
+            if (typeof errorCode === 'string' && errorCode) {
+                errorObject.code = errorCode;
+            }
+            const normalizedBotUrl = normalizeUrl(botUrl);
+            if (normalizedBotUrl) {
+                errorObject.botUrl = normalizedBotUrl;
             }
             throw errorObject;
         }
@@ -6669,6 +6830,15 @@
             userData.subscriptionUrl = userData.subscription_url || null;
             userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
             userData.referral = userData.referral || null;
+
+            const rawSubscriptionId = userData.subscription_id ?? userData.subscriptionId;
+            if (rawSubscriptionId !== undefined && rawSubscriptionId !== null) {
+                const normalizedId = Number(rawSubscriptionId);
+                if (!Number.isFinite(normalizedId) || normalizedId <= 0) {
+                    userData.subscription_id = null;
+                    userData.subscriptionId = null;
+                }
+            }
 
             resetSubscriptionRenewalState(null);
             prepareSubscriptionRenewalFromUserData();
@@ -6790,6 +6960,16 @@
             }
 
             const user = userData.user;
+            const hasActiveSubscription = Boolean(user?.has_active_subscription);
+            const userCardElement = document.querySelector('.user-card');
+            if (userCardElement) {
+                userCardElement.classList.toggle('hidden', !hasActiveSubscription);
+            }
+            const noSubscriptionCard = document.getElementById('noSubscriptionCard');
+            if (noSubscriptionCard) {
+                noSubscriptionCard.classList.toggle('hidden', hasActiveSubscription);
+            }
+
             const rawName = user.display_name || user.username || '';
             const fallbackName = rawName
                 || [user.first_name, user.last_name].filter(Boolean).join(' ')
@@ -6799,7 +6979,7 @@
             document.getElementById('userAvatar').textContent = avatarChar;
             document.getElementById('userName').textContent = fallbackName;
 
-            const knownStatuses = ['active', 'trial', 'expired', 'disabled'];
+            const knownStatuses = ['active', 'trial', 'expired', 'disabled', 'inactive'];
             const statusValueRaw = (user.subscription_actual_status || user.subscription_status || 'active').toLowerCase();
             const statusClass = knownStatuses.includes(statusValueRaw) ? statusValueRaw : 'unknown';
             const statusBadge = document.getElementById('statusBadge');
@@ -15280,6 +15460,8 @@
                 title: error?.title,
                 message: error?.message,
                 purchaseUrl: normalizeUrl(error?.purchaseUrl) || null,
+                code: error?.code || null,
+                botUrl: normalizeUrl(error?.botUrl) || null,
             };
             updateErrorTexts();
             document.getElementById('errorState').classList.remove('hidden');
@@ -15300,10 +15482,35 @@
             openExternalLink(link);
         });
 
+        const openBotBtn = document.getElementById('openBotBtn');
+        if (openBotBtn) {
+            openBotBtn.addEventListener('click', () => {
+                const url = openBotBtn.dataset.botUrl || currentErrorState?.botUrl;
+                const normalized = normalizeUrl(url);
+                if (normalized) {
+                    openExternalLink(normalized);
+                }
+            });
+        }
+
         const topupButton = document.getElementById('topupBalanceBtn');
         if (topupButton) {
             topupButton.addEventListener('click', () => {
                 openTopupModal();
+            });
+        }
+
+        const noSubscriptionPurchaseBtn = document.getElementById('noSubscriptionPurchaseBtn');
+        if (noSubscriptionPurchaseBtn) {
+            noSubscriptionPurchaseBtn.addEventListener('click', () => {
+                if (shouldShowPurchaseConfigurator()) {
+                    openSubscriptionPurchaseModal();
+                    return;
+                }
+                const link = getEffectivePurchaseUrl();
+                if (link) {
+                    openExternalLink(link);
+                }
             });
         }
 
