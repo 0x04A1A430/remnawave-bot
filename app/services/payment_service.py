@@ -2,7 +2,7 @@ import logging
 import hashlib
 import hmac
 import uuid
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_FLOOR
 from typing import Optional, Dict, Any
 from datetime import datetime
 from aiogram import Bot
@@ -106,16 +106,32 @@ class PaymentService:
         self,
         amount_kopeks: int,
         description: str,
-        payload: Optional[str] = None
+        payload: Optional[str] = None,
+        *,
+        stars_amount: Optional[int] = None,
     ) -> str:
-        
+
         if not self.bot or not self.stars_service:
             raise ValueError("Bot instance required for Stars payments")
-        
+
         try:
             amount_rubles = Decimal(amount_kopeks) / Decimal(100)
-            stars_amount = TelegramStarsService.calculate_stars_from_rubles(float(amount_rubles))
-            
+
+            if stars_amount is None:
+                rate = Decimal(str(settings.get_stars_rate()))
+                if rate <= 0:
+                    raise ValueError("Stars rate must be positive")
+
+                normalized_stars = (amount_rubles / rate).to_integral_value(
+                    rounding=ROUND_FLOOR
+                )
+                stars_amount = int(normalized_stars)
+                if stars_amount <= 0:
+                    stars_amount = 1
+
+            if stars_amount <= 0:
+                raise ValueError("Stars amount must be positive")
+
             invoice_link = await self.bot.create_invoice_link(
                 title="Пополнение баланса VPN",
                 description=f"{description} (≈{stars_amount} ⭐)",
@@ -828,6 +844,7 @@ class PaymentService:
         language: str,
         ttl_seconds: Optional[int] = None,
         payer_email: Optional[str] = None,
+        payment_method: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
 
         if not self.pal24_service or not self.pal24_service.is_configured:
@@ -858,6 +875,8 @@ class PaymentService:
             "language": language,
         }
 
+        normalized_payment_method = (payment_method or "SBP").upper()
+
         try:
             response = await self.pal24_service.create_bill(
                 amount_kopeks=amount_kopeks,
@@ -867,7 +886,7 @@ class PaymentService:
                 ttl_seconds=ttl_seconds,
                 custom_payload=custom_payload,
                 payer_email=payer_email,
-                payment_method="SBP",
+                payment_method=normalized_payment_method,
             )
         except Pal24APIError as error:
             logger.error("Ошибка Pal24 API при создании счета: %s", error)
@@ -962,6 +981,7 @@ class PaymentService:
             "sbp_url": transfer_url or primary_link,
             "card_url": card_url,
             "transfer_url": transfer_url,
+            "payment_method": normalized_payment_method,
         }
 
         logger.info(
