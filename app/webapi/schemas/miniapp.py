@@ -253,6 +253,72 @@ class MiniAppReferralInfo(BaseModel):
     referrals: Optional[MiniAppReferralList] = None
 
 
+class MiniAppPaymentMethodsRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+
+
+class MiniAppPaymentMethod(BaseModel):
+    id: str
+    icon: Optional[str] = None
+    requires_amount: bool = False
+    currency: str = "RUB"
+    min_amount_kopeks: Optional[int] = None
+    max_amount_kopeks: Optional[int] = None
+    amount_step_kopeks: Optional[int] = None
+
+
+class MiniAppPaymentMethodsResponse(BaseModel):
+    methods: List[MiniAppPaymentMethod] = Field(default_factory=list)
+
+
+class MiniAppPaymentCreateRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    method: str
+    amount_rubles: Optional[float] = Field(default=None, alias="amountRubles")
+    amount_kopeks: Optional[int] = Field(default=None, alias="amountKopeks")
+    payment_option: Optional[str] = Field(default=None, alias="option")
+
+
+class MiniAppPaymentCreateResponse(BaseModel):
+    success: bool = True
+    method: str
+    payment_url: Optional[str] = None
+    amount_kopeks: Optional[int] = None
+    extra: Dict[str, Any] = Field(default_factory=dict)
+
+
+class MiniAppPaymentStatusQuery(BaseModel):
+    method: str
+    local_payment_id: Optional[int] = Field(default=None, alias="localPaymentId")
+    invoice_id: Optional[str] = Field(default=None, alias="invoiceId")
+    payment_id: Optional[str] = Field(default=None, alias="paymentId")
+    payload: Optional[str] = None
+    amount_kopeks: Optional[int] = Field(default=None, alias="amountKopeks")
+    started_at: Optional[str] = Field(default=None, alias="startedAt")
+
+
+class MiniAppPaymentStatusRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    payments: List[MiniAppPaymentStatusQuery] = Field(default_factory=list)
+
+
+class MiniAppPaymentStatusResult(BaseModel):
+    method: str
+    status: str
+    is_paid: bool = False
+    amount_kopeks: Optional[int] = None
+    currency: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    transaction_id: Optional[int] = None
+    external_id: Optional[str] = None
+    message: Optional[str] = None
+    extra: Dict[str, Any] = Field(default_factory=dict)
+
+
+class MiniAppPaymentStatusResponse(BaseModel):
+    results: List[MiniAppPaymentStatusResult] = Field(default_factory=list)
+
+
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: int
