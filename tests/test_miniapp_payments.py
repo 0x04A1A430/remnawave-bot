@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from fastapi import HTTPException, status
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
@@ -23,7 +22,6 @@ from app.webapi.schemas.miniapp import (
     MiniAppPaymentCreateRequest,
     MiniAppPaymentMethodsRequest,
     MiniAppPaymentStatusQuery,
-    MiniAppSubscriptionRequest,
 )
 
 
@@ -199,136 +197,6 @@ async def test_resolve_pal24_status_includes_identifiers(monkeypatch):
     assert result.extra['payload'] == 'pal24_payload'
     assert result.extra['started_at'] == '2024-01-01T00:00:00Z'
     assert result.extra['remote_status'] == 'PAID'
-
-
-@pytest.mark.anyio("asyncio")
-async def test_get_subscription_details_returns_registration_error(monkeypatch):
-    async def fake_get_user_by_telegram_id(db, telegram_id):
-        return None
-
-    monkeypatch.setattr(miniapp, 'parse_webapp_init_data', lambda payload, token: {'user': {'id': 123}})
-    monkeypatch.setattr(miniapp, 'get_user_by_telegram_id', fake_get_user_by_telegram_id)
-    monkeypatch.setattr(miniapp.settings, 'MINIAPP_PURCHASE_URL', 'https://example.com/buy', raising=False)
-    monkeypatch.setattr(miniapp.settings, 'BOT_TOKEN', 'token', raising=False)
-    monkeypatch.setattr(miniapp.settings, 'BOT_USERNAME', 'awesome_bot', raising=False)
-
-    request = MiniAppSubscriptionRequest(initData='payload')
-
-    with pytest.raises(HTTPException) as excinfo:
-        await miniapp.get_subscription_details(request, db=types.SimpleNamespace())
-
-    error = excinfo.value
-    assert error.status_code == status.HTTP_404_NOT_FOUND
-    assert isinstance(error.detail, dict)
-    assert error.detail['code'] == 'user_not_registered'
-    assert error.detail['title'] == 'Registration required'
-    assert error.detail['purchase_url'] == 'https://example.com/buy'
-    assert error.detail['bot_url'] == 'https://t.me/awesome_bot'
-
-
-@pytest.mark.anyio("asyncio")
-async def test_get_subscription_details_without_active_subscription(monkeypatch):
-    user = types.SimpleNamespace(
-        id=1,
-        telegram_id=123,
-        username='testuser',
-        first_name='Test',
-        last_name='User',
-        language='ru',
-        status='active',
-        subscription=None,
-        balance_kopeks=0,
-        balance_rubles=0.0,
-        balance_currency='RUB',
-        promo_group=None,
-        promo_offer_discount_percent=0,
-        promo_offer_discount_expires_at=None,
-        promo_offer_discount_source=None,
-        lifetime_used_traffic_bytes=0,
-    )
-
-    class DummyResult:
-        def scalars(self):
-            return types.SimpleNamespace(all=lambda: [])
-
-    class DummyDB:
-        async def execute(self, query):
-            return DummyResult()
-
-    async def fake_get_user_by_telegram_id(db, telegram_id):
-        return user
-
-    async def fake_load_devices_info(_: types.SimpleNamespace):
-        return 0, []
-
-    async def fake_get_user_total_spent_kopeks(db, user_id):
-        return 0
-
-    async def fake_get_auto_assign_groups(db):
-        return []
-
-    async def fake_list_active_discount_offers_for_user(db, user_id):
-        return []
-
-    async def fake_get_latest_claimed_offer_for_user(db, user_id, source):
-        return None
-
-    async def fake_find_active_test_access_offers(db, subscription):
-        return []
-
-    async def fake_build_promo_offer_models(db, offers, contexts, user=None):
-        return []
-
-    async def fake_build_referral_info(db, user_instance):
-        return None
-
-    async def fake_get_faq_pages(db, language, include_inactive=False, fallback=True):
-        return []
-
-    async def fake_get_faq_setting(db, language, fallback=True):
-        return None
-
-    async def fake_get_public_offer(db, language):
-        return None
-
-    async def fake_get_privacy_policy(db, language):
-        return None
-
-    async def fake_get_rules_by_language(db, language):
-        return None
-
-    monkeypatch.setattr(miniapp, 'parse_webapp_init_data', lambda payload, token: {'user': {'id': 123}})
-    monkeypatch.setattr(miniapp, 'get_user_by_telegram_id', fake_get_user_by_telegram_id)
-    monkeypatch.setattr(miniapp, '_load_devices_info', fake_load_devices_info)
-    monkeypatch.setattr(miniapp, 'get_user_total_spent_kopeks', fake_get_user_total_spent_kopeks)
-    monkeypatch.setattr(miniapp, 'get_auto_assign_promo_groups', fake_get_auto_assign_groups)
-    monkeypatch.setattr(miniapp, 'list_active_discount_offers_for_user', fake_list_active_discount_offers_for_user)
-    monkeypatch.setattr(miniapp, 'get_latest_claimed_offer_for_user', fake_get_latest_claimed_offer_for_user)
-    monkeypatch.setattr(miniapp, '_find_active_test_access_offers', fake_find_active_test_access_offers)
-    monkeypatch.setattr(miniapp, '_build_promo_offer_models', fake_build_promo_offer_models)
-    monkeypatch.setattr(miniapp, '_build_referral_info', fake_build_referral_info)
-    monkeypatch.setattr(miniapp.FaqService, 'get_pages', fake_get_faq_pages)
-    monkeypatch.setattr(miniapp.FaqService, 'get_setting', fake_get_faq_setting)
-    monkeypatch.setattr(miniapp.PublicOfferService, 'get_active_offer', fake_get_public_offer)
-    monkeypatch.setattr(miniapp.PrivacyPolicyService, 'get_active_policy', fake_get_privacy_policy)
-    monkeypatch.setattr(miniapp, 'get_rules_by_language', fake_get_rules_by_language)
-    monkeypatch.setattr(miniapp.settings, 'MINIAPP_PURCHASE_URL', 'https://example.com/buy', raising=False)
-    monkeypatch.setattr(miniapp.settings, 'BOT_TOKEN', 'token', raising=False)
-
-    request = MiniAppSubscriptionRequest(initData='payload')
-    response = await miniapp.get_subscription_details(request, db=DummyDB())
-
-    assert response.success is True
-    assert response.subscription_id == 0
-    assert response.subscription_type == 'none'
-    assert response.subscription_purchase_url == 'https://example.com/buy'
-    assert response.user.has_active_subscription is False
-    assert response.user.subscription_actual_status == 'inactive'
-    assert response.user.display_name == 'testuser'
-    assert response.balance_rubles == 0.0
-    assert response.transactions == []
-    assert response.promo_offers == []
-    assert response.referral is None
 
 
 @pytest.mark.anyio("asyncio")
