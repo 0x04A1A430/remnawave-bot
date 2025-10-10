@@ -402,6 +402,309 @@
             padding: 0 16px 16px;
         }
 
+        .subscription-settings-card {
+            position: relative;
+        }
+
+        .subscription-settings-summary {
+            margin-left: auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .subscription-settings-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(var(--primary-rgb), 0.12);
+            color: var(--primary);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+
+        .subscription-settings-chip span {
+            color: inherit;
+        }
+
+        .subscription-settings-content {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            padding-top: 12px;
+        }
+
+        .subscription-settings-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .subscription-settings-section:last-child {
+            border-bottom: none;
+        }
+
+        .subscription-settings-section-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .subscription-settings-section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .subscription-settings-section-description {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.45;
+        }
+
+        .subscription-settings-section-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .subscription-settings-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .subscription-settings-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 140px;
+        }
+
+        .subscription-settings-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 12px 14px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 0;
+        }
+
+        .subscription-settings-toggle:hover:not(.disabled) {
+            border-color: rgba(var(--primary-rgb), 0.5);
+            box-shadow: var(--shadow-sm);
+            transform: translateY(-1px);
+        }
+
+        .subscription-settings-toggle.active {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.1), rgba(var(--primary-rgb), 0.02));
+            box-shadow: var(--shadow-sm);
+        }
+
+        .subscription-settings-toggle.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .subscription-settings-toggle-label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .subscription-settings-toggle-title {
+            font-weight: 700;
+            font-size: 14px;
+            color: inherit;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .subscription-settings-toggle-meta {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .subscription-settings-toggle.active .subscription-settings-toggle-meta {
+            color: inherit;
+        }
+
+        .subscription-settings-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .subscription-settings-apply {
+            padding: 12px 18px;
+            border-radius: var(--radius);
+            border: none;
+            background: var(--primary);
+            color: #fff;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+        }
+
+        .subscription-settings-apply:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .subscription-settings-apply:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .subscription-settings-inline-hint {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .subscription-settings-loading {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 8px 0 12px;
+        }
+
+        .subscription-settings-loading-line {
+            height: 12px;
+            border-radius: 999px;
+            background: rgba(var(--primary-rgb), 0.08);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .subscription-settings-loading-line::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(var(--primary-rgb), 0.2), transparent);
+            animation: shimmer 1.5s infinite;
+        }
+
+        .subscription-settings-error {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px 0;
+            color: var(--danger);
+            font-size: 14px;
+        }
+
+        .subscription-settings-retry {
+            align-self: flex-start;
+            padding: 10px 16px;
+            border-radius: var(--radius);
+            border: 1px solid rgba(var(--danger-rgb, 239, 68, 68), 0.4);
+            background: transparent;
+            color: var(--danger);
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
+
+        .subscription-settings-retry:hover {
+            background: rgba(var(--danger-rgb, 239, 68, 68), 0.1);
+            transform: translateY(-1px);
+        }
+
+        .subscription-settings-stepper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .subscription-settings-stepper button {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .subscription-settings-stepper button:hover:not(:disabled) {
+            border-color: rgba(var(--primary-rgb), 0.5);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .subscription-settings-stepper button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .subscription-settings-stepper-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .subscription-settings-price-note {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .subscription-settings-disabled-note {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .subscription-settings-empty {
+            font-size: 13px;
+            color: var(--text-secondary);
+            padding: 6px 0;
+        }
+
+        .subscription-settings-status-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        :root[data-theme="dark"] .subscription-settings-toggle {
+            background: rgba(15, 23, 42, 0.6);
+        }
+
+        :root[data-theme="dark"] .subscription-settings-chip {
+            background: rgba(var(--primary-rgb), 0.22);
+            color: #fff;
+        }
+
         .promo-offers {
             display: flex;
             flex-direction: column;
@@ -3105,6 +3408,88 @@
                 </div>
             </div>
 
+            <!-- Subscription Settings -->
+            <div class="card expandable subscription-settings-card hidden" id="subscriptionSettingsCard">
+                <div class="card-header">
+                    <div class="card-title">
+                        <svg class="card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 110 4 2 2 0 010-4zm6 2a2 2 0 110 4 2 2 0 010-4zM6 8a2 2 0 110 4 2 2 0 010-4zm12 6a2 2 0 110 4 2 2 0 010-4zm-6 2a2 2 0 110 4 2 2 0 010-4zm-6-2a2 2 0 110 4 2 2 0 010-4zm6-4v8"/>
+                        </svg>
+                        <span data-i18n="subscription_settings.title">Настройка подписки</span>
+                    </div>
+                    <div class="subscription-settings-summary" id="subscriptionSettingsSummary"></div>
+                    <svg class="expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </div>
+                <div class="card-content">
+                    <div class="subscription-settings-content" id="subscriptionSettingsContent">
+                        <div class="subscription-settings-loading" id="subscriptionSettingsLoading">
+                            <div class="subscription-settings-loading-line"></div>
+                            <div class="subscription-settings-loading-line" style="width: 70%;"></div>
+                            <div class="subscription-settings-loading-line" style="width: 55%;"></div>
+                        </div>
+                        <div class="subscription-settings-status-text hidden" id="subscriptionSettingsStatus"></div>
+                        <div class="subscription-settings-section" id="subscriptionSettingsServersSection">
+                            <div class="subscription-settings-section-header">
+                                <div>
+                                    <div class="subscription-settings-section-title" data-i18n="subscription_settings.servers.title">Серверы</div>
+                                    <div class="subscription-settings-section-description" data-i18n="subscription_settings.servers.subtitle">Выберите нужные регионы подключения.</div>
+                                </div>
+                                <div class="subscription-settings-section-meta" id="subscriptionSettingsServersMeta"></div>
+                            </div>
+                            <div class="subscription-settings-list" id="subscriptionSettingsServersList"></div>
+                            <div class="subscription-settings-empty hidden" id="subscriptionSettingsServersEmpty" data-i18n="subscription_settings.servers.empty">Нет доступных серверов</div>
+                            <div class="subscription-settings-disabled-note hidden" id="subscriptionSettingsServersDisabled" data-i18n="subscription_settings.section.disabled">Эта опция временно недоступна.</div>
+                            <div class="subscription-settings-actions">
+                                <button class="subscription-settings-apply" id="subscriptionSettingsServersApply" type="button" disabled data-i18n="subscription_settings.servers.manage">Обновить серверы</button>
+                                <div class="subscription-settings-inline-hint" id="subscriptionSettingsServersHint"></div>
+                            </div>
+                        </div>
+                        <div class="subscription-settings-section" id="subscriptionSettingsTrafficSection">
+                            <div class="subscription-settings-section-header">
+                                <div>
+                                    <div class="subscription-settings-section-title" data-i18n="subscription_settings.traffic.title">Трафик</div>
+                                    <div class="subscription-settings-section-description" data-i18n="subscription_settings.traffic.subtitle">Выберите месячный лимит трафика.</div>
+                                </div>
+                                <div class="subscription-settings-section-meta" id="subscriptionSettingsTrafficMeta"></div>
+                            </div>
+                            <div class="subscription-settings-list" id="subscriptionSettingsTrafficList"></div>
+                            <div class="subscription-settings-empty hidden" id="subscriptionSettingsTrafficEmpty" data-i18n="subscription_settings.traffic.empty">Нет вариантов</div>
+                            <div class="subscription-settings-disabled-note hidden" id="subscriptionSettingsTrafficDisabled" data-i18n="subscription_settings.section.disabled">Эта опция временно недоступна.</div>
+                            <div class="subscription-settings-actions">
+                                <button class="subscription-settings-apply" id="subscriptionSettingsTrafficApply" type="button" disabled data-i18n="subscription_settings.traffic.apply">Обновить трафик</button>
+                                <div class="subscription-settings-inline-hint" id="subscriptionSettingsTrafficHint"></div>
+                            </div>
+                        </div>
+                        <div class="subscription-settings-section" id="subscriptionSettingsDevicesSection">
+                            <div class="subscription-settings-section-header">
+                                <div>
+                                    <div class="subscription-settings-section-title" data-i18n="subscription_settings.devices.title">Устройства</div>
+                                    <div class="subscription-settings-section-description" data-i18n="subscription_settings.devices.subtitle">Количество одновременно подключённых устройств.</div>
+                                </div>
+                                <div class="subscription-settings-section-meta" id="subscriptionSettingsDevicesMeta"></div>
+                            </div>
+                            <div class="subscription-settings-stepper">
+                                <button type="button" id="subscriptionSettingsDevicesDecrease">−</button>
+                                <div class="subscription-settings-stepper-value" id="subscriptionSettingsDevicesValue">0</div>
+                                <button type="button" id="subscriptionSettingsDevicesIncrease">+</button>
+                            </div>
+                            <div class="subscription-settings-price-note" id="subscriptionSettingsDevicesPrice"></div>
+                            <div class="subscription-settings-disabled-note hidden" id="subscriptionSettingsDevicesDisabled" data-i18n="subscription_settings.section.disabled">Эта опция временно недоступна.</div>
+                            <div class="subscription-settings-actions">
+                                <button class="subscription-settings-apply" id="subscriptionSettingsDevicesApply" type="button" disabled data-i18n="subscription_settings.devices.apply">Обновить устройства</button>
+                                <div class="subscription-settings-inline-hint" id="subscriptionSettingsDevicesHint"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="subscription-settings-error hidden" id="subscriptionSettingsError">
+                        <div id="subscriptionSettingsErrorText" data-i18n="subscription_settings.status.error">Не удалось загрузить настройки подписки.</div>
+                        <button class="subscription-settings-retry" id="subscriptionSettingsRetry" type="button" data-i18n="subscription_settings.action.retry">Повторить</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Promo Card -->
             <div class="card expandable promo-card hidden" id="promoCard">
                 <div class="card-header">
@@ -3416,6 +3801,8 @@
             });
         });
 
+        setupSubscriptionSettingsEvents();
+
         const themeToggle = document.getElementById('themeToggle');
         const THEME_STORAGE_KEY = 'remnawave-miniapp-theme';
         let currentTheme = 'light';
@@ -3591,6 +3978,42 @@
                 'topup.done': 'Done',
                 'button.buy_subscription': 'Buy Subscription',
                 'card.balance.title': 'Balance',
+                'subscription_settings.title': 'Subscription settings',
+                'subscription_settings.summary.servers': 'Servers: {count}',
+                'subscription_settings.summary.servers_one': 'Server: {count}',
+                'subscription_settings.summary.traffic': 'Traffic: {amount}',
+                'subscription_settings.summary.devices': 'Devices: {count}',
+                'subscription_settings.summary.devices_one': 'Device: {count}',
+                'subscription_settings.summary.unlimited': 'Unlimited',
+                'subscription_settings.status.loading': 'Loading subscription settings…',
+                'subscription_settings.status.error': 'Unable to load subscription settings.',
+                'subscription_settings.action.retry': 'Try again',
+                'subscription_settings.section.disabled': 'This action is temporarily unavailable.',
+                'subscription_settings.servers.title': 'Servers',
+                'subscription_settings.servers.subtitle': 'Choose the regions you need.',
+                'subscription_settings.servers.manage': 'Update servers',
+                'subscription_settings.servers.empty': 'No servers available',
+                'subscription_settings.servers.limit': 'Selected: {count}',
+                'subscription_settings.servers.hint': 'Discounts are applied automatically.',
+                'subscription_settings.traffic.title': 'Traffic',
+                'subscription_settings.traffic.subtitle': 'Select your monthly traffic limit.',
+                'subscription_settings.traffic.apply': 'Update traffic',
+                'subscription_settings.traffic.empty': 'No traffic options available',
+                'subscription_settings.traffic.current': 'Current: {limit}',
+                'subscription_settings.devices.title': 'Devices',
+                'subscription_settings.devices.subtitle': 'Number of simultaneous connections.',
+                'subscription_settings.devices.apply': 'Update devices',
+                'subscription_settings.devices.value': '{count} devices',
+                'subscription_settings.devices.value_one': '{count} device',
+                'subscription_settings.devices.unlimited': 'Unlimited',
+                'subscription_settings.price.included': 'Included',
+                'subscription_settings.success.servers': 'Servers updated successfully.',
+                'subscription_settings.success.traffic': 'Traffic limit updated successfully.',
+                'subscription_settings.success.devices': 'Device limit updated successfully.',
+                'subscription_settings.error.generic': 'Unable to update subscription settings. Please try again later.',
+                'subscription_settings.error.unauthorized': 'Authorization failed. Please reopen the mini app from Telegram.',
+                'subscription_settings.error.validation': 'Please review your selection and try again.',
+                'subscription_settings.pending_action': 'Saving…',
                 'promo_code.title': 'Activate promo code',
                 'promo_code.subtitle': 'Enter a promo code to unlock rewards instantly.',
                 'promo_code.placeholder': 'Enter promo code',
@@ -3818,6 +4241,42 @@
                 'topup.done': 'Готово',
                 'button.buy_subscription': 'Купить подписку',
                 'card.balance.title': 'Баланс',
+                'subscription_settings.title': 'Настройка подписки',
+                'subscription_settings.summary.servers': 'Серверов: {count}',
+                'subscription_settings.summary.servers_one': 'Сервер: {count}',
+                'subscription_settings.summary.traffic': 'Трафик: {amount}',
+                'subscription_settings.summary.devices': 'Устройств: {count}',
+                'subscription_settings.summary.devices_one': 'Устройство: {count}',
+                'subscription_settings.summary.unlimited': 'Безлимит',
+                'subscription_settings.status.loading': 'Загружаем настройки подписки…',
+                'subscription_settings.status.error': 'Не удалось загрузить настройки подписки.',
+                'subscription_settings.action.retry': 'Попробовать снова',
+                'subscription_settings.section.disabled': 'Действие временно недоступно.',
+                'subscription_settings.servers.title': 'Серверы',
+                'subscription_settings.servers.subtitle': 'Выберите нужные регионы подключения.',
+                'subscription_settings.servers.manage': 'Обновить серверы',
+                'subscription_settings.servers.empty': 'Нет доступных серверов',
+                'subscription_settings.servers.limit': 'Выбрано: {count}',
+                'subscription_settings.servers.hint': 'Скидки применяются автоматически.',
+                'subscription_settings.traffic.title': 'Трафик',
+                'subscription_settings.traffic.subtitle': 'Выберите месячный лимит трафика.',
+                'subscription_settings.traffic.apply': 'Обновить трафик',
+                'subscription_settings.traffic.empty': 'Нет доступных вариантов трафика',
+                'subscription_settings.traffic.current': 'Текущий: {limit}',
+                'subscription_settings.devices.title': 'Устройства',
+                'subscription_settings.devices.subtitle': 'Количество одновременных подключений.',
+                'subscription_settings.devices.apply': 'Обновить устройства',
+                'subscription_settings.devices.value': '{count} устройств',
+                'subscription_settings.devices.value_one': '{count} устройство',
+                'subscription_settings.devices.unlimited': 'Безлимит',
+                'subscription_settings.price.included': 'Включено',
+                'subscription_settings.success.servers': 'Серверы успешно обновлены.',
+                'subscription_settings.success.traffic': 'Лимит трафика обновлён.',
+                'subscription_settings.success.devices': 'Лимит устройств обновлён.',
+                'subscription_settings.error.generic': 'Не удалось обновить настройки подписки. Попробуйте позже.',
+                'subscription_settings.error.unauthorized': 'Не удалось пройти авторизацию. Откройте мини-приложение заново из Telegram.',
+                'subscription_settings.error.validation': 'Проверьте выбранные параметры и попробуйте ещё раз.',
+                'subscription_settings.pending_action': 'Сохраняем…',
                 'promo_code.title': 'Активировать промокод',
                 'promo_code.subtitle': 'Введите промокод и сразу получите бонусы.',
                 'promo_code.placeholder': 'Введите промокод',
@@ -4098,6 +4557,16 @@
         const activePaymentMonitors = new Map();
         let paymentStatusPollTimer = null;
         let isPaymentStatusPolling = false;
+        let subscriptionSettingsData = null;
+        let subscriptionSettingsPromise = null;
+        let subscriptionSettingsError = null;
+        let subscriptionSettingsLoading = false;
+        let subscriptionSettingsAction = null;
+        const subscriptionSettingsSelections = {
+            servers: new Set(),
+            traffic: null,
+            devices: null,
+        };
 
         const PAYMENT_STATUS_INITIAL_DELAY_MS = 2000;
         const PAYMENT_STATUS_POLL_INTERVAL_MS = 5000;
@@ -5141,6 +5610,7 @@
                     : autopayLabel;
             }
 
+            renderSubscriptionSettingsCard();
             renderPromoOffers();
             renderPromoSection();
             renderBalanceSection();
@@ -6192,6 +6662,79 @@
 
             const fallback = Object.values(textObj).find(value => typeof value === 'string' && value.trim().length);
             return fallback || '';
+        }
+
+        function ensureArray(value) {
+            return Array.isArray(value) ? value : [];
+        }
+
+        function coerceNumber(value, fallback = null) {
+            if (typeof value === 'number') {
+                return Number.isFinite(value) ? value : fallback;
+            }
+            if (typeof value === 'string') {
+                const normalized = value.trim();
+                if (!normalized) {
+                    return fallback;
+                }
+                const parsed = Number(normalized);
+                return Number.isFinite(parsed) ? parsed : fallback;
+            }
+            return fallback;
+        }
+
+        function coercePositiveInt(value, fallback = null) {
+            const numeric = coerceNumber(value, null);
+            if (numeric === null || Number.isNaN(numeric)) {
+                return fallback;
+            }
+            const intValue = Math.trunc(numeric);
+            return Number.isFinite(intValue) && intValue >= 0 ? intValue : fallback;
+        }
+
+        function coerceBoolean(value, fallback = false) {
+            if (typeof value === 'boolean') {
+                return value;
+            }
+            if (typeof value === 'number') {
+                return value !== 0;
+            }
+            if (typeof value === 'string') {
+                const normalized = value.trim().toLowerCase();
+                if (!normalized) {
+                    return fallback;
+                }
+                if (['true', '1', 'yes', 'on', 'enabled'].includes(normalized)) {
+                    return true;
+                }
+                if (['false', '0', 'no', 'off', 'disabled'].includes(normalized)) {
+                    return false;
+                }
+            }
+            return fallback;
+        }
+
+        async function parseJsonSafe(response) {
+            try {
+                return await response.json();
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function isSameSet(a, b) {
+            if (!(a instanceof Set) || !(b instanceof Set)) {
+                return false;
+            }
+            if (a.size !== b.size) {
+                return false;
+            }
+            for (const item of a) {
+                if (!b.has(item)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         function formatTraffic(value) {
@@ -8277,6 +8820,1125 @@
 
             if (!shouldShow) {
                 card.classList.remove('expanded');
+            }
+        }
+
+        function hasPaidSubscription() {
+            if (!userData?.user) {
+                return false;
+            }
+
+            const typeRaw = String(userData.subscription_type || '').toLowerCase();
+            if (typeRaw === 'trial') {
+                return false;
+            }
+            if (typeRaw === 'paid') {
+                return true;
+            }
+
+            if (userData.user.has_active_subscription === false) {
+                return false;
+            }
+
+            const statusRaw = String(
+                userData.user.subscription_actual_status
+                || userData.user.subscription_status
+                || ''
+            ).toLowerCase();
+            if (['trial', 'expired', 'disabled'].includes(statusRaw)) {
+                return false;
+            }
+
+            return true;
+        }
+
+        function normalizeServerEntry(entry) {
+            if (!entry) {
+                return null;
+            }
+            if (typeof entry === 'string') {
+                const normalized = entry.trim();
+                if (!normalized) {
+                    return null;
+                }
+                return { uuid: normalized, name: normalized };
+            }
+            if (typeof entry !== 'object') {
+                return null;
+            }
+            const uuid = entry.uuid
+                || entry.id
+                || entry.squad_uuid
+                || entry.short_uuid
+                || entry.shortUuid
+                || entry.value
+                || null;
+            const name = entry.name
+                || entry.title
+                || entry.display_name
+                || entry.displayName
+                || entry.label
+                || uuid
+                || '';
+            if (!uuid && !name) {
+                return null;
+            }
+            return {
+                uuid: uuid || name,
+                name: name || uuid || '',
+            };
+        }
+
+        function resetSubscriptionSettingsSelections(data) {
+            if (!data) {
+                subscriptionSettingsSelections.servers = new Set();
+                subscriptionSettingsSelections.traffic = null;
+                subscriptionSettingsSelections.devices = null;
+                return;
+            }
+
+            const serverSet = data.current?.serverSet instanceof Set
+                ? data.current.serverSet
+                : new Set();
+            subscriptionSettingsSelections.servers = new Set(Array.from(serverSet));
+            subscriptionSettingsSelections.traffic = data.traffic?.currentValue ?? null;
+            subscriptionSettingsSelections.devices = data.devices?.current ?? null;
+        }
+
+        function normalizeSubscriptionSettings(payload) {
+            if (!payload || typeof payload !== 'object') {
+                return null;
+            }
+
+            const root = payload.settings || payload.data || payload;
+            if (!root || typeof root !== 'object') {
+                return null;
+            }
+
+            const currentInfo = root.current || root.subscription || {};
+            const serversInfo = root.servers || root.countries || {};
+            const trafficInfo = root.traffic || root.traffic_options || root.trafficOptions || {};
+            const devicesInfo = root.devices || root.device_options || root.deviceOptions || {};
+
+            const currentServersRaw = ensureArray(
+                currentInfo.servers
+                || currentInfo.connected_servers
+                || root.current_servers
+                || root.connected_servers
+                || userData?.connected_servers
+            );
+            const normalizedCurrentServers = currentServersRaw
+                .map(normalizeServerEntry)
+                .filter(Boolean);
+            const serverSet = new Set(
+                normalizedCurrentServers
+                    .map(server => server.uuid)
+                    .filter(Boolean)
+            );
+
+            const availableServersRaw = ensureArray(
+                serversInfo.available
+                || serversInfo.options
+                || root.available_servers
+                || root.available_squads
+                || []
+            );
+            const normalizedAvailableServers = availableServersRaw
+                .map(entry => {
+                    const base = normalizeServerEntry(entry);
+                    if (!base) {
+                        return null;
+                    }
+                    return {
+                        uuid: base.uuid,
+                        name: base.name,
+                        priceKopeks: coercePositiveInt(
+                            entry.price_kopeks ?? entry.priceKopeks ?? entry.price ?? entry.cost,
+                            null
+                        ),
+                        priceLabel: entry.price_label || entry.priceLabel || null,
+                        discountPercent: coercePositiveInt(
+                            entry.discount_percent ?? entry.discountPercent ?? entry.discount,
+                            null
+                        ),
+                        isConnected: coerceBoolean(
+                            entry.is_connected ?? entry.connected ?? entry.isSelected ?? entry.selected ?? serverSet.has(base.uuid),
+                            false
+                        ),
+                        isAvailable: coerceBoolean(
+                            entry.is_available ?? entry.available ?? entry.enabled ?? entry.selectable ?? true,
+                            true
+                        ),
+                        disabledReason: entry.disabled_reason || entry.reason || null,
+                    };
+                })
+                .filter(Boolean);
+
+            const trafficOptionsRaw = ensureArray(
+                trafficInfo.options
+                || root.available_traffic
+                || root.traffic_options
+                || []
+            );
+            const normalizedTrafficOptions = trafficOptionsRaw
+                .map(option => {
+                    const value = coerceNumber(
+                        option.value ?? option.gb ?? option.limit ?? option.traffic_gb ?? option.trafficGb,
+                        null
+                    );
+                    return {
+                        value,
+                        label: option.label || option.title || (value !== null ? formatTrafficLimit(value) : ''),
+                        priceKopeks: coercePositiveInt(option.price_kopeks ?? option.priceKopeks ?? option.price ?? null, null),
+                        priceLabel: option.price_label || option.priceLabel || null,
+                        isCurrent: coerceBoolean(option.is_current ?? option.current, false),
+                        isAvailable: coerceBoolean(option.is_available ?? option.available ?? option.enabled ?? true, true),
+                        description: option.description || null,
+                    };
+                })
+                .filter(option => option.value !== null || option.label);
+
+            const currentTrafficLimit = coerceNumber(
+                currentInfo.traffic_limit_gb
+                ?? currentInfo.traffic
+                ?? root.current_traffic_gb
+                ?? userData?.user?.traffic_limit_gb,
+                null
+            );
+            const currentTrafficLabel = currentInfo.traffic_limit_label
+                || trafficInfo.current_label
+                || trafficInfo.currentLabel
+                || userData?.user?.traffic_limit_label
+                || (currentTrafficLimit !== null ? formatTrafficLimit(currentTrafficLimit) : '');
+
+            let currentTrafficValue = normalizedTrafficOptions.find(option => option.isCurrent) || null;
+            if (!currentTrafficValue && currentTrafficLimit !== null) {
+                currentTrafficValue = normalizedTrafficOptions.find(
+                    option => Number(option.value) === Number(currentTrafficLimit)
+                ) || null;
+            }
+
+            const devicesOptionsRaw = ensureArray(
+                devicesInfo.options
+                || root.available_devices
+                || root.device_options
+                || []
+            );
+            const normalizedDeviceOptions = devicesOptionsRaw
+                .map(option => {
+                    const value = coercePositiveInt(option.value ?? option.devices ?? option.count ?? option.limit, null);
+                    return {
+                        value,
+                        label: option.label || option.title || (value !== null ? String(value) : ''),
+                        priceKopeks: coercePositiveInt(option.price_kopeks ?? option.priceKopeks ?? option.price ?? null, null),
+                        priceLabel: option.price_label || option.priceLabel || null,
+                    };
+                })
+                .filter(option => option.value !== null);
+
+            const currentDeviceLimit = coercePositiveInt(
+                devicesInfo.current
+                ?? currentInfo.device_limit
+                ?? root.current_device_limit
+                ?? userData?.user?.device_limit,
+                0
+            );
+
+            return {
+                raw: payload,
+                subscriptionId: root.subscription_id
+                    ?? payload.subscription_id
+                    ?? payload.subscriptionId
+                    ?? userData?.subscription_id
+                    ?? userData?.subscriptionId
+                    ?? null,
+                currency: (root.currency || payload.currency || userData?.balance_currency || 'RUB').toString().toUpperCase(),
+                current: {
+                    servers: normalizedCurrentServers,
+                    serverSet,
+                    trafficLimitGb: currentTrafficLimit,
+                    trafficLabel: currentTrafficLabel,
+                    deviceLimit: currentDeviceLimit,
+                },
+                servers: {
+                    available: normalizedAvailableServers,
+                    min: coercePositiveInt(
+                        serversInfo.min ?? serversInfo.min_selectable ?? serversInfo.minRequired ?? root.min_servers,
+                        0
+                    ) || 0,
+                    max: coercePositiveInt(
+                        serversInfo.max ?? serversInfo.max_selectable ?? serversInfo.maxAllowed ?? root.max_servers,
+                        0
+                    ) || 0,
+                    canUpdate: coerceBoolean(
+                        serversInfo.can_update ?? serversInfo.enabled ?? serversInfo.allow_update ?? true,
+                        true
+                    ),
+                    hint: serversInfo.hint || null,
+                },
+                traffic: {
+                    options: normalizedTrafficOptions,
+                    canUpdate: coerceBoolean(
+                        trafficInfo.can_update ?? trafficInfo.enabled ?? trafficInfo.allow_update ?? true,
+                        true
+                    ),
+                    currentValue: currentTrafficValue
+                        ? currentTrafficValue.value
+                        : (currentTrafficLimit !== null ? currentTrafficLimit : null),
+                },
+                devices: {
+                    options: normalizedDeviceOptions,
+                    canUpdate: coerceBoolean(
+                        devicesInfo.can_update ?? devicesInfo.enabled ?? devicesInfo.allow_update ?? true,
+                        true
+                    ),
+                    min: coercePositiveInt(devicesInfo.min ?? devicesInfo.min_devices ?? devicesInfo.min_limit, 0) || 0,
+                    max: coercePositiveInt(devicesInfo.max ?? devicesInfo.max_devices ?? devicesInfo.max_limit, 0) || 0,
+                    step: coercePositiveInt(devicesInfo.step ?? devicesInfo.increment ?? 1, 1) || 1,
+                    current: currentDeviceLimit,
+                },
+            };
+        }
+
+        function extractSettingsError(payload, status) {
+            if (status === 401) {
+                return t('subscription_settings.error.unauthorized');
+            }
+            if (!payload || typeof payload !== 'object') {
+                return t('subscription_settings.error.generic');
+            }
+            if (typeof payload.detail === 'string') {
+                return payload.detail;
+            }
+            if (payload.detail && typeof payload.detail === 'object') {
+                if (typeof payload.detail.message === 'string') {
+                    return payload.detail.message;
+                }
+                if (typeof payload.detail.error === 'string') {
+                    return payload.detail.error;
+                }
+            }
+            if (typeof payload.message === 'string') {
+                return payload.message;
+            }
+            if (typeof payload.error === 'string') {
+                return payload.error;
+            }
+            return t('subscription_settings.error.generic');
+        }
+
+        function resolveSettingsErrorMessage(error, fallbackKey = 'subscription_settings.error.generic') {
+            if (!error) {
+                return t(fallbackKey);
+            }
+            if (typeof error === 'string') {
+                return error;
+            }
+            if (typeof error.message === 'string' && error.message.trim()) {
+                return error.message;
+            }
+            if (error.detail) {
+                if (typeof error.detail === 'string' && error.detail.trim()) {
+                    return error.detail;
+                }
+                if (typeof error.detail.message === 'string' && error.detail.message.trim()) {
+                    return error.detail.message;
+                }
+            }
+            if (error.status === 401) {
+                return t('subscription_settings.error.unauthorized');
+            }
+            return t(fallbackKey);
+        }
+
+        function setSubscriptionSettingsActionLoading(section, isLoading) {
+            const ids = {
+                servers: 'subscriptionSettingsServersApply',
+                traffic: 'subscriptionSettingsTrafficApply',
+                devices: 'subscriptionSettingsDevicesApply',
+            };
+            const buttonId = ids[section];
+            if (!buttonId) {
+                return;
+            }
+            const button = document.getElementById(buttonId);
+            if (!button) {
+                return;
+            }
+            if (isLoading) {
+                if (!button.dataset.originalLabel) {
+                    button.dataset.originalLabel = button.textContent;
+                }
+                button.textContent = t('subscription_settings.pending_action');
+                button.disabled = true;
+                return;
+            }
+            const original = button.dataset.originalLabel;
+            const key = button.getAttribute('data-i18n');
+            if (key) {
+                const translated = t(key);
+                if (translated && translated !== key) {
+                    button.textContent = translated;
+                } else if (original) {
+                    button.textContent = original;
+                }
+            } else if (original) {
+                button.textContent = original;
+            }
+            delete button.dataset.originalLabel;
+            button.disabled = false;
+        }
+
+        function handleSubscriptionSettingsError(error) {
+            const message = resolveSettingsErrorMessage(error);
+            showPopup(message, t('subscription_settings.title') || 'Subscription settings');
+        }
+
+        function ensureSubscriptionSettingsLoaded(options = {}) {
+            const { force = false } = options;
+            if (!hasPaidSubscription()) {
+                subscriptionSettingsData = null;
+                subscriptionSettingsPromise = null;
+                subscriptionSettingsError = null;
+                subscriptionSettingsLoading = false;
+                resetSubscriptionSettingsSelections(null);
+                return Promise.resolve(null);
+            }
+
+            if (!force) {
+                if (subscriptionSettingsPromise) {
+                    return subscriptionSettingsPromise;
+                }
+                if (subscriptionSettingsData && !subscriptionSettingsError) {
+                    return Promise.resolve(subscriptionSettingsData);
+                }
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                const error = createError('Authorization Error', t('subscription_settings.error.unauthorized'));
+                subscriptionSettingsError = error;
+                subscriptionSettingsLoading = false;
+                renderSubscriptionSettingsCard();
+                return Promise.reject(error);
+            }
+
+            subscriptionSettingsLoading = true;
+            subscriptionSettingsError = null;
+            renderSubscriptionSettingsCard();
+
+            const payload = {
+                initData,
+                subscription_id: userData?.subscription_id ?? userData?.subscriptionId ?? null,
+            };
+
+            const request = fetch('/miniapp/subscription/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }).then(async response => {
+                const body = await parseJsonSafe(response);
+                if (!response.ok || (body && body.success === false)) {
+                    const message = extractSettingsError(body, response.status);
+                    throw createError('Subscription settings error', message, response.status);
+                }
+                const normalized = normalizeSubscriptionSettings(body);
+                subscriptionSettingsData = normalized;
+                subscriptionSettingsError = null;
+                subscriptionSettingsLoading = false;
+                subscriptionSettingsPromise = null;
+                resetSubscriptionSettingsSelections(normalized);
+                renderSubscriptionSettingsCard();
+                return normalized;
+            }).catch(error => {
+                subscriptionSettingsError = error;
+                subscriptionSettingsLoading = false;
+                subscriptionSettingsPromise = null;
+                renderSubscriptionSettingsCard();
+                throw error;
+            });
+
+            subscriptionSettingsPromise = request;
+            return request;
+        }
+
+        function renderSubscriptionSettingsSummary(data) {
+            const summary = document.getElementById('subscriptionSettingsSummary');
+            if (!summary) {
+                return;
+            }
+
+            summary.innerHTML = '';
+
+            if (!data) {
+                return;
+            }
+
+            const fragments = [];
+
+            const serversCount = data.current?.servers?.length
+                ?? ensureArray(userData?.connected_servers).length
+                ?? 0;
+            if (serversCount) {
+                const key = serversCount === 1
+                    ? 'subscription_settings.summary.servers_one'
+                    : 'subscription_settings.summary.servers';
+                const chip = document.createElement('div');
+                chip.className = 'subscription-settings-chip';
+                chip.textContent = t(key).replace('{count}', String(serversCount));
+                fragments.push(chip);
+            }
+
+            const trafficLabel = data.current?.trafficLabel || userData?.user?.traffic_limit_label || '';
+            if (trafficLabel) {
+                const chip = document.createElement('div');
+                chip.className = 'subscription-settings-chip';
+                chip.textContent = t('subscription_settings.summary.traffic').replace('{amount}', trafficLabel);
+                fragments.push(chip);
+            }
+
+            const deviceLimit = data.current?.deviceLimit ?? coercePositiveInt(userData?.user?.device_limit, null);
+            if (deviceLimit !== null && deviceLimit !== undefined) {
+                const chip = document.createElement('div');
+                chip.className = 'subscription-settings-chip';
+                if (deviceLimit > 0) {
+                    const key = deviceLimit === 1
+                        ? 'subscription_settings.summary.devices_one'
+                        : 'subscription_settings.summary.devices';
+                    chip.textContent = t(key).replace('{count}', String(deviceLimit));
+                } else {
+                    chip.textContent = t('subscription_settings.summary.devices').replace(
+                        '{count}',
+                        t('subscription_settings.summary.unlimited')
+                    );
+                }
+                fragments.push(chip);
+            }
+
+            fragments.forEach(fragment => summary.appendChild(fragment));
+        }
+
+        function renderSubscriptionSettingsCard() {
+            const card = document.getElementById('subscriptionSettingsCard');
+            if (!card) {
+                return;
+            }
+
+            const shouldShow = hasPaidSubscription();
+            card.classList.toggle('hidden', !shouldShow);
+            if (!shouldShow) {
+                return;
+            }
+
+            const loadingBlock = document.getElementById('subscriptionSettingsLoading');
+            const errorBlock = document.getElementById('subscriptionSettingsError');
+            const contentBlock = document.getElementById('subscriptionSettingsContent');
+            const statusText = document.getElementById('subscriptionSettingsStatus');
+
+            if (subscriptionSettingsLoading) {
+                loadingBlock?.classList.remove('hidden');
+                errorBlock?.classList.add('hidden');
+                contentBlock?.classList.remove('hidden');
+                if (statusText) {
+                    statusText.textContent = t('subscription_settings.status.loading');
+                    statusText.classList.remove('hidden');
+                }
+                renderSubscriptionSettingsSummary(subscriptionSettingsData);
+                return;
+            }
+
+            loadingBlock?.classList.add('hidden');
+            statusText?.classList.add('hidden');
+
+            if (subscriptionSettingsError) {
+                contentBlock?.classList.add('hidden');
+                if (errorBlock) {
+                    const errorText = document.getElementById('subscriptionSettingsErrorText');
+                    if (errorText) {
+                        errorText.textContent = resolveSettingsErrorMessage(subscriptionSettingsError);
+                    }
+                    errorBlock.classList.remove('hidden');
+                }
+                return;
+            }
+
+            errorBlock?.classList.add('hidden');
+            contentBlock?.classList.remove('hidden');
+
+            if (!subscriptionSettingsData) {
+                ensureSubscriptionSettingsLoaded().catch(error => {
+                    console.warn('Failed to load subscription settings:', error);
+                });
+                renderSubscriptionSettingsSummary(null);
+                return;
+            }
+
+            renderSubscriptionSettingsSummary(subscriptionSettingsData);
+            renderSubscriptionSettingsServers(subscriptionSettingsData);
+            renderSubscriptionSettingsTraffic(subscriptionSettingsData);
+            renderSubscriptionSettingsDevices(subscriptionSettingsData);
+        }
+
+        function setupSubscriptionSettingsEvents() {
+            document.getElementById('subscriptionSettingsRetry')?.addEventListener('click', () => {
+                ensureSubscriptionSettingsLoaded({ force: true }).catch(error => {
+                    handleSubscriptionSettingsError(error);
+                });
+            });
+            document.getElementById('subscriptionSettingsServersApply')?.addEventListener('click', submitSubscriptionServersChange);
+            document.getElementById('subscriptionSettingsTrafficApply')?.addEventListener('click', submitSubscriptionTrafficChange);
+            document.getElementById('subscriptionSettingsDevicesApply')?.addEventListener('click', submitSubscriptionDevicesChange);
+        }
+
+        function resolveServerPriceLabel(option, currency) {
+            if (!option) {
+                return '';
+            }
+            if (option.priceLabel) {
+                return option.priceLabel;
+            }
+            if (option.priceKopeks === null || option.priceKopeks === undefined) {
+                return '';
+            }
+            const price = coercePositiveInt(option.priceKopeks, null);
+            if (price === null) {
+                return '';
+            }
+            if (price === 0) {
+                return t('subscription_settings.price.included');
+            }
+            return formatPriceFromKopeks(price, currency);
+        }
+
+        function renderSubscriptionSettingsServers(data) {
+            const list = document.getElementById('subscriptionSettingsServersList');
+            const emptyState = document.getElementById('subscriptionSettingsServersEmpty');
+            const disabledNote = document.getElementById('subscriptionSettingsServersDisabled');
+            const applyButton = document.getElementById('subscriptionSettingsServersApply');
+            const hintElement = document.getElementById('subscriptionSettingsServersHint');
+            const metaElement = document.getElementById('subscriptionSettingsServersMeta');
+
+            if (!list || !applyButton) {
+                return;
+            }
+
+            const available = ensureArray(data?.servers?.available);
+            const minSelectable = coercePositiveInt(data?.servers?.min, 0) || 0;
+            const maxSelectable = coercePositiveInt(data?.servers?.max, 0) || 0;
+            const canUpdate = data?.servers?.canUpdate !== false;
+            const hint = data?.servers?.hint || t('subscription_settings.servers.hint');
+
+            const selectionSet = subscriptionSettingsSelections.servers instanceof Set
+                ? new Set(subscriptionSettingsSelections.servers)
+                : new Set();
+            const currentSet = data.current?.serverSet instanceof Set
+                ? data.current.serverSet
+                : new Set();
+
+            list.innerHTML = '';
+
+            if (metaElement) {
+                const selectedCount = selectionSet.size || currentSet.size;
+                metaElement.textContent = t('subscription_settings.servers.limit').replace('{count}', String(selectedCount));
+            }
+
+            if (hintElement) {
+                hintElement.textContent = hint || '';
+            }
+
+            if (!available.length) {
+                emptyState?.classList.remove('hidden');
+                disabledNote?.classList.toggle('hidden', canUpdate);
+                applyButton.disabled = true;
+                return;
+            }
+
+            emptyState?.classList.add('hidden');
+            disabledNote?.classList.toggle('hidden', canUpdate);
+
+            available.forEach(option => {
+                if (!option) {
+                    return;
+                }
+                const isSelected = selectionSet.has(option.uuid) || (!selectionSet.size && option.isConnected);
+                if (isSelected && option.uuid && !selectionSet.has(option.uuid)) {
+                    selectionSet.add(option.uuid);
+                }
+
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'subscription-settings-toggle';
+                if (isSelected) {
+                    button.classList.add('active');
+                }
+                const isOptionEnabled = canUpdate && coerceBoolean(option.isAvailable, true);
+                if (!isOptionEnabled) {
+                    button.classList.add('disabled');
+                }
+
+                const label = document.createElement('div');
+                label.className = 'subscription-settings-toggle-label';
+
+                const title = document.createElement('div');
+                title.className = 'subscription-settings-toggle-title';
+                title.textContent = option.name || option.uuid || t('values.not_available');
+                label.appendChild(title);
+
+                const meta = resolveServerPriceLabel(option, data.currency);
+                if (meta) {
+                    const metaSpan = document.createElement('div');
+                    metaSpan.className = 'subscription-settings-toggle-meta';
+                    metaSpan.textContent = meta;
+                    label.appendChild(metaSpan);
+                }
+
+                button.appendChild(label);
+
+                if (isOptionEnabled && option.uuid) {
+                    button.addEventListener('click', () => {
+                        if (subscriptionSettingsAction === 'servers') {
+                            return;
+                        }
+                        if (selectionSet.has(option.uuid)) {
+                            selectionSet.delete(option.uuid);
+                        } else {
+                            selectionSet.add(option.uuid);
+                        }
+                        subscriptionSettingsSelections.servers = new Set(selectionSet);
+                        renderSubscriptionSettingsServers(data);
+                    });
+                }
+
+                list.appendChild(button);
+            });
+
+            subscriptionSettingsSelections.servers = new Set(selectionSet);
+
+            const selectedCount = selectionSet.size;
+            const belowMin = selectedCount < (minSelectable || 1);
+            const aboveMax = maxSelectable && selectedCount > maxSelectable;
+            const hasChanges = !isSameSet(selectionSet, currentSet);
+            const isLoading = subscriptionSettingsAction === 'servers';
+
+            if (hintElement && (belowMin || aboveMax)) {
+                hintElement.textContent = t('subscription_settings.error.validation');
+            }
+
+            applyButton.disabled = isLoading
+                || !canUpdate
+                || !hasChanges
+                || selectedCount === 0
+                || belowMin
+                || aboveMax;
+        }
+
+        function renderSubscriptionSettingsTraffic(data) {
+            const list = document.getElementById('subscriptionSettingsTrafficList');
+            const emptyState = document.getElementById('subscriptionSettingsTrafficEmpty');
+            const disabledNote = document.getElementById('subscriptionSettingsTrafficDisabled');
+            const applyButton = document.getElementById('subscriptionSettingsTrafficApply');
+            const hintElement = document.getElementById('subscriptionSettingsTrafficHint');
+            const metaElement = document.getElementById('subscriptionSettingsTrafficMeta');
+
+            if (!list || !applyButton) {
+                return;
+            }
+
+            const options = ensureArray(data?.traffic?.options);
+            const canUpdate = data?.traffic?.canUpdate !== false;
+            const currentValue = data?.traffic?.currentValue;
+            const selectedValue = subscriptionSettingsSelections.traffic !== null
+                ? subscriptionSettingsSelections.traffic
+                : currentValue;
+
+            list.innerHTML = '';
+
+            if (metaElement) {
+                const currentLabel = data.current?.trafficLabel || '';
+                metaElement.textContent = currentLabel
+                    ? t('subscription_settings.traffic.current').replace('{limit}', currentLabel)
+                    : '';
+            }
+
+            if (!options.length) {
+                emptyState?.classList.remove('hidden');
+                disabledNote?.classList.toggle('hidden', canUpdate);
+                applyButton.disabled = true;
+                if (hintElement) {
+                    hintElement.textContent = '';
+                }
+                return;
+            }
+
+            emptyState?.classList.add('hidden');
+            disabledNote?.classList.toggle('hidden', canUpdate);
+
+            options.forEach(option => {
+                if (!option) {
+                    return;
+                }
+                const value = option.value;
+                const label = option.label || (value !== null ? formatTrafficLimit(value) : t('values.not_available'));
+
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'subscription-settings-toggle';
+                if (value === selectedValue) {
+                    button.classList.add('active');
+                }
+                const isOptionEnabled = canUpdate && coerceBoolean(option.isAvailable, true);
+                if (!isOptionEnabled) {
+                    button.classList.add('disabled');
+                }
+
+                const labelContainer = document.createElement('div');
+                labelContainer.className = 'subscription-settings-toggle-label';
+
+                const title = document.createElement('div');
+                title.className = 'subscription-settings-toggle-title';
+                title.textContent = label;
+                labelContainer.appendChild(title);
+
+                const meta = option.priceLabel
+                    || (option.priceKopeks !== null && option.priceKopeks !== undefined
+                        ? resolveServerPriceLabel(option, data.currency)
+                        : '');
+                if (meta) {
+                    const metaSpan = document.createElement('div');
+                    metaSpan.className = 'subscription-settings-toggle-meta';
+                    metaSpan.textContent = meta;
+                    labelContainer.appendChild(metaSpan);
+                }
+
+                button.appendChild(labelContainer);
+
+                if (isOptionEnabled && value !== null) {
+                    button.addEventListener('click', () => {
+                        if (subscriptionSettingsAction === 'traffic') {
+                            return;
+                        }
+                        subscriptionSettingsSelections.traffic = value;
+                        renderSubscriptionSettingsTraffic(data);
+                    });
+                }
+
+                list.appendChild(button);
+            });
+
+            if (hintElement) {
+                hintElement.textContent = '';
+            }
+
+            const isLoading = subscriptionSettingsAction === 'traffic';
+            const changed = selectedValue !== null && selectedValue !== currentValue;
+            applyButton.disabled = isLoading || !canUpdate || !changed;
+        }
+
+        function resolveDevicePriceLabel(value, devicesInfo, currency) {
+            const options = ensureArray(devicesInfo?.options);
+            const matched = options.find(option => coercePositiveInt(option.value, null) === value);
+            if (matched) {
+                if (matched.priceLabel) {
+                    return matched.priceLabel;
+                }
+                if (matched.priceKopeks !== null && matched.priceKopeks !== undefined) {
+                    const normalized = coercePositiveInt(matched.priceKopeks, null);
+                    if (normalized !== null) {
+                        if (normalized === 0) {
+                            return t('subscription_settings.price.included');
+                        }
+                        return formatPriceFromKopeks(normalized, currency);
+                    }
+                }
+            }
+
+            const basePrice = coercePositiveInt(
+                devicesInfo?.priceKopeks ?? devicesInfo?.price_kopeks ?? devicesInfo?.price ?? null,
+                null
+            );
+            if (basePrice !== null) {
+                if (basePrice === 0) {
+                    return t('subscription_settings.price.included');
+                }
+                return formatPriceFromKopeks(basePrice, currency);
+            }
+
+            return '';
+        }
+
+        function renderSubscriptionSettingsDevices(data) {
+            const decreaseBtn = document.getElementById('subscriptionSettingsDevicesDecrease');
+            const increaseBtn = document.getElementById('subscriptionSettingsDevicesIncrease');
+            const valueElement = document.getElementById('subscriptionSettingsDevicesValue');
+            const priceElement = document.getElementById('subscriptionSettingsDevicesPrice');
+            const disabledNote = document.getElementById('subscriptionSettingsDevicesDisabled');
+            const applyButton = document.getElementById('subscriptionSettingsDevicesApply');
+            const hintElement = document.getElementById('subscriptionSettingsDevicesHint');
+
+            if (!decreaseBtn || !increaseBtn || !valueElement || !applyButton) {
+                return;
+            }
+
+            const devicesInfo = data?.devices || {};
+            const canUpdate = devicesInfo.canUpdate !== false;
+            const min = coercePositiveInt(devicesInfo.min, 0) || 0;
+            const max = coercePositiveInt(devicesInfo.max, 0) || 0;
+            const step = coercePositiveInt(devicesInfo.step, 1) || 1;
+            const current = coercePositiveInt(devicesInfo.current, coercePositiveInt(data?.current?.deviceLimit, 0)) || 0;
+
+            if (subscriptionSettingsSelections.devices == null) {
+                subscriptionSettingsSelections.devices = current;
+            }
+
+            const selected = coercePositiveInt(subscriptionSettingsSelections.devices, current);
+            subscriptionSettingsSelections.devices = selected;
+
+            const unlimited = selected <= 0;
+            valueElement.textContent = unlimited
+                ? t('subscription_settings.devices.unlimited')
+                : t(selected === 1 ? 'subscription_settings.devices.value_one' : 'subscription_settings.devices.value').replace('{count}', String(selected));
+
+            if (priceElement) {
+                priceElement.textContent = resolveDevicePriceLabel(selected, devicesInfo, data.currency);
+            }
+
+            disabledNote?.classList.toggle('hidden', canUpdate);
+
+            const isLoading = subscriptionSettingsAction === 'devices';
+            const canDecrease = canUpdate && !isLoading && selected > min;
+            const canIncrease = canUpdate && !isLoading && (!max || selected < max);
+
+            decreaseBtn.disabled = !canDecrease;
+            increaseBtn.disabled = !canIncrease;
+
+            decreaseBtn.onclick = () => {
+                if (!canDecrease) {
+                    return;
+                }
+                const next = Math.max(min, selected - step);
+                subscriptionSettingsSelections.devices = next;
+                renderSubscriptionSettingsDevices(data);
+            };
+
+            increaseBtn.onclick = () => {
+                if (!canIncrease) {
+                    return;
+                }
+                const limit = max > 0 ? max : selected + step;
+                const next = Math.min(limit, selected + step);
+                subscriptionSettingsSelections.devices = next;
+                renderSubscriptionSettingsDevices(data);
+            };
+
+            const changed = selected !== current;
+            applyButton.disabled = isLoading || !canUpdate || !changed;
+            if (hintElement) {
+                hintElement.textContent = '';
+            }
+        }
+
+        async function submitSubscriptionServersChange() {
+            if (subscriptionSettingsAction) {
+                return;
+            }
+            const data = subscriptionSettingsData;
+            if (!data) {
+                try {
+                    await ensureSubscriptionSettingsLoaded({ force: true });
+                } catch (error) {
+                    handleSubscriptionSettingsError(error);
+                }
+                return;
+            }
+            const selectionSet = subscriptionSettingsSelections.servers instanceof Set
+                ? subscriptionSettingsSelections.servers
+                : new Set();
+            const selected = Array.from(selectionSet);
+            const minSelectable = coercePositiveInt(data.servers?.min, 0) || 0;
+            const maxSelectable = coercePositiveInt(data.servers?.max, 0) || 0;
+            const currentSet = data.current?.serverSet instanceof Set ? data.current.serverSet : new Set();
+
+            if (!selected.length || selected.length < (minSelectable || 1) || (maxSelectable && selected.length > maxSelectable)) {
+                handleSubscriptionSettingsError(createError('Validation', t('subscription_settings.error.validation')));
+                return;
+            }
+            if (isSameSet(new Set(selected), currentSet)) {
+                return;
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                handleSubscriptionSettingsError(createError('Auth', t('subscription_settings.error.unauthorized')));
+                return;
+            }
+
+            const payload = {
+                initData,
+                squads: selected,
+                servers: selected,
+                squad_uuids: selected,
+                server_uuids: selected,
+                subscription_id: data.subscriptionId || userData?.subscription_id || userData?.subscriptionId || null,
+            };
+
+            subscriptionSettingsAction = 'servers';
+            setSubscriptionSettingsActionLoading('servers', true);
+
+            try {
+                const response = await fetch('/miniapp/subscription/servers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const body = await parseJsonSafe(response);
+                if (!response.ok || (body && body.success === false)) {
+                    const message = extractSettingsError(body, response.status);
+                    throw createError('Subscription settings error', message, response.status);
+                }
+                showPopup(t('subscription_settings.success.servers'), t('subscription_settings.title'));
+                await refreshSubscriptionData({ silent: true });
+                await ensureSubscriptionSettingsLoaded({ force: true });
+            } catch (error) {
+                handleSubscriptionSettingsError(error);
+            } finally {
+                subscriptionSettingsAction = null;
+                setSubscriptionSettingsActionLoading('servers', false);
+                renderSubscriptionSettingsCard();
+            }
+        }
+
+        async function submitSubscriptionTrafficChange() {
+            if (subscriptionSettingsAction) {
+                return;
+            }
+            const data = subscriptionSettingsData;
+            if (!data) {
+                try {
+                    await ensureSubscriptionSettingsLoaded({ force: true });
+                } catch (error) {
+                    handleSubscriptionSettingsError(error);
+                }
+                return;
+            }
+
+            const selected = subscriptionSettingsSelections.traffic;
+            const currentValue = data.traffic?.currentValue;
+            if (selected === null || selected === undefined) {
+                handleSubscriptionSettingsError(createError('Validation', t('subscription_settings.error.validation')));
+                return;
+            }
+            if (selected === currentValue) {
+                return;
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                handleSubscriptionSettingsError(createError('Auth', t('subscription_settings.error.unauthorized')));
+                return;
+            }
+
+            const payload = {
+                initData,
+                traffic: selected,
+                traffic_gb: selected,
+                trafficGb: selected,
+                subscription_id: data.subscriptionId || userData?.subscription_id || userData?.subscriptionId || null,
+            };
+
+            subscriptionSettingsAction = 'traffic';
+            setSubscriptionSettingsActionLoading('traffic', true);
+
+            try {
+                const response = await fetch('/miniapp/subscription/traffic', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const body = await parseJsonSafe(response);
+                if (!response.ok || (body && body.success === false)) {
+                    const message = extractSettingsError(body, response.status);
+                    throw createError('Subscription settings error', message, response.status);
+                }
+                showPopup(t('subscription_settings.success.traffic'), t('subscription_settings.title'));
+                await refreshSubscriptionData({ silent: true });
+                await ensureSubscriptionSettingsLoaded({ force: true });
+            } catch (error) {
+                handleSubscriptionSettingsError(error);
+            } finally {
+                subscriptionSettingsAction = null;
+                setSubscriptionSettingsActionLoading('traffic', false);
+                renderSubscriptionSettingsCard();
+            }
+        }
+
+        async function submitSubscriptionDevicesChange() {
+            if (subscriptionSettingsAction) {
+                return;
+            }
+            const data = subscriptionSettingsData;
+            if (!data) {
+                try {
+                    await ensureSubscriptionSettingsLoaded({ force: true });
+                } catch (error) {
+                    handleSubscriptionSettingsError(error);
+                }
+                return;
+            }
+
+            const selected = coercePositiveInt(subscriptionSettingsSelections.devices, null);
+            const current = coercePositiveInt(data.devices?.current, coercePositiveInt(data.current?.deviceLimit, 0)) || 0;
+            if (selected === null) {
+                handleSubscriptionSettingsError(createError('Validation', t('subscription_settings.error.validation')));
+                return;
+            }
+            if (selected === current) {
+                return;
+            }
+
+            const min = coercePositiveInt(data.devices?.min, 0) || 0;
+            const max = coercePositiveInt(data.devices?.max, 0) || 0;
+            if (selected < min || (max && selected > max)) {
+                handleSubscriptionSettingsError(createError('Validation', t('subscription_settings.error.validation')));
+                return;
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                handleSubscriptionSettingsError(createError('Auth', t('subscription_settings.error.unauthorized')));
+                return;
+            }
+
+            const payload = {
+                initData,
+                devices: selected,
+                device_limit: selected,
+                deviceLimit: selected,
+                subscription_id: data.subscriptionId || userData?.subscription_id || userData?.subscriptionId || null,
+            };
+
+            subscriptionSettingsAction = 'devices';
+            setSubscriptionSettingsActionLoading('devices', true);
+
+            try {
+                const response = await fetch('/miniapp/subscription/devices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const body = await parseJsonSafe(response);
+                if (!response.ok || (body && body.success === false)) {
+                    const message = extractSettingsError(body, response.status);
+                    throw createError('Subscription settings error', message, response.status);
+                }
+                showPopup(t('subscription_settings.success.devices'), t('subscription_settings.title'));
+                await refreshSubscriptionData({ silent: true });
+                await ensureSubscriptionSettingsLoaded({ force: true });
+            } catch (error) {
+                handleSubscriptionSettingsError(error);
+            } finally {
+                subscriptionSettingsAction = null;
+                setSubscriptionSettingsActionLoading('devices', false);
+                renderSubscriptionSettingsCard();
             }
         }
 
