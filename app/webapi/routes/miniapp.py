@@ -3,10 +3,12 @@ from __future__ import annotations
 import logging
 import re
 import math
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_FLOOR
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from uuid import uuid4
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from aiogram import Bot
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
+from app.config import settings, PERIOD_PRICES
 from app.database.crud.discount_offer import (
     get_latest_claimed_offer_for_user,
     get_offer_by_id,
@@ -27,19 +29,30 @@ from app.database.crud.promo_offer_template import get_promo_offer_template_by_i
 from app.database.crud.server_squad import (
     get_available_server_squads,
     get_server_squad_by_uuid,
+    get_server_ids_by_uuids,
     add_user_to_servers,
     remove_user_from_servers,
 )
-from app.database.crud.subscription import add_subscription_servers, remove_subscription_servers
+from app.database.crud.subscription import (
+    add_subscription_servers,
+    remove_subscription_servers,
+    create_paid_subscription,
+)
+from app.database.crud.subscription_conversion import create_subscription_conversion
 from app.database.crud.transaction import (
     create_transaction,
     get_user_total_spent_kopeks,
 )
-from app.database.crud.user import get_user_by_telegram_id, subtract_user_balance
+from app.database.crud.user import (
+    get_user_by_telegram_id,
+    subtract_user_balance,
+    add_user_balance,
+)
 from app.database.models import (
     PromoGroup,
     PromoOfferTemplate,
     Subscription,
+    SubscriptionStatus,
     SubscriptionTemporaryAccess,
     Transaction,
     TransactionType,
@@ -60,6 +73,7 @@ from app.services.subscription_service import SubscriptionService
 from app.services.tribute_service import TributeService
 from app.utils.currency_converter import currency_converter
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
+from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.telegram_webapp import (
     TelegramWebAppAuthError,
     parse_webapp_init_data,
@@ -67,11 +81,14 @@ from app.utils.telegram_webapp import (
 from app.utils.user_utils import (
     get_detailed_referral_list,
     get_user_referral_summary,
+    mark_user_as_had_paid_subscription,
 )
 from app.utils.pricing_utils import (
     apply_percentage_discount,
     calculate_prorated_price,
     get_remaining_months,
+    calculate_months_from_days,
+    format_period_description,
 )
 
 from ..dependencies import get_db_session
@@ -126,6 +143,15 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionTrafficUpdateRequest,
     MiniAppSubscriptionDevicesUpdateRequest,
     MiniAppSubscriptionUpdateResponse,
+    MiniAppSubscriptionPurchaseOptions,
+    MiniAppSubscriptionPurchaseOptionsRequest,
+    MiniAppSubscriptionPurchaseOptionsResponse,
+    MiniAppSubscriptionPurchasePreview,
+    MiniAppSubscriptionPurchasePreviewRequest,
+    MiniAppSubscriptionPurchasePreviewResponse,
+    MiniAppSubscriptionPurchaseSubmitRequest,
+    MiniAppSubscriptionPurchaseSubmitResponse,
+    MiniAppSubscriptionPurchasePeriod,
 )
 
 
@@ -2729,6 +2755,769 @@ def _get_addon_discount_percent_for_user(
         return 0
 
 
+@dataclass
+class PurchaseSelection:
+    period_days: int
+    traffic_gb: int
+    servers: List[str]
+    devices: int
+
+
+def _format_price_label(amount_kopeks: Optional[int]) -> Optional[str]:
+    if amount_kopeks is None:
+        return None
+    try:
+        return settings.format_price(int(amount_kopeks))
+    except Exception:  # pragma: no cover - defensive fallback
+        return None
+
+
+def _normalize_server_list(values: Optional[Iterable[Any]]) -> List[str]:
+    normalized: List[str] = []
+    seen: set[str] = set()
+    if not values:
+        return normalized
+
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        normalized.append(text)
+
+    return normalized
+
+
+def _get_available_purchase_periods() -> List[int]:
+    raw_periods = settings.get_available_subscription_periods()
+    normalized: List[int] = []
+
+    for raw in raw_periods:
+        try:
+            days = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if days <= 0:
+            continue
+        if PERIOD_PRICES.get(days, 0) <= 0 and days not in PERIOD_PRICES:
+            continue
+        normalized.append(days)
+
+    if not normalized:
+        normalized = [days for days in sorted(PERIOD_PRICES.keys()) if PERIOD_PRICES.get(days, 0) > 0]
+
+    if not normalized:
+        normalized = [30]
+
+    normalized = sorted(set(normalized))
+    return normalized
+
+
+def _get_available_traffic_packages() -> List[int]:
+    packages: List[int] = []
+    for package in settings.get_traffic_packages():
+        try:
+            gb_value = int(package.get("gb"))
+        except (TypeError, ValueError):
+            continue
+
+        if gb_value < 0:
+            continue
+
+        is_enabled = bool(package.get("enabled", True))
+        if package.get("is_active") is False:
+            is_enabled = False
+
+        if is_enabled:
+            packages.append(gb_value)
+
+    packages = sorted(set(packages))
+    return packages
+
+
+def _resolve_purchase_period_days(
+    payload: Any,
+    available_periods: List[int],
+) -> int:
+    if not available_periods:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "period_unavailable", "message": "No subscription periods are available"},
+        )
+
+    candidates = [
+        getattr(payload, "period_id", None),
+        getattr(payload, "period_key", None),
+        getattr(payload, "period_code", None),
+        getattr(payload, "period", None),
+    ]
+
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        text = str(candidate).strip()
+        if not text:
+            continue
+        if text.startswith("days:"):
+            text = text.split(":", 1)[1]
+        try:
+            value = int(float(text))
+        except (TypeError, ValueError):
+            continue
+        if value in available_periods:
+            return value
+
+    month_candidates = [
+        getattr(payload, "period_months", None),
+        getattr(payload, "months", None),
+    ]
+    for candidate in month_candidates:
+        if candidate is None:
+            continue
+        try:
+            months = int(float(candidate))
+        except (TypeError, ValueError):
+            continue
+        days = months * 30
+        if days in available_periods:
+            return days
+
+    day_candidates = [getattr(payload, "period_days", None)]
+    for candidate in day_candidates:
+        if candidate is None:
+            continue
+        try:
+            days = int(float(candidate))
+        except (TypeError, ValueError):
+            continue
+        if days in available_periods:
+            return days
+
+    return available_periods[0]
+
+
+def _resolve_purchase_traffic_value(
+    payload: Any,
+    subscription: Optional[Subscription],
+    selectable: bool,
+    available_packages: List[int],
+) -> int:
+    if not selectable:
+        return settings.get_fixed_traffic_limit()
+
+    candidates = [
+        getattr(payload, "traffic", None),
+        getattr(payload, "traffic_value", None),
+        getattr(payload, "traffic_gb", None),
+        getattr(payload, "limit", None),
+    ]
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        try:
+            value = int(float(candidate))
+        except (TypeError, ValueError):
+            continue
+        if value < 0:
+            continue
+        if available_packages and value not in available_packages:
+            continue
+        return value
+
+    if subscription and subscription.traffic_limit_gb is not None:
+        value = int(subscription.traffic_limit_gb)
+        if value >= 0 and (not available_packages or value in available_packages):
+            return value
+
+    if available_packages:
+        return available_packages[0]
+
+    return 0
+
+
+def _resolve_purchase_devices_value(
+    payload: Any,
+    subscription: Optional[Subscription],
+) -> int:
+    candidates = [
+        getattr(payload, "devices", None),
+        getattr(payload, "device_limit", None),
+    ]
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        try:
+            value = int(float(candidate))
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            return value
+
+    if subscription and subscription.device_limit:
+        try:
+            value = int(subscription.device_limit)
+        except (TypeError, ValueError):
+            value = None
+        if value and value > 0:
+            return value
+
+    default_limit = max(1, int(getattr(settings, "DEFAULT_DEVICE_LIMIT", 1)))
+    return default_limit
+
+
+def _resolve_purchase_servers_selection(
+    payload: Any,
+    subscription: Optional[Subscription],
+    available_servers: List[str],
+) -> List[str]:
+    raw_servers: List[str] = []
+    for attr_name in ("servers", "countries", "server_uuids", "squad_uuids"):
+        attr_value = getattr(payload, attr_name, None)
+        if isinstance(attr_value, (list, tuple, set)):
+            raw_servers.extend(_normalize_server_list(attr_value))
+
+    selection = _normalize_server_list(raw_servers)
+
+    if not selection and subscription and getattr(subscription, "connected_squads", None):
+        selection = _normalize_server_list(subscription.connected_squads)
+
+    if not selection and available_servers:
+        selection = [available_servers[0]]
+
+    return selection
+
+
+def _build_default_purchase_selection(
+    payload: Any,
+    user: User,
+    available_periods: List[int],
+    available_packages: List[int],
+    available_servers: List[str],
+) -> PurchaseSelection:
+    subscription = getattr(user, "subscription", None)
+    period_days = _resolve_purchase_period_days(payload, available_periods)
+    traffic_value = _resolve_purchase_traffic_value(
+        payload,
+        subscription,
+        settings.is_traffic_selectable(),
+        available_packages,
+    )
+    servers = _resolve_purchase_servers_selection(payload, subscription, available_servers)
+    devices = _resolve_purchase_devices_value(payload, subscription)
+
+    return PurchaseSelection(
+        period_days=period_days,
+        traffic_gb=traffic_value,
+        servers=servers,
+        devices=devices,
+    )
+
+
+def _serialize_purchase_selection(selection: PurchaseSelection) -> Dict[str, Any]:
+    return {
+        "period_id": str(selection.period_days),
+        "periodId": str(selection.period_days),
+        "period": str(selection.period_days),
+        "period_days": selection.period_days,
+        "periodDays": selection.period_days,
+        "traffic": selection.traffic_gb,
+        "traffic_value": selection.traffic_gb,
+        "trafficValue": selection.traffic_gb,
+        "traffic_gb": selection.traffic_gb,
+        "trafficGb": selection.traffic_gb,
+        "servers": selection.servers,
+        "countries": selection.servers,
+        "server_uuids": selection.servers,
+        "serverUuids": selection.servers,
+        "devices": selection.devices,
+        "device_limit": selection.devices,
+        "deviceLimit": selection.devices,
+    }
+
+
+async def _build_subscription_purchase_options_payload(
+    db: AsyncSession,
+    user: User,
+    payload: Optional[Any] = None,
+) -> MiniAppSubscriptionPurchaseOptions:
+    payload = payload or SimpleNamespace()
+    available_periods = _get_available_purchase_periods()
+    available_packages = _get_available_traffic_packages()
+    available_servers_models = await get_available_server_squads(
+        db,
+        promo_group_id=getattr(user, "promo_group_id", None),
+    )
+    available_server_uuids = [
+        server.squad_uuid
+        for server in available_servers_models
+        if getattr(server, "squad_uuid", None)
+    ]
+
+    selection = _build_default_purchase_selection(
+        payload,
+        user,
+        available_periods,
+        available_packages,
+        available_server_uuids,
+    )
+
+    subscription = getattr(user, "subscription", None)
+    currency = (getattr(user, "balance_currency", None) or "RUB").upper()
+    balance_kopeks = int(getattr(user, "balance_kopeks", 0) or 0)
+
+    traffic_config: Dict[str, Any] = {
+        "mode": "selectable" if settings.is_traffic_selectable() else "fixed",
+        "selectable": settings.is_traffic_selectable(),
+        "options": [
+            {
+                "value": gb,
+                "label": f"{gb} GB",
+            }
+            for gb in available_packages
+        ],
+        "current": selection.traffic_gb,
+        "default": selection.traffic_gb,
+    }
+    if not settings.is_traffic_selectable():
+        traffic_config.update(
+            {
+                "value": settings.get_fixed_traffic_limit(),
+                "label": f"{settings.get_fixed_traffic_limit()} GB",
+            }
+        )
+
+    servers_config: Dict[str, Any] = {
+        "options": [
+            {
+                "uuid": server.squad_uuid,
+                "name": getattr(server, "display_name", server.squad_uuid),
+            }
+            for server in available_servers_models
+        ],
+        "min": 1 if available_servers_models else 0,
+        "max": len(available_servers_models),
+        "selectable": len(available_servers_models) > 1,
+        "selected": selection.servers,
+        "default": selection.servers,
+    }
+
+    max_devices_setting = getattr(settings, "MAX_DEVICES_LIMIT", 0)
+    devices_config: Dict[str, Any] = {
+        "min": 1,
+        "max": max_devices_setting if max_devices_setting > 0 else 0,
+        "step": 1,
+        "default": selection.devices,
+        "current": selection.devices,
+        "price_per_device_kopeks": settings.PRICE_PER_DEVICE,
+        "price_per_device_label": _format_price_label(settings.PRICE_PER_DEVICE),
+    }
+
+    language = getattr(user, "language", "ru") or "ru"
+    periods_payload: List[Dict[str, Any]] = []
+
+    for days in available_periods:
+        base_price_original = int(PERIOD_PRICES.get(days, 0) or 0)
+        if base_price_original <= 0:
+            continue
+
+        months = calculate_months_from_days(days)
+        try:
+            period_discount_percent = int(user.get_promo_discount("period", days))
+        except Exception:
+            period_discount_percent = 0
+        discounted_base, base_discount_value = apply_percentage_discount(
+            base_price_original,
+            period_discount_percent,
+        )
+
+        per_month_price = discounted_base // max(1, months)
+
+        period_payload: Dict[str, Any] = {
+            "id": str(days),
+            "days": days,
+            "months": months,
+            "priceKopeks": discounted_base,
+            "priceLabel": _format_price_label(discounted_base),
+            "perMonthPriceKopeks": per_month_price,
+            "perMonthPriceLabel": _format_price_label(per_month_price),
+            "description": format_period_description(days, language),
+        }
+
+        if base_discount_value > 0:
+            period_payload.update(
+                {
+                    "originalPriceKopeks": base_price_original,
+                    "originalPriceLabel": _format_price_label(base_price_original),
+                    "discountPercent": period_discount_percent,
+                }
+            )
+
+        if settings.is_traffic_selectable() and available_packages:
+            traffic_discount_percent = _get_addon_discount_percent_for_user(
+                user,
+                "traffic",
+                days,
+            )
+            traffic_options_override: List[Dict[str, Any]] = []
+            for gb in available_packages:
+                monthly_price = settings.get_traffic_price(gb)
+                discounted_monthly, _ = apply_percentage_discount(
+                    monthly_price,
+                    traffic_discount_percent,
+                )
+                option_payload: Dict[str, Any] = {
+                    "value": gb,
+                    "priceKopeks": discounted_monthly,
+                    "priceLabel": _format_price_label(discounted_monthly),
+                }
+                if discounted_monthly != monthly_price:
+                    option_payload.update(
+                        {
+                            "originalPriceKopeks": monthly_price,
+                            "originalPriceLabel": _format_price_label(monthly_price),
+                        }
+                    )
+                if traffic_discount_percent:
+                    option_payload["discountPercent"] = traffic_discount_percent
+                traffic_options_override.append(option_payload)
+
+            if traffic_options_override:
+                period_payload["traffic"] = {
+                    "options": traffic_options_override,
+                    "selectable": True,
+                }
+                if traffic_discount_percent:
+                    period_payload["traffic"]["discountPercent"] = traffic_discount_percent
+
+        servers_discount_percent = _get_addon_discount_percent_for_user(
+            user,
+            "servers",
+            days,
+        )
+        catalog_subscription = subscription or SimpleNamespace(
+            connected_squads=selection.servers,
+        )
+        _, server_option_models, server_catalog = await _prepare_server_catalog(
+            db,
+            user,
+            catalog_subscription,
+            servers_discount_percent,
+        )
+        server_override_options: List[Dict[str, Any]] = []
+        for option in server_option_models:
+            entry = server_catalog.get(option.uuid, {})
+            option_payload = {
+                "uuid": option.uuid,
+                "name": option.name,
+                "priceKopeks": option.price_kopeks,
+                "priceLabel": _format_price_label(option.price_kopeks),
+                "isAvailable": option.is_available,
+            }
+            original_per_month = int(entry.get("price_per_month", 0) or 0)
+            if original_per_month and original_per_month != option.price_kopeks:
+                option_payload.update(
+                    {
+                        "originalPriceKopeks": original_per_month,
+                        "originalPriceLabel": _format_price_label(original_per_month),
+                    }
+                )
+            if option.discount_percent:
+                option_payload["discountPercent"] = option.discount_percent
+            server_override_options.append(option_payload)
+
+        period_payload["servers"] = {
+            "options": server_override_options,
+            "min": 1 if server_override_options else 0,
+            "max": len(server_override_options),
+            "selectable": len(server_override_options) > 1,
+        }
+
+        devices_discount_percent = _get_addon_discount_percent_for_user(
+            user,
+            "devices",
+            days,
+        )
+        discounted_device_price, _ = apply_percentage_discount(
+            settings.PRICE_PER_DEVICE,
+            devices_discount_percent,
+        )
+        devices_override: Dict[str, Any] = {
+            "pricePerDeviceKopeks": discounted_device_price,
+            "pricePerDeviceLabel": _format_price_label(discounted_device_price),
+            "min": devices_config["min"],
+            "max": devices_config["max"],
+            "step": devices_config["step"],
+        }
+        if discounted_device_price != settings.PRICE_PER_DEVICE:
+            devices_override.update(
+                {
+                    "originalPricePerDeviceKopeks": settings.PRICE_PER_DEVICE,
+                    "originalPricePerDeviceLabel": _format_price_label(settings.PRICE_PER_DEVICE),
+                }
+            )
+        if devices_discount_percent:
+            devices_override["discountPercent"] = devices_discount_percent
+        period_payload["devices"] = devices_override
+
+        periods_payload.append(period_payload)
+
+    purchase_selection_dict = _serialize_purchase_selection(selection)
+
+    options_model = MiniAppSubscriptionPurchaseOptions(
+        currency=currency,
+        balanceKopeks=balance_kopeks,
+        balanceLabel=_format_price_label(balance_kopeks),
+        subscriptionId=getattr(subscription, "id", None),
+        periods=[MiniAppSubscriptionPurchasePeriod(**period) for period in periods_payload],
+        traffic=traffic_config,
+        servers=servers_config,
+        devices=devices_config,
+        selection=purchase_selection_dict,
+        promo={
+            "activePromoPercent": get_user_active_promo_discount_percent(user),
+        },
+    )
+
+    return options_model
+
+
+async def _calculate_subscription_purchase_preview(
+    db: AsyncSession,
+    user: User,
+    selection: PurchaseSelection,
+) -> Dict[str, Any]:
+    available_periods = _get_available_purchase_periods()
+    if selection.period_days not in available_periods:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "period_unavailable", "message": "Selected subscription period is not available"},
+        )
+
+    base_price_original = int(PERIOD_PRICES.get(selection.period_days, 0) or 0)
+    if base_price_original <= 0:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "period_unavailable", "message": "Selected subscription period is not available"},
+        )
+
+    months = calculate_months_from_days(selection.period_days)
+    months = max(1, months)
+
+    try:
+        period_discount_percent = int(user.get_promo_discount("period", selection.period_days))
+    except Exception:
+        period_discount_percent = 0
+    discounted_base, base_discount_value = apply_percentage_discount(
+        base_price_original,
+        period_discount_percent,
+    )
+
+    selectable_traffic = settings.is_traffic_selectable()
+    if selectable_traffic:
+        available_packages = _get_available_traffic_packages()
+        if available_packages and selection.traffic_gb not in available_packages:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "traffic_unavailable", "message": "Selected traffic package is not available"},
+            )
+    traffic_price_per_month = settings.get_traffic_price(selection.traffic_gb)
+    traffic_discount_percent = _get_addon_discount_percent_for_user(
+        user,
+        "traffic",
+        selection.period_days,
+    )
+    discounted_traffic_per_month, traffic_discount_per_month = apply_percentage_discount(
+        traffic_price_per_month,
+        traffic_discount_percent,
+    )
+    total_traffic_price = discounted_traffic_per_month * months
+    total_traffic_original = traffic_price_per_month * months
+
+    servers_discount_percent = _get_addon_discount_percent_for_user(
+        user,
+        "servers",
+        selection.period_days,
+    )
+    subscription = getattr(user, "subscription", None)
+    catalog_subscription = subscription or SimpleNamespace(
+        connected_squads=selection.servers,
+    )
+    _, server_option_models, server_catalog = await _prepare_server_catalog(
+        db,
+        user,
+        catalog_subscription,
+        servers_discount_percent,
+    )
+
+    if not selection.servers:
+        if server_option_models:
+            selection.servers = [server_option_models[0].uuid]
+        else:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "servers_unavailable", "message": "No servers are available for purchase"},
+            )
+
+    selected_entries = []
+    for uuid in selection.servers:
+        entry = server_catalog.get(uuid)
+        if not entry:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "invalid_servers", "message": "Selected server is not available"},
+            )
+        if not entry.get("available_for_new", False) and not entry.get("is_connected", False):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "server_unavailable", "message": "Selected server is not available"},
+            )
+        selected_entries.append(entry)
+
+    servers_original_per_month = sum(int(entry.get("price_per_month", 0) or 0) for entry in selected_entries)
+    servers_discounted_per_month = sum(int(entry.get("discounted_per_month", 0) or 0) for entry in selected_entries)
+    total_servers_original = servers_original_per_month * months
+    total_servers_price = servers_discounted_per_month * months
+
+    default_device_limit = max(1, getattr(settings, "DEFAULT_DEVICE_LIMIT", 1))
+    max_devices_setting = getattr(settings, "MAX_DEVICES_LIMIT", 0)
+    if max_devices_setting > 0 and selection.devices > max_devices_setting:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "devices_limit_exceeded",
+                "message": f"Device limit exceeds maximum allowed ({max_devices_setting})",
+            },
+        )
+
+    additional_devices = max(0, selection.devices - default_device_limit)
+    devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
+    devices_discount_percent = _get_addon_discount_percent_for_user(
+        user,
+        "devices",
+        selection.period_days,
+    )
+    discounted_devices_per_month, devices_discount_per_month = apply_percentage_discount(
+        devices_price_per_month,
+        devices_discount_percent,
+    )
+    total_devices_price = discounted_devices_per_month * months
+    total_devices_original = devices_price_per_month * months
+
+    total_original = (
+        base_price_original
+        + total_traffic_original
+        + total_servers_original
+        + total_devices_original
+    )
+    total_after_discounts = (
+        discounted_base
+        + total_traffic_price
+        + total_servers_price
+        + total_devices_price
+    )
+
+    promo_offer_percent = get_user_active_promo_discount_percent(user)
+    final_price, promo_discount_value = apply_percentage_discount(
+        total_after_discounts,
+        promo_offer_percent,
+    )
+
+    breakdown: List[Dict[str, Any]] = []
+    period_label = format_period_description(selection.period_days, getattr(user, "language", "ru"))
+    breakdown.append(
+        {
+            "label": period_label,
+            "value": _format_price_label(discounted_base),
+        }
+    )
+    if total_servers_price > 0:
+        breakdown.append(
+            {
+                "label": f"Servers ({len(selection.servers)})",
+                "value": _format_price_label(total_servers_price),
+            }
+        )
+    if total_traffic_price > 0:
+        breakdown.append(
+            {
+                "label": f"Traffic {selection.traffic_gb} GB",
+                "value": _format_price_label(total_traffic_price),
+            }
+        )
+    if total_devices_price > 0:
+        breakdown.append(
+            {
+                "label": f"Devices ({selection.devices})",
+                "value": _format_price_label(total_devices_price),
+            }
+        )
+
+    discount_lines: List[str] = []
+    if base_discount_value > 0 and period_discount_percent > 0:
+        discount_lines.append(f"Period discount −{period_discount_percent}%")
+    if traffic_discount_per_month > 0 and traffic_discount_percent > 0:
+        discount_lines.append(f"Traffic discount −{traffic_discount_percent}%")
+    if devices_discount_per_month > 0 and devices_discount_percent > 0:
+        discount_lines.append(f"Devices discount −{devices_discount_percent}%")
+    if servers_original_per_month > servers_discounted_per_month and servers_discount_percent > 0:
+        discount_lines.append(f"Servers discount −{servers_discount_percent}%")
+    if promo_discount_value > 0 and promo_offer_percent > 0:
+        discount_lines.append(f"Promo offer −{promo_offer_percent}%")
+
+    balance_kopeks = int(getattr(user, "balance_kopeks", 0) or 0)
+    missing_amount = max(0, final_price - balance_kopeks)
+
+    per_month_price = final_price // months
+
+    preview_payload = {
+        "totalPriceKopeks": final_price,
+        "totalPriceLabel": _format_price_label(final_price),
+        "originalPriceKopeks": total_original if total_original != final_price else None,
+        "originalPriceLabel": _format_price_label(total_original) if total_original != final_price else None,
+        "perMonthPriceKopeks": per_month_price,
+        "perMonthPriceLabel": _format_price_label(per_month_price),
+        "discountPercent": promo_offer_percent if promo_offer_percent else None,
+        "discountLines": discount_lines,
+        "balanceKopeks": balance_kopeks,
+        "balanceLabel": _format_price_label(balance_kopeks),
+        "missingAmountKopeks": missing_amount if missing_amount > 0 else None,
+        "missingAmountLabel": _format_price_label(missing_amount) if missing_amount > 0 else None,
+        "breakdown": breakdown,
+        "statusMessage": "Insufficient balance" if missing_amount > 0 else None,
+        "canPurchase": missing_amount <= 0,
+    }
+
+    calculation_details = {
+        "preview": preview_payload,
+        "selection": selection,
+        "total_price": final_price,
+        "total_original": total_original,
+        "months": months,
+        "base_price": discounted_base,
+        "base_price_original": base_price_original,
+        "promo_offer_percent": promo_offer_percent,
+        "promo_discount_value": promo_discount_value,
+        "traffic_total": total_traffic_price,
+        "servers_total": total_servers_price,
+        "devices_total": total_devices_price,
+        "server_catalog": server_catalog,
+        "server_option_models": server_option_models,
+        "server_prices_for_period": [
+            int(entry.get("discounted_per_month", 0) or 0) * months
+            for entry in selected_entries
+        ],
+        "traffic_discount_total": traffic_discount_per_month * months,
+        "devices_discount_total": devices_discount_per_month * months,
+        "servers_discount_total": (servers_original_per_month - servers_discounted_per_month) * months,
+        "base_discount_total": base_discount_value,
+        "selected_server_entries": selected_entries,
+    }
+
+    return calculation_details
+
+
 def _get_period_hint_from_subscription(
     subscription: Optional[Subscription],
 ) -> Optional[int]:
@@ -3092,6 +3881,297 @@ async def _build_subscription_settings(
     )
 
     return settings_payload
+
+
+@router.post(
+    "/subscription/purchase/options",
+    response_model=MiniAppSubscriptionPurchaseOptionsResponse,
+)
+async def get_subscription_purchase_options_endpoint(
+    payload: MiniAppSubscriptionPurchaseOptionsRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionPurchaseOptionsResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+
+    options_payload = await _build_subscription_purchase_options_payload(db, user, payload)
+
+    return MiniAppSubscriptionPurchaseOptionsResponse(data=options_payload)
+
+
+@router.post(
+    "/subscription/purchase/preview",
+    response_model=MiniAppSubscriptionPurchasePreviewResponse,
+)
+async def preview_subscription_purchase_endpoint(
+    payload: MiniAppSubscriptionPurchasePreviewRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionPurchasePreviewResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+
+    available_periods = _get_available_purchase_periods()
+    available_packages = _get_available_traffic_packages()
+    available_servers_models = await get_available_server_squads(
+        db,
+        promo_group_id=getattr(user, "promo_group_id", None),
+    )
+    available_server_uuids = [
+        server.squad_uuid
+        for server in available_servers_models
+        if getattr(server, "squad_uuid", None)
+    ]
+
+    selection = _build_default_purchase_selection(
+        payload,
+        user,
+        available_periods,
+        available_packages,
+        available_server_uuids,
+    )
+
+    calculation = await _calculate_subscription_purchase_preview(db, user, selection)
+    preview_model = MiniAppSubscriptionPurchasePreview(**calculation["preview"])
+
+    return MiniAppSubscriptionPurchasePreviewResponse(preview=preview_model)
+
+
+@router.post(
+    "/subscription/purchase",
+    response_model=MiniAppSubscriptionPurchaseSubmitResponse,
+)
+async def submit_subscription_purchase_endpoint(
+    payload: MiniAppSubscriptionPurchaseSubmitRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionPurchaseSubmitResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+
+    available_periods = _get_available_purchase_periods()
+    available_packages = _get_available_traffic_packages()
+    available_servers_models = await get_available_server_squads(
+        db,
+        promo_group_id=getattr(user, "promo_group_id", None),
+    )
+    available_server_uuids = [
+        server.squad_uuid
+        for server in available_servers_models
+        if getattr(server, "squad_uuid", None)
+    ]
+
+    selection = _build_default_purchase_selection(
+        payload,
+        user,
+        available_periods,
+        available_packages,
+        available_server_uuids,
+    )
+
+    calculation = await _calculate_subscription_purchase_preview(db, user, selection)
+    preview_payload = calculation["preview"]
+
+    missing_amount = preview_payload.get("missingAmountKopeks") or 0
+    if missing_amount and missing_amount > 0:
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "insufficient_funds",
+                "message": "Insufficient funds on balance",
+                "missing_amount_kopeks": missing_amount,
+            },
+        )
+
+    final_price = calculation["total_price"]
+    description = f"Purchase of subscription for {selection.period_days} days"
+
+    balance_debited = False
+    purchase_completed = False
+    subscription = getattr(user, "subscription", None)
+    server_entries = calculation.get("selected_server_entries", [])
+    server_prices_for_period = calculation.get("server_prices_for_period", [])
+
+    try:
+        if final_price > 0:
+            success = await subtract_user_balance(
+                db,
+                user,
+                final_price,
+                description,
+                consume_promo_offer=calculation.get("promo_discount_value", 0) > 0,
+            )
+            if not success:
+                raise HTTPException(
+                    status.HTTP_402_PAYMENT_REQUIRED,
+                    detail={
+                        "code": "insufficient_funds",
+                        "message": "Insufficient funds on balance",
+                    },
+                )
+            balance_debited = True
+
+        current_time = datetime.utcnow()
+        traffic_limit_gb = (
+            selection.traffic_gb
+            if settings.is_traffic_selectable()
+            else settings.get_fixed_traffic_limit()
+        )
+
+        if subscription:
+            bonus_period = timedelta()
+            if subscription.is_trial:
+                try:
+                    trial_duration = (current_time - (subscription.start_date or current_time)).days
+                except Exception:
+                    trial_duration = 0
+
+                if (
+                    settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID
+                    and getattr(subscription, "end_date", None)
+                ):
+                    remaining = subscription.end_date - current_time
+                    if remaining.total_seconds() > 0:
+                        bonus_period = remaining
+
+                try:
+                    await create_subscription_conversion(
+                        db=db,
+                        user_id=user.id,
+                        trial_duration_days=trial_duration,
+                        payment_method="balance",
+                        first_payment_amount_kopeks=final_price,
+                        first_paid_period_days=selection.period_days,
+                    )
+                except Exception as conversion_error:
+                    logger.warning(
+                        "Failed to record trial conversion for user %s: %s",
+                        user.id,
+                        conversion_error,
+                    )
+
+                subscription.is_trial = False
+
+            subscription.status = SubscriptionStatus.ACTIVE.value
+            subscription.start_date = current_time
+            subscription.end_date = current_time + timedelta(days=selection.period_days) + bonus_period
+            subscription.traffic_limit_gb = traffic_limit_gb
+            subscription.device_limit = selection.devices
+            subscription.connected_squads = selection.servers
+            subscription.traffic_used_gb = 0.0
+            subscription.updated_at = current_time
+
+            await db.commit()
+            await db.refresh(subscription)
+        else:
+            subscription = await create_paid_subscription(
+                db=db,
+                user_id=user.id,
+                duration_days=selection.period_days,
+                traffic_limit_gb=traffic_limit_gb,
+                device_limit=selection.devices,
+                connected_squads=selection.servers,
+                update_server_counters=False,
+            )
+
+        server_data: List[Tuple[int, int]] = []
+        for entry, price in zip(server_entries, server_prices_for_period):
+            server_id = entry.get("server_id") if isinstance(entry, dict) else None
+            if server_id is None:
+                try:
+                    server = await get_server_squad_by_uuid(db, entry.get("uuid"))
+                    server_id = getattr(server, "id", None)
+                except Exception:
+                    server_id = None
+            if server_id is not None:
+                server_data.append((int(server_id), int(price)))
+
+        if server_data:
+            server_ids = [item[0] for item in server_data]
+            server_paid_prices = [item[1] for item in server_data]
+            await add_subscription_servers(db, subscription, server_ids, server_paid_prices)
+            await add_user_to_servers(db, server_ids)
+
+        await mark_user_as_had_paid_subscription(db, user)
+
+        service = SubscriptionService()
+        try:
+            if getattr(user, "remnawave_uuid", None):
+                remna_user = await service.update_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=getattr(settings, "RESET_TRAFFIC_ON_PAYMENT", False),
+                    reset_reason="subscription_purchase",
+                )
+            else:
+                remna_user = await service.create_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=getattr(settings, "RESET_TRAFFIC_ON_PAYMENT", False),
+                    reset_reason="subscription_purchase",
+                )
+        except Exception as service_error:
+            logger.warning(
+                "Failed to synchronize RemnaWave user for %s: %s",
+                user.id,
+                service_error,
+            )
+            remna_user = None
+
+        if not remna_user:
+            try:
+                remna_user = await service.create_remnawave_user(
+                    db,
+                    subscription,
+                    reset_traffic=getattr(settings, "RESET_TRAFFIC_ON_PAYMENT", False),
+                    reset_reason="subscription_purchase_retry",
+                )
+            except Exception as retry_error:
+                logger.warning(
+                    "Failed to create RemnaWave user on retry for %s: %s",
+                    user.id,
+                    retry_error,
+                )
+
+        await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=final_price,
+            description=f"Subscription for {selection.period_days} days",
+        )
+
+        await db.refresh(user)
+        purchase_completed = True
+
+    except HTTPException:
+        raise
+    except Exception as purchase_error:
+        logger.error("Subscription purchase failed for user %s: %s", user.id, purchase_error)
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "purchase_failed", "message": "Failed to complete subscription purchase"},
+        ) from purchase_error
+    finally:
+        if not purchase_completed and balance_debited and final_price > 0:
+            try:
+                await add_user_balance(
+                    db,
+                    user,
+                    final_price,
+                    "Refund for failed subscription purchase",
+                )
+            except Exception as refund_error:
+                logger.error(
+                    "Failed to refund user %s after purchase failure: %s",
+                    user.id,
+                    refund_error,
+                )
+
+    response = MiniAppSubscriptionPurchaseSubmitResponse(
+        success=True,
+        message="Subscription purchased successfully",
+        subscriptionId=getattr(subscription, "id", None),
+        balanceKopeks=getattr(user, "balance_kopeks", 0),
+        balanceLabel=_format_price_label(getattr(user, "balance_kopeks", 0)),
+    )
+
+    return response
 
 
 @router.post(
