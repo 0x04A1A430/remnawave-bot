@@ -708,7 +708,6 @@ class PaymentService:
                 "invoice_id": str(invoice_data['invoice_id']),
                 "amount": amount_str,
                 "asset": asset,
-                "payload": payload,
                 "bot_invoice_url": invoice_data.get('bot_invoice_url'),
                 "mini_app_invoice_url": invoice_data.get('mini_app_invoice_url'),
                 "web_app_invoice_url": invoice_data.get('web_app_invoice_url'),
@@ -829,7 +828,6 @@ class PaymentService:
         language: str,
         ttl_seconds: Optional[int] = None,
         payer_email: Optional[str] = None,
-        payment_method: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
 
         if not self.pal24_service or not self.pal24_service.is_configured:
@@ -860,8 +858,6 @@ class PaymentService:
             "language": language,
         }
 
-        normalized_payment_method = (payment_method or "SBP").upper()
-
         try:
             response = await self.pal24_service.create_bill(
                 amount_kopeks=amount_kopeks,
@@ -871,7 +867,7 @@ class PaymentService:
                 ttl_seconds=ttl_seconds,
                 custom_payload=custom_payload,
                 payer_email=payer_email,
-                payment_method=normalized_payment_method,
+                payment_method="SBP",
             )
         except Pal24APIError as error:
             logger.error("Ошибка Pal24 API при создании счета: %s", error)
@@ -966,7 +962,6 @@ class PaymentService:
             "sbp_url": transfer_url or primary_link,
             "card_url": card_url,
             "transfer_url": transfer_url,
-            "payment_method": normalized_payment_method,
         }
 
         logger.info(
