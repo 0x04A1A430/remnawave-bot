@@ -15,6 +15,41 @@ class MiniAppSubscriptionRequest(BaseModel):
     init_data: str = Field(..., alias="initData")
 
 
+class MiniAppSubscriptionSettingsRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+
+class MiniAppSubscriptionServersUpdateRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    servers: List[str] = Field(default_factory=list)
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+
+class MiniAppSubscriptionTrafficUpdateRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    traffic: Optional[int] = None
+    traffic_gb: Optional[int] = Field(default=None, alias="trafficGb")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+
+class MiniAppSubscriptionDevicesUpdateRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    devices: Optional[int] = None
+    device_limit: Optional[int] = Field(default=None, alias="deviceLimit")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+
+class MiniAppSubscriptionActionResponse(BaseModel):
+    success: bool = True
+    message: Optional[str] = None
+
+
+class MiniAppSubscriptionSettingsResponse(BaseModel):
+    success: bool = True
+    settings: Dict[str, Any] = Field(default_factory=dict)
+
+
 class MiniAppSubscriptionUser(BaseModel):
     telegram_id: int
     username: Optional[str] = None
