@@ -331,46 +331,6 @@
             min-width: 220px;
         }
 
-        .state-card {
-            background: var(--bg-secondary);
-            border-radius: var(--radius-xl);
-            padding: 32px 24px;
-            text-align: center;
-            box-shadow: var(--shadow-sm);
-            margin: 20px 0;
-        }
-
-        .state-icon {
-            font-size: 56px;
-            margin-bottom: 16px;
-        }
-
-        .state-title {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 12px;
-            color: var(--text-primary);
-        }
-
-        .state-text {
-            font-size: 15px;
-            color: var(--text-secondary);
-            line-height: 1.6;
-            margin-bottom: 24px;
-        }
-
-        .state-actions {
-            display: flex;
-            justify-content: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .state-actions .btn {
-            width: auto;
-            min-width: 200px;
-        }
-
         /* Cards */
         .card {
             background: var(--bg-secondary);
@@ -1920,11 +1880,6 @@
         .status-disabled {
             background: linear-gradient(135deg, #e2e3e5, #eeeff1);
             color: #41464b;
-        }
-
-        .status-inactive {
-            background: linear-gradient(135deg, #e7e9ff, #f0f2ff);
-            color: #3f3d56;
         }
 
         /* Stats Grid */
@@ -4268,30 +4223,10 @@
             </div>
         </div>
 
-        <!-- Registration State -->
-        <div id="registerState" class="state-card hidden">
-            <div class="state-icon">🤖</div>
-            <div class="state-title" data-i18n="register_required.title">Registration required</div>
-            <div class="state-text" data-i18n="register_required.description">Open the bot to create an account and start using the VPN.</div>
-            <div class="state-actions">
-                <button class="btn btn-primary" id="registerBtn" type="button" data-i18n="register_required.action">Open bot</button>
-            </div>
-        </div>
-
         <!-- Main Content -->
         <div id="mainContent" class="hidden">
             <!-- Promo Offers -->
             <div id="promoOffersContainer" class="promo-offers hidden"></div>
-
-            <!-- Empty Subscription State -->
-            <div class="state-card hidden" id="subscriptionEmptyCard">
-                <div class="state-icon">🛒</div>
-                <div class="state-title" data-i18n="empty_subscription.title">Subscription inactive</div>
-                <div class="state-text" data-i18n="empty_subscription.description">You don't have an active subscription yet. Purchase a plan or activate a trial in the bot.</div>
-                <div class="state-actions">
-                    <button class="btn btn-primary" id="subscriptionEmptyAction" type="button" data-i18n="empty_subscription.action">Open bot</button>
-                </div>
-            </div>
 
             <!-- User Card -->
             <div class="card user-card animate-in">
@@ -5037,12 +4972,6 @@
                 'app.loading': 'Loading your subscription...',
                 'error.default.title': 'Subscription Not Found',
                 'error.default.message': 'Please contact support to activate your subscription.',
-                'register_required.title': 'Registration required',
-                'register_required.description': 'Open the bot to register and manage your subscription.',
-                'register_required.action': 'Open bot',
-                'empty_subscription.title': 'Subscription inactive',
-                'empty_subscription.description': 'You do not have an active subscription yet. Purchase a plan or activate a trial in the bot.',
-                'empty_subscription.action': 'Open bot',
                 'stats.days_left': 'Days left',
                 'stats.servers': 'Servers',
                 'stats.devices': 'Devices',
@@ -5056,7 +4985,6 @@
                 'button.connect.default': 'Connect to VPN',
                 'button.connect.happ': 'Connect',
                 'button.copy': 'Copy subscription link',
-                'button.open_bot': 'Open bot',
                 'button.topup_balance': 'Top up balance',
                 'topup.title': 'Top up balance',
                 'topup.subtitle': 'Choose a payment method',
@@ -5352,11 +5280,9 @@
                 'status.trial': 'Trial',
                 'status.expired': 'Expired',
                 'status.disabled': 'Disabled',
-                'status.inactive': 'Inactive',
                 'status.unknown': 'Unknown',
                 'subscription.type.trial': 'Trial',
                 'subscription.type.paid': 'Paid',
-                'subscription.type.none': 'No subscription',
                 'autopay.enabled': 'Enabled',
                 'autopay.disabled': 'Disabled',
                 'platform.ios': 'iOS',
@@ -5401,12 +5327,6 @@
                 'app.loading': 'Загружаем вашу подписку...',
                 'error.default.title': 'Подписка не найдена',
                 'error.default.message': 'Свяжитесь с поддержкой, чтобы активировать подписку.',
-                'register_required.title': 'Требуется регистрация',
-                'register_required.description': 'Откройте бота, чтобы зарегистрироваться и управлять подпиской.',
-                'register_required.action': 'Открыть бота',
-                'empty_subscription.title': 'Подписка не активна',
-                'empty_subscription.description': 'У вас нет активной подписки. Купите тариф или активируйте триал в боте.',
-                'empty_subscription.action': 'Открыть бота',
                 'stats.days_left': 'Осталось дней',
                 'stats.servers': 'Серверы',
                 'stats.devices': 'Устройства',
@@ -5420,7 +5340,6 @@
                 'button.connect.default': 'Подключиться к VPN',
                 'button.connect.happ': 'Подключиться',
                 'button.copy': 'Скопировать ссылку подписки',
-                'button.open_bot': 'Открыть бота',
                 'button.topup_balance': 'Пополнить баланс',
                 'topup.title': 'Пополнение баланса',
                 'topup.subtitle': 'Выберите способ оплаты',
@@ -5716,11 +5635,9 @@
                 'status.trial': 'Пробная',
                 'status.expired': 'Истекла',
                 'status.disabled': 'Отключена',
-                'status.inactive': 'Неактивна',
                 'status.unknown': 'Неизвестно',
                 'subscription.type.trial': 'Триал',
                 'subscription.type.paid': 'Платная',
-                'subscription.type.none': 'Нет подписки',
                 'autopay.enabled': 'Включен',
                 'autopay.disabled': 'Выключен',
                 'platform.ios': 'iOS',
@@ -6542,7 +6459,6 @@
 
         function getEffectivePurchaseUrl() {
             const candidates = [
-                currentErrorState?.botUrl,
                 currentErrorState?.purchaseUrl,
                 subscriptionPurchaseUrl,
                 configPurchaseUrl,
@@ -6577,31 +6493,6 @@
             }
         }
 
-        function updateRegisterState() {
-            const registerBtn = document.getElementById('registerBtn');
-            if (!registerBtn) {
-                return;
-            }
-
-            const sources = [
-                currentErrorState?.botUrl,
-                currentErrorState?.purchaseUrl,
-                configPurchaseUrl,
-            ];
-
-            let link = null;
-            for (const source of sources) {
-                const normalized = normalizeUrl(source);
-                if (normalized) {
-                    link = normalized;
-                    break;
-                }
-            }
-
-            registerBtn.disabled = !link;
-            registerBtn.dataset.link = link || '';
-        }
-
         function applyTranslations() {
             document.title = t('app.title');
             document.documentElement.setAttribute('lang', preferredLanguage);
@@ -6625,7 +6516,6 @@
                 languageSelect.setAttribute('aria-label', t('language.ariaLabel'));
             }
             updateErrorTexts();
-            updateRegisterState();
         }
 
         function updateConnectButtonLabel() {
@@ -6681,16 +6571,13 @@
             setLanguage(event.target.value, { persist: true });
         });
 
-        function createError(title, message, status, extra = null) {
+        function createError(title, message, status) {
             const error = new Error(message || title);
             if (title) {
                 error.title = title;
             }
             if (status) {
                 error.status = status;
-            }
-            if (extra && typeof extra === 'object') {
-                Object.assign(error, extra);
             }
             return error;
         }
@@ -6735,8 +6622,6 @@
                 : 'Subscription not found';
             let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
             let purchaseUrl = null;
-            let detailCode = null;
-            let botUrl = null;
 
             try {
                 const errorPayload = await response.json();
@@ -6747,18 +6632,9 @@
                         if (typeof errorPayload.detail.message === 'string') {
                             detail = errorPayload.detail.message;
                         }
-                        if (typeof errorPayload.detail.code === 'string') {
-                            detailCode = errorPayload.detail.code;
-                        }
-                        if (typeof errorPayload.detail.title === 'string') {
-                            title = errorPayload.detail.title;
-                        }
                         purchaseUrl = errorPayload.detail.purchase_url
                             || errorPayload.detail.purchaseUrl
                             || purchaseUrl;
-                        botUrl = errorPayload.detail.bot_url
-                            || errorPayload.detail.botUrl
-                            || botUrl;
                     }
                 } else if (typeof errorPayload?.message === 'string') {
                     detail = errorPayload.message;
@@ -6766,14 +6642,6 @@
 
                 if (typeof errorPayload?.title === 'string') {
                     title = errorPayload.title;
-                }
-
-                if (typeof errorPayload?.code === 'string') {
-                    detailCode = detailCode || errorPayload.code;
-                }
-
-                if (typeof errorPayload?.bot_url === 'string' || typeof errorPayload?.botUrl === 'string') {
-                    botUrl = errorPayload.bot_url || errorPayload.botUrl || botUrl;
                 }
 
                 purchaseUrl = purchaseUrl
@@ -6784,13 +6652,11 @@
                 // ignore JSON parsing errors
             }
 
+            const errorObject = createError(title, detail, response.status);
             const normalizedPurchaseUrl = normalizeUrl(purchaseUrl);
-            const normalizedBotUrl = normalizeUrl(botUrl);
-            const errorObject = createError(title, detail, response.status, {
-                code: detailCode,
-                purchaseUrl: normalizedPurchaseUrl || null,
-                botUrl: normalizedBotUrl || null,
-            });
+            if (normalizedPurchaseUrl) {
+                errorObject.purchaseUrl = normalizedPurchaseUrl;
+            }
             throw errorObject;
         }
 
@@ -6825,16 +6691,10 @@
 
             currentErrorState = null;
             updateErrorTexts();
-            updateRegisterState();
 
             const errorState = document.getElementById('errorState');
             if (errorState) {
                 errorState.classList.add('hidden');
-            }
-
-            const registerState = document.getElementById('registerState');
-            if (registerState) {
-                registerState.classList.add('hidden');
             }
 
             const loadingState = document.getElementById('loadingState');
@@ -6917,36 +6777,10 @@
                 );
                 if (configUrl) {
                     configPurchaseUrl = configUrl;
-                    updateRegisterState();
-                    updateSubscriptionEmptyState();
                 }
             } catch (error) {
                 console.warn('Unable to load apps configuration:', error);
                 appsConfig = {};
-            }
-        }
-
-        function updateSubscriptionEmptyState() {
-            const card = document.getElementById('subscriptionEmptyCard');
-            const userCard = document.querySelector('.user-card');
-            if (!card) {
-                return;
-            }
-
-            const hasUser = Boolean(userData?.user);
-            const hasActive = Boolean(userData?.user?.has_active_subscription);
-            const shouldShow = hasUser && !hasActive;
-
-            card.classList.toggle('hidden', !shouldShow);
-            if (userCard) {
-                userCard.classList.toggle('hidden', shouldShow);
-            }
-
-            const actionBtn = document.getElementById('subscriptionEmptyAction');
-            if (actionBtn) {
-                const link = getEffectivePurchaseUrl();
-                actionBtn.disabled = !link;
-                actionBtn.dataset.link = link || '';
             }
         }
 
@@ -6965,7 +6799,7 @@
             document.getElementById('userAvatar').textContent = avatarChar;
             document.getElementById('userName').textContent = fallbackName;
 
-            const knownStatuses = ['active', 'trial', 'expired', 'disabled', 'inactive'];
+            const knownStatuses = ['active', 'trial', 'expired', 'disabled'];
             const statusValueRaw = (user.subscription_actual_status || user.subscription_status || 'active').toLowerCase();
             const statusClass = knownStatuses.includes(statusValueRaw) ? statusValueRaw : 'unknown';
             const statusBadge = document.getElementById('statusBadge');
@@ -7045,7 +6879,6 @@
                     : autopayLabel;
             }
 
-            updateSubscriptionEmptyState();
             renderSubscriptionPurchaseCard();
             renderSubscriptionRenewalCard();
             renderSubscriptionSettingsCard();
@@ -10849,7 +10682,7 @@
                 || userData.user.subscription_status
                 || ''
             ).toLowerCase();
-            if (['trial', 'expired', 'disabled', 'inactive'].includes(statusRaw)) {
+            if (['trial', 'expired', 'disabled'].includes(statusRaw)) {
                 return false;
             }
 
@@ -15447,22 +15280,9 @@
                 title: error?.title,
                 message: error?.message,
                 purchaseUrl: normalizeUrl(error?.purchaseUrl) || null,
-                botUrl: normalizeUrl(error?.botUrl) || null,
-                code: error?.code || null,
             };
             updateErrorTexts();
-            updateRegisterState();
-
-            const errorState = document.getElementById('errorState');
-            const registerState = document.getElementById('registerState');
-
-            if (error?.code === 'user_not_registered') {
-                errorState?.classList.add('hidden');
-                registerState?.classList.remove('hidden');
-            } else {
-                registerState?.classList.add('hidden');
-                errorState?.classList.remove('hidden');
-            }
+            document.getElementById('errorState').classList.remove('hidden');
             updateActionButtons();
         }
 
@@ -15479,22 +15299,6 @@
             const link = getConnectLink();
             openExternalLink(link);
         });
-
-        const registerBtn = document.getElementById('registerBtn');
-        if (registerBtn) {
-            registerBtn.addEventListener('click', () => {
-                const link = registerBtn.dataset.link || getEffectivePurchaseUrl();
-                openExternalLink(link);
-            });
-        }
-
-        const subscriptionEmptyAction = document.getElementById('subscriptionEmptyAction');
-        if (subscriptionEmptyAction) {
-            subscriptionEmptyAction.addEventListener('click', () => {
-                const link = subscriptionEmptyAction.dataset.link || getEffectivePurchaseUrl();
-                openExternalLink(link);
-            });
-        }
 
         const topupButton = document.getElementById('topupBalanceBtn');
         if (topupButton) {
