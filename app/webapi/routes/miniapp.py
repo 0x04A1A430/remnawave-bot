@@ -48,6 +48,12 @@ from app.services.payment_service import PaymentService
 from app.services.promo_offer_service import promo_offer_service
 from app.services.promocode_service import PromoCodeService
 from app.services.subscription_service import SubscriptionService
+from app.services.miniapp_subscription_settings_service import (
+    load_subscription_settings,
+    update_subscription_devices,
+    update_subscription_servers,
+    update_subscription_traffic,
+)
 from app.services.tribute_service import TributeService
 from app.utils.currency_converter import currency_converter
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
@@ -96,6 +102,13 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionRequest,
     MiniAppSubscriptionResponse,
     MiniAppSubscriptionUser,
+    MiniAppSubscriptionSettingsRequest,
+    MiniAppSubscriptionSettingsResponse,
+    MiniAppSubscriptionServersRequest,
+    MiniAppSubscriptionServersResponse,
+    MiniAppSubscriptionTrafficRequest,
+    MiniAppSubscriptionDevicesRequest,
+    MiniAppSubscriptionActionResponse,
     MiniAppTransaction,
 )
 
@@ -235,6 +248,43 @@ def _parse_client_timestamp(value: Optional[Union[str, int, float]]) -> Optional
             return parsed.astimezone(timezone.utc).replace(tzinfo=None)
         return parsed
     return None
+
+
+async def _authorize_webapp_user(
+    init_data: str,
+    db: AsyncSession,
+) -> User:
+    try:
+        webapp_data = parse_webapp_init_data(init_data, settings.BOT_TOKEN)
+    except TelegramWebAppAuthError as error:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "unauthorized", "message": str(error)},
+        ) from error
+
+    telegram_user = webapp_data.get("user")
+    if not isinstance(telegram_user, dict) or "id" not in telegram_user:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_user", "message": "Invalid Telegram user payload"},
+        )
+
+    try:
+        telegram_id = int(telegram_user["id"])
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_user", "message": "Invalid Telegram user identifier"},
+        ) from None
+
+    user = await get_user_by_telegram_id(db, telegram_id)
+    if not user:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"code": "user_not_found", "message": "User not found"},
+        )
+
+    return user
 
 
 async def _find_recent_deposit(
@@ -1955,6 +2005,213 @@ async def _build_referral_info(
         stats=stats,
         recent_earnings=recent_earnings,
         referrals=referral_list,
+    )
+
+
+@router.post("/subscription/settings", response_model=MiniAppSubscriptionSettingsResponse)
+async def get_subscription_settings_endpoint(
+    payload: MiniAppSubscriptionSettingsRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionSettingsResponse:
+    user = await _authorize_webapp_user(payload.init_data, db)
+    subscription = user.subscription
+    if not subscription:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"code": "subscription_not_found", "message": "Subscription not found"},
+        )
+    if payload.subscription_id and subscription.id != payload.subscription_id:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"code": "subscription_not_found", "message": "Subscription not found"},
+        )
+    if subscription.is_trial:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "trial_subscription",
+                "message": "Subscription settings are available for paid subscriptions",
+            },
+        )
+
+    try:
+        settings_payload = await load_subscription_settings(db, user, subscription)
+    except ValueError as error:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_request", "message": str(error)},
+        ) from error
+
+    return MiniAppSubscriptionSettingsResponse(success=True, settings=settings_payload)
+
+
+@router.post("/subscription/servers", response_model=MiniAppSubscriptionServersResponse)
+async def update_subscription_servers_endpoint(
+    payload: MiniAppSubscriptionServersRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionServersResponse:
+    user = await _authorize_webapp_user(payload.init_data, db)
+    subscription = user.subscription
+    if not subscription:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"code": "subscription_not_found", "message": "Subscription not found"},
+        )
+    if subscription.is_trial:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "trial_subscription",
+                "message": "Subscription settings are available for paid subscriptions",
+            },
+        )
+    if payload.subscription_id and subscription.id != payload.subscription_id:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"code": "subscription_not_found", "message": "Subscription not found"},
+        )
+
+    squads = payload.resolve_squads()
+    if not squads:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_request", "message": "No servers provided"},
+        )
+
+    try:
+        result = await update_subscription_servers(db, user, subscription, squads)
+    except ValueError as error:
+        message = str(error) or "Unable to update servers"
+        if message == "insufficient_funds":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                detail={"code": "insufficient_funds", "message": "Insufficient funds to update servers"},
+            ) from error
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_request", "message": message},
+        ) from error
+
+    return MiniAppSubscriptionServersResponse(
+        success=True,
+        charged_amount_kopeks=int(result.get("charged_amount", 0) or 0),
+        charged_months=int(result.get("charged_months", 0) or 0),
+        discount_percent=int(result.get("discount_percent", 0) or 0),
+        discount_amount_kopeks=int(result.get("discount_amount", 0) or 0),
+        added=list(result.get("added", [])),
+        removed=list(result.get("removed", [])),
+    )
+
+
+@router.post("/subscription/traffic", response_model=MiniAppSubscriptionActionResponse)
+async def update_subscription_traffic_endpoint(
+    payload: MiniAppSubscriptionTrafficRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionActionResponse:
+    user = await _authorize_webapp_user(payload.init_data, db)
+    subscription = user.subscription
+    if not subscription:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"code": "subscription_not_found", "message": "Subscription not found"},
+        )
+    if subscription.is_trial:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "trial_subscription",
+                "message": "Subscription settings are available for paid subscriptions",
+            },
+        )
+    if payload.subscription_id and subscription.id != payload.subscription_id:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"code": "subscription_not_found", "message": "Subscription not found"},
+        )
+
+    new_limit = payload.resolve_traffic()
+    if new_limit is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_request", "message": "Traffic limit is required"},
+        )
+
+    try:
+        result = await update_subscription_traffic(db, user, subscription, int(new_limit))
+    except ValueError as error:
+        message = str(error) or "Unable to update traffic limit"
+        if message == "insufficient_funds":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                detail={"code": "insufficient_funds", "message": "Insufficient funds to update traffic"},
+            ) from error
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_request", "message": message},
+        ) from error
+
+    return MiniAppSubscriptionActionResponse(
+        success=True,
+        charged_amount_kopeks=int(result.get("charged_amount", 0) or 0),
+        charged_months=int(result.get("charged_months", 0) or 0),
+        discount_percent=int(result.get("discount_percent", 0) or 0),
+        discount_amount_kopeks=int(result.get("discount_amount", 0) or 0),
+    )
+
+
+@router.post("/subscription/devices", response_model=MiniAppSubscriptionActionResponse)
+async def update_subscription_devices_endpoint(
+    payload: MiniAppSubscriptionDevicesRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionActionResponse:
+    user = await _authorize_webapp_user(payload.init_data, db)
+    subscription = user.subscription
+    if not subscription:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"code": "subscription_not_found", "message": "Subscription not found"},
+        )
+    if subscription.is_trial:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "trial_subscription",
+                "message": "Subscription settings are available for paid subscriptions",
+            },
+        )
+    if payload.subscription_id and subscription.id != payload.subscription_id:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"code": "subscription_not_found", "message": "Subscription not found"},
+        )
+
+    new_limit = payload.resolve_devices()
+    if new_limit is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_request", "message": "Device limit is required"},
+        )
+
+    try:
+        result = await update_subscription_devices(db, user, subscription, int(new_limit))
+    except ValueError as error:
+        message = str(error) or "Unable to update device limit"
+        if message == "insufficient_funds":
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                detail={"code": "insufficient_funds", "message": "Insufficient funds to update devices"},
+            ) from error
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_request", "message": message},
+        ) from error
+
+    return MiniAppSubscriptionActionResponse(
+        success=True,
+        charged_amount_kopeks=int(result.get("charged_amount", 0) or 0),
+        charged_months=int(result.get("charged_months", 0) or 0),
+        discount_percent=int(result.get("discount_percent", 0) or 0),
+        discount_amount_kopeks=int(result.get("discount_amount", 0) or 0),
     )
 
 

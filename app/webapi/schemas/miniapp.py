@@ -354,3 +354,135 @@ class MiniAppSubscriptionResponse(BaseModel):
     legal_documents: Optional[MiniAppLegalDocuments] = None
     referral: Optional[MiniAppReferralInfo] = None
 
+
+class MiniAppSubscriptionServerOption(BaseModel):
+    uuid: str
+    name: str
+    price_kopeks: int = Field(default=0, alias="priceKopeks")
+    price_label: Optional[str] = Field(default=None, alias="priceLabel")
+    discount_percent: int = Field(default=0, alias="discountPercent")
+    is_connected: bool = Field(default=False, alias="isConnected")
+    is_available: bool = Field(default=True, alias="isAvailable")
+    disabled_reason: Optional[str] = Field(default=None, alias="disabledReason")
+
+
+class MiniAppSubscriptionTrafficOption(BaseModel):
+    value: int
+    label: Optional[str] = None
+    price_kopeks: int = Field(default=0, alias="priceKopeks")
+    price_label: Optional[str] = Field(default=None, alias="priceLabel")
+    discount_percent: int = Field(default=0, alias="discountPercent")
+    is_current: bool = Field(default=False, alias="isCurrent")
+    is_available: bool = Field(default=True, alias="isAvailable")
+
+
+class MiniAppSubscriptionDeviceOption(BaseModel):
+    value: int
+    label: Optional[str] = None
+    price_kopeks: int = Field(default=0, alias="priceKopeks")
+    price_label: Optional[str] = Field(default=None, alias="priceLabel")
+    discount_percent: int = Field(default=0, alias="discountPercent")
+
+
+class MiniAppSubscriptionSettingsCurrent(BaseModel):
+    servers: List[MiniAppConnectedServer] = Field(default_factory=list)
+    traffic_limit_gb: Optional[int] = Field(default=None, alias="trafficLimitGb")
+    traffic_limit_label: Optional[str] = Field(default=None, alias="trafficLimitLabel")
+    device_limit: Optional[int] = Field(default=None, alias="deviceLimit")
+
+
+class MiniAppSubscriptionSettingsServers(BaseModel):
+    available: List[MiniAppSubscriptionServerOption] = Field(default_factory=list)
+    min: int = 0
+    max: int = 0
+    can_update: bool = Field(default=True, alias="canUpdate")
+    hint: Optional[str] = None
+
+
+class MiniAppSubscriptionSettingsTraffic(BaseModel):
+    options: List[MiniAppSubscriptionTrafficOption] = Field(default_factory=list)
+    can_update: bool = Field(default=True, alias="canUpdate")
+    current_value: Optional[int] = Field(default=None, alias="currentValue")
+
+
+class MiniAppSubscriptionSettingsDevices(BaseModel):
+    options: List[MiniAppSubscriptionDeviceOption] = Field(default_factory=list)
+    can_update: bool = Field(default=True, alias="canUpdate")
+    min: int = 0
+    max: int = 0
+    step: int = 1
+    current: Optional[int] = None
+
+
+class MiniAppSubscriptionSettings(BaseModel):
+    subscription_id: int = Field(alias="subscriptionId")
+    currency: str = "RUB"
+    current: MiniAppSubscriptionSettingsCurrent
+    servers: MiniAppSubscriptionSettingsServers
+    traffic: MiniAppSubscriptionSettingsTraffic
+    devices: MiniAppSubscriptionSettingsDevices
+
+
+class MiniAppSubscriptionSettingsRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+
+class MiniAppSubscriptionSettingsResponse(BaseModel):
+    success: bool = True
+    settings: MiniAppSubscriptionSettings
+
+
+class MiniAppSubscriptionServersRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    servers: List[str] = Field(default_factory=list)
+    squads: List[str] = Field(default_factory=list)
+    squad_uuids: List[str] = Field(default_factory=list, alias="squadUuids")
+    server_uuids: List[str] = Field(default_factory=list, alias="serverUuids")
+
+    def resolve_squads(self) -> List[str]:
+        combined = list(self.servers or [])
+        combined.extend(self.squads or [])
+        combined.extend(self.squad_uuids or [])
+        combined.extend(self.server_uuids or [])
+        normalized: List[str] = []
+        for value in combined:
+            if not value:
+                continue
+            normalized.append(str(value))
+        return normalized
+
+
+class MiniAppSubscriptionTrafficRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    traffic: Optional[int] = None
+    traffic_gb: Optional[int] = Field(default=None, alias="trafficGb")
+
+    def resolve_traffic(self) -> Optional[int]:
+        return self.traffic if self.traffic is not None else self.traffic_gb
+
+
+class MiniAppSubscriptionDevicesRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    devices: Optional[int] = None
+    device_limit: Optional[int] = Field(default=None, alias="deviceLimit")
+
+    def resolve_devices(self) -> Optional[int]:
+        return self.devices if self.devices is not None else self.device_limit
+
+
+class MiniAppSubscriptionActionResponse(BaseModel):
+    success: bool = True
+    charged_amount_kopeks: int = Field(default=0, alias="chargedAmountKopeks")
+    charged_months: int = Field(default=0, alias="chargedMonths")
+    discount_percent: int = Field(default=0, alias="discountPercent")
+    discount_amount_kopeks: int = Field(default=0, alias="discountAmountKopeks")
+
+
+class MiniAppSubscriptionServersResponse(MiniAppSubscriptionActionResponse):
+    added: List[str] = Field(default_factory=list)
+    removed: List[str] = Field(default_factory=list)
+
