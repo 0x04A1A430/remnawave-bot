@@ -331,6 +331,99 @@
             min-width: 220px;
         }
 
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-xl);
+            margin: 20px 0;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .empty-icon {
+            font-size: 56px;
+            margin-bottom: 16px;
+        }
+
+        .empty-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .empty-text {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+
+        .empty-actions {
+            display: flex;
+            justify-content: center;
+        }
+
+        .empty-actions .btn {
+            min-width: 220px;
+        }
+
+        /* No Subscription Card */
+        .no-subscription-card .card-content {
+            padding: 24px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 12px;
+        }
+
+        .no-subscription-icon {
+            font-size: 40px;
+        }
+
+        .no-subscription-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .no-subscription-text {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .no-subscription-balance {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .no-subscription-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .no-subscription-actions .btn {
+            width: 100%;
+        }
+
+        @media (min-width: 420px) {
+            .no-subscription-actions {
+                flex-direction: row;
+                justify-content: center;
+            }
+
+            .no-subscription-actions .btn {
+                width: auto;
+                min-width: 180px;
+            }
+        }
+
         /* Cards */
         .card {
             background: var(--bg-secondary);
@@ -4223,6 +4316,16 @@
             </div>
         </div>
 
+        <!-- Registration State -->
+        <div id="registrationState" class="empty-state hidden">
+            <div class="empty-icon">🤖</div>
+            <div class="empty-title" data-i18n="registration.title">Register in the bot</div>
+            <div class="empty-text" data-i18n="registration.message">Open the Telegram bot to activate your account.</div>
+            <div class="empty-actions">
+                <button id="openBotBtn" class="btn btn-primary" type="button" data-i18n="registration.button">Open bot</button>
+            </div>
+        </div>
+
         <!-- Main Content -->
         <div id="mainContent" class="hidden">
             <!-- Promo Offers -->
@@ -4282,6 +4385,19 @@
                     <div class="info-item">
                         <span class="info-label" data-i18n="info.autopay">Auto-Pay</span>
                         <span class="info-value" id="autopayStatus">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card no-subscription-card hidden" id="noSubscriptionCard">
+                <div class="card-content">
+                    <div class="no-subscription-icon">🛡️</div>
+                    <div class="no-subscription-title" data-i18n="subscription.empty.title">Subscription required</div>
+                    <div class="no-subscription-text" id="noSubscriptionText" data-i18n="subscription.empty.message">Choose a plan to unlock VPN access.</div>
+                    <div class="no-subscription-balance hidden" id="noSubscriptionBalance"></div>
+                    <div class="no-subscription-actions">
+                        <button class="btn btn-primary" id="noSubscriptionPurchaseBtn" type="button" data-i18n="subscription.empty.action">Choose a plan</button>
+                        <button class="btn btn-secondary" id="noSubscriptionTopupBtn" type="button" data-i18n="button.topup_balance">Top up balance</button>
                     </div>
                 </div>
             </div>
@@ -4972,6 +5088,13 @@
                 'app.loading': 'Loading your subscription...',
                 'error.default.title': 'Subscription Not Found',
                 'error.default.message': 'Please contact support to activate your subscription.',
+                'registration.title': 'Register in the bot',
+                'registration.message': 'Open the Telegram bot to activate your account and access subscription options.',
+                'registration.button': 'Open bot',
+                'subscription.empty.title': 'Subscription required',
+                'subscription.empty.message': 'Choose a plan to unlock VPN access and start using the service.',
+                'subscription.empty.balance': 'Balance: {balance}',
+                'subscription.empty.action': 'Choose a plan',
                 'stats.days_left': 'Days left',
                 'stats.servers': 'Servers',
                 'stats.devices': 'Devices',
@@ -5283,6 +5406,7 @@
                 'status.unknown': 'Unknown',
                 'subscription.type.trial': 'Trial',
                 'subscription.type.paid': 'Paid',
+                'subscription.type.none': 'No subscription',
                 'autopay.enabled': 'Enabled',
                 'autopay.disabled': 'Disabled',
                 'platform.ios': 'iOS',
@@ -5327,6 +5451,13 @@
                 'app.loading': 'Загружаем вашу подписку...',
                 'error.default.title': 'Подписка не найдена',
                 'error.default.message': 'Свяжитесь с поддержкой, чтобы активировать подписку.',
+                'registration.title': 'Зарегистрируйтесь в боте',
+                'registration.message': 'Откройте Telegram-бота, чтобы завершить регистрацию и получить доступ к подпискам.',
+                'registration.button': 'Открыть бота',
+                'subscription.empty.title': 'Подписка не активна',
+                'subscription.empty.message': 'Оформите подписку, чтобы получить доступ к VPN и дополнительным возможностям.',
+                'subscription.empty.balance': 'Баланс: {balance}',
+                'subscription.empty.action': 'Выбрать тариф',
                 'stats.days_left': 'Осталось дней',
                 'stats.servers': 'Серверы',
                 'stats.devices': 'Устройства',
@@ -5638,6 +5769,7 @@
                 'status.unknown': 'Неизвестно',
                 'subscription.type.trial': 'Триал',
                 'subscription.type.paid': 'Платная',
+                'subscription.type.none': 'Нет подписки',
                 'autopay.enabled': 'Включен',
                 'autopay.disabled': 'Выключен',
                 'platform.ios': 'iOS',
@@ -5781,6 +5913,7 @@
         }
 
         let userData = null;
+        let subscriptionState = 'unknown';
         let appsConfig = {};
         let currentPlatform = 'android';
         let configPurchaseUrl = null;
@@ -6474,6 +6607,172 @@
             return null;
         }
 
+        function setSubscriptionState(state) {
+            subscriptionState = state || 'unknown';
+            if (document.body) {
+                document.body.setAttribute('data-subscription-state', subscriptionState);
+            }
+
+            const registrationState = document.getElementById('registrationState');
+            const loadingState = document.getElementById('loadingState');
+            const mainContent = document.getElementById('mainContent');
+            const errorState = document.getElementById('errorState');
+            const noSubscriptionCard = document.getElementById('noSubscriptionCard');
+
+            if (subscriptionState === 'unregistered') {
+                loadingState?.classList.add('hidden');
+                mainContent?.classList.add('hidden');
+                errorState?.classList.add('hidden');
+                registrationState?.classList.remove('hidden');
+                noSubscriptionCard?.classList.add('hidden');
+                updateRegistrationState();
+                return;
+            }
+
+            registrationState?.classList.add('hidden');
+
+            if (subscriptionState === 'error') {
+                noSubscriptionCard?.classList.add('hidden');
+                mainContent?.classList.add('hidden');
+                return;
+            }
+
+            if (subscriptionState === 'missing' || subscriptionState === 'full') {
+                loadingState?.classList.add('hidden');
+                errorState?.classList.add('hidden');
+                mainContent?.classList.remove('hidden');
+                if (subscriptionState === 'missing') {
+                    noSubscriptionCard?.classList.remove('hidden');
+                } else {
+                    noSubscriptionCard?.classList.add('hidden');
+                }
+            } else {
+                noSubscriptionCard?.classList.add('hidden');
+            }
+        }
+
+        function updateRegistrationState() {
+            const button = document.getElementById('openBotBtn');
+            if (!button) {
+                return;
+            }
+            const link = getEffectivePurchaseUrl();
+            button.disabled = !link;
+        }
+
+        function updateNoSubscriptionCard(purchaseData) {
+            if (subscriptionState !== 'missing') {
+                return;
+            }
+            const balanceBlock = document.getElementById('noSubscriptionBalance');
+            if (!balanceBlock) {
+                return;
+            }
+
+            const currency = (purchaseData?.currency || userData?.balance_currency || 'RUB').toString().toUpperCase();
+            const balanceKopeks = coercePositiveInt(
+                purchaseData?.balanceKopeks ?? purchaseData?.balance_kopeks ?? null,
+                null,
+            );
+            const balanceLabel = purchaseData?.balanceLabel
+                || (balanceKopeks !== null ? formatPriceFromKopeks(balanceKopeks, currency) : '');
+
+            if (balanceLabel) {
+                const template = t('subscription.empty.balance');
+                balanceBlock.textContent = template && template !== 'subscription.empty.balance'
+                    ? template.replace('{balance}', balanceLabel)
+                    : `Balance: ${balanceLabel}`;
+                balanceBlock.classList.remove('hidden');
+            } else {
+                balanceBlock.textContent = '';
+                balanceBlock.classList.add('hidden');
+            }
+        }
+
+        function buildMissingSubscriptionPayload(purchaseData) {
+            const telegramUser = tg?.initDataUnsafe?.user || {};
+            const rawUsername = typeof telegramUser.username === 'string'
+                ? telegramUser.username.trim()
+                : '';
+            const normalizedUsername = rawUsername
+                ? (rawUsername.startsWith('@') ? rawUsername : `@${rawUsername}`)
+                : '';
+            const displayName = normalizedUsername
+                || [telegramUser.first_name, telegramUser.last_name].filter(Boolean).join(' ')
+                || (typeof telegramUser.first_name === 'string' ? telegramUser.first_name : '')
+                || 'User';
+
+            const purchaseUrl = getEffectivePurchaseUrl();
+            const currency = (purchaseData?.currency || 'RUB').toString().toUpperCase();
+            const balanceKopeks = coercePositiveInt(
+                purchaseData?.balanceKopeks ?? purchaseData?.balance_kopeks ?? null,
+                0,
+            );
+            const balanceRubles = balanceKopeks / 100;
+            const balanceLabel = purchaseData?.balanceLabel || formatPriceFromKopeks(balanceKopeks, currency);
+            const statusLabel = t('status.disabled');
+
+            return {
+                subscription_missing: true,
+                user: {
+                    telegram_id: Number.parseInt(telegramUser.id, 10) || 0,
+                    username: normalizedUsername || null,
+                    first_name: telegramUser.first_name || null,
+                    last_name: telegramUser.last_name || null,
+                    display_name: displayName,
+                    language: telegramUser.language_code || preferredLanguage,
+                    status: 'inactive',
+                    subscription_status: 'disabled',
+                    subscription_actual_status: 'disabled',
+                    status_label: statusLabel === 'status.disabled' ? 'Disabled' : statusLabel,
+                    expires_at: null,
+                    device_limit: 0,
+                    traffic_used_gb: 0,
+                    traffic_used_label: formatTraffic(0),
+                    traffic_limit_gb: 0,
+                    traffic_limit_label: formatTrafficLimit(0),
+                    lifetime_used_traffic_gb: 0,
+                    has_active_subscription: false,
+                    promo_offer_discount_percent: 0,
+                    promo_offer_discount_expires_at: null,
+                    promo_offer_discount_source: null,
+                },
+                subscription_type: 'none',
+                subscription_url: '',
+                subscriptionUrl: '',
+                subscription_purchase_url: purchaseUrl,
+                subscriptionPurchaseUrl: purchaseUrl,
+                subscription_crypto_link: null,
+                subscriptionCryptoLink: null,
+                happ_link: null,
+                happ: null,
+                happ_crypto_link: null,
+                happ_cryptolink_redirect_link: null,
+                connected_squads: [],
+                connected_servers: [],
+                connected_devices: [],
+                connected_devices_count: 0,
+                links: [],
+                ss_conf_links: {},
+                balance_kopeks: balanceKopeks,
+                balance_rubles: balanceRubles,
+                balance_currency: currency,
+                balance_label: balanceLabel,
+                transactions: [],
+                promo_offers: [],
+                promo_group: null,
+                auto_assign_promo_groups: [],
+                total_spent_kopeks: 0,
+                total_spent_rubles: 0,
+                total_spent_label: formatPriceFromKopeks(0, currency),
+                autopay_enabled: false,
+                branding: null,
+                faq: null,
+                legal_documents: null,
+                referral: null,
+            };
+        }
+
         function updateErrorTexts() {
             const titleElement = document.getElementById('errorTitle');
             const textElement = document.getElementById('errorText');
@@ -6669,6 +6968,9 @@
             userData.subscriptionUrl = userData.subscription_url || null;
             userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
             userData.referral = userData.referral || null;
+            userData.subscription_missing = Boolean(userData.subscription_missing);
+
+            setSubscriptionState(userData.subscription_missing ? 'missing' : 'full');
 
             resetSubscriptionRenewalState(null);
             prepareSubscriptionRenewalFromUserData();
@@ -6713,6 +7015,10 @@
 
             animateCardsOnce();
 
+            if (userData.subscription_missing && subscriptionPurchaseData) {
+                updateNoSubscriptionCard(subscriptionPurchaseData);
+            }
+
             return userData;
         }
 
@@ -6734,6 +7040,37 @@
             return applySubscriptionData(payload);
         }
 
+        async function handleSubscriptionInitError(error) {
+            if (!error || typeof error !== 'object') {
+                return false;
+            }
+
+            if (error.status === 404) {
+                const normalizedPurchaseUrl = normalizeUrl(error.purchaseUrl);
+                if (normalizedPurchaseUrl) {
+                    currentErrorState = currentErrorState || {};
+                    currentErrorState.purchaseUrl = normalizedPurchaseUrl;
+                }
+
+                try {
+                    const purchaseData = await ensureSubscriptionPurchaseData({ force: true });
+                    const fallbackPayload = buildMissingSubscriptionPayload(purchaseData || {});
+                    applySubscriptionData(fallbackPayload);
+                    updateNoSubscriptionCard(purchaseData);
+                    return true;
+                } catch (fallbackError) {
+                    if (fallbackError?.code === 'user_not_found') {
+                        setSubscriptionState('unregistered');
+                        updateRegistrationState();
+                        return true;
+                    }
+                    throw fallbackError;
+                }
+            }
+
+            return false;
+        }
+
         async function init() {
             try {
                 const telegramUser = tg.initDataUnsafe?.user;
@@ -6750,7 +7087,15 @@
                 await refreshSubscriptionData();
             } catch (error) {
                 console.error('Initialization error:', error);
-                showError(error);
+                try {
+                    const handled = await handleSubscriptionInitError(error);
+                    if (!handled) {
+                        showError(error);
+                    }
+                } catch (fallbackError) {
+                    console.error('Failed to handle subscription fallback state:', fallbackError);
+                    showError(error);
+                }
             }
         }
 
@@ -13471,7 +13816,12 @@
                 const body = await parseJsonSafe(response);
                 if (!response.ok || (body && body.success === false)) {
                     const message = extractPurchaseErrorMessage(body, response.status);
-                    throw createError('Subscription purchase error', message, response.status);
+                    const error = createError('Subscription purchase error', message, response.status);
+                    const code = body?.detail?.code || body?.code || null;
+                    if (code) {
+                        error.code = code;
+                    }
+                    throw error;
                 }
 
                 const normalized = normalizeSubscriptionPurchasePayload(body);
@@ -13489,6 +13839,18 @@
                 updateSubscriptionPurchasePreview({ immediate: true }).catch(error => {
                     console.warn('Failed to update subscription purchase preview:', error);
                 });
+                if (subscriptionState === 'missing') {
+                    updateNoSubscriptionCard(normalized);
+                    const balanceKopeks = coercePositiveInt(normalized?.balanceKopeks ?? null, null);
+                    if (userData && balanceKopeks !== null) {
+                        userData.balance_kopeks = balanceKopeks;
+                        userData.balance_rubles = balanceKopeks / 100;
+                        if (normalized?.currency) {
+                            userData.balance_currency = normalized.currency;
+                        }
+                        renderBalanceSection();
+                    }
+                }
                 return normalized;
             }).catch(error => {
                 subscriptionPurchaseError = error;
@@ -15274,6 +15636,7 @@
         }
 
         function showError(error) {
+            setSubscriptionState('error');
             document.getElementById('loadingState').classList.add('hidden');
             document.getElementById('mainContent').classList.add('hidden');
             currentErrorState = {
@@ -15347,6 +15710,23 @@
         document.getElementById('referralToggleBtn')?.addEventListener('click', () => {
             referralListExpanded = !referralListExpanded;
             updateReferralToggleState();
+        });
+
+        document.getElementById('openBotBtn')?.addEventListener('click', () => {
+            const link = getEffectivePurchaseUrl();
+            if (link) {
+                openExternalLink(link, { openInMiniApp: true });
+            } else {
+                showPopup(t('registration.message') || 'Open the Telegram bot to activate your account.');
+            }
+        });
+
+        document.getElementById('noSubscriptionPurchaseBtn')?.addEventListener('click', () => {
+            openSubscriptionPurchaseModal();
+        });
+
+        document.getElementById('noSubscriptionTopupBtn')?.addEventListener('click', () => {
+            openTopupModal();
         });
 
         document.getElementById('referralCopyBtn')?.addEventListener('click', async () => {
