@@ -358,7 +358,7 @@ class MiniAppSubscriptionPurchaseService:
             except (TypeError, ValueError):
                 continue
 
-        default_connected = list(getattr(subscription, "connected_squads", []) or [])
+        default_connected = list(subscription.connected_squads or [])
         if not default_connected:
             for server in available_servers:
                 if getattr(server, "is_available", True) and not getattr(server, "is_full", False):
