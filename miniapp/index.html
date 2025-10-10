@@ -331,57 +331,6 @@
             min-width: 220px;
         }
 
-        .empty-state-card {
-            text-align: center;
-            padding: 48px 24px;
-            background: var(--bg-secondary);
-            border-radius: var(--radius-xl);
-            margin: 20px 0;
-            box-shadow: var(--shadow-sm);
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            align-items: center;
-        }
-
-        .empty-state-icon {
-            font-size: 56px;
-            line-height: 1;
-        }
-
-        .empty-state-title {
-            font-size: 22px;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-
-        .empty-state-text {
-            font-size: 15px;
-            color: var(--text-secondary);
-            line-height: 1.6;
-            max-width: 320px;
-        }
-
-        .empty-state-hint {
-            font-size: 13px;
-            color: var(--text-secondary);
-            max-width: 320px;
-        }
-
-        .empty-state-actions {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            justify-content: center;
-            width: 100%;
-        }
-
-        .empty-state-actions .btn {
-            min-width: 200px;
-            flex: 1;
-            max-width: 240px;
-        }
-
         /* Cards */
         .card {
             background: var(--bg-secondary);
@@ -4274,38 +4223,6 @@
             </div>
         </div>
 
-        <div id="registrationState" class="empty-state-card hidden">
-            <div class="empty-state-icon">🤖</div>
-            <div class="empty-state-title" data-i18n="state.registration.title">Register in the bot</div>
-            <div class="empty-state-text" id="registrationStateMessage" data-i18n="state.registration.message">
-                Open the Telegram bot to create an account. Return here after completing registration.
-            </div>
-            <div class="empty-state-hint" data-i18n="state.registration.hint">
-                Registration is required to manage your VPN subscription.
-            </div>
-            <div class="empty-state-actions">
-                <button class="btn btn-primary" id="registrationOpenBotBtn" type="button" data-i18n="state.registration.button">
-                    Open bot
-                </button>
-            </div>
-        </div>
-
-        <div id="subscriptionMissingState" class="empty-state-card hidden">
-            <div class="empty-state-icon">🛒</div>
-            <div class="empty-state-title" data-i18n="state.subscription_missing.title">No active subscription</div>
-            <div class="empty-state-text" id="subscriptionMissingMessage" data-i18n="state.subscription_missing.message">
-                You do not have an active VPN subscription yet. Purchase a plan to continue.
-            </div>
-            <div class="empty-state-hint" data-i18n="state.subscription_missing.hint">
-                Use the button below to buy a subscription or top up your balance in the bot.
-            </div>
-            <div class="empty-state-actions">
-                <button class="btn btn-primary" id="subscriptionMissingPurchaseBtn" type="button" data-i18n="state.subscription_missing.button">
-                    Go to purchase
-                </button>
-            </div>
-        </div>
-
         <!-- Main Content -->
         <div id="mainContent" class="hidden">
             <!-- Promo Offers -->
@@ -5055,14 +4972,6 @@
                 'app.loading': 'Loading your subscription...',
                 'error.default.title': 'Subscription Not Found',
                 'error.default.message': 'Please contact support to activate your subscription.',
-                'state.registration.title': 'Register in the bot',
-                'state.registration.message': 'Open the Telegram bot to create an account. Return here after completing registration.',
-                'state.registration.button': 'Open bot',
-                'state.registration.hint': 'Registration is required to manage your VPN subscription.',
-                'state.subscription_missing.title': 'No active subscription',
-                'state.subscription_missing.message': 'You do not have an active VPN subscription yet. Purchase a plan to continue.',
-                'state.subscription_missing.button': 'Go to purchase',
-                'state.subscription_missing.hint': 'Use the button below to buy a subscription or top up your balance in the bot.',
                 'stats.days_left': 'Days left',
                 'stats.servers': 'Servers',
                 'stats.devices': 'Devices',
@@ -5418,14 +5327,6 @@
                 'app.loading': 'Загружаем вашу подписку...',
                 'error.default.title': 'Подписка не найдена',
                 'error.default.message': 'Свяжитесь с поддержкой, чтобы активировать подписку.',
-                'state.registration.title': 'Зарегистрируйтесь в боте',
-                'state.registration.message': 'Откройте Telegram-бота, чтобы создать учетную запись. После регистрации вернитесь сюда.',
-                'state.registration.button': 'Открыть бота',
-                'state.registration.hint': 'Без регистрации в боте вы не сможете управлять подпиской.',
-                'state.subscription_missing.title': 'Подписка еще не оформлена',
-                'state.subscription_missing.message': 'У вас нет активной подписки. Купите подходящий тариф, чтобы пользоваться сервисом.',
-                'state.subscription_missing.button': 'Перейти к покупке',
-                'state.subscription_missing.hint': 'Нажмите кнопку, чтобы оформить подписку или пополнить баланс в боте.',
                 'stats.days_left': 'Осталось дней',
                 'stats.servers': 'Серверы',
                 'stats.devices': 'Устройства',
@@ -5884,7 +5785,6 @@
         let currentPlatform = 'android';
         let configPurchaseUrl = null;
         let subscriptionPurchaseUrl = null;
-        let cachedBotUsername;
         let preferredLanguage = 'en';
         let languageLockedByUser = false;
         let currentErrorState = null;
@@ -6593,180 +6493,6 @@
             }
         }
 
-        function resolveErrorStateType(error) {
-            if (!error) {
-                return null;
-            }
-
-            const code = typeof error.code === 'string' ? error.code.toLowerCase() : '';
-            const status = Number.isFinite(error.status) ? Number(error.status) : null;
-            const title = typeof error.title === 'string' ? error.title.toLowerCase() : '';
-            const message = typeof error.message === 'string' ? error.message.toLowerCase() : '';
-            const combined = `${title} ${message}`;
-
-            if (code === 'user_not_found' || /user not found/.test(combined)) {
-                return 'registration';
-            }
-
-            if (
-                code === 'subscription_not_found'
-                || code === 'paid_subscription_required'
-                || code === 'subscription_inactive'
-                || code === 'trial_not_active'
-                || /subscription not found/.test(combined)
-                || /trial/.test(code)
-            ) {
-                return 'subscription_missing';
-            }
-
-            if (status === 404 && /subscription/.test(combined)) {
-                return 'subscription_missing';
-            }
-
-            if (/trial/.test(combined)) {
-                return 'subscription_missing';
-            }
-
-            return 'error';
-        }
-
-        function renderRegistrationState() {
-            const messageElement = document.getElementById('registrationStateMessage');
-            if (messageElement) {
-                const message = typeof currentErrorState?.message === 'string'
-                    ? currentErrorState.message.trim()
-                    : '';
-                if (message && !/user not found/i.test(message)) {
-                    messageElement.textContent = message;
-                } else {
-                    messageElement.textContent = t('state.registration.message');
-                }
-            }
-
-            const button = document.getElementById('registrationOpenBotBtn');
-            if (button) {
-                const link = getBotLink();
-                button.disabled = !link;
-            }
-        }
-
-        function renderSubscriptionMissingState() {
-            const messageElement = document.getElementById('subscriptionMissingMessage');
-            if (messageElement) {
-                const message = typeof currentErrorState?.message === 'string'
-                    ? currentErrorState.message.trim()
-                    : '';
-                if (message && !/subscription not found/i.test(message)) {
-                    messageElement.textContent = message;
-                } else {
-                    messageElement.textContent = t('state.subscription_missing.message');
-                }
-            }
-
-            const button = document.getElementById('subscriptionMissingPurchaseBtn');
-            if (button) {
-                const link = getEffectivePurchaseUrl();
-                button.disabled = !link;
-            }
-        }
-
-        function renderGlobalState() {
-            const registrationState = document.getElementById('registrationState');
-            const subscriptionMissingState = document.getElementById('subscriptionMissingState');
-            const errorState = document.getElementById('errorState');
-
-            if (!currentErrorState) {
-                registrationState?.classList.add('hidden');
-                subscriptionMissingState?.classList.add('hidden');
-                errorState?.classList.add('hidden');
-                return;
-            }
-
-            const stateType = resolveErrorStateType(currentErrorState);
-
-            registrationState?.classList.add('hidden');
-            subscriptionMissingState?.classList.add('hidden');
-            errorState?.classList.add('hidden');
-
-            if (stateType === 'registration') {
-                renderRegistrationState();
-                registrationState?.classList.remove('hidden');
-                return;
-            }
-
-            if (stateType === 'subscription_missing') {
-                renderSubscriptionMissingState();
-                subscriptionMissingState?.classList.remove('hidden');
-                return;
-            }
-
-            updateErrorTexts();
-            errorState?.classList.remove('hidden');
-        }
-
-        function getBotUsername() {
-            if (typeof cachedBotUsername === 'string') {
-                return cachedBotUsername || null;
-            }
-
-            const sources = [
-                userData?.bot_username,
-                userData?.botUsername,
-                currentErrorState?.bot_username,
-                currentErrorState?.botUsername,
-                window.MINIAPP_BOT_USERNAME,
-                document.body?.dataset?.botUsername,
-            ];
-
-            for (const candidate of sources) {
-                if (typeof candidate === 'string' && candidate.trim()) {
-                    cachedBotUsername = candidate.trim().replace(/^@/, '');
-                    return cachedBotUsername;
-                }
-            }
-
-            const referrer = document.referrer;
-            if (referrer) {
-                try {
-                    const url = new URL(referrer);
-                    const match = url.pathname.match(/^\/?@?([A-Za-z0-9_]+)/);
-                    if (match && match[1]) {
-                        cachedBotUsername = match[1];
-                        return cachedBotUsername;
-                    }
-                } catch (error) {
-                    console.warn('Unable to parse referrer for bot username:', error);
-                }
-            }
-
-            cachedBotUsername = '';
-            return null;
-        }
-
-        function getBotLink() {
-            const username = getBotUsername();
-            if (!username) {
-                return null;
-            }
-            return `https://t.me/${username}`;
-        }
-
-        function openBot() {
-            const link = getBotLink();
-            if (!link) {
-                return;
-            }
-            if (typeof tg.openTelegramLink === 'function') {
-                try {
-                    tg.openTelegramLink(link);
-                    return;
-                } catch (error) {
-                    console.warn('tg.openTelegramLink failed:', error);
-                }
-            }
-            openExternalLink(link, { openInMiniApp: true });
-        }
-
         function applyTranslations() {
             document.title = t('app.title');
             document.documentElement.setAttribute('lang', preferredLanguage);
@@ -6790,7 +6516,6 @@
                 languageSelect.setAttribute('aria-label', t('language.ariaLabel'));
             }
             updateErrorTexts();
-            renderGlobalState();
         }
 
         function updateConnectButtonLabel() {
@@ -6897,7 +6622,6 @@
                 : 'Subscription not found';
             let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
             let purchaseUrl = null;
-            let errorCode = null;
 
             try {
                 const errorPayload = await response.json();
@@ -6907,9 +6631,6 @@
                     } else if (typeof errorPayload.detail === 'object') {
                         if (typeof errorPayload.detail.message === 'string') {
                             detail = errorPayload.detail.message;
-                        }
-                        if (typeof errorPayload.detail.code === 'string') {
-                            errorCode = errorPayload.detail.code;
                         }
                         purchaseUrl = errorPayload.detail.purchase_url
                             || errorPayload.detail.purchaseUrl
@@ -6921,10 +6642,6 @@
 
                 if (typeof errorPayload?.title === 'string') {
                     title = errorPayload.title;
-                }
-
-                if (typeof errorPayload?.code === 'string') {
-                    errorCode = errorPayload.code;
                 }
 
                 purchaseUrl = purchaseUrl
@@ -6940,9 +6657,6 @@
             if (normalizedPurchaseUrl) {
                 errorObject.purchaseUrl = normalizedPurchaseUrl;
             }
-            if (typeof errorCode === 'string' && errorCode.trim()) {
-                errorObject.code = errorCode.trim();
-            }
             throw errorObject;
         }
 
@@ -6952,7 +6666,6 @@
             }
 
             userData = payload;
-            cachedBotUsername = undefined;
             userData.subscriptionUrl = userData.subscription_url || null;
             userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
             userData.referral = userData.referral || null;
@@ -6978,15 +6691,11 @@
 
             currentErrorState = null;
             updateErrorTexts();
-            renderGlobalState();
 
             const errorState = document.getElementById('errorState');
             if (errorState) {
                 errorState.classList.add('hidden');
             }
-
-            document.getElementById('registrationState')?.classList.add('hidden');
-            document.getElementById('subscriptionMissingState')?.classList.add('hidden');
 
             const loadingState = document.getElementById('loadingState');
             if (loadingState) {
@@ -7017,8 +6726,6 @@
 
             if (!silent) {
                 document.getElementById('errorState')?.classList.add('hidden');
-                document.getElementById('registrationState')?.classList.add('hidden');
-                document.getElementById('subscriptionMissingState')?.classList.add('hidden');
                 document.getElementById('mainContent')?.classList.add('hidden');
                 document.getElementById('loadingState')?.classList.remove('hidden');
             }
@@ -15567,18 +15274,15 @@
         }
 
         function showError(error) {
-            document.getElementById('loadingState')?.classList.add('hidden');
-            document.getElementById('mainContent')?.classList.add('hidden');
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('mainContent').classList.add('hidden');
             currentErrorState = {
                 title: error?.title,
                 message: error?.message,
                 purchaseUrl: normalizeUrl(error?.purchaseUrl) || null,
-                code: typeof error?.code === 'string' ? error.code : null,
-                status: Number.isFinite(error?.status) ? Number(error.status) : null,
-                botUsername: typeof error?.botUsername === 'string' ? error.botUsername : null,
             };
-            cachedBotUsername = undefined;
-            renderGlobalState();
+            updateErrorTexts();
+            document.getElementById('errorState').classList.remove('hidden');
             updateActionButtons();
         }
 
@@ -15589,17 +15293,6 @@
                 renderApps();
                 updateActionButtons();
             });
-        });
-
-        document.getElementById('registrationOpenBotBtn')?.addEventListener('click', () => {
-            openBot();
-        });
-
-        document.getElementById('subscriptionMissingPurchaseBtn')?.addEventListener('click', () => {
-            const link = getEffectivePurchaseUrl();
-            if (link) {
-                openExternalLink(link, { openInMiniApp: true });
-            }
         });
 
         document.getElementById('connectBtn')?.addEventListener('click', () => {
