@@ -96,25 +96,19 @@ async def handle_successful_payment(message: types.Message):
                         return
                     
                     user = await get_user_by_id(db, user_id)
-
+                    
                     if user:
-                        invoice_payload = payment.invoice_payload
                         await add_user_balance(
                             db, user, amount_kopeks,
                             f"Пополнение через Telegram Stars"
                         )
-
+                        
                         await create_transaction(
                             db=db,
                             user_id=user.id,
                             type=TransactionType.DEPOSIT,
                             amount_kopeks=amount_kopeks,
-                            description=(
-                                f"Пополнение через Telegram Stars"
-                                f" (payload={invoice_payload})"
-                                if invoice_payload
-                                else "Пополнение через Telegram Stars"
-                            ),
+                            description=f"Пополнение через Telegram Stars",
                             payment_method=PaymentMethod.TELEGRAM_STARS,
                             external_id=payment.telegram_payment_charge_id
                         )
