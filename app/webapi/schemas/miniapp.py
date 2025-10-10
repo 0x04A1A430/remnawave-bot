@@ -383,7 +383,7 @@ class MiniAppPaymentStatusResponse(BaseModel):
 
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
-    subscription_id: int
+    subscription_id: Optional[int] = None
     remnawave_short_uuid: Optional[str] = None
     user: MiniAppSubscriptionUser
     subscription_url: Optional[str] = None
@@ -415,6 +415,11 @@ class MiniAppSubscriptionResponse(BaseModel):
     faq: Optional[MiniAppFaq] = None
     legal_documents: Optional[MiniAppLegalDocuments] = None
     referral: Optional[MiniAppReferralInfo] = None
+    subscription_missing: bool = False
+    subscription_missing_reason: Optional[str] = None
+    trial_available: bool = False
+    trial_duration_days: Optional[int] = None
+    trial_status: Optional[str] = None
 
 
 class MiniAppSubscriptionServerOption(BaseModel):
