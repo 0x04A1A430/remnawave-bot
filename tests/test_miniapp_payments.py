@@ -22,6 +22,7 @@ from app.webapi.schemas.miniapp import (
     MiniAppPaymentCreateRequest,
     MiniAppPaymentMethodsRequest,
     MiniAppPaymentStatusQuery,
+    MiniAppSubscriptionRenewalRequest,
 )
 
 
@@ -351,3 +352,100 @@ async def test_find_recent_deposit_accepts_recent_transactions():
     )
 
     assert result is transaction
+
+
+@pytest.mark.anyio("asyncio")
+async def test_submit_renewal_consumes_promo_on_zero_total(monkeypatch):
+    subscription = types.SimpleNamespace(
+        id=42,
+        is_trial=False,
+        is_active=True,
+        end_date=datetime.utcnow() + timedelta(days=30),
+    )
+
+    user = types.SimpleNamespace(
+        id=7,
+        balance_kopeks=0,
+        language="ru",
+        promo_offer_discount_percent=50,
+        promo_offer_discount_source="welcome",
+        subscription=subscription,
+    )
+
+    async def fake_authorize(init_data, db):  # noqa: ARG001
+        assert init_data == "init"
+        return user
+
+    monkeypatch.setattr(miniapp, "_authorize_miniapp_user", fake_authorize)
+    async def fake_pricing(db, user_obj, subscription_obj, period_days):  # noqa: ARG001
+        assert user_obj is user
+        assert subscription_obj is subscription
+        assert period_days == 30
+        return {
+            "final_total": 0,
+            "promo_discount_value": 1234,
+            "server_ids": [],
+            "details": {},
+        }
+
+    monkeypatch.setattr(
+        miniapp,
+        "_calculate_subscription_renewal_pricing",
+        fake_pricing,
+    )
+
+    captured_charge = {}
+
+    async def fake_subtract(db, user_obj, amount, description, **kwargs):  # noqa: ARG001
+        captured_charge.update(
+            {
+                "user": user_obj,
+                "amount": amount,
+                "description": description,
+                "consume": kwargs.get("consume_promo_offer"),
+            }
+        )
+        if kwargs.get("consume_promo_offer"):
+            user_obj.promo_offer_discount_percent = 0
+            user_obj.promo_offer_discount_source = None
+        return True
+
+    monkeypatch.setattr(miniapp, "subtract_user_balance", fake_subtract)
+
+    async def fake_extend(db, subscription_obj, period_days):  # noqa: ARG001
+        subscription_obj.end_date = datetime.utcnow() + timedelta(days=period_days)
+        return subscription_obj
+
+    monkeypatch.setattr(miniapp, "extend_subscription", fake_extend)
+
+    class DummySubscriptionService:
+        async def update_remnawave_user(self, *args, **kwargs):  # noqa: ARG002
+            return None
+
+    monkeypatch.setattr(
+        miniapp,
+        "SubscriptionService",
+        lambda: DummySubscriptionService(),
+    )
+
+    async def fake_create_transaction(**kwargs):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(miniapp, "create_transaction", fake_create_transaction)
+
+    class DummySession:
+        async def refresh(self, obj):  # noqa: ARG001
+            return None
+
+    payload = MiniAppSubscriptionRenewalRequest(
+        initData="init",
+        subscriptionId=subscription.id,
+        periodDays=30,
+    )
+
+    response = await miniapp.submit_subscription_renewal_endpoint(payload, db=DummySession())
+
+    assert captured_charge["user"] is user
+    assert captured_charge["amount"] == 0
+    assert captured_charge["consume"] is True
+    assert "скидка" in (response.message or "")
