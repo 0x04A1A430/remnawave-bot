@@ -12,6 +12,25 @@ from app.database.models import User, ReferralEarning, Transaction, TransactionT
 logger = logging.getLogger(__name__)
 
 
+def format_referrer_info(user: User) -> str:
+    """Return formatted referrer info for admin notifications."""
+
+    referred_by_id = getattr(user, "referred_by_id", None)
+
+    if not referred_by_id:
+        return "Нет"
+
+    referrer = getattr(user, "referrer", None)
+
+    if not referrer:
+        return f"ID {referred_by_id} (не найден)"
+
+    if referrer.username:
+        return f"@{referrer.username} (ID: {referred_by_id})"
+
+    return f"ID {referrer.telegram_id}"
+
+
 async def generate_unique_referral_code(db: AsyncSession, telegram_id: int) -> str:
     max_attempts = 10
     
