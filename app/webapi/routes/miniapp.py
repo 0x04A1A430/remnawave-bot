@@ -37,7 +37,6 @@ from app.database.crud.subscription import (
     create_trial_subscription,
     extend_subscription,
     remove_subscription_servers,
-    update_subscription_autopay,
 )
 from app.database.crud.transaction import (
     create_transaction,
@@ -156,9 +155,6 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionRenewalPeriod,
     MiniAppSubscriptionRenewalRequest,
     MiniAppSubscriptionRenewalResponse,
-    MiniAppSubscriptionAutopayRequest,
-    MiniAppSubscriptionAutopayResponse,
-    MiniAppSubscriptionAutopaySettings,
 )
 
 
@@ -200,71 +196,6 @@ _PAYMENT_FAILURE_STATUSES = {
 
 
 _PERIOD_ID_PATTERN = re.compile(r"(\d+)")
-
-
-_AUTOPAY_DAY_OPTIONS = (0, 1, 3, 7, 14)
-
-
-def _resolve_autopay_day_options(subscription: Optional[Subscription] = None) -> List[int]:
-    options: set[int] = set()
-    for value in _AUTOPAY_DAY_OPTIONS:
-        try:
-            numeric = int(value)
-        except (TypeError, ValueError):
-            continue
-        if numeric < 0:
-            continue
-        options.add(numeric)
-
-    default_days = getattr(settings, "DEFAULT_AUTOPAY_DAYS_BEFORE", None)
-    if isinstance(default_days, int) and default_days >= 0:
-        options.add(default_days)
-
-    if subscription is not None:
-        try:
-            candidate = int(getattr(subscription, "autopay_days_before", None))
-        except (TypeError, ValueError):
-            candidate = None
-        if candidate is not None and candidate >= 0:
-            options.add(candidate)
-
-    return sorted(options)
-
-
-def _build_autopay_payload(
-    subscription: Optional[Subscription],
-) -> Optional[MiniAppSubscriptionAutopaySettings]:
-    if subscription is None:
-        return None
-
-    options = _resolve_autopay_day_options(subscription)
-
-    days_before_value = getattr(subscription, "autopay_days_before", None)
-    days_before: Optional[int]
-    try:
-        days_before = int(days_before_value) if days_before_value is not None else None
-    except (TypeError, ValueError):
-        days_before = None
-
-    if days_before is None or days_before < 0:
-        default_days = getattr(settings, "DEFAULT_AUTOPAY_DAYS_BEFORE", None)
-        days_before = default_days if isinstance(default_days, int) and default_days >= 0 else None
-
-    if days_before is None and options:
-        days_before = options[0]
-
-    min_balance_setting = getattr(settings, "MIN_BALANCE_FOR_AUTOPAY_KOPEKS", None)
-    min_balance = None
-    if isinstance(min_balance_setting, int) and min_balance_setting > 0:
-        min_balance = min_balance_setting
-
-    return MiniAppSubscriptionAutopaySettings(
-        enabled=bool(getattr(subscription, "autopay_enabled", False)),
-        days_before=days_before,
-        autopay_days_before=days_before,
-        autopay_days_options=options,
-        min_balance_kopeks=min_balance,
-    )
 
 
 async def _get_usd_to_rub_rate() -> float:
@@ -2399,9 +2330,6 @@ async def get_subscription_details(
     traffic_limit_value = 0
     device_limit_value: Optional[int] = settings.DEFAULT_DEVICE_LIMIT or None
     autopay_enabled = False
-    autopay_settings: Optional[MiniAppSubscriptionAutopaySettings] = None
-    autopay_days_before: Optional[int] = None
-    autopay_day_options: List[int] = []
 
     if subscription:
         traffic_used_value = _format_gb(subscription.traffic_used_gb)
@@ -2424,12 +2352,6 @@ async def get_subscription_details(
         remnawave_short_uuid = subscription.remnawave_short_uuid
         device_limit_value = subscription.device_limit
         autopay_enabled = bool(subscription.autopay_enabled)
-        autopay_settings = _build_autopay_payload(subscription)
-
-    if autopay_settings:
-        autopay_enabled = bool(autopay_settings.enabled)
-        autopay_days_before = autopay_settings.autopay_days_before
-        autopay_day_options = list(autopay_settings.autopay_days_options)
 
     devices_count, devices = await _load_devices_info(user)
 
@@ -2519,9 +2441,6 @@ async def get_subscription_details(
             else ("paid" if subscription else "none")
         ),
         autopay_enabled=autopay_enabled,
-        autopay_days_before=autopay_days_before,
-        autopay_days_options=autopay_day_options,
-        autopay=autopay_settings,
         branding=settings.get_miniapp_branding(),
         faq=faq_payload,
         legal_documents=legal_documents_payload,
@@ -2531,126 +2450,6 @@ async def get_subscription_details(
         trial_available=trial_available,
         trial_duration_days=trial_duration_days,
         trial_status="available" if trial_available else "unavailable",
-    )
-
-
-@router.post(
-    "/subscription/autopay",
-    response_model=MiniAppSubscriptionAutopayResponse,
-)
-async def update_subscription_autopay_endpoint(
-    payload: MiniAppSubscriptionAutopayRequest,
-    db: AsyncSession = Depends(get_db_session),
-) -> MiniAppSubscriptionAutopayResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(user)
-    _validate_subscription_id(payload.subscription_id, subscription)
-
-    target_enabled = (
-        subscription.autopay_enabled if payload.enabled is None else bool(payload.enabled)
-    )
-
-    autopay_options = _resolve_autopay_day_options(subscription)
-
-    target_days: Optional[int] = None
-    if payload.days_before is not None:
-        try:
-            candidate = int(payload.days_before)
-        except (TypeError, ValueError) as error:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "code": "invalid_days",
-                    "message": "Invalid auto-pay day selected",
-                },
-            ) from error
-        if candidate < 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "code": "invalid_days",
-                    "message": "Invalid auto-pay day selected",
-                },
-            )
-        target_days = candidate
-
-    if target_days is None:
-        days_before_value = getattr(subscription, "autopay_days_before", None)
-        try:
-            target_days = int(days_before_value) if days_before_value is not None else None
-        except (TypeError, ValueError):
-            target_days = None
-
-    if target_enabled:
-        if not autopay_options:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "code": "options_unavailable",
-                    "message": "Auto-pay day selection is unavailable",
-                },
-            )
-        if target_days is None:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "code": "invalid_days",
-                    "message": "Auto-pay day must be selected",
-                },
-            )
-        if target_days not in autopay_options:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "code": "invalid_days",
-                    "message": "Selected auto-pay day is not available",
-                },
-            )
-
-    if target_days is None:
-        if autopay_options:
-            target_days = autopay_options[0]
-        else:
-            default_days = getattr(settings, "DEFAULT_AUTOPAY_DAYS_BEFORE", None)
-            target_days = default_days if isinstance(default_days, int) else 0
-
-    try:
-        subscription = await update_subscription_autopay(
-            db,
-            subscription,
-            target_enabled,
-            int(target_days),
-        )
-    except HTTPException:
-        raise
-    except Exception as error:  # pragma: no cover - defensive logging
-        logger.error(
-            "Failed to update auto-pay for subscription %s: %s",
-            getattr(subscription, "id", None),
-            error,
-        )
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": "autopay_update_failed",
-                "message": "Failed to update auto-pay settings",
-            },
-        ) from error
-
-    autopay_settings = _build_autopay_payload(subscription)
-
-    return MiniAppSubscriptionAutopayResponse(
-        subscription_id=subscription.id,
-        autopay_enabled=bool(subscription.autopay_enabled),
-        autopay_days_before=(
-            autopay_settings.autopay_days_before if autopay_settings else target_days
-        ),
-        autopay_days_options=(
-            list(autopay_settings.autopay_days_options)
-            if autopay_settings
-            else autopay_options
-        ),
-        autopay=autopay_settings,
     )
 
 
@@ -3764,8 +3563,6 @@ async def get_subscription_renewal_options_endpoint(
     subscription = _ensure_paid_subscription(user)
     _validate_subscription_id(payload.subscription_id, subscription)
 
-    autopay_settings = _build_autopay_payload(subscription)
-
     periods, pricing_map, default_period_id = await _prepare_subscription_renewal_options(
         db,
         user,
@@ -3806,14 +3603,6 @@ async def get_subscription_renewal_options_endpoint(
         default_period_id=default_period_id,
         missing_amount_kopeks=missing_amount,
         status_message=_build_renewal_status_message(user),
-        autopay_enabled=autopay_settings.enabled if autopay_settings else None,
-        autopay_days_before=autopay_settings.autopay_days_before if autopay_settings else None,
-        autopay_days_options=(
-            list(autopay_settings.autopay_days_options)
-            if autopay_settings
-            else []
-        ),
-        autopay=autopay_settings,
     )
 
 
