@@ -24,7 +24,6 @@ from app.external.cryptobot import CryptoBotService
 from app.utils.currency_converter import currency_converter
 from app.database.database import get_db
 from app.localization.texts import get_texts
-from app.utils.user_utils import format_referrer_info
 from app.services.subscription_checkout_service import (
     has_subscription_checkout_draft,
     should_offer_checkout_resume,
@@ -179,19 +178,10 @@ class PaymentService:
             user = await get_user_by_id(db, user_id)
             if user:
                 old_balance = user.balance_kopeks
-                was_first_topup = not user.has_made_first_topup
-
+                
                 user.balance_kopeks += amount_kopeks
                 user.updated_at = datetime.utcnow()
-
-                if was_first_topup:
-                    user.has_made_first_topup = True
-
-                promo_group = getattr(user, "promo_group", None)
-                subscription = getattr(user, "subscription", None)
-                referrer_info = format_referrer_info(user)
-                topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
-
+                
                 await db.commit()
                 await db.refresh(user)
                 
@@ -217,13 +207,7 @@ class PaymentService:
                         from app.services.admin_notification_service import AdminNotificationService
                         notification_service = AdminNotificationService(self.bot)
                         await notification_service.send_balance_topup_notification(
-                            user,
-                            transaction,
-                            old_balance,
-                            topup_status=topup_status,
-                            referrer_info=referrer_info,
-                            subscription=subscription,
-                            promo_group=promo_group,
+                            db, user, transaction, old_balance
                         )
                     except Exception as e:
                         logger.error(f"Ошибка отправки уведомления о пополнении Stars: {e}")
@@ -491,19 +475,10 @@ class PaymentService:
                 user = await get_user_by_id(db, updated_payment.user_id)
                 if user:
                     old_balance = user.balance_kopeks
-                    was_first_topup = not user.has_made_first_topup
-
+                    
                     user.balance_kopeks += updated_payment.amount_kopeks
                     user.updated_at = datetime.utcnow()
-
-                    if was_first_topup:
-                        user.has_made_first_topup = True
-
-                    promo_group = getattr(user, "promo_group", None)
-                    subscription = getattr(user, "subscription", None)
-                    referrer_info = format_referrer_info(user)
-                    topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
-
+                    
                     await db.commit()
                     await db.refresh(user)
                     
@@ -518,13 +493,7 @@ class PaymentService:
                             from app.services.admin_notification_service import AdminNotificationService
                             notification_service = AdminNotificationService(self.bot)
                             await notification_service.send_balance_topup_notification(
-                                user,
-                                transaction,
-                                old_balance,
-                                topup_status=topup_status,
-                                referrer_info=referrer_info,
-                                subscription=subscription,
-                                promo_group=promo_group,
+                                db, user, transaction, old_balance
                             )
                         except Exception as e:
                             logger.error(f"Ошибка отправки уведомления о пополнении YooKassa: {e}")
@@ -1106,18 +1075,8 @@ class PaymentService:
                     return False
 
                 old_balance = user.balance_kopeks
-                was_first_topup = not user.has_made_first_topup
-
                 user.balance_kopeks += payment.amount_kopeks
                 user.updated_at = datetime.utcnow()
-
-                if was_first_topup:
-                    user.has_made_first_topup = True
-
-                promo_group = getattr(user, "promo_group", None)
-                subscription = getattr(user, "subscription", None)
-                referrer_info = format_referrer_info(user)
-                topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
 
                 await db.commit()
                 await db.refresh(user)
@@ -1148,13 +1107,10 @@ class PaymentService:
 
                         notification_service = AdminNotificationService(self.bot)
                         await notification_service.send_balance_topup_notification(
+                            db,
                             user,
                             transaction,
                             old_balance,
-                            topup_status=topup_status,
-                            referrer_info=referrer_info,
-                            subscription=subscription,
-                            promo_group=promo_group,
                         )
                     except Exception as notify_error:
                         logger.error(
@@ -1312,19 +1268,8 @@ class PaymentService:
             await link_pal24_payment_to_transaction(db, payment, transaction.id)
 
             old_balance = user.balance_kopeks
-            was_first_topup = not user.has_made_first_topup
-
             user.balance_kopeks += payment.amount_kopeks
             user.updated_at = datetime.utcnow()
-
-            if was_first_topup:
-                user.has_made_first_topup = True
-
-            promo_group = getattr(user, "promo_group", None)
-            subscription = getattr(user, "subscription", None)
-            referrer_info = format_referrer_info(user)
-            topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
-
             await db.commit()
             await db.refresh(user)
 
@@ -1341,13 +1286,10 @@ class PaymentService:
 
                     notification_service = AdminNotificationService(self.bot)
                     await notification_service.send_balance_topup_notification(
+                        db,
                         user,
                         transaction,
                         old_balance,
-                        topup_status=topup_status,
-                        referrer_info=referrer_info,
-                        subscription=subscription,
-                        promo_group=promo_group,
                     )
                 except Exception as notify_error:
                     logger.error("Ошибка отправки админ уведомления Pal24: %s", notify_error)
@@ -1582,19 +1524,10 @@ class PaymentService:
                 user = await get_user_by_id(db, updated_payment.user_id)
                 if user:
                     old_balance = user.balance_kopeks
-                    was_first_topup = not user.has_made_first_topup
-
+                    
                     user.balance_kopeks += amount_kopeks
                     user.updated_at = datetime.utcnow()
-
-                    if was_first_topup:
-                        user.has_made_first_topup = True
-
-                    promo_group = getattr(user, "promo_group", None)
-                    subscription = getattr(user, "subscription", None)
-                    referrer_info = format_referrer_info(user)
-                    topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
-
+                    
                     await db.commit()
                     await db.refresh(user)
                     
@@ -1609,13 +1542,7 @@ class PaymentService:
                             from app.services.admin_notification_service import AdminNotificationService
                             notification_service = AdminNotificationService(self.bot)
                             await notification_service.send_balance_topup_notification(
-                                user,
-                                transaction,
-                                old_balance,
-                                topup_status=topup_status,
-                                referrer_info=referrer_info,
-                                subscription=subscription,
-                                promo_group=promo_group,
+                                db, user, transaction, old_balance
                             )
                         except Exception as e:
                             logger.error(f"Ошибка отправки уведомления о пополнении CryptoBot: {e}")

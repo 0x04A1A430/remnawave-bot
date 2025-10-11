@@ -39,7 +39,6 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
         .options(
             selectinload(User.subscription),
             selectinload(User.promo_group),
-            selectinload(User.referrer),
         )
         .where(User.id == user_id)
     )
@@ -57,7 +56,6 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optiona
         .options(
             selectinload(User.subscription),
             selectinload(User.promo_group),
-            selectinload(User.referrer),
         )
         .where(User.telegram_id == telegram_id)
     )
