@@ -1524,6 +1524,149 @@
             box-shadow: var(--shadow-sm);
         }
 
+        .subscription-autopay-section {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: var(--radius-lg);
+            background: var(--bg-primary);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+        }
+
+        .subscription-autopay-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .subscription-autopay-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .subscription-autopay-description {
+            margin-top: 4px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .subscription-autopay-status {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .subscription-autopay-status::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            opacity: 0.7;
+        }
+
+        .subscription-autopay-status.enabled {
+            color: var(--success);
+        }
+
+        .subscription-autopay-status.disabled {
+            color: var(--text-secondary);
+        }
+
+        .subscription-autopay-status.saving {
+            color: var(--primary);
+        }
+
+        .subscription-autopay-status.loading {
+            color: var(--text-secondary);
+        }
+
+        .subscription-autopay-toggle-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .subscription-autopay-toggle {
+            flex: 1;
+            padding: 14px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .subscription-autopay-toggle:hover:not(:disabled) {
+            border-color: var(--primary);
+            box-shadow: var(--shadow-sm);
+            transform: translateY(-1px);
+        }
+
+        .subscription-autopay-toggle.active {
+            background: linear-gradient(135deg, var(--primary), rgba(var(--primary-rgb), 0.85));
+            color: var(--tg-theme-button-text-color);
+            border-color: transparent;
+            box-shadow: var(--shadow-md);
+        }
+
+        .subscription-autopay-toggle:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .subscription-autopay-days {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .subscription-autopay-days-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .subscription-autopay-days-options {
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            margin-right: -8px;
+            padding-right: 8px;
+        }
+
+        .subscription-autopay-days-options::-webkit-scrollbar {
+            display: none;
+        }
+
+        .subscription-autopay-days-options .subscription-settings-toggle {
+            min-width: 140px;
+            flex: 0 0 auto;
+        }
+
+        .subscription-autopay-hint {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        :root[data-theme="dark"] .subscription-autopay-section {
+            border-color: rgba(148, 163, 184, 0.2);
+            background: rgba(15, 23, 42, 0.6);
+        }
+
         .subscription-renewal-summary-header {
             display: flex;
             justify-content: space-between;
@@ -4704,6 +4847,24 @@
                                 <div class="subscription-renewal-price-note hidden" id="subscriptionRenewalPriceNote"></div>
                                 <div class="subscription-renewal-balance-warning hidden" id="subscriptionRenewalBalanceWarning"></div>
                             </div>
+                            <div class="subscription-autopay-section" id="subscriptionAutopaySection">
+                                <div class="subscription-autopay-header">
+                                    <div>
+                                        <div class="subscription-autopay-title" data-i18n="subscription_autopay.title">Автоплатеж</div>
+                                        <div class="subscription-autopay-description" data-i18n="subscription_autopay.subtitle">Автоматически продлеваем подписку перед окончанием срока.</div>
+                                    </div>
+                                    <div class="subscription-autopay-status loading" id="subscriptionAutopayStatus">Loading…</div>
+                                </div>
+                                <div class="subscription-autopay-days hidden" id="subscriptionAutopayDays">
+                                    <div class="subscription-autopay-days-title" data-i18n="subscription_autopay.days.title">За сколько списывать</div>
+                                    <div class="subscription-autopay-days-options" id="subscriptionAutopayDaysOptions"></div>
+                                </div>
+                                <div class="subscription-autopay-hint hidden" id="subscriptionAutopayHint"></div>
+                                <div class="subscription-autopay-toggle-group">
+                                    <button class="subscription-autopay-toggle" id="subscriptionAutopayEnable" type="button" data-i18n="subscription_autopay.action.enable">Включить</button>
+                                    <button class="subscription-autopay-toggle" id="subscriptionAutopayDisable" type="button" data-i18n="subscription_autopay.action.disable">Отключить</button>
+                                </div>
+                            </div>
                             <div class="subscription-renewal-actions">
                                 <button class="btn btn-primary" id="subscriptionRenewalSubmit" type="button" data-i18n="subscription_renewal.submit">Продлить</button>
                             </div>
@@ -5585,6 +5746,24 @@
                 'trial.activation.error.already_active': 'You already have an active subscription.',
                 'autopay.enabled': 'Enabled',
                 'autopay.disabled': 'Disabled',
+                'subscription_autopay.title': 'Auto-pay',
+                'subscription_autopay.subtitle': 'Automatically renew your subscription before it expires.',
+                'subscription_autopay.status.enabled': 'Enabled',
+                'subscription_autopay.status.disabled': 'Disabled',
+                'subscription_autopay.status.loading': 'Loading…',
+                'subscription_autopay.action.enable': 'Enable',
+                'subscription_autopay.action.disable': 'Disable',
+                'subscription_autopay.days.title': 'Charge before expiry',
+                'subscription_autopay.day.same_day': 'On renewal day',
+                'subscription_autopay.day.before.one': '{count} day before',
+                'subscription_autopay.day.before.few': '{count} days before',
+                'subscription_autopay.day.before.many': '{count} days before',
+                'subscription_autopay.saving': 'Saving…',
+                'subscription_autopay.hint.disabled': 'Enable auto-pay to choose when to charge your balance.',
+                'subscription_autopay.hint.no_options': 'Auto-pay day selection is temporarily unavailable.',
+                'subscription_autopay.error.generic': 'Failed to update auto-pay settings. Please try again later.',
+                'subscription_autopay.error.unauthorized': 'Authorization failed. Please reopen the mini app from Telegram.',
+                'subscription_autopay.error.no_days': 'Select a charge day to enable auto-pay.',
                 'platform.ios': 'iOS',
                 'platform.android': 'Android',
                 'platform.pc': 'PC',
@@ -5962,6 +6141,24 @@
                 'trial.activation.error.already_active': 'У вас уже есть активная подписка.',
                 'autopay.enabled': 'Включен',
                 'autopay.disabled': 'Выключен',
+                'subscription_autopay.title': 'Автоплатеж',
+                'subscription_autopay.subtitle': 'Автоматически продлеваем подписку перед окончанием срока.',
+                'subscription_autopay.status.enabled': 'Включен',
+                'subscription_autopay.status.disabled': 'Выключен',
+                'subscription_autopay.status.loading': 'Загружаем…',
+                'subscription_autopay.action.enable': 'Включить',
+                'subscription_autopay.action.disable': 'Отключить',
+                'subscription_autopay.days.title': 'За сколько списывать',
+                'subscription_autopay.day.same_day': 'В день окончания',
+                'subscription_autopay.day.before.one': '{count} день до списания',
+                'subscription_autopay.day.before.few': '{count} дня до списания',
+                'subscription_autopay.day.before.many': '{count} дней до списания',
+                'subscription_autopay.saving': 'Сохраняем…',
+                'subscription_autopay.hint.disabled': 'Включите автоплатеж, чтобы выбрать день списания.',
+                'subscription_autopay.hint.no_options': 'Выбор дня списания временно недоступен.',
+                'subscription_autopay.error.generic': 'Не удалось обновить настройки автоплатежа. Попробуйте позже.',
+                'subscription_autopay.error.unauthorized': 'Ошибка авторизации. Откройте мини-приложение из Telegram и повторите попытку.',
+                'subscription_autopay.error.no_days': 'Выберите день списания, чтобы включить автоплатеж.',
                 'platform.ios': 'iOS',
                 'platform.android': 'Android',
                 'platform.pc': 'ПК',
@@ -6154,6 +6351,15 @@
         let subscriptionRenewalSubmitting = false;
         const subscriptionRenewalSelection = {
             periodId: null,
+        };
+
+        let subscriptionAutopayState = {
+            enabled: false,
+            daysBefore: null,
+            defaultDaysBefore: null,
+            options: [],
+            loading: true,
+            saving: false,
         };
 
         let trialActivationInProgress = false;
@@ -7187,6 +7393,31 @@
             userData.subscriptionUrl = userData.subscription_url || null;
             userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
             userData.referral = userData.referral || null;
+
+            if (hasPaidSubscription()) {
+                subscriptionAutopayState.loading = true;
+                subscriptionAutopayState.saving = false;
+                subscriptionAutopayState.defaultDaysBefore = null;
+                subscriptionAutopayState.options = [];
+                ingestAutopayData(
+                    payload,
+                    payload?.autopay,
+                    payload?.autopay_settings,
+                    payload?.autopaySettings,
+                    payload?.subscription_renewal,
+                    payload?.subscriptionRenewal,
+                    payload?.subscription_renewal?.autopay,
+                    payload?.subscriptionRenewal?.autopay,
+                );
+            } else {
+                subscriptionAutopayState.enabled = false;
+                subscriptionAutopayState.daysBefore = null;
+                subscriptionAutopayState.defaultDaysBefore = null;
+                subscriptionAutopayState.options = [];
+                subscriptionAutopayState.loading = false;
+                subscriptionAutopayState.saving = false;
+                renderSubscriptionAutopay();
+            }
 
             resetSubscriptionRenewalState(null);
             prepareSubscriptionRenewalFromUserData();
@@ -8741,6 +8972,605 @@
             } catch (error) {
                 return null;
             }
+        }
+
+        function resolvePluralForm(count, language = preferredLanguage) {
+            const normalizedLang = (language || preferredLanguage || 'en').split('-')[0].toLowerCase();
+            if (normalizedLang === 'ru') {
+                const mod10 = count % 10;
+                const mod100 = count % 100;
+                if (mod10 === 1 && mod100 !== 11) {
+                    return 'one';
+                }
+                if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+                    return 'few';
+                }
+                return 'many';
+            }
+            return count === 1 ? 'one' : 'many';
+        }
+
+        function formatAutopayDayLabel(days) {
+            const value = coercePositiveInt(days, null);
+            if (value === null) {
+                return '';
+            }
+            if (value === 0) {
+                const sameDayKey = 'subscription_autopay.day.same_day';
+                const sameDay = t(sameDayKey);
+                if (sameDay && sameDay !== sameDayKey) {
+                    return sameDay;
+                }
+                return preferredLanguage === 'ru' ? 'В день окончания' : 'On renewal day';
+            }
+            const pluralKey = resolvePluralForm(value);
+            const key = `subscription_autopay.day.before.${pluralKey}`;
+            const template = t(key);
+            if (template && template !== key) {
+                return template.replace('{count}', String(value));
+            }
+            if (preferredLanguage === 'ru') {
+                if (pluralKey === 'one') {
+                    return `${value} день до списания`;
+                }
+                if (pluralKey === 'few') {
+                    return `${value} дня до списания`;
+                }
+                return `${value} дней до списания`;
+            }
+            return pluralKey === 'one'
+                ? `${value} day before`
+                : `${value} days before`;
+        }
+
+        function renderSubscriptionAutopay() {
+            const section = document.getElementById('subscriptionAutopaySection');
+            if (!section) {
+                return;
+            }
+
+            const shouldShow = hasPaidSubscription();
+            section.classList.toggle('hidden', !shouldShow);
+            if (!shouldShow) {
+                return;
+            }
+
+            const statusElement = document.getElementById('subscriptionAutopayStatus');
+            const enableButton = document.getElementById('subscriptionAutopayEnable');
+            const disableButton = document.getElementById('subscriptionAutopayDisable');
+            const daysContainer = document.getElementById('subscriptionAutopayDays');
+            const optionsContainer = document.getElementById('subscriptionAutopayDaysOptions');
+            const hintElement = document.getElementById('subscriptionAutopayHint');
+
+            const enabled = Boolean(subscriptionAutopayState.enabled);
+            const saving = Boolean(subscriptionAutopayState.saving);
+            const loading = Boolean(subscriptionAutopayState.loading);
+            const options = Array.isArray(subscriptionAutopayState.options)
+                ? subscriptionAutopayState.options.slice().sort((a, b) => a - b)
+                : [];
+            const hasOptions = options.length > 0;
+
+            if (statusElement) {
+                if (saving) {
+                    const savingKey = 'subscription_autopay.saving';
+                    const savingText = t(savingKey);
+                    statusElement.textContent = savingText && savingText !== savingKey ? savingText : 'Saving…';
+                    statusElement.className = 'subscription-autopay-status saving';
+                } else if (loading) {
+                    const loadingKey = 'subscription_autopay.status.loading';
+                    const loadingText = t(loadingKey);
+                    statusElement.textContent = loadingText && loadingText !== loadingKey ? loadingText : 'Loading…';
+                    statusElement.className = 'subscription-autopay-status loading';
+                } else {
+                    const key = enabled
+                        ? 'subscription_autopay.status.enabled'
+                        : 'subscription_autopay.status.disabled';
+                    const label = t(key);
+                    statusElement.textContent = label && label !== key
+                        ? label
+                        : (enabled ? 'Enabled' : 'Disabled');
+                    statusElement.className = `subscription-autopay-status ${enabled ? 'enabled' : 'disabled'}`;
+                }
+            }
+
+            if (enableButton) {
+                enableButton.disabled = saving || loading || enabled;
+                enableButton.classList.toggle('active', enabled && !loading);
+            }
+
+            if (disableButton) {
+                disableButton.disabled = saving || loading || !enabled;
+                disableButton.classList.toggle('active', !enabled && !loading);
+            }
+
+            if (daysContainer) {
+                daysContainer.classList.toggle('hidden', !enabled || !hasOptions);
+            }
+
+            if (hintElement) {
+                if (!enabled) {
+                    const hintKey = 'subscription_autopay.hint.disabled';
+                    const hint = t(hintKey);
+                    hintElement.textContent = hint && hint !== hintKey
+                        ? hint
+                        : (preferredLanguage === 'ru'
+                            ? 'Включите автоплатеж, чтобы выбрать день списания.'
+                            : 'Enable auto-pay to choose when to charge your balance.');
+                    hintElement.classList.remove('hidden');
+                } else if (enabled && !hasOptions && !loading) {
+                    const hintKey = 'subscription_autopay.hint.no_options';
+                    const hint = t(hintKey);
+                    hintElement.textContent = hint && hint !== hintKey
+                        ? hint
+                        : (preferredLanguage === 'ru'
+                            ? 'Выбор дня списания временно недоступен.'
+                            : 'Auto-pay day selection is temporarily unavailable.');
+                    hintElement.classList.remove('hidden');
+                } else {
+                    hintElement.classList.add('hidden');
+                    hintElement.textContent = '';
+                }
+            }
+
+            if (optionsContainer) {
+                optionsContainer.innerHTML = '';
+                if (enabled && hasOptions) {
+                    options.forEach(value => {
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'subscription-settings-toggle';
+                        button.dataset.autopayDays = String(value);
+                        button.disabled = saving;
+
+                        if (subscriptionAutopayState.daysBefore === value) {
+                            button.classList.add('active');
+                        }
+
+                        const label = document.createElement('div');
+                        label.className = 'subscription-settings-toggle-label';
+
+                        const title = document.createElement('div');
+                        title.className = 'subscription-settings-toggle-title';
+                        title.textContent = formatAutopayDayLabel(value);
+
+                        label.appendChild(title);
+                        button.appendChild(label);
+                        optionsContainer.appendChild(button);
+                    });
+                }
+            }
+        }
+
+        function normalizeAutopayPayload(raw) {
+            if (!raw || typeof raw !== 'object') {
+                return null;
+            }
+
+            const enabledCandidate = raw.autopay_enabled
+                ?? raw.enabled
+                ?? raw.is_enabled
+                ?? raw.active
+                ?? null;
+            let enabledValue;
+            if (typeof enabledCandidate === 'boolean') {
+                enabledValue = enabledCandidate;
+            } else if (enabledCandidate != null) {
+                enabledValue = coerceBoolean(enabledCandidate, undefined);
+            }
+
+            const daysCandidate = raw.autopay_days_before
+                ?? raw.days_before
+                ?? raw.daysBefore
+                ?? raw.days
+                ?? raw.value
+                ?? null;
+            const daysBefore = daysCandidate != null
+                ? coercePositiveInt(daysCandidate, null)
+                : null;
+
+            const defaultDaysCandidate = raw.default_autopay_days_before
+                ?? raw.default_autopay_days
+                ?? raw.default_days_before
+                ?? raw.default_days
+                ?? raw.defaultDaysBefore
+                ?? raw.defaultDays
+                ?? raw.default
+                ?? null;
+            const defaultDaysBefore = defaultDaysCandidate != null
+                ? coercePositiveInt(defaultDaysCandidate, null)
+                : null;
+
+            const optionSet = new Set();
+            const optionSources = [
+                raw.autopay_days_options,
+                raw.autopayDaysOptions,
+                raw.days_options,
+                raw.daysOptions,
+                raw.available_days,
+                raw.availableDays,
+            ];
+
+            optionSources.forEach(source => {
+                if (!source) {
+                    return;
+                }
+                const normalized = Array.isArray(source)
+                    ? source
+                    : (typeof source === 'object' ? Object.values(source) : [source]);
+                normalized.forEach(item => {
+                    if (item == null) {
+                        return;
+                    }
+                    if (typeof item === 'object') {
+                        const candidate = item.days_before
+                            ?? item.daysBefore
+                            ?? item.value
+                            ?? item.days
+                            ?? item.amount
+                            ?? null;
+                        const numeric = candidate != null ? coercePositiveInt(candidate, null) : null;
+                        if (numeric !== null) {
+                            optionSet.add(numeric);
+                        }
+                        return;
+                    }
+                    const numeric = coercePositiveInt(item, null);
+                    if (numeric !== null) {
+                        optionSet.add(numeric);
+                    }
+                });
+            });
+
+            const options = Array.from(optionSet).sort((a, b) => a - b);
+            if (daysBefore !== null && !optionSet.has(daysBefore)) {
+                options.push(daysBefore);
+                options.sort((a, b) => a - b);
+            }
+            if (defaultDaysBefore !== null && !optionSet.has(defaultDaysBefore)) {
+                options.push(defaultDaysBefore);
+                options.sort((a, b) => a - b);
+            }
+
+            return {
+                enabled: typeof enabledValue === 'boolean' ? enabledValue : undefined,
+                daysBefore: daysBefore !== null ? daysBefore : null,
+                defaultDaysBefore: defaultDaysBefore !== null ? defaultDaysBefore : null,
+                options,
+            };
+        }
+
+        const DEFAULT_AUTOPAY_DAY_OPTIONS = [1, 3, 7, 14];
+
+        function mergeAutopaySources(...sources) {
+            let hasData = false;
+            let enabledValue;
+            let daysValue = null;
+            let defaultDaysValue = null;
+            const optionSet = new Set();
+
+            DEFAULT_AUTOPAY_DAY_OPTIONS.forEach(value => {
+                const numeric = coercePositiveInt(value, null);
+                if (numeric !== null) {
+                    optionSet.add(numeric);
+                }
+            });
+
+            sources.forEach(source => {
+                const normalized = normalizeAutopayPayload(source);
+                if (!normalized) {
+                    return;
+                }
+                hasData = true;
+                if (typeof normalized.enabled === 'boolean') {
+                    enabledValue = normalized.enabled;
+                }
+                if (normalized.daysBefore !== null && normalized.daysBefore !== undefined) {
+                    daysValue = normalized.daysBefore;
+                }
+                if (normalized.defaultDaysBefore !== null && normalized.defaultDaysBefore !== undefined) {
+                    defaultDaysValue = normalized.defaultDaysBefore;
+                }
+                normalized.options.forEach(value => optionSet.add(value));
+            });
+
+            if (!hasData) {
+                return null;
+            }
+
+            if (daysValue !== null && daysValue !== undefined) {
+                optionSet.add(daysValue);
+            }
+            if (defaultDaysValue !== null && defaultDaysValue !== undefined) {
+                optionSet.add(defaultDaysValue);
+            }
+
+            const options = Array.from(optionSet).sort((a, b) => a - b);
+            let resolvedDays = daysValue;
+            if (resolvedDays === null || resolvedDays === undefined) {
+                if (defaultDaysValue !== null && defaultDaysValue !== undefined) {
+                    resolvedDays = defaultDaysValue;
+                } else if (options.length) {
+                    resolvedDays = options[0];
+                }
+            }
+
+            return {
+                enabled: enabledValue,
+                daysBefore: resolvedDays,
+                defaultDaysBefore: defaultDaysValue !== null && defaultDaysValue !== undefined
+                    ? defaultDaysValue
+                    : (daysValue !== null && daysValue !== undefined ? daysValue : null),
+                options,
+            };
+        }
+
+        function ingestAutopayData(...sources) {
+            const candidates = sources.filter(Boolean);
+            if (!candidates.length) {
+                subscriptionAutopayState.loading = false;
+                renderSubscriptionAutopay();
+                return;
+            }
+
+            const normalized = mergeAutopaySources(...candidates);
+            if (!normalized) {
+                subscriptionAutopayState.loading = false;
+                renderSubscriptionAutopay();
+                return;
+            }
+
+            if (typeof normalized.enabled === 'boolean') {
+                subscriptionAutopayState.enabled = normalized.enabled;
+            }
+
+            if (normalized.daysBefore !== null && normalized.daysBefore !== undefined) {
+                subscriptionAutopayState.daysBefore = normalized.daysBefore;
+            }
+
+            if (normalized.defaultDaysBefore !== undefined) {
+                if (normalized.defaultDaysBefore !== null) {
+                    subscriptionAutopayState.defaultDaysBefore = normalized.defaultDaysBefore;
+                } else if (subscriptionAutopayState.defaultDaysBefore === undefined) {
+                    subscriptionAutopayState.defaultDaysBefore = null;
+                }
+            } else if ((subscriptionAutopayState.defaultDaysBefore === null || subscriptionAutopayState.defaultDaysBefore === undefined)
+                && normalized.daysBefore !== null && normalized.daysBefore !== undefined) {
+                subscriptionAutopayState.defaultDaysBefore = normalized.daysBefore;
+            }
+
+            subscriptionAutopayState.options = Array.isArray(normalized.options)
+                ? normalized.options.slice().sort((a, b) => a - b)
+                : [];
+
+            if ((subscriptionAutopayState.daysBefore === null || subscriptionAutopayState.daysBefore === undefined)
+                && subscriptionAutopayState.options.length) {
+                subscriptionAutopayState.daysBefore = subscriptionAutopayState.options[0];
+            }
+
+            subscriptionAutopayState.loading = false;
+            renderSubscriptionAutopay();
+        }
+
+        function extractAutopayError(payload, status) {
+            if (status === 401) {
+                return t('subscription_autopay.error.unauthorized');
+            }
+            if (!payload || typeof payload !== 'object') {
+                return t('subscription_autopay.error.generic');
+            }
+            if (typeof payload.detail === 'string') {
+                return payload.detail;
+            }
+            if (payload.detail && typeof payload.detail === 'object') {
+                if (typeof payload.detail.message === 'string') {
+                    return payload.detail.message;
+                }
+                if (typeof payload.detail.error === 'string') {
+                    return payload.detail.error;
+                }
+            }
+            if (typeof payload.message === 'string') {
+                return payload.message;
+            }
+            if (typeof payload.error === 'string') {
+                return payload.error;
+            }
+            return t('subscription_autopay.error.generic');
+        }
+
+        function resolveAutopayErrorMessage(error, fallbackKey = 'subscription_autopay.error.generic') {
+            if (!error) {
+                return t(fallbackKey);
+            }
+            if (typeof error === 'string') {
+                return error;
+            }
+            if (typeof error.message === 'string' && error.message.trim()) {
+                return error.message;
+            }
+            if (error.detail) {
+                if (typeof error.detail === 'string' && error.detail.trim()) {
+                    return error.detail;
+                }
+                if (typeof error.detail.message === 'string' && error.detail.message.trim()) {
+                    return error.detail.message;
+                }
+            }
+            if (error.status === 401) {
+                return t('subscription_autopay.error.unauthorized');
+            }
+            return t(fallbackKey);
+        }
+
+        function handleAutopayError(error) {
+            const message = resolveAutopayErrorMessage(error);
+            const titleKey = 'subscription_autopay.title';
+            const title = t(titleKey);
+            showPopup(message, title && title !== titleKey ? title : 'Auto-pay');
+        }
+
+        async function submitAutopaySettingsChange(changes = {}) {
+            if (subscriptionAutopayState.saving || subscriptionAutopayState.loading) {
+                return;
+            }
+
+            if (!hasPaidSubscription()) {
+                handleAutopayError(createError('Auto-pay', t('subscription_autopay.error.generic')));
+                return;
+            }
+
+            const initData = tg.initData || '';
+            if (!initData) {
+                handleAutopayError(createError('Authorization Error', t('subscription_autopay.error.unauthorized')));
+                return;
+            }
+
+            const subscriptionId = userData?.subscription_id ?? userData?.subscriptionId ?? null;
+            if (!subscriptionId) {
+                handleAutopayError(createError('Auto-pay', t('subscription_autopay.error.generic')));
+                return;
+            }
+
+            const previousState = {
+                ...subscriptionAutopayState,
+                options: [...(subscriptionAutopayState.options || [])],
+            };
+
+            const targetEnabled = typeof changes.enabled === 'boolean'
+                ? changes.enabled
+                : subscriptionAutopayState.enabled;
+
+            let targetDays = changes.daysBefore;
+            if (targetDays === undefined || targetDays === null) {
+                targetDays = subscriptionAutopayState.daysBefore;
+            }
+            if (targetEnabled && (targetDays === undefined || targetDays === null)) {
+                if (subscriptionAutopayState.defaultDaysBefore !== null && subscriptionAutopayState.defaultDaysBefore !== undefined) {
+                    targetDays = subscriptionAutopayState.defaultDaysBefore;
+                } else if (subscriptionAutopayState.options.length) {
+                    targetDays = subscriptionAutopayState.options[0];
+                }
+            }
+            targetDays = targetDays !== undefined && targetDays !== null
+                ? coercePositiveInt(targetDays, null)
+                : null;
+
+            if (targetEnabled && (targetDays === null || targetDays === undefined)) {
+                handleAutopayError(createError('Auto-pay', t('subscription_autopay.error.no_days')));
+                renderSubscriptionAutopay();
+                return;
+            }
+
+            subscriptionAutopayState.enabled = targetEnabled;
+            if (targetEnabled) {
+                subscriptionAutopayState.daysBefore = targetDays;
+                if (subscriptionAutopayState.defaultDaysBefore === null || subscriptionAutopayState.defaultDaysBefore === undefined) {
+                    subscriptionAutopayState.defaultDaysBefore = targetDays;
+                }
+            }
+            subscriptionAutopayState.saving = true;
+            renderSubscriptionAutopay();
+
+            try {
+                const payload = {
+                    initData,
+                    subscription_id: subscriptionId,
+                    subscriptionId,
+                    enabled: targetEnabled,
+                    days_before: targetDays,
+                    daysBefore: targetDays,
+                };
+
+                const response = await fetch('/miniapp/subscription/autopay', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+
+                const body = await parseJsonSafe(response);
+                if (!response.ok || (body && body.success === false)) {
+                    const message = extractAutopayError(body, response.status);
+                    throw createError('Auto-pay', message, response.status);
+                }
+
+                subscriptionAutopayState.saving = false;
+
+                if (body && typeof body === 'object') {
+                    ingestAutopayData(
+                        body.autopay
+                            || body.data
+                            || body.subscription
+                            || body.settings
+                            || body,
+                    );
+                } else {
+                    renderSubscriptionAutopay();
+                }
+
+                await refreshSubscriptionData({ silent: true });
+                await ensureSubscriptionRenewalData({ force: true });
+            } catch (error) {
+                subscriptionAutopayState = {
+                    ...previousState,
+                    options: [...previousState.options],
+                    saving: false,
+                };
+                renderSubscriptionAutopay();
+                handleAutopayError(error);
+            }
+        }
+
+        function handleAutopayToggle(enabled) {
+            if (typeof enabled !== 'boolean') {
+                return;
+            }
+            if (subscriptionAutopayState.loading || subscriptionAutopayState.saving) {
+                return;
+            }
+            if (enabled === subscriptionAutopayState.enabled) {
+                return;
+            }
+            submitAutopaySettingsChange({ enabled });
+        }
+
+        function handleAutopayDaySelection(days) {
+            if (subscriptionAutopayState.loading || subscriptionAutopayState.saving) {
+                return;
+            }
+            if (!subscriptionAutopayState.enabled) {
+                return;
+            }
+            const value = coercePositiveInt(days, null);
+            if (value === null || value === undefined) {
+                return;
+            }
+            if (subscriptionAutopayState.daysBefore === value) {
+                return;
+            }
+            if (!subscriptionAutopayState.options.includes(value)) {
+                return;
+            }
+            submitAutopaySettingsChange({ daysBefore: value });
+        }
+
+        function setupSubscriptionAutopayEvents() {
+            document.getElementById('subscriptionAutopayEnable')?.addEventListener('click', () => {
+                handleAutopayToggle(true);
+            });
+            document.getElementById('subscriptionAutopayDisable')?.addEventListener('click', () => {
+                handleAutopayToggle(false);
+            });
+            document.getElementById('subscriptionAutopayDaysOptions')?.addEventListener('click', event => {
+                const target = event.target.closest('button[data-autopay-days]');
+                if (!target || target.disabled) {
+                    return;
+                }
+                const value = coercePositiveInt(target.dataset.autopayDays, null);
+                if (value === null || value === undefined) {
+                    return;
+                }
+                handleAutopayDaySelection(value);
+            });
         }
 
         function isSameSet(a, b) {
@@ -12025,6 +12855,16 @@
 
             const promoOffer = normalizeRenewalPromoOffer(root.promo_offer ?? root.promoOffer);
 
+            const autopayData = mergeAutopaySources(
+                root.autopay,
+                root.autopay_settings,
+                root.autopaySettings,
+                root,
+                payload.autopay,
+                payload.autopay_settings,
+                payload.autopaySettings,
+            );
+
             return {
                 subscriptionId,
                 currency,
@@ -12036,6 +12876,7 @@
                 promoOffer,
                 missingAmountKopeks,
                 statusMessage,
+                autopay: autopayData,
             };
         }
 
@@ -12053,6 +12894,9 @@
                 if (normalized && Array.isArray(normalized.periods) && normalized.periods.length) {
                     subscriptionRenewalData = normalized;
                     resetSubscriptionRenewalSelection(normalized);
+                    if (normalized.autopay) {
+                        ingestAutopayData(normalized.autopay);
+                    }
                     return;
                 }
             }
@@ -12135,6 +12979,9 @@
                 subscriptionRenewalError = null;
                 subscriptionRenewalLoading = false;
                 resetSubscriptionRenewalSelection(inlineNormalized);
+                if (inlineNormalized.autopay) {
+                    ingestAutopayData(inlineNormalized.autopay);
+                }
                 renderSubscriptionRenewalCard();
                 return Promise.resolve(inlineNormalized);
             }
@@ -12174,6 +13021,9 @@
                 subscriptionRenewalLoading = false;
                 subscriptionRenewalPromise = null;
                 resetSubscriptionRenewalSelection(normalized);
+                if (normalized.autopay) {
+                    ingestAutopayData(normalized.autopay);
+                }
                 renderSubscriptionRenewalCard();
                 return normalized;
             }).catch(error => {
@@ -12700,6 +13550,7 @@
             renderSubscriptionRenewalMeta(subscriptionRenewalData);
             renderSubscriptionRenewalOptions(subscriptionRenewalData);
             renderSubscriptionRenewalSummary(subscriptionRenewalData);
+            renderSubscriptionAutopay();
         }
 
         async function confirmSubscriptionRenewal(option, data) {
@@ -12831,6 +13682,7 @@
         }
 
         function setupSubscriptionRenewalEvents() {
+            setupSubscriptionAutopayEvents();
             document.getElementById('subscriptionRenewalRetry')?.addEventListener('click', () => {
                 ensureSubscriptionRenewalData({ force: true }).catch(error => {
                     console.warn('Failed to reload renewal options:', error);
