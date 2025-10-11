@@ -1171,6 +1171,10 @@
             padding: 0 16px 0;
         }
 
+        .subscription-purchase-card.has-promo-details .card-content {
+            max-height: none;
+        }
+
         .subscription-purchase-actions {
             display: flex;
             flex-direction: column;
@@ -1301,6 +1305,14 @@
         @media (max-width: 480px) {
             .card.subscription-purchase-card:not(.as-modal) .card-content {
                 padding: 0 16px 0;
+            }
+
+            .subscription-purchase-card.has-promo-details {
+                overflow: visible;
+            }
+
+            .subscription-purchase-card.has-promo-details .card-content {
+                max-height: none;
             }
 
             .subscription-purchase-option-content {
@@ -16344,6 +16356,70 @@
                     || preview.canPurchase === false
                     || (preview?.missingAmountKopeks || 0) > 0;
                 submitButton.disabled = disabled;
+            }
+
+            const cardElement = document.getElementById('subscriptionPurchaseCard');
+            if (cardElement) {
+                let hasPromoDetails = false;
+                if (!loading && preview) {
+                    const discountLines = ensureArray(preview.discountLines)
+                        .map(line => {
+                            if (typeof line === 'string') {
+                                return line.trim();
+                            }
+                            if (line && typeof line.label === 'string') {
+                                return line.label.trim();
+                            }
+                            return '';
+                        })
+                        .filter(Boolean);
+
+                    const rawPreview = preview.raw;
+                    const promoRoots = [];
+                    if (rawPreview && typeof rawPreview === 'object') {
+                        promoRoots.push(rawPreview);
+                        ['preview', 'data', 'summary', 'config', 'meta'].forEach(key => {
+                            const candidate = rawPreview[key];
+                            if (candidate && typeof candidate === 'object') {
+                                promoRoots.push(candidate);
+                            }
+                        });
+                    }
+
+                    const hasPromoFromRaw = promoRoots.some(entry => {
+                        if (!entry || typeof entry !== 'object') {
+                            return false;
+                        }
+
+                        const groupActive = entry.promo_group
+                            || entry.promoGroup
+                            || entry.promo_group_active
+                            || entry.promoGroupActive;
+                        const offerActive = entry.promo_offer || entry.promoOffer;
+                        const rawDiscounts = ensureArray(
+                            entry.discount_lines
+                            || entry.discountLines
+                            || entry.promo
+                            || entry.discounts,
+                        )
+                            .map(item => {
+                                if (typeof item === 'string') {
+                                    return item.trim();
+                                }
+                                if (item && typeof item.label === 'string') {
+                                    return item.label.trim();
+                                }
+                                return '';
+                            })
+                            .filter(Boolean);
+
+                        return Boolean(groupActive || offerActive || rawDiscounts.length);
+                    });
+
+                    hasPromoDetails = discountLines.length > 0 || hasPromoFromRaw;
+                }
+
+                cardElement.classList.toggle('has-promo-details', hasPromoDetails);
             }
         }
 
