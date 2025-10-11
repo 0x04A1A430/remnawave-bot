@@ -331,16 +331,6 @@
             min-width: 220px;
         }
 
-        .error.error-user-missing {
-            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.14), rgba(var(--primary-rgb), 0.08));
-            box-shadow: var(--shadow-md);
-            border: 1px solid rgba(var(--primary-rgb), 0.25);
-        }
-
-        .error.error-user-missing .error-text {
-            color: var(--text-primary);
-        }
-
         /* Cards */
         .card {
             background: var(--bg-secondary);
@@ -1791,21 +1781,6 @@
             background: rgba(255, 255, 255, 0.2);
         }
 
-        :root[data-theme="dark"] .subscription-missing-card {
-            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.28), rgba(var(--primary-rgb), 0.12));
-            border-color: rgba(var(--primary-rgb), 0.5);
-        }
-
-        :root[data-theme="dark"] .subscription-missing-icon {
-            background: rgba(var(--primary-rgb), 0.3);
-            color: #bfdbfe;
-        }
-
-        :root[data-theme="dark"] .status-missing {
-            background: rgba(59, 130, 246, 0.18);
-            color: #bfdbfe;
-        }
-
         :root[data-theme="dark"] .promo-offer-chip {
             background: rgba(255, 255, 255, 0.08);
             color: rgba(255, 255, 255, 0.9);
@@ -1857,64 +1832,6 @@
             min-width: 0;
         }
 
-        .subscription-missing-card {
-            display: flex;
-            gap: 16px;
-            padding: 20px;
-            align-items: center;
-            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.06), rgba(var(--primary-rgb), 0.12));
-            border: 2px dashed rgba(var(--primary-rgb), 0.35);
-        }
-
-        .subscription-missing-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 16px;
-            background: rgba(var(--primary-rgb), 0.15);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            flex-shrink: 0;
-            color: var(--primary);
-        }
-
-        .subscription-missing-content {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .subscription-missing-title {
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 6px;
-            color: var(--text-primary);
-        }
-
-        .subscription-missing-description {
-            font-size: 14px;
-            color: var(--text-secondary);
-            margin-bottom: 12px;
-        }
-
-        .subscription-missing-hint {
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin-bottom: 16px;
-        }
-
-        .subscription-missing-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .subscription-missing-actions .btn-primary,
-        .subscription-missing-actions .btn-secondary {
-            flex: 1;
-            min-width: 140px;
-        }
-
         .user-name {
             font-size: 20px;
             font-weight: 700;
@@ -1963,11 +1880,6 @@
         .status-disabled {
             background: linear-gradient(135deg, #e2e3e5, #eeeff1);
             color: #41464b;
-        }
-
-        .status-missing {
-            background: linear-gradient(135deg, #e0e7ff, #eef2ff);
-            color: #1e3a8a;
         }
 
         /* Stats Grid */
@@ -4298,7 +4210,7 @@
 
         <!-- Error State -->
         <div id="errorState" class="error hidden">
-            <div class="error-icon" id="errorIcon">⚠️</div>
+            <div class="error-icon">⚠️</div>
             <div class="error-title" id="errorTitle" data-i18n="error.default.title">Subscription Not Found</div>
             <div class="error-text" id="errorText" data-i18n="error.default.message">Please contact support to activate your subscription</div>
             <div class="error-actions">
@@ -4316,21 +4228,8 @@
             <!-- Promo Offers -->
             <div id="promoOffersContainer" class="promo-offers hidden"></div>
 
-            <!-- Subscription Missing -->
-            <div class="card subscription-missing-card hidden animate-in" id="subscriptionMissingCard">
-                <div class="subscription-missing-icon" aria-hidden="true">🛡️</div>
-                <div class="subscription-missing-content">
-                    <div class="subscription-missing-title" id="subscriptionMissingTitle" data-i18n="subscription_missing.title">No active subscription</div>
-                    <div class="subscription-missing-description" id="subscriptionMissingDescription" data-i18n="subscription_missing.description.default">Purchase a plan or activate a trial to continue.</div>
-                    <div class="subscription-missing-hint" id="subscriptionMissingHint" data-i18n="subscription_missing.hint">Top up your balance after activation to stay connected.</div>
-                    <div class="subscription-missing-actions">
-                        <button class="btn btn-secondary hidden" type="button" id="subscriptionMissingTrialBtn" data-i18n="subscription_missing.action.trial">Activate trial</button>
-                    </div>
-                </div>
-            </div>
-
             <!-- User Card -->
-            <div class="card user-card animate-in" id="userCard">
+            <div class="card user-card animate-in">
                 <div class="user-header">
                     <div class="user-avatar" id="userAvatar">U</div>
                     <div class="user-info">
@@ -5073,8 +4972,6 @@
                 'app.loading': 'Loading your subscription...',
                 'error.default.title': 'Subscription Not Found',
                 'error.default.message': 'Please contact support to activate your subscription.',
-                'error.user_not_found.title': 'Register in the bot',
-                'error.user_not_found.message': 'Open the Telegram bot to register before using the mini app.',
                 'stats.days_left': 'Days left',
                 'stats.servers': 'Servers',
                 'stats.devices': 'Devices',
@@ -5134,7 +5031,6 @@
                 'topup.status.retry': 'Try again',
                 'topup.done': 'Done',
                 'button.buy_subscription': 'Buy Subscription',
-                'button.open_bot': 'Open Telegram bot',
                 'subscription_purchase.title': 'Purchase subscription',
                 'subscription_purchase.subtitle': 'Configure the plan before completing the purchase.',
                 'subscription_purchase.status.loading': 'Loading subscription options…',
@@ -5160,8 +5056,6 @@
                 'subscription_purchase.servers.selected': 'Selected: {count}',
                 'subscription_purchase.devices.title': 'Devices',
                 'subscription_purchase.devices.subtitle': 'Simultaneous connections.',
-                'subscription_purchase.devices.price_label': 'Per device: {amount}',
-                'subscription_purchase.devices.price_original_label': 'Original price: {amount}',
                 'subscription_purchase.devices.unlimited': 'Unlimited devices',
                 'subscription_purchase.devices.limit': 'From {min} to {max} devices',
                 'subscription_purchase.summary.total': 'Total',
@@ -5386,26 +5280,9 @@
                 'status.trial': 'Trial',
                 'status.expired': 'Expired',
                 'status.disabled': 'Disabled',
-                'status.missing': 'Inactive',
                 'status.unknown': 'Unknown',
                 'subscription.type.trial': 'Trial',
                 'subscription.type.paid': 'Paid',
-                'subscription.type.none': 'No subscription',
-                'subscription_missing.title': 'No active subscription',
-                'subscription_missing.description.default': 'You do not have an active subscription yet. Purchase a plan to get access.',
-                'subscription_missing.description.trial': 'Activate your free {days}-day trial or choose a plan to continue.',
-                'subscription_missing.description.trial_short': 'Activate your free trial or choose a plan to continue.',
-                'subscription_missing.description.no_trial': 'Your trial is no longer available. Purchase a plan to continue.',
-                'subscription_missing.hint': 'After activation you can top up your balance here to stay connected.',
-                'subscription_missing.action.trial': 'Activate trial',
-                'subscription_missing.action.trial.loading': 'Activating…',
-                'trial.activation.title': 'Trial activation',
-                'trial.activation.success': 'Trial activated! Enjoy {days} days of access.',
-                'trial.activation.success.short': 'Trial activated successfully.',
-                'trial.activation.error.generic': 'Unable to activate the trial. Please try again later.',
-                'trial.activation.error.unavailable': 'Your trial is no longer available. Choose a plan to continue.',
-                'trial.activation.error.unauthorized': 'Authorization failed. Please reopen the mini app from Telegram.',
-                'trial.activation.error.already_active': 'You already have an active subscription.',
                 'autopay.enabled': 'Enabled',
                 'autopay.disabled': 'Disabled',
                 'platform.ios': 'iOS',
@@ -5450,8 +5327,6 @@
                 'app.loading': 'Загружаем вашу подписку...',
                 'error.default.title': 'Подписка не найдена',
                 'error.default.message': 'Свяжитесь с поддержкой, чтобы активировать подписку.',
-                'error.user_not_found.title': 'Зарегистрируйтесь в боте',
-                'error.user_not_found.message': 'Откройте телеграм-бота, чтобы зарегистрироваться перед использованием мини-приложения.',
                 'stats.days_left': 'Осталось дней',
                 'stats.servers': 'Серверы',
                 'stats.devices': 'Устройства',
@@ -5511,7 +5386,6 @@
                 'topup.status.retry': 'Повторить попытку',
                 'topup.done': 'Готово',
                 'button.buy_subscription': 'Купить подписку',
-                'button.open_bot': 'Открыть бота',
                 'subscription_purchase.title': 'Оформление подписки',
                 'subscription_purchase.subtitle': 'Настройте параметры перед покупкой.',
                 'subscription_purchase.status.loading': 'Загружаем доступные варианты…',
@@ -5537,8 +5411,6 @@
                 'subscription_purchase.servers.selected': 'Выбрано: {count}',
                 'subscription_purchase.devices.title': 'Устройства',
                 'subscription_purchase.devices.subtitle': 'Одновременные подключения.',
-                'subscription_purchase.devices.price_label': 'Стоимость за устройство: {amount}',
-                'subscription_purchase.devices.price_original_label': 'Старая цена: {amount}',
                 'subscription_purchase.devices.unlimited': 'Безлимитное число устройств',
                 'subscription_purchase.devices.limit': 'От {min} до {max} устройств',
                 'subscription_purchase.summary.total': 'Итого',
@@ -5763,26 +5635,9 @@
                 'status.trial': 'Пробная',
                 'status.expired': 'Истекла',
                 'status.disabled': 'Отключена',
-                'status.missing': 'Неактивна',
                 'status.unknown': 'Неизвестно',
                 'subscription.type.trial': 'Триал',
                 'subscription.type.paid': 'Платная',
-                'subscription.type.none': 'Нет подписки',
-                'subscription_missing.title': 'Нет активной подписки',
-                'subscription_missing.description.default': 'У вас ещё нет активной подписки. Оформите тариф, чтобы получить доступ.',
-                'subscription_missing.description.trial': 'Активируйте бесплатный триал на {days} дн. или выберите тариф, чтобы продолжить.',
-                'subscription_missing.description.trial_short': 'Активируйте бесплатный триал или выберите тариф, чтобы продолжить.',
-                'subscription_missing.description.no_trial': 'Пробный период недоступен. Оформите подписку, чтобы продолжить.',
-                'subscription_missing.hint': 'После активации вы сможете пополнить баланс здесь для бесперебойной работы.',
-                'subscription_missing.action.trial': 'Активировать триал',
-                'subscription_missing.action.trial.loading': 'Активация…',
-                'trial.activation.title': 'Активация триала',
-                'trial.activation.success': 'Триал активирован! Доступ открыт на {days} дн.',
-                'trial.activation.success.short': 'Триал успешно активирован.',
-                'trial.activation.error.generic': 'Не удалось активировать триал. Попробуйте позже.',
-                'trial.activation.error.unavailable': 'Пробный период недоступен. Оформите подписку, чтобы продолжить.',
-                'trial.activation.error.unauthorized': 'Ошибка авторизации. Откройте мини-приложение из Telegram и повторите попытку.',
-                'trial.activation.error.already_active': 'У вас уже есть активная подписка.',
                 'autopay.enabled': 'Включен',
                 'autopay.disabled': 'Выключен',
                 'platform.ios': 'iOS',
@@ -5978,8 +5833,6 @@
         const subscriptionRenewalSelection = {
             periodId: null,
         };
-
-        let trialActivationInProgress = false;
 
         const PAYMENT_STATUS_INITIAL_DELAY_MS = 2000;
         const PAYMENT_STATUS_POLL_INTERVAL_MS = 5000;
@@ -6627,66 +6480,16 @@
             if (!titleElement || !textElement) {
                 return;
             }
-            const code = typeof currentErrorState?.code === 'string'
-                ? currentErrorState.code.toLowerCase()
-                : null;
-
-            let title = currentErrorState?.title || null;
-            let message = currentErrorState?.message || null;
-
-            if (code) {
-                const titleKey = `error.${code}.title`;
-                const translatedTitle = t(titleKey);
-                if (translatedTitle && translatedTitle !== titleKey) {
-                    title = translatedTitle;
-                }
-
-                const messageKey = `error.${code}.message`;
-                const translatedMessage = t(messageKey);
-                if (translatedMessage && translatedMessage !== messageKey) {
-                    message = translatedMessage;
-                }
-            }
-
-            const defaultTitle = t('error.default.title');
-            if (!title) {
-                title = defaultTitle === 'error.default.title'
-                    ? (currentErrorState?.title || 'Subscription Not Found')
-                    : defaultTitle;
-            }
-
-            const defaultMessage = t('error.default.message');
-            if (!message) {
-                message = defaultMessage === 'error.default.message'
-                    ? (currentErrorState?.message || 'Please contact support to activate your subscription.')
-                    : defaultMessage;
-            }
-
+            const title = currentErrorState?.title || t('error.default.title');
+            const message = currentErrorState?.message || t('error.default.message');
             titleElement.textContent = title;
             textElement.textContent = message;
-
-            const errorStateElement = document.getElementById('errorState');
-            if (errorStateElement) {
-                errorStateElement.classList.toggle('error-user-missing', code === 'user_not_found');
-            }
-
-            const iconElement = document.getElementById('errorIcon');
-            if (iconElement) {
-                iconElement.textContent = code === 'user_not_found' ? '🤖' : '⚠️';
-            }
 
             const purchaseButton = document.getElementById('purchaseBtn');
             if (purchaseButton) {
                 const link = getEffectivePurchaseUrl();
                 purchaseButton.classList.toggle('hidden', !link);
                 purchaseButton.disabled = !link;
-
-                const buttonKey = code === 'user_not_found'
-                    ? 'button.open_bot'
-                    : 'button.buy_subscription';
-                const label = t(buttonKey);
-                const fallback = code === 'user_not_found' ? 'Open bot' : 'Buy subscription';
-                purchaseButton.textContent = label === buttonKey ? fallback : label;
             }
         }
 
@@ -6779,136 +6582,6 @@
             return error;
         }
 
-        function resolveTrialActivationTitle() {
-            const titleKey = 'trial.activation.title';
-            const title = t(titleKey);
-            return title && title !== titleKey ? title : 'Trial activation';
-        }
-
-        function resolveTrialActivationSuccessMessage(payload) {
-            const successKey = 'trial.activation.success';
-            const fallbackKey = 'trial.activation.success.short';
-            const duration = coercePositiveInt(
-                payload?.trial_duration_days
-                    ?? payload?.trialDurationDays
-                    ?? userData?.trial_duration_days
-                    ?? userData?.trialDurationDays
-                    ?? null,
-                null,
-            );
-
-            let message = t(successKey);
-            if (!message || message === successKey) {
-                const fallback = t(fallbackKey);
-                if (fallback && fallback !== fallbackKey) {
-                    message = fallback;
-                } else if (duration) {
-                    message = preferredLanguage === 'ru'
-                        ? `Триал активирован! Доступ открыт на ${duration} дн.`
-                        : `Trial activated! Enjoy ${duration} days of access.`;
-                } else {
-                    message = preferredLanguage === 'ru'
-                        ? 'Триал успешно активирован.'
-                        : 'Trial activated successfully.';
-                }
-            }
-
-            if (duration && message.includes('{days}')) {
-                message = message.replace('{days}', String(duration));
-            }
-
-            return message;
-        }
-
-        function extractTrialActivationError(payload, status) {
-            if (status === 401) {
-                const unauthorized = t('trial.activation.error.unauthorized');
-                return unauthorized === 'trial.activation.error.unauthorized'
-                    ? 'Authorization failed. Please reopen the mini app from Telegram.'
-                    : unauthorized;
-            }
-
-            let code = null;
-            let message = null;
-
-            if (payload && typeof payload === 'object') {
-                if (typeof payload.detail === 'string') {
-                    message = payload.detail;
-                } else if (payload.detail && typeof payload.detail === 'object') {
-                    if (typeof payload.detail.message === 'string') {
-                        message = payload.detail.message;
-                    }
-                    if (!message && typeof payload.detail.error === 'string') {
-                        message = payload.detail.error;
-                    }
-                    if (typeof payload.detail.code === 'string') {
-                        code = payload.detail.code;
-                    }
-                }
-
-                if (!code && typeof payload.code === 'string') {
-                    code = payload.code;
-                }
-                if (!message && typeof payload.message === 'string') {
-                    message = payload.message;
-                }
-            }
-
-            if (!message && code) {
-                if (['trial_unavailable', 'trial_disabled', 'trial_expired'].includes(code)) {
-                    const unavailable = t('trial.activation.error.unavailable');
-                    return unavailable === 'trial.activation.error.unavailable'
-                        ? 'Your trial is no longer available. Choose a plan to continue.'
-                        : unavailable;
-                }
-                if (code === 'subscription_exists') {
-                    const active = t('trial.activation.error.already_active');
-                    return active === 'trial.activation.error.already_active'
-                        ? 'You already have an active subscription.'
-                        : active;
-                }
-            }
-
-            if (message) {
-                return message;
-            }
-
-            const fallbackKey = 'trial.activation.error.generic';
-            const fallback = t(fallbackKey);
-            return fallback === fallbackKey
-                ? 'Unable to activate the trial. Please try again later.'
-                : fallback;
-        }
-
-        function resolveTrialActivationErrorMessage(error) {
-            const fallbackKey = 'trial.activation.error.generic';
-            const fallback = t(fallbackKey);
-            const fallbackMessage = fallback === fallbackKey
-                ? 'Unable to activate the trial. Please try again later.'
-                : fallback;
-
-            if (!error) {
-                return fallbackMessage;
-            }
-
-            if (error.status === 401) {
-                const unauthorized = t('trial.activation.error.unauthorized');
-                return unauthorized === 'trial.activation.error.unauthorized'
-                    ? 'Authorization failed. Please reopen the mini app from Telegram.'
-                    : unauthorized;
-            }
-
-            if (typeof error.message === 'string' && error.message.trim().length) {
-                const normalized = error.message.trim();
-                if (normalized.toLowerCase().includes('failed to fetch')) {
-                    return fallbackMessage;
-                }
-                return normalized;
-            }
-
-            return fallbackMessage;
-        }
-
         function animateCardsOnce() {
             if (hasAnimatedCards) {
                 return;
@@ -6950,7 +6623,6 @@
             let title = response.status === 401 ? 'Authorization Error' : 'Subscription Not Found';
             let purchaseUrl = null;
 
-            let code = null;
             try {
                 const errorPayload = await response.json();
                 if (errorPayload?.detail) {
@@ -6959,12 +6631,6 @@
                     } else if (typeof errorPayload.detail === 'object') {
                         if (typeof errorPayload.detail.message === 'string') {
                             detail = errorPayload.detail.message;
-                        }
-                        if (typeof errorPayload.detail.title === 'string') {
-                            title = errorPayload.detail.title;
-                        }
-                        if (typeof errorPayload.detail.code === 'string') {
-                            code = errorPayload.detail.code;
                         }
                         purchaseUrl = errorPayload.detail.purchase_url
                             || errorPayload.detail.purchaseUrl
@@ -6978,10 +6644,6 @@
                     title = errorPayload.title;
                 }
 
-                if (!code && typeof errorPayload?.code === 'string') {
-                    code = errorPayload.code;
-                }
-
                 purchaseUrl = purchaseUrl
                     || errorPayload?.purchase_url
                     || errorPayload?.purchaseUrl
@@ -6991,9 +6653,6 @@
             }
 
             const errorObject = createError(title, detail, response.status);
-            if (code) {
-                errorObject.code = code;
-            }
             const normalizedPurchaseUrl = normalizeUrl(purchaseUrl);
             if (normalizedPurchaseUrl) {
                 errorObject.purchaseUrl = normalizedPurchaseUrl;
@@ -7020,33 +6679,6 @@
             );
             subscriptionPurchaseUrl = normalizedPurchaseUrl;
             userData.subscriptionPurchaseUrl = normalizedPurchaseUrl || null;
-
-            const subscriptionMissingValue = Boolean(
-                userData.subscription_missing ?? userData.subscriptionMissing
-            );
-            userData.subscription_missing = subscriptionMissingValue;
-            userData.subscriptionMissing = subscriptionMissingValue;
-
-            const trialAvailableValue = Boolean(
-                userData.trial_available ?? userData.trialAvailable
-            );
-            userData.trial_available = trialAvailableValue;
-            userData.trialAvailable = trialAvailableValue;
-
-            const trialDuration = coercePositiveInt(
-                userData.trial_duration_days ?? userData.trialDurationDays ?? null,
-                null,
-            );
-            userData.trial_duration_days = trialDuration;
-            userData.trialDurationDays = trialDuration;
-
-            const missingReason = (
-                userData.subscription_missing_reason
-                ?? userData.subscriptionMissingReason
-                ?? null
-            );
-            userData.subscription_missing_reason = missingReason;
-            userData.subscriptionMissingReason = missingReason;
 
             if (userData.branding) {
                 applyBrandingOverrides(userData.branding);
@@ -7164,34 +6796,12 @@
                 || `User ${user.telegram_id || ''}`.trim();
             const avatarChar = (fallbackName.replace(/^@/, '')[0] || 'U').toUpperCase();
 
-            const subscriptionMissing = Boolean(
-                userData?.subscription_missing ?? userData?.subscriptionMissing
-            );
-
             document.getElementById('userAvatar').textContent = avatarChar;
             document.getElementById('userName').textContent = fallbackName;
 
-            const userCard = document.getElementById('userCard');
-            if (userCard) {
-                userCard.classList.toggle('hidden', subscriptionMissing);
-            }
-
-            const serversCard = document.getElementById('serversCard');
-            if (serversCard) {
-                serversCard.classList.toggle('hidden', subscriptionMissing);
-            }
-
-            const devicesCard = document.getElementById('devicesCard');
-            if (devicesCard) {
-                devicesCard.classList.toggle('hidden', subscriptionMissing);
-            }
-
-            const knownStatuses = ['active', 'trial', 'expired', 'disabled', 'missing'];
+            const knownStatuses = ['active', 'trial', 'expired', 'disabled'];
             const statusValueRaw = (user.subscription_actual_status || user.subscription_status || 'active').toLowerCase();
-            let statusClass = knownStatuses.includes(statusValueRaw) ? statusValueRaw : 'unknown';
-            if (subscriptionMissing && statusClass !== 'missing') {
-                statusClass = 'missing';
-            }
+            const statusClass = knownStatuses.includes(statusValueRaw) ? statusValueRaw : 'unknown';
             const statusBadge = document.getElementById('statusBadge');
             const statusKey = `status.${statusClass}`;
             const statusLabel = t(statusKey);
@@ -7269,7 +6879,6 @@
                     : autopayLabel;
             }
 
-            renderSubscriptionMissingCard();
             renderSubscriptionPurchaseCard();
             renderSubscriptionRenewalCard();
             renderSubscriptionSettingsCard();
@@ -7284,99 +6893,6 @@
             renderLegalDocuments();
             updateConnectButtonLabel();
             updateActionButtons();
-        }
-
-        function renderSubscriptionMissingCard() {
-            const card = document.getElementById('subscriptionMissingCard');
-            if (!card) {
-                return;
-            }
-
-            const subscriptionMissing = Boolean(
-                userData?.subscription_missing ?? userData?.subscriptionMissing
-            );
-            card.classList.toggle('hidden', !subscriptionMissing);
-
-            if (!subscriptionMissing) {
-                return;
-            }
-
-            const titleElement = document.getElementById('subscriptionMissingTitle');
-            if (titleElement) {
-                const titleValue = t('subscription_missing.title');
-                titleElement.textContent = titleValue && titleValue !== 'subscription_missing.title'
-                    ? titleValue
-                    : 'No active subscription';
-            }
-
-            const trialAvailable = Boolean(
-                userData?.trial_available ?? userData?.trialAvailable
-            );
-            const trialDuration = coercePositiveInt(
-                userData?.trial_duration_days ?? userData?.trialDurationDays ?? null,
-                null,
-            );
-            const missingReason = String(
-                userData?.subscription_missing_reason ?? userData?.subscriptionMissingReason ?? ''
-            ).toLowerCase();
-
-            const descriptionElement = document.getElementById('subscriptionMissingDescription');
-            if (descriptionElement) {
-                let descriptionKey = 'subscription_missing.description.default';
-                if (trialAvailable) {
-                    descriptionKey = trialDuration
-                        ? 'subscription_missing.description.trial'
-                        : 'subscription_missing.description.trial_short';
-                } else if (missingReason === 'trial_expired') {
-                    descriptionKey = 'subscription_missing.description.no_trial';
-                }
-
-                let descriptionValue = t(descriptionKey);
-                if (!descriptionValue || descriptionValue === descriptionKey) {
-                    if (trialAvailable) {
-                        descriptionValue = trialDuration
-                            ? `Activate your free ${trialDuration}-day trial or choose a plan to continue.`
-                            : 'Activate your free trial or choose a plan to continue.';
-                    } else if (missingReason === 'trial_expired') {
-                        descriptionValue = 'Your trial is no longer available. Purchase a plan to continue.';
-                    } else {
-                        descriptionValue = 'You do not have an active subscription yet. Purchase a plan to get access.';
-                    }
-                }
-
-                if (trialDuration && descriptionValue.includes('{days}')) {
-                    descriptionValue = descriptionValue.replace('{days}', String(trialDuration));
-                }
-
-                descriptionElement.textContent = descriptionValue;
-            }
-
-            const hintElement = document.getElementById('subscriptionMissingHint');
-            if (hintElement) {
-                const hintValue = t('subscription_missing.hint');
-                hintElement.textContent = hintValue && hintValue !== 'subscription_missing.hint'
-                    ? hintValue
-                    : 'After activation you can top up your balance here to stay connected.';
-            }
-
-            const trialButton = document.getElementById('subscriptionMissingTrialBtn');
-            if (trialButton) {
-                const baseKey = 'subscription_missing.action.trial';
-                const loadingKey = 'subscription_missing.action.trial.loading';
-                const activeKey = trialActivationInProgress ? loadingKey : baseKey;
-                let label = t(activeKey);
-                if (!label || label === activeKey) {
-                    if (trialActivationInProgress) {
-                        label = preferredLanguage === 'ru' ? 'Активация…' : 'Activating…';
-                    } else {
-                        label = 'Activate trial';
-                    }
-                }
-
-                trialButton.textContent = label;
-                trialButton.classList.toggle('hidden', !trialAvailable && !trialActivationInProgress);
-                trialButton.disabled = !trialAvailable || trialActivationInProgress;
-            }
         }
 
         function resolvePromoOfferIcon(offer) {
@@ -14953,53 +14469,16 @@
                     null,
                 );
 
-                const formatDevicesPriceText = (templateKey, amount, fallbackTemplate) => {
-                    if (!amount) {
-                        return '';
-                    }
-                    const template = t(templateKey);
-                    const resolvedTemplate = template && template !== templateKey
-                        ? template
-                        : fallbackTemplate;
-                    if (resolvedTemplate && resolvedTemplate.includes('{amount}')) {
-                        return resolvedTemplate.replace('{amount}', amount);
-                    }
-                    if (resolvedTemplate) {
-                        return `${resolvedTemplate} ${amount}`;
-                    }
-                    return amount;
-                };
-
                 const fragments = [];
                 if (originalInfo.label && originalInfo.label !== priceInfo.label) {
-                    const fallbackOriginal = preferredLanguage === 'ru'
-                        ? 'Старая цена: {amount}'
-                        : 'Original price: {amount}';
-                    const originalText = formatDevicesPriceText(
-                        'subscription_purchase.devices.price_original_label',
-                        originalInfo.label,
-                        fallbackOriginal,
+                    fragments.push(
+                        `<span class="subscription-purchase-option-price-original">${escapeHtml(originalInfo.label)}</span>`
                     );
-                    if (originalText) {
-                        fragments.push(
-                            `<span class="subscription-purchase-option-price-original">${escapeHtml(originalText)}</span>`
-                        );
-                    }
                 }
                 if (priceInfo.label) {
-                    const fallbackCurrent = preferredLanguage === 'ru'
-                        ? 'Стоимость за устройство: {amount}'
-                        : 'Per device: {amount}';
-                    const currentText = formatDevicesPriceText(
-                        'subscription_purchase.devices.price_label',
-                        priceInfo.label,
-                        fallbackCurrent,
+                    fragments.push(
+                        `<span class="subscription-purchase-option-price-current">${escapeHtml(priceInfo.label)}</span>`
                     );
-                    if (currentText) {
-                        fragments.push(
-                            `<span class="subscription-purchase-option-price-current">${escapeHtml(currentText)}</span>`
-                        );
-                    }
                 }
                 if (discountPercent) {
                     fragments.push(
@@ -15725,7 +15204,7 @@
 
         async function copySubscriptionUrl(url) {
             if (!url) return;
-
+            
             try {
                 if (navigator.clipboard && window.isSecureContext) {
                     await navigator.clipboard.writeText(url);
@@ -15761,90 +15240,6 @@
                     t('notifications.copy.failure') || 'Unable to copy. Please copy manually: ' + url,
                     t('notifications.copy.title.failure') || 'Copy failed'
                 );
-            }
-        }
-
-        function handlePurchaseAction(event) {
-            if (event && typeof event.preventDefault === 'function') {
-                event.preventDefault();
-            }
-
-            if (shouldShowPurchaseConfigurator()) {
-                openSubscriptionPurchaseModal();
-                return true;
-            }
-
-            const link = getEffectivePurchaseUrl();
-            if (link) {
-                openExternalLink(link, { openInMiniApp: true });
-                return true;
-            }
-
-            return false;
-        }
-
-        async function handleTrialAction(event) {
-            if (event && typeof event.preventDefault === 'function') {
-                event.preventDefault();
-            }
-
-            if (trialActivationInProgress) {
-                return false;
-            }
-
-            const trialAvailable = Boolean(
-                userData?.trial_available ?? userData?.trialAvailable
-            );
-
-            if (!trialAvailable) {
-                return handlePurchaseAction(event);
-            }
-
-            const initData = tg.initData || '';
-            if (!initData) {
-                const message = t('trial.activation.error.unauthorized');
-                showPopup(
-                    message && message !== 'trial.activation.error.unauthorized'
-                        ? message
-                        : 'Authorization failed. Please reopen the mini app from Telegram.',
-                    resolveTrialActivationTitle(),
-                );
-                return false;
-            }
-
-            trialActivationInProgress = true;
-            renderSubscriptionMissingCard();
-
-            try {
-                const response = await fetch('/miniapp/subscription/trial', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ initData }),
-                });
-
-                const body = await parseJsonSafe(response);
-                if (!response.ok || (body && body.success === false)) {
-                    const message = extractTrialActivationError(body, response.status);
-                    throw createError('Trial activation error', message, response.status);
-                }
-
-                const successMessage = resolveTrialActivationSuccessMessage(body);
-                showPopup(successMessage, resolveTrialActivationTitle());
-
-                try {
-                    await refreshSubscriptionData({ silent: true });
-                } catch (refreshError) {
-                    console.warn('Failed to refresh data after trial activation:', refreshError);
-                }
-                return true;
-            } catch (error) {
-                console.error('Failed to activate trial subscription:', error);
-                const message = resolveTrialActivationErrorMessage(error);
-                showPopup(message, resolveTrialActivationTitle());
-                return false;
-            } finally {
-                trialActivationInProgress = false;
-                renderSubscriptionMissingCard();
             }
         }
 
@@ -15884,7 +15279,6 @@
             currentErrorState = {
                 title: error?.title,
                 message: error?.message,
-                code: typeof error?.code === 'string' ? error.code : null,
                 purchaseUrl: normalizeUrl(error?.purchaseUrl) || null,
             };
             updateErrorTexts();
@@ -16011,8 +15405,18 @@
             }
         });
 
-        document.getElementById('purchaseBtn')?.addEventListener('click', handlePurchaseAction);
-        document.getElementById('subscriptionMissingTrialBtn')?.addEventListener('click', handleTrialAction);
+        document.getElementById('purchaseBtn')?.addEventListener('click', event => {
+            if (shouldShowPurchaseConfigurator()) {
+                event.preventDefault();
+                openSubscriptionPurchaseModal();
+                return;
+            }
+            const link = getEffectivePurchaseUrl();
+            if (!link) {
+                return;
+            }
+            openExternalLink(link, { openInMiniApp: true });
+        });
 
         initializePromoCodeForm();
 
