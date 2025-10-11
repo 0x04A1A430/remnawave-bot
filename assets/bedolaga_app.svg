@@ -1,0 +1,275 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="moonGradient" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#e8e8e8"/>
+      <stop offset="100%" stop-color="#9a9a9a"/>
+    </radialGradient>
+    
+    <radialGradient id="bgGradient" cx="50%" cy="50%" r="100%" fx="50%" fy="100%">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#666666"/>
+    </radialGradient>
+    
+    <radialGradient id="craterGradient" cx="30%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#707070"/>
+      <stop offset="100%" stop-color="#505050"/>
+    </radialGradient>
+    
+    <!-- Определение спутника (увеличенный) -->
+    <g id="satellite">
+      <!-- Корпус -->
+      <rect x="-15" y="-12" width="30" height="24" fill="#4a90e2" stroke="#2c5aa0" stroke-width="2" rx="2"/>
+      <rect x="-12" y="-9" width="24" height="18" fill="#5ba3f5" opacity="0.7"/>
+      
+      <!-- Солнечные панели -->
+      <g>
+        <rect x="-40" y="-8" width="22" height="16" fill="#1a1a2e" stroke="#4a90e2" stroke-width="1" rx="1"/>
+        <line x1="-38" y1="-6" x2="-38" y2="6" stroke="#4a90e2" stroke-width="0.5"/>
+        <line x1="-33" y1="-6" x2="-33" y2="6" stroke="#4a90e2" stroke-width="0.5"/>
+        <line x1="-28" y1="-6" x2="-28" y2="6" stroke="#4a90e2" stroke-width="0.5"/>
+        <line x1="-23" y1="-6" x2="-23" y2="6" stroke="#4a90e2" stroke-width="0.5"/>
+      </g>
+      
+      <g>
+        <rect x="18" y="-8" width="22" height="16" fill="#1a1a2e" stroke="#4a90e2" stroke-width="1" rx="1"/>
+        <line x1="20" y1="-6" x2="20" y2="6" stroke="#4a90e2" stroke-width="0.5"/>
+        <line x1="25" y1="-6" x2="25" y2="6" stroke="#4a90e2" stroke-width="0.5"/>
+        <line x1="30" y1="-6" x2="30" y2="6" stroke="#4a90e2" stroke-width="0.5"/>
+        <line x1="35" y1="-6" x2="35" y2="6" stroke="#4a90e2" stroke-width="0.5"/>
+      </g>
+      
+      <!-- Антенна -->
+      <line x1="0" y1="-12" x2="0" y2="-25" stroke="#888" stroke-width="2"/>
+      <circle cx="0" cy="-25" r="4" fill="#e74c3c"/>
+      
+      <!-- Детали корпуса -->
+      <circle cx="-5" cy="-3" r="2" fill="#2c5aa0"/>
+      <circle cx="5" cy="-3" r="2" fill="#2c5aa0"/>
+      <rect x="-8" y="2" width="16" height="4" fill="#2c5aa0" rx="1"/>
+      
+      <!-- Мигающий огонёк -->
+      <circle cx="0" cy="0" r="3" fill="#ff0000">
+        <animate attributeName="opacity" values="1;0.2;1" dur="1.2s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+  </defs>
+  
+
+  
+  <!-- Луна в центре (увеличенная) -->
+  <g transform="translate(256, 256)">
+    <circle r="130" fill="url(#moonGradient)">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="0"
+        to="360"
+        dur="40s"
+        repeatCount="indefinite"/>
+    </circle>
+    
+    <!-- Большие кратеры -->
+    <g opacity="0.6">
+      <circle cx="35" cy="-25" r="22" fill="url(#craterGradient)">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 0 0"
+          to="360 0 0"
+          dur="40s"
+          repeatCount="indefinite"/>
+      </circle>
+      <circle cx="30" cy="-20" r="8" fill="#606060" opacity="0.5">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 0 0"
+          to="360 0 0"
+          dur="40s"
+          repeatCount="indefinite"/>
+      </circle>
+      
+      <circle cx="-40" cy="15" r="28" fill="url(#craterGradient)">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 0 0"
+          to="360 0 0"
+          dur="40s"
+          repeatCount="indefinite"/>
+      </circle>
+      <circle cx="-35" cy="20" r="12" fill="#606060" opacity="0.5">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 0 0"
+          to="360 0 0"
+          dur="40s"
+          repeatCount="indefinite"/>
+      </circle>
+      
+      <circle cx="15" cy="50" r="18" fill="url(#craterGradient)">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 0 0"
+          to="360 0 0"
+          dur="40s"
+          repeatCount="indefinite"/>
+      </circle>
+      
+      <circle cx="-25" cy="-55" r="20" fill="url(#craterGradient)">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 0 0"
+          to="360 0 0"
+          dur="40s"
+          repeatCount="indefinite"/>
+      </circle>
+      
+      <circle cx="60" cy="35" r="15" fill="url(#craterGradient)">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 0 0"
+          to="360 0 0"
+          dur="40s"
+          repeatCount="indefinite"/>
+      </circle>
+      
+      <!-- Маленькие кратеры -->
+      <circle cx="-10" cy="-40" r="8" fill="#707070">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 0 0"
+          to="360 0 0"
+          dur="40s"
+          repeatCount="indefinite"/>
+      </circle>
+      <circle cx="50" cy="-10" r="10" fill="#707070">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 0 0"
+          to="360 0 0"
+          dur="40s"
+          repeatCount="indefinite"/>
+      </circle>
+      <circle cx="-50" cy="-20" r="7" fill="#707070">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 0 0"
+          to="360 0 0"
+          dur="40s"
+          repeatCount="indefinite"/>
+      </circle>
+      <circle cx="5" cy="25" r="6" fill="#707070">
+        <animateTransform
+          attributeName="transform"
+          type="rotate"
+          from="0 0 0"
+          to="360 0 0"
+          dur="40s"
+          repeatCount="indefinite"/>
+      </circle>
+    </g>
+    
+    <!-- Тени на Луне -->
+    <ellipse cx="-20" cy="30" rx="40" ry="25" fill="#808080" opacity="0.15">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="0 0 0"
+        to="360 0 0"
+        dur="40s"
+        repeatCount="indefinite"/>
+    </ellipse>
+  </g>
+  
+  <!-- Спутник 1 -->
+  <g transform="translate(256, 256)">
+    <use href="#satellite">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="0 0 0"
+        to="360 0 0"
+        dur="10s"
+        repeatCount="indefinite"/>
+      <animateTransform
+        attributeName="transform"
+        type="translate"
+        values="0,-200; 0,-200"
+        dur="10s"
+        repeatCount="indefinite"
+        additive="sum"/>
+    </use>
+  </g>
+  
+  <!-- Спутник 2 -->
+  <g transform="translate(256, 256)">
+    <use href="#satellite">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="90 0 0"
+        to="450 0 0"
+        dur="10s"
+        repeatCount="indefinite"/>
+      <animateTransform
+        attributeName="transform"
+        type="translate"
+        values="0,-200; 0,-200"
+        dur="10s"
+        repeatCount="indefinite"
+        additive="sum"/>
+    </use>
+  </g>
+  
+  <!-- Спутник 3 -->
+  <g transform="translate(256, 256)">
+    <use href="#satellite">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="180 0 0"
+        to="540 0 0"
+        dur="10s"
+        repeatCount="indefinite"/>
+      <animateTransform
+        attributeName="transform"
+        type="translate"
+        values="0,-200; 0,-200"
+        dur="10s"
+        repeatCount="indefinite"
+        additive="sum"/>
+    </use>
+  </g>
+  
+  <!-- Спутник 4 -->
+  <g transform="translate(256, 256)">
+    <use href="#satellite">
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="270 0 0"
+        to="630 0 0"
+        dur="10s"
+        repeatCount="indefinite"/>
+      <animateTransform
+        attributeName="transform"
+        type="translate"
+        values="0,-200; 0,-200"
+        dur="10s"
+        repeatCount="indefinite"
+        additive="sum"/>
+    </use>
+  </g>
+  
+  <!-- Орбита (пунктирная линия) -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#cccccc" stroke-width="2" stroke-dasharray="8,6" opacity="0.4"/>
+</svg>
