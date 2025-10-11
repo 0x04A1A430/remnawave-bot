@@ -56,7 +56,6 @@
   </defs>
   
   <!-- Фон с градиентом -->
-  <rect width="512" height="512" rx="128" fill="url(#bgGradient)"/>
   
   <!-- Луна в центре (увеличенная) -->
   <g transform="translate(256, 256)">
