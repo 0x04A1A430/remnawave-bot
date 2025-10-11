@@ -3,7 +3,6 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from aiogram import Bot, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
-from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -345,35 +344,22 @@ class AdminNotificationService:
     
     async def send_balance_topup_notification(
         self,
-        db: AsyncSession,
         user: User,
         transaction: Transaction,
-        old_balance: int
+        old_balance: int,
+        *,
+        topup_status: str,
+        referrer_info: str,
+        subscription: Subscription | None,
+        promo_group: PromoGroup | None,
     ) -> bool:
         if not self._is_enabled():
             return False
 
         try:
-            deposit_count_result = await db.execute(
-                select(func.count())
-                .select_from(Transaction)
-                .where(
-                    Transaction.user_id == user.id,
-                    Transaction.type == TransactionType.DEPOSIT.value,
-                    Transaction.is_completed.is_(True)
-                )
-            )
-            deposit_count = deposit_count_result.scalar_one() or 0
-            topup_status = "🆕 Первое пополнение" if deposit_count <= 1 else "🔄 Пополнение"
             payment_method = self._get_payment_method_display(transaction.payment_method)
             balance_change = user.balance_kopeks - old_balance
-            referrer_info = await self._get_referrer_info(db, user.referred_by_id)
-            subscription_result = await db.execute(
-                select(Subscription).where(Subscription.user_id == user.id)
-            )
-            subscription = subscription_result.scalar_one_or_none()
             subscription_status = self._get_subscription_status(subscription)
-            promo_group = await self._get_user_promo_group(db, user)
             promo_block = self._format_promo_group_block(promo_group)
 
             message = f"""💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>
