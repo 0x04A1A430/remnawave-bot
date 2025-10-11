@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import AliasChoices, BaseModel, Field, ConfigDict, model_validator
 
 
 class MiniAppBranding(BaseModel):
@@ -172,6 +172,10 @@ class MiniAppSubscriptionRenewalOptionsResponse(BaseModel):
     default_period_id: Optional[str] = Field(default=None, alias="defaultPeriodId")
     missing_amount_kopeks: Optional[int] = Field(default=None, alias="missingAmountKopeks")
     status_message: Optional[str] = Field(default=None, alias="statusMessage")
+    autopay_enabled: Optional[bool] = Field(default=None, alias="autopayEnabled")
+    autopay_days_before: Optional[int] = Field(default=None, alias="autopayDaysBefore")
+    autopay_days_options: List[int] = Field(default_factory=list, alias="autopayDaysOptions")
+    autopay: Optional[MiniAppSubscriptionAutopaySettings] = None
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -215,6 +219,34 @@ class MiniAppPromoCodeActivationResponse(BaseModel):
     success: bool = True
     description: Optional[str] = None
     promocode: Optional[MiniAppPromoCode] = None
+
+
+class MiniAppSubscriptionAutopayRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(
+        default=None,
+        alias="subscriptionId",
+        validation_alias=AliasChoices("subscriptionId", "subscription_id"),
+    )
+    enabled: Optional[bool] = None
+    days_before: Optional[int] = Field(
+        default=None,
+        alias="daysBefore",
+        validation_alias=AliasChoices("daysBefore", "days_before"),
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionAutopayResponse(BaseModel):
+    success: bool = True
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    autopay_enabled: bool = Field(default=False, alias="autopayEnabled")
+    autopay_days_before: Optional[int] = Field(default=None, alias="autopayDaysBefore")
+    autopay_days_options: List[int] = Field(default_factory=list, alias="autopayDaysOptions")
+    autopay: Optional[MiniAppSubscriptionAutopaySettings] = None
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class MiniAppFaqItem(BaseModel):
@@ -381,6 +413,16 @@ class MiniAppPaymentStatusResponse(BaseModel):
     results: List[MiniAppPaymentStatusResult] = Field(default_factory=list)
 
 
+class MiniAppSubscriptionAutopaySettings(BaseModel):
+    enabled: bool = False
+    days_before: Optional[int] = Field(default=None, alias="daysBefore")
+    autopay_days_before: Optional[int] = Field(default=None, alias="autopayDaysBefore")
+    autopay_days_options: List[int] = Field(default_factory=list, alias="autopayDaysOptions")
+    min_balance_kopeks: Optional[int] = Field(default=None, alias="minBalanceKopeks")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
     subscription_id: Optional[int] = None
@@ -411,6 +453,9 @@ class MiniAppSubscriptionResponse(BaseModel):
     total_spent_label: Optional[str] = None
     subscription_type: str
     autopay_enabled: bool = False
+    autopay_days_before: Optional[int] = Field(default=None, alias="autopayDaysBefore")
+    autopay_days_options: List[int] = Field(default_factory=list, alias="autopayDaysOptions")
+    autopay: Optional[MiniAppSubscriptionAutopaySettings] = None
     branding: Optional[MiniAppBranding] = None
     faq: Optional[MiniAppFaq] = None
     legal_documents: Optional[MiniAppLegalDocuments] = None
