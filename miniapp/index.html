@@ -1182,6 +1182,17 @@
             box-shadow: 0 -12px 32px rgba(15, 23, 42, 0.15);
         }
 
+        @media (max-width: 420px) {
+            .subscription-purchase-summary {
+                margin-bottom: 16px;
+            }
+
+            .subscription-purchase-actions {
+                margin-top: 26px;
+                padding-bottom: calc(32px + env(safe-area-inset-bottom, 0));
+            }
+        }
+
         .subscription-purchase-actions .btn {
             width: 100%;
         }
