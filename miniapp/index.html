@@ -3783,6 +3783,13 @@
             margin-bottom: 20px;
         }
 
+        .platform-subselector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 0 0 16px;
+        }
+
         .platform-btn {
             padding: 14px 8px;
             background: var(--bg-primary);
@@ -3808,6 +3815,29 @@
             border-color: var(--primary);
             background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.1), rgba(var(--primary-rgb), 0.05));
             color: var(--primary);
+        }
+
+        .platform-filter-btn {
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .platform-filter-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .platform-filter-btn.active {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: rgba(var(--primary-rgb), 0.1);
         }
 
         .platform-icon {
@@ -4288,6 +4318,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            min-height: 0;
         }
 
         .guide-modal-header {
@@ -4325,6 +4356,9 @@
             padding: 0 24px 24px;
             overflow-y: auto;
             flex: 1;
+            min-height: 0;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
         }
 
         .guide-modal-footer {
@@ -4334,6 +4368,7 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
+            flex-shrink: 0;
         }
 
         .guide-modal-footer .btn {
@@ -4363,6 +4398,7 @@
                 height: 100vh;
                 border-radius: 0;
                 box-shadow: none;
+                min-height: 0;
             }
 
             .guide-modal-header {
@@ -4520,6 +4556,10 @@
                 background: var(--bg-secondary);
             }
 
+            .platform-filter-btn {
+                background: var(--bg-secondary);
+            }
+
             .theme-toggle .icon-sun {
                 display: none;
             }
@@ -4535,7 +4575,8 @@
         :root[data-theme="dark"] .server-item,
         :root[data-theme="dark"] .device-item,
         :root[data-theme="dark"] .app-card,
-        :root[data-theme="dark"] .platform-btn {
+        :root[data-theme="dark"] .platform-btn,
+        :root[data-theme="dark"] .platform-filter-btn {
             background: var(--bg-secondary);
         }
 
@@ -5341,6 +5382,8 @@
                                     </button>
                                 </div>
 
+                                <div class="platform-subselector hidden" id="platformFilterContainer"></div>
+
                                 <div id="appsContainer">
                                     <!-- Apps will be rendered here -->
                                 </div>
@@ -5905,6 +5948,7 @@
                 'platform.android': 'Android',
                 'platform.pc': 'PC',
                 'platform.tv': 'TV',
+                'platform.all': 'All',
                 'platform.windows': 'Windows',
                 'platform.macos': 'macOS',
                 'platform.linux': 'Linux',
@@ -6308,6 +6352,7 @@
                 'platform.android': 'Android',
                 'platform.pc': 'ПК',
                 'platform.tv': 'ТВ',
+                'platform.all': 'Все',
                 'platform.windows': 'Windows',
                 'platform.macos': 'macOS',
                 'platform.linux': 'Linux',
@@ -6448,6 +6493,8 @@
             pc: ['windows', 'macos', 'linux'],
             tv: ['androidTV', 'appleTV'],
         };
+
+        const PLATFORM_FILTER_ALL = '__all__';
 
         const HAPP_APP_IDS = new Set(['happ', 'happ-app']);
 
@@ -6602,6 +6649,8 @@
         let appsConfig = {};
         let currentPlatform = 'android';
         let detectedDevicePlatform = 'android';
+        let currentPlatformFilter = PLATFORM_FILTER_ALL;
+        let detectedPlatformFilter = null;
         let cachedHappCryptolinkRedirectTemplate;
         let configPurchaseUrl = null;
         let subscriptionPurchaseUrl = null;
@@ -7886,6 +7935,7 @@
 
                 const data = await response.json();
                 appsConfig = sanitizeAppsConfig(data?.platforms || {});
+                ensurePlatformFilter();
 
                 const configData = data?.config || {};
                 if (configData.branding || data?.branding) {
@@ -9059,15 +9109,29 @@
 
         function detectPlatform() {
             const userAgent = navigator.userAgent.toLowerCase();
+            const platformInfo = (navigator.platform || '').toLowerCase();
+            detectedPlatformFilter = null;
+
             if (userAgent.includes('iphone') || userAgent.includes('ipad')) {
                 detectedDevicePlatform = 'ios';
             } else if (userAgent.includes('android')) {
                 detectedDevicePlatform = 'android';
             } else {
                 detectedDevicePlatform = 'pc';
+
+                if (platformInfo.includes('mac') || userAgent.includes('mac os x') || userAgent.includes('macintosh')) {
+                    detectedPlatformFilter = 'macos';
+                } else if (platformInfo.includes('win') || userAgent.includes('windows')) {
+                    detectedPlatformFilter = 'windows';
+                } else if (platformInfo.includes('linux') || userAgent.includes('linux') || userAgent.includes('x11')) {
+                    detectedPlatformFilter = 'linux';
+                }
             }
 
             currentPlatform = detectedDevicePlatform;
+            currentPlatformFilter = detectedDevicePlatform === 'pc'
+                ? (detectedPlatformFilter || PLATFORM_FILTER_ALL)
+                : PLATFORM_FILTER_ALL;
         }
 
         function setActivePlatformButton() {
@@ -9085,15 +9149,144 @@
             return label === labelKey ? platformKey : label;
         }
 
+        function getAvailableGroupedPlatforms(platformKey) {
+            const group = PLATFORM_GROUPS[platformKey];
+            if (!Array.isArray(group) || !group.length) {
+                return [];
+            }
+
+            return group.filter(key => Array.isArray(appsConfig?.[key]) && appsConfig[key].length > 0);
+        }
+
+        function ensurePlatformFilter() {
+            const group = PLATFORM_GROUPS[currentPlatform];
+            if (!Array.isArray(group) || !group.length) {
+                currentPlatformFilter = PLATFORM_FILTER_ALL;
+                return;
+            }
+
+            const available = getAvailableGroupedPlatforms(currentPlatform);
+            if (!available.length) {
+                if (currentPlatformFilter !== PLATFORM_FILTER_ALL && !group.includes(currentPlatformFilter)) {
+                    currentPlatformFilter = PLATFORM_FILTER_ALL;
+                }
+                return;
+            }
+
+            if (currentPlatformFilter === PLATFORM_FILTER_ALL) {
+                return;
+            }
+
+            if (available.includes(currentPlatformFilter)) {
+                return;
+            }
+
+            if (
+                currentPlatform === detectedDevicePlatform
+                && detectedPlatformFilter
+                && available.includes(detectedPlatformFilter)
+            ) {
+                currentPlatformFilter = detectedPlatformFilter;
+                return;
+            }
+
+            currentPlatformFilter = PLATFORM_FILTER_ALL;
+        }
+
+        function renderPlatformFilters() {
+            const container = document.getElementById('platformFilterContainer');
+            if (!container) {
+                return;
+            }
+
+            const group = PLATFORM_GROUPS[currentPlatform];
+            if (!Array.isArray(group) || !group.length) {
+                container.innerHTML = '';
+                container.classList.add('hidden');
+                return;
+            }
+
+            ensurePlatformFilter();
+
+            const available = getAvailableGroupedPlatforms(currentPlatform);
+            if (!available.length) {
+                container.innerHTML = '';
+                container.classList.add('hidden');
+                return;
+            }
+
+            const options = available;
+
+            if (options.length <= 1) {
+                container.innerHTML = '';
+                container.classList.add('hidden');
+                return;
+            }
+
+            const showAllButton = options.length > 1;
+            const allLabelRaw = t('platform.all');
+            const allLabel = allLabelRaw === 'platform.all' ? 'All' : allLabelRaw;
+
+            const buttons = [];
+
+            if (showAllButton) {
+                const isActive = currentPlatformFilter === PLATFORM_FILTER_ALL;
+                buttons.push(`<button type="button" class="platform-filter-btn${isActive ? ' active' : ''}" data-filter="${escapeHtml(PLATFORM_FILTER_ALL)}">${escapeHtml(allLabel)}</button>`);
+            }
+
+            options.forEach(key => {
+                const label = getPlatformLabel(key) || key;
+                const isActive = currentPlatformFilter === key;
+                buttons.push(`<button type="button" class="platform-filter-btn${isActive ? ' active' : ''}" data-filter="${escapeHtml(key)}">${escapeHtml(label)}</button>`);
+            });
+
+            container.innerHTML = buttons.join('');
+            container.classList.remove('hidden');
+
+            container.querySelectorAll('.platform-filter-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const filter = button.dataset.filter || PLATFORM_FILTER_ALL;
+                    if (filter === currentPlatformFilter) {
+                        return;
+                    }
+
+                    currentPlatformFilter = filter;
+                    ensurePlatformFilter();
+                    renderApps();
+                });
+            });
+        }
+
         function getAppsForCurrentPlatform() {
-            const platformKeys = PLATFORM_GROUPS[currentPlatform] || [currentPlatform];
+            ensurePlatformFilter();
+
             const aggregated = [];
-            platformKeys.forEach(key => {
+            const group = PLATFORM_GROUPS[currentPlatform];
+
+            let keysToUse;
+            if (Array.isArray(group) && group.length) {
+                const available = getAvailableGroupedPlatforms(currentPlatform);
+                const fallback = available.length ? available : group;
+
+                if (
+                    currentPlatformFilter !== PLATFORM_FILTER_ALL
+                    && fallback.includes(currentPlatformFilter)
+                ) {
+                    keysToUse = [currentPlatformFilter];
+                } else {
+                    keysToUse = fallback;
+                }
+            } else {
+                keysToUse = [currentPlatform];
+            }
+
+            keysToUse.forEach(key => {
                 const apps = Array.isArray(appsConfig?.[key]) ? appsConfig[key] : [];
                 apps.forEach(app => {
                     aggregated.push({ ...app, __platformKey: key });
                 });
             });
+
             return aggregated;
         }
 
@@ -9147,6 +9340,8 @@
             if (!container) {
                 return;
             }
+
+            renderPlatformFilters();
 
             const apps = getAppsForCurrentPlatform();
             const hasConnectLink = hasAnyConnectLink(apps);
@@ -18125,7 +18320,20 @@
 
         document.querySelectorAll('.platform-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                currentPlatform = btn.dataset.platform;
+                const nextPlatform = btn.dataset.platform;
+                if (!nextPlatform) {
+                    return;
+                }
+
+                if (currentPlatform !== nextPlatform) {
+                    currentPlatform = nextPlatform;
+                    if (currentPlatform === detectedDevicePlatform && detectedPlatformFilter) {
+                        currentPlatformFilter = detectedPlatformFilter;
+                    } else {
+                        currentPlatformFilter = PLATFORM_FILTER_ALL;
+                    }
+                }
+
                 setActivePlatformButton();
                 renderApps();
                 updateActionButtons();
