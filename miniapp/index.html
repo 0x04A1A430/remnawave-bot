@@ -972,83 +972,53 @@
             font-weight: 600;
         }
 
-        .subscription-purchase-period-option {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr);
-            row-gap: 12px;
-            column-gap: 18px;
-            align-items: stretch;
-            text-align: left;
+        .subscription-purchase-option-card--period .subscription-purchase-option-content {
+            width: 100%;
         }
 
-        .subscription-purchase-period-option .subscription-settings-toggle-label {
-            gap: 6px;
+        .subscription-purchase-option-card--period .subscription-settings-toggle-label {
+            gap: 8px;
         }
 
-        .subscription-purchase-period-option .subscription-settings-toggle-title {
+        .subscription-purchase-option-card--period .subscription-settings-toggle-title {
             white-space: normal;
             overflow: visible;
             text-overflow: initial;
             font-size: 16px;
+            line-height: 1.35;
         }
 
-        .subscription-purchase-period-option .subscription-purchase-option-description {
+        .subscription-purchase-option-card--period .subscription-purchase-option-description {
             font-size: 13px;
         }
 
-        .subscription-purchase-period-option .subscription-purchase-option-aside {
-            margin-left: 0;
-            width: 100%;
-            min-width: 0;
-            align-items: flex-start;
-            text-align: left;
-            gap: 8px;
+        .subscription-purchase-option-card--period .subscription-purchase-option-aside {
+            min-width: 140px;
+            gap: 10px;
         }
 
-        .subscription-purchase-period-option .subscription-purchase-option-price {
-            align-items: flex-start;
-            width: 100%;
+        .subscription-purchase-option-card--period .subscription-purchase-option-price {
+            align-items: flex-end;
         }
 
-        .subscription-purchase-period-option .subscription-purchase-option-price-current {
+        .subscription-purchase-option-card--period .subscription-purchase-option-price-current {
             font-size: 18px;
             font-weight: 700;
             color: var(--text-primary);
             word-break: break-word;
         }
 
-        .subscription-purchase-period-option .subscription-purchase-option-price-original {
+        .subscription-purchase-option-card--period .subscription-purchase-option-price-original {
             font-size: 13px;
         }
 
-        .subscription-purchase-period-option .subscription-purchase-option-note {
+        .subscription-purchase-option-card--period .subscription-purchase-option-note {
             font-size: 12px;
             color: var(--text-secondary);
         }
 
-        .subscription-purchase-period-option .subscription-purchase-option-discount {
-            align-self: flex-start;
-        }
-
-        @media (min-width: 420px) {
-            .subscription-purchase-period-option {
-                grid-template-columns: minmax(0, 1fr) auto;
-                align-items: center;
-            }
-
-            .subscription-purchase-period-option .subscription-purchase-option-aside {
-                width: auto;
-                align-items: flex-end;
-                text-align: right;
-            }
-
-            .subscription-purchase-period-option .subscription-purchase-option-price {
-                align-items: flex-end;
-            }
-
-            .subscription-purchase-period-option .subscription-purchase-option-discount {
-                align-self: flex-end;
-            }
+        .subscription-purchase-option-card--period .subscription-purchase-option-discount {
+            align-self: flex-end;
         }
 
         @media (max-width: 400px) {
@@ -1057,39 +1027,35 @@
                 gap: 12px;
             }
 
-            .subscription-purchase-period-option {
-                grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
-                column-gap: 12px;
-                row-gap: 10px;
+            .subscription-purchase-option-card--period .subscription-purchase-option-content {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
             }
 
-            .subscription-purchase-period-option .subscription-settings-toggle-label {
+            .subscription-purchase-option-card--period .subscription-settings-toggle-label {
                 gap: 4px;
             }
 
-            .subscription-purchase-period-option .subscription-settings-toggle-title {
+            .subscription-purchase-option-card--period .subscription-settings-toggle-title {
                 font-size: 15px;
             }
 
-            .subscription-purchase-period-option .subscription-purchase-option-description,
-            .subscription-purchase-period-option .subscription-purchase-option-note,
-            .subscription-purchase-period-option .subscription-purchase-option-price-original {
+            .subscription-purchase-option-card--period .subscription-purchase-option-description,
+            .subscription-purchase-option-card--period .subscription-purchase-option-note,
+            .subscription-purchase-option-card--period .subscription-purchase-option-price-original {
                 font-size: 12px;
             }
 
-            .subscription-purchase-period-option .subscription-purchase-option-aside {
-                width: auto;
-                align-items: flex-end;
-                text-align: right;
+            .subscription-purchase-option-card--period .subscription-purchase-option-aside {
+                align-items: flex-start;
+                text-align: left;
                 gap: 6px;
+                min-width: 0;
             }
 
-            .subscription-purchase-period-option .subscription-purchase-option-price {
-                align-items: flex-end;
-            }
-
-            .subscription-purchase-period-option .subscription-purchase-option-price-current {
-                font-size: 16px;
+            .subscription-purchase-option-card--period .subscription-purchase-option-discount {
+                align-self: flex-start;
             }
 
             .subscription-purchase-option-badges {
@@ -15507,7 +15473,7 @@
 
                 const button = document.createElement('button');
                 button.type = 'button';
-                button.className = 'subscription-settings-toggle subscription-purchase-period-option';
+                button.className = 'subscription-settings-toggle subscription-purchase-option-card subscription-purchase-option-card--period';
                 if (isSelected) {
                     button.classList.add('active');
                 }
@@ -15515,8 +15481,11 @@
                     button.classList.add('disabled');
                 }
 
+                const content = document.createElement('div');
+                content.className = 'subscription-purchase-option-content';
+
                 const labelContainer = document.createElement('div');
-                labelContainer.className = 'subscription-settings-toggle-label';
+                labelContainer.className = 'subscription-settings-toggle-label subscription-purchase-option-info';
 
                 const title = document.createElement('div');
                 title.className = 'subscription-settings-toggle-title';
@@ -15648,12 +15617,15 @@
                     discountEl.textContent = `-${discountPercent}%`;
                     priceAside.appendChild(discountEl);
                     hasAsideContent = true;
+                    button.classList.add('has-discount');
                 }
 
-                button.appendChild(labelContainer);
+                content.appendChild(labelContainer);
                 if (hasAsideContent) {
-                    button.appendChild(priceAside);
+                    content.appendChild(priceAside);
                 }
+
+                button.appendChild(content);
 
                 if (isAvailable && periodId !== null && periodId !== undefined) {
                     button.addEventListener('click', () => {
