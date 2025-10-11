@@ -34,7 +34,6 @@ from app.database.crud.server_squad import (
 from app.database.crud.subscription import (
     add_subscription_servers,
     calculate_subscription_total_cost,
-    create_trial_subscription,
     extend_subscription,
     remove_subscription_servers,
 )
@@ -148,8 +147,6 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionPurchasePreviewResponse,
     MiniAppSubscriptionPurchaseRequest,
     MiniAppSubscriptionPurchaseResponse,
-    MiniAppSubscriptionTrialRequest,
-    MiniAppSubscriptionTrialResponse,
     MiniAppSubscriptionRenewalOptionsRequest,
     MiniAppSubscriptionRenewalOptionsResponse,
     MiniAppSubscriptionRenewalPeriod,
@@ -2058,20 +2055,6 @@ async def _build_referral_info(
     )
 
 
-def _is_trial_available_for_user(user: User) -> bool:
-    if settings.TRIAL_DURATION_DAYS <= 0:
-        return False
-
-    if getattr(user, "has_had_paid_subscription", False):
-        return False
-
-    subscription = getattr(user, "subscription", None)
-    if subscription is not None:
-        return False
-
-    return True
-
-
 @router.post("/subscription", response_model=MiniAppSubscriptionResponse)
 async def get_subscription_details(
     payload: MiniAppSubscriptionRequest,
@@ -2102,22 +2085,39 @@ async def get_subscription_details(
 
     user = await get_user_by_telegram_id(db, telegram_id)
     purchase_url = (settings.MINIAPP_PURCHASE_URL or "").strip()
-
-    if not user:
-        detail: Dict[str, Any] = {
-            "code": "user_not_found",
-            "message": "User not found. Please register in the bot to continue.",
-            "title": "Registration required",
-        }
+    if not user or not user.subscription:
+        detail: Union[str, Dict[str, str]] = "Subscription not found"
         if purchase_url:
-            detail["purchase_url"] = purchase_url
+            detail = {
+                "message": "Subscription not found",
+                "purchase_url": purchase_url,
+            }
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=detail,
         )
 
-    subscription = getattr(user, "subscription", None)
+    subscription = user.subscription
+    traffic_used = _format_gb(subscription.traffic_used_gb)
+    traffic_limit = subscription.traffic_limit_gb or 0
     lifetime_used = _bytes_to_gb(getattr(user, "lifetime_used_traffic_bytes", 0))
+
+    status_actual = subscription.actual_status
+    links_payload = await _load_subscription_links(subscription)
+
+    subscription_url = links_payload.get("subscription_url") or subscription.subscription_url
+    subscription_crypto_link = (
+        links_payload.get("happ_crypto_link")
+        or subscription.subscription_crypto_link
+    )
+
+    happ_redirect_link = get_happ_cryptolink_redirect_link(subscription_crypto_link)
+
+    connected_squads: List[str] = list(subscription.connected_squads or [])
+    connected_servers = await _resolve_connected_servers(db, connected_squads)
+    devices_count, devices = await _load_devices_info(user)
+    links: List[str] = links_payload.get("links") or connected_squads
+    ss_conf_links: Dict[str, str] = links_payload.get("ss_conf_links") or {}
 
     transactions_query = (
         select(Transaction)
@@ -2186,10 +2186,7 @@ async def get_subscription_details(
                 )
             )
 
-    if subscription:
-        active_offer_contexts.extend(
-            await _find_active_test_access_offers(db, subscription)
-        )
+    active_offer_contexts.extend(await _find_active_test_access_offers(db, subscription))
 
     promo_offers = await _build_promo_offer_models(
         db,
@@ -2315,46 +2312,6 @@ async def get_subscription_details(
             updated_at=getattr(service_rules, "updated_at", None),
         )
 
-    links_payload: Dict[str, Any] = {}
-    connected_squads: List[str] = []
-    connected_servers: List[MiniAppConnectedServer] = []
-    links: List[str] = []
-    ss_conf_links: Dict[str, str] = {}
-    subscription_url: Optional[str] = None
-    subscription_crypto_link: Optional[str] = None
-    happ_redirect_link: Optional[str] = None
-    remnawave_short_uuid: Optional[str] = None
-    status_actual = "missing"
-    subscription_status_value = "none"
-    traffic_used_value = 0.0
-    traffic_limit_value = 0
-    device_limit_value: Optional[int] = settings.DEFAULT_DEVICE_LIMIT or None
-    autopay_enabled = False
-
-    if subscription:
-        traffic_used_value = _format_gb(subscription.traffic_used_gb)
-        traffic_limit_value = subscription.traffic_limit_gb or 0
-        status_actual = subscription.actual_status
-        subscription_status_value = subscription.status
-        links_payload = await _load_subscription_links(subscription)
-        subscription_url = (
-            links_payload.get("subscription_url") or subscription.subscription_url
-        )
-        subscription_crypto_link = (
-            links_payload.get("happ_crypto_link")
-            or subscription.subscription_crypto_link
-        )
-        happ_redirect_link = get_happ_cryptolink_redirect_link(subscription_crypto_link)
-        connected_squads = list(subscription.connected_squads or [])
-        connected_servers = await _resolve_connected_servers(db, connected_squads)
-        links = links_payload.get("links") or connected_squads
-        ss_conf_links = links_payload.get("ss_conf_links") or {}
-        remnawave_short_uuid = subscription.remnawave_short_uuid
-        device_limit_value = subscription.device_limit
-        autopay_enabled = bool(subscription.autopay_enabled)
-
-    devices_count, devices = await _load_devices_info(user)
-
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
         username=user.username,
@@ -2370,15 +2327,15 @@ async def get_subscription_details(
         ),
         language=user.language,
         status=user.status,
-        subscription_status=subscription_status_value,
+        subscription_status=subscription.status,
         subscription_actual_status=status_actual,
         status_label=_status_label(status_actual),
-        expires_at=getattr(subscription, "end_date", None),
-        device_limit=device_limit_value,
-        traffic_used_gb=round(traffic_used_value, 2),
-        traffic_used_label=_format_gb_label(traffic_used_value),
-        traffic_limit_gb=traffic_limit_value,
-        traffic_limit_label=_format_limit_label(traffic_limit_value),
+        expires_at=subscription.end_date,
+        device_limit=subscription.device_limit,
+        traffic_used_gb=round(traffic_used, 2),
+        traffic_used_label=_format_gb_label(traffic_used),
+        traffic_limit_gb=traffic_limit,
+        traffic_limit_label=_format_limit_label(traffic_limit),
         lifetime_used_traffic_gb=lifetime_used,
         has_active_subscription=status_actual in {"active", "trial"},
         promo_offer_discount_percent=active_discount_percent,
@@ -2388,21 +2345,9 @@ async def get_subscription_details(
 
     referral_info = await _build_referral_info(db, user)
 
-    trial_available = _is_trial_available_for_user(user)
-    trial_duration_days = (
-        settings.TRIAL_DURATION_DAYS if settings.TRIAL_DURATION_DAYS > 0 else None
-    )
-
-    subscription_missing_reason = None
-    if subscription is None:
-        if not trial_available and settings.TRIAL_DURATION_DAYS > 0:
-            subscription_missing_reason = "trial_expired"
-        else:
-            subscription_missing_reason = "not_found"
-
     return MiniAppSubscriptionResponse(
-        subscription_id=getattr(subscription, "id", None),
-        remnawave_short_uuid=remnawave_short_uuid,
+        subscription_id=subscription.id,
+        remnawave_short_uuid=subscription.remnawave_short_uuid,
         user=response_user,
         subscription_url=subscription_url,
         subscription_crypto_link=subscription_crypto_link,
@@ -2413,9 +2358,9 @@ async def get_subscription_details(
         connected_servers=connected_servers,
         connected_devices_count=devices_count,
         connected_devices=devices,
-        happ=links_payload.get("happ") if subscription else None,
-        happ_link=links_payload.get("happ_link") if subscription else None,
-        happ_crypto_link=links_payload.get("happ_crypto_link") if subscription else None,
+        happ=links_payload.get("happ"),
+        happ_link=links_payload.get("happ_link"),
+        happ_crypto_link=links_payload.get("happ_crypto_link"),
         happ_cryptolink_redirect_link=happ_redirect_link,
         balance_kopeks=user.balance_kopeks,
         balance_rubles=round(user.balance_rubles, 2),
@@ -2435,121 +2380,12 @@ async def get_subscription_details(
         total_spent_kopeks=total_spent_kopeks,
         total_spent_rubles=round(total_spent_kopeks / 100, 2),
         total_spent_label=settings.format_price(total_spent_kopeks),
-        subscription_type=(
-            "trial"
-            if subscription and subscription.is_trial
-            else ("paid" if subscription else "none")
-        ),
-        autopay_enabled=autopay_enabled,
+        subscription_type="trial" if subscription.is_trial else "paid",
+        autopay_enabled=bool(subscription.autopay_enabled),
         branding=settings.get_miniapp_branding(),
         faq=faq_payload,
         legal_documents=legal_documents_payload,
         referral=referral_info,
-        subscription_missing=subscription is None,
-        subscription_missing_reason=subscription_missing_reason,
-        trial_available=trial_available,
-        trial_duration_days=trial_duration_days,
-        trial_status="available" if trial_available else "unavailable",
-    )
-
-
-@router.post(
-    "/subscription/trial",
-    response_model=MiniAppSubscriptionTrialResponse,
-)
-async def activate_subscription_trial_endpoint(
-    payload: MiniAppSubscriptionTrialRequest,
-    db: AsyncSession = Depends(get_db_session),
-) -> MiniAppSubscriptionTrialResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
-
-    existing_subscription = getattr(user, "subscription", None)
-    if existing_subscription is not None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "subscription_exists",
-                "message": "Subscription is already active",
-            },
-        )
-
-    if not _is_trial_available_for_user(user):
-        error_code = "trial_unavailable"
-        if getattr(user, "has_had_paid_subscription", False):
-            error_code = "trial_expired"
-        elif settings.TRIAL_DURATION_DAYS <= 0:
-            error_code = "trial_disabled"
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": error_code,
-                "message": "Trial is not available for this user",
-            },
-        )
-
-    try:
-        subscription = await create_trial_subscription(db, user.id)
-    except Exception as error:  # pragma: no cover - defensive logging
-        logger.error(
-            "Failed to activate trial subscription for user %s: %s",
-            user.id,
-            error,
-        )
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": "trial_activation_failed",
-                "message": "Failed to activate trial subscription",
-            },
-        ) from error
-
-    await db.refresh(user)
-    await db.refresh(subscription)
-
-    subscription_service = SubscriptionService()
-    try:
-        await subscription_service.create_remnawave_user(db, subscription)
-    except RemnaWaveConfigurationError as error:  # pragma: no cover - configuration issues
-        logger.warning("RemnaWave update skipped: %s", error)
-    except Exception as error:  # pragma: no cover - defensive logging
-        logger.error(
-            "Failed to create RemnaWave user for trial subscription %s: %s",
-            subscription.id,
-            error,
-        )
-
-    await db.refresh(subscription)
-
-    duration_days: Optional[int] = None
-    if subscription.start_date and subscription.end_date:
-        try:
-            duration_days = max(
-                0,
-                (subscription.end_date.date() - subscription.start_date.date()).days,
-            )
-        except Exception:  # pragma: no cover - defensive fallback
-            duration_days = None
-
-    if not duration_days and settings.TRIAL_DURATION_DAYS > 0:
-        duration_days = settings.TRIAL_DURATION_DAYS
-
-    language_code = _normalize_language_code(user)
-    if language_code == "ru":
-        if duration_days:
-            message = f"Триал активирован на {duration_days} дн. Приятного пользования!"
-        else:
-            message = "Триал активирован. Приятного пользования!"
-    else:
-        if duration_days:
-            message = f"Trial activated for {duration_days} days. Enjoy!"
-        else:
-            message = "Trial activated successfully. Enjoy!"
-
-    return MiniAppSubscriptionTrialResponse(
-        message=message,
-        subscription_id=getattr(subscription, "id", None),
-        trial_status="activated",
-        trial_duration_days=duration_days,
     )
 
 
