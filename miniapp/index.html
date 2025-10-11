@@ -87,7 +87,7 @@
             max-width: 480px;
             margin: 0 auto;
             padding: 16px;
-            padding-bottom: 120px;
+            padding-bottom: 32px;
         }
 
         /* Animations */
@@ -2401,7 +2401,7 @@
             align-items: center;
             justify-content: center;
             padding: 24px;
-            z-index: 950;
+            z-index: 1000;
             backdrop-filter: blur(4px);
         }
 
@@ -3991,170 +3991,6 @@
             display: none !important;
         }
 
-        /* Floating connect button */
-        .floating-connect-button {
-            position: fixed;
-            right: 16px;
-            bottom: 24px;
-            border: none;
-            border-radius: 999px;
-            background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.95), rgba(59, 130, 246, 0.95));
-            color: var(--tg-theme-button-text-color);
-            box-shadow: 0 12px 32px rgba(var(--primary-rgb), 0.35);
-            padding: 0;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.3s ease, opacity 0.2s ease;
-            width: min(320px, 50vw);
-            min-width: 200px;
-            z-index: 950;
-        }
-
-        .floating-connect-button:disabled {
-            cursor: not-allowed;
-            opacity: 0.6;
-            box-shadow: none;
-        }
-
-        .floating-connect-button:not(:disabled):hover {
-            transform: translateY(-2px);
-            box-shadow: 0 16px 40px rgba(var(--primary-rgb), 0.45);
-        }
-
-        .floating-connect-button__content {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            padding: 16px 24px;
-            font-weight: 700;
-            font-size: 15px;
-        }
-
-        .floating-connect-button__icon {
-            width: 22px;
-            height: 22px;
-        }
-
-        .floating-connect-button__label {
-            white-space: nowrap;
-        }
-
-        @media (max-width: 480px) {
-            .floating-connect-button {
-                left: 16px;
-                width: calc(100vw - 32px);
-                min-width: 0;
-            }
-        }
-
-        /* Installation modal */
-        .guide-modal-backdrop {
-            position: fixed;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.4);
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            padding: 24px 16px;
-            z-index: 2000;
-            backdrop-filter: blur(6px);
-        }
-
-        .guide-modal {
-            background: var(--bg-primary);
-            border-radius: 24px 24px 16px 16px;
-            width: min(480px, 100%);
-            max-height: min(90vh, 640px);
-            box-shadow: var(--shadow-lg);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .guide-modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 20px 24px 12px;
-        }
-
-        .guide-modal-title {
-            font-size: 18px;
-            font-weight: 700;
-        }
-
-        .guide-modal-close {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            border: 2px solid var(--border-color);
-            background: var(--bg-secondary);
-            color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .guide-modal-close:hover {
-            border-color: var(--primary);
-            color: var(--primary);
-        }
-
-        .guide-modal-body {
-            padding: 0 24px 24px;
-            overflow-y: auto;
-        }
-
-        .installation-card {
-            background: transparent;
-            box-shadow: none;
-            margin-bottom: 0;
-        }
-
-        .installation-card-content {
-            padding: 0;
-        }
-
-        .step-final-action {
-            margin-top: 16px;
-        }
-
-        .step-final-button {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px 20px;
-            border-radius: 999px;
-            font-weight: 600;
-            font-size: 14px;
-            color: var(--tg-theme-button-text-color);
-            background: linear-gradient(135deg, rgba(var(--primary-rgb), 1), rgba(59, 130, 246, 0.9));
-            box-shadow: 0 8px 24px rgba(var(--primary-rgb), 0.35);
-            text-decoration: none;
-            border: none;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-        }
-
-        .step-final-button:disabled {
-            cursor: not-allowed;
-            opacity: 0.6;
-            box-shadow: none;
-        }
-
-        .step-final-button:not(:disabled):hover {
-            transform: translateY(-1px);
-            box-shadow: 0 12px 28px rgba(var(--primary-rgb), 0.45);
-        }
-
-        .step-final-button svg {
-            width: 18px;
-            height: 18px;
-        }
-
         /* Mobile Optimizations */
         @media (max-width: 480px) {
             .container {
@@ -4840,6 +4676,13 @@
 
             <!-- Action Buttons -->
             <div class="btn-group">
+                <button class="btn btn-primary" id="connectBtn">
+                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span id="connectBtnText" data-i18n="button.connect.default">Connect to VPN</span>
+                </button>
+
                 <button class="btn btn-secondary" id="copyBtn">
                     <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
@@ -4847,15 +4690,6 @@
                     <span data-i18n="button.copy">Copy Subscription Link</span>
                 </button>
             </div>
-
-            <button class="floating-connect-button hidden" id="openGuideBtn" type="button">
-                <div class="floating-connect-button__content">
-                    <svg class="floating-connect-button__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
-                    <span class="floating-connect-button__label" id="connectBtnText" data-i18n="button.connect.default">Connect to VPN</span>
-                </div>
-            </button>
 
             <!-- Balance Card -->
             <div class="card balance-card" id="balanceCard">
@@ -5029,44 +4863,33 @@
                 </div>
             </div>
 
-            <!-- App Installation Modal -->
-            <div class="guide-modal-backdrop hidden" id="installationModal">
-                <div class="guide-modal" role="dialog" aria-modal="true" aria-labelledby="installationModalTitle">
-                    <div class="guide-modal-header">
-                        <div class="guide-modal-title" id="installationModalTitle" data-i18n="apps.title">Installation Guide</div>
-                        <button class="guide-modal-close" type="button" id="installationModalClose" aria-label="Close">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
+            <!-- App Installation Section -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title" data-i18n="apps.title">Installation Guide</div>
+                </div>
+                <div class="card-content" style="opacity: 1; max-height: 2000px; padding-bottom: 16px;">
+                    <div class="platform-selector">
+                        <button class="platform-btn" data-platform="ios">
+                            <span class="platform-icon">🍎</span>
+                            <span data-i18n="platform.ios">iOS</span>
+                        </button>
+                        <button class="platform-btn active" data-platform="android">
+                            <span class="platform-icon">🤖</span>
+                            <span data-i18n="platform.android">Android</span>
+                        </button>
+                        <button class="platform-btn" data-platform="pc">
+                            <span class="platform-icon">💻</span>
+                            <span data-i18n="platform.pc">PC</span>
+                        </button>
+                        <button class="platform-btn" data-platform="tv">
+                            <span class="platform-icon">📺</span>
+                            <span data-i18n="platform.tv">TV</span>
                         </button>
                     </div>
-                    <div class="guide-modal-body">
-                        <div class="card installation-card">
-                            <div class="card-content installation-card-content">
-                                <div class="platform-selector">
-                                    <button class="platform-btn" data-platform="ios">
-                                        <span class="platform-icon">🍎</span>
-                                        <span data-i18n="platform.ios">iOS</span>
-                                    </button>
-                                    <button class="platform-btn active" data-platform="android">
-                                        <span class="platform-icon">🤖</span>
-                                        <span data-i18n="platform.android">Android</span>
-                                    </button>
-                                    <button class="platform-btn" data-platform="pc">
-                                        <span class="platform-icon">💻</span>
-                                        <span data-i18n="platform.pc">PC</span>
-                                    </button>
-                                    <button class="platform-btn" data-platform="tv">
-                                        <span class="platform-icon">📺</span>
-                                        <span data-i18n="platform.tv">TV</span>
-                                    </button>
-                                </div>
 
-                                <div id="appsContainer">
-                                    <!-- Apps will be rendered here -->
-                                </div>
-                            </div>
-                        </div>
+                    <div id="appsContainer">
+                        <!-- Apps will be rendered here -->
                     </div>
                 </div>
             </div>
@@ -8503,19 +8326,6 @@
                     </div>
                 `;
             }).join('');
-
-            container.querySelectorAll('.step-final-button').forEach(button => {
-                button.addEventListener('click', () => {
-                    const link = getConnectLink();
-                    if (!link) {
-                        return;
-                    }
-                    closeInstallationModal();
-                    openExternalLink(link);
-                });
-            });
-
-            updateInstructionConnectButtons();
         }
 
         function renderAppSteps(app) {
@@ -8572,62 +8382,7 @@
                 `;
             }
 
-            const connectLabelRaw = t('button.connect.default');
-            const connectLabel = connectLabelRaw === 'button.connect.default'
-                ? 'Connect to VPN'
-                : connectLabelRaw;
-
-            html += `
-                <div class="step-final-action">
-                    <button class="step-final-button" type="button" data-app-id="${escapeHtml(app.id || '')}">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                        </svg>
-                        <span>${escapeHtml(connectLabel)}</span>
-                    </button>
-                </div>
-            `;
-
             return html;
-        }
-
-        function updateInstructionConnectButtons(hasConnect = Boolean(getConnectLink())) {
-            document.querySelectorAll('.step-final-button').forEach(button => {
-                button.disabled = !hasConnect;
-            });
-        }
-
-        function openInstallationModal() {
-            const modal = document.getElementById('installationModal');
-            if (!modal) {
-                return;
-            }
-
-            renderApps();
-            setActivePlatformButton();
-            updateInstructionConnectButtons(Boolean(getConnectLink()));
-
-            modal.classList.remove('hidden');
-            document.body.classList.add('modal-open');
-
-            const focusTarget = modal.querySelector('.guide-modal-close');
-            if (focusTarget && typeof focusTarget.focus === 'function') {
-                try {
-                    focusTarget.focus({ preventScroll: true });
-                } catch (error) {
-                    focusTarget.focus();
-                }
-            }
-        }
-
-        function closeInstallationModal() {
-            const modal = document.getElementById('installationModal');
-            if (!modal) {
-                return;
-            }
-
-            modal.classList.add('hidden');
-            document.body.classList.remove('modal-open');
         }
 
         function getLocalizedText(textObj) {
@@ -11387,59 +11142,6 @@
             if (!shouldShow) {
                 card.classList.remove('expanded');
             }
-        }
-
-        function hasActiveSubscription() {
-            if (!userData?.user) {
-                return false;
-            }
-
-            if (userData.subscription_missing === true || userData.subscriptionMissing === true) {
-                return false;
-            }
-
-            const hasActiveFlag = userData.user.has_active_subscription;
-            if (hasActiveFlag === true) {
-                return true;
-            }
-            if (hasActiveFlag === false) {
-                return false;
-            }
-
-            const statusRaw = String(
-                userData.user.subscription_actual_status
-                || userData.user.subscription_status
-                || ''
-            ).toLowerCase();
-
-            if (statusRaw) {
-                const activeStatuses = ['active', 'trial', 'trialing'];
-                const inactiveStatuses = ['expired', 'disabled', 'missing', 'inactive', 'cancelled', 'canceled', 'ended', 'paused', 'stopped'];
-
-                if (activeStatuses.includes(statusRaw)) {
-                    return true;
-                }
-
-                if (inactiveStatuses.includes(statusRaw)) {
-                    return false;
-                }
-            }
-
-            const typeRaw = String(
-                userData.subscription_type
-                || userData.user.subscription_type
-                || ''
-            ).toLowerCase();
-
-            if (['paid', 'trial'].includes(typeRaw)) {
-                return true;
-            }
-
-            if (['expired', 'inactive', 'disabled', 'none', 'missing', 'ended'].includes(typeRaw)) {
-                return false;
-            }
-
-            return false;
         }
 
         function hasPaidSubscription() {
@@ -16147,22 +15849,15 @@
         }
 
         function updateActionButtons() {
+            const connectBtn = document.getElementById('connectBtn');
             const copyBtn = document.getElementById('copyBtn');
-            const guideBtn = document.getElementById('openGuideBtn');
 
             const connectLink = getConnectLink();
-            const showConnectButton = hasActiveSubscription();
-
-            if (guideBtn) {
-                guideBtn.classList.toggle('hidden', !showConnectButton);
-                guideBtn.disabled = !showConnectButton;
+            if (connectBtn) {
+                const hasConnect = Boolean(connectLink);
+                connectBtn.disabled = !hasConnect;
+                connectBtn.classList.toggle('hidden', !hasConnect);
             }
-
-            if (!showConnectButton) {
-                closeInstallationModal();
-            }
-
-            updateInstructionConnectButtons(showConnectButton && Boolean(connectLink));
 
             const subscriptionUrl = getCurrentSubscriptionUrl();
             if (copyBtn) {
@@ -16206,18 +15901,9 @@
             });
         });
 
-        document.getElementById('openGuideBtn')?.addEventListener('click', () => {
-            openInstallationModal();
-        });
-
-        document.getElementById('installationModalClose')?.addEventListener('click', () => {
-            closeInstallationModal();
-        });
-
-        document.getElementById('installationModal')?.addEventListener('click', event => {
-            if (event.target === event.currentTarget) {
-                closeInstallationModal();
-            }
+        document.getElementById('connectBtn')?.addEventListener('click', () => {
+            const link = getConnectLink();
+            openExternalLink(link);
         });
 
         const topupButton = document.getElementById('topupBalanceBtn');
@@ -16241,11 +15927,6 @@
                 const { backdrop } = getTopupElements();
                 if (backdrop && !backdrop.classList.contains('hidden')) {
                     closeTopupModal();
-                    return;
-                }
-                const installationModal = document.getElementById('installationModal');
-                if (installationModal && !installationModal.classList.contains('hidden')) {
-                    closeInstallationModal();
                     return;
                 }
                 if (subscriptionPurchaseModalOpen) {
