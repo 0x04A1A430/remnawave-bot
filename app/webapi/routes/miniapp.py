@@ -37,7 +37,6 @@ from app.database.crud.subscription import (
     create_trial_subscription,
     extend_subscription,
     remove_subscription_servers,
-    update_subscription_autopay,
 )
 from app.database.crud.transaction import (
     create_transaction,
@@ -151,9 +150,6 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionPurchaseResponse,
     MiniAppSubscriptionTrialRequest,
     MiniAppSubscriptionTrialResponse,
-    MiniAppSubscriptionAutopay,
-    MiniAppSubscriptionAutopayRequest,
-    MiniAppSubscriptionAutopayResponse,
     MiniAppSubscriptionRenewalOptionsRequest,
     MiniAppSubscriptionRenewalOptionsResponse,
     MiniAppSubscriptionRenewalPeriod,
@@ -200,104 +196,6 @@ _PAYMENT_FAILURE_STATUSES = {
 
 
 _PERIOD_ID_PATTERN = re.compile(r"(\d+)")
-
-
-_AUTOPAY_DEFAULT_DAY_OPTIONS = (1, 3, 7, 14)
-
-
-def _normalize_autopay_days(value: Optional[Any]) -> Optional[int]:
-    if value is None:
-        return None
-    try:
-        numeric = int(value)
-    except (TypeError, ValueError):
-        return None
-    return numeric if numeric > 0 else None
-
-
-def _get_autopay_day_options(subscription: Optional[Subscription]) -> List[int]:
-    options: set[int] = set()
-    for candidate in _AUTOPAY_DEFAULT_DAY_OPTIONS:
-        normalized = _normalize_autopay_days(candidate)
-        if normalized is not None:
-            options.add(normalized)
-
-    default_setting = _normalize_autopay_days(
-        getattr(settings, "DEFAULT_AUTOPAY_DAYS_BEFORE", None)
-    )
-    if default_setting is not None:
-        options.add(default_setting)
-
-    if subscription is not None:
-        current = _normalize_autopay_days(
-            getattr(subscription, "autopay_days_before", None)
-        )
-        if current is not None:
-            options.add(current)
-
-    return sorted(options)
-
-
-def _build_autopay_payload(
-    subscription: Optional[Subscription],
-) -> Optional[MiniAppSubscriptionAutopay]:
-    if subscription is None:
-        return None
-
-    enabled = bool(getattr(subscription, "autopay_enabled", False))
-    days_before = _normalize_autopay_days(
-        getattr(subscription, "autopay_days_before", None)
-    )
-    options = _get_autopay_day_options(subscription)
-
-    default_days = days_before
-    if default_days is None:
-        default_days = _normalize_autopay_days(
-            getattr(settings, "DEFAULT_AUTOPAY_DAYS_BEFORE", None)
-        )
-    if default_days is None and options:
-        default_days = options[0]
-
-    autopay_kwargs: Dict[str, Any] = {
-        "enabled": enabled,
-        "autopay_enabled": enabled,
-        "days_before": days_before,
-        "autopay_days_before": days_before,
-        "default_days_before": default_days,
-        "autopay_days_options": options,
-        "days_options": options,
-        "options": options,
-        "available_days": options,
-        "availableDays": options,
-        "autopayEnabled": enabled,
-        "autopayDaysBefore": days_before,
-        "autopayDaysOptions": options,
-        "daysBefore": days_before,
-        "daysOptions": options,
-        "defaultDaysBefore": default_days,
-    }
-
-    return MiniAppSubscriptionAutopay(**autopay_kwargs)
-
-
-def _autopay_response_extras(
-    enabled: bool,
-    days_before: Optional[int],
-    options: List[int],
-    autopay_payload: Optional[MiniAppSubscriptionAutopay],
-) -> Dict[str, Any]:
-    extras: Dict[str, Any] = {
-        "autopayEnabled": enabled,
-        "autopayDaysBefore": days_before,
-        "autopayDaysOptions": options,
-    }
-    if days_before is not None:
-        extras["daysBefore"] = days_before
-    if options:
-        extras["daysOptions"] = options
-    if autopay_payload is not None:
-        extras["autopaySettings"] = autopay_payload
-    return extras
 
 
 async def _get_usd_to_rub_rate() -> float:
@@ -2455,24 +2353,6 @@ async def get_subscription_details(
         device_limit_value = subscription.device_limit
         autopay_enabled = bool(subscription.autopay_enabled)
 
-    autopay_payload = _build_autopay_payload(subscription)
-    autopay_days_before = (
-        getattr(autopay_payload, "autopay_days_before", None)
-        if autopay_payload
-        else None
-    )
-    autopay_days_options = (
-        list(getattr(autopay_payload, "autopay_days_options", []) or [])
-        if autopay_payload
-        else []
-    )
-    autopay_extras = _autopay_response_extras(
-        autopay_enabled,
-        autopay_days_before,
-        autopay_days_options,
-        autopay_payload,
-    )
-
     devices_count, devices = await _load_devices_info(user)
 
     response_user = MiniAppSubscriptionUser(
@@ -2561,10 +2441,6 @@ async def get_subscription_details(
             else ("paid" if subscription else "none")
         ),
         autopay_enabled=autopay_enabled,
-        autopay_days_before=autopay_days_before,
-        autopay_days_options=autopay_days_options,
-        autopay=autopay_payload,
-        autopay_settings=autopay_payload,
         branding=settings.get_miniapp_branding(),
         faq=faq_payload,
         legal_documents=legal_documents_payload,
@@ -2574,121 +2450,6 @@ async def get_subscription_details(
         trial_available=trial_available,
         trial_duration_days=trial_duration_days,
         trial_status="available" if trial_available else "unavailable",
-        **autopay_extras,
-    )
-
-
-@router.post(
-    "/subscription/autopay",
-    response_model=MiniAppSubscriptionAutopayResponse,
-)
-async def update_subscription_autopay_endpoint(
-    payload: MiniAppSubscriptionAutopayRequest,
-    db: AsyncSession = Depends(get_db_session),
-) -> MiniAppSubscriptionAutopayResponse:
-    user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(user)
-    _validate_subscription_id(payload.subscription_id, subscription)
-
-    target_enabled = (
-        bool(payload.enabled)
-        if payload.enabled is not None
-        else bool(subscription.autopay_enabled)
-    )
-
-    requested_days = payload.days_before
-    normalized_days = _normalize_autopay_days(requested_days)
-    current_days = _normalize_autopay_days(
-        getattr(subscription, "autopay_days_before", None)
-    )
-    if normalized_days is None:
-        normalized_days = current_days
-
-    options = _get_autopay_day_options(subscription)
-    default_day = _normalize_autopay_days(
-        getattr(settings, "DEFAULT_AUTOPAY_DAYS_BEFORE", None)
-    )
-    if default_day is None and options:
-        default_day = options[0]
-
-    if target_enabled and normalized_days is None:
-        if default_day is None:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "code": "autopay_no_days",
-                    "message": "Auto-pay day selection is temporarily unavailable",
-                },
-            )
-        normalized_days = default_day
-
-    if normalized_days is None:
-        normalized_days = default_day or (options[0] if options else 1)
-
-    if (
-        bool(subscription.autopay_enabled) == target_enabled
-        and current_days == normalized_days
-    ):
-        autopay_payload = _build_autopay_payload(subscription)
-        autopay_days_before = (
-            getattr(autopay_payload, "autopay_days_before", None)
-            if autopay_payload
-            else None
-        )
-        autopay_days_options = (
-            list(getattr(autopay_payload, "autopay_days_options", []) or [])
-            if autopay_payload
-            else options
-        )
-        extras = _autopay_response_extras(
-            target_enabled,
-            autopay_days_before,
-            autopay_days_options,
-            autopay_payload,
-        )
-        return MiniAppSubscriptionAutopayResponse(
-            subscription_id=subscription.id,
-            autopay_enabled=target_enabled,
-            autopay_days_before=autopay_days_before,
-            autopay_days_options=autopay_days_options,
-            autopay=autopay_payload,
-            autopay_settings=autopay_payload,
-            **extras,
-        )
-
-    updated_subscription = await update_subscription_autopay(
-        db,
-        subscription,
-        target_enabled,
-        normalized_days,
-    )
-
-    autopay_payload = _build_autopay_payload(updated_subscription)
-    autopay_days_before = (
-        getattr(autopay_payload, "autopay_days_before", None)
-        if autopay_payload
-        else None
-    )
-    autopay_days_options = (
-        list(getattr(autopay_payload, "autopay_days_options", []) or [])
-        if autopay_payload
-        else _get_autopay_day_options(updated_subscription)
-    )
-    extras = _autopay_response_extras(
-        bool(updated_subscription.autopay_enabled),
-        autopay_days_before,
-        autopay_days_options,
-        autopay_payload,
-    )
-
-    return MiniAppSubscriptionAutopayResponse(
-        subscription_id=updated_subscription.id,
-        autopay_enabled=bool(updated_subscription.autopay_enabled),
-        autopay_days_before=autopay_days_before,
-        autopay_days_options=autopay_days_options,
-        autopay=autopay_payload,
-        autopay_settings=autopay_payload,
-        **extras,
     )
 
 
@@ -3831,24 +3592,6 @@ async def get_subscription_renewal_options_endpoint(
         if isinstance(final_total, int) and balance_kopeks < final_total:
             missing_amount = final_total - balance_kopeks
 
-    renewal_autopay_payload = _build_autopay_payload(subscription)
-    renewal_autopay_days_before = (
-        getattr(renewal_autopay_payload, "autopay_days_before", None)
-        if renewal_autopay_payload
-        else None
-    )
-    renewal_autopay_days_options = (
-        list(getattr(renewal_autopay_payload, "autopay_days_options", []) or [])
-        if renewal_autopay_payload
-        else []
-    )
-    renewal_autopay_extras = _autopay_response_extras(
-        bool(subscription.autopay_enabled),
-        renewal_autopay_days_before,
-        renewal_autopay_days_options,
-        renewal_autopay_payload,
-    )
-
     return MiniAppSubscriptionRenewalOptionsResponse(
         subscription_id=subscription.id,
         currency=currency,
@@ -3860,12 +3603,6 @@ async def get_subscription_renewal_options_endpoint(
         default_period_id=default_period_id,
         missing_amount_kopeks=missing_amount,
         status_message=_build_renewal_status_message(user),
-        autopay_enabled=bool(subscription.autopay_enabled),
-        autopay_days_before=renewal_autopay_days_before,
-        autopay_days_options=renewal_autopay_days_options,
-        autopay=renewal_autopay_payload,
-        autopay_settings=renewal_autopay_payload,
-        **renewal_autopay_extras,
     )
 
 

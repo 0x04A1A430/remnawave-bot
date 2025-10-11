@@ -134,20 +134,6 @@ class MiniAppPromoOfferClaimResponse(BaseModel):
     code: Optional[str] = None
 
 
-class MiniAppSubscriptionAutopay(BaseModel):
-    enabled: bool = False
-    autopay_enabled: Optional[bool] = None
-    autopay_enabled_at: Optional[datetime] = None
-    days_before: Optional[int] = None
-    autopay_days_before: Optional[int] = None
-    default_days_before: Optional[int] = None
-    autopay_days_options: List[int] = Field(default_factory=list)
-    days_options: List[int] = Field(default_factory=list)
-    options: List[int] = Field(default_factory=list)
-
-    model_config = ConfigDict(extra="allow")
-
-
 class MiniAppSubscriptionRenewalPeriod(BaseModel):
     id: str
     days: Optional[int] = None
@@ -186,13 +172,8 @@ class MiniAppSubscriptionRenewalOptionsResponse(BaseModel):
     default_period_id: Optional[str] = Field(default=None, alias="defaultPeriodId")
     missing_amount_kopeks: Optional[int] = Field(default=None, alias="missingAmountKopeks")
     status_message: Optional[str] = Field(default=None, alias="statusMessage")
-    autopay_enabled: bool = False
-    autopay_days_before: Optional[int] = None
-    autopay_days_options: List[int] = Field(default_factory=list)
-    autopay: Optional[MiniAppSubscriptionAutopay] = None
-    autopay_settings: Optional[MiniAppSubscriptionAutopay] = None
 
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class MiniAppSubscriptionRenewalRequest(BaseModel):
@@ -213,27 +194,6 @@ class MiniAppSubscriptionRenewalResponse(BaseModel):
     renewed_until: Optional[datetime] = Field(default=None, alias="renewedUntil")
 
     model_config = ConfigDict(populate_by_name=True)
-
-
-class MiniAppSubscriptionAutopayRequest(BaseModel):
-    init_data: str = Field(..., alias="initData")
-    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
-    enabled: Optional[bool] = None
-    days_before: Optional[int] = Field(default=None, alias="daysBefore")
-
-    model_config = ConfigDict(populate_by_name=True)
-
-
-class MiniAppSubscriptionAutopayResponse(BaseModel):
-    success: bool = True
-    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
-    autopay_enabled: bool = False
-    autopay_days_before: Optional[int] = None
-    autopay_days_options: List[int] = Field(default_factory=list)
-    autopay: Optional[MiniAppSubscriptionAutopay] = None
-    autopay_settings: Optional[MiniAppSubscriptionAutopay] = None
-
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
 class MiniAppPromoCode(BaseModel):
@@ -451,10 +411,6 @@ class MiniAppSubscriptionResponse(BaseModel):
     total_spent_label: Optional[str] = None
     subscription_type: str
     autopay_enabled: bool = False
-    autopay_days_before: Optional[int] = None
-    autopay_days_options: List[int] = Field(default_factory=list)
-    autopay: Optional[MiniAppSubscriptionAutopay] = None
-    autopay_settings: Optional[MiniAppSubscriptionAutopay] = None
     branding: Optional[MiniAppBranding] = None
     faq: Optional[MiniAppFaq] = None
     legal_documents: Optional[MiniAppLegalDocuments] = None
@@ -464,8 +420,6 @@ class MiniAppSubscriptionResponse(BaseModel):
     trial_available: bool = False
     trial_duration_days: Optional[int] = None
     trial_status: Optional[str] = None
-
-    model_config = ConfigDict(extra="allow")
 
 
 class MiniAppSubscriptionServerOption(BaseModel):
