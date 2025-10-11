@@ -1,5 +1,11 @@
 {
-  "config": {},
+  "config": {
+    "additionalLocales": [
+      "ru",
+      "zh",
+      "fa"
+    ]
+  },
   "platforms": {
     "ios": [
       {
@@ -169,25 +175,33 @@
               "buttonLink": "https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x86.exe",
               "buttonText": {
                 "en": "Download",
-                "ru": "Скачать"
+                "ru": "Скачать",
+                "zh": "下载",
+                "fa": "دانلود"
               }
             }
           ],
           "description": {
             "en": "Download and install Happ.",
-            "ru": "Скачайте и установите Happ"
+            "ru": "Скачайте и установите Happ",
+            "zh": "下载并安装 Happ",
+            "fa": "دانلود و نصب Happ"
           }
         },
         "addSubscriptionStep": {
           "description": {
             "en": "Click the button below to add subscription",
-            "ru": "Нажмите кнопку выше — (Подключить подписку) приложение откроется, и подписка добавится автоматически."
+            "ru": "Нажмите кнопку выше — (Подключить подписку) приложение откроется, и подписка добавится автоматически.",
+            "zh": "点击下方按钮添加订阅",
+            "fa": "برای افزودن اشتراک روی دکمه زیر کلیک کنید"
           }
         },
         "connectAndUseStep": {
           "description": {
             "en": "You can select a server",
-            "ru": "Выберете локацию, включить VPN"
+            "ru": "Выберете локацию, включить VPN",
+            "zh": "您可以选择服务器",
+            "fa": "می‌توانید سرور را انتخاب کنید"
           }
         }
       }
@@ -204,30 +218,80 @@
               "buttonLink": "https://play.google.com/store/apps/details?id=com.vpn4tv.hiddify",
               "buttonText": {
                 "en": "Google Play",
-                "ru": "Google Play"
+                "ru": "Google Play",
+                "zh": "Google Play",
+                "fa": "Google Play"
               }
             }
           ],
           "description": {
             "en": "Open the page in Google Play and install the app. Or install the app directly from the APK file if Google Play is not working.",
-            "ru": "Откройте страницу в Google Play и установите приложение"
+            "ru": "Откройте страницу в Google Play и установите приложение",
+            "zh": "在 Google Play 中打开页面并安装应用",
+            "fa": "صفحه را در Google Play باز کنید و برنامه را نصب کنید"
           }
         },
         "addSubscriptionStep": {
           "description": {
             "en": "Click the button below to add subscription",
-            "ru": "Нажмите кнопку выше — (Скопировать ссылку подписки) ты скопируешь свою подписку, далее на телевизоре открой VPN4TV, следуя инструкция передай telegram боту ссылку, которую ты скопировал"
+            "ru": "Нажмите кнопку выше — (Скопировать ссылку подписки) ты скопируешь свою подписку, далее на телевизоре открой VPN4TV, следуя инструкция передай telegram боту ссылку, которую ты скопировал",
+            "zh": "点击下方按钮添加订阅",
+            "fa": "برای افزودن اشتراک روی دکمه زیر کلیک کنید"
           }
         },
         "connectAndUseStep": {
           "description": {
             "en": "Open the app and connect to the server",
-            "ru": "Приложение автоматически обновится и загрузит нужные конфиги на твой телевизор, подключай VPN"
+            "ru": "Приложение автоматически обновится и загрузит нужные конфиги на твой телевизор, подключай VPN",
+            "zh": "打开应用并连接到服务器",
+            "fa": "برنامه را باز کنید و به سرور متصل شوید"
           }
         }
       }
     ],
     "linux": [],
-    "appleTV": []
+    "appleTV": [
+      {
+        "id": "vpn4tv",
+        "name": "VPN4TV",
+        "isFeatured": true,
+        "urlScheme": "",
+        "installationStep": {
+          "buttons": [
+            {
+              "buttonLink": "https://apps.apple.com/app/vpn4tv/id6504287215",
+              "buttonText": {
+                "en": "App Store",
+                "ru": "App Store",
+                "zh": "App Store",
+                "fa": "App Store"
+              }
+            }
+          ],
+          "description": {
+            "en": "Open the page in App Store and install the app.",
+            "ru": "Откройте страницу в App Store и установите приложение",
+            "zh": "在 App Store 中打开页面并安装应用",
+            "fa": "صفحه را در App Store باز کنید و برنامه را نصب کنید"
+          }
+        },
+        "addSubscriptionStep": {
+          "description": {
+            "en": "Click the button below to add subscription",
+            "ru": "Нажмите кнопку выше — (Скопировать ссылку подписки) ты скопируешь свою подписку, далее на телевизоре открой VPN4TV, следуя инструкция передай telegram боту ссылку, которую ты скопировал",
+            "zh": "点击下方按钮添加订阅",
+            "fa": "برای افزودن اشتراک روی دکمه زیر کلیک کنید"
+          }
+        },
+        "connectAndUseStep": {
+          "description": {
+            "en": "Open the app and connect to the server",
+            "ru": "Приложение автоматически обновится и загрузит нужные конфиги на твой телевизор, подключай VPN",
+            "zh": "打开应用并连接到服务器",
+            "fa": "برنامه را باز کنید و به سرور متصل شوید"
+          }
+        }
+      }
+    ]
   }
 }
