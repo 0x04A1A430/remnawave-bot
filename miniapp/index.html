@@ -2591,6 +2591,21 @@
             display: flex;
             flex-direction: column;
             gap: 18px;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 600px) {
+            .modal-backdrop {
+                padding: 0;
+                align-items: stretch;
+            }
+
+            .modal {
+                max-width: none;
+                height: 100vh;
+                border-radius: 0;
+                box-shadow: none;
+            }
         }
 
         .modal-header {
