@@ -8937,25 +8937,10 @@
 
         function coercePositiveInt(value, fallback = null) {
             const numeric = coerceNumber(value, null);
-            let candidate = numeric;
-
-            if (candidate === null || Number.isNaN(candidate)) {
-                if (typeof value === 'string') {
-                    const normalized = value.trim();
-                    if (normalized) {
-                        const match = normalized.match(/\d+/);
-                        if (match) {
-                            candidate = Number(match[0]);
-                        }
-                    }
-                }
-            }
-
-            if (candidate === null || Number.isNaN(candidate)) {
+            if (numeric === null || Number.isNaN(numeric)) {
                 return fallback;
             }
-
-            const intValue = Math.trunc(candidate);
+            const intValue = Math.trunc(numeric);
             return Number.isFinite(intValue) && intValue >= 0 ? intValue : fallback;
         }
 
