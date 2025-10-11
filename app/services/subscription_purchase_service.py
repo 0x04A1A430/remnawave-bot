@@ -358,7 +358,7 @@ class MiniAppSubscriptionPurchaseService:
             except (TypeError, ValueError):
                 continue
 
-        default_connected = list(getattr(subscription, "connected_squads", []) or [])
+        default_connected = list(subscription.connected_squads or [])
         if not default_connected:
             for server in available_servers:
                 if getattr(server, "is_available", True) and not getattr(server, "is_full", False):
@@ -594,12 +594,13 @@ class MiniAppSubscriptionPurchaseService:
         default_devices: int,
     ) -> PurchaseDevicesConfig:
         discount_percent = user.get_promo_discount("devices", period_days)
-        unit_price = settings.PRICE_PER_DEVICE
-        discounted_unit_price, unit_discount_value = _apply_percentage_discount(unit_price, discount_percent)
-        price_label = texts.format_price(discounted_unit_price)
+        additional = max(0, default_devices - settings.DEFAULT_DEVICE_LIMIT)
+        base_price_per_month = additional * settings.PRICE_PER_DEVICE
+        discounted_per_month, discount_value = _apply_percentage_discount(base_price_per_month, discount_percent)
+        price_label = texts.format_price(discounted_per_month)
         original_label = (
-            texts.format_price(unit_price)
-            if unit_discount_value and unit_price != discounted_unit_price
+            texts.format_price(base_price_per_month)
+            if discount_value and base_price_per_month != discounted_per_month
             else None
         )
 
@@ -614,8 +615,8 @@ class MiniAppSubscriptionPurchaseService:
             maximum=maximum,
             default=default_devices,
             current=default_devices,
-            price_per_device=unit_price,
-            discounted_price_per_device=discounted_unit_price,
+            price_per_device=base_price_per_month,
+            discounted_price_per_device=discounted_per_month,
             price_label=price_label,
             original_price_label=original_label,
             discount_percent=max(0, discount_percent),
