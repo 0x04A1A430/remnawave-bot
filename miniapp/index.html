@@ -1051,6 +1051,57 @@
             }
         }
 
+        @media (max-width: 400px) {
+            .subscription-purchase-card .subscription-settings-toggle {
+                padding: 10px 12px;
+                gap: 12px;
+            }
+
+            .subscription-purchase-period-option {
+                grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+                column-gap: 12px;
+                row-gap: 10px;
+            }
+
+            .subscription-purchase-period-option .subscription-settings-toggle-label {
+                gap: 4px;
+            }
+
+            .subscription-purchase-period-option .subscription-settings-toggle-title {
+                font-size: 15px;
+            }
+
+            .subscription-purchase-period-option .subscription-purchase-option-description,
+            .subscription-purchase-period-option .subscription-purchase-option-note,
+            .subscription-purchase-period-option .subscription-purchase-option-price-original {
+                font-size: 12px;
+            }
+
+            .subscription-purchase-period-option .subscription-purchase-option-aside {
+                width: auto;
+                align-items: flex-end;
+                text-align: right;
+                gap: 6px;
+            }
+
+            .subscription-purchase-period-option .subscription-purchase-option-price {
+                align-items: flex-end;
+            }
+
+            .subscription-purchase-period-option .subscription-purchase-option-price-current {
+                font-size: 16px;
+            }
+
+            .subscription-purchase-option-badges {
+                gap: 4px;
+            }
+
+            .subscription-purchase-option-badge {
+                font-size: 10px;
+                padding: 3px 8px;
+            }
+        }
+
         .subscription-purchase-summary {
             display: flex;
             flex-direction: column;
@@ -4250,6 +4301,30 @@
             overflow-y: auto;
         }
 
+        .guide-modal-footer {
+            padding: 16px 24px 24px;
+            border-top: 1px solid var(--border-color);
+            background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.05), rgba(var(--primary-rgb), 0));
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .guide-modal-footer .btn {
+            width: 100%;
+        }
+
+        @media (min-width: 420px) {
+            .guide-modal-footer {
+                flex-direction: row;
+                justify-content: flex-end;
+            }
+
+            .guide-modal-footer .btn {
+                width: auto;
+            }
+        }
+
         .installation-card {
             background: transparent;
             box-shadow: none;
@@ -4999,16 +5074,6 @@
                 </div>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="btn-group">
-                <button class="btn btn-secondary" id="copyBtn">
-                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                    </svg>
-                    <span data-i18n="button.copy">Copy Subscription Link</span>
-                </button>
-            </div>
-
             <button class="floating-connect-button hidden" id="openGuideBtn" type="button">
                 <div class="floating-connect-button__content">
                     <svg class="floating-connect-button__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5228,6 +5293,14 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    <div class="guide-modal-footer">
+                        <button class="btn btn-secondary" id="copyBtn">
+                            <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span data-i18n="button.copy">Copy Subscription Link</span>
+                        </button>
                     </div>
                 </div>
             </div>
