@@ -134,6 +134,108 @@ class MiniAppPromoOfferClaimResponse(BaseModel):
     code: Optional[str] = None
 
 
+class MiniAppSubscriptionAutopay(BaseModel):
+    enabled: bool = False
+    autopay_enabled: Optional[bool] = None
+    autopay_enabled_at: Optional[datetime] = None
+    days_before: Optional[int] = None
+    autopay_days_before: Optional[int] = None
+    default_days_before: Optional[int] = None
+    autopay_days_options: List[int] = Field(default_factory=list)
+    days_options: List[int] = Field(default_factory=list)
+    options: List[int] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="allow")
+
+
+class MiniAppSubscriptionRenewalPeriod(BaseModel):
+    id: str
+    days: Optional[int] = None
+    months: Optional[int] = None
+    price_kopeks: Optional[int] = Field(default=None, alias="priceKopeks")
+    price_label: Optional[str] = Field(default=None, alias="priceLabel")
+    original_price_kopeks: Optional[int] = Field(default=None, alias="originalPriceKopeks")
+    original_price_label: Optional[str] = Field(default=None, alias="originalPriceLabel")
+    discount_percent: int = Field(default=0, alias="discountPercent")
+    price_per_month_kopeks: Optional[int] = Field(default=None, alias="pricePerMonthKopeks")
+    price_per_month_label: Optional[str] = Field(default=None, alias="pricePerMonthLabel")
+    is_recommended: bool = Field(default=False, alias="isRecommended")
+    description: Optional[str] = None
+    badge: Optional[str] = None
+    title: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionRenewalOptionsRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionRenewalOptionsResponse(BaseModel):
+    success: bool = True
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    currency: str
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+    promo_group: Optional[MiniAppPromoGroup] = Field(default=None, alias="promoGroup")
+    promo_offer: Optional[Dict[str, Any]] = Field(default=None, alias="promoOffer")
+    periods: List[MiniAppSubscriptionRenewalPeriod] = Field(default_factory=list)
+    default_period_id: Optional[str] = Field(default=None, alias="defaultPeriodId")
+    missing_amount_kopeks: Optional[int] = Field(default=None, alias="missingAmountKopeks")
+    status_message: Optional[str] = Field(default=None, alias="statusMessage")
+    autopay_enabled: bool = False
+    autopay_days_before: Optional[int] = None
+    autopay_days_options: List[int] = Field(default_factory=list)
+    autopay: Optional[MiniAppSubscriptionAutopay] = None
+    autopay_settings: Optional[MiniAppSubscriptionAutopay] = None
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+class MiniAppSubscriptionRenewalRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    period_id: Optional[str] = Field(default=None, alias="periodId")
+    period_days: Optional[int] = Field(default=None, alias="periodDays")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionRenewalResponse(BaseModel):
+    success: bool = True
+    message: Optional[str] = None
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    renewed_until: Optional[datetime] = Field(default=None, alias="renewedUntil")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionAutopayRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    enabled: Optional[bool] = None
+    days_before: Optional[int] = Field(default=None, alias="daysBefore")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionAutopayResponse(BaseModel):
+    success: bool = True
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    autopay_enabled: bool = False
+    autopay_days_before: Optional[int] = None
+    autopay_days_options: List[int] = Field(default_factory=list)
+    autopay: Optional[MiniAppSubscriptionAutopay] = None
+    autopay_settings: Optional[MiniAppSubscriptionAutopay] = None
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
 class MiniAppPromoCode(BaseModel):
     code: str
     type: Optional[str] = None
@@ -321,7 +423,7 @@ class MiniAppPaymentStatusResponse(BaseModel):
 
 class MiniAppSubscriptionResponse(BaseModel):
     success: bool = True
-    subscription_id: int
+    subscription_id: Optional[int] = None
     remnawave_short_uuid: Optional[str] = None
     user: MiniAppSubscriptionUser
     subscription_url: Optional[str] = None
@@ -349,10 +451,21 @@ class MiniAppSubscriptionResponse(BaseModel):
     total_spent_label: Optional[str] = None
     subscription_type: str
     autopay_enabled: bool = False
+    autopay_days_before: Optional[int] = None
+    autopay_days_options: List[int] = Field(default_factory=list)
+    autopay: Optional[MiniAppSubscriptionAutopay] = None
+    autopay_settings: Optional[MiniAppSubscriptionAutopay] = None
     branding: Optional[MiniAppBranding] = None
     faq: Optional[MiniAppFaq] = None
     legal_documents: Optional[MiniAppLegalDocuments] = None
     referral: Optional[MiniAppReferralInfo] = None
+    subscription_missing: bool = False
+    subscription_missing_reason: Optional[str] = None
+    trial_available: bool = False
+    trial_duration_days: Optional[int] = None
+    trial_status: Optional[str] = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class MiniAppSubscriptionServerOption(BaseModel):
@@ -523,4 +636,105 @@ class MiniAppSubscriptionDevicesUpdateRequest(BaseModel):
 class MiniAppSubscriptionUpdateResponse(BaseModel):
     success: bool = True
     message: Optional[str] = None
+
+
+class MiniAppSubscriptionPurchaseOptionsRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionPurchaseOptionsResponse(BaseModel):
+    success: bool = True
+    currency: str
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionPurchasePreviewRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    selection: Optional[Dict[str, Any]] = None
+    period_id: Optional[str] = Field(default=None, alias="periodId")
+    period_days: Optional[int] = Field(default=None, alias="periodDays")
+    period: Optional[str] = None
+    traffic_value: Optional[int] = Field(default=None, alias="trafficValue")
+    traffic: Optional[int] = None
+    traffic_gb: Optional[int] = Field(default=None, alias="trafficGb")
+    servers: Optional[List[str]] = None
+    countries: Optional[List[str]] = None
+    server_uuids: Optional[List[str]] = Field(default=None, alias="serverUuids")
+    devices: Optional[int] = None
+    device_limit: Optional[int] = Field(default=None, alias="deviceLimit")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _merge_selection(cls, values: Any) -> Any:
+        if not isinstance(values, dict):
+            return values
+        selection = values.get("selection")
+        if isinstance(selection, dict):
+            merged = {**selection, **values}
+        else:
+            merged = dict(values)
+        aliases = {
+            "period_id": ("periodId", "period", "code"),
+            "period_days": ("periodDays",),
+            "traffic_value": ("trafficValue", "traffic", "trafficGb"),
+            "servers": ("countries", "server_uuids", "serverUuids"),
+            "devices": ("deviceLimit",),
+        }
+        for target, sources in aliases.items():
+            if merged.get(target) is not None:
+                continue
+            for source in sources:
+                if source in merged and merged[source] is not None:
+                    merged[target] = merged[source]
+                    break
+        return merged
+
+
+class MiniAppSubscriptionPurchasePreviewResponse(BaseModel):
+    success: bool = True
+    preview: Dict[str, Any] = Field(default_factory=dict)
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionPurchaseRequest(MiniAppSubscriptionPurchasePreviewRequest):
+    pass
+
+
+class MiniAppSubscriptionPurchaseResponse(BaseModel):
+    success: bool = True
+    message: Optional[str] = None
+    balance_kopeks: Optional[int] = Field(default=None, alias="balanceKopeks")
+    balance_label: Optional[str] = Field(default=None, alias="balanceLabel")
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionTrialRequest(BaseModel):
+    init_data: str = Field(..., alias="initData")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MiniAppSubscriptionTrialResponse(BaseModel):
+    success: bool = True
+    message: Optional[str] = None
+    subscription_id: Optional[int] = Field(default=None, alias="subscriptionId")
+    trial_status: Optional[str] = Field(default=None, alias="trialStatus")
+    trial_duration_days: Optional[int] = Field(default=None, alias="trialDurationDays")
+
+    model_config = ConfigDict(populate_by_name=True)
 

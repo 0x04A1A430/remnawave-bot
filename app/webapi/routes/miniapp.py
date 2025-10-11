@@ -6,7 +6,7 @@ import math
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_FLOOR
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
 from aiogram import Bot
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -25,12 +25,20 @@ from app.database.crud.promo_group import get_auto_assign_promo_groups
 from app.database.crud.rules import get_rules_by_language
 from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.crud.server_squad import (
-    get_available_server_squads,
-    get_server_squad_by_uuid,
     add_user_to_servers,
+    get_available_server_squads,
+    get_server_ids_by_uuids,
+    get_server_squad_by_uuid,
     remove_user_from_servers,
 )
-from app.database.crud.subscription import add_subscription_servers, remove_subscription_servers
+from app.database.crud.subscription import (
+    add_subscription_servers,
+    calculate_subscription_total_cost,
+    create_trial_subscription,
+    extend_subscription,
+    remove_subscription_servers,
+    update_subscription_autopay,
+)
 from app.database.crud.transaction import (
     create_transaction,
     get_user_total_spent_kopeks,
@@ -46,6 +54,7 @@ from app.database.models import (
     PaymentMethod,
     User,
 )
+from app.services.admin_notification_service import AdminNotificationService
 from app.services.faq_service import FaqService
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
@@ -57,6 +66,11 @@ from app.services.payment_service import PaymentService
 from app.services.promo_offer_service import promo_offer_service
 from app.services.promocode_service import PromoCodeService
 from app.services.subscription_service import SubscriptionService
+from app.services.subscription_purchase_service import (
+    purchase_service,
+    PurchaseBalanceError,
+    PurchaseValidationError,
+)
 from app.services.tribute_service import TributeService
 from app.utils.currency_converter import currency_converter
 from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
@@ -70,9 +84,13 @@ from app.utils.user_utils import (
 )
 from app.utils.pricing_utils import (
     apply_percentage_discount,
+    calculate_months_from_days,
     calculate_prorated_price,
+    format_period_description,
     get_remaining_months,
+    validate_pricing_calculation,
 )
+from app.utils.promo_offer import get_user_active_promo_discount_percent
 
 from ..dependencies import get_db_session
 from ..schemas.miniapp import (
@@ -126,6 +144,22 @@ from ..schemas.miniapp import (
     MiniAppSubscriptionTrafficUpdateRequest,
     MiniAppSubscriptionDevicesUpdateRequest,
     MiniAppSubscriptionUpdateResponse,
+    MiniAppSubscriptionPurchaseOptionsRequest,
+    MiniAppSubscriptionPurchaseOptionsResponse,
+    MiniAppSubscriptionPurchasePreviewRequest,
+    MiniAppSubscriptionPurchasePreviewResponse,
+    MiniAppSubscriptionPurchaseRequest,
+    MiniAppSubscriptionPurchaseResponse,
+    MiniAppSubscriptionTrialRequest,
+    MiniAppSubscriptionTrialResponse,
+    MiniAppSubscriptionAutopay,
+    MiniAppSubscriptionAutopayRequest,
+    MiniAppSubscriptionAutopayResponse,
+    MiniAppSubscriptionRenewalOptionsRequest,
+    MiniAppSubscriptionRenewalOptionsResponse,
+    MiniAppSubscriptionRenewalPeriod,
+    MiniAppSubscriptionRenewalRequest,
+    MiniAppSubscriptionRenewalResponse,
 )
 
 
@@ -134,6 +168,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 promo_code_service = PromoCodeService()
+
+
+async def _with_admin_notification_service(
+    handler: Callable[[AdminNotificationService], Awaitable[Any]],
+) -> None:
+    if not getattr(settings, "ADMIN_NOTIFICATIONS_ENABLED", False):
+        return
+    if not settings.BOT_TOKEN:
+        logger.debug("Skipping admin notification: bot token is not configured")
+        return
+
+    bot: Bot | None = None
+    try:
+        bot = Bot(token=settings.BOT_TOKEN)
+        service = AdminNotificationService(bot)
+        await handler(service)
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.error("Failed to send admin notification from miniapp: %s", error)
+    finally:
+        if bot:
+            await bot.session.close()
 
 
 _CRYPTOBOT_MIN_USD = 1.0
@@ -164,6 +219,107 @@ _PAYMENT_FAILURE_STATUSES = {
     "refunded",
     "chargeback",
 }
+
+
+_PERIOD_ID_PATTERN = re.compile(r"(\d+)")
+
+
+_AUTOPAY_DEFAULT_DAY_OPTIONS = (1, 3, 7, 14)
+
+
+def _normalize_autopay_days(value: Optional[Any]) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        numeric = int(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if numeric >= 0 else None
+
+
+def _get_autopay_day_options(subscription: Optional[Subscription]) -> List[int]:
+    options: set[int] = set()
+    for candidate in _AUTOPAY_DEFAULT_DAY_OPTIONS:
+        normalized = _normalize_autopay_days(candidate)
+        if normalized is not None:
+            options.add(normalized)
+
+    default_setting = _normalize_autopay_days(
+        getattr(settings, "DEFAULT_AUTOPAY_DAYS_BEFORE", None)
+    )
+    if default_setting is not None:
+        options.add(default_setting)
+
+    if subscription is not None:
+        current = _normalize_autopay_days(
+            getattr(subscription, "autopay_days_before", None)
+        )
+        if current is not None:
+            options.add(current)
+
+    return sorted(options)
+
+
+def _build_autopay_payload(
+    subscription: Optional[Subscription],
+) -> Optional[MiniAppSubscriptionAutopay]:
+    if subscription is None:
+        return None
+
+    enabled = bool(getattr(subscription, "autopay_enabled", False))
+    days_before = _normalize_autopay_days(
+        getattr(subscription, "autopay_days_before", None)
+    )
+    options = _get_autopay_day_options(subscription)
+
+    default_days = days_before
+    if default_days is None:
+        default_days = _normalize_autopay_days(
+            getattr(settings, "DEFAULT_AUTOPAY_DAYS_BEFORE", None)
+        )
+    if default_days is None and options:
+        default_days = options[0]
+
+    autopay_kwargs: Dict[str, Any] = {
+        "enabled": enabled,
+        "autopay_enabled": enabled,
+        "days_before": days_before,
+        "autopay_days_before": days_before,
+        "default_days_before": default_days,
+        "autopay_days_options": options,
+        "days_options": options,
+        "options": options,
+        "available_days": options,
+        "availableDays": options,
+        "autopayEnabled": enabled,
+        "autopayDaysBefore": days_before,
+        "autopayDaysOptions": options,
+        "daysBefore": days_before,
+        "daysOptions": options,
+        "defaultDaysBefore": default_days,
+    }
+
+    return MiniAppSubscriptionAutopay(**autopay_kwargs)
+
+
+def _autopay_response_extras(
+    enabled: bool,
+    days_before: Optional[int],
+    options: List[int],
+    autopay_payload: Optional[MiniAppSubscriptionAutopay],
+) -> Dict[str, Any]:
+    extras: Dict[str, Any] = {
+        "autopayEnabled": enabled,
+        "autopayDaysBefore": days_before,
+        "autopayDaysOptions": options,
+    }
+    if days_before is not None:
+        extras["daysBefore"] = days_before
+    if options:
+        extras["daysOptions"] = options
+    if autopay_payload is not None:
+        extras["autopaySettings"] = autopay_payload
+    return extras
 
 
 async def _get_usd_to_rub_rate() -> float:
@@ -230,6 +386,45 @@ def _normalize_stars_amount(amount_kopeks: int) -> Tuple[int, int]:
 def _build_balance_invoice_payload(user_id: int, amount_kopeks: int) -> str:
     suffix = uuid4().hex[:8]
     return f"balance_{user_id}_{amount_kopeks}_{suffix}"
+
+
+def _merge_purchase_selection_from_request(
+    payload: Union[
+        "MiniAppSubscriptionPurchasePreviewRequest",
+        "MiniAppSubscriptionPurchaseRequest",
+    ]
+) -> Dict[str, Any]:
+    base: Dict[str, Any] = {}
+    if payload.selection:
+        base.update(payload.selection)
+
+    def _maybe_set(key: str, value: Any) -> None:
+        if value is None:
+            return
+        if key not in base:
+            base[key] = value
+
+    _maybe_set("period_id", getattr(payload, "period_id", None))
+    _maybe_set("period_days", getattr(payload, "period_days", None))
+
+    _maybe_set("traffic_value", getattr(payload, "traffic_value", None))
+    _maybe_set("traffic", getattr(payload, "traffic", None))
+    _maybe_set("traffic_gb", getattr(payload, "traffic_gb", None))
+
+    servers = getattr(payload, "servers", None)
+    if servers is not None and "servers" not in base:
+        base["servers"] = servers
+    countries = getattr(payload, "countries", None)
+    if countries is not None and "countries" not in base:
+        base["countries"] = countries
+    server_uuids = getattr(payload, "server_uuids", None)
+    if server_uuids is not None and "server_uuids" not in base:
+        base["server_uuids"] = server_uuids
+
+    _maybe_set("devices", getattr(payload, "devices", None))
+    _maybe_set("device_limit", getattr(payload, "device_limit", None))
+
+    return base
 
 
 def _parse_client_timestamp(value: Optional[Union[str, int, float]]) -> Optional[datetime]:
@@ -1987,6 +2182,20 @@ async def _build_referral_info(
     )
 
 
+def _is_trial_available_for_user(user: User) -> bool:
+    if settings.TRIAL_DURATION_DAYS <= 0:
+        return False
+
+    if getattr(user, "has_had_paid_subscription", False):
+        return False
+
+    subscription = getattr(user, "subscription", None)
+    if subscription is not None:
+        return False
+
+    return True
+
+
 @router.post("/subscription", response_model=MiniAppSubscriptionResponse)
 async def get_subscription_details(
     payload: MiniAppSubscriptionRequest,
@@ -2017,39 +2226,22 @@ async def get_subscription_details(
 
     user = await get_user_by_telegram_id(db, telegram_id)
     purchase_url = (settings.MINIAPP_PURCHASE_URL or "").strip()
-    if not user or not user.subscription:
-        detail: Union[str, Dict[str, str]] = "Subscription not found"
+
+    if not user:
+        detail: Dict[str, Any] = {
+            "code": "user_not_found",
+            "message": "User not found. Please register in the bot to continue.",
+            "title": "Registration required",
+        }
         if purchase_url:
-            detail = {
-                "message": "Subscription not found",
-                "purchase_url": purchase_url,
-            }
+            detail["purchase_url"] = purchase_url
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=detail,
         )
 
-    subscription = user.subscription
-    traffic_used = _format_gb(subscription.traffic_used_gb)
-    traffic_limit = subscription.traffic_limit_gb or 0
+    subscription = getattr(user, "subscription", None)
     lifetime_used = _bytes_to_gb(getattr(user, "lifetime_used_traffic_bytes", 0))
-
-    status_actual = subscription.actual_status
-    links_payload = await _load_subscription_links(subscription)
-
-    subscription_url = links_payload.get("subscription_url") or subscription.subscription_url
-    subscription_crypto_link = (
-        links_payload.get("happ_crypto_link")
-        or subscription.subscription_crypto_link
-    )
-
-    happ_redirect_link = get_happ_cryptolink_redirect_link(subscription_crypto_link)
-
-    connected_squads: List[str] = list(subscription.connected_squads or [])
-    connected_servers = await _resolve_connected_servers(db, connected_squads)
-    devices_count, devices = await _load_devices_info(user)
-    links: List[str] = links_payload.get("links") or connected_squads
-    ss_conf_links: Dict[str, str] = links_payload.get("ss_conf_links") or {}
 
     transactions_query = (
         select(Transaction)
@@ -2118,7 +2310,10 @@ async def get_subscription_details(
                 )
             )
 
-    active_offer_contexts.extend(await _find_active_test_access_offers(db, subscription))
+    if subscription:
+        active_offer_contexts.extend(
+            await _find_active_test_access_offers(db, subscription)
+        )
 
     promo_offers = await _build_promo_offer_models(
         db,
@@ -2244,6 +2439,64 @@ async def get_subscription_details(
             updated_at=getattr(service_rules, "updated_at", None),
         )
 
+    links_payload: Dict[str, Any] = {}
+    connected_squads: List[str] = []
+    connected_servers: List[MiniAppConnectedServer] = []
+    links: List[str] = []
+    ss_conf_links: Dict[str, str] = {}
+    subscription_url: Optional[str] = None
+    subscription_crypto_link: Optional[str] = None
+    happ_redirect_link: Optional[str] = None
+    remnawave_short_uuid: Optional[str] = None
+    status_actual = "missing"
+    subscription_status_value = "none"
+    traffic_used_value = 0.0
+    traffic_limit_value = 0
+    device_limit_value: Optional[int] = settings.DEFAULT_DEVICE_LIMIT or None
+    autopay_enabled = False
+
+    if subscription:
+        traffic_used_value = _format_gb(subscription.traffic_used_gb)
+        traffic_limit_value = subscription.traffic_limit_gb or 0
+        status_actual = subscription.actual_status
+        subscription_status_value = subscription.status
+        links_payload = await _load_subscription_links(subscription)
+        subscription_url = (
+            links_payload.get("subscription_url") or subscription.subscription_url
+        )
+        subscription_crypto_link = (
+            links_payload.get("happ_crypto_link")
+            or subscription.subscription_crypto_link
+        )
+        happ_redirect_link = get_happ_cryptolink_redirect_link(subscription_crypto_link)
+        connected_squads = list(subscription.connected_squads or [])
+        connected_servers = await _resolve_connected_servers(db, connected_squads)
+        links = links_payload.get("links") or connected_squads
+        ss_conf_links = links_payload.get("ss_conf_links") or {}
+        remnawave_short_uuid = subscription.remnawave_short_uuid
+        device_limit_value = subscription.device_limit
+        autopay_enabled = bool(subscription.autopay_enabled)
+
+    autopay_payload = _build_autopay_payload(subscription)
+    autopay_days_before = (
+        getattr(autopay_payload, "autopay_days_before", None)
+        if autopay_payload
+        else None
+    )
+    autopay_days_options = (
+        list(getattr(autopay_payload, "autopay_days_options", []) or [])
+        if autopay_payload
+        else []
+    )
+    autopay_extras = _autopay_response_extras(
+        autopay_enabled,
+        autopay_days_before,
+        autopay_days_options,
+        autopay_payload,
+    )
+
+    devices_count, devices = await _load_devices_info(user)
+
     response_user = MiniAppSubscriptionUser(
         telegram_id=user.telegram_id,
         username=user.username,
@@ -2259,15 +2512,15 @@ async def get_subscription_details(
         ),
         language=user.language,
         status=user.status,
-        subscription_status=subscription.status,
+        subscription_status=subscription_status_value,
         subscription_actual_status=status_actual,
         status_label=_status_label(status_actual),
-        expires_at=subscription.end_date,
-        device_limit=subscription.device_limit,
-        traffic_used_gb=round(traffic_used, 2),
-        traffic_used_label=_format_gb_label(traffic_used),
-        traffic_limit_gb=traffic_limit,
-        traffic_limit_label=_format_limit_label(traffic_limit),
+        expires_at=getattr(subscription, "end_date", None),
+        device_limit=device_limit_value,
+        traffic_used_gb=round(traffic_used_value, 2),
+        traffic_used_label=_format_gb_label(traffic_used_value),
+        traffic_limit_gb=traffic_limit_value,
+        traffic_limit_label=_format_limit_label(traffic_limit_value),
         lifetime_used_traffic_gb=lifetime_used,
         has_active_subscription=status_actual in {"active", "trial"},
         promo_offer_discount_percent=active_discount_percent,
@@ -2277,9 +2530,21 @@ async def get_subscription_details(
 
     referral_info = await _build_referral_info(db, user)
 
+    trial_available = _is_trial_available_for_user(user)
+    trial_duration_days = (
+        settings.TRIAL_DURATION_DAYS if settings.TRIAL_DURATION_DAYS > 0 else None
+    )
+
+    subscription_missing_reason = None
+    if subscription is None:
+        if not trial_available and settings.TRIAL_DURATION_DAYS > 0:
+            subscription_missing_reason = "trial_expired"
+        else:
+            subscription_missing_reason = "not_found"
+
     return MiniAppSubscriptionResponse(
-        subscription_id=subscription.id,
-        remnawave_short_uuid=subscription.remnawave_short_uuid,
+        subscription_id=getattr(subscription, "id", None),
+        remnawave_short_uuid=remnawave_short_uuid,
         user=response_user,
         subscription_url=subscription_url,
         subscription_crypto_link=subscription_crypto_link,
@@ -2290,9 +2555,9 @@ async def get_subscription_details(
         connected_servers=connected_servers,
         connected_devices_count=devices_count,
         connected_devices=devices,
-        happ=links_payload.get("happ"),
-        happ_link=links_payload.get("happ_link"),
-        happ_crypto_link=links_payload.get("happ_crypto_link"),
+        happ=links_payload.get("happ") if subscription else None,
+        happ_link=links_payload.get("happ_link") if subscription else None,
+        happ_crypto_link=links_payload.get("happ_crypto_link") if subscription else None,
         happ_cryptolink_redirect_link=happ_redirect_link,
         balance_kopeks=user.balance_kopeks,
         balance_rubles=round(user.balance_rubles, 2),
@@ -2312,12 +2577,244 @@ async def get_subscription_details(
         total_spent_kopeks=total_spent_kopeks,
         total_spent_rubles=round(total_spent_kopeks / 100, 2),
         total_spent_label=settings.format_price(total_spent_kopeks),
-        subscription_type="trial" if subscription.is_trial else "paid",
-        autopay_enabled=bool(subscription.autopay_enabled),
+        subscription_type=(
+            "trial"
+            if subscription and subscription.is_trial
+            else ("paid" if subscription else "none")
+        ),
+        autopay_enabled=autopay_enabled,
+        autopay_days_before=autopay_days_before,
+        autopay_days_options=autopay_days_options,
+        autopay=autopay_payload,
+        autopay_settings=autopay_payload,
         branding=settings.get_miniapp_branding(),
         faq=faq_payload,
         legal_documents=legal_documents_payload,
         referral=referral_info,
+        subscription_missing=subscription is None,
+        subscription_missing_reason=subscription_missing_reason,
+        trial_available=trial_available,
+        trial_duration_days=trial_duration_days,
+        trial_status="available" if trial_available else "unavailable",
+        **autopay_extras,
+    )
+
+
+@router.post(
+    "/subscription/autopay",
+    response_model=MiniAppSubscriptionAutopayResponse,
+)
+async def update_subscription_autopay_endpoint(
+    payload: MiniAppSubscriptionAutopayRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionAutopayResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(user)
+    _validate_subscription_id(payload.subscription_id, subscription)
+
+    target_enabled = (
+        bool(payload.enabled)
+        if payload.enabled is not None
+        else bool(subscription.autopay_enabled)
+    )
+
+    requested_days = payload.days_before
+    normalized_days = _normalize_autopay_days(requested_days)
+    current_days = _normalize_autopay_days(
+        getattr(subscription, "autopay_days_before", None)
+    )
+    if normalized_days is None:
+        normalized_days = current_days
+
+    options = _get_autopay_day_options(subscription)
+    default_day = _normalize_autopay_days(
+        getattr(settings, "DEFAULT_AUTOPAY_DAYS_BEFORE", None)
+    )
+    if default_day is None and options:
+        default_day = options[0]
+
+    if target_enabled and normalized_days is None:
+        if default_day is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "autopay_no_days",
+                    "message": "Auto-pay day selection is temporarily unavailable",
+                },
+            )
+        normalized_days = default_day
+
+    if normalized_days is None:
+        normalized_days = default_day or (options[0] if options else 1)
+
+    if (
+        bool(subscription.autopay_enabled) == target_enabled
+        and current_days == normalized_days
+    ):
+        autopay_payload = _build_autopay_payload(subscription)
+        autopay_days_before = (
+            getattr(autopay_payload, "autopay_days_before", None)
+            if autopay_payload
+            else None
+        )
+        autopay_days_options = (
+            list(getattr(autopay_payload, "autopay_days_options", []) or [])
+            if autopay_payload
+            else options
+        )
+        extras = _autopay_response_extras(
+            target_enabled,
+            autopay_days_before,
+            autopay_days_options,
+            autopay_payload,
+        )
+        return MiniAppSubscriptionAutopayResponse(
+            subscription_id=subscription.id,
+            autopay_enabled=target_enabled,
+            autopay_days_before=autopay_days_before,
+            autopay_days_options=autopay_days_options,
+            autopay=autopay_payload,
+            autopay_settings=autopay_payload,
+            **extras,
+        )
+
+    updated_subscription = await update_subscription_autopay(
+        db,
+        subscription,
+        target_enabled,
+        normalized_days,
+    )
+
+    autopay_payload = _build_autopay_payload(updated_subscription)
+    autopay_days_before = (
+        getattr(autopay_payload, "autopay_days_before", None)
+        if autopay_payload
+        else None
+    )
+    autopay_days_options = (
+        list(getattr(autopay_payload, "autopay_days_options", []) or [])
+        if autopay_payload
+        else _get_autopay_day_options(updated_subscription)
+    )
+    extras = _autopay_response_extras(
+        bool(updated_subscription.autopay_enabled),
+        autopay_days_before,
+        autopay_days_options,
+        autopay_payload,
+    )
+
+    return MiniAppSubscriptionAutopayResponse(
+        subscription_id=updated_subscription.id,
+        autopay_enabled=bool(updated_subscription.autopay_enabled),
+        autopay_days_before=autopay_days_before,
+        autopay_days_options=autopay_days_options,
+        autopay=autopay_payload,
+        autopay_settings=autopay_payload,
+        **extras,
+    )
+
+
+@router.post(
+    "/subscription/trial",
+    response_model=MiniAppSubscriptionTrialResponse,
+)
+async def activate_subscription_trial_endpoint(
+    payload: MiniAppSubscriptionTrialRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionTrialResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+
+    existing_subscription = getattr(user, "subscription", None)
+    if existing_subscription is not None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "subscription_exists",
+                "message": "Subscription is already active",
+            },
+        )
+
+    if not _is_trial_available_for_user(user):
+        error_code = "trial_unavailable"
+        if getattr(user, "has_had_paid_subscription", False):
+            error_code = "trial_expired"
+        elif settings.TRIAL_DURATION_DAYS <= 0:
+            error_code = "trial_disabled"
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": error_code,
+                "message": "Trial is not available for this user",
+            },
+        )
+
+    try:
+        subscription = await create_trial_subscription(db, user.id)
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.error(
+            "Failed to activate trial subscription for user %s: %s",
+            user.id,
+            error,
+        )
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "trial_activation_failed",
+                "message": "Failed to activate trial subscription",
+            },
+        ) from error
+
+    await db.refresh(user)
+    await db.refresh(subscription)
+
+    subscription_service = SubscriptionService()
+    try:
+        await subscription_service.create_remnawave_user(db, subscription)
+    except RemnaWaveConfigurationError as error:  # pragma: no cover - configuration issues
+        logger.warning("RemnaWave update skipped: %s", error)
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.error(
+            "Failed to create RemnaWave user for trial subscription %s: %s",
+            subscription.id,
+            error,
+        )
+
+    await db.refresh(subscription)
+
+    duration_days: Optional[int] = None
+    if subscription.start_date and subscription.end_date:
+        try:
+            duration_days = max(
+                0,
+                (subscription.end_date.date() - subscription.start_date.date()).days,
+            )
+        except Exception:  # pragma: no cover - defensive fallback
+            duration_days = None
+
+    if not duration_days and settings.TRIAL_DURATION_DAYS > 0:
+        duration_days = settings.TRIAL_DURATION_DAYS
+
+    language_code = _normalize_language_code(user)
+    if language_code == "ru":
+        if duration_days:
+            message = f"Триал активирован на {duration_days} дн. Приятного пользования!"
+        else:
+            message = "Триал активирован. Приятного пользования!"
+    else:
+        if duration_days:
+            message = f"Trial activated for {duration_days} days. Enjoy!"
+        else:
+            message = "Trial activated successfully. Enjoy!"
+
+    await _with_admin_notification_service(
+        lambda service: service.send_trial_activation_notification(db, user, subscription)
+    )
+
+    return MiniAppSubscriptionTrialResponse(
+        message=message,
+        subscription_id=getattr(subscription, "id", None),
+        trial_status="activated",
+        trial_duration_days=duration_days,
     )
 
 
@@ -2701,6 +3198,231 @@ def _extract_promo_discounts(group: Optional[PromoGroup]) -> Dict[str, Any]:
             getattr(group, "apply_discounts_to_addons", True)
         ),
     }
+
+
+def _normalize_language_code(user: Optional[User]) -> str:
+    language = getattr(user, "language", None) or settings.DEFAULT_LANGUAGE or "ru"
+    return language.split("-")[0].lower()
+
+
+def _build_renewal_status_message(user: Optional[User]) -> str:
+    language_code = _normalize_language_code(user)
+    if language_code == "ru":
+        return "Стоимость указана с учётом ваших текущих серверов, трафика и устройств."
+    return "Prices already include your current servers, traffic, and devices."
+
+
+def _build_promo_offer_payload(user: Optional[User]) -> Optional[Dict[str, Any]]:
+    percent = get_user_active_promo_discount_percent(user)
+    if percent <= 0:
+        return None
+
+    payload: Dict[str, Any] = {"percent": percent}
+
+    expires_at = getattr(user, "promo_offer_discount_expires_at", None)
+    if expires_at:
+        payload["expires_at"] = expires_at
+
+    language_code = _normalize_language_code(user)
+    if language_code == "ru":
+        payload["message"] = "Дополнительная скидка применяется автоматически."
+    else:
+        payload["message"] = "Extra discount is applied automatically."
+
+    return payload
+
+
+def _build_renewal_period_id(period_days: int) -> str:
+    return f"days:{period_days}"
+
+
+def _parse_period_identifier(identifier: Optional[str]) -> Optional[int]:
+    if not identifier:
+        return None
+
+    match = _PERIOD_ID_PATTERN.search(str(identifier))
+    if not match:
+        return None
+
+    try:
+        return int(match.group(1))
+    except (TypeError, ValueError):
+        return None
+
+
+async def _calculate_subscription_renewal_pricing(
+    db: AsyncSession,
+    user: User,
+    subscription: Subscription,
+    period_days: int,
+) -> Dict[str, Any]:
+    connected_uuids = [str(uuid) for uuid in list(subscription.connected_squads or [])]
+    server_ids: List[int] = []
+    if connected_uuids:
+        server_ids = await get_server_ids_by_uuids(db, connected_uuids)
+
+    traffic_limit = subscription.traffic_limit_gb
+    if traffic_limit is None:
+        traffic_limit = settings.DEFAULT_TRAFFIC_LIMIT_GB
+
+    devices_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
+
+    total_cost, details = await calculate_subscription_total_cost(
+        db,
+        period_days,
+        int(traffic_limit or 0),
+        server_ids,
+        int(devices_limit or 0),
+        user=user,
+    )
+
+    months = details.get("months_in_period") or calculate_months_from_days(period_days)
+
+    base_original_total = (
+        details.get("base_price_original", 0)
+        + details.get("traffic_price_per_month", 0) * months
+        + details.get("servers_price_per_month", 0) * months
+        + details.get("devices_price_per_month", 0) * months
+    )
+
+    discounted_total = total_cost
+
+    monthly_additions = 0
+    if months > 0:
+        monthly_additions = (
+            details.get("total_servers_price", 0) // months
+            + details.get("total_devices_price", 0) // months
+            + details.get("total_traffic_price", 0) // months
+        )
+
+    if not validate_pricing_calculation(
+        details.get("base_price", 0),
+        monthly_additions,
+        months,
+        discounted_total,
+    ):
+        logger.warning(
+            "Renewal pricing validation failed for subscription %s (period %s)",
+            subscription.id,
+            period_days,
+        )
+
+    promo_percent = get_user_active_promo_discount_percent(user)
+    final_total = discounted_total
+    promo_discount_value = 0
+    if promo_percent > 0 and discounted_total > 0:
+        final_total, promo_discount_value = apply_percentage_discount(
+            discounted_total,
+            promo_percent,
+        )
+
+    overall_discount_value = max(0, base_original_total - final_total)
+    overall_discount_percent = 0
+    if base_original_total > 0 and overall_discount_value > 0:
+        overall_discount_percent = int(
+            round(overall_discount_value * 100 / base_original_total)
+        )
+
+    per_month = final_total // months if months else final_total
+
+    pricing_payload: Dict[str, Any] = {
+        "period_id": _build_renewal_period_id(period_days),
+        "period_days": period_days,
+        "months": months,
+        "base_original_total": base_original_total,
+        "discounted_total": discounted_total,
+        "final_total": final_total,
+        "promo_discount_value": promo_discount_value,
+        "promo_discount_percent": promo_percent if promo_discount_value else 0,
+        "overall_discount_percent": overall_discount_percent,
+        "per_month": per_month,
+        "server_ids": list(server_ids),
+        "details": details,
+    }
+
+    return pricing_payload
+
+
+async def _prepare_subscription_renewal_options(
+    db: AsyncSession,
+    user: User,
+    subscription: Subscription,
+) -> Tuple[List[MiniAppSubscriptionRenewalPeriod], Dict[Union[str, int], Dict[str, Any]], Optional[str]]:
+    available_periods = [
+        period for period in settings.get_available_renewal_periods() if period > 0
+    ]
+
+    option_payloads: List[Tuple[MiniAppSubscriptionRenewalPeriod, Dict[str, Any]]] = []
+
+    for period_days in available_periods:
+        try:
+            pricing = await _calculate_subscription_renewal_pricing(
+                db,
+                user,
+                subscription,
+                period_days,
+            )
+        except Exception as error:  # pragma: no cover - defensive logging
+            logger.warning(
+                "Failed to calculate renewal pricing for subscription %s (period %s): %s",
+                subscription.id,
+                period_days,
+                error,
+            )
+            continue
+
+        label = format_period_description(
+            period_days,
+            getattr(user, "language", settings.DEFAULT_LANGUAGE),
+        )
+
+        price_label = settings.format_price(pricing["final_total"])
+        original_label = None
+        if pricing["base_original_total"] and pricing["base_original_total"] != pricing["final_total"]:
+            original_label = settings.format_price(pricing["base_original_total"])
+
+        per_month_label = settings.format_price(pricing["per_month"])
+
+        option_model = MiniAppSubscriptionRenewalPeriod(
+            id=pricing["period_id"],
+            days=period_days,
+            months=pricing["months"],
+            price_kopeks=pricing["final_total"],
+            price_label=price_label,
+            original_price_kopeks=pricing["base_original_total"],
+            original_price_label=original_label,
+            discount_percent=pricing["overall_discount_percent"],
+            price_per_month_kopeks=pricing["per_month"],
+            price_per_month_label=per_month_label,
+            title=label,
+        )
+
+        option_payloads.append((option_model, pricing))
+
+    if not option_payloads:
+        return [], {}, None
+
+    option_payloads.sort(key=lambda item: item[0].days or 0)
+
+    recommended_option = max(
+        option_payloads,
+        key=lambda item: (
+            item[1]["overall_discount_percent"],
+            item[0].months or 0,
+            -(item[1]["final_total"] or 0),
+        ),
+    )
+    recommended_option[0].is_recommended = True
+
+    pricing_map: Dict[Union[str, int], Dict[str, Any]] = {}
+    for option_model, pricing in option_payloads:
+        pricing_map[option_model.id] = pricing
+        pricing_map[pricing["period_days"]] = pricing
+        pricing_map[str(pricing["period_days"])] = pricing
+
+    periods = [item[0] for item in option_payloads]
+
+    return periods, pricing_map, recommended_option[0].id
 
 
 def _get_addon_discount_percent_for_user(
@@ -3095,6 +3817,429 @@ async def _build_subscription_settings(
 
 
 @router.post(
+    "/subscription/renewal/options",
+    response_model=MiniAppSubscriptionRenewalOptionsResponse,
+)
+async def get_subscription_renewal_options_endpoint(
+    payload: MiniAppSubscriptionRenewalOptionsRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionRenewalOptionsResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(user)
+    _validate_subscription_id(payload.subscription_id, subscription)
+
+    periods, pricing_map, default_period_id = await _prepare_subscription_renewal_options(
+        db,
+        user,
+        subscription,
+    )
+
+    balance_kopeks = getattr(user, "balance_kopeks", 0)
+    currency = (getattr(user, "balance_currency", None) or "RUB").upper()
+
+    promo_group = getattr(user, "promo_group", None)
+    promo_group_model = (
+        MiniAppPromoGroup(
+            id=promo_group.id,
+            name=promo_group.name,
+            **_extract_promo_discounts(promo_group),
+        )
+        if promo_group
+        else None
+    )
+
+    promo_offer_payload = _build_promo_offer_payload(user)
+
+    missing_amount = None
+    if default_period_id and default_period_id in pricing_map:
+        selected_pricing = pricing_map[default_period_id]
+        final_total = selected_pricing.get("final_total")
+        if isinstance(final_total, int) and balance_kopeks < final_total:
+            missing_amount = final_total - balance_kopeks
+
+    renewal_autopay_payload = _build_autopay_payload(subscription)
+    renewal_autopay_days_before = (
+        getattr(renewal_autopay_payload, "autopay_days_before", None)
+        if renewal_autopay_payload
+        else None
+    )
+    renewal_autopay_days_options = (
+        list(getattr(renewal_autopay_payload, "autopay_days_options", []) or [])
+        if renewal_autopay_payload
+        else []
+    )
+    renewal_autopay_extras = _autopay_response_extras(
+        bool(subscription.autopay_enabled),
+        renewal_autopay_days_before,
+        renewal_autopay_days_options,
+        renewal_autopay_payload,
+    )
+
+    return MiniAppSubscriptionRenewalOptionsResponse(
+        subscription_id=subscription.id,
+        currency=currency,
+        balance_kopeks=balance_kopeks,
+        balance_label=settings.format_price(balance_kopeks),
+        promo_group=promo_group_model,
+        promo_offer=promo_offer_payload,
+        periods=periods,
+        default_period_id=default_period_id,
+        missing_amount_kopeks=missing_amount,
+        status_message=_build_renewal_status_message(user),
+        autopay_enabled=bool(subscription.autopay_enabled),
+        autopay_days_before=renewal_autopay_days_before,
+        autopay_days_options=renewal_autopay_days_options,
+        autopay=renewal_autopay_payload,
+        autopay_settings=renewal_autopay_payload,
+        **renewal_autopay_extras,
+    )
+
+
+@router.post(
+    "/subscription/renewal",
+    response_model=MiniAppSubscriptionRenewalResponse,
+)
+async def submit_subscription_renewal_endpoint(
+    payload: MiniAppSubscriptionRenewalRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionRenewalResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    subscription = _ensure_paid_subscription(user)
+    _validate_subscription_id(payload.subscription_id, subscription)
+
+    period_days: Optional[int] = None
+    if payload.period_days is not None:
+        try:
+            period_days = int(payload.period_days)
+        except (TypeError, ValueError) as error:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"code": "invalid_period", "message": "Invalid renewal period"},
+            ) from error
+
+    if period_days is None:
+        period_days = _parse_period_identifier(payload.period_id)
+
+    if period_days is None or period_days <= 0:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_period", "message": "Invalid renewal period"},
+        )
+
+    available_periods = [
+        period for period in settings.get_available_renewal_periods() if period > 0
+    ]
+    if period_days not in available_periods:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": "period_unavailable", "message": "Selected renewal period is not available"},
+        )
+
+    try:
+        pricing = await _calculate_subscription_renewal_pricing(
+            db,
+            user,
+            subscription,
+            period_days,
+        )
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.error(
+            "Failed to calculate renewal pricing for subscription %s (period %s): %s",
+            subscription.id,
+            period_days,
+            error,
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "pricing_failed", "message": "Failed to calculate renewal pricing"},
+        ) from error
+
+    final_total = int(pricing.get("final_total") or 0)
+    balance_kopeks = getattr(user, "balance_kopeks", 0)
+
+    if final_total > 0 and balance_kopeks < final_total:
+        missing = final_total - balance_kopeks
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "insufficient_funds",
+                "message": "Not enough funds to renew the subscription",
+                "missing_amount_kopeks": missing,
+            },
+        )
+
+    consume_promo_offer = bool(pricing.get("promo_discount_value"))
+    description = f"Продление подписки на {period_days} дней"
+    old_end_date = subscription.end_date
+
+    if final_total > 0 or consume_promo_offer:
+        success = await subtract_user_balance(
+            db,
+            user,
+            final_total,
+            description,
+            consume_promo_offer=consume_promo_offer,
+        )
+        if not success:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={"code": "charge_failed", "message": "Failed to charge balance"},
+            )
+        await db.refresh(user)
+
+    subscription = await extend_subscription(db, subscription, period_days)
+
+    server_ids = pricing.get("server_ids") or []
+    server_prices_for_period = pricing.get("details", {}).get(
+        "servers_individual_prices",
+        [],
+    )
+    if server_ids:
+        try:
+            await add_subscription_servers(
+                db,
+                subscription,
+                server_ids,
+                server_prices_for_period,
+            )
+        except Exception as error:  # pragma: no cover - defensive logging
+            logger.warning(
+                "Failed to record renewal server prices for subscription %s: %s",
+                subscription.id,
+                error,
+            )
+
+    subscription_service = SubscriptionService()
+    try:
+        await subscription_service.update_remnawave_user(
+            db,
+            subscription,
+            reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+            reset_reason="subscription renewal",
+        )
+    except RemnaWaveConfigurationError as error:  # pragma: no cover - configuration issues
+        logger.warning("RemnaWave update skipped: %s", error)
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.error(
+            "Failed to update RemnaWave user for subscription %s: %s",
+            subscription.id,
+            error,
+        )
+
+    transaction: Optional[Transaction] = None
+    try:
+        transaction = await create_transaction(
+            db=db,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            amount_kopeks=final_total,
+            description=description,
+        )
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.warning(
+            "Failed to create renewal transaction for subscription %s: %s",
+            subscription.id,
+            error,
+        )
+
+    await db.refresh(user)
+    await db.refresh(subscription)
+
+    if transaction and old_end_date and subscription.end_date:
+        await _with_admin_notification_service(
+            lambda service: service.send_subscription_extension_notification(
+                db,
+                user,
+                subscription,
+                transaction,
+                period_days,
+                old_end_date,
+                new_end_date=subscription.end_date,
+                balance_after=user.balance_kopeks,
+            )
+        )
+
+    language_code = _normalize_language_code(user)
+    amount_label = settings.format_price(final_total)
+    date_label = (
+        subscription.end_date.strftime("%d.%m.%Y %H:%M")
+        if subscription.end_date
+        else ""
+    )
+
+    if language_code == "ru":
+        if final_total > 0:
+            message = (
+                f"Подписка продлена до {date_label}. " if date_label else "Подписка продлена. "
+            ) + f"Списано {amount_label}."
+        else:
+            message = (
+                f"Подписка продлена до {date_label}."
+                if date_label
+                else "Подписка успешно продлена."
+            )
+    else:
+        if final_total > 0:
+            message = (
+                f"Subscription renewed until {date_label}. " if date_label else "Subscription renewed. "
+            ) + f"Charged {amount_label}."
+        else:
+            message = (
+                f"Subscription renewed until {date_label}."
+                if date_label
+                else "Subscription renewed successfully."
+            )
+
+    promo_discount_value = pricing.get("promo_discount_value") or 0
+    if consume_promo_offer and promo_discount_value > 0:
+        discount_label = settings.format_price(promo_discount_value)
+        if language_code == "ru":
+            message += f" Применена дополнительная скидка {discount_label}."
+        else:
+            message += f" Promo discount applied: {discount_label}."
+
+    return MiniAppSubscriptionRenewalResponse(
+        message=message,
+        balance_kopeks=user.balance_kopeks,
+        balance_label=settings.format_price(user.balance_kopeks),
+        subscription_id=subscription.id,
+        renewed_until=subscription.end_date,
+    )
+
+
+@router.post(
+    "/subscription/purchase/options",
+    response_model=MiniAppSubscriptionPurchaseOptionsResponse,
+)
+async def get_subscription_purchase_options_endpoint(
+    payload: MiniAppSubscriptionPurchaseOptionsRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionPurchaseOptionsResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    context = await purchase_service.build_options(db, user)
+
+    data_payload = dict(context.payload)
+    data_payload.setdefault("currency", context.currency)
+    data_payload.setdefault("balance_kopeks", context.balance_kopeks)
+    data_payload.setdefault("balanceKopeks", context.balance_kopeks)
+    data_payload.setdefault("balance_label", settings.format_price(context.balance_kopeks))
+    data_payload.setdefault("balanceLabel", settings.format_price(context.balance_kopeks))
+
+    return MiniAppSubscriptionPurchaseOptionsResponse(
+        currency=context.currency,
+        balance_kopeks=context.balance_kopeks,
+        balance_label=settings.format_price(context.balance_kopeks),
+        subscription_id=data_payload.get("subscription_id") or data_payload.get("subscriptionId"),
+        data=data_payload,
+    )
+
+
+@router.post(
+    "/subscription/purchase/preview",
+    response_model=MiniAppSubscriptionPurchasePreviewResponse,
+)
+async def subscription_purchase_preview_endpoint(
+    payload: MiniAppSubscriptionPurchasePreviewRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionPurchasePreviewResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    context = await purchase_service.build_options(db, user)
+
+    selection_payload = _merge_purchase_selection_from_request(payload)
+    try:
+        selection = purchase_service.parse_selection(context, selection_payload)
+    except PurchaseValidationError as error:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": error.code, "message": str(error)},
+        ) from error
+
+    pricing = await purchase_service.calculate_pricing(db, context, selection)
+    preview_payload = purchase_service.build_preview_payload(context, pricing)
+
+    balance_label = settings.format_price(getattr(user, "balance_kopeks", 0))
+
+    return MiniAppSubscriptionPurchasePreviewResponse(
+        preview=preview_payload,
+        balance_kopeks=user.balance_kopeks,
+        balance_label=balance_label,
+    )
+
+
+@router.post(
+    "/subscription/purchase",
+    response_model=MiniAppSubscriptionPurchaseResponse,
+)
+async def subscription_purchase_endpoint(
+    payload: MiniAppSubscriptionPurchaseRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> MiniAppSubscriptionPurchaseResponse:
+    user = await _authorize_miniapp_user(payload.init_data, db)
+    context = await purchase_service.build_options(db, user)
+
+    selection_payload = _merge_purchase_selection_from_request(payload)
+    try:
+        selection = purchase_service.parse_selection(context, selection_payload)
+    except PurchaseValidationError as error:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": error.code, "message": str(error)},
+        ) from error
+
+    pricing = await purchase_service.calculate_pricing(db, context, selection)
+
+    try:
+        result = await purchase_service.submit_purchase(db, context, pricing)
+    except PurchaseBalanceError as error:
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            detail={"code": "insufficient_funds", "message": str(error)},
+        ) from error
+    except PurchaseValidationError as error:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"code": error.code, "message": str(error)},
+        ) from error
+
+    await db.refresh(user)
+
+    subscription = result.get("subscription")
+    transaction = result.get("transaction")
+    was_trial_conversion = bool(result.get("was_trial_conversion"))
+    period_days = getattr(getattr(pricing, "selection", None), "period", None)
+    period_days = getattr(period_days, "days", None) if period_days else None
+
+    if subscription is not None:
+        try:
+            await db.refresh(subscription)
+        except Exception:  # pragma: no cover - defensive refresh safeguard
+            pass
+
+    if subscription and transaction and period_days:
+        await _with_admin_notification_service(
+            lambda service: service.send_subscription_purchase_notification(
+                db,
+                user,
+                subscription,
+                transaction,
+                period_days,
+                was_trial_conversion=was_trial_conversion,
+            )
+        )
+
+    balance_label = settings.format_price(getattr(user, "balance_kopeks", 0))
+
+    return MiniAppSubscriptionPurchaseResponse(
+        message=result.get("message"),
+        balance_kopeks=user.balance_kopeks,
+        balance_label=balance_label,
+        subscription_id=getattr(subscription, "id", None),
+    )
+
+
+@router.post(
     "/subscription/settings",
     response_model=MiniAppSubscriptionSettingsResponse,
 )
@@ -3122,6 +4267,7 @@ async def update_subscription_servers_endpoint(
     user = await _authorize_miniapp_user(payload.init_data, db)
     subscription = _ensure_paid_subscription(user)
     _validate_subscription_id(payload.subscription_id, subscription)
+    old_servers = list(getattr(subscription, "connected_squads", []) or [])
 
     raw_selection: List[str] = []
     for collection in (
@@ -3293,9 +4439,25 @@ async def update_subscription_servers_endpoint(
     subscription.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(subscription)
+    try:
+        await db.refresh(user)
+    except Exception:  # pragma: no cover - defensive refresh safeguard
+        pass
 
     service = SubscriptionService()
     await service.update_remnawave_user(db, subscription)
+
+    await _with_admin_notification_service(
+        lambda service: service.send_subscription_update_notification(
+            db,
+            user,
+            subscription,
+            "servers",
+            old_servers,
+            subscription.connected_squads or [],
+            price_paid=max(total_cost, 0),
+        )
+    )
 
     return MiniAppSubscriptionUpdateResponse(success=True)
 
@@ -3311,6 +4473,7 @@ async def update_subscription_traffic_endpoint(
     user = await _authorize_miniapp_user(payload.init_data, db)
     subscription = _ensure_paid_subscription(user)
     _validate_subscription_id(payload.subscription_id, subscription)
+    old_traffic = subscription.traffic_limit_gb
 
     raw_value = (
         payload.traffic
@@ -3440,9 +4603,25 @@ async def update_subscription_traffic_endpoint(
     subscription.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(subscription)
+    try:
+        await db.refresh(user)
+    except Exception:  # pragma: no cover - defensive refresh safeguard
+        pass
 
     service = SubscriptionService()
     await service.update_remnawave_user(db, subscription)
+
+    await _with_admin_notification_service(
+        lambda service: service.send_subscription_update_notification(
+            db,
+            user,
+            subscription,
+            "traffic",
+            old_traffic,
+            subscription.traffic_limit_gb,
+            price_paid=max(total_price_difference, 0),
+        )
+    )
 
     return MiniAppSubscriptionUpdateResponse(success=True)
 
@@ -3493,6 +4672,7 @@ async def update_subscription_devices_endpoint(
         )
 
     current_devices = int(subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT or 1)
+    old_devices = current_devices
 
     if new_devices == current_devices:
         return MiniAppSubscriptionUpdateResponse(success=True, message="No changes")
@@ -3569,9 +4749,25 @@ async def update_subscription_devices_endpoint(
     subscription.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(subscription)
+    try:
+        await db.refresh(user)
+    except Exception:  # pragma: no cover - defensive refresh safeguard
+        pass
 
     service = SubscriptionService()
     await service.update_remnawave_user(db, subscription)
+
+    await _with_admin_notification_service(
+        lambda service: service.send_subscription_update_notification(
+            db,
+            user,
+            subscription,
+            "devices",
+            old_devices,
+            subscription.device_limit,
+            price_paid=max(price_to_charge, 0),
+        )
+    )
 
     return MiniAppSubscriptionUpdateResponse(success=True)
 

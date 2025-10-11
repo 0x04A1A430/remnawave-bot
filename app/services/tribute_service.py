@@ -11,9 +11,10 @@ from app.database.models import Transaction, TransactionType, PaymentMethod
 from app.database.crud.transaction import (
     create_transaction, get_transaction_by_external_id, complete_transaction
 )
-from app.database.crud.user import get_user_by_telegram_id, add_user_balance
+from app.database.crud.user import get_user_by_telegram_id
 from app.external.tribute import TributeService as TributeAPI
 from app.services.payment_service import PaymentService
+from app.utils.user_utils import format_referrer_info
 
 logger = logging.getLogger(__name__)
 
@@ -120,32 +121,52 @@ class TributeService:
                     amount_kopeks=amount_kopeks,
                     description=f"Пополнение через Tribute: {amount_kopeks/100}₽ (ID: {payment_id})"
                 )
-                
+
                 old_balance = user.balance_kopeks
+                was_first_topup = not user.has_made_first_topup
+
                 user.balance_kopeks += amount_kopeks
                 user.updated_at = datetime.utcnow()
-                
+
+                promo_group = getattr(user, "promo_group", None)
+                subscription = getattr(user, "subscription", None)
+                referrer_info = format_referrer_info(user)
+                topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
+
                 await session.commit()
-                
-                logger.info(f"✅ Баланс пользователя {user_telegram_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})")
-                logger.info(f"✅ Создана транзакция ID: {transaction.id}")
-                
+
                 try:
                     from app.services.referral_service import process_referral_topup
                     await process_referral_topup(session, user.id, amount_kopeks, self.bot)
                 except Exception as e:
                     logger.error(f"Ошибка обработки реферального пополнения Tribute: {e}")
-                    
-                if not user.has_made_first_topup:
+
+                if was_first_topup and not user.has_made_first_topup:
                     user.has_made_first_topup = True
+                    await session.commit()
+
+                await session.refresh(user)
+
+                logger.info(
+                    f"✅ Баланс пользователя {user_telegram_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})"
+                )
+                logger.info(f"✅ Создана транзакция ID: {transaction.id}")
+
+                if was_first_topup:
                     logger.info(f"Отмечен первый топап для пользователя {user_telegram_id}")
-                
-                
+
+
                 try:
                     from app.services.admin_notification_service import AdminNotificationService
                     notification_service = AdminNotificationService(self.bot)
                     await notification_service.send_balance_topup_notification(
-                        session, user, transaction, old_balance
+                        user,
+                        transaction,
+                        old_balance,
+                        topup_status=topup_status,
+                        referrer_info=referrer_info,
+                        subscription=subscription,
+                        promo_group=promo_group,
                     )
                 except Exception as e:
                     logger.error(f"Ошибка отправки уведомления о Tribute пополнении: {e}")
