@@ -254,6 +254,18 @@
             z-index: 1;
         }
 
+        .logo-icon.has-image {
+            font-size: 0;
+            line-height: 0;
+        }
+
+        .logo-icon.has-image img {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+            display: block;
+        }
+
         .logo {
             font-size: 28px;
             font-weight: 800;
@@ -3853,6 +3865,13 @@
             margin-bottom: 4px;
         }
 
+        .app-meta {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+        }
+
         .featured-badge {
             display: inline-block;
             background: linear-gradient(135deg, var(--primary), rgba(var(--primary-rgb), 0.8));
@@ -3863,6 +3882,19 @@
             border-radius: 20px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+        }
+
+        .app-platform {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: none;
+            letter-spacing: 0;
         }
 
         .app-steps {
@@ -5494,7 +5526,15 @@
 
         // All original constants and functions
         const LANG_STORAGE_KEY = 'remnawave-miniapp-language';
-        const SUPPORTED_LANGUAGES = ['en', 'ru'];
+        const DEFAULT_SUPPORTED_LANGUAGES = ['en', 'ru'];
+        const BASE_LANGUAGE_ORDER = ['en', 'ru'];
+        const supportedLanguages = new Set(DEFAULT_SUPPORTED_LANGUAGES);
+        const LANGUAGE_LABELS = {
+            en: '🇬🇧 English',
+            ru: '🇷🇺 Русский',
+            zh: '🇨🇳 中文',
+            fa: '🇮🇷 فارسی',
+        };
 
         const translations = {
             en: {
@@ -5739,8 +5779,11 @@
                 'apps.no_data': 'No installation guide available for this platform yet.',
                 'apps.featured': 'Recommended',
                 'apps.step.download': 'Download & install',
+                'apps.step.before_add': 'Before adding subscription',
                 'apps.step.add': 'Add subscription',
+                'apps.step.after_add': 'If the subscription is not added',
                 'apps.step.connect': 'Connect & use',
+                'apps.button.open_link': 'Open link',
                 'faq.title': 'FAQ',
                 'faq.item_default_title': 'Question {index}',
                 'faq.item_empty': 'Answer will be added soon.',
@@ -5862,6 +5905,11 @@
                 'platform.android': 'Android',
                 'platform.pc': 'PC',
                 'platform.tv': 'TV',
+                'platform.windows': 'Windows',
+                'platform.macos': 'macOS',
+                'platform.linux': 'Linux',
+                'platform.android_tv': 'Android TV',
+                'platform.apple_tv': 'Apple TV',
                 'units.gb': 'GB',
                 'values.unlimited': 'Unlimited',
                 'values.not_available': 'Not available',
@@ -6134,8 +6182,11 @@
                 'apps.no_data': 'Для этой платформы инструкция пока недоступна.',
                 'apps.featured': 'Рекомендуем',
                 'apps.step.download': 'Скачать и установить',
+                'apps.step.before_add': 'Перед добавлением подписки',
                 'apps.step.add': 'Добавить подписку',
+                'apps.step.after_add': 'Если подписка не добавилась',
                 'apps.step.connect': 'Подключиться и пользоваться',
+                'apps.button.open_link': 'Открыть ссылку',
                 'faq.title': 'FAQ',
                 'faq.item_default_title': 'Вопрос {index}',
                 'faq.item_empty': 'Ответ будет добавлен позже.',
@@ -6257,6 +6308,11 @@
                 'platform.android': 'Android',
                 'platform.pc': 'ПК',
                 'platform.tv': 'ТВ',
+                'platform.windows': 'Windows',
+                'platform.macos': 'macOS',
+                'platform.linux': 'Linux',
+                'platform.android_tv': 'Android TV',
+                'platform.apple_tv': 'Apple TV',
                 'units.gb': 'ГБ',
                 'values.unlimited': 'Безлимит',
                 'values.not_available': 'Недоступно',
@@ -6308,6 +6364,103 @@
             Object.assign(translations[lang], pcTranslations[lang]);
         });
 
+        function getLanguageLabel(code) {
+            const normalized = String(code ?? '').toLowerCase();
+            if (!normalized) {
+                return '';
+            }
+            const base = normalized.split('-')[0];
+            return LANGUAGE_LABELS[normalized] || LANGUAGE_LABELS[base] || normalized.toUpperCase();
+        }
+
+        function getSupportedLanguages() {
+            return Array.from(supportedLanguages);
+        }
+
+        function addSupportedLanguages(locales = []) {
+            let updated = false;
+            locales.forEach(locale => {
+                if (!locale) {
+                    return;
+                }
+                const normalized = String(locale).toLowerCase();
+                if (!normalized) {
+                    return;
+                }
+                if (!supportedLanguages.has(normalized)) {
+                    supportedLanguages.add(normalized);
+                    updated = true;
+                }
+            });
+            return updated;
+        }
+
+        function renderLanguageSelectOptions() {
+            const select = document.getElementById('languageSelect');
+            if (!select) {
+                return;
+            }
+
+            const normalizedPreferred = resolveLanguage(preferredLanguage) || 'en';
+            if (!supportedLanguages.has(normalizedPreferred)) {
+                supportedLanguages.add(normalizedPreferred);
+            }
+
+            const baseOrder = BASE_LANGUAGE_ORDER.map(lang => lang.toLowerCase());
+            const extras = getSupportedLanguages()
+                .map(lang => lang.toLowerCase())
+                .filter(lang => !baseOrder.includes(lang));
+            extras.sort((a, b) => a.localeCompare(b));
+
+            const order = [...baseOrder];
+            extras.forEach(lang => {
+                if (!order.includes(lang)) {
+                    order.push(lang);
+                }
+            });
+            if (!order.includes(normalizedPreferred)) {
+                order.push(normalizedPreferred);
+            }
+
+            const seen = new Set();
+            const optionsHtml = order.map(lang => {
+                const normalized = String(lang).toLowerCase();
+                if (!normalized || seen.has(normalized)) {
+                    return '';
+                }
+                seen.add(normalized);
+                const value = escapeHtml(normalized);
+                const label = escapeHtml(getLanguageLabel(normalized));
+                return `<option value="${value}">${label}</option>`;
+            }).filter(Boolean).join('');
+
+            select.innerHTML = optionsHtml;
+            select.value = normalizedPreferred;
+
+            if (preferredLanguage !== normalizedPreferred) {
+                preferredLanguage = normalizedPreferred;
+            }
+        }
+
+        const PLATFORM_GROUPS = {
+            ios: ['ios'],
+            android: ['android'],
+            pc: ['windows', 'macos', 'linux'],
+            tv: ['androidTV', 'appleTV'],
+        };
+
+        const HAPP_APP_IDS = new Set(['happ', 'happ-app']);
+
+        const PLATFORM_LABEL_KEYS = {
+            ios: 'platform.ios',
+            android: 'platform.android',
+            windows: 'platform.windows',
+            macos: 'platform.macos',
+            linux: 'platform.linux',
+            androidTV: 'platform.android_tv',
+            appleTV: 'platform.apple_tv',
+        };
+
         const LEGAL_DOCUMENT_CONFIG = {
             public_offer: {
                 icon: '📜',
@@ -6332,24 +6485,42 @@
                 return;
             }
 
-            const {
-                service_name: rawServiceName = {},
-                service_description: rawServiceDescription = {}
-            } = branding;
-
             function normalizeMap(map) {
                 const normalized = {};
+                if (!map) {
+                    return normalized;
+                }
+
+                if (typeof map === 'string') {
+                    const normalizedValue = normalizeLocalizedValue(map);
+                    if (normalizedValue) {
+                        normalized.default = normalizedValue;
+                    }
+                    return normalized;
+                }
+
                 Object.entries(map || {}).forEach(([lang, value]) => {
-                    if (typeof value !== 'string') {
+                    const normalizedValue = normalizeLocalizedValue(value);
+                    if (!normalizedValue) {
                         return;
                     }
-                    const trimmed = value.trim();
-                    if (!trimmed) {
-                        return;
-                    }
-                    normalized[lang.toLowerCase()] = trimmed;
+                    normalized[lang.toLowerCase()] = normalizedValue;
                 });
+
                 return normalized;
+            }
+
+            function mergeLocaleMaps(...sources) {
+                const result = {};
+                sources.forEach(source => {
+                    const normalized = normalizeMap(source);
+                    Object.entries(normalized).forEach(([lang, value]) => {
+                        if (value) {
+                            result[lang] = value;
+                        }
+                    });
+                });
+                return result;
             }
 
             function applyKey(key, map) {
@@ -6388,14 +6559,50 @@
                 });
             }
 
-            applyKey('app.name', rawServiceName);
-            applyKey('app.title', rawServiceName);
-            applyKey('app.subtitle', rawServiceDescription);
+            const serviceNameMap = mergeLocaleMaps(
+                branding.service_name,
+                branding.name,
+                branding.title
+            );
+            const serviceDescriptionMap = mergeLocaleMaps(
+                branding.service_description,
+                branding.description,
+                branding.subtitle
+            );
+
+            applyKey('app.name', serviceNameMap);
+            applyKey('app.title', serviceNameMap);
+            applyKey('app.subtitle', serviceDescriptionMap);
+
+            const logoUrl = normalizeUrl(
+                branding.logoUrl
+                || branding.logo_url
+                || branding.logo
+                || null
+            );
+
+            if (logoUrl) {
+                const logoIcon = document.querySelector('.logo-icon');
+                if (logoIcon) {
+                    logoIcon.classList.add('has-image');
+                    logoIcon.innerHTML = '';
+                    const img = document.createElement('img');
+                    img.src = logoUrl;
+                    const altText = serviceNameMap.default
+                        || serviceNameMap.en
+                        || serviceNameMap.ru
+                        || 'Logo';
+                    img.alt = altText;
+                    logoIcon.appendChild(img);
+                }
+            }
         }
 
         let userData = null;
         let appsConfig = {};
         let currentPlatform = 'android';
+        let detectedDevicePlatform = 'android';
+        let cachedHappCryptolinkRedirectTemplate;
         let configPurchaseUrl = null;
         let subscriptionPurchaseUrl = null;
         let preferredLanguage = 'en';
@@ -7019,11 +7226,11 @@
                 return null;
             }
             const normalized = String(lang).toLowerCase();
-            if (SUPPORTED_LANGUAGES.includes(normalized)) {
+            if (supportedLanguages.has(normalized)) {
                 return normalized;
             }
             const short = normalized.split('-')[0];
-            if (SUPPORTED_LANGUAGES.includes(short)) {
+            if (supportedLanguages.has(short)) {
                 return short;
             }
             return null;
@@ -7238,6 +7445,7 @@
             }
         }
 
+        renderLanguageSelectOptions();
         applyTranslations();
         updateConnectButtonLabel();
 
@@ -7484,9 +7692,54 @@
             }
 
             userData = payload;
+            cachedHappCryptolinkRedirectTemplate = undefined;
             userData.subscriptionUrl = userData.subscription_url || null;
             userData.subscriptionCryptoLink = userData.subscription_crypto_link || null;
             userData.referral = userData.referral || null;
+
+            const happData = payload?.happ;
+            if (happData && typeof happData === 'object') {
+                userData.happ = { ...happData };
+
+                const happCryptoLinkCandidate = happData.cryptoLink
+                    ?? happData.crypto_link
+                    ?? null;
+                if (happCryptoLinkCandidate) {
+                    if (!userData.happ_crypto_link) {
+                        userData.happ_crypto_link = happCryptoLinkCandidate;
+                    }
+                    if (!userData.happCryptoLink) {
+                        userData.happCryptoLink = happCryptoLinkCandidate;
+                    }
+                }
+
+                const happRedirectCandidate = happData.cryptolinkRedirectLink
+                    ?? happData.cryptolink_redirect_link
+                    ?? happData.redirectLink
+                    ?? happData.redirect_link
+                    ?? null;
+                if (happRedirectCandidate) {
+                    if (!userData.happ_cryptolink_redirect_link) {
+                        userData.happ_cryptolink_redirect_link = happRedirectCandidate;
+                    }
+                    if (!userData.happCryptolinkRedirectLink) {
+                        userData.happCryptolinkRedirectLink = happRedirectCandidate;
+                    }
+                }
+
+                const happLinkCandidate = happData.link
+                    ?? happData.appLink
+                    ?? happData.url
+                    ?? null;
+                if (happLinkCandidate) {
+                    if (!userData.happ_link) {
+                        userData.happ_link = happLinkCandidate;
+                    }
+                    if (!userData.happLink) {
+                        userData.happLink = happLinkCandidate;
+                    }
+                }
+            }
 
             if (hasPaidSubscription()) {
                 subscriptionAutopayState.loading = true;
@@ -7632,9 +7885,13 @@
                 }
 
                 const data = await response.json();
-                appsConfig = data?.platforms || {};
+                appsConfig = sanitizeAppsConfig(data?.platforms || {});
 
                 const configData = data?.config || {};
+                if (configData.branding || data?.branding) {
+                    applyBrandingOverrides(configData.branding || data.branding);
+                }
+
                 const configUrl = normalizeUrl(
                     configData.subscriptionPurchaseUrl
                     || configData.subscription_purchase_url
@@ -7647,6 +7904,45 @@
                 );
                 if (configUrl) {
                     configPurchaseUrl = configUrl;
+                }
+
+                const additionalLocalesRaw = configData.additionalLocales
+                    || configData.additional_locales
+                    || data?.additionalLocales
+                    || data?.additional_locales
+                    || [];
+                const additionalLocales = (Array.isArray(additionalLocalesRaw)
+                    ? additionalLocalesRaw
+                    : [additionalLocalesRaw])
+                    .map(locale => typeof locale === 'string' ? locale.trim() : '')
+                    .filter(Boolean);
+
+                const previousLanguage = preferredLanguage;
+                const languagesUpdated = addSupportedLanguages(additionalLocales);
+
+                if (languagesUpdated && !languageLockedByUser) {
+                    const storedLanguageRaw = safeGetStoredLanguage();
+                    const storedResolved = resolveLanguage(storedLanguageRaw);
+                    if (storedResolved) {
+                        preferredLanguage = storedResolved;
+                        languageLockedByUser = true;
+                    } else {
+                        const telegramResolved = resolveLanguage(tg.initDataUnsafe?.user?.language_code);
+                        if (telegramResolved) {
+                            preferredLanguage = telegramResolved;
+                        }
+                    }
+                }
+
+                const normalizedPreferred = resolveLanguage(preferredLanguage) || 'en';
+                if (preferredLanguage !== normalizedPreferred) {
+                    preferredLanguage = normalizedPreferred;
+                }
+
+                renderLanguageSelectOptions();
+
+                if (languagesUpdated || preferredLanguage !== previousLanguage) {
+                    refreshAfterLanguageChange();
                 }
             } catch (error) {
                 console.warn('Unable to load apps configuration:', error);
@@ -8764,12 +9060,14 @@
         function detectPlatform() {
             const userAgent = navigator.userAgent.toLowerCase();
             if (userAgent.includes('iphone') || userAgent.includes('ipad')) {
-                currentPlatform = 'ios';
+                detectedDevicePlatform = 'ios';
             } else if (userAgent.includes('android')) {
-                currentPlatform = 'android';
+                detectedDevicePlatform = 'android';
             } else {
-                currentPlatform = 'pc';
+                detectedDevicePlatform = 'pc';
             }
+
+            currentPlatform = detectedDevicePlatform;
         }
 
         function setActivePlatformButton() {
@@ -8778,20 +9076,25 @@
             });
         }
 
-        function getPlatformKey(platform) {
-            const mapping = {
-                ios: 'ios',
-                android: 'android',
-                pc: 'windows',
-                tv: 'androidTV',
-                mac: 'macos'
-            };
-            return mapping[platform] || platform;
+        function getPlatformLabel(platformKey) {
+            const labelKey = PLATFORM_LABEL_KEYS[platformKey];
+            if (!labelKey) {
+                return null;
+            }
+            const label = t(labelKey);
+            return label === labelKey ? platformKey : label;
         }
 
         function getAppsForCurrentPlatform() {
-            const platformKey = getPlatformKey(currentPlatform);
-            return appsConfig?.[platformKey] || [];
+            const platformKeys = PLATFORM_GROUPS[currentPlatform] || [currentPlatform];
+            const aggregated = [];
+            platformKeys.forEach(key => {
+                const apps = Array.isArray(appsConfig?.[key]) ? appsConfig[key] : [];
+                apps.forEach(app => {
+                    aggregated.push({ ...app, __platformKey: key });
+                });
+            });
+            return aggregated;
         }
 
         function resolveConnectButtonLabel() {
@@ -8803,7 +9106,10 @@
 
         function renderConnectActionButton(appId = '') {
             const label = escapeHtml(resolveConnectButtonLabel());
-            const appAttribute = appId ? ` data-app-id="${escapeHtml(appId)}"` : '';
+            const normalizedId = typeof appId === 'string' ? appId.trim() : '';
+            const appAttribute = normalizedId
+                ? ` data-app-id="${escapeHtml(normalizedId)}"`
+                : '';
 
             return `
                 <div class="step-final-action">
@@ -8817,13 +9123,16 @@
             `;
         }
 
-        function attachInstructionConnectHandlers(scope) {
+        function attachInstructionConnectHandlers(scope, apps = null) {
             if (!scope || typeof scope.querySelectorAll !== 'function') {
                 return;
             }
+
+            const appList = Array.isArray(apps) ? apps : getAppsForCurrentPlatform();
             scope.querySelectorAll('.step-final-button').forEach(button => {
                 button.addEventListener('click', () => {
-                    const link = getConnectLink();
+                    const appId = button.getAttribute('data-app-id') || null;
+                    const link = getConnectLink(appId, { apps: appList });
                     if (!link) {
                         return;
                     }
@@ -8840,13 +9149,13 @@
             }
 
             const apps = getAppsForCurrentPlatform();
-            const hasConnectLink = Boolean(getConnectLink());
+            const hasConnectLink = hasAnyConnectLink(apps);
 
             if (!apps.length) {
                 const noDataMessage = `<div class="step-description">${escapeHtml(t('apps.no_data'))}</div>`;
                 const fallbackButton = hasConnectLink ? renderConnectActionButton() : '';
                 container.innerHTML = `${noDataMessage}${fallbackButton}`;
-                attachInstructionConnectHandlers(container);
+                attachInstructionConnectHandlers(container, apps);
                 updateInstructionConnectButtons(hasConnectLink);
                 return;
             }
@@ -8857,13 +9166,19 @@
                 const featuredBadge = app.isFeatured
                     ? `<span class="featured-badge">${escapeHtml(t('apps.featured'))}</span>`
                     : '';
+                const platformLabel = app.__platformKey ? getPlatformLabel(app.__platformKey) : null;
+                const platformBadge = platformLabel
+                    ? `<span class="app-platform">${escapeHtml(platformLabel)}</span>`
+                    : '';
+                const badges = [featuredBadge, platformBadge].filter(Boolean).join('');
+                const metaSection = badges ? `<div class="app-meta">${badges}</div>` : '';
                 return `
                     <div class="app-card ${app.isFeatured ? 'featured' : ''}">
                         <div class="app-header">
                             <div class="app-icon">${escapeHtml(iconChar)}</div>
                             <div class="app-info">
                                 <div class="app-name">${appName}</div>
-                                ${featuredBadge}
+                                ${metaSection}
                             </div>
                         </div>
                         <div class="app-steps">
@@ -8873,73 +9188,151 @@
                 `;
             }).join('');
 
-            attachInstructionConnectHandlers(container);
+            attachInstructionConnectHandlers(container, apps);
 
             updateInstructionConnectButtons(hasConnectLink);
         }
 
-        function renderAppSteps(app) {
-            let html = '';
-            let stepNum = 1;
-
-            if (app.installationStep) {
-                const descriptionHtml = app.installationStep.description
-                    ? `<div class="step-description">${getLocalizedText(app.installationStep.description)}</div>`
-                    : '';
-                const buttonsHtml = Array.isArray(app.installationStep.buttons) && app.installationStep.buttons.length
-                    ? `
-                            <div class="step-buttons">
-                                ${app.installationStep.buttons.map(btn => {
-                                    const buttonText = escapeHtml(getLocalizedText(btn.buttonText));
-                                    return `<a href="${btn.buttonLink}" class="step-btn" target="_blank" rel="noopener">${buttonText}</a>`;
-                                }).join('')}
-                            </div>
-                        `
-                    : '';
-                html += `
-                    <div class="step">
-                        <span class="step-number">${stepNum++}</span>
-                        <div>
-                            <div class="step-title">${escapeHtml(t('apps.step.download'))}</div>
-                            ${descriptionHtml}
-                            ${buttonsHtml}
-                        </div>
-                    </div>
-                `;
+        function renderInstructionStep(step, options = {}) {
+            if (!step) {
+                return '';
             }
 
-            if (app.addSubscriptionStep) {
-                html += `
-                    <div class="step">
-                        <span class="step-number">${stepNum++}</span>
-                        <div>
-                            <div class="step-title">${escapeHtml(t('apps.step.add'))}</div>
-                            <div class="step-description">${getLocalizedText(app.addSubscriptionStep.description)}</div>
-                        </div>
-                    </div>
-                `;
+            const {
+                number = null,
+                defaultTitleKey = '',
+                defaultTitle = '',
+            } = options;
+
+            let title = '';
+            let explicitTitle = '';
+            if (Object.prototype.hasOwnProperty.call(step, 'title')) {
+                title = getLocalizedText(step.title);
+                explicitTitle = title;
             }
 
-            if (app.connectAndUseStep) {
-                html += `
-                    <div class="step">
-                        <span class="step-number">${stepNum++}</span>
-                        <div>
-                            <div class="step-title">${escapeHtml(t('apps.step.connect'))}</div>
-                            <div class="step-description">${getLocalizedText(app.connectAndUseStep.description)}</div>
-                        </div>
-                    </div>
-                `;
+            if (!title) {
+                if (defaultTitleKey) {
+                    const translated = t(defaultTitleKey);
+                    title = translated && translated !== defaultTitleKey
+                        ? translated
+                        : (defaultTitle || '');
+                } else {
+                    title = defaultTitle || '';
+                }
             }
 
-            html += renderConnectActionButton(app.id || '');
+            const description = Object.prototype.hasOwnProperty.call(step, 'description')
+                ? getLocalizedText(step.description)
+                : '';
 
-            return html;
+            const buttons = Array.isArray(step.buttons)
+                ? step.buttons.filter(btn => btn && btn.buttonLink)
+                : [];
+
+            const buttonsHtml = buttons.length
+                ? `
+                        <div class="step-buttons">
+                            ${buttons.map(btn => {
+                                const buttonTextRaw = getLocalizedText(btn.buttonText);
+                                const fallbackButtonLabel = t('apps.button.open_link');
+                                const resolvedLabel = buttonTextRaw
+                                    || (fallbackButtonLabel && fallbackButtonLabel !== 'apps.button.open_link'
+                                        ? fallbackButtonLabel
+                                        : 'Open link');
+                                const buttonText = escapeHtml(resolvedLabel);
+                                const buttonHref = escapeHtml(btn.buttonLink);
+                                return `<a href="${buttonHref}" class="step-btn" target="_blank" rel="noopener">${buttonText}</a>`;
+                            }).join('')}
+                        </div>
+                    `
+                : '';
+
+            const hasExplicitTitle = Boolean(explicitTitle);
+            const hasContent = Boolean(description || buttonsHtml.trim().length || hasExplicitTitle);
+            if (!hasContent) {
+                return '';
+            }
+
+            const titleHtml = title ? `<div class="step-title">${escapeHtml(title)}</div>` : '';
+            const descriptionHtml = description
+                ? `<div class="step-description">${description}</div>`
+                : '';
+
+            const stepNumber = Number.isFinite(number) ? Number(number) : null;
+            const numberHtml = stepNumber !== null
+                ? `<span class="step-number">${stepNumber}</span>`
+                : '<span class="step-number"></span>';
+
+            return `
+                <div class="step">
+                    ${numberHtml}
+                    <div>
+                        ${titleHtml}
+                        ${descriptionHtml}
+                        ${buttonsHtml}
+                    </div>
+                </div>
+            `;
         }
 
-        function updateInstructionConnectButtons(hasConnect = Boolean(getConnectLink())) {
+        function renderAppSteps(app) {
+            const parts = [];
+            let stepNum = 1;
+
+            function appendStep(step, defaults) {
+                const stepHtml = renderInstructionStep(step, {
+                    number: stepNum,
+                    ...(defaults || {}),
+                });
+                if (stepHtml) {
+                    parts.push(stepHtml);
+                    stepNum += 1;
+                }
+            }
+
+            appendStep(app.installationStep, {
+                defaultTitleKey: 'apps.step.download',
+                defaultTitle: 'Download & install',
+            });
+
+            appendStep(app.additionalBeforeAddSubscriptionStep, {
+                defaultTitleKey: 'apps.step.before_add',
+                defaultTitle: 'Before adding subscription',
+            });
+
+            appendStep(app.addSubscriptionStep, {
+                defaultTitleKey: 'apps.step.add',
+                defaultTitle: 'Add subscription',
+            });
+
+            appendStep(app.additionalAfterAddSubscriptionStep, {
+                defaultTitleKey: 'apps.step.after_add',
+                defaultTitle: 'If the subscription is not added',
+            });
+
+            appendStep(app.connectAndUseStep, {
+                defaultTitleKey: 'apps.step.connect',
+                defaultTitle: 'Connect & use',
+            });
+
+            parts.push(renderConnectActionButton(app.id || ''));
+
+            return parts.join('');
+        }
+
+        function updateInstructionConnectButtons(isEnabled = true) {
+            const apps = getAppsForCurrentPlatform();
+
             document.querySelectorAll('.step-final-button').forEach(button => {
-                button.disabled = !hasConnect;
+                if (!isEnabled) {
+                    button.disabled = true;
+                    return;
+                }
+
+                const appId = button.getAttribute('data-app-id') || null;
+                const hasLink = Boolean(getConnectLink(appId, { apps }));
+                button.disabled = !hasLink;
             });
         }
 
@@ -8951,7 +9344,7 @@
 
             renderApps();
             setActivePlatformButton();
-            updateInstructionConnectButtons(Boolean(getConnectLink()));
+            updateInstructionConnectButtons(hasAnyConnectLink());
 
             modal.classList.remove('hidden');
             document.body.classList.add('modal-open');
@@ -8976,38 +9369,83 @@
             document.body.classList.remove('modal-open');
         }
 
+        function normalizeLocalizedValue(value) {
+            if (typeof value !== 'string') {
+                return '';
+            }
+
+            const trimmed = value.trim();
+            if (!trimmed || /^[-–—]+$/.test(trimmed)) {
+                return '';
+            }
+
+            return trimmed;
+        }
+
         function getLocalizedText(textObj) {
             if (!textObj) {
                 return '';
             }
             if (typeof textObj === 'string') {
-                return textObj;
+                return normalizeLocalizedValue(textObj);
             }
 
             const telegramLang = tg.initDataUnsafe?.user?.language_code;
+            const fallbackLanguages = getSupportedLanguages();
             const preferenceOrder = [
                 preferredLanguage,
                 preferredLanguage?.split('-')[0],
                 userData?.user?.language,
                 telegramLang,
                 telegramLang?.split('-')[0],
+                ...fallbackLanguages,
                 'en',
                 'ru'
             ].filter(Boolean).map(lang => lang.toLowerCase());
 
             const seen = new Set();
             for (const lang of preferenceOrder) {
-                if (seen.has(lang)) {
+                const normalizedLang = lang.toLowerCase();
+                if (seen.has(normalizedLang)) {
                     continue;
                 }
-                seen.add(lang);
-                if (textObj[lang]) {
-                    return textObj[lang];
+                seen.add(normalizedLang);
+
+                const candidateKeys = [normalizedLang];
+                if (lang !== normalizedLang) {
+                    candidateKeys.push(lang);
+                }
+
+                for (const key of candidateKeys) {
+                    if (!Object.prototype.hasOwnProperty.call(textObj, key)) {
+                        continue;
+                    }
+                    const value = normalizeLocalizedValue(textObj[key]);
+                    if (value) {
+                        return value;
+                    }
                 }
             }
 
-            const fallback = Object.values(textObj).find(value => typeof value === 'string' && value.trim().length);
-            return fallback || '';
+            const fallbackKeys = ['default', 'en', 'ru'];
+            for (const key of fallbackKeys) {
+                if (!Object.prototype.hasOwnProperty.call(textObj, key)) {
+                    continue;
+                }
+                const value = normalizeLocalizedValue(textObj[key]);
+                if (value) {
+                    return value;
+                }
+            }
+
+            for (const value of Object.values(textObj)) {
+                const normalizedValue = normalizeLocalizedValue(value);
+                if (normalizedValue) {
+                    return normalizedValue;
+                }
+            }
+
+            return '';
         }
 
         function ensureArray(value) {
@@ -9058,6 +9496,186 @@
                 }
             }
             return fallback;
+        }
+
+        function sanitizeAppsConfig(rawPlatforms) {
+            const sanitized = {};
+            if (!rawPlatforms || typeof rawPlatforms !== 'object') {
+                return sanitized;
+            }
+
+            Object.entries(rawPlatforms).forEach(([platformKey, apps]) => {
+                if (!Array.isArray(apps)) {
+                    sanitized[platformKey] = [];
+                    return;
+                }
+
+                const normalizedApps = apps
+                    .map(app => sanitizeAppDefinition(app))
+                    .filter(Boolean);
+                sanitized[platformKey] = normalizedApps;
+            });
+
+            return sanitized;
+        }
+
+        function sanitizeAppDefinition(app) {
+            if (!app || typeof app !== 'object') {
+                return null;
+            }
+
+            const sanitized = {};
+
+            const rawId = app.id ?? app.appId ?? app.slug ?? null;
+            let normalizedId = typeof rawId === 'string' && rawId.trim().length
+                ? rawId.trim()
+                : null;
+
+            let resolvedName = '';
+            if (typeof app.name === 'string') {
+                resolvedName = normalizeLocalizedValue(app.name) || app.name;
+            } else if (app.name && typeof app.name === 'object') {
+                const nameCandidates = [
+                    app.name.en,
+                    app.name.default,
+                    app.name.ru,
+                    ...Object.values(app.name)
+                ];
+                for (const candidate of nameCandidates) {
+                    const normalizedCandidate = normalizeLocalizedValue(candidate);
+                    if (normalizedCandidate) {
+                        resolvedName = normalizedCandidate;
+                        break;
+                    }
+                }
+            }
+
+            if (!resolvedName && typeof rawId === 'string') {
+                resolvedName = rawId.trim();
+            }
+
+            if (!normalizedId && resolvedName) {
+                const slug = resolvedName
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '');
+                normalizedId = slug || null;
+            }
+
+            sanitized.id = normalizedId;
+            sanitized.name = resolvedName || 'App';
+
+            const rawScheme = app.urlScheme ?? app.url_scheme ?? '';
+            sanitized.urlScheme = typeof rawScheme === 'string' && rawScheme.trim().length
+                ? rawScheme.trim()
+                : null;
+
+            sanitized.isFeatured = coerceBoolean(app.isFeatured ?? app.is_featured, false);
+            sanitized.isNeedBase64Encoding = coerceBoolean(
+                app.isNeedBase64Encoding ?? app.is_need_base64_encoding,
+                false
+            );
+
+            const installationStep = sanitizeStep(app.installationStep ?? app.installation_step);
+            if (installationStep) {
+                sanitized.installationStep = installationStep;
+            }
+
+            const beforeAddStep = sanitizeStep(
+                app.additionalBeforeAddSubscriptionStep
+                ?? app.additional_before_add_subscription_step
+            );
+            if (beforeAddStep) {
+                sanitized.additionalBeforeAddSubscriptionStep = beforeAddStep;
+            }
+
+            const addStep = sanitizeStep(app.addSubscriptionStep ?? app.add_subscription_step);
+            if (addStep) {
+                sanitized.addSubscriptionStep = addStep;
+            }
+
+            const afterAddStep = sanitizeStep(
+                app.additionalAfterAddSubscriptionStep
+                ?? app.additional_after_add_subscription_step
+            );
+            if (afterAddStep) {
+                sanitized.additionalAfterAddSubscriptionStep = afterAddStep;
+            }
+
+            const connectStep = sanitizeStep(app.connectAndUseStep ?? app.connect_and_use_step);
+            if (connectStep) {
+                sanitized.connectAndUseStep = connectStep;
+            }
+
+            return sanitized;
+        }
+
+        function sanitizeStep(step) {
+            if (!step || typeof step !== 'object') {
+                return null;
+            }
+
+            const sanitized = {};
+
+            if (Object.prototype.hasOwnProperty.call(step, 'title')) {
+                sanitized.title = step.title;
+            }
+
+            if (Object.prototype.hasOwnProperty.call(step, 'description')) {
+                sanitized.description = step.description;
+            }
+
+            const rawButtons = ensureArray(step.buttons ?? step.buttonList ?? step.button_list);
+            const buttons = rawButtons.map(sanitizeButton).filter(Boolean);
+            if (buttons.length) {
+                sanitized.buttons = buttons;
+            }
+
+            if (
+                !Object.prototype.hasOwnProperty.call(sanitized, 'title')
+                && !Object.prototype.hasOwnProperty.call(sanitized, 'description')
+                && !sanitized.buttons
+            ) {
+                return null;
+            }
+
+            return sanitized;
+        }
+
+        function sanitizeButton(button) {
+            if (!button || typeof button !== 'object') {
+                return null;
+            }
+
+            const link = normalizeUrl(
+                button.buttonLink
+                ?? button.button_link
+                ?? button.link
+                ?? button.url
+                ?? button.href
+            );
+
+            if (!link) {
+                return null;
+            }
+
+            const rawText = button.buttonText
+                ?? button.button_text
+                ?? button.text
+                ?? button.label
+                ?? '';
+
+            if (typeof rawText === 'string') {
+                return {
+                    buttonLink: link,
+                    buttonText: normalizeLocalizedValue(rawText) || rawText,
+                };
+            }
+
+            return {
+                buttonLink: link,
+                buttonText: rawText,
+            };
         }
 
         async function parseJsonSafe(response) {
@@ -16888,63 +17506,331 @@
             return userData?.subscription_url || userData?.subscriptionUrl || '';
         }
 
-        function getHappCryptoLink() {
-            if (!userData) {
+        function getHappCryptoLink(data = userData) {
+            if (!data || typeof data !== 'object') {
                 return null;
             }
 
-            return (
-                userData.happ_crypto_link ||
-                userData.subscriptionCryptoLink ||
-                userData.subscription_crypto_link ||
-                null
-            );
+            const happData = data.happ && typeof data.happ === 'object'
+                ? data.happ
+                : null;
+
+            const candidates = [
+                data.happ_crypto_link,
+                data.happCryptoLink,
+                happData?.cryptoLink,
+                happData?.crypto_link,
+                happData?.crypto?.link,
+                happData?.links?.crypto,
+                data.subscriptionCryptoLink,
+                data.subscription_crypto_link,
+            ];
+
+            for (const candidate of candidates) {
+                const normalized = normalizeUrl(candidate);
+                if (normalized) {
+                    return normalized;
+                }
+            }
+
+            return null;
         }
 
-        function getConnectLink() {
+        function getHappCryptolinkRedirectTemplate(data = userData) {
+            if (typeof cachedHappCryptolinkRedirectTemplate !== 'undefined') {
+                return cachedHappCryptolinkRedirectTemplate || null;
+            }
+
+            const candidates = [];
+
+            if (data && typeof data === 'object') {
+                candidates.push(
+                    data.happ_cryptolink_redirect_template,
+                    data.happCryptolinkRedirectTemplate,
+                );
+
+                const happData = data.happ && typeof data.happ === 'object'
+                    ? data.happ
+                    : null;
+
+                if (happData) {
+                    candidates.push(
+                        happData.cryptolinkRedirectTemplate,
+                        happData.cryptolink_redirect_template,
+                        happData.redirectTemplate,
+                        happData.redirect_template,
+                        happData.cryptolink?.redirectTemplate,
+                        happData.cryptolink?.redirect_template,
+                    );
+                }
+            }
+
+            if (typeof window !== 'undefined') {
+                candidates.push(
+                    window.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE,
+                    window.happCryptolinkRedirectTemplate,
+                    window.__HAPP_CRYPTOLINK_REDIRECT_TEMPLATE__,
+                );
+            }
+
+            for (const candidate of candidates) {
+                const normalized = normalizeUrl(candidate);
+                if (normalized) {
+                    cachedHappCryptolinkRedirectTemplate = normalized;
+                    return normalized;
+                }
+            }
+
+            cachedHappCryptolinkRedirectTemplate = null;
+            return null;
+        }
+
+        function buildHappCryptolinkRedirectLink(targetLink, template = null) {
+            const normalizedTarget = normalizeUrl(targetLink);
+            const normalizedTemplate = normalizeUrl(template);
+
+            if (!normalizedTarget || !normalizedTemplate) {
+                return null;
+            }
+
+            const encodedTarget = encodeURIComponent(normalizedTarget);
+            let result = normalizedTemplate;
+            let replaced = false;
+
+            const replacements = [
+                ['{subscription_link}', encodedTarget],
+                ['{link}', encodedTarget],
+                ['{subscription_link_raw}', normalizedTarget],
+                ['{link_raw}', normalizedTarget],
+            ];
+
+            for (const [placeholder, replacement] of replacements) {
+                if (result.includes(placeholder)) {
+                    result = result.split(placeholder).join(replacement);
+                    replaced = true;
+                }
+            }
+
+            if (!replaced) {
+                if (/[?&=]$/.test(result)) {
+                    result = `${result}${encodedTarget}`;
+                } else {
+                    result = `${result}${encodedTarget}`;
+                }
+            }
+
+            return normalizeUrl(result);
+        }
+
+        function encodeToBase64(value) {
+            if (typeof value !== 'string') {
+                return '';
+            }
+
+            try {
+                return btoa(value);
+            } catch (error) {
+                try {
+                    return btoa(encodeURIComponent(value).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+                } catch (nestedError) {
+                    console.warn('Failed to base64 encode value:', nestedError);
+                    return value;
+                }
+            }
+        }
+
+        function buildAppSchemeLink(app, subscriptionUrl) {
+            if (!app || !subscriptionUrl) {
+                return null;
+            }
+
+            const scheme = typeof app.urlScheme === 'string' ? app.urlScheme.trim() : '';
+            if (!scheme) {
+                return null;
+            }
+
+            let payload = subscriptionUrl;
+            if (app.isNeedBase64Encoding) {
+                const encoded = encodeToBase64(subscriptionUrl);
+                payload = encoded || subscriptionUrl;
+            }
+
+            return `${scheme}${payload}`;
+        }
+
+        function getConnectLink(appId = null, options = {}) {
             if (!userData) {
                 return null;
             }
 
+            const apps = Array.isArray(options.apps)
+                ? options.apps
+                : getAppsForCurrentPlatform();
+            const normalizedAppId = typeof appId === 'string' && appId.trim().length
+                ? appId.trim()
+                : null;
+            const requestedApp = normalizedAppId
+                ? apps.find(app => (app.id || '').toString() === normalizedAppId)
+                : null;
+            const featuredApp = apps.find(app => coerceBoolean(app.isFeatured, false)) || apps[0] || null;
+            const selectedApp = requestedApp || featuredApp || null;
+            const selectedAppId = selectedApp?.id != null
+                ? String(selectedApp.id).trim().toLowerCase()
+                : null;
+            const isHappApp = selectedAppId ? HAPP_APP_IDS.has(selectedAppId) : false;
+
+            const subscriptionUrl = normalizeUrl(getCurrentSubscriptionUrl());
+            const subscriptionCryptoLink = normalizeUrl(
+                userData?.subscription_crypto_link
+                || userData?.subscriptionCryptoLink
+                || null
+            );
             const happCryptoLink = getHappCryptoLink();
-            const isPC = currentPlatform === 'pc' || (!['ios', 'android', 'tv'].includes(currentPlatform));
-            
-            // For PC, prefer direct subscription URL if no Happ redirect link
-            if (isPC) {
-                if (userData.happ_cryptolink_redirect_link) {
-                    return userData.happ_cryptolink_redirect_link;
+            const happData = userData?.happ && typeof userData.happ === 'object'
+                ? userData.happ
+                : null;
+            const redirectLinkRaw = normalizeUrl(
+                userData?.happ_cryptolink_redirect_link
+                || userData?.happCryptolinkRedirectLink
+                || happData?.cryptolinkRedirectLink
+                || happData?.cryptolink_redirect_link
+                || happData?.redirectLink
+                || happData?.redirect_link
+                || null
+            );
+            const happLink = normalizeUrl(
+                userData?.happ_link
+                || userData?.happLink
+                || happData?.link
+                || happData?.appLink
+                || happData?.url
+                || null
+            );
+
+            const schemeLink = selectedApp && subscriptionUrl
+                ? buildAppSchemeLink(selectedApp, subscriptionUrl)
+                : null;
+
+            const detectedPlatform = typeof detectedDevicePlatform === 'string'
+                ? detectedDevicePlatform
+                : currentPlatform;
+            const normalizedDevicePlatform = typeof detectedPlatform === 'string'
+                ? detectedPlatform.toLowerCase()
+                : 'android';
+            const isPCDevice = normalizedDevicePlatform === 'pc';
+            const isMobileDevice = normalizedDevicePlatform === 'ios' || normalizedDevicePlatform === 'android';
+
+            const redirectTemplate = getHappCryptolinkRedirectTemplate();
+            const redirectTarget = (() => {
+                if (isPCDevice) {
+                    if (isHappApp) {
+                        return (
+                            happCryptoLink
+                            || subscriptionCryptoLink
+                            || subscriptionUrl
+                            || happLink
+                            || schemeLink
+                        );
+                    }
+
+                    if (schemeLink) {
+                        return schemeLink;
+                    }
+
+                    if (subscriptionUrl) {
+                        return subscriptionUrl;
+                    }
+
+                    return subscriptionCryptoLink || null;
                 }
-                if (happCryptoLink) {
-                    return happCryptoLink;
+
+                if (isHappApp) {
+                    return (
+                        happCryptoLink
+                        || subscriptionCryptoLink
+                        || subscriptionUrl
+                        || happLink
+                        || schemeLink
+                    );
                 }
-                // Return plain subscription URL for PC
-                return getCurrentSubscriptionUrl();
-            }
-            
-            // Original logic for mobile platforms
-            if (happCryptoLink) {
-                return happCryptoLink;
+
+                return (
+                    schemeLink
+                    || subscriptionUrl
+                    || subscriptionCryptoLink
+                    || happCryptoLink
+                    || happLink
+                );
+            })();
+            const templatedRedirectLink = (redirectTemplate && redirectTarget)
+                ? buildHappCryptolinkRedirectLink(redirectTarget, redirectTemplate)
+                : null;
+
+            const candidates = [];
+            const seen = new Set();
+            const pushCandidate = value => {
+                const normalized = normalizeUrl(value);
+                if (!normalized || seen.has(normalized)) {
+                    return;
+                }
+                seen.add(normalized);
+                candidates.push(normalized);
+            };
+
+            if (isPCDevice) {
+                pushCandidate(templatedRedirectLink);
+                if (isHappApp) {
+                    pushCandidate(redirectLinkRaw);
+                    pushCandidate(happCryptoLink);
+                    pushCandidate(happLink);
+                }
+                pushCandidate(subscriptionUrl);
+                pushCandidate(subscriptionCryptoLink);
+                if (!isHappApp) {
+                    pushCandidate(schemeLink);
+                }
+            } else {
+                if (isHappApp) {
+                    pushCandidate(happCryptoLink);
+                    pushCandidate(happLink);
+                    pushCandidate(subscriptionCryptoLink);
+                    pushCandidate(subscriptionUrl);
+                } else {
+                    pushCandidate(schemeLink);
+                    pushCandidate(subscriptionUrl);
+                    pushCandidate(subscriptionCryptoLink);
+                }
+
+                if (!isMobileDevice) {
+                    pushCandidate(templatedRedirectLink);
+                    if (isHappApp) {
+                        pushCandidate(redirectLinkRaw);
+                    }
+                }
             }
 
-            if (userData.happ_cryptolink_redirect_link) {
-                return userData.happ_cryptolink_redirect_link;
+            pushCandidate(subscriptionUrl);
+            pushCandidate(subscriptionCryptoLink);
+            if (isHappApp) {
+                pushCandidate(happCryptoLink);
+                pushCandidate(happLink);
+            } else {
+                pushCandidate(schemeLink);
             }
 
-            const subscriptionUrl = getCurrentSubscriptionUrl();
-            if (!subscriptionUrl) {
-                return null;
+            return candidates[0] || null;
+        }
+
+        function hasAnyConnectLink(precomputedApps = null) {
+            const apps = Array.isArray(precomputedApps)
+                ? precomputedApps
+                : getAppsForCurrentPlatform();
+
+            if (Boolean(getConnectLink(null, { apps }))) {
+                return true;
             }
 
-            const apps = getAppsForCurrentPlatform();
-            const featuredApp = apps.find(app => app.isFeatured) || apps[0];
-
-            if (featuredApp?.urlScheme) {
-                return `${featuredApp.urlScheme}${subscriptionUrl}`;
-            }
-            if (userData?.happ_link && featuredApp?.id === 'happ') {
-                return userData.happ_link;
-            }
-            return subscriptionUrl;
+            return apps.some(app => Boolean(getConnectLink(app.id || null, { apps })));
         }
 
         function openExternalLink(link, options = {}) {
@@ -16955,7 +17841,8 @@
             const { openInMiniApp = false } = options;
 
             // Detect if we're on PC and trying to open a happ:// link
-            const isPC = currentPlatform === 'pc' || (!['ios', 'android', 'tv'].includes(currentPlatform));
+            const platformKey = (detectedDevicePlatform || currentPlatform || '').toLowerCase();
+            const isPC = platformKey === 'pc' || (!['ios', 'android', 'tv'].includes(platformKey));
             const isHappLink = link.startsWith('happ://');
             
             if (isPC && isHappLink) {
@@ -17188,6 +18075,7 @@
             const guideBtn = document.getElementById('openGuideBtn');
 
             const connectLink = getConnectLink();
+            const anyConnectLink = hasAnyConnectLink();
             const showConnectButton = hasActiveSubscription();
 
             if (guideBtn) {
@@ -17199,7 +18087,7 @@
                 closeInstallationModal();
             }
 
-            updateInstructionConnectButtons(showConnectButton && Boolean(connectLink));
+            updateInstructionConnectButtons(showConnectButton && anyConnectLink);
 
             const subscriptionUrl = getCurrentSubscriptionUrl();
             if (copyBtn) {
