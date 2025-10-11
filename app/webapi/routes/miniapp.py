@@ -6,7 +6,7 @@ import math
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_FLOOR
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
 from aiogram import Bot
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -54,6 +54,7 @@ from app.database.models import (
     PaymentMethod,
     User,
 )
+from app.services.admin_notification_service import AdminNotificationService
 from app.services.faq_service import FaqService
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
@@ -167,6 +168,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 promo_code_service = PromoCodeService()
+
+
+async def _with_admin_notification_service(
+    handler: Callable[[AdminNotificationService], Awaitable[Any]],
+) -> None:
+    if not getattr(settings, "ADMIN_NOTIFICATIONS_ENABLED", False):
+        return
+    if not settings.BOT_TOKEN:
+        logger.debug("Skipping admin notification: bot token is not configured")
+        return
+
+    bot: Bot | None = None
+    try:
+        bot = Bot(token=settings.BOT_TOKEN)
+        service = AdminNotificationService(bot)
+        await handler(service)
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.error("Failed to send admin notification from miniapp: %s", error)
+    finally:
+        if bot:
+            await bot.session.close()
 
 
 _CRYPTOBOT_MIN_USD = 1.0
@@ -2784,6 +2806,10 @@ async def activate_subscription_trial_endpoint(
         else:
             message = "Trial activated successfully. Enjoy!"
 
+    await _with_admin_notification_service(
+        lambda service: service.send_trial_activation_notification(db, user, subscription)
+    )
+
     return MiniAppSubscriptionTrialResponse(
         message=message,
         subscription_id=getattr(subscription, "id", None),
@@ -3946,6 +3972,7 @@ async def submit_subscription_renewal_endpoint(
 
     consume_promo_offer = bool(pricing.get("promo_discount_value"))
     description = f"Продление подписки на {period_days} дней"
+    old_end_date = subscription.end_date
 
     if final_total > 0 or consume_promo_offer:
         success = await subtract_user_balance(
@@ -4001,8 +4028,9 @@ async def submit_subscription_renewal_endpoint(
             error,
         )
 
+    transaction: Optional[Transaction] = None
     try:
-        await create_transaction(
+        transaction = await create_transaction(
             db=db,
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
@@ -4018,6 +4046,20 @@ async def submit_subscription_renewal_endpoint(
 
     await db.refresh(user)
     await db.refresh(subscription)
+
+    if transaction and old_end_date and subscription.end_date:
+        await _with_admin_notification_service(
+            lambda service: service.send_subscription_extension_notification(
+                db,
+                user,
+                subscription,
+                transaction,
+                period_days,
+                old_end_date,
+                new_end_date=subscription.end_date,
+                balance_after=user.balance_kopeks,
+            )
+        )
 
     language_code = _normalize_language_code(user)
     amount_label = settings.format_price(final_total)
@@ -4164,6 +4206,29 @@ async def subscription_purchase_endpoint(
     await db.refresh(user)
 
     subscription = result.get("subscription")
+    transaction = result.get("transaction")
+    was_trial_conversion = bool(result.get("was_trial_conversion"))
+    period_days = getattr(getattr(pricing, "selection", None), "period", None)
+    period_days = getattr(period_days, "days", None) if period_days else None
+
+    if subscription is not None:
+        try:
+            await db.refresh(subscription)
+        except Exception:  # pragma: no cover - defensive refresh safeguard
+            pass
+
+    if subscription and transaction and period_days:
+        await _with_admin_notification_service(
+            lambda service: service.send_subscription_purchase_notification(
+                db,
+                user,
+                subscription,
+                transaction,
+                period_days,
+                was_trial_conversion=was_trial_conversion,
+            )
+        )
+
     balance_label = settings.format_price(getattr(user, "balance_kopeks", 0))
 
     return MiniAppSubscriptionPurchaseResponse(
@@ -4202,6 +4267,7 @@ async def update_subscription_servers_endpoint(
     user = await _authorize_miniapp_user(payload.init_data, db)
     subscription = _ensure_paid_subscription(user)
     _validate_subscription_id(payload.subscription_id, subscription)
+    old_servers = list(getattr(subscription, "connected_squads", []) or [])
 
     raw_selection: List[str] = []
     for collection in (
@@ -4373,9 +4439,25 @@ async def update_subscription_servers_endpoint(
     subscription.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(subscription)
+    try:
+        await db.refresh(user)
+    except Exception:  # pragma: no cover - defensive refresh safeguard
+        pass
 
     service = SubscriptionService()
     await service.update_remnawave_user(db, subscription)
+
+    await _with_admin_notification_service(
+        lambda service: service.send_subscription_update_notification(
+            db,
+            user,
+            subscription,
+            "servers",
+            old_servers,
+            subscription.connected_squads or [],
+            price_paid=max(total_cost, 0),
+        )
+    )
 
     return MiniAppSubscriptionUpdateResponse(success=True)
 
@@ -4391,6 +4473,7 @@ async def update_subscription_traffic_endpoint(
     user = await _authorize_miniapp_user(payload.init_data, db)
     subscription = _ensure_paid_subscription(user)
     _validate_subscription_id(payload.subscription_id, subscription)
+    old_traffic = subscription.traffic_limit_gb
 
     raw_value = (
         payload.traffic
@@ -4520,9 +4603,25 @@ async def update_subscription_traffic_endpoint(
     subscription.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(subscription)
+    try:
+        await db.refresh(user)
+    except Exception:  # pragma: no cover - defensive refresh safeguard
+        pass
 
     service = SubscriptionService()
     await service.update_remnawave_user(db, subscription)
+
+    await _with_admin_notification_service(
+        lambda service: service.send_subscription_update_notification(
+            db,
+            user,
+            subscription,
+            "traffic",
+            old_traffic,
+            subscription.traffic_limit_gb,
+            price_paid=max(total_price_difference, 0),
+        )
+    )
 
     return MiniAppSubscriptionUpdateResponse(success=True)
 
@@ -4573,6 +4672,7 @@ async def update_subscription_devices_endpoint(
         )
 
     current_devices = int(subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT or 1)
+    old_devices = current_devices
 
     if new_devices == current_devices:
         return MiniAppSubscriptionUpdateResponse(success=True, message="No changes")
@@ -4649,9 +4749,25 @@ async def update_subscription_devices_endpoint(
     subscription.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(subscription)
+    try:
+        await db.refresh(user)
+    except Exception:  # pragma: no cover - defensive refresh safeguard
+        pass
 
     service = SubscriptionService()
     await service.update_remnawave_user(db, subscription)
+
+    await _with_admin_notification_service(
+        lambda service: service.send_subscription_update_notification(
+            db,
+            user,
+            subscription,
+            "devices",
+            old_devices,
+            subscription.device_limit,
+            price_paid=max(price_to_charge, 0),
+        )
+    )
 
     return MiniAppSubscriptionUpdateResponse(success=True)
 
