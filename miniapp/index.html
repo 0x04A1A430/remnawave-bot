@@ -802,7 +802,7 @@
         .subscription-purchase-options {
             display: grid;
             gap: 14px;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         }
 
         .subscription-purchase-option-card {
@@ -1028,6 +1028,86 @@
 
         .subscription-purchase-period-option .subscription-purchase-option-discount {
             align-self: flex-start;
+        }
+
+        @media (max-width: 420px) {
+            .subscription-purchase-options {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 12px;
+            }
+
+            .subscription-purchase-option-card {
+                padding: 14px;
+                gap: 12px;
+            }
+
+            .subscription-purchase-option-content {
+                gap: 12px;
+            }
+
+            .subscription-purchase-option-card .subscription-settings-toggle-title {
+                font-size: 14px;
+            }
+
+            .subscription-purchase-option-card .subscription-purchase-option-price-current {
+                font-size: 15px;
+            }
+
+            .subscription-purchase-option-card .subscription-purchase-option-price-original {
+                font-size: 12px;
+            }
+
+            .subscription-purchase-option-card .subscription-purchase-option-note {
+                font-size: 11px;
+            }
+
+            .subscription-purchase-period-option {
+                grid-template-columns: minmax(0, 1fr) auto;
+                column-gap: 12px;
+                align-items: center;
+            }
+
+            .subscription-purchase-period-option .subscription-purchase-option-aside {
+                width: auto;
+                min-width: 0;
+                align-items: flex-end;
+                text-align: right;
+                gap: 4px;
+            }
+
+            .subscription-purchase-period-option .subscription-purchase-option-price {
+                align-items: flex-end;
+            }
+
+            .subscription-purchase-period-option .subscription-purchase-option-price-current {
+                font-size: 16px;
+            }
+
+            .subscription-purchase-period-option .subscription-purchase-option-description {
+                font-size: 12px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .subscription-purchase-options {
+                gap: 10px;
+            }
+
+            .subscription-purchase-option-card {
+                padding: 12px;
+            }
+
+            .subscription-purchase-option-card .subscription-settings-toggle-title {
+                font-size: 13px;
+            }
+
+            .subscription-purchase-option-card .subscription-purchase-option-price-current {
+                font-size: 14px;
+            }
+
+            .subscription-purchase-period-option .subscription-purchase-option-price-current {
+                font-size: 15px;
+            }
         }
 
         @media (min-width: 420px) {
@@ -3712,13 +3792,6 @@
             stroke-width: 2.5;
         }
 
-        .btn-group {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin: 20px 0;
-        }
-
         /* App Installation */
         .platform-selector {
             display: grid;
@@ -4243,6 +4316,24 @@
         .guide-modal-close:hover {
             border-color: var(--primary);
             color: var(--primary);
+        }
+
+        .guide-modal-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0 24px 16px;
+        }
+
+        .guide-modal-actions .btn {
+            padding: 14px 20px;
+            font-size: 14px;
+        }
+
+        @media (max-width: 480px) {
+            .guide-modal-actions {
+                padding: 0 16px 16px;
+            }
         }
 
         .guide-modal-body {
@@ -4999,16 +5090,6 @@
                 </div>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="btn-group">
-                <button class="btn btn-secondary" id="copyBtn">
-                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                    </svg>
-                    <span data-i18n="button.copy">Copy Subscription Link</span>
-                </button>
-            </div>
-
             <button class="floating-connect-button hidden" id="openGuideBtn" type="button">
                 <div class="floating-connect-button__content">
                     <svg class="floating-connect-button__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5199,6 +5280,14 @@
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                             </svg>
+                        </button>
+                    </div>
+                    <div class="guide-modal-actions">
+                        <button class="btn btn-secondary" id="copyBtn" type="button">
+                            <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                            </svg>
+                            <span data-i18n="button.copy">Copy Subscription Link</span>
                         </button>
                     </div>
                     <div class="guide-modal-body">
