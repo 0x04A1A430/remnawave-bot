@@ -17,6 +17,64 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+def _get_localized_value(values, language: str, default_language: str = "en") -> str:
+    if not isinstance(values, dict):
+        return ""
+
+    candidates = []
+    normalized_language = (language or "").strip().lower()
+
+    if normalized_language:
+        candidates.append(normalized_language)
+        if "-" in normalized_language:
+            candidates.append(normalized_language.split("-")[0])
+
+    default_language = (default_language or "").strip().lower()
+    if default_language and default_language not in candidates:
+        candidates.append(default_language)
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+        value = values.get(candidate)
+        if isinstance(value, str) and value.strip():
+            return value
+
+    for value in values.values():
+        if isinstance(value, str) and value.strip():
+            return value
+
+    return ""
+
+
+def _build_additional_buttons(additional_section, language: str) -> List[InlineKeyboardButton]:
+    if not isinstance(additional_section, dict):
+        return []
+
+    buttons = additional_section.get("buttons")
+    if not isinstance(buttons, list):
+        return []
+
+    localized_buttons: List[InlineKeyboardButton] = []
+
+    for button in buttons:
+        if not isinstance(button, dict):
+            continue
+
+        button_text = _get_localized_value(button.get("buttonText"), language)
+        button_link = button.get("buttonLink")
+
+        if not button_text or not button_link:
+            continue
+
+        localized_buttons.append(
+            InlineKeyboardButton(text=button_text, url=button_link)
+        )
+
+    return localized_buttons
+
+
 _LANGUAGE_DISPLAY_NAMES = {
     "ru": "🇷🇺 Русский",
     "en": "🇬🇧 English",
@@ -1564,42 +1622,70 @@ def get_device_selection_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKey
 
 
 def get_connection_guide_keyboard(
-    subscription_url: str, 
-    app: dict, 
+    subscription_url: str,
+    app: dict,
     language: str = DEFAULT_LANGUAGE
 ) -> InlineKeyboardMarkup:
     from app.handlers.subscription import create_deep_link
     texts = get_texts(language)
-    
+
     keyboard = []
-    
+
     if 'installationStep' in app and 'buttons' in app['installationStep']:
         app_buttons = []
         for button in app['installationStep']['buttons']:
-            button_text = button['buttonText'].get(language, button['buttonText']['en'])
+            button_text = _get_localized_value(button.get('buttonText'), language)
+            button_link = button.get('buttonLink')
+
+            if not button_text or not button_link:
+                continue
+
             app_buttons.append(
-                InlineKeyboardButton(text=f"📥 {button_text}", url=button['buttonLink'])
+                InlineKeyboardButton(text=f"📥 {button_text}", url=button_link)
             )
             if len(app_buttons) == 2:
                 keyboard.append(app_buttons)
                 app_buttons = []
-        
+
         if app_buttons:
             keyboard.append(app_buttons)
-    
-    if settings.is_happ_cryptolink_mode():
-        copy_button = InlineKeyboardButton(
-            text=texts.t("COPY_SUBSCRIPTION_LINK", "📋 Скопировать ссылку подписки"),
+
+    additional_before_buttons = _build_additional_buttons(
+        app.get('additionalBeforeAddSubscriptionStep'),
+        language,
+    )
+
+    for button in additional_before_buttons:
+        keyboard.append([button])
+
+    connect_link = create_deep_link(app, subscription_url)
+
+    if connect_link:
+        connect_button = InlineKeyboardButton(
+            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+            url=connect_link,
+        )
+    elif settings.is_happ_cryptolink_mode():
+        connect_button = InlineKeyboardButton(
+            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
             callback_data="open_subscription_link",
         )
     else:
-        copy_button = InlineKeyboardButton(
-            text=texts.t("COPY_SUBSCRIPTION_LINK", "📋 Скопировать ссылку подписки"),
+        connect_button = InlineKeyboardButton(
+            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
             url=subscription_url,
         )
 
-    keyboard.append([copy_button])
-    
+    keyboard.append([connect_button])
+
+    additional_after_buttons = _build_additional_buttons(
+        app.get('additionalAfterAddSubscriptionStep'),
+        language,
+    )
+
+    for button in additional_after_buttons:
+        keyboard.append([button])
+
     keyboard.extend([
         [
             InlineKeyboardButton(text=texts.t("CHOOSE_ANOTHER_DEVICE", "📱 Выбрать другое устройство"), callback_data="subscription_connect")
@@ -1652,43 +1738,64 @@ def get_specific_app_keyboard(
 ) -> InlineKeyboardMarkup:
     from app.handlers.subscription import create_deep_link
     texts = get_texts(language)
-    
+
     keyboard = []
-    
+
     if 'installationStep' in app and 'buttons' in app['installationStep']:
         app_buttons = []
         for button in app['installationStep']['buttons']:
-            button_text = button['buttonText'].get(language, button['buttonText']['en'])
+            button_text = _get_localized_value(button.get('buttonText'), language)
+            button_link = button.get('buttonLink')
+
+            if not button_text or not button_link:
+                continue
+
             app_buttons.append(
-                InlineKeyboardButton(text=f"📥 {button_text}", url=button['buttonLink'])
+                InlineKeyboardButton(text=f"📥 {button_text}", url=button_link)
             )
             if len(app_buttons) == 2:
                 keyboard.append(app_buttons)
                 app_buttons = []
-        
+
         if app_buttons:
             keyboard.append(app_buttons)
-    
-    if settings.is_happ_cryptolink_mode():
-        copy_button = InlineKeyboardButton(
-            text=texts.t("COPY_SUBSCRIPTION_LINK", "📋 Скопировать ссылку подписки"),
+
+    additional_before_buttons = _build_additional_buttons(
+        app.get('additionalBeforeAddSubscriptionStep'),
+        language,
+    )
+
+    for button in additional_before_buttons:
+        keyboard.append([button])
+
+    connect_link = create_deep_link(app, subscription_url)
+
+    if connect_link:
+        connect_button = InlineKeyboardButton(
+            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+            url=connect_link,
+        )
+    elif settings.is_happ_cryptolink_mode():
+        connect_button = InlineKeyboardButton(
+            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
             callback_data="open_subscription_link",
         )
     else:
-        copy_button = InlineKeyboardButton(
-            text=texts.t("COPY_SUBSCRIPTION_LINK", "📋 Скопировать ссылку подписки"),
+        connect_button = InlineKeyboardButton(
+            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
             url=subscription_url,
         )
 
-    keyboard.append([copy_button])
-    
-    if 'additionalAfterAddSubscriptionStep' in app and 'buttons' in app['additionalAfterAddSubscriptionStep']:
-        for button in app['additionalAfterAddSubscriptionStep']['buttons']:
-            button_text = button['buttonText'].get(language, button['buttonText']['en'])
-            keyboard.append([
-                InlineKeyboardButton(text=button_text, url=button['buttonLink'])
-            ])
-    
+    keyboard.append([connect_button])
+
+    additional_after_buttons = _build_additional_buttons(
+        app.get('additionalAfterAddSubscriptionStep'),
+        language,
+    )
+
+    for button in additional_after_buttons:
+        keyboard.append([button])
+
     keyboard.extend([
         [
             InlineKeyboardButton(text=texts.t("OTHER_APPS_BUTTON", "📋 Другие приложения"), callback_data=f"app_list_{device_type}")
