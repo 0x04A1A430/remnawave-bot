@@ -45,6 +45,7 @@ from app.services.payment_service import PaymentService
 from app.services.subscription_service import SubscriptionService
 from app.services.promo_offer_service import promo_offer_service
 from app.utils.pricing_utils import apply_percentage_discount
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
 from app.external.remnawave_api import (
     RemnaWaveAPIError,
@@ -977,10 +978,10 @@ class MonitoringService:
 """
             
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-            
+
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💎 Купить подписку", callback_data="menu_buy")],
-                [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="balance_topup")]
+                [build_miniapp_or_callback_button(text="💎 Купить подписку", callback_data="menu_buy")],
+                [build_miniapp_or_callback_button(text="💳 Пополнить баланс", callback_data="balance_topup")],
             ])
 
             await self._send_message_with_logo(
@@ -1033,11 +1034,11 @@ class MonitoringService:
 """
             
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-            
+
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⏰ Продлить подписку", callback_data="subscription_extend")],
-                [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="balance_topup")],
-                [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")]
+                [build_miniapp_or_callback_button(text="⏰ Продлить подписку", callback_data="subscription_extend")],
+                [build_miniapp_or_callback_button(text="💳 Пополнить баланс", callback_data="balance_topup")],
+                [build_miniapp_or_callback_button(text="📱 Моя подписка", callback_data="menu_subscription")],
             ])
 
             await self._send_message_with_logo(
@@ -1087,10 +1088,10 @@ class MonitoringService:
 """
             
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-            
+
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💎 Купить подписку", callback_data="menu_buy")],
-                [InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="balance_topup")]
+                [build_miniapp_or_callback_button(text="💎 Купить подписку", callback_data="menu_buy")],
+                [build_miniapp_or_callback_button(text="💰 Пополнить баланс", callback_data="balance_topup")],
             ])
 
             await self._send_message_with_logo(
@@ -1147,8 +1148,14 @@ class MonitoringService:
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), callback_data="subscription_connect")],
-                [InlineKeyboardButton(text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), callback_data="menu_subscription")],
+                [build_miniapp_or_callback_button(
+                    text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                    callback_data="subscription_connect",
+                )],
+                [build_miniapp_or_callback_button(
+                    text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
+                    callback_data="menu_subscription",
+                )],
                 [InlineKeyboardButton(text=texts.t("SUPPORT_BUTTON", "🆘 Поддержка"), callback_data="menu_support")],
             ])
 
@@ -1258,8 +1265,14 @@ class MonitoringService:
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=texts.t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"), callback_data="subscription_extend")],
-                [InlineKeyboardButton(text=texts.t("BALANCE_TOPUP", "💳 Пополнить баланс"), callback_data="balance_topup")],
+                [build_miniapp_or_callback_button(
+                    text=texts.t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
+                    callback_data="subscription_extend",
+                )],
+                [build_miniapp_or_callback_button(
+                    text=texts.t("BALANCE_TOPUP", "💳 Пополнить баланс"),
+                    callback_data="balance_topup",
+                )],
                 [InlineKeyboardButton(text=texts.t("SUPPORT_BUTTON", "🆘 Поддержка"), callback_data="menu_support")],
             ])
 
@@ -1329,9 +1342,15 @@ class MonitoringService:
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🎁 Получить скидку", callback_data=f"claim_discount_{offer_id}")],
-                [InlineKeyboardButton(text=texts.t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"), callback_data="subscription_extend")],
-                [InlineKeyboardButton(text=texts.t("BALANCE_TOPUP", "💳 Пополнить баланс"), callback_data="balance_topup")],
+                [build_miniapp_or_callback_button(text="🎁 Получить скидку", callback_data=f"claim_discount_{offer_id}")],
+                [build_miniapp_or_callback_button(
+                    text=texts.t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
+                    callback_data="subscription_extend",
+                )],
+                [build_miniapp_or_callback_button(
+                    text=texts.t("BALANCE_TOPUP", "💳 Пополнить баланс"),
+                    callback_data="balance_topup",
+                )],
                 [InlineKeyboardButton(text=texts.t("SUPPORT_BUTTON", "🆘 Поддержка"), callback_data="menu_support")],
             ])
 
@@ -1394,11 +1413,11 @@ class MonitoringService:
                 required=settings.format_price(required)
             )
             
-            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-            
+            from aiogram.types import InlineKeyboardMarkup
+
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="balance_topup")],
-                [InlineKeyboardButton(text="📱 Моя подписка", callback_data="menu_subscription")]
+                [build_miniapp_or_callback_button(text="💳 Пополнить баланс", callback_data="balance_topup")],
+                [build_miniapp_or_callback_button(text="📱 Моя подписка", callback_data="menu_subscription")],
             ])
             
             await self._send_message_with_logo(
