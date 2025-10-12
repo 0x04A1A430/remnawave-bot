@@ -829,9 +829,6 @@ PAL24_REQUEST_TIMEOUT=30
 ENABLE_LOGO_MODE=true
 LOGO_FILE=vpn_logo.png
 
-# Режим главного меню (default - полное меню, text - только текст с базовыми кнопками)
-MAIN_MENU_MODE=default
-
 # Скрыть блок с ссылкой подключения в разделе с информацией о подписке
 HIDE_SUBSCRIPTION_LINK=false
 

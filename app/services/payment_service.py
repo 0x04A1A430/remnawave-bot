@@ -31,7 +31,6 @@ from app.services.subscription_checkout_service import (
 )
 from app.services.mulenpay_service import MulenPayService
 from app.services.pal24_service import Pal24Service, Pal24APIError
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.database.crud.mulenpay import (
     create_mulenpay_payment,
     get_mulenpay_payment_by_local_id,
@@ -72,7 +71,7 @@ class PaymentService:
             and user.subscription.is_active
         )
 
-        first_button = build_miniapp_or_callback_button(
+        first_button = InlineKeyboardButton(
             text=(
                 texts.MENU_EXTEND_SUBSCRIPTION
                 if has_active_subscription
@@ -89,14 +88,14 @@ class PaymentService:
             draft_exists = await has_subscription_checkout_draft(user.id)
             if should_offer_checkout_resume(user, draft_exists):
                 keyboard_rows.append([
-                    build_miniapp_or_callback_button(
+                    InlineKeyboardButton(
                         text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
                         callback_data="subscription_resume_checkout",
                     )
                 ])
 
         keyboard_rows.append([
-            build_miniapp_or_callback_button(text="💰 Мой баланс", callback_data="menu_balance")
+            InlineKeyboardButton(text="💰 Мой баланс", callback_data="menu_balance")
         ])
         keyboard_rows.append([
             InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_menu")

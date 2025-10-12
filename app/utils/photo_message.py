@@ -69,12 +69,10 @@ async def edit_or_answer_photo(
     caption: str,
     keyboard: types.InlineKeyboardMarkup,
     parse_mode: str | None = "HTML",
-    *,
-    force_text: bool = False,
 ) -> None:
     resolved_parse_mode = parse_mode or "HTML"
-    # Если режим логотипа выключен или требуется текстовое сообщение — работаем текстом
-    if force_text or not settings.ENABLE_LOGO_MODE:
+    # Если режим логотипа выключен — работаем текстом
+    if not settings.ENABLE_LOGO_MODE:
         try:
             if callback.message.photo:
                 await callback.message.delete()
@@ -86,10 +84,7 @@ async def edit_or_answer_photo(
                     parse_mode=resolved_parse_mode,
                 )
         except TelegramBadRequest as error:
-            try:
-                await callback.message.delete()
-            except Exception:
-                pass
+            await callback.message.delete()
             await _answer_text(callback, caption, keyboard, resolved_parse_mode, error)
         return
 

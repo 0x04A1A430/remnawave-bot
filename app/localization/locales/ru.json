@@ -256,8 +256,6 @@
   "PUBLIC_OFFER_EMPTY_ALERT": "Публичная оферта ещё не заполнена.",
   "PUBLIC_OFFER_HEADER": "📄 <b>Публичная оферта</b>",
   "PUBLIC_OFFER_PAGE_INFO": "Страница {current} из {total}",
-  "MENU_PROFILE": "👤 Личный кабинет",
-  "MENU_PROFILE_UNAVAILABLE": "❗️ Личный кабинет пока недоступен. Попробуйте позже.",
   "MENU_LANGUAGE": "🌐 Язык",
   "MENU_PROMOCODE": "🎫 Промокод",
   "MENU_REFERRALS": "🤝 Партнерка",
