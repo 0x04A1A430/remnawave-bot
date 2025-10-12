@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.pricing_utils import format_period_description, apply_percentage_discount
 from app.utils.subscription_utils import (
     get_display_subscription_link,
@@ -168,6 +169,59 @@ def get_language_selection_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def _build_text_main_menu_keyboard(
+    language: str,
+    texts,
+    *,
+    is_admin: bool,
+    is_moderator: bool,
+) -> InlineKeyboardMarkup:
+    profile_text = texts.t("MENU_PROFILE", "👤 Личный кабинет")
+    miniapp_url = settings.get_main_menu_miniapp_url()
+
+    if miniapp_url:
+        profile_button = InlineKeyboardButton(
+            text=profile_text,
+            web_app=types.WebAppInfo(url=miniapp_url),
+        )
+    else:
+        profile_button = InlineKeyboardButton(
+            text=profile_text,
+            callback_data="menu_profile_unavailable",
+        )
+
+    keyboard_rows: List[List[InlineKeyboardButton]] = [[profile_button]]
+
+    if settings.is_language_selection_enabled():
+        keyboard_rows.append([
+            InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data="menu_language")
+        ])
+
+    support_enabled = False
+    try:
+        from app.services.support_settings_service import SupportSettingsService
+
+        support_enabled = SupportSettingsService.is_support_menu_enabled()
+    except Exception:
+        support_enabled = settings.SUPPORT_MENU_ENABLED
+
+    if support_enabled:
+        keyboard_rows.append([
+            InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data="menu_support")
+        ])
+
+    if is_admin:
+        keyboard_rows.append([
+            InlineKeyboardButton(text=texts.MENU_ADMIN, callback_data="admin_panel")
+        ])
+    elif is_moderator:
+        keyboard_rows.append([
+            InlineKeyboardButton(text="🧑‍⚖️ Модерация", callback_data="moderator_panel")
+        ])
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+
 def get_main_menu_keyboard(
     language: str = DEFAULT_LANGUAGE,
     is_admin: bool = False,
@@ -182,6 +236,14 @@ def get_main_menu_keyboard(
     custom_buttons: Optional[list[InlineKeyboardButton]] = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
+
+    if settings.is_text_main_menu_mode():
+        return _build_text_main_menu_keyboard(
+            language,
+            texts,
+            is_admin=is_admin,
+            is_moderator=is_moderator,
+        )
     
     if settings.DEBUG:
         print(f"DEBUG KEYBOARD: language={language}, is_admin={is_admin}, has_had_paid={has_had_paid_subscription}, has_active={has_active_subscription}, sub_active={subscription_is_active}, balance={balance_kopeks}")
@@ -1071,17 +1133,17 @@ def get_yookassa_payment_keyboard(
 
 def get_autopay_notification_keyboard(subscription_id: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    
+
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(
-                text=texts.t("TOPUP_BALANCE_BUTTON", "💳 Пополнить баланс"), 
+            build_miniapp_or_callback_button(
+                text=texts.t("TOPUP_BALANCE_BUTTON", "💳 Пополнить баланс"),
                 callback_data="balance_topup"
             )
         ],
         [
-            InlineKeyboardButton(
-                text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), 
+            build_miniapp_or_callback_button(
+                text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
                 callback_data="menu_subscription"
             )
         ]
@@ -1089,23 +1151,23 @@ def get_autopay_notification_keyboard(subscription_id: int, language: str = DEFA
 
 def get_subscription_expiring_keyboard(subscription_id: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    
+
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(
-                text=texts.MENU_EXTEND_SUBSCRIPTION, 
+            build_miniapp_or_callback_button(
+                text=texts.MENU_EXTEND_SUBSCRIPTION,
                 callback_data="subscription_extend"
             )
         ],
         [
-            InlineKeyboardButton(
-                text=texts.t("TOPUP_BALANCE_BUTTON", "💳 Пополнить баланс"), 
+            build_miniapp_or_callback_button(
+                text=texts.t("TOPUP_BALANCE_BUTTON", "💳 Пополнить баланс"),
                 callback_data="balance_topup"
             )
         ],
         [
-            InlineKeyboardButton(
-                text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"), 
+            build_miniapp_or_callback_button(
+                text=texts.t("MY_SUBSCRIPTION_BUTTON", "📱 Моя подписка"),
                 callback_data="menu_subscription"
             )
         ]
