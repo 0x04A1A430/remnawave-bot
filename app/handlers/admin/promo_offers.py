@@ -44,7 +44,6 @@ from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
 from app.utils.subscription_utils import get_display_subscription_link
 from app.utils.formatters import format_datetime, format_duration
-from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
 logger = logging.getLogger(__name__)
 
@@ -1921,12 +1920,7 @@ async def _send_offer_to_users(
 
             user_texts = get_texts(user.language or db_user.language)
             keyboard_rows: List[List[InlineKeyboardButton]] = [
-                [
-                    build_miniapp_or_callback_button(
-                        text=template.button_text,
-                        callback_data=f"claim_discount_{offer_record.id}",
-                    )
-                ]
+                [InlineKeyboardButton(text=template.button_text, callback_data=f"claim_discount_{offer_record.id}")]
             ]
 
             keyboard_rows.append([
