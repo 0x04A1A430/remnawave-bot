@@ -17954,7 +17954,11 @@
             }
 
             if (isPCDevice && !redirectTemplate) {
-                redirectTemplate = 'https://miniapp.fring.tech/redirect/?redirect_to=';
+                redirectTemplate = normalizeUrl(
+                    userData?.happ_cryptolink_redirect_template
+                    || userData?.happCryptolinkRedirectTemplate
+                    || null,
+                );
             }
 
             const templatedRedirectLink = (isPCDevice && redirectTemplate && redirectTarget)

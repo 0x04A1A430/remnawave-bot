@@ -2559,6 +2559,7 @@ async def get_subscription_details(
         happ_link=links_payload.get("happ_link") if subscription else None,
         happ_crypto_link=links_payload.get("happ_crypto_link") if subscription else None,
         happ_cryptolink_redirect_link=happ_redirect_link,
+        happ_cryptolink_redirect_template=settings.get_happ_cryptolink_redirect_template(),
         balance_kopeks=user.balance_kopeks,
         balance_rubles=round(user.balance_rubles, 2),
         balance_currency=balance_currency,
