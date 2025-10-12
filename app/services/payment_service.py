@@ -227,6 +227,7 @@ class PaymentService:
                             referrer_info=referrer_info,
                             subscription=subscription,
                             promo_group=promo_group,
+                            db=db,
                         )
                     except Exception as e:
                         logger.error(f"Ошибка отправки уведомления о пополнении Stars: {e}")
@@ -530,6 +531,7 @@ class PaymentService:
                                 referrer_info=referrer_info,
                                 subscription=subscription,
                                 promo_group=promo_group,
+                                db=db,
                             )
                         except Exception as e:
                             logger.error(f"Ошибка отправки уведомления о пополнении YooKassa: {e}")
@@ -1162,6 +1164,7 @@ class PaymentService:
                             referrer_info=referrer_info,
                             subscription=subscription,
                             promo_group=promo_group,
+                            db=db,
                         )
                     except Exception as notify_error:
                         logger.error(
@@ -1357,6 +1360,7 @@ class PaymentService:
                         referrer_info=referrer_info,
                         subscription=subscription,
                         promo_group=promo_group,
+                        db=db,
                     )
                 except Exception as notify_error:
                     logger.error("Ошибка отправки админ уведомления Pal24: %s", notify_error)
@@ -1627,6 +1631,7 @@ class PaymentService:
                                 referrer_info=referrer_info,
                                 subscription=subscription,
                                 promo_group=promo_group,
+                                db=db,
                             )
                         except Exception as e:
                             logger.error(f"Ошибка отправки уведомления о пополнении CryptoBot: {e}")
