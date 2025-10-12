@@ -58,6 +58,7 @@ from app.services.subscription_checkout_service import (
     should_offer_checkout_resume,
 )
 from app.services.subscription_service import SubscriptionService
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.services.promo_offer_service import promo_offer_service
 from app.states import SubscriptionStates
 from app.utils.pagination import paginate_list
@@ -5487,7 +5488,7 @@ async def claim_discount_offer(
     buy_keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
+                build_miniapp_or_callback_button(
                     text=button_text,
                     callback_data=button_callback,
                 )
