@@ -480,7 +480,7 @@
   "SUBSCRIPTION_DEVICE_STEP_CONNECT_TITLE": "<b>Step 3 - Connect:</b>",
   "SUBSCRIPTION_DEVICE_HOW_TO_TITLE": "💡 <b>How to connect:</b>",
   "SUBSCRIPTION_DEVICE_HOW_TO_STEP1": "1. Install the app from the link above",
-  "SUBSCRIPTION_DEVICE_HOW_TO_STEP2": "2. Tap the \"Connect\" button below",
+  "SUBSCRIPTION_DEVICE_HOW_TO_STEP2": "2. Copy the subscription link (tap on it)",
   "SUBSCRIPTION_DEVICE_HOW_TO_STEP3": "3. Open the app and paste the link",
   "SUBSCRIPTION_DEVICE_HOW_TO_STEP4": "4. Connect to a server",
   "SUBSCRIPTION_APPS_TITLE": "📱 <b>Apps for {device_name}</b>",
