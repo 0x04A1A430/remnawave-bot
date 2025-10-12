@@ -28,11 +28,20 @@ from app.localization.texts import get_texts
 from app.database.crud.user import get_users_list
 from app.database.crud.subscription import get_expiring_subscriptions
 from app.utils.decorators import admin_required, error_handler
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
 logger = logging.getLogger(__name__)
 
 BUTTON_ROWS = BROADCAST_BUTTON_ROWS
 DEFAULT_SELECTED_BUTTONS = DEFAULT_BROADCAST_BUTTONS
+
+TEXT_MENU_MINIAPP_BUTTON_KEYS = {
+    "balance",
+    "referrals",
+    "promocode",
+    "connect",
+    "subscription",
+}
 
 
 def get_message_buttons_selector_keyboard(language: str = "ru") -> types.InlineKeyboardMarkup:
@@ -54,12 +63,20 @@ def create_broadcast_keyboard(selected_buttons: list, language: str = "ru") -> O
             if button_key not in selected_buttons:
                 continue
             button_config = button_config_map[button_key]
-            row_buttons.append(
-                types.InlineKeyboardButton(
-                    text=button_config["text"],
-                    callback_data=button_config["callback"]
+            if settings.is_text_main_menu_mode() and button_key in TEXT_MENU_MINIAPP_BUTTON_KEYS:
+                row_buttons.append(
+                    build_miniapp_or_callback_button(
+                        text=button_config["text"],
+                        callback_data=button_config["callback"],
+                    )
                 )
-            )
+            else:
+                row_buttons.append(
+                    types.InlineKeyboardButton(
+                        text=button_config["text"],
+                        callback_data=button_config["callback"]
+                    )
+                )
         if row_buttons:
             keyboard.append(row_buttons)
 
