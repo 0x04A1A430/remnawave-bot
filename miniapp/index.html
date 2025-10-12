@@ -9389,20 +9389,19 @@
         }
 
         function renderInstructionStep(step, options = {}) {
-            if (!step) {
-                return '';
-            }
+            const normalizedStep = step && typeof step === 'object' ? step : {};
 
             const {
                 number = null,
                 defaultTitleKey = '',
                 defaultTitle = '',
+                extraContent = null,
             } = options;
 
             let title = '';
             let explicitTitle = '';
-            if (Object.prototype.hasOwnProperty.call(step, 'title')) {
-                title = getLocalizedText(step.title);
+            if (Object.prototype.hasOwnProperty.call(normalizedStep, 'title')) {
+                title = getLocalizedText(normalizedStep.title);
                 explicitTitle = title;
             }
 
@@ -9417,12 +9416,12 @@
                 }
             }
 
-            const description = Object.prototype.hasOwnProperty.call(step, 'description')
-                ? getLocalizedText(step.description)
+            const description = Object.prototype.hasOwnProperty.call(normalizedStep, 'description')
+                ? getLocalizedText(normalizedStep.description)
                 : '';
 
-            const buttons = Array.isArray(step.buttons)
-                ? step.buttons.filter(btn => btn && btn.buttonLink)
+            const buttons = Array.isArray(normalizedStep.buttons)
+                ? normalizedStep.buttons.filter(btn => btn && btn.buttonLink)
                 : [];
 
             const buttonsHtml = buttons.length
@@ -9443,8 +9442,24 @@
                     `
                 : '';
 
+            const extraContentHtmlRaw = typeof extraContent === 'function'
+                ? extraContent({
+                    step: normalizedStep,
+                    number,
+                    title,
+                    description,
+                    buttonsHtml,
+                })
+                : extraContent;
+            const extraContentHtml = extraContentHtmlRaw ? String(extraContentHtmlRaw) : '';
+
             const hasExplicitTitle = Boolean(explicitTitle);
-            const hasContent = Boolean(description || buttonsHtml.trim().length || hasExplicitTitle);
+            const hasContent = Boolean(
+                description
+                || buttonsHtml.trim().length
+                || hasExplicitTitle
+                || extraContentHtml.trim().length
+            );
             if (!hasContent) {
                 return '';
             }
@@ -9466,6 +9481,7 @@
                         ${titleHtml}
                         ${descriptionHtml}
                         ${buttonsHtml}
+                        ${extraContentHtml}
                     </div>
                 </div>
             `;
@@ -9499,6 +9515,7 @@
             appendStep(app.addSubscriptionStep, {
                 defaultTitleKey: 'apps.step.add',
                 defaultTitle: 'Add subscription',
+                extraContent: () => renderConnectActionButton(app.id || ''),
             });
 
             appendStep(app.additionalAfterAddSubscriptionStep, {
@@ -9510,8 +9527,6 @@
                 defaultTitleKey: 'apps.step.connect',
                 defaultTitle: 'Connect & use',
             });
-
-            parts.push(renderConnectActionButton(app.id || ''));
 
             return parts.join('');
         }
