@@ -1,9 +1,7 @@
-import base64
 import json
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Tuple, Optional
-from urllib.parse import quote
 
 from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
@@ -5541,17 +5539,6 @@ async def handle_device_guide(
         return
 
     featured_app = next((app for app in apps if app.get('isFeatured', False)), apps[0])
-    featured_app_id = featured_app.get('id')
-    other_apps = [
-        app for app in apps
-        if isinstance(app, dict) and app.get('id') and app.get('id') != featured_app_id
-    ]
-
-    other_app_names = ", ".join(
-        str(app.get('name')).strip()
-        for app in other_apps
-        if isinstance(app.get('name'), str) and app.get('name').strip()
-    )
 
     if hide_subscription_link:
         link_section = (
@@ -5569,20 +5556,6 @@ async def handle_device_guide(
                 + f"\n<code>{subscription_link}</code>\n\n"
         )
 
-    installation_description = get_step_description(featured_app, "installationStep", db_user.language)
-    add_description = get_step_description(featured_app, "addSubscriptionStep", db_user.language)
-    connect_description = get_step_description(featured_app, "connectAndUseStep", db_user.language)
-    additional_before_text = format_additional_section(
-        featured_app.get("additionalBeforeAddSubscriptionStep"),
-        texts,
-        db_user.language,
-    )
-    additional_after_text = format_additional_section(
-        featured_app.get("additionalAfterAddSubscriptionStep"),
-        texts,
-        db_user.language,
-    )
-
     guide_text = (
             texts.t(
                 "SUBSCRIPTION_DEVICE_GUIDE_TITLE",
@@ -5593,36 +5566,17 @@ async def handle_device_guide(
             + texts.t(
         "SUBSCRIPTION_DEVICE_FEATURED_APP",
         "📋 <b>Рекомендуемое приложение:</b> {app_name}",
-    ).format(app_name=featured_app.get('name', ''))
-    )
-
-    if other_app_names:
-        guide_text += "\n\n" + texts.t(
-            "SUBSCRIPTION_DEVICE_OTHER_APPS",
-            "📦 <b>Другие приложения:</b> {app_list}",
-        ).format(app_list=other_app_names)
-        guide_text += "\n" + texts.t(
-            "SUBSCRIPTION_DEVICE_OTHER_APPS_HINT",
-            "Нажмите кнопку \"Другие приложения\" ниже, чтобы выбрать приложение.",
-        )
-
-    guide_text += "\n\n" + texts.t("SUBSCRIPTION_DEVICE_STEP_INSTALL_TITLE", "<b>Шаг 1 - Установка:</b>")
-    if installation_description:
-        guide_text += f"\n{installation_description}"
-
-    if additional_before_text:
-        guide_text += f"\n\n{additional_before_text}"
-
-    guide_text += "\n\n" + texts.t("SUBSCRIPTION_DEVICE_STEP_ADD_TITLE", "<b>Шаг 2 - Добавление подписки:</b>")
-    if add_description:
-        guide_text += f"\n{add_description}"
-
-    guide_text += "\n\n" + texts.t("SUBSCRIPTION_DEVICE_STEP_CONNECT_TITLE", "<b>Шаг 3 - Подключение:</b>")
-    if connect_description:
-        guide_text += f"\n{connect_description}"
-
-    guide_text += "\n\n" + texts.t("SUBSCRIPTION_DEVICE_HOW_TO_TITLE", "💡 <b>Как подключить:</b>")
-    guide_text += "\n" + "\n".join(
+    ).format(app_name=featured_app['name'])
+            + "\n\n"
+            + texts.t("SUBSCRIPTION_DEVICE_STEP_INSTALL_TITLE", "<b>Шаг 1 - Установка:</b>")
+            + f"\n{featured_app['installationStep']['description'][db_user.language]}\n\n"
+            + texts.t("SUBSCRIPTION_DEVICE_STEP_ADD_TITLE", "<b>Шаг 2 - Добавление подписки:</b>")
+            + f"\n{featured_app['addSubscriptionStep']['description'][db_user.language]}\n\n"
+            + texts.t("SUBSCRIPTION_DEVICE_STEP_CONNECT_TITLE", "<b>Шаг 3 - Подключение:</b>")
+            + f"\n{featured_app['connectAndUseStep']['description'][db_user.language]}\n\n"
+            + texts.t("SUBSCRIPTION_DEVICE_HOW_TO_TITLE", "💡 <b>Как подключить:</b>")
+            + "\n"
+            + "\n".join(
         [
             texts.t(
                 "SUBSCRIPTION_DEVICE_HOW_TO_STEP1",
@@ -5630,7 +5584,7 @@ async def handle_device_guide(
             ),
             texts.t(
                 "SUBSCRIPTION_DEVICE_HOW_TO_STEP2",
-                "2. Нажмите кнопку \"Подключиться\" ниже",
+                "2. Скопируйте ссылку подписки (нажмите на неё)",
             ),
             texts.t(
                 "SUBSCRIPTION_DEVICE_HOW_TO_STEP3",
@@ -5642,18 +5596,14 @@ async def handle_device_guide(
             ),
         ]
     )
-
-    if additional_after_text:
-        guide_text += f"\n\n{additional_after_text}"
+    )
 
     await callback.message.edit_text(
         guide_text,
         reply_markup=get_connection_guide_keyboard(
             subscription_link,
             featured_app,
-            device_type,
-            db_user.language,
-            has_other_apps=bool(other_apps),
+            db_user.language
         ),
         parse_mode="HTML"
     )
@@ -5741,46 +5691,31 @@ async def handle_specific_app_guide(
                 + f"\n<code>{subscription_link}</code>\n\n"
         )
 
-    installation_description = get_step_description(app, "installationStep", db_user.language)
-    add_description = get_step_description(app, "addSubscriptionStep", db_user.language)
-    connect_description = get_step_description(app, "connectAndUseStep", db_user.language)
-    additional_before_text = format_additional_section(
-        app.get("additionalBeforeAddSubscriptionStep"),
-        texts,
-        db_user.language,
-    )
-    additional_after_text = format_additional_section(
-        app.get("additionalAfterAddSubscriptionStep"),
-        texts,
-        db_user.language,
-    )
-
     guide_text = (
             texts.t(
                 "SUBSCRIPTION_SPECIFIC_APP_TITLE",
                 "📱 <b>{app_name} - {device_name}</b>",
-            ).format(app_name=app.get('name', ''), device_name=get_device_name(device_type, db_user.language))
+            ).format(app_name=app['name'], device_name=get_device_name(device_type, db_user.language))
             + "\n\n"
             + link_section
+            + texts.t("SUBSCRIPTION_DEVICE_STEP_INSTALL_TITLE", "<b>Шаг 1 - Установка:</b>")
+            + f"\n{app['installationStep']['description'][db_user.language]}\n\n"
+            + texts.t("SUBSCRIPTION_DEVICE_STEP_ADD_TITLE", "<b>Шаг 2 - Добавление подписки:</b>")
+            + f"\n{app['addSubscriptionStep']['description'][db_user.language]}\n\n"
+            + texts.t("SUBSCRIPTION_DEVICE_STEP_CONNECT_TITLE", "<b>Шаг 3 - Подключение:</b>")
+            + f"\n{app['connectAndUseStep']['description'][db_user.language]}"
     )
 
-    guide_text += texts.t("SUBSCRIPTION_DEVICE_STEP_INSTALL_TITLE", "<b>Шаг 1 - Установка:</b>")
-    if installation_description:
-        guide_text += f"\n{installation_description}"
-
-    if additional_before_text:
-        guide_text += f"\n\n{additional_before_text}"
-
-    guide_text += "\n\n" + texts.t("SUBSCRIPTION_DEVICE_STEP_ADD_TITLE", "<b>Шаг 2 - Добавление подписки:</b>")
-    if add_description:
-        guide_text += f"\n{add_description}"
-
-    guide_text += "\n\n" + texts.t("SUBSCRIPTION_DEVICE_STEP_CONNECT_TITLE", "<b>Шаг 3 - Подключение:</b>")
-    if connect_description:
-        guide_text += f"\n{connect_description}"
-
-    if additional_after_text:
-        guide_text += f"\n\n{additional_after_text}"
+    if 'additionalAfterAddSubscriptionStep' in app:
+        additional = app['additionalAfterAddSubscriptionStep']
+        guide_text += (
+                "\n\n"
+                + texts.t(
+            "SUBSCRIPTION_ADDITIONAL_STEP_TITLE",
+            "<b>{title}:</b>",
+        ).format(title=additional['title'][db_user.language])
+                + f"\n{additional['description'][db_user.language]}"
+        )
 
     await callback.message.edit_text(
         guide_text,
@@ -5923,119 +5858,14 @@ def load_app_config() -> Dict[str, Any]:
         config_path = settings.get_app_config_path()
 
         with open(config_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if isinstance(data, dict):
-                return data
-            logger.error("Некорректный формат app-config.json: ожидается объект")
+            return json.load(f)
     except Exception as e:
         logger.error(f"Ошибка загрузки конфига приложений: {e}")
-
-    return {}
-
-
-def get_localized_value(values: Any, language: str, default_language: str = "en") -> str:
-    if not isinstance(values, dict):
-        return ""
-
-    candidates: List[str] = []
-    normalized_language = (language or "").strip().lower()
-
-    if normalized_language:
-        candidates.append(normalized_language)
-        if "-" in normalized_language:
-            candidates.append(normalized_language.split("-")[0])
-
-    default_language = (default_language or "").strip().lower()
-    if default_language and default_language not in candidates:
-        candidates.append(default_language)
-
-    for candidate in candidates:
-        if not candidate:
-            continue
-        value = values.get(candidate)
-        if isinstance(value, str) and value.strip():
-            return value
-
-    for value in values.values():
-        if isinstance(value, str) and value.strip():
-            return value
-
-    return ""
-
-
-def get_step_description(app: Dict[str, Any], step_key: str, language: str) -> str:
-    if not isinstance(app, dict):
-        return ""
-
-    step = app.get(step_key)
-    if not isinstance(step, dict):
-        return ""
-
-    description = step.get("description")
-    return get_localized_value(description, language)
-
-
-def format_additional_section(additional: Any, texts, language: str) -> str:
-    if not isinstance(additional, dict):
-        return ""
-
-    title = get_localized_value(additional.get("title"), language)
-    description = get_localized_value(additional.get("description"), language)
-
-    parts: List[str] = []
-
-    if title:
-        parts.append(
-            texts.t(
-                "SUBSCRIPTION_ADDITIONAL_STEP_TITLE",
-                "<b>{title}:</b>",
-            ).format(title=title)
-        )
-
-    if description:
-        parts.append(description)
-
-    return "\n".join(parts)
-
-
-def build_redirect_link(target_link: Optional[str], template: Optional[str]) -> Optional[str]:
-    if not target_link or not template:
-        return None
-
-    normalized_target = str(target_link).strip()
-    normalized_template = str(template).strip()
-
-    if not normalized_target or not normalized_template:
-        return None
-
-    encoded_target = quote(normalized_target, safe="")
-    result = normalized_template
-    replaced = False
-
-    replacements = [
-        ("{subscription_link}", encoded_target),
-        ("{link}", encoded_target),
-        ("{subscription_link_raw}", normalized_target),
-        ("{link_raw}", normalized_target),
-    ]
-
-    for placeholder, replacement in replacements:
-        if placeholder in result:
-            result = result.replace(placeholder, replacement)
-            replaced = True
-
-    if not replaced:
-        result = f"{result}{encoded_target}"
-
-    return result
+        return {}
 
 
 def get_apps_for_device(device_type: str, language: str = "ru") -> List[Dict[str, Any]]:
-    config = load_app_config()
-    platforms = config.get("platforms", {}) if isinstance(config, dict) else {}
-
-    if not isinstance(platforms, dict):
-        return []
+    config = load_app_config()['platforms']
 
     device_mapping = {
         'ios': 'ios',
@@ -6046,49 +5876,32 @@ def get_apps_for_device(device_type: str, language: str = "ru") -> List[Dict[str
     }
 
     config_key = device_mapping.get(device_type, device_type)
-    apps = platforms.get(config_key, [])
-    return apps if isinstance(apps, list) else []
+    return config.get(config_key, [])
 
 
 def get_device_name(device_type: str, language: str = "ru") -> str:
-    names = {
-        'ios': 'iPhone/iPad',
-        'android': 'Android',
-        'windows': 'Windows',
-        'mac': 'macOS',
-        'tv': 'Android TV'
-    }
+    if language == "en":
+        names = {
+            'ios': 'iPhone/iPad',
+            'android': 'Android',
+            'windows': 'Windows',
+            'mac': 'macOS',
+            'tv': 'Android TV'
+        }
+    else:
+        names = {
+            'ios': 'iPhone/iPad',
+            'android': 'Android',
+            'windows': 'Windows',
+            'mac': 'macOS',
+            'tv': 'Android TV'
+        }
 
     return names.get(device_type, device_type)
 
 
-def create_deep_link(app: Dict[str, Any], subscription_url: str) -> Optional[str]:
-    if not subscription_url:
-        return None
-
-    if not isinstance(app, dict):
-        return subscription_url
-
-    scheme = str(app.get("urlScheme", "")).strip()
-    payload = subscription_url
-
-    if app.get("isNeedBase64Encoding"):
-        try:
-            payload = base64.b64encode(subscription_url.encode("utf-8")).decode("utf-8")
-        except Exception as exc:
-            logger.warning(
-                "Не удалось закодировать ссылку подписки в base64 для приложения %s: %s",
-                app.get("id"),
-                exc,
-            )
-            payload = subscription_url
-
-    scheme_link = f"{scheme}{payload}" if scheme else None
-
-    template = settings.get_happ_cryptolink_redirect_template()
-    redirect_link = build_redirect_link(scheme_link, template) if scheme_link and template else None
-
-    return redirect_link or scheme_link or subscription_url
+def create_deep_link(app: Dict[str, Any], subscription_url: str) -> str:
+    return subscription_url
 
 
 def get_reset_devices_confirm_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
