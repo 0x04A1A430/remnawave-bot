@@ -168,14 +168,12 @@ async def show_main_menu(
         db_user.telegram_id
     )
 
-    custom_buttons = []
-    if not settings.is_text_main_menu_mode():
-        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
+    custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+        db,
+        is_admin=is_admin,
+        has_active_subscription=has_active_subscription,
+        subscription_is_active=subscription_is_active,
+    )
 
     await edit_or_answer_photo(
         callback=callback,
@@ -193,26 +191,9 @@ async def show_main_menu(
             custom_buttons=custom_buttons,
         ),
         parse_mode="HTML",
-        force_text=settings.is_text_main_menu_mode(),
     )
     if not skip_callback_answer:
         await callback.answer()
-
-
-async def handle_profile_unavailable(callback: types.CallbackQuery) -> None:
-    language = getattr(callback.from_user, "language_code", None) or settings.DEFAULT_LANGUAGE
-    try:
-        texts = get_texts(language)
-    except Exception:
-        texts = get_texts()
-
-    await callback.answer(
-        texts.t(
-            "MENU_PROFILE_UNAVAILABLE",
-            "❗️ Личный кабинет пока недоступен. Попробуйте позже.",
-        ),
-        show_alert=True,
-    )
 
 
 async def show_service_rules(
@@ -899,14 +880,12 @@ async def handle_back_to_menu(
         db_user.telegram_id
     )
 
-    custom_buttons = []
-    if not settings.is_text_main_menu_mode():
-        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
+    custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+        db,
+        is_admin=is_admin,
+        has_active_subscription=has_active_subscription,
+        subscription_is_active=subscription_is_active,
+    )
 
     await edit_or_answer_photo(
         callback=callback,
@@ -924,7 +903,6 @@ async def handle_back_to_menu(
             custom_buttons=custom_buttons,
         ),
         parse_mode="HTML",
-        force_text=settings.is_text_main_menu_mode(),
     )
     await callback.answer()
 
@@ -1058,12 +1036,7 @@ def register_handlers(dp: Dispatcher):
         handle_back_to_menu,
         F.data == "back_to_menu"
     )
-
-    dp.callback_query.register(
-        handle_profile_unavailable,
-        F.data == "menu_profile_unavailable",
-    )
-
+    
     dp.callback_query.register(
         show_service_rules,
         F.data == "menu_rules"
