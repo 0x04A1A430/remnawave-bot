@@ -11,8 +11,9 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+
 class YooKassaService:
-    
+
     def __init__(self,
                  shop_id: Optional[str] = None,
                  secret_key: Optional[str] = None,
@@ -23,23 +24,33 @@ class YooKassaService:
         secret_key = secret_key or getattr(settings, 'YOOKASSA_SECRET_KEY', None)
         configured_return_url = configured_return_url or getattr(settings, 'YOOKASSA_RETURN_URL', None)
 
+        self.configured = False
+
         if not shop_id or not secret_key:
             logger.warning(
                 "YooKassa SHOP_ID или SECRET_KEY не настроены в settings. "
                 "Функционал платежей будет ОТКЛЮЧЕН.")
-            self.configured = False
         else:
             try:
                 Configuration.configure(shop_id, secret_key)
                 self.configured = True
                 logger.info(
                     f"YooKassa SDK сконфигурирован для shop_id: {shop_id[:5]}...")
-            except Exception as e:
-                logger.error(f"Ошибка конфигурации YooKassa SDK: {e}",
-                              exc_info=True)
+            except Exception as error:
+                logger.error(
+                    "Ошибка конфигурации YooKassa SDK: %s",
+                    error,
+                    exc_info=True,
+                )
                 self.configured = False
 
-        if configured_return_url:
+        if not self.configured:
+            self.return_url = "https://t.me/"
+            logger.warning(
+                "YooKassa не активна, используем заглушку return_url: %s",
+                self.return_url,
+            )
+        elif configured_return_url:
             self.return_url = configured_return_url
         elif bot_username_for_default_return:
             self.return_url = f"https://t.me/{bot_username_for_default_return}"
@@ -50,7 +61,7 @@ class YooKassaService:
             logger.warning(
                 f"КРИТИЧНО: YOOKASSA_RETURN_URL не установлен И username бота не предоставлен. "
                 f"Используем заглушку: {self.return_url}. Платежи могут работать некорректно.")
-        
+
         logger.info(f"YooKassa Service return_url: {self.return_url}")
 
     async def create_payment(
@@ -62,7 +73,7 @@ class YooKassaService:
             receipt_email: Optional[str] = None,
             receipt_phone: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Создает платеж в YooKassa"""
-        
+
         if not self.configured:
             logger.error("YooKassa не сконфигурирован. Невозможно создать платеж.")
             return None
@@ -156,7 +167,7 @@ class YooKassaService:
             metadata: Dict[str, Any],
             receipt_email: Optional[str] = None,
             receipt_phone: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        
+
         if not self.configured:
             logger.error("YooKassa не сконфигурирован. Невозможно создать платеж через СБП.")
             return None
@@ -178,23 +189,23 @@ class YooKassaService:
 
         try:
             builder = PaymentRequestBuilder()
-            
+
             builder.set_amount({
                 "value": str(round(amount, 2)),
                 "currency": currency.upper()
             })
-            
+
             builder.set_capture(True)
-            
+
             builder.set_confirmation({
                 "type": "redirect",
                 "return_url": self.return_url
             })
-            
+
             builder.set_description(description)
-            
+
             builder.set_metadata(metadata)
-            
+
             builder.set_payment_method_data({
                 "type": "sbp"
             })
@@ -219,7 +230,7 @@ class YooKassaService:
             builder.set_receipt(receipt_data_dict)
 
             idempotence_key = str(uuid.uuid4())
-            
+
             payment_request = builder.build()
 
             logger.info(
@@ -254,11 +265,11 @@ class YooKassaService:
 
     async def get_payment_info(
             self, payment_id_in_yookassa: str) -> Optional[Dict[str, Any]]:
-        
+
         if not self.configured:
             logger.error("YooKassa не сконфигурирован. Невозможно получить информацию о платеже.")
             return None
-            
+
         try:
             logger.info(f"Получение информации о платеже YooKassa ID: {payment_id_in_yookassa}")
 

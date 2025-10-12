@@ -1035,20 +1035,20 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         ])
 
     if settings.is_yookassa_enabled():
-        keyboard.append([
-            InlineKeyboardButton(
-                text=texts.t("PAYMENT_CARD_YOOKASSA", "💳 Банковская карта (YooKassa)"),
-                callback_data=_build_callback("yookassa")
-            )
-        ])
-
         if settings.YOOKASSA_SBP_ENABLED:
             keyboard.append([
                 InlineKeyboardButton(
                     text=texts.t("PAYMENT_SBP_YOOKASSA", "🏦 Оплатить по СБП (YooKassa)"),
-                    callback_data=_build_callback("yookassa_sbp")
+                    callback_data=_build_callback("yookassa_sbp"),
                 )
             ])
+
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("PAYMENT_CARD_YOOKASSA", "💳 Банковская карта (YooKassa)"),
+                callback_data=_build_callback("yookassa"),
+            )
+        ])
 
     if settings.TRIBUTE_ENABLED:
         keyboard.append([
