@@ -397,8 +397,6 @@
   "TRAFFIC_ALREADY_UNLIMITED": "⚠ You already have unlimited traffic",
   "ADD_TRAFFIC_PROMPT": "📈 <b>Add traffic to your subscription</b>\n\nCurrent limit: {current_traffic}\nChoose extra traffic:",
   "USER_NOT_FOUND": "❌ User not found",
-  "MENU_PROFILE": "👤 Personal account",
-  "MENU_PROFILE_UNAVAILABLE": "❗️ Personal account is not available yet. Please try again later.",
   "MENU_LANGUAGE": "🌐 Language",
   "SUBSCRIPTION_STATUS_EXPIRED": "Expired",
   "SUBSCRIPTION_STATUS_TRIAL": "Trial",
