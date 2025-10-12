@@ -2241,6 +2241,38 @@ async def get_subscription_details(
         )
 
     subscription = getattr(user, "subscription", None)
+    usage_synced = False
+
+    if subscription and _is_remnawave_configured():
+        service = SubscriptionService()
+        try:
+            usage_synced = await service.sync_subscription_usage(db, subscription)
+        except Exception as error:  # pragma: no cover - defensive logging
+            logger.warning(
+                "Failed to sync subscription usage for user %s: %s",
+                getattr(user, "id", "unknown"),
+                error,
+            )
+
+    if usage_synced:
+        try:
+            await db.refresh(subscription, attribute_names=["traffic_used_gb", "updated_at"])
+        except Exception as refresh_error:  # pragma: no cover - defensive logging
+            logger.debug(
+                "Failed to refresh subscription after usage sync: %s",
+                refresh_error,
+            )
+
+        try:
+            await db.refresh(user)
+        except Exception as refresh_error:  # pragma: no cover - defensive logging
+            logger.debug(
+                "Failed to refresh user after usage sync: %s",
+                refresh_error,
+            )
+            user = await get_user_by_telegram_id(db, telegram_id)
+
+        subscription = getattr(user, "subscription", subscription)
     lifetime_used = _bytes_to_gb(getattr(user, "lifetime_used_traffic_bytes", 0))
 
     transactions_query = (
