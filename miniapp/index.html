@@ -17953,13 +17953,8 @@
                 );
             }
 
-            if (isPCDevice && !redirectTemplate && typeof window !== 'undefined') {
-                redirectTemplate = normalizeUrl(
-                    window.HAPP_CRYPTOLINK_REDIRECT_TEMPLATE
-                    || window.happCryptolinkRedirectTemplate
-                    || window.__HAPP_CRYPTOLINK_REDIRECT_TEMPLATE__
-                    || ''
-                );
+            if (isPCDevice && !redirectTemplate) {
+                redirectTemplate = 'https://miniapp.fring.tech/redirect/?redirect_to=';
             }
 
             const templatedRedirectLink = (isPCDevice && redirectTemplate && redirectTarget)
