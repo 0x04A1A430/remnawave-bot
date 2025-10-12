@@ -335,12 +335,14 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             user.telegram_id
         )
 
-        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
+        custom_buttons = []
+        if not settings.is_text_main_menu_mode():
+            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+                db,
+                is_admin=is_admin,
+                has_active_subscription=has_active_subscription,
+                subscription_is_active=subscription_is_active,
+            )
 
         await message.answer(
             menu_text,
@@ -757,12 +759,14 @@ async def complete_registration_from_callback(
             and SupportSettingsService.is_moderator(existing_user.telegram_id)
         )
 
-        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
+        custom_buttons = []
+        if not settings.is_text_main_menu_mode():
+            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+                db,
+                is_admin=is_admin,
+                has_active_subscription=has_active_subscription,
+                subscription_is_active=subscription_is_active,
+            )
 
         try:
             await callback.message.answer(
@@ -937,12 +941,14 @@ async def complete_registration_from_callback(
             and SupportSettingsService.is_moderator(user.telegram_id)
         )
 
-        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
+        custom_buttons = []
+        if not settings.is_text_main_menu_mode():
+            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+                db,
+                is_admin=is_admin,
+                has_active_subscription=has_active_subscription,
+                subscription_is_active=subscription_is_active,
+            )
 
         try:
             await callback.message.answer(
@@ -1011,12 +1017,14 @@ async def complete_registration(
             and SupportSettingsService.is_moderator(existing_user.telegram_id)
         )
 
-        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
+        custom_buttons = []
+        if not settings.is_text_main_menu_mode():
+            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+                db,
+                is_admin=is_admin,
+                has_active_subscription=has_active_subscription,
+                subscription_is_active=subscription_is_active,
+            )
 
         try:
             await message.answer(
@@ -1191,12 +1199,14 @@ async def complete_registration(
             and SupportSettingsService.is_moderator(user.telegram_id)
         )
 
-        custom_buttons = await MainMenuButtonService.get_buttons_for_user(
-            db,
-            is_admin=is_admin,
-            has_active_subscription=has_active_subscription,
-            subscription_is_active=subscription_is_active,
-        )
+        custom_buttons = []
+        if not settings.is_text_main_menu_mode():
+            custom_buttons = await MainMenuButtonService.get_buttons_for_user(
+                db,
+                is_admin=is_admin,
+                has_active_subscription=has_active_subscription,
+                subscription_is_active=subscription_is_active,
+            )
 
         try:
             await message.answer(
