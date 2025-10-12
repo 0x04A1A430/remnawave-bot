@@ -439,6 +439,7 @@ class MiniAppSubscriptionResponse(BaseModel):
     happ_link: Optional[str] = None
     happ_crypto_link: Optional[str] = None
     happ_cryptolink_redirect_link: Optional[str] = None
+    happ_cryptolink_redirect_template: Optional[str] = None
     balance_kopeks: int = 0
     balance_rubles: float = 0.0
     balance_currency: Optional[str] = None
