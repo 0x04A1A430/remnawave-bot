@@ -168,6 +168,59 @@ def get_language_selection_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def _build_text_main_menu_keyboard(
+    language: str,
+    texts,
+    *,
+    is_admin: bool,
+    is_moderator: bool,
+) -> InlineKeyboardMarkup:
+    profile_text = texts.t("MENU_PROFILE", "👤 Личный кабинет")
+    miniapp_url = settings.get_main_menu_miniapp_url()
+
+    if miniapp_url:
+        profile_button = InlineKeyboardButton(
+            text=profile_text,
+            web_app=types.WebAppInfo(url=miniapp_url),
+        )
+    else:
+        profile_button = InlineKeyboardButton(
+            text=profile_text,
+            callback_data="menu_profile_unavailable",
+        )
+
+    keyboard_rows: List[List[InlineKeyboardButton]] = [[profile_button]]
+
+    if settings.is_language_selection_enabled():
+        keyboard_rows.append([
+            InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data="menu_language")
+        ])
+
+    support_enabled = False
+    try:
+        from app.services.support_settings_service import SupportSettingsService
+
+        support_enabled = SupportSettingsService.is_support_menu_enabled()
+    except Exception:
+        support_enabled = settings.SUPPORT_MENU_ENABLED
+
+    if support_enabled:
+        keyboard_rows.append([
+            InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data="menu_support")
+        ])
+
+    if is_admin:
+        keyboard_rows.append([
+            InlineKeyboardButton(text=texts.MENU_ADMIN, callback_data="admin_panel")
+        ])
+    elif is_moderator:
+        keyboard_rows.append([
+            InlineKeyboardButton(text="🧑‍⚖️ Модерация", callback_data="moderator_panel")
+        ])
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+
 def get_main_menu_keyboard(
     language: str = DEFAULT_LANGUAGE,
     is_admin: bool = False,
@@ -182,6 +235,14 @@ def get_main_menu_keyboard(
     custom_buttons: Optional[list[InlineKeyboardButton]] = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
+
+    if settings.is_text_main_menu_mode():
+        return _build_text_main_menu_keyboard(
+            language,
+            texts,
+            is_admin=is_admin,
+            is_moderator=is_moderator,
+        )
     
     if settings.DEBUG:
         print(f"DEBUG KEYBOARD: language={language}, is_admin={is_admin}, has_had_paid={has_had_paid_subscription}, has_active={has_active_subscription}, sub_active={subscription_is_active}, balance={balance_kopeks}")
