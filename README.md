@@ -829,6 +829,9 @@ PAL24_REQUEST_TIMEOUT=30
 ENABLE_LOGO_MODE=true
 LOGO_FILE=vpn_logo.png
 
+# Режим главного меню (default - классический режим работы бота, text - режим работы с активным ЛК MiniApp, отключает покупку/управление подпиской в меню, заменяет все кнопками открытия в MiniApp ЛК)
+MAIN_MENU_MODE=default
+
 # Скрыть блок с ссылкой подключения в разделе с информацией о подписке
 HIDE_SUBSCRIPTION_LINK=false
 

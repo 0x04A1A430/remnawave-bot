@@ -227,6 +227,7 @@ class Settings(BaseSettings):
     PAL24_SBP_BUTTON_TEXT: Optional[str] = None
     PAL24_CARD_BUTTON_TEXT: Optional[str] = None
 
+    MAIN_MENU_MODE: str = "default"
     CONNECT_BUTTON_MODE: str = "guide"
     MINIAPP_CUSTOM_URL: str = ""
     MINIAPP_PURCHASE_URL: str = ""
@@ -292,6 +293,29 @@ class Settings(BaseSettings):
 
     EXTERNAL_ADMIN_TOKEN: Optional[str] = None
     EXTERNAL_ADMIN_TOKEN_BOT_ID: Optional[int] = None
+
+    @field_validator('MAIN_MENU_MODE', mode='before')
+    @classmethod
+    def normalize_main_menu_mode(cls, value: Optional[str]) -> str:
+        if not value:
+            return "default"
+
+        normalized = str(value).strip().lower()
+        aliases = {
+            "classic": "default",
+            "default": "default",
+            "full": "default",
+            "standard": "default",
+            "text": "text",
+            "text_only": "text",
+            "textual": "text",
+            "minimal": "text",
+        }
+
+        mode = aliases.get(normalized, normalized)
+        if mode not in {"default", "text"}:
+            raise ValueError("MAIN_MENU_MODE must be one of: default, text")
+        return mode
 
     @field_validator('SERVER_STATUS_MODE', mode='before')
     @classmethod
@@ -577,6 +601,19 @@ class Settings(BaseSettings):
 
     def is_notifications_enabled(self) -> bool:
         return self.ENABLE_NOTIFICATIONS
+
+    def get_main_menu_mode(self) -> str:
+        return getattr(self, "MAIN_MENU_MODE", "default")
+
+    def is_text_main_menu_mode(self) -> bool:
+        return self.get_main_menu_mode() == "text"
+
+    def get_main_menu_miniapp_url(self) -> Optional[str]:
+        for candidate in [self.MINIAPP_CUSTOM_URL, self.MINIAPP_PURCHASE_URL]:
+            value = (candidate or "").strip()
+            if value:
+                return value
+        return None
     
     def get_app_config_path(self) -> str:
         if os.path.isabs(self.APP_CONFIG_PATH):

@@ -227,6 +227,7 @@ class BotConfigurationService:
         "ENABLE_LOGO_MODE": "INTERFACE_BRANDING",
         "LOGO_FILE": "INTERFACE_BRANDING",
         "HIDE_SUBSCRIPTION_LINK": "INTERFACE_SUBSCRIPTION",
+        "MAIN_MENU_MODE": "INTERFACE",
         "CONNECT_BUTTON_MODE": "CONNECT_BUTTON",
         "MINIAPP_CUSTOM_URL": "CONNECT_BUTTON",
         "APP_CONFIG_PATH": "ADDITIONAL",
@@ -320,6 +321,10 @@ class BotConfigurationService:
             ChoiceOption("miniapp_custom", "🧩 Mini App (ссылка)"),
             ChoiceOption("link", "🔗 Прямая ссылка"),
             ChoiceOption("happ_cryptolink", "🪙 Happ CryptoLink"),
+        ],
+        "MAIN_MENU_MODE": [
+            ChoiceOption("default", "📋 Полное меню"),
+            ChoiceOption("text", "📝 Текстовое меню"),
         ],
         "SERVER_STATUS_MODE": [
             ChoiceOption("disabled", "🚫 Отключено"),
