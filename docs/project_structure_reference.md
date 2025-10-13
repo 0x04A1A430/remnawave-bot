@@ -210,9 +210,12 @@
 - `app/handlers/start.py` — Python-модуль
   Классы: нет
   Функции: `_get_language_prompt_text`, `_get_subscription_status`, `_get_subscription_status_simple`, `_insert_random_message`, `get_referral_code_keyboard`, `register_handlers`
-- `app/handlers/subscription.py` — Python-модуль
-  Классы: `_SafeFormatDict` (1 методов)
-  Функции: `_format_text_with_placeholders`, `_get_addon_discount_percent_for_user`, `_apply_addon_discount`, `_get_promo_offer_discount_percent`, `_apply_promo_offer_discount`, `_get_period_hint_from_subscription`, `_apply_discount_to_monthly_component`, `_build_promo_group_discount_text`, `update_traffic_prices`, `format_traffic_display`, `validate_traffic_price`, `load_app_config`, `get_localized_value`, `get_step_description`, `format_additional_section`, `build_redirect_link`, `get_apps_for_device`, `get_device_name`, `create_deep_link`, `get_reset_devices_confirm_keyboard`, `get_traffic_switch_keyboard`, `get_confirm_switch_traffic_keyboard`, `register_handlers`
+- `app/handlers/subscription/` — пакет обработчиков подписки
+  Ключевые модули:
+    - `common.py` — вспомогательные функции форматирования, расчётов и построения клавиатур.
+    - `purchase.py` — пользовательские сценарии, регистрация обработчиков (`register_handlers`).
+    - `countries.py`, `devices.py`, `traffic.py`, `autopay.py`, `promo.py`, `happ.py`, `links.py`, `notifications.py`, `pricing.py` — тематические обработчики и сервисные утилиты.
+  Публичные функции доступны через `app.handlers.subscription` (например, `create_deep_link`, `get_servers_display_names`, `register_handlers`).
 - `app/handlers/support.py` — Python-модуль
   Классы: нет
   Функции: `register_handlers`
