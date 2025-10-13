@@ -17,6 +17,8 @@
 !app/**
 !locales/
 !locales/**
+!tests/
+!tests/**
 
 # Дополнительно разрешаем README и лицензию (опционально)
 !README.md

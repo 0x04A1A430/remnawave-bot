@@ -19,12 +19,21 @@ def get_available_payment_methods() -> List[Dict[str, str]]:
         })
     
     if settings.is_yookassa_enabled():
+        if getattr(settings, "YOOKASSA_SBP_ENABLED", False):
+            methods.append({
+                "id": "yookassa_sbp",
+                "name": "СБП (YooKassa)",
+                "icon": "🏦",
+                "description": "моментальная оплата по QR",
+                "callback": "topup_yookassa_sbp",
+            })
+
         methods.append({
-            "id": "yookassa", 
+            "id": "yookassa",
             "name": "Банковская карта",
             "icon": "💳",
             "description": "через YooKassa",
-            "callback": "topup_yookassa"
+            "callback": "topup_yookassa",
         })
     
     if settings.TRIBUTE_ENABLED:

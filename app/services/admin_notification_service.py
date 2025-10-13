@@ -4,10 +4,12 @@ from datetime import datetime
 from aiogram import Bot, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import MissingGreenlet
 
 from app.config import settings
 from app.database.crud.promo_group import get_promo_group_by_id
 from app.database.crud.user import get_user_by_id
+from app.database.crud.transaction import get_transaction_by_id
 from app.database.models import (
     AdvertisingCampaign,
     PromoCodeType,
@@ -342,7 +344,7 @@ class AdminNotificationService:
             logger.error(f"Ошибка отправки уведомления об ошибке проверки версий: {e}")
             return False
     
-    async def send_balance_topup_notification(
+    def _build_balance_topup_message(
         self,
         user: User,
         transaction: Transaction,
@@ -352,17 +354,14 @@ class AdminNotificationService:
         referrer_info: str,
         subscription: Subscription | None,
         promo_group: PromoGroup | None,
-    ) -> bool:
-        if not self._is_enabled():
-            return False
+    ) -> str:
+        payment_method = self._get_payment_method_display(transaction.payment_method)
+        balance_change = user.balance_kopeks - old_balance
+        subscription_status = self._get_subscription_status(subscription)
+        promo_block = self._format_promo_group_block(promo_group)
+        timestamp = datetime.now().strftime('%d.%m.%Y %H:%M:%S')
 
-        try:
-            payment_method = self._get_payment_method_display(transaction.payment_method)
-            balance_change = user.balance_kopeks - old_balance
-            subscription_status = self._get_subscription_status(subscription)
-            promo_block = self._format_promo_group_block(promo_group)
-
-            message = f"""💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>
+        return f"""💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>
 
 👤 <b>Пользователь:</b> {user.full_name}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
@@ -384,10 +383,96 @@ class AdminNotificationService:
 🔗 <b>Реферер:</b> {referrer_info}
 📱 <b>Подписка:</b> {subscription_status}
 
-⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
-            
+⏰ <i>{timestamp}</i>"""
+
+    async def _reload_topup_notification_entities(
+        self,
+        db: AsyncSession,
+        user: User,
+        transaction: Transaction,
+    ) -> tuple[User, Transaction, Subscription | None, PromoGroup | None]:
+        refreshed_user = await get_user_by_id(db, user.id)
+        if not refreshed_user:
+            raise ValueError(
+                f"Не удалось повторно загрузить пользователя {user.id} для уведомления о пополнении"
+            )
+
+        refreshed_transaction = await get_transaction_by_id(db, transaction.id)
+        if not refreshed_transaction:
+            raise ValueError(
+                f"Не удалось повторно загрузить транзакцию {transaction.id} для уведомления о пополнении"
+            )
+
+        subscription = getattr(refreshed_user, "subscription", None)
+        promo_group = await self._get_user_promo_group(db, refreshed_user)
+
+        return refreshed_user, refreshed_transaction, subscription, promo_group
+
+    async def send_balance_topup_notification(
+        self,
+        user: User,
+        transaction: Transaction,
+        old_balance: int,
+        *,
+        topup_status: str,
+        referrer_info: str,
+        subscription: Subscription | None,
+        promo_group: PromoGroup | None,
+        db: AsyncSession | None = None,
+    ) -> bool:
+        if not self._is_enabled():
+            return False
+
+        try:
+            message = self._build_balance_topup_message(
+                user,
+                transaction,
+                old_balance,
+                topup_status=topup_status,
+                referrer_info=referrer_info,
+                subscription=subscription,
+                promo_group=promo_group,
+            )
+        except MissingGreenlet as missing_greenlet:
+            if db is None:
+                logger.error(
+                    "Недостаточно данных для уведомления о пополнении и отсутствует доступ к БД: %s",
+                    missing_greenlet,
+                )
+                return False
+
+            try:
+                (
+                    user,
+                    transaction,
+                    subscription,
+                    promo_group,
+                ) = await self._reload_topup_notification_entities(db, user, transaction)
+                message = self._build_balance_topup_message(
+                    user,
+                    transaction,
+                    old_balance,
+                    topup_status=topup_status,
+                    referrer_info=referrer_info,
+                    subscription=subscription,
+                    promo_group=promo_group,
+                )
+            except Exception as reload_error:
+                logger.error(
+                    "Ошибка повторной загрузки данных для уведомления о пополнении: %s",
+                    reload_error,
+                    exc_info=True,
+                )
+                return False
+        except Exception as e:
+            logger.error(
+                f"Ошибка подготовки уведомления о пополнении: {e}",
+                exc_info=True,
+            )
+            return False
+
+        try:
             return await self._send_message(message)
-            
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о пополнении: {e}")
             return False
@@ -1074,4 +1159,3 @@ class AdminNotificationService:
         if not (self._is_enabled() and runtime_enabled):
             return False
         return await self._send_message(text, reply_markup=keyboard, ticket_event=True)
-
