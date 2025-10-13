@@ -356,12 +356,18 @@ def get_main_menu_keyboard(
             if isinstance(button, InlineKeyboardButton):
                 keyboard.append([button])
 
-    keyboard.extend([
-        [
-            InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data="menu_promocode"),
+    # Добавляем кнопки промокода и рефералов, учитывая настройки
+    additional_buttons = [
+        InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data="menu_promocode")
+    ]
+    
+    # Добавляем кнопку рефералов только если программа включена
+    if settings.is_referral_program_enabled():
+        additional_buttons.append(
             InlineKeyboardButton(text=texts.MENU_REFERRALS, callback_data="menu_referrals")
-        ]
-    ])
+        )
+    
+    keyboard.append(additional_buttons)
 
     # Support button is configurable (runtime via service)
     try:
