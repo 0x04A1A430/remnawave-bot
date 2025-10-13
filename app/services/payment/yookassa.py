@@ -297,6 +297,8 @@ class YooKassaPaymentMixin:
                             user.telegram_id,
                             payment.amount_kopeks,
                             user=user,
+                            db=db,
+                            payment_method_title="Банковская карта (YooKassa)",
                         )
                     except Exception as error:
                         logger.error(
