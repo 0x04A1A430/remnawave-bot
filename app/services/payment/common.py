@@ -8,9 +8,12 @@
 from __future__ import annotations
 
 import logging
+from types import SimpleNamespace
 from typing import Any
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlalchemy.exc import MissingGreenlet
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
@@ -83,32 +86,29 @@ class PaymentCommonMixin:
         telegram_id: int,
         amount_kopeks: int,
         user: Any | None = None,
+        *,
+        db: AsyncSession | None = None,
+        payment_method_title: str | None = None,
     ) -> None:
         """Отправляет пользователю уведомление об успешном платеже."""
         if not getattr(self, "bot", None):
             # Если бот не передан (например, внутри фоновых задач), уведомление пропускаем.
             return
 
-        if user is None:
-            try:
-                async for db in get_db():
-                    user = await get_user_by_telegram_id(db, telegram_id)
-                    break
-            except Exception as fetch_error:
-                logger.warning(
-                    "Не удалось получить пользователя %s для уведомления: %s",
-                    telegram_id,
-                    fetch_error,
-                )
-                user = None
+        user_snapshot = await self._ensure_user_snapshot(
+            telegram_id,
+            user,
+            db=db,
+        )
 
         try:
-            keyboard = await self.build_topup_success_keyboard(user)
+            keyboard = await self.build_topup_success_keyboard(user_snapshot)
 
+            payment_method = payment_method_title or "Банковская карта (YooKassa)"
             message = (
                 "✅ <b>Платеж успешно завершен!</b>\n\n"
                 f"💰 Сумма: {settings.format_price(amount_kopeks)}\n"
-                "💳 Способ: Банковская карта (YooKassa)\n\n"
+                f"💳 Способ: {payment_method}\n\n"
                 "Средства зачислены на ваш баланс!"
             )
 
@@ -124,6 +124,70 @@ class PaymentCommonMixin:
                 telegram_id,
                 error,
             )
+
+    async def _ensure_user_snapshot(
+        self,
+        telegram_id: int,
+        user: Any | None,
+        *,
+        db: AsyncSession | None = None,
+    ) -> Any | None:
+        """Гарантирует, что данные пользователя пригодны для построения клавиатуры."""
+
+        def _build_snapshot(source: Any | None) -> SimpleNamespace | None:
+            if source is None:
+                return None
+
+            subscription = getattr(source, "subscription", None)
+            subscription_snapshot = None
+
+            if subscription is not None:
+                subscription_snapshot = SimpleNamespace(
+                    is_trial=getattr(subscription, "is_trial", False),
+                    is_active=getattr(subscription, "is_active", False),
+                    actual_status=getattr(subscription, "actual_status", None),
+                )
+
+            return SimpleNamespace(
+                id=getattr(source, "id", None),
+                telegram_id=getattr(source, "telegram_id", None),
+                language=getattr(source, "language", "ru"),
+                subscription=subscription_snapshot,
+            )
+
+        try:
+            snapshot = _build_snapshot(user)
+        except MissingGreenlet:
+            snapshot = None
+
+        if snapshot is not None:
+            return snapshot
+
+        fetch_session = db
+
+        if fetch_session is not None:
+            try:
+                fetched_user = await get_user_by_telegram_id(fetch_session, telegram_id)
+                return _build_snapshot(fetched_user)
+            except Exception as fetch_error:
+                logger.warning(
+                    "Не удалось обновить пользователя %s из переданной сессии: %s",
+                    telegram_id,
+                    fetch_error,
+                )
+
+        try:
+            async for db_session in get_db():
+                fetched_user = await get_user_by_telegram_id(db_session, telegram_id)
+                return _build_snapshot(fetched_user)
+        except Exception as fetch_error:
+            logger.warning(
+                "Не удалось получить пользователя %s для уведомления: %s",
+                telegram_id,
+                fetch_error,
+            )
+
+        return None
 
     async def process_successful_payment(
         self,
