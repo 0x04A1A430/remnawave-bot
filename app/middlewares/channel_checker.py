@@ -1,5 +1,5 @@
 import logging
-from typing import Callable, Dict, Any, Awaitable
+from typing import Callable, Dict, Any, Awaitable, Optional
 from aiogram import BaseMiddleware, Bot
 from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -86,16 +86,16 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         is_required = settings.CHANNEL_IS_REQUIRED_SUB
-        
+
         if not is_required:
             logger.debug("⚠️ Обязательная подписка отключена, пропускаем проверку")
             return await handler(event, data)
 
         channel_link = settings.CHANNEL_LINK
-        
+
         try:
             member = await bot.get_chat_member(chat_id=channel_id, user_id=telegram_id)
-            
+
             if member.status in self.GOOD_MEMBER_STATUS:
                 return await handler(event, data)
             elif member.status in self.BAD_MEMBER_STATUS:
@@ -104,6 +104,8 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 if telegram_id:
                     await self._deactivate_trial_subscription(telegram_id)
 
+                await self._capture_start_payload(state, event)
+
                 if isinstance(event, CallbackQuery) and event.data == "sub_channel_check":
                     await event.answer("❌ Вы еще не подписались на канал! Подпишитесь и попробуйте снова.", show_alert=True)
                     return
@@ -111,10 +113,12 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 return await self._deny_message(event, bot, channel_link)
             else:
                 logger.warning(f"⚠️ Неожиданный статус пользователя {telegram_id}: {member.status}")
+                await self._capture_start_payload(state, event)
                 return await self._deny_message(event, bot, channel_link)
-                
+
         except TelegramForbiddenError as e:
             logger.error(f"❌ Бот заблокирован в канале {channel_id}: {e}")
+            await self._capture_start_payload(state, event)
             return await self._deny_message(event, bot, channel_link)
         except TelegramBadRequest as e:
             if "chat not found" in str(e).lower():
@@ -123,10 +127,44 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 logger.error(f"❌ Пользователь {telegram_id} не найден: {e}")
             else:
                 logger.error(f"❌ Ошибка запроса к каналу {channel_id}: {e}")
+            await self._capture_start_payload(state, event)
             return await self._deny_message(event, bot, channel_link)
         except Exception as e:
             logger.error(f"❌ Неожиданная ошибка при проверке подписки: {e}")
             return await handler(event, data)
+
+    async def _capture_start_payload(self, state: Optional[FSMContext], event: TelegramObject) -> None:
+        if not state:
+            return
+
+        message: Optional[Message] = None
+        if isinstance(event, Message):
+            message = event
+        elif isinstance(event, CallbackQuery):
+            message = event.message
+        elif isinstance(event, Update):
+            message = event.message
+
+        if not message or not message.text:
+            return
+
+        text = message.text.strip()
+        if not text.startswith("/start"):
+            return
+
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2 or not parts[1]:
+            return
+
+        payload = parts[1]
+
+        data = await state.get_data() or {}
+        if data.get("pending_start_payload") == payload:
+            return
+
+        data["pending_start_payload"] = payload
+        await state.set_data(data)
+        logger.debug("💾 Сохранен start payload %s для последующей обработки", payload)
 
     async def _deactivate_trial_subscription(self, telegram_id: int) -> None:
         async for db in get_db():

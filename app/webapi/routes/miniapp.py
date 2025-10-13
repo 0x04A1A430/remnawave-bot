@@ -641,6 +641,18 @@ async def get_payment_methods(
         )
 
     if settings.is_yookassa_enabled():
+        if getattr(settings, "YOOKASSA_SBP_ENABLED", False):
+            methods.append(
+                MiniAppPaymentMethod(
+                    id="yookassa_sbp",
+                    icon="🏦",
+                    requires_amount=True,
+                    currency="RUB",
+                    min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
+                    max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
+                )
+            )
+
         methods.append(
             MiniAppPaymentMethod(
                 id="yookassa",
@@ -702,11 +714,12 @@ async def get_payment_methods(
 
     order_map = {
         "stars": 1,
-        "yookassa": 2,
-        "mulenpay": 3,
-        "pal24": 4,
-        "cryptobot": 5,
-        "tribute": 6,
+        "yookassa_sbp": 2,
+        "yookassa": 3,
+        "mulenpay": 4,
+        "pal24": 5,
+        "cryptobot": 6,
+        "tribute": 7,
     }
     methods.sort(key=lambda item: order_map.get(item.id, 99))
 
@@ -779,6 +792,44 @@ async def create_payment_link(
                 "stars_amount": stars_amount,
                 "requested_amount_kopeks": requested_amount_kopeks,
             },
+        )
+
+    if method == "yookassa_sbp":
+        if not settings.is_yookassa_enabled() or not getattr(settings, "YOOKASSA_SBP_ENABLED", False):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Payment method is unavailable")
+        if amount_kopeks is None or amount_kopeks <= 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Amount must be positive")
+        if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Amount is below minimum")
+        if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Amount exceeds maximum")
+
+        payment_service = PaymentService()
+        result = await payment_service.create_yookassa_sbp_payment(
+            db=db,
+            user_id=user.id,
+            amount_kopeks=amount_kopeks,
+            description=settings.get_balance_payment_description(amount_kopeks),
+        )
+        confirmation_url = result.get("confirmation_url") if result else None
+        if not result or not confirmation_url:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Failed to create payment")
+
+        extra: dict[str, Any] = {
+            "local_payment_id": result.get("local_payment_id"),
+            "payment_id": result.get("yookassa_payment_id"),
+            "status": result.get("status"),
+            "requested_at": _current_request_timestamp(),
+        }
+        confirmation_token = result.get("confirmation_token")
+        if confirmation_token:
+            extra["confirmation_token"] = confirmation_token
+
+        return MiniAppPaymentCreateResponse(
+            method=method,
+            payment_url=confirmation_url,
+            amount_kopeks=amount_kopeks,
+            extra=extra,
         )
 
     if method == "yookassa":
@@ -1047,8 +1098,13 @@ async def _resolve_payment_status_entry(
             message="Payment method is required",
         )
 
-    if method == "yookassa":
-        return await _resolve_yookassa_payment_status(db, user, query)
+    if method in {"yookassa", "yookassa_sbp"}:
+        return await _resolve_yookassa_payment_status(
+            db,
+            user,
+            query,
+            method=method,
+        )
     if method == "mulenpay":
         return await _resolve_mulenpay_payment_status(payment_service, db, user, query)
     if method == "pal24":
@@ -1071,6 +1127,8 @@ async def _resolve_yookassa_payment_status(
     db: AsyncSession,
     user: User,
     query: MiniAppPaymentStatusQuery,
+    *,
+    method: str = "yookassa",
 ) -> MiniAppPaymentStatusResult:
     from app.database.crud.yookassa import (
         get_yookassa_payment_by_id,
@@ -1085,7 +1143,7 @@ async def _resolve_yookassa_payment_status(
 
     if not payment or payment.user_id != user.id:
         return MiniAppPaymentStatusResult(
-            method="yookassa",
+            method=method,
             status="pending",
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
@@ -1104,7 +1162,7 @@ async def _resolve_yookassa_payment_status(
     completed_at = payment.captured_at or payment.updated_at or payment.created_at
 
     return MiniAppPaymentStatusResult(
-        method="yookassa",
+        method=method,
         status=status,
         is_paid=status == "paid",
         amount_kopeks=payment.amount_kopeks,
@@ -4803,4 +4861,3 @@ async def update_subscription_devices_endpoint(
     )
 
     return MiniAppSubscriptionUpdateResponse(success=True)
-
