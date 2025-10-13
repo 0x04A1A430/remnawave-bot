@@ -137,6 +137,58 @@ async def test_resolve_yookassa_status_includes_identifiers(monkeypatch):
 
 
 @pytest.mark.anyio("asyncio")
+async def test_resolve_payment_status_supports_yookassa_sbp(monkeypatch):
+    payment = types.SimpleNamespace(
+        id=77,
+        user_id=5,
+        amount_kopeks=25000,
+        currency='RUB',
+        status='pending',
+        is_paid=False,
+        captured_at=None,
+        updated_at=None,
+        created_at=datetime.utcnow(),
+        transaction_id=None,
+        yookassa_payment_id='yk_sbp_1',
+    )
+
+    async def fake_get_by_local_id(db, local_id):  # noqa: ARG001
+        return payment if local_id == 77 else None
+
+    async def fake_get_by_id(db, payment_id):  # noqa: ARG001
+        return None
+
+    stub_module = types.SimpleNamespace(
+        get_yookassa_payment_by_local_id=fake_get_by_local_id,
+        get_yookassa_payment_by_id=fake_get_by_id,
+    )
+    monkeypatch.setitem(sys.modules, 'app.database.crud.yookassa', stub_module)
+
+    user = types.SimpleNamespace(id=5)
+    query = MiniAppPaymentStatusQuery(
+        method='yookassa_sbp',
+        localPaymentId=77,
+        amountKopeks=25000,
+        startedAt='2024-05-01T10:00:00Z',
+        payload='sbp_payload',
+    )
+
+    result = await miniapp._resolve_payment_status_entry(
+        payment_service=types.SimpleNamespace(),
+        db=None,
+        user=user,
+        query=query,
+    )
+
+    assert result.method == 'yookassa_sbp'
+    assert result.status == 'pending'
+    assert result.extra['local_payment_id'] == 77
+    assert result.extra['payment_id'] == 'yk_sbp_1'
+    assert result.extra['payload'] == 'sbp_payload'
+    assert result.extra['started_at'] == '2024-05-01T10:00:00Z'
+
+
+@pytest.mark.anyio("asyncio")
 async def test_resolve_pal24_status_includes_identifiers(monkeypatch):
     async def fake_get_pal24_payment_by_bill_id(db, bill_id):
         return None

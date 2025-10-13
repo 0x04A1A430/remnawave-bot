@@ -1098,8 +1098,13 @@ async def _resolve_payment_status_entry(
             message="Payment method is required",
         )
 
-    if method == "yookassa":
-        return await _resolve_yookassa_payment_status(db, user, query)
+    if method in {"yookassa", "yookassa_sbp"}:
+        return await _resolve_yookassa_payment_status(
+            db,
+            user,
+            query,
+            method=method,
+        )
     if method == "mulenpay":
         return await _resolve_mulenpay_payment_status(payment_service, db, user, query)
     if method == "pal24":
@@ -1122,6 +1127,8 @@ async def _resolve_yookassa_payment_status(
     db: AsyncSession,
     user: User,
     query: MiniAppPaymentStatusQuery,
+    *,
+    method: str = "yookassa",
 ) -> MiniAppPaymentStatusResult:
     from app.database.crud.yookassa import (
         get_yookassa_payment_by_id,
@@ -1136,7 +1143,7 @@ async def _resolve_yookassa_payment_status(
 
     if not payment or payment.user_id != user.id:
         return MiniAppPaymentStatusResult(
-            method="yookassa",
+            method=method,
             status="pending",
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
@@ -1155,7 +1162,7 @@ async def _resolve_yookassa_payment_status(
     completed_at = payment.captured_at or payment.updated_at or payment.created_at
 
     return MiniAppPaymentStatusResult(
-        method="yookassa",
+        method=method,
         status=status,
         is_paid=status == "paid",
         amount_kopeks=payment.amount_kopeks,
