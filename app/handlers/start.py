@@ -222,12 +222,28 @@ async def _continue_registration_after_language(
 
 async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession, db_user=None):
     logger.info(f"🚀 START: Обработка /start от {message.from_user.id}")
-    
+
+    data = await state.get_data() or {}
+    pending_start_payload = data.pop("pending_start_payload", None)
+
     referral_code = None
     campaign = None
     start_args = message.text.split()
+    start_parameter = None
+
     if len(start_args) > 1:
         start_parameter = start_args[1]
+    elif pending_start_payload:
+        start_parameter = pending_start_payload
+        logger.info(
+            "📦 START: Используем сохраненный payload '%s'",
+            pending_start_payload,
+        )
+
+    if pending_start_payload is not None:
+        await state.set_data(data)
+
+    if start_parameter:
         campaign = await get_campaign_by_start_parameter(
             db,
             start_parameter,
@@ -1408,6 +1424,41 @@ async def required_sub_channel_check(
 
     try:
         state_data = await state.get_data() or {}
+
+        pending_start_payload = state_data.pop("pending_start_payload", None)
+        state_updated = pending_start_payload is not None
+
+        if pending_start_payload:
+            logger.info(
+                "📦 CHANNEL CHECK: Найден сохраненный payload '%s'",
+                pending_start_payload,
+            )
+
+            if "campaign_id" not in state_data and "referral_code" not in state_data:
+                campaign = await get_campaign_by_start_parameter(
+                    db,
+                    pending_start_payload,
+                    only_active=True,
+                )
+
+                if campaign:
+                    state_data["campaign_id"] = campaign.id
+                    logger.info(
+                        "📣 CHANNEL CHECK: Кампания %s восстановлена из payload",
+                        campaign.id,
+                    )
+                else:
+                    state_data["referral_code"] = pending_start_payload
+                    logger.info(
+                        "🎯 CHANNEL CHECK: Payload интерпретирован как реферальный код",
+                    )
+            else:
+                logger.debug(
+                    "ℹ️ CHANNEL CHECK: Payload уже обработан ранее, пропускаем восстановление",
+                )
+
+        if state_updated:
+            await state.set_data(state_data)
 
         user = db_user
         if not user:
