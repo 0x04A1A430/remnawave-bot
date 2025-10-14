@@ -62,7 +62,7 @@ from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
 )
-from app.services.payment_service import PaymentService
+from app.services.payment_service import PaymentService, get_wata_payment_by_link_id
 from app.services.promo_offer_service import promo_offer_service
 from app.services.promocode_service import PromoCodeService
 from app.services.subscription_service import SubscriptionService
@@ -688,6 +688,18 @@ async def get_payment_methods(
             )
         )
 
+    if settings.is_wata_enabled():
+        methods.append(
+            MiniAppPaymentMethod(
+                id="wata",
+                icon="🌊",
+                requires_amount=True,
+                currency="RUB",
+                min_amount_kopeks=settings.WATA_MIN_AMOUNT_KOPEKS,
+                max_amount_kopeks=settings.WATA_MAX_AMOUNT_KOPEKS,
+            )
+        )
+
     if settings.is_cryptobot_enabled():
         rate = await _get_usd_to_rub_rate()
         min_amount_kopeks, max_amount_kopeks = _compute_cryptobot_limits(rate)
@@ -718,8 +730,9 @@ async def get_payment_methods(
         "yookassa": 3,
         "mulenpay": 4,
         "pal24": 5,
-        "cryptobot": 6,
-        "tribute": 7,
+        "wata": 6,
+        "cryptobot": 7,
+        "tribute": 8,
     }
     methods.sort(key=lambda item: order_map.get(item.id, 99))
 
@@ -892,6 +905,42 @@ async def create_payment_link(
             extra={
                 "local_payment_id": result.get("local_payment_id"),
                 "payment_id": result.get("mulen_payment_id"),
+                "requested_at": _current_request_timestamp(),
+            },
+        )
+
+    if method == "wata":
+        if not settings.is_wata_enabled():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Payment method is unavailable")
+        if amount_kopeks is None or amount_kopeks <= 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Amount must be positive")
+        if amount_kopeks < settings.WATA_MIN_AMOUNT_KOPEKS:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Amount is below minimum")
+        if amount_kopeks > settings.WATA_MAX_AMOUNT_KOPEKS:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Amount exceeds maximum")
+
+        payment_service = PaymentService()
+        result = await payment_service.create_wata_payment(
+            db=db,
+            user_id=user.id,
+            amount_kopeks=amount_kopeks,
+            description=settings.get_balance_payment_description(amount_kopeks),
+            language=user.language,
+        )
+        payment_url = result.get("payment_url") if result else None
+        if not result or not payment_url:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Failed to create payment")
+
+        return MiniAppPaymentCreateResponse(
+            method=method,
+            payment_url=payment_url,
+            amount_kopeks=amount_kopeks,
+            extra={
+                "local_payment_id": result.get("local_payment_id"),
+                "payment_link_id": result.get("payment_link_id"),
+                "payment_id": result.get("payment_link_id"),
+                "status": result.get("status"),
+                "order_id": result.get("order_id"),
                 "requested_at": _current_request_timestamp(),
             },
         )
@@ -1107,6 +1156,8 @@ async def _resolve_payment_status_entry(
         )
     if method == "mulenpay":
         return await _resolve_mulenpay_payment_status(payment_service, db, user, query)
+    if method == "wata":
+        return await _resolve_wata_payment_status(payment_service, db, user, query)
     if method == "pal24":
         return await _resolve_pal24_payment_status(payment_service, db, user, query)
     if method == "cryptobot":
@@ -1252,6 +1303,106 @@ async def _resolve_mulenpay_payment_status(
             "payload": query.payload,
             "started_at": query.started_at,
         },
+    )
+
+
+async def _resolve_wata_payment_status(
+    payment_service: PaymentService,
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    local_id = query.local_payment_id
+    payment_link_id = query.payment_link_id or query.payment_id or query.invoice_id
+    fallback_payment = None
+
+    if not local_id and payment_link_id:
+        fallback_payment = await get_wata_payment_by_link_id(db, payment_link_id)
+        if fallback_payment:
+            local_id = fallback_payment.id
+
+    if not local_id:
+        return MiniAppPaymentStatusResult(
+            method="wata",
+            status="pending",
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message="Missing payment identifier",
+            extra={
+                "local_payment_id": query.local_payment_id,
+                "payment_link_id": payment_link_id,
+                "payment_id": query.payment_id,
+                "invoice_id": query.invoice_id,
+                "payload": query.payload,
+                "started_at": query.started_at,
+            },
+        )
+
+    status_info = await payment_service.get_wata_payment_status(db, local_id)
+    payment = (status_info or {}).get("payment") or fallback_payment
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method="wata",
+            status="pending",
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message="Payment not found",
+            extra={
+                "local_payment_id": local_id,
+                "payment_link_id": (payment_link_id or getattr(payment, "payment_link_id", None)),
+                "payment_id": query.payment_id,
+                "invoice_id": query.invoice_id,
+                "payload": query.payload,
+                "started_at": query.started_at,
+            },
+        )
+
+    remote_link = (status_info or {}).get("remote_link") if status_info else None
+    transaction_payload = (status_info or {}).get("transaction") if status_info else None
+    status_raw = (status_info or {}).get("status") or getattr(payment, "status", None)
+    is_paid_flag = bool((status_info or {}).get("is_paid") or getattr(payment, "is_paid", False))
+    status_value = _classify_status(status_raw, is_paid_flag)
+    completed_at = (
+        getattr(payment, "paid_at", None)
+        or getattr(payment, "updated_at", None)
+        or getattr(payment, "created_at", None)
+    )
+
+    message = None
+    if status_value == "failed":
+        message = (
+            (transaction_payload or {}).get("errorDescription")
+            or (transaction_payload or {}).get("errorCode")
+            or (remote_link or {}).get("status")
+        )
+
+    extra: Dict[str, Any] = {
+        "local_payment_id": payment.id,
+        "payment_link_id": payment.payment_link_id,
+        "payment_id": payment.payment_link_id,
+        "status": status_raw,
+        "is_paid": getattr(payment, "is_paid", False),
+        "order_id": getattr(payment, "order_id", None),
+        "payload": query.payload,
+        "started_at": query.started_at,
+    }
+    if remote_link:
+        extra["remote_link"] = remote_link
+    if transaction_payload:
+        extra["transaction"] = transaction_payload
+
+    return MiniAppPaymentStatusResult(
+        method="wata",
+        status=status_value,
+        is_paid=status_value == "paid",
+        amount_kopeks=payment.amount_kopeks,
+        currency=payment.currency,
+        completed_at=completed_at,
+        transaction_id=payment.transaction_id,
+        external_id=payment.payment_link_id,
+        message=message,
+        extra=extra,
     )
 
 
