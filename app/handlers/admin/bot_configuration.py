@@ -46,9 +46,18 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
     },
     "payments": {
         "title": "💳 Платежные системы",
-        "description": "YooKassa, CryptoBot, MulenPay, PAL24, Tribute и Telegram Stars.",
+        "description": "YooKassa, CryptoBot, MulenPay, PAL24, Wata, Tribute и Telegram Stars.",
         "icon": "💳",
-        "categories": ("PAYMENT", "YOOKASSA", "CRYPTOBOT", "MULENPAY", "PAL24", "TRIBUTE", "TELEGRAM"),
+        "categories": (
+            "PAYMENT",
+            "YOOKASSA",
+            "CRYPTOBOT",
+            "MULENPAY",
+            "PAL24",
+            "WATA",
+            "TRIBUTE",
+            "TELEGRAM",
+        ),
     },
     "subscriptions": {
         "title": "📅 Подписки и цены",
@@ -76,9 +85,19 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
     },
     "interface": {
         "title": "🎨 Интерфейс и брендинг",
-        "description": "Логотип, тексты, языки, miniapp и deep links.",
+        "description": "Логотип, тексты, языки, главное меню, miniapp и deep links.",
         "icon": "🎨",
-        "categories": ("INTERFACE_BRANDING", "INTERFACE_SUBSCRIPTION", "CONNECT_BUTTON", "MINIAPP", "HAPP", "SKIP", "LOCALIZATION", "ADDITIONAL"),
+        "categories": (
+            "INTERFACE",
+            "INTERFACE_BRANDING",
+            "INTERFACE_SUBSCRIPTION",
+            "CONNECT_BUTTON",
+            "MINIAPP",
+            "HAPP",
+            "SKIP",
+            "LOCALIZATION",
+            "ADDITIONAL",
+        ),
     },
     "database": {
         "title": "💾 База данных",
@@ -106,9 +125,9 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
     },
     "advanced": {
         "title": "⚡ Расширенные",
-        "description": "Web API, webhook, логирование и режим отладки.",
+        "description": "Web API, webhook, логирование, модерация и режим отладки.",
         "icon": "⚡",
-        "categories": ("WEB_API", "WEBHOOK", "LOG", "DEBUG"),
+        "categories": ("WEB_API", "WEBHOOK", "LOG", "MODERATION", "DEBUG"),
     },
     "external_admin": {
         "title": "🛡️ Внешняя админка",
