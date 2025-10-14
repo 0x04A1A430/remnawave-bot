@@ -231,6 +231,7 @@ def get_main_menu_keyboard(
     balance_kopeks: int = 0,
     subscription=None,
     show_resume_checkout: bool = False,
+    has_saved_cart: bool = False,  # Новый параметр для отображения уведомления о сохраненной корзине
     *,
     is_moderator: bool = False,
     custom_buttons: Optional[list[InlineKeyboardButton]] = None,
@@ -343,7 +344,7 @@ def get_main_menu_keyboard(
         else:
             keyboard.append([subscription_buttons[0]])
 
-    if show_resume_checkout:
+    if show_resume_checkout or has_saved_cart:
         keyboard.append([
             InlineKeyboardButton(
                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
@@ -356,12 +357,18 @@ def get_main_menu_keyboard(
             if isinstance(button, InlineKeyboardButton):
                 keyboard.append([button])
 
-    keyboard.extend([
-        [
-            InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data="menu_promocode"),
+    # Добавляем кнопки промокода и рефералов, учитывая настройки
+    additional_buttons = [
+        InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data="menu_promocode")
+    ]
+    
+    # Добавляем кнопку рефералов только если программа включена
+    if settings.is_referral_program_enabled():
+        additional_buttons.append(
             InlineKeyboardButton(text=texts.MENU_REFERRALS, callback_data="menu_referrals")
-        ]
-    ])
+        )
+    
+    keyboard.append(additional_buttons)
 
     # Support button is configurable (runtime via service)
     try:
@@ -624,6 +631,7 @@ def get_insufficient_balance_keyboard(
     language: str = DEFAULT_LANGUAGE,
     resume_callback: str | None = None,
     amount_kopeks: int | None = None,
+    has_saved_cart: bool = False,  # Новый параметр для указания наличия сохраненной корзины
 ) -> InlineKeyboardMarkup:
 
     texts = get_texts(language)
@@ -644,14 +652,23 @@ def get_insufficient_balance_keyboard(
             )
             back_row_index = len(keyboard.inline_keyboard) - 1
 
-    if resume_callback:
+    # Если есть сохраненная корзина, добавляем кнопку возврата к оформлению
+    if has_saved_cart:
+        return_row = [
+            InlineKeyboardButton(
+                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                callback_data="subscription_resume_checkout",
+            )
+        ]
+        insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
+        keyboard.inline_keyboard.insert(insert_index, return_row)
+    elif resume_callback:
         return_row = [
             InlineKeyboardButton(
                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
                 callback_data=resume_callback,
             )
         ]
-
         insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
         keyboard.inline_keyboard.insert(insert_index, return_row)
 
@@ -757,6 +774,7 @@ def get_payment_methods_keyboard_with_cart(
     language: str = "ru",
     amount_kopeks: int = 0,
 ) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
     keyboard = get_payment_methods_keyboard(amount_kopeks, language)
     
     # Добавляем кнопку "Очистить корзину"
@@ -767,9 +785,18 @@ def get_payment_methods_keyboard_with_cart(
         )
     ])
     
+    # Добавляем кнопку возврата к оформлению подписки
+    keyboard.inline_keyboard.insert(-1, [  # Вставляем перед кнопкой "назад"
+        InlineKeyboardButton(
+            text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+            callback_data="subscription_resume_checkout"
+        )
+    ])
+    
     return keyboard
 
 def get_subscription_confirm_keyboard_with_cart(language: str = "ru") -> InlineKeyboardMarkup:
+    texts = get_texts(language)
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
             text="✅ Подтвердить покупку",
@@ -780,8 +807,8 @@ def get_subscription_confirm_keyboard_with_cart(language: str = "ru") -> InlineK
             callback_data="clear_saved_cart"
         )],
         [InlineKeyboardButton(
-            text="🔙 Назад",
-            callback_data="back_to_menu"
+            text=texts.BACK,
+            callback_data="subscription_config_back"  # Изменили на возврат к настройке
         )]
     ])
 
@@ -789,11 +816,14 @@ def get_insufficient_balance_keyboard_with_cart(
     language: str = "ru",
     amount_kopeks: int = 0,
 ) -> InlineKeyboardMarkup:
+    # Используем обновленную версию с флагом has_saved_cart=True
     keyboard = get_insufficient_balance_keyboard(
         language,
         amount_kopeks=amount_kopeks,
+        has_saved_cart=True,
     )
 
+    # Добавляем кнопку очистки корзины в начало
     keyboard.inline_keyboard.insert(
         0,
         [

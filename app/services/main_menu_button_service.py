@@ -14,6 +14,7 @@ from app.database.models import (
     MainMenuButtonActionType,
     MainMenuButtonVisibility,
 )
+from app.config import settings
 
 
 @dataclass(frozen=True)
@@ -103,6 +104,19 @@ class MainMenuButtonService:
                 continue
 
             if item.visibility == MainMenuButtonVisibility.SUBSCRIBERS and not has_subscription:
+                continue
+
+            # Проверка реферальной программы: скрыть кнопки, связанные с рефералами, если программа отключена
+            if (
+                not settings.is_referral_program_enabled()
+                and (
+                    "partner" in item.text.lower()
+                    or "referr" in item.text.lower()
+                    or "партнер" in item.text.lower()
+                    or "реферал" in item.text.lower()
+                    or "referral" in item.action_value.lower()
+                )
+            ):
                 continue
 
             button = cls._build_button(item)

@@ -134,6 +134,7 @@ class Settings(BaseSettings):
     REFERRAL_INVITER_BONUS_KOPEKS: int = 10000 
     REFERRAL_COMMISSION_PERCENT: int = 25 
 
+    REFERRAL_PROGRAM_ENABLED: bool = True
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
     REFERRED_USER_REWARD: int = 0 
@@ -178,6 +179,7 @@ class Settings(BaseSettings):
     YOOKASSA_MIN_AMOUNT_KOPEKS: int = 5000
     YOOKASSA_MAX_AMOUNT_KOPEKS: int = 1000000
     YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED: bool = False
+    DISABLE_TOPUP_BUTTONS: bool = False
     PAYMENT_BALANCE_DESCRIPTION: str = "Пополнение баланса"
     PAYMENT_SUBSCRIPTION_DESCRIPTION: str = "Оплата подписки"
     PAYMENT_SERVICE_NAME: str = "Интернет-сервис"
@@ -950,6 +952,7 @@ class Settings(BaseSettings):
         referred_reward_kopeks = self.get_referred_user_reward_kopeks()
 
         return {
+            "program_enabled": self.is_referral_program_enabled(),
             "minimum_topup_kopeks": self.REFERRAL_MINIMUM_TOPUP_KOPEKS,
             "first_topup_bonus_kopeks": self.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
             "inviter_bonus_kopeks": self.REFERRAL_INVITER_BONUS_KOPEKS,
@@ -958,6 +961,9 @@ class Settings(BaseSettings):
             "referred_user_reward": referred_reward_kopeks,
             "referred_user_reward_kopeks": referred_reward_kopeks,
         }
+    
+    def is_referral_program_enabled(self) -> bool:
+        return bool(self.REFERRAL_PROGRAM_ENABLED)
     
     def is_referral_notifications_enabled(self) -> bool:
         return self.REFERRAL_NOTIFICATIONS_ENABLED
