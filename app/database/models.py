@@ -77,7 +77,6 @@ class PaymentMethod(Enum):
     CRYPTOBOT = "cryptobot"
     MULENPAY = "mulenpay"
     PAL24 = "pal24"
-    WATA = "wata"
     MANUAL = "manual"
 
 
@@ -290,62 +289,6 @@ class Pal24Payment(Base):
                 self.bill_id,
                 self.amount_rubles,
                 self.status,
-            )
-        )
-
-
-class WataPayment(Base):
-    __tablename__ = "wata_payments"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-
-    wata_link_id = Column(String(64), unique=True, nullable=True, index=True)
-    order_id = Column(String(255), unique=True, nullable=False, index=True)
-    amount_kopeks = Column(Integer, nullable=False)
-    currency = Column(String(10), nullable=False, default="RUB")
-    description = Column(Text, nullable=True)
-
-    status = Column(String(32), nullable=False, default="Opened")
-    transaction_status = Column(String(32), nullable=True)
-    external_transaction_id = Column(String(255), nullable=True, index=True)
-
-    payment_url = Column(Text, nullable=True)
-    success_redirect_url = Column(Text, nullable=True)
-    fail_redirect_url = Column(Text, nullable=True)
-    expiration_at = Column(DateTime, nullable=True)
-
-    is_paid = Column(Boolean, default=False)
-    paid_at = Column(DateTime, nullable=True)
-
-    metadata_json = Column(JSON, nullable=True)
-    callback_payload = Column(JSON, nullable=True)
-    last_status_payload = Column(JSON, nullable=True)
-
-    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
-
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-
-    user = relationship("User", backref="wata_payments")
-    transaction = relationship("Transaction", backref="wata_payment")
-
-    @property
-    def amount_rubles(self) -> float:
-        return self.amount_kopeks / 100
-
-    @property
-    def is_pending(self) -> bool:
-        return not self.is_paid and (self.status or "").lower() == "opened"
-
-    def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return (
-            "<WataPayment(id={0}, order_id={1}, amount={2}₽, status={3}, transaction_status={4})>".format(
-                self.id,
-                self.order_id,
-                self.amount_rubles,
-                self.status,
-                self.transaction_status,
             )
         )
 
