@@ -21,7 +21,7 @@ from app.database.models import (
     User, UserStatus, Subscription, Transaction, PromoCode, PromoCodeUse,
     ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory,
     CryptoBotPayment, SubscriptionConversion, UserMessage, WelcomeText,
-    SentNotification, PromoGroup, MulenPayPayment, Pal24Payment,
+    SentNotification, PromoGroup, MulenPayPayment, Pal24Payment, WataPayment,
     AdvertisingCampaign, AdvertisingCampaignRegistration, PaymentMethod,
     TransactionType
 )
@@ -686,6 +686,27 @@ class UserService:
                     await db.flush()
             except Exception as e:
                 logger.error(f"❌ Ошибка удаления Pal24 платежей: {e}")
+
+            try:
+                wata_result = await db.execute(
+                    select(WataPayment).where(WataPayment.user_id == user_id)
+                )
+                wata_payments = wata_result.scalars().all()
+
+                if wata_payments:
+                    logger.info(f"🔄 Удаляем {len(wata_payments)} Wata платежей")
+                    await db.execute(
+                        update(WataPayment)
+                        .where(WataPayment.user_id == user_id)
+                        .values(transaction_id=None)
+                    )
+                    await db.flush()
+                    await db.execute(
+                        delete(WataPayment).where(WataPayment.user_id == user_id)
+                    )
+                    await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления Wata платежей: {e}")
 
             try:
                 transactions_result = await db.execute(

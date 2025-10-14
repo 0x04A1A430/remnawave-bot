@@ -50,6 +50,7 @@ def _make_service(stub: Optional[StubMulenPayService]) -> PaymentService:
     service.yookassa_service = None
     service.stars_service = None
     service.cryptobot_service = None
+    service.wata_service = None
     return service
 
 
