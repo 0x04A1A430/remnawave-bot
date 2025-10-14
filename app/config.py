@@ -215,20 +215,6 @@ class Settings(BaseSettings):
     MULENPAY_MIN_AMOUNT_KOPEKS: int = 10000
     MULENPAY_MAX_AMOUNT_KOPEKS: int = 10000000
 
-    WATA_ENABLED: bool = False
-    WATA_ACCESS_TOKEN: Optional[str] = None
-    WATA_BASE_URL: str = "https://api.wata.pro/api/h2h"
-    WATA_WEBHOOK_PATH: str = "/wata-webhook"
-    WATA_DESCRIPTION: str = "Пополнение баланса"
-    WATA_DEFAULT_CURRENCY: str = "RUB"
-    WATA_SUCCESS_REDIRECT_URL: Optional[str] = None
-    WATA_FAIL_REDIRECT_URL: Optional[str] = None
-    WATA_LINK_TYPE: str = "OneTime"
-    WATA_ALLOW_ARBITRARY_AMOUNT: bool = False
-    WATA_MIN_AMOUNT_KOPEKS: int = 10000
-    WATA_MAX_AMOUNT_KOPEKS: int = 100000000
-    WATA_TIMEOUT_SECONDS: int = 60
-
     PAL24_ENABLED: bool = False
     PAL24_API_TOKEN: Optional[str] = None
     PAL24_SHOP_ID: Optional[str] = None
@@ -735,9 +721,6 @@ class Settings(BaseSettings):
             and self.MULENPAY_SECRET_KEY is not None
             and self.MULENPAY_SHOP_ID is not None
         )
-
-    def is_wata_enabled(self) -> bool:
-        return bool(self.WATA_ENABLED and self.WATA_ACCESS_TOKEN)
 
     def is_pal24_enabled(self) -> bool:
         return (
