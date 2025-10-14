@@ -30,6 +30,7 @@ from app.services.subscription_checkout_service import (
 from app.utils.photo_message import edit_or_answer_photo
 from app.services.support_settings_service import SupportSettingsService
 from app.services.main_menu_button_service import MainMenuButtonService
+from app.services.user_cart_service import user_cart_service
 from app.utils.promo_offer import (
     build_promo_offer_hint,
     build_test_access_hint,
@@ -162,6 +163,13 @@ async def show_main_menu(
 
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
+    
+    # Проверяем наличие сохраненной корзины в Redis
+    try:
+        has_saved_cart = await user_cart_service.has_user_cart(db_user.id)
+    except Exception as e:
+        logger.error(f"Ошибка проверки сохраненной корзины для пользователя {db_user.id}: {e}")
+        has_saved_cart = False
 
     is_admin = settings.is_admin(db_user.telegram_id)
     is_moderator = (not is_admin) and SupportSettingsService.is_moderator(
@@ -190,6 +198,7 @@ async def show_main_menu(
             balance_kopeks=db_user.balance_kopeks,
             subscription=db_user.subscription,
             show_resume_checkout=show_resume_checkout,
+            has_saved_cart=has_saved_cart,  # Добавляем параметр для отображения уведомления о сохраненной корзине
             custom_buttons=custom_buttons,
         ),
         parse_mode="HTML",
@@ -893,6 +902,13 @@ async def handle_back_to_menu(
 
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
+    
+    # Проверяем наличие сохраненной корзины в Redis
+    try:
+        has_saved_cart = await user_cart_service.has_user_cart(db_user.id)
+    except Exception as e:
+        logger.error(f"Ошибка проверки сохраненной корзины для пользователя {db_user.id}: {e}")
+        has_saved_cart = False
 
     is_admin = settings.is_admin(db_user.telegram_id)
     is_moderator = (not is_admin) and SupportSettingsService.is_moderator(
@@ -921,6 +937,7 @@ async def handle_back_to_menu(
             balance_kopeks=db_user.balance_kopeks,
             subscription=db_user.subscription,
             show_resume_checkout=show_resume_checkout,
+            has_saved_cart=has_saved_cart,  # Добавляем параметр для отображения уведомления о сохраненной корзине
             custom_buttons=custom_buttons,
         ),
         parse_mode="HTML",

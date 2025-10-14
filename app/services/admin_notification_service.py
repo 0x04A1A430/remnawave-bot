@@ -408,6 +408,16 @@ class AdminNotificationService:
 
         return refreshed_user, refreshed_transaction, subscription, promo_group
 
+    def _is_lazy_loading_error(self, error: Exception) -> bool:
+        message = str(error).lower()
+        return (
+            isinstance(error, MissingGreenlet)
+            or "greenlet_spawn" in message
+            or "await_only" in message
+            or "missinggreenlet" in message
+        )
+
+
     async def send_balance_topup_notification(
         self,
         user: User,
@@ -423,7 +433,10 @@ class AdminNotificationService:
         if not self._is_enabled():
             return False
 
+        logger.info("Начинаем отправку уведомления о пополнении баланса")
+        
         try:
+            logger.info("Пытаемся создать сообщение уведомления")
             message = self._build_balance_topup_message(
                 user,
                 transaction,
@@ -433,21 +446,49 @@ class AdminNotificationService:
                 subscription=subscription,
                 promo_group=promo_group,
             )
-        except MissingGreenlet as missing_greenlet:
-            if db is None:
+            logger.info("Сообщение уведомления создано успешно")
+        except Exception as error:
+            logger.info(f"Перехвачена ошибка при создании сообщения уведомления: {type(error).__name__}: {error}")
+            if not self._is_lazy_loading_error(error):
                 logger.error(
-                    "Недостаточно данных для уведомления о пополнении и отсутствует доступ к БД: %s",
-                    missing_greenlet,
+                    "Ошибка подготовки уведомления о пополнении: %s",
+                    error,
+                    exc_info=True,
                 )
                 return False
 
+            if db is None:
+                logger.error(
+                    "Недостаточно данных для уведомления о пополнении и отсутствует доступ к БД: %s",
+                    error,
+                    exc_info=True,
+                )
+                return False
+
+            logger.warning(
+                "Повторная загрузка данных для уведомления о пополнении после ошибки ленивой загрузки: %s",
+                error,
+            )
+
             try:
+                logger.info("Пытаемся перезагрузить данные для уведомления")
                 (
                     user,
                     transaction,
                     subscription,
                     promo_group,
                 ) = await self._reload_topup_notification_entities(db, user, transaction)
+                logger.info("Данные успешно перезагружены")
+            except Exception as reload_error:
+                logger.error(
+                    "Ошибка повторной загрузки данных для уведомления о пополнении: %s",
+                    reload_error,
+                    exc_info=True,
+                )
+                return False
+
+            try:
+                logger.info("Пытаемся создать сообщение после перезагрузки данных")
                 message = self._build_balance_topup_message(
                     user,
                     transaction,
@@ -457,24 +498,22 @@ class AdminNotificationService:
                     subscription=subscription,
                     promo_group=promo_group,
                 )
-            except Exception as reload_error:
+                logger.info("Сообщение успешно создано после перезагрузки данных")
+            except Exception as rebuild_error:
                 logger.error(
-                    "Ошибка повторной загрузки данных для уведомления о пополнении: %s",
-                    reload_error,
+                    "Ошибка повторной подготовки уведомления о пополнении после повторной загрузки: %s",
+                    rebuild_error,
                     exc_info=True,
                 )
                 return False
-        except Exception as e:
-            logger.error(
-                f"Ошибка подготовки уведомления о пополнении: {e}",
-                exc_info=True,
-            )
-            return False
 
         try:
             return await self._send_message(message)
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления о пополнении: {e}")
+            logger.error(
+                f"Ошибка отправки уведомления о пополнении: {e}",
+                exc_info=True,
+            )
             return False
     
     async def send_subscription_extension_notification(

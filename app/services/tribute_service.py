@@ -167,6 +167,7 @@ class TributeService:
                         referrer_info=referrer_info,
                         subscription=subscription,
                         promo_group=promo_group,
+                        db=session,
                     )
                 except Exception as e:
                     logger.error(f"Ошибка отправки уведомления о Tribute пополнении: {e}")
