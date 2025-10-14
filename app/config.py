@@ -179,6 +179,7 @@ class Settings(BaseSettings):
     YOOKASSA_MIN_AMOUNT_KOPEKS: int = 5000
     YOOKASSA_MAX_AMOUNT_KOPEKS: int = 1000000
     YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED: bool = False
+    DISABLE_TOPUP_BUTTONS: bool = False
     PAYMENT_BALANCE_DESCRIPTION: str = "Пополнение баланса"
     PAYMENT_SUBSCRIPTION_DESCRIPTION: str = "Оплата подписки"
     PAYMENT_SERVICE_NAME: str = "Интернет-сервис"
