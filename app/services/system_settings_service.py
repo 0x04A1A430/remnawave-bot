@@ -78,6 +78,7 @@ class BotConfigurationService:
         "TRIBUTE": "🎁 Tribute",
         "MULENPAY": "💰 MulenPay",
         "PAL24": "🏦 PAL24 / PayPalych",
+        "WATA": "💠 Wata",
         "EXTERNAL_ADMIN": "🛡️ Внешняя админка",
         "SUBSCRIPTIONS_CORE": "📅 Подписки и лимиты",
         "PERIODS": "📆 Периоды подписок",
@@ -127,6 +128,7 @@ class BotConfigurationService:
         "PAL24": "PAL24 / PayPalych подключения и лимиты.",
         "TRIBUTE": "Tribute и донат-сервисы.",
         "TELEGRAM": "Telegram Stars и их стоимость.",
+        "WATA": "Wata: токены доступа, редиректы и лимиты платежей.",
         "EXTERNAL_ADMIN": "Токен внешней админки для проверки запросов.",
         "SUBSCRIPTIONS_CORE": "Лимиты устройств, трафика и базовые цены подписок.",
         "PERIODS": "Доступные периоды подписок и продлений.",
@@ -165,6 +167,8 @@ class BotConfigurationService:
     }
 
     CATEGORY_KEY_OVERRIDES: Dict[str, str] = {
+        "BOT_TOKEN": "CORE",
+        "BOT_USERNAME": "CORE",
         "DATABASE_URL": "DATABASE",
         "DATABASE_MODE": "DATABASE",
         "LOCALES_PATH": "LOCALIZATION",
@@ -198,6 +202,7 @@ class BotConfigurationService:
         "DEFAULT_AUTOPAY_ENABLED": "AUTOPAY",
         "DEFAULT_AUTOPAY_DAYS_BEFORE": "AUTOPAY",
         "MIN_BALANCE_FOR_AUTOPAY_KOPEKS": "AUTOPAY",
+        "DISABLE_TOPUP_BUTTONS": "PAYMENT",
         "TRIAL_WARNING_HOURS": "TRIAL",
         "SUPPORT_USERNAME": "SUPPORT",
         "SUPPORT_MENU_ENABLED": "SUPPORT",
@@ -247,6 +252,7 @@ class BotConfigurationService:
     }
 
     CATEGORY_PREFIX_OVERRIDES: Dict[str, str] = {
+        "BOT_": "CORE",
         "SUPPORT_": "SUPPORT",
         "ADMIN_NOTIFICATIONS": "ADMIN_NOTIFICATIONS",
         "ADMIN_REPORTS": "ADMIN_REPORTS",
@@ -267,6 +273,7 @@ class BotConfigurationService:
         "CRYPTOBOT_": "CRYPTOBOT",
         "MULENPAY_": "MULENPAY",
         "PAL24_": "PAL24",
+        "WATA_": "WATA",
         "PAYMENT_": "PAYMENT",
         "EXTERNAL_ADMIN_": "EXTERNAL_ADMIN",
         "CONNECT_BUTTON_HAPP": "HAPP",
