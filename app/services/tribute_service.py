@@ -235,6 +235,7 @@ class TributeService:
         except Exception as e:
             logger.error(f"Ошибка обработки возврата Tribute: {e}")
     
+
     async def _send_success_notification(self, user_id: int, amount_kopeks: int):
 
         try:
@@ -244,6 +245,7 @@ class TributeService:
                 user = await get_user_by_telegram_id(session, user_id)
                 break
 
+            # Сначала отправляем стандартное уведомление
             payment_service = PaymentService(self.bot)
             keyboard = await payment_service.build_topup_success_keyboard(user)
 
@@ -262,10 +264,45 @@ class TributeService:
                 parse_mode="Markdown"
             )
 
+            # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
+            from app.services.user_cart_service import user_cart_service
+            has_saved_cart = await user_cart_service.has_user_cart(user.id)
+            if has_saved_cart and self.bot:
+                # Если у пользователя есть сохраненная корзина, 
+                # отправляем ему уведомление с кнопкой вернуться к оформлению
+                from app.localization.texts import get_texts
+                from aiogram import types
+                
+                texts = get_texts(user.language)
+                cart_message = texts.BALANCE_TOPUP_CART_REMINDER_DETAILED.format(
+                    total_amount=settings.format_price(amount_kopeks)
+                )
+                
+                # Создаем клавиатуру с кнопками
+                keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(
+                        text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                        callback_data="subscription_resume_checkout"
+                    )],
+                    [types.InlineKeyboardButton(
+                        text="💰 Мой баланс",
+                        callback_data="menu_balance"
+                    )],
+                    [types.InlineKeyboardButton(
+                        text="🏠 Главное меню",
+                        callback_data="back_to_menu"
+                    )]
+                ])
+                
+                await self.bot.send_message(
+                    chat_id=user_id,
+                    text=f"✅ Баланс пополнен на {settings.format_price(amount_kopeks)}!\n\n{cart_message}",
+                    reply_markup=keyboard
+                )
+                logger.info(f"Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю {user_id}")
+
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об успешном платеже: {e}")
-
-
     async def _send_failure_notification(self, user_id: int):
         
         try:

@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.utils.user_utils import format_referrer_info
 
@@ -322,22 +323,37 @@ class YooKassaPaymentMixin:
                     logger.info(f"Результат проверки корзины для пользователя {user.id}: {has_saved_cart}")
                     if has_saved_cart and getattr(self, "bot", None):
                         # Если у пользователя есть сохраненная корзина, 
-                        # отправляем ему уведомление о возможности вернуться к оформлению
+                        # отправляем ему уведомление с кнопкой вернуться к оформлению
                         from app.localization.texts import get_texts
+                        from aiogram import types
                         
                         texts = get_texts(user.language)
-                        cart_message = texts.t(
-                            "BALANCE_TOPUP_CART_REMINDER",
-                            "💰 Баланс пополнен! У вас есть неоформленный заказ.\n\n"
-                            "Нажмите \"Вернуться к оформлению подписки\" в главном меню, "
-                            "чтобы продолжить с теми же параметрами."
+                        cart_message = texts.BALANCE_TOPUP_CART_REMINDER_DETAILED.format(
+                            total_amount=settings.format_price(payment.amount_kopeks)
                         )
+                        
+                        # Создаем клавиатуру с кнопками
+                        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                            [types.InlineKeyboardButton(
+                                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                                callback_data="subscription_resume_checkout"
+                            )],
+                            [types.InlineKeyboardButton(
+                                text="💰 Мой баланс",
+                                callback_data="menu_balance"
+                            )],
+                            [types.InlineKeyboardButton(
+                                text="🏠 Главное меню",
+                                callback_data="back_to_menu"
+                            )]
+                        ])
                         
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
-                            text=cart_message
+                            text=f"✅ Баланс пополнен на {settings.format_price(payment.amount_kopeks)}!\n\n{cart_message}",
+                            reply_markup=keyboard
                         )
-                        logger.info(f"Отправлено уведомление о сохраненной корзине пользователю {user.id}")
+                        logger.info(f"Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю {user.id}")
                     else:
                         logger.info(f"У пользователя {user.id} нет сохраненной корзины или бот недоступен")
                 except Exception as e:
