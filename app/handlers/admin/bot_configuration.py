@@ -42,13 +42,22 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
         "title": "💬 Поддержка",
         "description": "Контакты, режимы тикетов, SLA и уведомления модераторов.",
         "icon": "💬",
-        "categories": ("SUPPORT",),
+        "categories": ("SUPPORT", "MODERATION"),
     },
     "payments": {
         "title": "💳 Платежные системы",
         "description": "YooKassa, CryptoBot, MulenPay, PAL24, Tribute и Telegram Stars.",
         "icon": "💳",
-        "categories": ("PAYMENT", "YOOKASSA", "CRYPTOBOT", "MULENPAY", "PAL24", "TRIBUTE", "TELEGRAM"),
+        "categories": (
+            "PAYMENT",
+            "YOOKASSA",
+            "CRYPTOBOT",
+            "MULENPAY",
+            "PAL24",
+            "TRIBUTE",
+            "TELEGRAM",
+            "WATA",
+        ),
     },
     "subscriptions": {
         "title": "📅 Подписки и цены",
@@ -78,7 +87,17 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
         "title": "🎨 Интерфейс и брендинг",
         "description": "Логотип, тексты, языки, miniapp и deep links.",
         "icon": "🎨",
-        "categories": ("INTERFACE_BRANDING", "INTERFACE_SUBSCRIPTION", "CONNECT_BUTTON", "MINIAPP", "HAPP", "SKIP", "LOCALIZATION", "ADDITIONAL"),
+        "categories": (
+            "INTERFACE",
+            "INTERFACE_BRANDING",
+            "INTERFACE_SUBSCRIPTION",
+            "CONNECT_BUTTON",
+            "MINIAPP",
+            "HAPP",
+            "SKIP",
+            "LOCALIZATION",
+            "ADDITIONAL",
+        ),
     },
     "database": {
         "title": "💾 База данных",
@@ -120,11 +139,11 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
 
 CATEGORY_GROUP_ORDER: Tuple[str, ...] = (
     "core",
-    "support",
     "payments",
     "subscriptions",
     "trial",
     "referral",
+    "support",
     "notifications",
     "interface",
     "database",
@@ -212,6 +231,21 @@ def _get_group_description(group_key: str) -> str:
     return str(meta.get("description", ""))
 
 
+def _format_days(count: int) -> str:
+    remainder = count % 100
+    if 11 <= remainder <= 14:
+        suffix = "дней"
+    else:
+        last_digit = count % 10
+        if last_digit == 1:
+            suffix = "день"
+        elif last_digit in {2, 3, 4}:
+            suffix = "дня"
+        else:
+            suffix = "дней"
+    return f"{count} {suffix}"
+
+
 def _get_group_icon(group_key: str) -> str:
     meta = _get_group_meta(group_key)
     return str(meta.get("icon", "⚙️"))
@@ -226,6 +260,7 @@ def _get_group_status(group_key: str) -> Tuple[str, str]:
             "MulenPay": settings.is_mulenpay_enabled(),
             "PAL24": settings.is_pal24_enabled(),
             "Tribute": settings.TRIBUTE_ENABLED,
+            "Wata": getattr(settings, "WATA_ENABLED", False),
             "Stars": settings.TELEGRAM_STARS_ENABLED,
         }
         active = sum(1 for value in payment_statuses.values() if value)
@@ -244,7 +279,7 @@ def _get_group_status(group_key: str) -> Tuple[str, str]:
                 or (settings.REMNAWAVE_USERNAME and settings.REMNAWAVE_PASSWORD)
             )
         )
-        return ("🟢", "API подключено") if api_ready else ("🟡", "Нужно указать URL и ключи")
+        return ("🟢", "Подключено") if api_ready else ("🟡", "Нужно указать URL и ключи")
 
     if key == "server":
         mode = (settings.SERVER_STATUS_MODE or "").lower()
@@ -264,14 +299,14 @@ def _get_group_status(group_key: str) -> Tuple[str, str]:
         user_on = settings.is_notifications_enabled()
         admin_on = settings.is_admin_notifications_enabled()
         if user_on and admin_on:
-            return "🟢", "Все уведомления включены"
+            return "🟢", "Все включены"
         if user_on or admin_on:
             return "🟡", "Часть уведомлений включена"
         return "⚪", "Уведомления отключены"
 
     if key == "trial":
         if settings.TRIAL_DURATION_DAYS > 0:
-            return "🟢", f"{settings.TRIAL_DURATION_DAYS} дней пробного периода"
+            return "🟢", f"{_format_days(settings.TRIAL_DURATION_DAYS)}"
         return "⚪", "Триал отключен"
 
     if key == "referral":
@@ -281,7 +316,14 @@ def _get_group_status(group_key: str) -> Tuple[str, str]:
             or settings.REFERRAL_INVITER_BONUS_KOPEKS
             or settings.get_referred_user_reward_kopeks()
         )
-        return ("🟢", "Программа активна") if active else ("⚪", "Бонусы не заданы")
+        return ("🟢", "Активна") if active else ("⚪", "Бонусы не заданы")
+
+    if key == "support":
+        if not settings.SUPPORT_MENU_ENABLED:
+            return "⚪", "Меню отключено"
+        if settings.SUPPORT_USERNAME and settings.SUPPORT_USERNAME != "@support":
+            return "🟢", "Команда готова"
+        return "🟡", "Требует настройки"
 
     if key == "core":
         token_ok = bool(getattr(settings, "BOT_TOKEN", ""))
@@ -306,7 +348,12 @@ def _get_group_status(group_key: str) -> Tuple[str, str]:
         branding = bool(settings.ENABLE_LOGO_MODE or settings.MINIAPP_CUSTOM_URL)
         return ("🟢", "Брендинг настроен") if branding else ("⚪", "Настройки по умолчанию")
 
-    return "🟢", "Готово к работе"
+    if key == "external_admin":
+        if getattr(settings, "WEB_API_DEFAULT_TOKEN", ""):
+            return "🟢", "Настроено"
+        return "⚪", "Требуется токен"
+
+    return "🟢", "Готово"
 
 
 def _get_setting_icon(definition, current_value: object) -> str:
@@ -353,22 +400,27 @@ def _render_dashboard_overview() -> str:
             )
 
     lines: List[str] = [
-        "⚙️ <b>Панель управления ботом</b>",
+        "⚙️ <b>ПАНЕЛЬ УПРАВЛЕНИЯ БОТОМ</b>",
         "",
         f"Всего параметров: <b>{total_settings}</b> • Переопределено: <b>{total_overrides}</b>",
         "",
-        "Выберите категорию ниже или используйте быстрые действия:",
+        "Группы настроек:",
         "",
     ]
 
     for group_key, title, items in grouped:
         status_icon, status_text = _get_group_status(group_key)
-        description = _get_group_description(group_key) if group_key != CATEGORY_FALLBACK_KEY else "Настройки без категории."
+        description = (
+            _get_group_description(group_key)
+            if group_key != CATEGORY_FALLBACK_KEY
+            else "Настройки без категории."
+        )
         total = sum(count for _, _, count in items)
-        lines.append(f"{status_icon} <b>{title}</b> — {status_text}")
+        icon = _get_group_icon(group_key)
+        lines.append(f"{status_icon} {icon} <b>{title}</b> — {status_text}")
         if description:
             lines.append(f"   {description}")
-        lines.append(f"   Настроек: {total}")
+        lines.append(f"└ Настроек: {total}")
         lines.append("")
 
     lines.append("🔍 Кнопка поиска поможет найти параметр по названию, описанию или ключу.")
@@ -461,7 +513,15 @@ def _build_search_results_keyboard(results: List[Dict[str, object]]) -> types.In
     rows.append(
         [
             types.InlineKeyboardButton(
-                text="⬅️ В главное меню",
+                text="⬅️ Попробовать снова",
+                callback_data="botcfg_action:search",
+            )
+        ]
+    )
+    rows.append(
+        [
+            types.InlineKeyboardButton(
+                text="🏠 Главное меню",
                 callback_data="admin_bot_config",
             )
         ]
@@ -505,7 +565,7 @@ async def start_settings_search(
 
     await callback.message.edit_text(
         "🔍 <b>Поиск по настройкам</b>\n\n"
-        "Отправьте часть ключа или названия настройки. \n"
+        "Отправьте часть ключа или названия.\n"
         "Например: <code>yookassa</code> или <code>уведомления</code>.",
         reply_markup=keyboard,
         parse_mode="HTML",
@@ -542,6 +602,8 @@ async def handle_search_query(
             lines.append(
                 f"{index}. {item['name']} — {item['value']} ({item['category_label']})"
             )
+        lines.append("")
+        lines.append("Нажмите на нужную настройку, чтобы открыть её.")
         text = "\n".join(lines)
     else:
         keyboard = types.InlineKeyboardMarkup(
@@ -580,7 +642,7 @@ async def show_presets(
     lines = [
         "🎯 <b>Готовые пресеты</b>",
         "",
-        "Выберите набор параметров, чтобы быстро применить его к боту.",
+        "Выберите набор параметров:",
         "",
     ]
     for key, meta in PRESET_METADATA.items():
@@ -714,12 +776,14 @@ async def apply_preset(
 
     title = PRESET_METADATA.get(preset_key, {}).get("title", preset_key)
     summary_lines = [
-        f"✅ Пресет <b>{title}</b> применен",
+        f'✅ <b>Пресет "{title}" применен</b>',
         "",
         f"Изменено параметров: <b>{len(applied)}</b>",
     ]
     if applied:
-        summary_lines.append("\n".join(f"• <code>{key}</code>" for key in applied))
+        summary_lines.extend(
+            ["", "\n".join(f"• <code>{key}</code>" for key in applied)]
+        )
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
@@ -806,7 +870,7 @@ async def start_import_settings(
 
     await callback.message.edit_text(
         "📥 <b>Импорт настроек</b>\n\n"
-        "Прикрепите .env файл или отправьте текстом пары <code>KEY=value</code>.\n"
+        "Прикрепите .env файл или отправьте текстом пары <code>KEY=value</code>.\n\n"
         "Неизвестные параметры будут проигнорированы.",
         parse_mode="HTML",
         reply_markup=keyboard,
@@ -886,15 +950,30 @@ async def handle_import_message(
         f"Обновлено параметров: <b>{len(applied)}</b>",
     ]
     if applied:
-        summary_lines.append("\n".join(f"• <code>{key}</code>" for key in applied))
+        summary_lines.extend(
+            [
+                "",
+                "\n".join(f"• <code>{key}</code>" for key in applied),
+            ]
+        )
 
     if skipped:
-        summary_lines.append("\nПропущено (неизвестные ключи):")
-        summary_lines.append("\n".join(f"• <code>{key}</code>" for key in skipped))
+        summary_lines.extend(
+            [
+                "",
+                "<b>Пропущено (неизвестные ключи):</b>",
+                "\n".join(f"• <code>{key}</code>" for key in skipped),
+            ]
+        )
 
     if errors:
-        summary_lines.append("\nОшибки разбора:")
-        summary_lines.append("\n".join(f"• {html.escape(err)}" for err in errors))
+        summary_lines.extend(
+            [
+                "",
+                "<b>Ошибки разбора:</b>",
+                "\n".join(f"• {html.escape(err)}" for err in errors),
+            ]
+        )
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
@@ -937,7 +1016,9 @@ async def show_settings_history(
                 )
             except Exception:
                 formatted_value = row.value or "—"
-            lines.append(f"{ts_text} • <code>{row.key}</code> = {formatted_value}")
+            lines.append(
+                f"{ts_text} • <code>{row.key}</code> = {html.escape(str(formatted_value))}"
+            )
     else:
         lines.append("История изменений пуста.")
 
@@ -1109,8 +1190,12 @@ def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
 
     for group_key, title, items in grouped:
         total = sum(count for _, _, count in items)
-        status_icon, _ = _get_group_status(group_key)
-        button_text = f"{status_icon} {title} ({total})"
+        status_icon, status_text = _get_group_status(group_key)
+        icon = _get_group_icon(group_key)
+        button_text = (
+            f"{status_icon} {icon} {title} — {status_text}\n"
+            f"└ Настроек: {total}"
+        )
         rows.append(
             [
                 types.InlineKeyboardButton(
@@ -1162,7 +1247,7 @@ def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
     rows.append(
         [
             types.InlineKeyboardButton(
-                text="⬅️ Назад",
+                text="⬅️ Назад в админку",
                 callback_data="admin_submenu_settings",
             )
         ]
@@ -1193,7 +1278,10 @@ def _build_categories_keyboard(
     rows.append(
         [
             types.InlineKeyboardButton(
-                text=f"{status_icon} {group_title}",
+                text=(
+                    f"{status_icon} {_get_group_icon(group_key)} {group_title}\n"
+                    f"└ Статус: {_status_text}"
+                ),
                 callback_data="botcfg_group:noop",
             )
         ]
@@ -1206,7 +1294,7 @@ def _build_categories_keyboard(
             if bot_configuration_service.has_override(definition.key):
                 overrides += 1
         badge = "✳️" if overrides else "•"
-        button_text = f"{badge} {label} ({count})"
+        button_text = f"{badge} • {label} ({count})"
         buttons.append(
             types.InlineKeyboardButton(
                 text=button_text,
@@ -1228,7 +1316,7 @@ def _build_categories_keyboard(
             )
         nav_row.append(
             types.InlineKeyboardButton(
-                text=f"{page}/{total_pages}",
+                text=f"[{page}/{total_pages}]",
                 callback_data="botcfg_group:noop",
             )
         )
@@ -1353,7 +1441,7 @@ def _build_settings_keyboard(
             )
         nav_row.append(
             types.InlineKeyboardButton(
-                text=f"{page}/{total_pages}", callback_data="botcfg_cat_page:noop"
+                text=f"[{page}/{total_pages}]", callback_data="botcfg_cat_page:noop"
             )
         )
         if page < total_pages:
@@ -1464,6 +1552,11 @@ def _build_setting_keyboard(
 def _render_setting_text(key: str) -> str:
     summary = bot_configuration_service.get_setting_summary(key)
     guidance = bot_configuration_service.get_setting_guidance(key)
+    description = guidance.get("description") or "—"
+    format_hint = guidance.get("format") or "—"
+    example = guidance.get("example") or "—"
+    warning = guidance.get("warning") or "—"
+    dependencies = guidance.get("dependencies") or "—"
 
     lines = [
         f"🧩 <b>{summary['name']}</b>",
@@ -1479,11 +1572,11 @@ def _render_setting_text(key: str) -> str:
             else []
         ),
         "",
-        f"📘 <b>Описание:</b> {guidance['description']}",
-        f"📐 <b>Формат:</b> {guidance['format']}",
-        f"💡 <b>Пример:</b> {guidance['example']}",
-        f"⚠️ <b>Важно:</b> {guidance['warning']}",
-        f"🔗 <b>Связанные настройки:</b> {guidance['dependencies']}",
+        f"📘 <b>Описание:</b> {description}",
+        f"📐 <b>Формат:</b> {format_hint}",
+        f"💡 <b>Пример:</b> {example}",
+        f"⚠️ <b>Важно:</b> {warning}",
+        f"🔗 <b>Связанные настройки:</b> {dependencies}",
     ]
 
     choices = bot_configuration_service.get_choice_options(key)
@@ -1543,11 +1636,13 @@ async def show_bot_config_group(
     keyboard = _build_categories_keyboard(group_key, group_title, items, page)
     status_icon, status_text = _get_group_status(group_key)
     description = _get_group_description(group_key)
-    lines = [f"{status_icon} <b>{group_title}</b>"]
+    icon = _get_group_icon(group_key)
+    lines = [f"{icon} <b>{group_title}</b>"]
+    lines.append(f"Хлебные крошки: 🏠 → {group_title}")
+    if status_text:
+        lines.append(f"Статус: {status_icon} {status_text}")
     if description:
         lines.append(description)
-    if status_text:
-        lines.append(f"Статус: {status_text}")
     lines.append("")
     lines.append("📂 Выберите категорию настроек:")
     await callback.message.edit_text(
@@ -1587,12 +1682,12 @@ async def show_bot_config_category(
     )
     text_lines = [
         f"🗂 <b>{category_label}</b>",
-        f"Навигация: 🏠 Главное → {group_title} → {category_label}",
+        f"Хлебные крошки: 🏠 → {group_title} → {category_label}",
     ]
     if category_description:
         text_lines.append(category_description)
     text_lines.append("")
-    text_lines.append("📋 Выберите настройку для просмотра или редактирования:")
+    text_lines.append("📋 Список настроек категории:")
     await callback.message.edit_text(
         "\n".join(text_lines),
         reply_markup=keyboard,
@@ -2071,7 +2166,7 @@ async def show_bot_config_setting(
         return
     text = _render_setting_text(key)
     keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await _store_setting_context(
         state,
         key=key,
