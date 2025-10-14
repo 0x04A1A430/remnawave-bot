@@ -1,6 +1,6 @@
 import html
 import logging
-from aiogram import types, F
+from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
