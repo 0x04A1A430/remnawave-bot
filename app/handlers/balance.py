@@ -27,7 +27,7 @@ TRANSACTIONS_PER_PAGE = 10
 
 
 def get_quick_amount_buttons(language: str) -> list:
-    if not settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+    if not settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED or settings.DISABLE_TOPUP_BUTTONS:
         return []
     
     buttons = []
@@ -225,9 +225,28 @@ async def start_stars_payment(
         await callback.answer("❌ Пополнение через Stars временно недоступно", show_alert=True)
         return
     
+    # Формируем текст сообщения в зависимости от настройки
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
+        message_text = (
+            f"⭐ <b>Пополнение через Telegram Stars</b>\n\n"
+            f"Выберите сумму пополнения или введите вручную:"
+        )
+    else:
+        message_text = texts.TOP_UP_AMOUNT
+    
+    # Создаем клавиатуру
+    keyboard = get_back_keyboard(db_user.language)
+    
+    # Если включен быстрый выбор суммы и не отключены кнопки, добавляем кнопки
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
+        quick_amount_buttons = get_quick_amount_buttons(db_user.language)
+        if quick_amount_buttons:
+            # Вставляем кнопки быстрого выбора перед кнопкой "Назад"
+            keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
+    
     await callback.message.edit_text(
-        texts.TOP_UP_AMOUNT,
-        reply_markup=get_back_keyboard(db_user.language)
+        message_text,
+        reply_markup=keyboard
     )
     
     await state.set_state(BalanceStates.waiting_for_amount)
@@ -251,7 +270,7 @@ async def start_yookassa_payment(
     max_amount_rub = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
     
     # Формируем текст сообщения в зависимости от настройки
-    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
         message_text = (
             f"💳 <b>Оплата банковской картой</b>\n\n"
             f"Выберите сумму пополнения или введите вручную сумму "
@@ -266,8 +285,8 @@ async def start_yookassa_payment(
     # Создаем клавиатуру
     keyboard = get_back_keyboard(db_user.language)
     
-    # Если включен быстрый выбор суммы, добавляем кнопки
-    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+    # Если включен быстрый выбор суммы и не отключены кнопки, добавляем кнопки
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
         quick_amount_buttons = get_quick_amount_buttons(db_user.language)
         if quick_amount_buttons:
             # Вставляем кнопки быстрого выбора перед кнопкой "Назад"
@@ -300,7 +319,7 @@ async def start_yookassa_sbp_payment(
     max_amount_rub = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
     
     # Формируем текст сообщения в зависимости от настройки
-    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
         message_text = (
             f"🏦 <b>Оплата через СБП</b>\n\n"
             f"Выберите сумму пополнения или введите вручную сумму "
@@ -315,8 +334,8 @@ async def start_yookassa_sbp_payment(
     # Создаем клавиатуру
     keyboard = get_back_keyboard(db_user.language)
     
-    # Если включен быстрый выбор суммы, добавляем кнопки
-    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+    # Если включен быстрый выбор суммы и не отключены кнопки, добавляем кнопки
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
         quick_amount_buttons = get_quick_amount_buttons(db_user.language)
         if quick_amount_buttons:
             # Вставляем кнопки быстрого выбора перед кнопкой "Назад"
@@ -356,7 +375,7 @@ async def start_mulenpay_payment(
 
     keyboard = get_back_keyboard(db_user.language)
 
-    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
         quick_amount_buttons = get_quick_amount_buttons(db_user.language)
         if quick_amount_buttons:
             keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
@@ -395,7 +414,7 @@ async def start_pal24_payment(
 
     keyboard = get_back_keyboard(db_user.language)
 
-    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
         quick_amount_buttons = get_quick_amount_buttons(db_user.language)
         if quick_amount_buttons:
             keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
@@ -1422,15 +1441,42 @@ async def start_cryptobot_payment(
     available_assets = settings.get_cryptobot_assets()
     assets_text = ", ".join(available_assets)
     
+    # Формируем текст сообщения в зависимости от настройки
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
+        message_text = (
+            f"🪙 <b>Пополнение криптовалютой</b>\n\n"
+            f"Выберите сумму пополнения или введите вручную сумму "
+            f"от 100 до 100,000 ₽:\n\n"
+            f"💰 Доступные активы: {assets_text}\n"
+            f"⚡ Мгновенное зачисление на баланс\n"
+            f"🔒 Безопасная оплата через CryptoBot\n\n"
+            f"{rate_text}\n"
+            f"Сумма будет автоматически конвертирована в USD для оплаты."
+        )
+    else:
+        message_text = (
+            f"🪙 <b>Пополнение криптовалютой</b>\n\n"
+            f"Введите сумму для пополнения от 100 до 100,000 ₽:\n\n"
+            f"💰 Доступные активы: {assets_text}\n"
+            f"⚡ Мгновенное зачисление на баланс\n"
+            f"🔒 Безопасная оплата через CryptoBot\n\n"
+            f"{rate_text}\n"
+            f"Сумма будет автоматически конвертирована в USD для оплаты."
+        )
+    
+    # Создаем клавиатуру
+    keyboard = get_back_keyboard(db_user.language)
+    
+    # Если включен быстрый выбор суммы и не отключены кнопки, добавляем кнопки
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
+        quick_amount_buttons = get_quick_amount_buttons(db_user.language)
+        if quick_amount_buttons:
+            # Вставляем кнопки быстрого выбора перед кнопкой "Назад"
+            keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
+    
     await callback.message.edit_text(
-        f"🪙 <b>Пополнение криптовалютой</b>\n\n"
-        f"Введите сумму для пополнения в рублях от 100 до 100,000 ₽:\n\n"
-        f"💰 Доступные активы: {assets_text}\n"
-        f"⚡ Мгновенное зачисление на баланс\n"
-        f"🔒 Безопасная оплата через CryptoBot\n\n"
-        f"{rate_text}\n"
-        f"Сумма будет автоматически конвертирована в USD для оплаты.",
-        reply_markup=get_back_keyboard(db_user.language),
+        message_text,
+        reply_markup=keyboard,
         parse_mode="HTML"
     )
     

@@ -46,6 +46,7 @@ from app.keyboards.inline import (
     get_subscription_confirm_keyboard_with_cart,
     get_insufficient_balance_keyboard_with_cart
 )
+from app.services.user_cart_service import user_cart_service
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.remnawave_service import RemnaWaveService
@@ -563,13 +564,16 @@ async def save_cart_and_redirect_to_topup(
     texts = get_texts(db_user.language)
     data = await state.get_data()
 
-    await state.set_state(SubscriptionStates.cart_saved_for_topup)
-    await state.update_data({
+    # Сохраняем данные корзины в Redis
+    cart_data = {
         **data,
         'saved_cart': True,
         'missing_amount': missing_amount,
-        'return_to_cart': True
-    })
+        'return_to_cart': True,
+        'user_id': db_user.id
+    }
+    
+    await user_cart_service.save_user_cart(db_user.id, cart_data)
 
     await callback.message.edit_text(
         f"💰 Недостаточно средств для оформления подписки\n\n"
@@ -591,14 +595,15 @@ async def return_to_saved_cart(
         db_user: User,
         db: AsyncSession
 ):
-    data = await state.get_data()
-    texts = get_texts(db_user.language)
-
-    if not data.get('saved_cart'):
+    # Получаем данные корзины из Redis
+    cart_data = await user_cart_service.get_user_cart(db_user.id)
+    
+    if not cart_data:
         await callback.answer("❌ Сохраненная корзина не найдена", show_alert=True)
         return
 
-    total_price = data.get('total_price', 0)
+    texts = get_texts(db_user.language)
+    total_price = cart_data.get('total_price', 0)
 
     if db_user.balance_kopeks < total_price:
         missing_amount = total_price - db_user.balance_kopeks
@@ -617,27 +622,31 @@ async def return_to_saved_cart(
     countries = await _get_available_countries(db_user.promo_group_id)
     selected_countries_names = []
 
-    months_in_period = calculate_months_from_days(data['period_days'])
-    period_display = format_period_description(data['period_days'], db_user.language)
+    months_in_period = calculate_months_from_days(cart_data['period_days'])
+    period_display = format_period_description(cart_data['period_days'], db_user.language)
 
     for country in countries:
-        if country['uuid'] in data['countries']:
+        if country['uuid'] in cart_data['countries']:
             selected_countries_names.append(country['name'])
 
     if settings.is_traffic_fixed():
-        traffic_display = "Безлимитный" if data['traffic_gb'] == 0 else f"{data['traffic_gb']} ГБ"
+        traffic_display = "Безлимитный" if cart_data['traffic_gb'] == 0 else f"{cart_data['traffic_gb']} ГБ"
     else:
-        traffic_display = "Безлимитный" if data['traffic_gb'] == 0 else f"{data['traffic_gb']} ГБ"
+        traffic_display = "Безлимитный" if cart_data['traffic_gb'] == 0 else f"{cart_data['traffic_gb']} ГБ"
 
     summary_text = (
         "🛒 Восстановленная корзина\n\n"
         f"📅 Период: {period_display}\n"
         f"📊 Трафик: {traffic_display}\n"
         f"🌍 Страны: {', '.join(selected_countries_names)}\n"
-        f"📱 Устройства: {data['devices']}\n\n"
+        f"📱 Устройства: {cart_data['devices']}\n\n"
         f"💎 Общая стоимость: {texts.format_price(total_price)}\n\n"
         "Подтверждаете покупку?"
     )
+
+    # Устанавливаем данные в FSM для продолжения процесса
+    await state.set_data(cart_data)
+    await state.set_state(SubscriptionStates.confirming_purchase)
 
     await callback.message.edit_text(
         summary_text,
@@ -645,7 +654,6 @@ async def return_to_saved_cart(
         parse_mode="HTML"
     )
 
-    await state.set_state(SubscriptionStates.confirming_purchase)
     await callback.answer("✅ Корзина восстановлена!")
 
 async def handle_extend_subscription(
@@ -964,11 +972,24 @@ async def confirm_extend_subscription(
             missing=texts.format_price(missing_kopeks),
         )
 
+        # Подготовим данные для сохранения в корзину
+        cart_data = {
+            'period_days': days,
+            'total_price': price,
+            'user_id': db_user.id,
+            'saved_cart': True,
+            'missing_amount': missing_kopeks,
+            'return_to_cart': True
+        }
+        
+        await user_cart_service.save_user_cart(db_user.id, cart_data)
+
         await callback.message.edit_text(
             message_text,
             reply_markup=get_insufficient_balance_keyboard(
                 db_user.language,
                 amount_kopeks=missing_kopeks,
+                has_saved_cart=True  # Указываем, что есть сохраненная корзина
             ),
             parse_mode="HTML",
         )
@@ -1481,12 +1502,24 @@ async def confirm_purchase(
             missing=texts.format_price(missing_kopeks),
         )
 
+        # Сохраняем данные корзины в Redis перед переходом к пополнению
+        cart_data = {
+            **data,
+            'saved_cart': True,
+            'missing_amount': missing_kopeks,
+            'return_to_cart': True,
+            'user_id': db_user.id
+        }
+        
+        await user_cart_service.save_user_cart(db_user.id, cart_data)
+
         await callback.message.edit_text(
             message_text,
             reply_markup=get_insufficient_balance_keyboard(
                 db_user.language,
                 resume_callback=resume_callback,
                 amount_kopeks=missing_kopeks,
+                has_saved_cart=True  # Указываем, что есть сохраненная корзина
             ),
             parse_mode="HTML",
         )
@@ -1937,7 +1970,9 @@ async def clear_saved_cart(
         db_user: User,
         db: AsyncSession
 ):
+    # Очищаем как FSM, так и Redis
     await state.clear()
+    await user_cart_service.delete_user_cart(db_user.id)
 
     from app.handlers.menu import show_main_menu
     await show_main_menu(callback, db_user, db)

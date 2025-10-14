@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
 from app.utils.user_utils import format_referrer_info
 
@@ -268,6 +269,7 @@ class YooKassaPaymentMixin:
 
                 await db.refresh(user)
 
+                # Отправляем уведомления админам
                 if getattr(self, "bot", None):
                     try:
                         from app.services.admin_notification_service import (
@@ -285,25 +287,84 @@ class YooKassaPaymentMixin:
                             promo_group=promo_group,
                             db=db,
                         )
+                        logger.info("Уведомление админам о пополнении отправлено успешно")
                     except Exception as error:
                         logger.error(
                             "Ошибка отправки уведомления админам о YooKassa пополнении: %s",
                             error,
+                            exc_info=True  # Добавляем полный стек вызовов для отладки
                         )
 
+                # Отправляем уведомление пользователю
                 if getattr(self, "bot", None):
                     try:
+                        # Передаем только простые данные, чтобы избежать проблем с ленивой загрузкой
                         await self._send_payment_success_notification(
                             user.telegram_id,
                             payment.amount_kopeks,
-                            user=user,
+                            user=None,  # Передаем None, чтобы _ensure_user_snapshot загрузил данные сам
                             db=db,
                             payment_method_title="Банковская карта (YooKassa)",
                         )
+                        logger.info("Уведомление пользователю о платеже отправлено успешно")
                     except Exception as error:
                         logger.error(
-                            "Ошибка отправки уведомления о платеже: %s", error
+                            "Ошибка отправки уведомления о платеже: %s", 
+                            error,
+                            exc_info=True  # Добавляем полный стек вызовов для отладки
                         )
+
+                # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
+                # ВАЖНО: этот код должен выполняться даже при ошибках в уведомлениях
+                logger.info(f"Проверяем наличие сохраненной корзины для пользователя {user.id}")
+                from app.services.user_cart_service import user_cart_service
+                try:
+                    has_saved_cart = await user_cart_service.has_user_cart(user.id)
+                    logger.info(f"Результат проверки корзины для пользователя {user.id}: {has_saved_cart}")
+                    if has_saved_cart and getattr(self, "bot", None):
+                        # Если у пользователя есть сохраненная корзина, 
+                        # отправляем ему уведомление с кнопкой вернуться к оформлению
+                        from app.localization.texts import get_texts
+                        from aiogram import types
+                        
+                        texts = get_texts(user.language)
+                        cart_message = texts.BALANCE_TOPUP_CART_REMINDER_DETAILED.format(
+                            total_amount=settings.format_price(payment.amount_kopeks)
+                        )
+                        
+                        # Создаем клавиатуру с кнопками
+                        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                            [types.InlineKeyboardButton(
+                                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                                callback_data="subscription_resume_checkout"
+                            )],
+                            [types.InlineKeyboardButton(
+                                text="💰 Мой баланс",
+                                callback_data="menu_balance"
+                            )],
+                            [types.InlineKeyboardButton(
+                                text="🏠 Главное меню",
+                                callback_data="back_to_menu"
+                            )]
+                        ])
+                        
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=f"✅ Баланс пополнен на {settings.format_price(payment.amount_kopeks)}!\n\n{cart_message}",
+                            reply_markup=keyboard
+                        )
+                        logger.info(f"Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю {user.id}")
+                    else:
+                        logger.info(f"У пользователя {user.id} нет сохраненной корзины или бот недоступен")
+                except Exception as e:
+                    logger.error(f"Критическая ошибка при работе с сохраненной корзиной для пользователя {user.id}: {e}", exc_info=True)
+
+            logger.info(
+                "Успешно обработан платеж YooKassa %s: пользователь %s получил %s₽",
+                payment.yookassa_payment_id,
+                payment.user_id,
+                payment.amount_kopeks / 100,
+            )
 
             logger.info(
                 "Успешно обработан платеж YooKassa %s: пользователь %s получил %s₽",

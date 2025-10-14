@@ -206,6 +206,7 @@ class TelegramStarsMixin:
                     logger.error(
                         "Ошибка отправки уведомления о пополнении Stars: %s",
                         error,
+                        exc_info=True
                     )
 
             if getattr(self, "bot", None):
@@ -235,6 +236,48 @@ class TelegramStarsMixin:
                         "Ошибка отправки уведомления о пополнении Stars: %s",
                         error,
                     )
+
+            # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
+            try:
+                from app.services.user_cart_service import user_cart_service
+                from aiogram import types
+                has_saved_cart = await user_cart_service.has_user_cart(user.id)
+                if has_saved_cart and getattr(self, "bot", None):
+                    # Если у пользователя есть сохраненная корзина, 
+                    # отправляем ему уведомление с кнопкой вернуться к оформлению
+                    from app.localization.texts import get_texts
+                    
+                    texts = get_texts(user.language)
+                    cart_message = texts.t(
+                        "BALANCE_TOPUP_CART_REMINDER_DETAILED",
+                        "🛒 У вас есть неоформленный заказ.\n\n"
+                        "Вы можете продолжить оформление с теми же параметрами."
+                    )
+                    
+                    # Создаем клавиатуру с кнопками
+                    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                        [types.InlineKeyboardButton(
+                            text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                            callback_data="subscription_resume_checkout"
+                        )],
+                        [types.InlineKeyboardButton(
+                            text="💰 Мой баланс",
+                            callback_data="menu_balance"
+                        )],
+                        [types.InlineKeyboardButton(
+                            text="🏠 Главное меню",
+                            callback_data="back_to_menu"
+                        )]
+                    ])
+                    
+                    await self.bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=f"✅ Баланс пополнен на {settings.format_price(amount_kopeks)}!\n\n{cart_message}",
+                        reply_markup=keyboard
+                    )
+                    logger.info(f"Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю {user.id}")
+            except Exception as e:
+                logger.error(f"Ошибка при работе с сохраненной корзиной для пользователя {user.id}: {e}", exc_info=True)
 
             logger.info(
                 "✅ Обработан Stars платеж: пользователь %s, %s звезд → %s",
