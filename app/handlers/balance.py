@@ -1406,9 +1406,19 @@ async def check_pal24_payment_status(
                 f"❌ Платеж не завершен корректно. Обратитесь в {settings.get_support_contact_display()}"
             )
 
+        from app.localization.texts import get_texts
+        db_user = getattr(callback, 'db_user', None)
+        texts = get_texts(db_user.language if db_user else 'ru') if db_user else get_texts('ru')
+
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"), callback_data=f"check_pal24_{local_payment_id}")],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")]
+        ])
+        
         await callback.answer()
-        await callback.message.answer(
+        await callback.message.edit_text(
             "\n".join(message_lines),
+            reply_markup=keyboard,
             disable_web_page_preview=True,
         )
 
