@@ -24,7 +24,7 @@ from app.database.models import (
     ServerSquad, SubscriptionServer, UserMessage, YooKassaPayment,
     CryptoBotPayment, WelcomeText, Base, PromoGroup, AdvertisingCampaign,
     AdvertisingCampaignRegistration, SupportAuditLog, Ticket, TicketMessage,
-    MulenPayPayment, Pal24Payment, DiscountOffer, WebApiToken,
+    MulenPayPayment, Pal24Payment, WataPayment, DiscountOffer, WebApiToken,
     server_squad_promo_groups
 )
 
@@ -82,6 +82,7 @@ class BackupService:
             CryptoBotPayment,
             MulenPayPayment,
             Pal24Payment,
+            WataPayment,
             PromoCodeUse,
             ReferralEarning,
             SentNotification,
