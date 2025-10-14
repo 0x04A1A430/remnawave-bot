@@ -158,7 +158,8 @@ class WataPaymentMixin:
                 )
                 payment = await payment_module.get_wata_payment_by_id(db, local_payment_id)
 
-            if (remote_status or "").lower() == "closed" and not payment.is_paid:
+            remote_status_normalized = (remote_status or "").lower()
+            if remote_status_normalized in {"closed", "paid"} and not payment.is_paid:
                 try:
                     tx_response = await self.wata_service.search_transactions(  # type: ignore[union-attr]
                         order_id=payment.order_id,
