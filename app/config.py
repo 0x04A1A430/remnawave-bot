@@ -228,6 +228,8 @@ class Settings(BaseSettings):
     PAL24_REQUEST_TIMEOUT: int = 30
     PAL24_SBP_BUTTON_TEXT: Optional[str] = None
     PAL24_CARD_BUTTON_TEXT: Optional[str] = None
+    PAL24_SBP_BUTTON_VISIBLE: bool = True
+    PAL24_CARD_BUTTON_VISIBLE: bool = True
 
     MAIN_MENU_MODE: str = "default"
     CONNECT_BUTTON_MODE: str = "guide"
@@ -459,6 +461,12 @@ class Settings(BaseSettings):
     def get_pal24_card_button_text(self, fallback: str) -> str:
         value = (self.PAL24_CARD_BUTTON_TEXT or "").strip()
         return value or fallback
+    
+    def is_pal24_sbp_button_visible(self) -> bool:
+        return self.PAL24_SBP_BUTTON_VISIBLE
+    
+    def is_pal24_card_button_visible(self) -> bool:
+        return self.PAL24_CARD_BUTTON_VISIBLE
     
     def get_remnawave_user_delete_mode(self) -> str:
         """Возвращает режим удаления пользователей: 'delete' или 'disable'"""
