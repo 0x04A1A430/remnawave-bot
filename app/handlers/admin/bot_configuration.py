@@ -353,25 +353,22 @@ def _render_dashboard_overview() -> str:
             )
 
     lines: List[str] = [
-        "⚙️ <b>Панель управления ботом</b>",
+        "⚙️ <b>ПАНЕЛЬ УПРАВЛЕНИЯ БОТОМ</b>",
         "",
         f"Всего параметров: <b>{total_settings}</b> • Переопределено: <b>{total_overrides}</b>",
         "",
-        "Выберите категорию ниже или используйте быстрые действия:",
+        "<b>Группы настроек</b>",
         "",
     ]
 
     for group_key, title, items in grouped:
         status_icon, status_text = _get_group_status(group_key)
-        description = _get_group_description(group_key) if group_key != CATEGORY_FALLBACK_KEY else "Настройки без категории."
         total = sum(count for _, _, count in items)
         lines.append(f"{status_icon} <b>{title}</b> — {status_text}")
-        if description:
-            lines.append(f"   {description}")
-        lines.append(f"   Настроек: {total}")
+        lines.append(f"└ Настроек: {total}")
         lines.append("")
 
-    lines.append("🔍 Кнопка поиска поможет найти параметр по названию, описанию или ключу.")
+    lines.append("🔍 Используйте поиск, чтобы быстро найти нужный параметр по ключу или названию.")
     return "\n".join(lines).strip()
 
 
@@ -1109,8 +1106,8 @@ def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
 
     for group_key, title, items in grouped:
         total = sum(count for _, _, count in items)
-        status_icon, _ = _get_group_status(group_key)
-        button_text = f"{status_icon} {title} ({total})"
+        status_icon, status_text = _get_group_status(group_key)
+        button_text = f"{status_icon} {title} — {status_text}"
         rows.append(
             [
                 types.InlineKeyboardButton(
@@ -1162,7 +1159,7 @@ def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
     rows.append(
         [
             types.InlineKeyboardButton(
-                text="⬅️ Назад",
+                text="⬅️ Назад в админку",
                 callback_data="admin_submenu_settings",
             )
         ]
@@ -1185,19 +1182,6 @@ def _build_categories_keyboard(
     sliced = categories[start:end]
 
     rows: list[list[types.InlineKeyboardButton]] = []
-    status_icon, _status_text = (
-        _get_group_status(group_key)
-        if group_key != CATEGORY_FALLBACK_KEY
-        else ("⚪", "Прочие настройки")
-    )
-    rows.append(
-        [
-            types.InlineKeyboardButton(
-                text=f"{status_icon} {group_title}",
-                callback_data="botcfg_group:noop",
-            )
-        ]
-    )
 
     buttons: List[types.InlineKeyboardButton] = []
     for category_key, label, count in sliced:
@@ -1205,7 +1189,7 @@ def _build_categories_keyboard(
         for definition in bot_configuration_service.get_settings_for_category(category_key):
             if bot_configuration_service.has_override(definition.key):
                 overrides += 1
-        badge = "✳️" if overrides else "•"
+        badge = "✳️ •" if overrides else "•"
         button_text = f"{badge} {label} ({count})"
         buttons.append(
             types.InlineKeyboardButton(
@@ -1228,7 +1212,7 @@ def _build_categories_keyboard(
             )
         nav_row.append(
             types.InlineKeyboardButton(
-                text=f"{page}/{total_pages}",
+                text=f"[{page}/{total_pages}]",
                 callback_data="botcfg_group:noop",
             )
         )
@@ -1353,7 +1337,7 @@ def _build_settings_keyboard(
             )
         nav_row.append(
             types.InlineKeyboardButton(
-                text=f"{page}/{total_pages}", callback_data="botcfg_cat_page:noop"
+                text=f"[{page}/{total_pages}]", callback_data="botcfg_cat_page:noop"
             )
         )
         if page < total_pages:
@@ -1465,42 +1449,57 @@ def _render_setting_text(key: str) -> str:
     summary = bot_configuration_service.get_setting_summary(key)
     guidance = bot_configuration_service.get_setting_guidance(key)
 
+    definition = bot_configuration_service.get_definition(key)
+
+    description = guidance.get("description") or "—"
+    format_hint = guidance.get("format") or "—"
+    example = guidance.get("example") or "—"
+    warning = guidance.get("warning") or "—"
+    dependencies = guidance.get("dependencies") or "—"
+    type_label = guidance.get("type") or summary.get("type") or definition.type_label
+
     lines = [
         f"🧩 <b>{summary['name']}</b>",
-        f"🔑 <b>Ключ:</b> <code>{summary['key']}</code>",
-        f"📁 <b>Категория:</b> {summary['category_label']}",
-        f"📝 <b>Тип:</b> {guidance['type']}",
-        f"📌 <b>Текущее:</b> {summary['current']}",
-        f"📦 <b>По умолчанию:</b> {summary['original']}",
-        f"✳️ <b>Переопределено:</b> {'Да' if summary['has_override'] else 'Нет'}",
-        *(
-            ["🔒 <b>Режим:</b> Только для чтения (управляется автоматически)"]
-            if summary.get("is_read_only")
-            else []
-        ),
-        "",
-        f"📘 <b>Описание:</b> {guidance['description']}",
-        f"📐 <b>Формат:</b> {guidance['format']}",
-        f"💡 <b>Пример:</b> {guidance['example']}",
-        f"⚠️ <b>Важно:</b> {guidance['warning']}",
-        f"🔗 <b>Связанные настройки:</b> {guidance['dependencies']}",
+        f"🔑 Ключ: <code>{summary['key']}</code>",
+        f"📁 Категория: {summary['category_label']}",
+        f"📝 Тип: {type_label}",
+        f"📌 Текущее: {summary['current']}",
     ]
+
+    original_value = summary.get("original")
+    if original_value not in {None, ""}:
+        lines.append(f"📦 По умолчанию: {original_value}")
+
+    lines.append(f"✳️ Переопределено: {'Да' if summary['has_override'] else 'Нет'}")
+
+    if summary.get("is_read_only"):
+        lines.append("🔒 Режим: Только для чтения (управляется автоматически)")
+
+    lines.append("")
+    if description:
+        lines.append(f"📘 Описание: {description}")
+    if format_hint:
+        lines.append(f"📐 Формат: {format_hint}")
+    if example:
+        lines.append(f"💡 Пример: {example}")
+    if warning:
+        lines.append(f"⚠️ Важно: {warning}")
+    if dependencies:
+        lines.append(f"🔗 Связанные: {dependencies}")
 
     choices = bot_configuration_service.get_choice_options(key)
     if choices:
         current_raw = bot_configuration_service.get_current_value(key)
         lines.append("")
-        lines.append("📋 <b>Доступные значения:</b>")
+        lines.append("📋 Доступные значения:")
         for option in choices:
             marker = "✅" if current_raw == option.value else "•"
             value_display = bot_configuration_service.format_value_human(key, option.value)
             description = option.description or ""
+            base_line = f"{marker} {option.label} — <code>{value_display}</code>"
             if description:
-                lines.append(
-                    f"{marker} {option.label} — <code>{value_display}</code>\n   {description}"
-                )
-            else:
-                lines.append(f"{marker} {option.label} — <code>{value_display}</code>")
+                base_line += f"\n└ {description}"
+            lines.append(base_line)
 
     return "\n".join(lines)
 
@@ -1543,13 +1542,25 @@ async def show_bot_config_group(
     keyboard = _build_categories_keyboard(group_key, group_title, items, page)
     status_icon, status_text = _get_group_status(group_key)
     description = _get_group_description(group_key)
-    lines = [f"{status_icon} <b>{group_title}</b>"]
-    if description:
-        lines.append(description)
+    icon = _get_group_icon(group_key)
+    raw_title = str(group_title).strip()
+    clean_title = raw_title
+    if icon and raw_title.startswith(icon):
+        clean_title = raw_title[len(icon) :].strip()
+    elif " " in raw_title:
+        possible_icon, remainder = raw_title.split(" ", 1)
+        if possible_icon:
+            icon = possible_icon
+            clean_title = remainder.strip()
+    lines = [f"{icon} <b>{clean_title}</b>"]
     if status_text:
-        lines.append(f"Статус: {status_text}")
+        lines.append(f"Статус: {status_icon} {status_text}")
+    lines.append(f"🏠 → {clean_title}")
+    if description:
+        lines.append("")
+        lines.append(description)
     lines.append("")
-    lines.append("📂 Выберите категорию настроек:")
+    lines.append("📂 Категории группы:")
     await callback.message.edit_text(
         "\n".join(lines),
         reply_markup=keyboard,
@@ -1578,6 +1589,17 @@ async def show_bot_config_category(
     category_description = bot_configuration_service.get_category_description(category_key)
     group_meta = _get_group_meta(group_key)
     group_title = str(group_meta.get("title", group_key))
+    group_icon = _get_group_icon(group_key)
+    raw_group_title = group_title.strip()
+    if group_icon and raw_group_title.startswith(group_icon):
+        group_plain_title = raw_group_title[len(group_icon) :].strip()
+    elif " " in raw_group_title:
+        possible_icon, remainder = raw_group_title.split(" ", 1)
+        group_plain_title = remainder.strip()
+        if possible_icon:
+            group_icon = possible_icon
+    else:
+        group_plain_title = raw_group_title
     keyboard = _build_settings_keyboard(
         category_key,
         group_key,
@@ -1587,12 +1609,12 @@ async def show_bot_config_category(
     )
     text_lines = [
         f"🗂 <b>{category_label}</b>",
-        f"Навигация: 🏠 Главное → {group_title} → {category_label}",
+        f"🏠 → {group_plain_title} → {category_label}",
     ]
     if category_description:
         text_lines.append(category_description)
     text_lines.append("")
-    text_lines.append("📋 Выберите настройку для просмотра или редактирования:")
+    text_lines.append("📋 Список настроек категории:")
     await callback.message.edit_text(
         "\n".join(text_lines),
         reply_markup=keyboard,
