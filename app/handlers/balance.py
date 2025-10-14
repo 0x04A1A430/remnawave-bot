@@ -373,45 +373,6 @@ async def start_mulenpay_payment(
 
 
 @error_handler
-async def start_wata_payment(
-    callback: types.CallbackQuery,
-    db_user: User,
-    state: FSMContext,
-):
-    texts = get_texts(db_user.language)
-
-    if not settings.is_wata_enabled():
-        await callback.answer("❌ Оплата через Wata Pay временно недоступна", show_alert=True)
-        return
-
-    message_text = texts.t(
-        "WATA_TOPUP_PROMPT",
-        (
-            "🌐 <b>Оплата через Wata Pay</b>\n\n"
-            "Введите сумму для пополнения от 100 до 1 000 000 ₽.\n"
-            "Оплата проходит через платформу Wata Pay."
-        ),
-    )
-
-    keyboard = get_back_keyboard(db_user.language)
-
-    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED:
-        quick_amount_buttons = get_quick_amount_buttons(db_user.language)
-        if quick_amount_buttons:
-            keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
-
-    await callback.message.edit_text(
-        message_text,
-        reply_markup=keyboard,
-        parse_mode="HTML",
-    )
-
-    await state.set_state(BalanceStates.waiting_for_amount)
-    await state.update_data(payment_method="wata")
-    await callback.answer()
-
-
-@error_handler
 async def start_pal24_payment(
     callback: types.CallbackQuery,
     db_user: User,
@@ -672,10 +633,6 @@ async def process_topup_amount(
             from app.database.database import AsyncSessionLocal
             async with AsyncSessionLocal() as db:
                 await process_mulenpay_payment_amount(message, db_user, db, amount_kopeks, state)
-        elif payment_method == "wata":
-            from app.database.database import AsyncSessionLocal
-            async with AsyncSessionLocal() as db:
-                await process_wata_payment_amount(message, db_user, db, amount_kopeks, state)
         elif payment_method == "pal24":
             from app.database.database import AsyncSessionLocal
             async with AsyncSessionLocal() as db:
@@ -1036,118 +993,6 @@ async def process_mulenpay_payment_amount(
 
 
 @error_handler
-async def process_wata_payment_amount(
-    message: types.Message,
-    db_user: User,
-    db: AsyncSession,
-    amount_kopeks: int,
-    state: FSMContext,
-):
-    texts = get_texts(db_user.language)
-
-    if not settings.is_wata_enabled():
-        await message.answer("❌ Оплата через Wata Pay временно недоступна")
-        return
-
-    if amount_kopeks < settings.WATA_MIN_AMOUNT_KOPEKS:
-        await message.answer(
-            f"Минимальная сумма пополнения: {settings.format_price(settings.WATA_MIN_AMOUNT_KOPEKS)}"
-        )
-        return
-
-    if amount_kopeks > settings.WATA_MAX_AMOUNT_KOPEKS:
-        await message.answer(
-            f"Максимальная сумма пополнения: {settings.format_price(settings.WATA_MAX_AMOUNT_KOPEKS)}"
-        )
-        return
-
-    try:
-        payment_service = PaymentService(message.bot)
-        payment_result = await payment_service.create_wata_payment(
-            db=db,
-            user_id=db_user.id,
-            amount_kopeks=amount_kopeks,
-            description=settings.get_balance_payment_description(amount_kopeks),
-            language=db_user.language,
-        )
-
-        if not payment_result or not payment_result.get("payment_url"):
-            await message.answer(
-                texts.t(
-                    "WATA_PAYMENT_ERROR",
-                    "❌ Ошибка создания платежа Wata Pay. Попробуйте позже или обратитесь в поддержку.",
-                )
-            )
-            await state.clear()
-            return
-
-        payment_url = payment_result["payment_url"]
-        local_payment_id = payment_result["local_payment_id"]
-        order_id = payment_result.get("order_id") or local_payment_id
-
-        keyboard = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.t("WATA_PAY_BUTTON", "🌐 Оплатить через Wata Pay"),
-                        url=payment_url,
-                    )
-                ],
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
-                        callback_data=f"check_wata_{local_payment_id}",
-                    )
-                ],
-                [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")],
-            ]
-        )
-
-        message_template = texts.t(
-            "WATA_PAYMENT_INSTRUCTIONS",
-            (
-                "🌐 <b>Оплата через Wata Pay</b>\n\n"
-                "💰 Сумма: {amount}\n"
-                "🆔 ID платежа: {payment_id}\n\n"
-                "📱 <b>Инструкция:</b>\n"
-                "1. Нажмите кнопку ‘Оплатить через Wata Pay’\n"
-                "2. Следуйте подсказкам платежной системы\n"
-                "3. Подтвердите перевод\n"
-                "4. Средства зачислятся автоматически\n\n"
-                "❓ Если возникнут проблемы, обратитесь в {support}"
-            ),
-        )
-
-        message_text = message_template.format(
-            amount=settings.format_price(amount_kopeks),
-            payment_id=order_id,
-            support=settings.get_support_contact_display_html(),
-        )
-
-        await message.answer(
-            message_text,
-            reply_markup=keyboard,
-            parse_mode="HTML",
-        )
-
-        await state.clear()
-
-        logger.info(
-            "Создан Wata платеж для пользователя %s: %s₽, ID: %s",
-            db_user.telegram_id,
-            amount_kopeks / 100,
-            order_id,
-        )
-
-    except Exception as error:
-        logger.error(f"Ошибка создания Wata платежа: {error}")
-        await message.answer(
-            texts.t(
-                "WATA_PAYMENT_ERROR",
-                "❌ Ошибка создания платежа Wata Pay. Попробуйте позже или обратитесь в поддержку.",
-            )
-        )
-        await state.clear()
 async def process_pal24_payment_amount(
     message: types.Message,
     db_user: User,
@@ -1476,146 +1321,6 @@ async def check_mulenpay_payment_status(
     except Exception as e:
         logger.error(f"Ошибка проверки статуса MulenPay: {e}")
         await callback.answer("❌ Ошибка проверки статуса", show_alert=True)
-
-
-@error_handler
-async def check_wata_payment_status(
-    callback: types.CallbackQuery,
-    db: AsyncSession,
-):
-    base_texts = get_texts(settings.DEFAULT_LANGUAGE)
-
-    try:
-        local_payment_id = int(callback.data.split('_')[-1])
-        payment_service = PaymentService(callback.bot)
-        status_info = await payment_service.get_wata_payment_status(db, local_payment_id)
-
-        if not status_info:
-            await callback.answer(
-                base_texts.t(
-                    "WATA_PAYMENT_NOT_FOUND",
-                    "❌ Платеж не найден",
-                ),
-                show_alert=True,
-            )
-            return
-
-        payment = status_info["payment"]
-        remote_transaction = status_info.get("remote_transaction")
-
-        user = getattr(payment, "user", None)
-        language = getattr(user, "language", None) or settings.DEFAULT_LANGUAGE
-        texts = get_texts(language)
-
-        status_labels = {
-            "Opened": (
-                "⏳",
-                texts.t("WATA_STATUS_LINK_OPENED", "Ожидает оплаты"),
-            ),
-            "Closed": (
-                "✅" if payment.is_paid else "🔒",
-                texts.t("WATA_STATUS_LINK_CLOSED", "Ссылка закрыта"),
-            ),
-        }
-        transaction_labels = {
-            "Paid": ("✅", texts.t("WATA_STATUS_TRANSACTION_PAID", "Оплачен")),
-            "Declined": ("❌", texts.t("WATA_STATUS_TRANSACTION_DECLINED", "Отклонен")),
-            "Pending": ("⏳", texts.t("WATA_STATUS_TRANSACTION_PENDING", "В обработке")),
-            None: ("❓", texts.t("WATA_STATUS_TRANSACTION_UNKNOWN", "Неизвестно")),
-        }
-
-        emoji, status_text = status_labels.get(
-            payment.status,
-            ("❓", texts.t("WATA_STATUS_LINK_UNKNOWN", "Неизвестно")),
-        )
-        t_emoji, transaction_text = transaction_labels.get(
-            payment.transaction_status,
-            transaction_labels[None],
-        )
-
-        message_lines = [
-            texts.t("WATA_STATUS_HEADER", "🌐 Статус платежа Wata Pay:"),
-            "",
-            texts.t("WATA_STATUS_ORDER_ID", "🆔 ID заказа: {order_id}").format(
-                order_id=payment.order_id,
-            ),
-            texts.t("WATA_STATUS_AMOUNT", "💰 Сумма: {amount}").format(
-                amount=settings.format_price(payment.amount_kopeks),
-            ),
-            texts.t("WATA_STATUS_LINK_STATUS", "📊 Статус ссылки: {emoji} {status}").format(
-                emoji=emoji,
-                status=status_text,
-            ),
-            texts.t(
-                "WATA_STATUS_TRANSACTION_STATUS",
-                "💳 Статус транзакции: {emoji} {status}",
-            ).format(
-                emoji=t_emoji,
-                status=transaction_text,
-            ),
-            texts.t(
-                "WATA_STATUS_CREATED_AT",
-                "📅 Создан: {created_at}",
-            ).format(
-                created_at=(
-                    payment.created_at.strftime('%d.%m.%Y %H:%M')
-                    if payment.created_at
-                    else "-"
-                ),
-            ),
-        ]
-
-        if payment.is_paid:
-            message_lines.append("")
-            message_lines.append(
-                texts.t(
-                    "WATA_STATUS_SUCCESS",
-                    "✅ Платеж успешно завершен! Средства уже на балансе.",
-                )
-            )
-        else:
-            message_lines.append("")
-            message_lines.append(
-                texts.t(
-                    "WATA_STATUS_PENDING",
-                    "⏳ Платеж еще не завершен. После оплаты вернитесь и проверьте статус.",
-                )
-            )
-            if payment.payment_url:
-                message_lines.append("")
-                message_lines.append(
-                    texts.t(
-                        "WATA_STATUS_PAYMENT_URL",
-                        "🌐 Ссылка на оплату: {url}",
-                    ).format(url=payment.payment_url)
-                )
-
-        if remote_transaction and not payment.is_paid:
-            remote_status = remote_transaction.get("status")
-            if remote_status:
-                message_lines.append("")
-                message_lines.append(
-                    texts.t(
-                        "WATA_STATUS_REMOTE_STATUS",
-                        "ℹ️ Последний статус транзакции: {status}",
-                    ).format(status=remote_status)
-                )
-
-        await callback.answer()
-        await callback.message.answer(
-            "\n".join(message_lines),
-            disable_web_page_preview=True,
-        )
-
-    except Exception as error:
-        logger.error(f"Ошибка проверки статуса Wata Pay: {error}")
-        await callback.answer(
-            base_texts.t(
-                "WATA_STATUS_ERROR",
-                "❌ Ошибка проверки статуса",
-            ),
-            show_alert=True,
-        )
 
 
 @error_handler
@@ -1969,12 +1674,6 @@ async def handle_quick_amount_selection(
                 await process_mulenpay_payment_amount(
                     callback.message, db_user, db, amount_kopeks, state
                 )
-        elif payment_method == "wata":
-            from app.database.database import AsyncSessionLocal
-            async with AsyncSessionLocal() as db:
-                await process_wata_payment_amount(
-                    callback.message, db_user, db, amount_kopeks, state
-                )
         elif payment_method == "pal24":
             from app.database.database import AsyncSessionLocal
             async with AsyncSessionLocal() as db:
@@ -2106,11 +1805,6 @@ def register_handlers(dp: Dispatcher):
     )
 
     dp.callback_query.register(
-        start_wata_payment,
-        F.data == "topup_wata"
-    )
-
-    dp.callback_query.register(
         start_pal24_payment,
         F.data == "topup_pal24"
     )
@@ -2153,11 +1847,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         check_mulenpay_payment_status,
         F.data.startswith("check_mulenpay_")
-    )
-
-    dp.callback_query.register(
-        check_wata_payment_status,
-        F.data.startswith("check_wata_")
     )
 
     dp.callback_query.register(
