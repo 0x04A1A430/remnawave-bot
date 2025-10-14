@@ -403,12 +403,23 @@ async def start_pal24_payment(
         await callback.answer("❌ Оплата через PayPalych временно недоступна", show_alert=True)
         return
 
+    # Формируем текст сообщения в зависимости от доступных способов оплаты
+    if settings.is_pal24_sbp_button_visible() and settings.is_pal24_card_button_visible():
+        payment_methods_text = "СБП и банковской картой"
+    elif settings.is_pal24_sbp_button_visible():
+        payment_methods_text = "СБП"
+    elif settings.is_pal24_card_button_visible():
+        payment_methods_text = "банковской картой"
+    else:
+        # Если обе кнопки отключены, используем общий текст
+        payment_methods_text = "доступными способами"
+
     message_text = texts.t(
         "PAL24_TOPUP_PROMPT",
         (
-            "🏦 <b>Оплата через PayPalych (СБП)</b>\n\n"
+            f"🏦 <b>Оплата через PayPalych ({payment_methods_text})</b>\n\n"
             "Введите сумму для пополнения от 100 до 1 000 000 ₽.\n"
-            "Оплата проходит через систему быстрых платежей PayPalych."
+            f"Оплата проходит через PayPalych ({payment_methods_text})."
         ),
     )
 
@@ -1091,7 +1102,7 @@ async def process_pal24_payment_amount(
         )
         sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
 
-        if sbp_url:
+        if sbp_url and settings.is_pal24_sbp_button_visible():
             pay_buttons.append(
                 [
                     types.InlineKeyboardButton(
@@ -1114,7 +1125,7 @@ async def process_pal24_payment_amount(
         )
         card_button_text = settings.get_pal24_card_button_text(default_card_text)
 
-        if card_url and card_url != sbp_url:
+        if card_url and card_url != sbp_url and settings.is_pal24_card_button_visible():
             pay_buttons.append(
                 [
                     types.InlineKeyboardButton(
@@ -1131,7 +1142,7 @@ async def process_pal24_payment_amount(
             )
             step_counter += 1
 
-        if not pay_buttons and fallback_url:
+        if not pay_buttons and fallback_url and settings.is_pal24_sbp_button_visible():
             pay_buttons.append(
                 [
                     types.InlineKeyboardButton(
