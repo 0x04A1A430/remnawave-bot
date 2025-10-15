@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict
@@ -161,6 +162,32 @@ def _normalize_locale_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+def _directory_is_writable(directory: Path) -> bool:
+    try:
+        with tempfile.NamedTemporaryFile(dir=directory, prefix=".locale_write_test_", delete=True):
+            pass
+        return True
+    except PermissionError as error:
+        _logger.warning(
+            "Locale directory %s is not writable. Configure LOCALES_PATH to a writable path. (%s)",
+            directory,
+            error,
+        )
+    except OSError as error:
+        _logger.warning(
+            "Unable to prepare locale directory %s for writing: %s. Configure LOCALES_PATH to a writable path.",
+            directory,
+            error,
+        )
+    except Exception as error:  # pragma: no cover - defensive logging
+        _logger.warning(
+            "Unexpected error while checking locale directory %s: %s",
+            directory,
+            error,
+        )
+    return False
+
+
 def ensure_locale_templates() -> None:
     destination = _resolve_user_locales_dir()
     try:
@@ -171,6 +198,9 @@ def ensure_locale_templates() -> None:
 
     if not _DEFAULT_LOCALES_DIR.exists():
         _logger.debug("Default locales directory %s is missing", _DEFAULT_LOCALES_DIR)
+        return
+
+    if not _directory_is_writable(destination):
         return
 
     destination_has_files = any(destination.glob("*"))
