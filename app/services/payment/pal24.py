@@ -64,6 +64,7 @@ class Pal24PaymentMixin:
         }
 
         normalized_payment_method = self._normalize_payment_method(payment_method)
+        pal24_payment_method = self._map_payment_method_for_api(normalized_payment_method)
 
         payment_module = import_module("app.services.payment_service")
 
@@ -76,7 +77,7 @@ class Pal24PaymentMixin:
                 ttl_seconds=ttl_seconds,
                 custom_payload=custom_payload,
                 payer_email=payer_email,
-                payment_method=normalized_payment_method,
+                payment_method=pal24_payment_method,
             )
         except Pal24APIError as error:
             logger.error("Ошибка Pal24 API при создании счета: %s", error)
@@ -528,3 +529,12 @@ class Pal24PaymentMixin:
 
         normalized = payment_method.strip().lower()
         return mapping.get(normalized, "sbp")
+
+    @staticmethod
+    def _map_payment_method_for_api(normalized_method: str) -> Optional[str]:
+        mapping = {
+            "sbp": "fast_payment",
+            "card": "bank_card",
+        }
+
+        return mapping.get(normalized_method)
