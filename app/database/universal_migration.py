@@ -836,127 +836,32 @@ async def ensure_wata_payment_schema() -> bool:
         link_index_exists = await check_index_exists("wata_payments", "idx_wata_link_id")
         order_index_exists = await check_index_exists("wata_payments", "idx_wata_order_id")
 
-        payment_link_column_exists = await check_column_exists(
-            "wata_payments", "payment_link_id"
-        )
-        order_id_column_exists = await check_column_exists("wata_payments", "order_id")
-
         async with engine.begin() as conn:
             db_type = await get_database_type()
 
-            if not payment_link_column_exists:
-                if db_type == "sqlite":
-                    await conn.execute(
-                        text("ALTER TABLE wata_payments ADD COLUMN payment_link_id VARCHAR(64)")
-                    )
-                    payment_link_column_exists = True
-                elif db_type == "postgresql":
-                    await conn.execute(
-                        text(
-                            "ALTER TABLE wata_payments "
-                            "ADD COLUMN IF NOT EXISTS payment_link_id VARCHAR(64)"
-                        )
-                    )
-                    payment_link_column_exists = True
-                elif db_type == "mysql":
-                    await conn.execute(
-                        text("ALTER TABLE wata_payments ADD COLUMN payment_link_id VARCHAR(64)")
-                    )
-                    payment_link_column_exists = True
-                else:
-                    logger.warning(
-                        "⚠️ Неизвестный тип БД %s — пропущено добавление payment_link_id",
-                        db_type,
-                    )
-
-                if payment_link_column_exists:
-                    logger.info("✅ Добавлена колонка payment_link_id в wata_payments")
-
-            if not order_id_column_exists:
-                if db_type == "sqlite":
-                    await conn.execute(
-                        text("ALTER TABLE wata_payments ADD COLUMN order_id VARCHAR(255)")
-                    )
-                    order_id_column_exists = True
-                elif db_type == "postgresql":
-                    await conn.execute(
-                        text(
-                            "ALTER TABLE wata_payments "
-                            "ADD COLUMN IF NOT EXISTS order_id VARCHAR(255)"
-                        )
-                    )
-                    order_id_column_exists = True
-                elif db_type == "mysql":
-                    await conn.execute(
-                        text("ALTER TABLE wata_payments ADD COLUMN order_id VARCHAR(255)")
-                    )
-                    order_id_column_exists = True
-                else:
-                    logger.warning(
-                        "⚠️ Неизвестный тип БД %s — пропущено добавление order_id",
-                        db_type,
-                    )
-
-                if order_id_column_exists:
-                    logger.info("✅ Добавлена колонка order_id в wata_payments")
-
             if not link_index_exists:
-                if not payment_link_column_exists:
-                    logger.warning(
-                        "⚠️ Пропущено создание индекса idx_wata_link_id — колонка payment_link_id отсутствует"
+                if db_type in {"sqlite", "postgresql"}:
+                    await conn.execute(
+                        text("CREATE INDEX IF NOT EXISTS idx_wata_link_id ON wata_payments(payment_link_id)")
                     )
-                else:
-                    index_created = False
-                    if db_type in {"sqlite", "postgresql"}:
-                        await conn.execute(
-                            text(
-                                "CREATE INDEX IF NOT EXISTS idx_wata_link_id ON wata_payments(payment_link_id)"
-                            )
-                        )
-                        index_created = True
-                    elif db_type == "mysql":
-                        await conn.execute(
-                            text("CREATE INDEX idx_wata_link_id ON wata_payments(payment_link_id)")
-                        )
-                        index_created = True
-                    else:
-                        logger.warning(
-                            "⚠️ Неизвестный тип БД %s — пропущено создание индекса idx_wata_link_id",
-                            db_type,
-                        )
-
-                    if index_created:
-                        logger.info("✅ Создан индекс idx_wata_link_id")
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text("CREATE INDEX idx_wata_link_id ON wata_payments(payment_link_id)")
+                    )
+                logger.info("✅ Создан индекс idx_wata_link_id")
             else:
                 logger.info("ℹ️ Индекс idx_wata_link_id уже существует")
 
             if not order_index_exists:
-                if not order_id_column_exists:
-                    logger.warning(
-                        "⚠️ Пропущено создание индекса idx_wata_order_id — колонка order_id отсутствует"
+                if db_type in {"sqlite", "postgresql"}:
+                    await conn.execute(
+                        text("CREATE INDEX IF NOT EXISTS idx_wata_order_id ON wata_payments(order_id)")
                     )
-                else:
-                    index_created = False
-                    if db_type in {"sqlite", "postgresql"}:
-                        await conn.execute(
-                            text(
-                                "CREATE INDEX IF NOT EXISTS idx_wata_order_id ON wata_payments(order_id)"
-                            )
-                        )
-                        index_created = True
-                    elif db_type == "mysql":
-                        await conn.execute(
-                            text("CREATE INDEX idx_wata_order_id ON wata_payments(order_id)")
-                        )
-                        index_created = True
-                    else:
-                        logger.warning(
-                            "⚠️ Неизвестный тип БД %s — пропущено создание индекса idx_wata_order_id",
-                            db_type,
-                        )
-
-                    if index_created:
-                        logger.info("✅ Создан индекс idx_wata_order_id")
+                elif db_type == "mysql":
+                    await conn.execute(
+                        text("CREATE INDEX idx_wata_order_id ON wata_payments(order_id)")
+                    )
+                logger.info("✅ Создан индекс idx_wata_order_id")
             else:
                 logger.info("ℹ️ Индекс idx_wata_order_id уже существует")
 
