@@ -573,6 +573,8 @@
   "PAYMENT_METHOD_STARS_DESCRIPTION": "fast and convenient",
   "PAYMENT_METHOD_YOOKASSA_NAME": "💳 <b>Bank card</b>",
   "PAYMENT_METHOD_YOOKASSA_DESCRIPTION": "via YooKassa",
+  "PAYMENT_METHOD_YOOKASSA_SBP_NAME": "🏦 <b>SBP (YooKassa)</b>",
+  "PAYMENT_METHOD_YOOKASSA_SBP_DESCRIPTION": "via YooKassa Fast Payment System",
   "PAYMENT_METHOD_TRIBUTE_NAME": "💳 <b>Bank card</b>",
   "PAYMENT_METHOD_TRIBUTE_DESCRIPTION": "via Tribute",
   "PAYMENT_METHOD_MULENPAY_NAME": "💳 <b>Bank card (Mulen Pay)</b>",

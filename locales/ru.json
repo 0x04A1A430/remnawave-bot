@@ -575,6 +575,8 @@
   "PAYMENT_METHOD_STARS_DESCRIPTION": "быстро и удобно",
   "PAYMENT_METHOD_YOOKASSA_NAME": "💳 <b>Банковская карта</b>",
   "PAYMENT_METHOD_YOOKASSA_DESCRIPTION": "через YooKassa",
+  "PAYMENT_METHOD_YOOKASSA_SBP_NAME": "🏦 <b>СБП (YooKassa)</b>",
+  "PAYMENT_METHOD_YOOKASSA_SBP_DESCRIPTION": "через систему быстрых платежей YooKassa",
   "PAYMENT_METHOD_TRIBUTE_NAME": "💳 <b>Банковская карта</b>",
   "PAYMENT_METHOD_TRIBUTE_DESCRIPTION": "через Tribute",
   "PAYMENT_METHOD_MULENPAY_NAME": "💳 <b>Банковская карта (Mulen Pay)</b>",
