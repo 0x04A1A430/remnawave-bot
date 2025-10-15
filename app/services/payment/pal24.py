@@ -63,7 +63,7 @@ class Pal24PaymentMixin:
             "language": language,
         }
 
-        normalized_payment_method = (payment_method or "SBP").upper()
+        normalized_payment_method = self._normalize_payment_method(payment_method)
 
         payment_module = import_module("app.services.payment_service")
 
@@ -147,6 +147,7 @@ class Pal24PaymentMixin:
             "description": description,
             "links": metadata_links,
             "raw_response": response,
+            "selected_method": normalized_payment_method,
         }
 
         payment = await payment_module.create_pal24_payment(
@@ -186,6 +187,10 @@ class Pal24PaymentMixin:
             "payment_method": normalized_payment_method,
             "metadata_links": metadata_links,
             "status": payment_status,
+            "sbp_url": transfer_url,
+            "transfer_url": transfer_url,
+            "link_page_url": link_page_url,
+            "payment_url": primary_link,
         }
 
     async def process_pal24_postback(
@@ -240,7 +245,7 @@ class Pal24PaymentMixin:
                 logger.info("Pal24 платеж %s уже обработан", payment.bill_id)
                 return True
 
-            if status in {"PAID", "SUCCESS"}:
+            if status in {"PAID", "SUCCESS", "OVERPAID"}:
                 user = await payment_module.get_user_by_id(db, payment.user_id)
                 if not user:
                     logger.error(
@@ -253,8 +258,17 @@ class Pal24PaymentMixin:
                     db,
                     payment,
                     status=status,
+                    is_paid=True,
+                    paid_at=datetime.utcnow(),
                     postback_payload=postback,
                     payment_id=payment_id,
+                    payment_status=postback.get("Status") or status,
+                    payment_method=(
+                        postback.get("payment_method")
+                        or postback.get("PaymentMethod")
+                        or (payment.metadata_json or {}).get("selected_method")
+                        or getattr(payment, "payment_method", None)
+                    ),
                 )
 
                 if payment.transaction_id:
@@ -407,8 +421,15 @@ class Pal24PaymentMixin:
                 db,
                 payment,
                 status=status or "UNKNOWN",
+                is_paid=False,
                 postback_payload=postback,
                 payment_id=payment_id,
+                payment_status=postback.get("Status") or status,
+                payment_method=(
+                    postback.get("payment_method")
+                    or postback.get("PaymentMethod")
+                    or getattr(payment, "payment_method", None)
+                ),
             )
             logger.info(
                 "Обновили Pal24 платеж %s до статуса %s",
@@ -446,12 +467,29 @@ class Pal24PaymentMixin:
                         "bill", {}
                     ).get("status")
 
-                    if remote_status and remote_status != payment.status:
-                        await payment_module.update_pal24_payment_status(
-                            db,
-                            payment,
-                            status=str(remote_status).upper(),
-                        )
+                    if remote_status:
+                        normalized_remote = str(remote_status).upper()
+                        if normalized_remote != payment.status:
+                            update_kwargs: Dict[str, Any] = {
+                                "status": normalized_remote,
+                                "payment_status": remote_status,
+                            }
+                            if normalized_remote in getattr(
+                                service, "BILL_SUCCESS_STATES", {"SUCCESS"}
+                            ):
+                                update_kwargs["is_paid"] = True
+                                if not payment.paid_at:
+                                    update_kwargs["paid_at"] = datetime.utcnow()
+                            elif normalized_remote in getattr(
+                                service, "BILL_FAILED_STATES", {"FAIL"}
+                            ):
+                                update_kwargs["is_paid"] = False
+
+                            await payment_module.update_pal24_payment_status(
+                                db,
+                                payment,
+                                **update_kwargs,
+                            )
                         payment = await payment_module.get_pal24_payment_by_id(
                             db, local_payment_id
                         )
@@ -471,3 +509,22 @@ class Pal24PaymentMixin:
         except Exception as error:
             logger.error("Ошибка получения статуса Pal24: %s", error, exc_info=True)
             return None
+
+    @staticmethod
+    def _normalize_payment_method(payment_method: Optional[str]) -> str:
+        mapping = {
+            "sbp": "sbp",
+            "fast": "sbp",
+            "fastpay": "sbp",
+            "fast_payment": "sbp",
+            "card": "card",
+            "bank_card": "card",
+            "bankcard": "card",
+            "bank-card": "card",
+        }
+
+        if not payment_method:
+            return "sbp"
+
+        normalized = payment_method.strip().lower()
+        return mapping.get(normalized, "sbp")

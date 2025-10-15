@@ -1,10 +1,12 @@
 import html
 import logging
 from aiogram import types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.database import AsyncSessionLocal
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
 from app.localization.texts import get_texts
@@ -15,80 +17,26 @@ from app.states import BalanceStates
 logger = logging.getLogger(__name__)
 
 
-@error_handler
-async def start_pal24_payment(
-    callback: types.CallbackQuery,
-    db_user: User,
-    state: FSMContext,
-):
-    texts = get_texts(db_user.language)
-
-    if not settings.is_pal24_enabled():
-        await callback.answer("❌ Оплата через PayPalych временно недоступна", show_alert=True)
-        return
-
-    # Формируем текст сообщения в зависимости от доступных способов оплаты
-    if settings.is_pal24_sbp_button_visible() and settings.is_pal24_card_button_visible():
-        payment_methods_text = "СБП и банковской картой"
-    elif settings.is_pal24_sbp_button_visible():
-        payment_methods_text = "СБП"
-    elif settings.is_pal24_card_button_visible():
-        payment_methods_text = "банковской картой"
-    else:
-        # Если обе кнопки отключены, используем общий текст
-        payment_methods_text = "доступными способами"
-
-    message_text = texts.t(
-        "PAL24_TOPUP_PROMPT",
-        (
-            f"🏦 <b>Оплата через PayPalych ({payment_methods_text})</b>\n\n"
-            "Введите сумму для пополнения от 100 до 1 000 000 ₽.\n"
-            f"Оплата проходит через PayPalych ({payment_methods_text})."
-        ),
-    )
-
-    keyboard = get_back_keyboard(db_user.language)
-
-    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
-        from .main import get_quick_amount_buttons
-        quick_amount_buttons = get_quick_amount_buttons(db_user.language)
-        if quick_amount_buttons:
-            keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
-
-    await callback.message.edit_text(
-        message_text,
-        reply_markup=keyboard,
-        parse_mode="HTML",
-    )
-
-    await state.set_state(BalanceStates.waiting_for_amount)
-    await state.update_data(payment_method="pal24")
-    await callback.answer()
+def _get_available_pal24_methods() -> list[str]:
+    methods: list[str] = []
+    if settings.is_pal24_sbp_button_visible():
+        methods.append("sbp")
+    if settings.is_pal24_card_button_visible():
+        methods.append("card")
+    if not methods:
+        methods.append("sbp")
+    return methods
 
 
-@error_handler
-async def process_pal24_payment_amount(
+async def _send_pal24_payment_message(
     message: types.Message,
     db_user: User,
     db: AsyncSession,
     amount_kopeks: int,
+    payment_method: str,
     state: FSMContext,
-):
+) -> None:
     texts = get_texts(db_user.language)
-
-    if not settings.is_pal24_enabled():
-        await message.answer("❌ Оплата через PayPalych временно недоступна")
-        return
-
-    if amount_kopeks < settings.PAL24_MIN_AMOUNT_KOPEKS:
-        min_rubles = settings.PAL24_MIN_AMOUNT_KOPEKS / 100
-        await message.answer(f"❌ Минимальная сумма для оплаты через PayPalych: {min_rubles:.0f} ₽")
-        return
-
-    if amount_kopeks > settings.PAL24_MAX_AMOUNT_KOPEKS:
-        max_rubles = settings.PAL24_MAX_AMOUNT_KOPEKS / 100
-        await message.answer(f"❌ Максимальная сумма для оплаты через PayPalych: {max_rubles:,.0f} ₽".replace(',', ' '))
-        return
 
     try:
         payment_service = PaymentService(message.bot)
@@ -98,6 +46,7 @@ async def process_pal24_payment_amount(
             amount_kopeks=amount_kopeks,
             description=settings.get_balance_payment_description(amount_kopeks),
             language=db_user.language,
+            payment_method=payment_method,
         )
 
         if not payment_result:
@@ -262,14 +211,15 @@ async def process_pal24_payment_amount(
         await state.clear()
 
         logger.info(
-            "Создан PayPalych счет для пользователя %s: %s₽, ID: %s",
+            "Создан PayPalych счет для пользователя %s: %s₽, ID: %s, метод: %s",
             db_user.telegram_id,
             amount_kopeks / 100,
             bill_id,
+            payment_method,
         )
 
-    except Exception as e:
-        logger.error(f"Ошибка создания PayPalych платежа: {e}")
+    except Exception as error:
+        logger.error(f"Ошибка создания PayPalych платежа: {error}")
         await message.answer(
             texts.t(
                 "PAL24_PAYMENT_ERROR",
@@ -277,6 +227,168 @@ async def process_pal24_payment_amount(
             )
         )
         await state.clear()
+
+@error_handler
+async def start_pal24_payment(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+):
+    texts = get_texts(db_user.language)
+
+    if not settings.is_pal24_enabled():
+        await callback.answer("❌ Оплата через PayPalych временно недоступна", show_alert=True)
+        return
+
+    # Формируем текст сообщения в зависимости от доступных способов оплаты
+    if settings.is_pal24_sbp_button_visible() and settings.is_pal24_card_button_visible():
+        payment_methods_text = "СБП и банковской картой"
+    elif settings.is_pal24_sbp_button_visible():
+        payment_methods_text = "СБП"
+    elif settings.is_pal24_card_button_visible():
+        payment_methods_text = "банковской картой"
+    else:
+        # Если обе кнопки отключены, используем общий текст
+        payment_methods_text = "доступными способами"
+
+    message_text = texts.t(
+        "PAL24_TOPUP_PROMPT",
+        (
+            f"🏦 <b>Оплата через PayPalych ({payment_methods_text})</b>\n\n"
+            "Введите сумму для пополнения от 100 до 1 000 000 ₽.\n"
+            f"Оплата проходит через PayPalych ({payment_methods_text})."
+        ),
+    )
+
+    keyboard = get_back_keyboard(db_user.language)
+
+    if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
+        from .main import get_quick_amount_buttons
+        quick_amount_buttons = get_quick_amount_buttons(db_user.language)
+        if quick_amount_buttons:
+            keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
+
+    await callback.message.edit_text(
+        message_text,
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
+
+    await state.set_state(BalanceStates.waiting_for_amount)
+    await state.update_data(payment_method="pal24")
+    await callback.answer()
+
+
+@error_handler
+async def process_pal24_payment_amount(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+    amount_kopeks: int,
+    state: FSMContext,
+):
+    texts = get_texts(db_user.language)
+
+    if not settings.is_pal24_enabled():
+        await message.answer("❌ Оплата через PayPalych временно недоступна")
+        return
+
+    if amount_kopeks < settings.PAL24_MIN_AMOUNT_KOPEKS:
+        min_rubles = settings.PAL24_MIN_AMOUNT_KOPEKS / 100
+        await message.answer(f"❌ Минимальная сумма для оплаты через PayPalych: {min_rubles:.0f} ₽")
+        return
+
+    if amount_kopeks > settings.PAL24_MAX_AMOUNT_KOPEKS:
+        max_rubles = settings.PAL24_MAX_AMOUNT_KOPEKS / 100
+        await message.answer(
+            f"❌ Максимальная сумма для оплаты через PayPalych: {max_rubles:,.0f} ₽".replace(',', ' ')
+        )
+        return
+
+    available_methods = _get_available_pal24_methods()
+
+    if len(available_methods) == 1:
+        await _send_pal24_payment_message(
+            message,
+            db_user,
+            db,
+            amount_kopeks,
+            available_methods[0],
+            state,
+        )
+        return
+
+    await state.update_data(pal24_amount_kopeks=amount_kopeks)
+    await state.set_state(BalanceStates.waiting_for_pal24_method)
+
+    method_buttons: list[list[types.InlineKeyboardButton]] = []
+    if "sbp" in available_methods:
+        method_buttons.append(
+            [
+                types.InlineKeyboardButton(
+                    text=settings.get_pal24_sbp_button_text(
+                        texts.t("PAL24_SBP_PAY_BUTTON", "🏦 Оплатить через PayPalych (СБП)")
+                    ),
+                    callback_data="pal24_method_sbp",
+                )
+            ]
+        )
+    if "card" in available_methods:
+        method_buttons.append(
+            [
+                types.InlineKeyboardButton(
+                    text=settings.get_pal24_card_button_text(
+                        texts.t("PAL24_CARD_PAY_BUTTON", "💳 Оплатить банковской картой (PayPalych)")
+                    ),
+                    callback_data="pal24_method_card",
+                )
+            ]
+        )
+
+    method_buttons.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")])
+
+    await message.answer(
+        texts.t(
+            "PAL24_SELECT_PAYMENT_METHOD",
+            "Выберите способ оплаты PayPalych:",
+        ),
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=method_buttons),
+    )
+
+
+@error_handler
+async def handle_pal24_method_selection(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+):
+    data = await state.get_data()
+    amount_kopeks = data.get("pal24_amount_kopeks")
+    if not amount_kopeks:
+        texts = get_texts(db_user.language)
+        await callback.answer(
+            texts.t(
+                "PAL24_PAYMENT_ERROR",
+                "❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.",
+            ),
+            show_alert=True,
+        )
+        await state.clear()
+        return
+
+    method = "sbp" if callback.data.endswith("_sbp") else "card"
+
+    await callback.answer()
+
+    async with AsyncSessionLocal() as db:
+        await _send_pal24_payment_message(
+            callback.message,
+            db_user,
+            db,
+            int(amount_kopeks),
+            method,
+            state,
+        )
 
 
 @error_handler
@@ -353,11 +465,17 @@ async def check_pal24_payment_status(
         ])
         
         await callback.answer()
-        await callback.message.edit_text(
-            "\n".join(message_lines),
-            reply_markup=keyboard,
-            disable_web_page_preview=True,
-        )
+        try:
+            await callback.message.edit_text(
+                "\n".join(message_lines),
+                reply_markup=keyboard,
+                disable_web_page_preview=True,
+            )
+        except TelegramBadRequest as error:
+            if "message is not modified" in str(error).lower():
+                await callback.answer(texts.t("CHECK_STATUS_NO_CHANGES", "Статус не изменился"))
+            else:
+                raise
 
     except Exception as e:
         logger.error(f"Ошибка проверки статуса PayPalych: {e}")

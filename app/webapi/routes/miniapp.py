@@ -958,7 +958,7 @@ async def create_payment_link(
         option = (payload.payment_option or "").strip().lower()
         if option not in {"card", "sbp"}:
             option = "sbp"
-        provider_method = "CARD" if option == "card" else "SBP"
+        provider_method = "card" if option == "card" else "sbp"
 
         payment_service = PaymentService()
         result = await payment_service.create_pal24_payment(
@@ -974,7 +974,7 @@ async def create_payment_link(
 
         preferred_urls: List[Optional[str]] = []
         if option == "sbp":
-            preferred_urls.append(result.get("sbp_url"))
+            preferred_urls.append(result.get("sbp_url") or result.get("transfer_url"))
         elif option == "card":
             preferred_urls.append(result.get("card_url"))
         preferred_urls.extend(
@@ -998,7 +998,7 @@ async def create_payment_link(
                 "bill_id": result.get("bill_id"),
                 "order_id": result.get("order_id"),
                 "payment_method": result.get("payment_method") or provider_method,
-                "sbp_url": result.get("sbp_url"),
+                "sbp_url": result.get("sbp_url") or result.get("transfer_url"),
                 "card_url": result.get("card_url"),
                 "link_url": result.get("link_url"),
                 "link_page_url": result.get("link_page_url"),
