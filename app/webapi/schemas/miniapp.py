@@ -392,6 +392,7 @@ class MiniAppPaymentCreateResponse(BaseModel):
 class MiniAppPaymentStatusQuery(BaseModel):
     method: str
     local_payment_id: Optional[int] = Field(default=None, alias="localPaymentId")
+    payment_link_id: Optional[str] = Field(default=None, alias="paymentLinkId")
     invoice_id: Optional[str] = Field(default=None, alias="invoiceId")
     payment_id: Optional[str] = Field(default=None, alias="paymentId")
     payload: Optional[str] = None

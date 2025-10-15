@@ -3,6 +3,7 @@ import sys
 import types
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -87,6 +88,57 @@ async def test_create_payment_link_pal24_uses_selected_option(monkeypatch):
     assert response.extra['selected_option'] == 'card'
     assert response.extra['payment_method'] == 'CARD'
     assert captured_calls and captured_calls[0]['payment_method'] == 'CARD'
+
+
+@pytest.mark.anyio("asyncio")
+async def test_create_payment_link_wata_returns_payload(monkeypatch):
+    monkeypatch.setattr(settings, 'WATA_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'WATA_ACCESS_TOKEN', 'token', raising=False)
+    monkeypatch.setattr(settings, 'WATA_TERMINAL_PUBLIC_ID', 'terminal', raising=False)
+    monkeypatch.setattr(settings, 'WATA_MIN_AMOUNT_KOPEKS', 1000, raising=False)
+    monkeypatch.setattr(settings, 'WATA_MAX_AMOUNT_KOPEKS', 5000000, raising=False)
+
+    captured_call: dict[str, Any] = {}
+
+    class DummyPaymentService:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def create_wata_payment(self, db, **kwargs):
+            captured_call.update({'db': db, **kwargs})
+            return {
+                'local_payment_id': 202,
+                'payment_link_id': 'link_202',
+                'payment_url': 'https://wata.example/pay',
+                'status': 'Opened',
+                'order_id': 'order_202',
+            }
+
+    async def fake_resolve_user(db, init_data):
+        return types.SimpleNamespace(id=555, language='ru'), {}
+
+    monkeypatch.setattr(miniapp, 'PaymentService', lambda *args, **kwargs: DummyPaymentService())
+    monkeypatch.setattr(miniapp, '_resolve_user_from_init_data', fake_resolve_user)
+
+    payload = MiniAppPaymentCreateRequest(
+        initData='init',
+        method='wata',
+        amountKopeks=25000,
+    )
+
+    response = await miniapp.create_payment_link(payload, db=types.SimpleNamespace())
+
+    assert response.payment_url == 'https://wata.example/pay'
+    assert response.amount_kopeks == 25000
+    assert response.extra['local_payment_id'] == 202
+    assert response.extra['payment_link_id'] == 'link_202'
+    assert response.extra['payment_id'] == 'link_202'
+    assert response.extra['order_id'] == 'order_202'
+    assert 'requested_at' in response.extra
+
+    assert captured_call.get('user_id') == 555
+    assert captured_call.get('amount_kopeks') == 25000
+    assert captured_call.get('description')
 
 
 @pytest.mark.anyio("asyncio")
@@ -252,6 +304,112 @@ async def test_resolve_pal24_status_includes_identifiers(monkeypatch):
 
 
 @pytest.mark.anyio("asyncio")
+async def test_resolve_wata_payment_status_success():
+    paid_at = datetime.utcnow()
+    payment = types.SimpleNamespace(
+        id=404,
+        user_id=9,
+        amount_kopeks=30000,
+        currency='RUB',
+        status='Paid',
+        is_paid=True,
+        payment_link_id='wata_link_404',
+        order_id='order_404',
+        transaction_id=909,
+        paid_at=paid_at,
+        updated_at=paid_at,
+        created_at=paid_at - timedelta(minutes=1),
+    )
+
+    class StubWataService:
+        async def get_wata_payment_status(self, db, local_payment_id):  # noqa: ARG002
+            assert local_payment_id == 404
+            return {
+                'payment': payment,
+                'status': 'Paid',
+                'is_paid': True,
+                'remote_link': {'status': 'Paid'},
+                'transaction': {'id': 'tx_404', 'status': 'Paid'},
+            }
+
+    query = MiniAppPaymentStatusQuery(
+        method='wata',
+        localPaymentId=404,
+        amountKopeks=30000,
+        startedAt='2024-06-01T12:00:00Z',
+        payload='wata_payload',
+    )
+
+    result = await miniapp._resolve_wata_payment_status(
+        StubWataService(),
+        db=None,
+        user=types.SimpleNamespace(id=9),
+        query=query,
+    )
+
+    assert result.status == 'paid'
+    assert result.external_id == 'wata_link_404'
+    assert result.extra['payment_link_id'] == 'wata_link_404'
+    assert result.extra['transaction']['id'] == 'tx_404'
+    assert result.extra['payload'] == 'wata_payload'
+    assert result.extra['started_at'] == '2024-06-01T12:00:00Z'
+
+
+@pytest.mark.anyio("asyncio")
+async def test_resolve_wata_payment_status_uses_payment_link_lookup(monkeypatch):
+    created_at = datetime.utcnow()
+    payment = types.SimpleNamespace(
+        id=505,
+        user_id=7,
+        amount_kopeks=15000,
+        currency='RUB',
+        status='Opened',
+        is_paid=False,
+        payment_link_id='wata_lookup',
+        order_id='order_lookup',
+        transaction_id=None,
+        paid_at=None,
+        updated_at=None,
+        created_at=created_at,
+    )
+
+    async def fake_get_wata_payment_by_link_id(db, link_id):  # noqa: ARG001
+        assert link_id == 'wata_lookup'
+        return payment
+
+    monkeypatch.setattr(miniapp, 'get_wata_payment_by_link_id', fake_get_wata_payment_by_link_id)
+
+    class StubWataService:
+        async def get_wata_payment_status(self, db, local_payment_id):  # noqa: ARG002
+            assert local_payment_id == 505
+            return {
+                'payment': payment,
+                'status': payment.status,
+                'is_paid': False,
+                'remote_link': None,
+                'transaction': None,
+            }
+
+    query = MiniAppPaymentStatusQuery(
+        method='wata',
+        paymentLinkId='wata_lookup',
+        amountKopeks=15000,
+    )
+
+    result = await miniapp._resolve_wata_payment_status(
+        StubWataService(),
+        db=None,
+        user=types.SimpleNamespace(id=7),
+        query=query,
+    )
+
+    assert result.status == 'pending'
+    assert result.extra['local_payment_id'] == 505
+    assert result.extra['payment_link_id'] == 'wata_lookup'
+    assert 'transaction' not in result.extra
+
+
+@pytest.mark.anyio("asyncio")
 async def test_create_payment_link_stars_normalizes_amount(monkeypatch):
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'TELEGRAM_STARS_RATE_RUB', 1000.0, raising=False)
@@ -333,6 +491,30 @@ async def test_get_payment_methods_exposes_stars_min_amount(monkeypatch):
     assert stars_method is not None
     assert stars_method.min_amount_kopeks == 99999
     assert stars_method.amount_step_kopeks == 99999
+
+
+@pytest.mark.anyio("asyncio")
+async def test_get_payment_methods_includes_wata(monkeypatch):
+    monkeypatch.setattr(settings, 'WATA_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'WATA_ACCESS_TOKEN', 'token', raising=False)
+    monkeypatch.setattr(settings, 'WATA_TERMINAL_PUBLIC_ID', 'terminal', raising=False)
+    monkeypatch.setattr(settings, 'WATA_MIN_AMOUNT_KOPEKS', 5000, raising=False)
+    monkeypatch.setattr(settings, 'WATA_MAX_AMOUNT_KOPEKS', 7500000, raising=False)
+
+    async def fake_resolve_user(db, init_data):
+        return types.SimpleNamespace(id=1, language='ru'), {}
+
+    monkeypatch.setattr(miniapp, '_resolve_user_from_init_data', fake_resolve_user)
+
+    payload = MiniAppPaymentMethodsRequest(initData='abc')
+    response = await miniapp.get_payment_methods(payload, db=types.SimpleNamespace())
+
+    wata_method = next((method for method in response.methods if method.id == 'wata'), None)
+
+    assert wata_method is not None
+    assert wata_method.min_amount_kopeks == 5000
+    assert wata_method.max_amount_kopeks == 7500000
+    assert wata_method.icon == '🌊'
 @pytest.mark.anyio("asyncio")
 async def test_find_recent_deposit_ignores_transactions_before_attempt():
     started_at = datetime(2024, 5, 1, 12, 0, 0)

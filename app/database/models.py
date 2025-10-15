@@ -77,6 +77,7 @@ class PaymentMethod(Enum):
     CRYPTOBOT = "cryptobot"
     MULENPAY = "mulenpay"
     PAL24 = "pal24"
+    WATA = "wata"
     MANUAL = "manual"
 
 
@@ -287,6 +288,56 @@ class Pal24Payment(Base):
             "<Pal24Payment(id={0}, bill_id={1}, amount={2}₽, status={3})>".format(
                 self.id,
                 self.bill_id,
+                self.amount_rubles,
+                self.status,
+            )
+        )
+
+
+class WataPayment(Base):
+    __tablename__ = "wata_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    payment_link_id = Column(String(64), unique=True, nullable=False, index=True)
+    order_id = Column(String(255), nullable=True, index=True)
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(10), nullable=False, default="RUB")
+    description = Column(Text, nullable=True)
+    type = Column(String(50), nullable=True)
+
+    status = Column(String(50), nullable=False, default="Opened")
+    is_paid = Column(Boolean, default=False)
+    paid_at = Column(DateTime, nullable=True)
+    last_status = Column(String(50), nullable=True)
+    terminal_public_id = Column(String(64), nullable=True)
+
+    url = Column(Text, nullable=True)
+    success_redirect_url = Column(Text, nullable=True)
+    fail_redirect_url = Column(Text, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    callback_payload = Column(JSON, nullable=True)
+
+    expires_at = Column(DateTime, nullable=True)
+
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    user = relationship("User", backref="wata_payments")
+    transaction = relationship("Transaction", backref="wata_payment")
+
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return (
+            "<WataPayment(id={0}, link_id={1}, amount={2}₽, status={3})>".format(
+                self.id,
+                self.payment_link_id,
                 self.amount_rubles,
                 self.status,
             )
