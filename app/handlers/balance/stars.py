@@ -8,6 +8,7 @@ from app.database.models import User
 from app.keyboards.inline import get_back_keyboard, get_payment_methods_keyboard
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
+from app.states import BalanceStates
 from app.utils.decorators import error_handler
 from app.external.telegram_stars import TelegramStarsService
 
