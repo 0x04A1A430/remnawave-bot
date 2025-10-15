@@ -85,9 +85,9 @@ git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot.git
 cd remnawave-bedolaga-telegram-bot
 
 # 2. Создай необходимые директории
-mkdir -p ./logs ./data ./data/backups ./data/referral_qr
-chmod -R 755 ./logs ./data
-sudo chown -R 1000:1000 ./logs ./data
+mkdir -p ./logs ./data ./locales ./data/backups ./data/referral_qr
+chmod -R 755 ./logs ./data ./locales
+sudo chown -R 1000:1000 ./logs ./data ./locales
 
 # 3. Запусти мастер установки
 chmod +x install_bot.sh   # один раз, если файл не исполняемый
@@ -129,9 +129,9 @@ cp .env.example .env
 nano .env  # Заполни токены и настройки
 
 # 3. Создай необходимые директории
-mkdir -p ./logs ./data ./data/backups ./data/referral_qr
-chmod -R 755 ./logs ./data
-sudo chown -R 1000:1000 ./logs ./data
+mkdir -p ./logs ./data ./locales ./data/backups ./data/referral_qr
+chmod -R 755 ./logs ./data ./locales
+sudo chown -R 1000:1000 ./logs ./data ./locales
 
 # 4. Запусти всё разом
 docker compose up -d
