@@ -169,26 +169,44 @@ def ensure_locale_templates() -> None:
         _logger.warning("Unable to create locales directory %s: %s", destination, error)
         return
 
-    if any(destination.glob("*")):
-        return
-
     if not _DEFAULT_LOCALES_DIR.exists():
         _logger.debug("Default locales directory %s is missing", _DEFAULT_LOCALES_DIR)
         return
 
-    for template in _DEFAULT_LOCALES_DIR.iterdir():
-        if not template.is_file():
-            continue
-        target_path = destination / template.name
+    destination_has_files = any(destination.glob("*"))
+
+    def _copy_locale(source: Path, target: Path) -> None:
         try:
-            shutil.copyfile(template, target_path)
+            shutil.copyfile(source, target)
         except Exception as error:
             _logger.warning(
                 "Failed to copy default locale %s to %s: %s",
-                template,
-                target_path,
+                source,
+                target,
                 error,
             )
+
+    if not destination_has_files:
+        for template in _DEFAULT_LOCALES_DIR.iterdir():
+            if not template.is_file():
+                continue
+            _copy_locale(template, destination / template.name)
+        return
+
+    for locale_code in ("ru", "en"):
+        source_path = _DEFAULT_LOCALES_DIR / f"{locale_code}.json"
+        target_path = destination / f"{locale_code}.json"
+
+        if target_path.exists():
+            continue
+
+        if not source_path.exists():
+            _logger.debug(
+                "Default locale template %s is missing at %s", locale_code, source_path
+            )
+            continue
+
+        _copy_locale(source_path, target_path)
 
 
 def _load_default_locale(language: str) -> Dict[str, Any]:
