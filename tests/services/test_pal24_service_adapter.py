@@ -70,7 +70,7 @@ async def test_create_bill_success(monkeypatch: pytest.MonkeyPatch) -> None:
         ttl_seconds=600,
         custom_payload={"extra": "value"},
         payer_email="user@example.com",
-        payment_method="CARD",
+        payment_method="card",
     )
 
     assert result["bill_id"] == "BILL42"
