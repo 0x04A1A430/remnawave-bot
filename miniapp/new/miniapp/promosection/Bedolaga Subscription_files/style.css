@@ -1,0 +1,433 @@
+.bedolaga-subsription {
+  background-color: var(--x1st-layer);
+  width: 100%;
+  min-width: 375px;
+  min-height: 917px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.bedolaga-subsription .frame {
+  margin-left: 16px;
+  width: 343px;
+  height: 269px;
+  margin-top: 43px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  background-color: var(--x2nd-layer);
+  border-radius: 15px;
+  border: 1px solid;
+  border-color: var(--x3d-layer);
+  display: flex;
+  position: relative;
+}
+
+.bedolaga-subsription .div {
+  align-items: center;
+  gap: 11px;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  display: flex;
+  position: relative;
+}
+
+.bedolaga-subsription .img {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
+.bedolaga-subsription .text-wrapper {
+  position: relative;
+  width: fit-content;
+  font-family: "Inter", Helvetica;
+  font-weight: 500;
+  color: var(--white);
+  font-size: 16px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.bedolaga-subsription .frame-2 {
+  height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0px;
+  align-self: stretch;
+  width: 100%;
+  display: flex;
+  position: relative;
+}
+
+.bedolaga-subsription .text-wrapper-2 {
+  width: fit-content;
+  margin-top: -3.50px;
+  margin-bottom: -1.50px;
+  font-weight: 400;
+  color: var(--white);
+  font-size: 14px;
+  position: relative;
+  font-family: "Inter", Helvetica;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .text-wrapper-3 {
+  width: fit-content;
+  margin-top: -4.50px;
+  margin-bottom: -2.50px;
+  font-weight: 700;
+  color: var(--white);
+  font-size: 16px;
+  text-align: right;
+  white-space: nowrap;
+  position: relative;
+  font-family: "Inter", Helvetica;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .div-wrapper {
+  height: 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0px;
+  align-self: stretch;
+  width: 100%;
+  display: flex;
+  position: relative;
+}
+
+.bedolaga-subsription .p {
+  flex: 1;
+  margin-top: -12.00px;
+  margin-bottom: -10.00px;
+  font-weight: 400;
+  color: var(--white);
+  font-size: 14px;
+  position: relative;
+  font-family: "Inter", Helvetica;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .button {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  background-color: var(--vanila);
+  border-radius: 10px;
+}
+
+.bedolaga-subsription .text-wrapper-4 {
+  position: relative;
+  width: fit-content;
+  margin-top: -1.00px;
+  font-family: "Inter", Helvetica;
+  font-weight: 500;
+  color: var(--x1st-layer);
+  font-size: 14px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .frame-3 {
+  height: 32px;
+  align-items: center;
+  justify-content: space-around;
+  gap: 10px;
+  padding: 10px 0px;
+  align-self: stretch;
+  width: 100%;
+  display: flex;
+  position: relative;
+}
+
+.bedolaga-subsription .text-wrapper-5 {
+  flex: 1;
+  height: 17px;
+  margin-top: -3.50px;
+  margin-bottom: -1.50px;
+  font-weight: 500;
+  color: #ff6868;
+  font-size: 14px;
+  text-align: center;
+  position: relative;
+  font-family: "Inter", Helvetica;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .frame-4 {
+  display: flex;
+  margin-left: 16px;
+  width: 343px;
+  height: 212px;
+  position: relative;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  background-color: var(--x2nd-layer);
+  border-radius: 15px;
+  border: 1px solid;
+  border-color: var(--x3d-layer);
+}
+
+.bedolaga-subsription .frame-5 {
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0px;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  display: flex;
+  position: relative;
+}
+
+.bedolaga-subsription .text-wrapper-6 {
+  flex: 1;
+  margin-top: -1.00px;
+  font-weight: 400;
+  color: var(--white);
+  font-size: 14px;
+  position: relative;
+  font-family: "Inter", Helvetica;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+/* Original CSS code should be injected here from the existing style.css file */
+
+.bedolaga-subsription {
+  background-color: var(--x1st-layer);
+  width: 100%;
+  min-width: 375px;
+  min-height: 917px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.bedolaga-subsription .frame {
+  margin-left: 16px;
+  width: 343px;
+  height: 269px;
+  margin-top: 43px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  background-color: var(--x2nd-layer);
+  border-radius: 15px;
+  border: 1px solid;
+  border-color: var(--x3d-layer);
+  display: flex;
+  position: relative;
+}
+
+.bedolaga-subsription .div {
+  align-items: center;
+  gap: 11px;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  display: flex;
+  position: relative;
+}
+
+.bedolaga-subsription .img {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
+.bedolaga-subsription .text-wrapper {
+  position: relative;
+  width: fit-content;
+  font-family: "Inter", Helvetica;
+  font-weight: 500;
+  color: var(--white);
+  font-size: 16px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.bedolaga-subsription .frame-2 {
+  height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0px;
+  align-self: stretch;
+  width: 100%;
+  display: flex;
+  position: relative;
+}
+
+.bedolaga-subsription .text-wrapper-2 {
+  width: fit-content;
+  margin-top: -3.50px;
+  margin-bottom: -1.50px;
+  font-weight: 400;
+  color: var(--white);
+  font-size: 14px;
+  position: relative;
+  font-family: "Inter", Helvetica;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .text-wrapper-3 {
+  width: fit-content;
+  margin-top: -4.50px;
+  margin-bottom: -2.50px;
+  font-weight: 700;
+  color: var(--white);
+  font-size: 16px;
+  text-align: right;
+  white-space: nowrap;
+  position: relative;
+  font-family: "Inter", Helvetica;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .div-wrapper {
+  height: 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0px;
+  align-self: stretch;
+  width: 100%;
+  display: flex;
+  position: relative;
+}
+
+.bedolaga-subsription .p {
+  flex: 1;
+  margin-top: -12.00px;
+  margin-bottom: -10.00px;
+  font-weight: 400;
+  color: var(--white);
+  font-size: 14px;
+  position: relative;
+  font-family: "Inter", Helvetica;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .button {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  background-color: var(--vanila);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.bedolaga-subsription .button:hover {
+  opacity: 0.9;
+}
+
+.bedolaga-subsription .button:active {
+  opacity: 0.8;
+}
+
+.bedolaga-subsription .text-wrapper-4 {
+  position: relative;
+  width: fit-content;
+  margin-top: -1.00px;
+  font-family: "Inter", Helvetica;
+  font-weight: 500;
+  color: var(--x1st-layer);
+  font-size: 14px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .frame-3 {
+  height: 32px;
+  align-items: center;
+  justify-content: space-around;
+  gap: 10px;
+  padding: 10px 0px;
+  align-self: stretch;
+  width: 100%;
+  display: flex;
+  position: relative;
+}
+
+.bedolaga-subsription .text-wrapper-5 {
+  flex: 1;
+  height: 17px;
+  margin-top: -3.50px;
+  margin-bottom: -1.50px;
+  font-weight: 500;
+  color: #ff6868;
+  font-size: 14px;
+  text-align: center;
+  position: relative;
+  font-family: "Inter", Helvetica;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .frame-4 {
+  display: flex;
+  margin-left: 16px;
+  width: 343px;
+  height: 212px;
+  position: relative;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  background-color: var(--x2nd-layer);
+  border-radius: 15px;
+  border: 1px solid;
+  border-color: var(--x3d-layer);
+}
+
+.bedolaga-subsription .frame-5 {
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0px;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  display: flex;
+  position: relative;
+}
+
+.bedolaga-subsription .text-wrapper-6 {
+  flex: 1;
+  margin-top: -1.00px;
+  font-weight: 400;
+  color: var(--white);
+  font-size: 14px;
+  position: relative;
+  font-family: "Inter", Helvetica;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}

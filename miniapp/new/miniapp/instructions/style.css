@@ -1,0 +1,614 @@
+.bedolaga-subsription {
+  background-color: var(--x1st-layer);
+  width: 100%;
+  min-width: 375px;
+  min-height: 917px;
+  display: flex;
+  flex-direction: column;
+}
+
+.bedolaga-subsription .frame {
+  display: flex;
+  margin-left: 16px;
+  width: 342px;
+  height: 32px;
+  position: relative;
+  margin-top: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bedolaga-subsription .text-wrapper {
+  position: relative;
+  width: fit-content;
+  font-family: "Inter-Bold", Helvetica;
+  font-weight: 700;
+  color: var(--white);
+  font-size: 20px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.bedolaga-subsription .vector-wrapper {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  position: relative;
+  background-color: var(--vanila);
+  border-radius: 10px;
+}
+
+.bedolaga-subsription .vector {
+  position: relative;
+  width: 10.42px;
+  height: 10.43px;
+}
+
+.bedolaga-subsription .div {
+  margin-left: 16px;
+  width: 343px;
+  height: 19px;
+  margin-top: 29px;
+  font-family: "Inter-Bold", Helvetica;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--white);
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .os-selector {
+  display: flex;
+  margin-left: 15px;
+  width: 343px;
+  height: 56px;
+  position: relative;
+  margin-top: 8px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: var(--x2nd-layer);
+  border-radius: 15px;
+}
+
+.bedolaga-subsription .apple-icon {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  aspect-ratio: 1;
+}
+
+.bedolaga-subsription .text-wrapper-2 {
+  position: relative;
+  flex: 1;
+  font-family: "Inter-Medium", Helvetica;
+  font-weight: 500;
+  color: var(--white);
+  font-size: 16px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .img {
+  position: relative;
+  width: 14px;
+  height: 8px;
+  margin-right: -1.00px;
+}
+
+.bedolaga-subsription .frame-2 {
+  display: flex;
+  margin-left: 16px;
+  width: 343px;
+  height: 635px;
+  position: relative;
+  margin-top: 29px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.bedolaga-subsription .text-wrapper-3 {
+  position: relative;
+  align-self: stretch;
+  margin-top: -1.00px;
+  font-family: "Inter-Bold", Helvetica;
+  font-weight: 700;
+  color: var(--white);
+  font-size: 16px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .frame-3 {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 26px;
+  padding: 16px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  background-color: var(--x2nd-layer);
+  border-radius: 15px;
+}
+
+.bedolaga-subsription .frame-4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.bedolaga-subsription .frame-5 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.bedolaga-subsription .happ-dark {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  aspect-ratio: 1;
+}
+
+.bedolaga-subsription .github-stars {
+  position: relative;
+  width: 21px;
+  height: 21px;
+}
+
+.bedolaga-subsription .frame-6 {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.bedolaga-subsription .language {
+  display: flex;
+  width: 25px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  position: relative;
+  background-color: var(--vanila);
+  border-radius: 7px;
+}
+
+.bedolaga-subsription .RU {
+  position: relative;
+  width: fit-content;
+  margin-top: -7.50px;
+  margin-bottom: -5.50px;
+  margin-left: -1.00px;
+  margin-right: -1.00px;
+  font-family: "Inter-Medium", Helvetica;
+  font-weight: 500;
+  color: var(--x1st-layer);
+  font-size: 14px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .frame-7 {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  position: relative;
+  flex: 1;
+  flex-grow: 1;
+}
+
+.bedolaga-subsription .p {
+  position: relative;
+  align-self: stretch;
+  font-family: "Inter-Regular", Helvetica;
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--white);
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .button {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  background-color: var(--vanila);
+  border-radius: 10px;
+}
+
+.bedolaga-subsription .text-wrapper-4 {
+  position: relative;
+  width: fit-content;
+  margin-top: -1.00px;
+  font-family: "Inter-Medium", Helvetica;
+  font-weight: 500;
+  color: var(--x1st-layer);
+  font-size: 14px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .RU-2 {
+  margin-left: -2.00px;
+  margin-right: -2.00px;
+  position: relative;
+  width: fit-content;
+  margin-top: -7.50px;
+  margin-bottom: -5.50px;
+  font-family: "Inter-Medium", Helvetica;
+  font-weight: 500;
+  color: var(--x1st-layer);
+  font-size: 14px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .RU-3 {
+  margin-left: -2.50px;
+  margin-right: -2.50px;
+  position: relative;
+  width: fit-content;
+  margin-top: -7.50px;
+  margin-bottom: -5.50px;
+  font-family: "Inter-Medium", Helvetica;
+  font-weight: 500;
+  color: var(--x1st-layer);
+  font-size: 14px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+/* Inject original globals.css and styleguide.css here */
+
+.bedolaga-subsription {
+  background-color: var(--x1st-layer);
+  width: 100%;
+  min-width: 375px;
+  min-height: 917px;
+  display: flex;
+  flex-direction: column;
+}
+
+.bedolaga-subsription .frame {
+  display: flex;
+  margin-left: 16px;
+  width: 342px;
+  height: 32px;
+  position: relative;
+  margin-top: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bedolaga-subsription .text-wrapper {
+  position: relative;
+  width: fit-content;
+  font-family: "Inter-Bold", Helvetica;
+  font-weight: 700;
+  color: var(--white);
+  font-size: 20px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+  white-space: nowrap;
+}
+
+.bedolaga-subsription .vector-wrapper {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  position: relative;
+  background-color: var(--vanila);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.bedolaga-subsription .vector-wrapper:hover {
+  opacity: 0.9;
+}
+
+.bedolaga-subsription .vector-wrapper:active {
+  opacity: 0.8;
+}
+
+.bedolaga-subsription .vector {
+  position: relative;
+  width: 10.42px;
+  height: 10.43px;
+}
+
+.bedolaga-subsription .device-selection {
+  display: flex;
+  flex-direction: column;
+  margin-left: 16px;
+  width: 343px;
+}
+
+.bedolaga-subsription .div {
+  width: 343px;
+  height: 19px;
+  margin-top: 29px;
+  font-family: "Inter-Bold", Helvetica;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--white);
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .os-selector {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  width: 343px;
+  height: 56px;
+  position: relative;
+  margin-top: 8px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: var(--x2nd-layer);
+  border-radius: 15px;
+  cursor: pointer;
+}
+
+.bedolaga-subsription .os-selector:hover {
+  background-color: var(--x3d-layer);
+}
+
+.bedolaga-subsription .os-selector:active {
+  opacity: 0.9;
+}
+
+.bedolaga-subsription .apple-icon {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  aspect-ratio: 1;
+}
+
+.bedolaga-subsription .text-wrapper-2 {
+  position: relative;
+  flex: 1;
+  font-family: "Inter-Medium", Helvetica;
+  font-weight: 500;
+  color: var(--white);
+  font-size: 16px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .img {
+  position: relative;
+  width: 14px;
+  height: 8px;
+  margin-right: -1.00px;
+}
+
+.bedolaga-subsription .frame-2 {
+  display: flex;
+  margin-left: 16px;
+  width: 343px;
+  height: 635px;
+  position: relative;
+  margin-top: 29px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.bedolaga-subsription .text-wrapper-3 {
+  position: relative;
+  align-self: stretch;
+  margin-top: -1.00px;
+  font-family: "Inter-Bold", Helvetica;
+  font-weight: 700;
+  color: var(--white);
+  font-size: 16px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .frame-3 {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 26px;
+  padding: 16px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  background-color: var(--x2nd-layer);
+  border-radius: 15px;
+}
+
+.bedolaga-subsription .frame-4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.bedolaga-subsription .frame-5 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.bedolaga-subsription .happ-dark {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  aspect-ratio: 1;
+}
+
+.bedolaga-subsription .github-stars {
+  position: relative;
+  width: 21px;
+  height: 21px;
+}
+
+.bedolaga-subsription .frame-6 {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.bedolaga-subsription .language {
+  display: flex;
+  width: 25px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  position: relative;
+  background-color: var(--vanila);
+  border-radius: 7px;
+}
+
+.bedolaga-subsription .RU {
+  position: relative;
+  width: fit-content;
+  margin-top: -7.50px;
+  margin-bottom: -5.50px;
+  margin-left: -1.00px;
+  margin-right: -1.00px;
+  font-family: "Inter-Medium", Helvetica;
+  font-weight: 500;
+  color: var(--x1st-layer);
+  font-size: 14px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .frame-7 {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  position: relative;
+  flex: 1;
+  flex-grow: 1;
+}
+
+.bedolaga-subsription .p {
+  position: relative;
+  align-self: stretch;
+  font-family: "Inter-Regular", Helvetica;
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--white);
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .button {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  background-color: var(--vanila);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.bedolaga-subsription .button:hover {
+  opacity: 0.9;
+}
+
+.bedolaga-subsription .button:active {
+  opacity: 0.8;
+}
+
+.bedolaga-subsription .text-wrapper-4 {
+  position: relative;
+  width: fit-content;
+  margin-top: -1.00px;
+  font-family: "Inter-Medium", Helvetica;
+  font-weight: 500;
+  color: var(--x1st-layer);
+  font-size: 14px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .RU-2 {
+  margin-left: -2.00px;
+  margin-right: -2.00px;
+  position: relative;
+  width: fit-content;
+  margin-top: -7.50px;
+  margin-bottom: -5.50px;
+  font-family: "Inter-Medium", Helvetica;
+  font-weight: 500;
+  color: var(--x1st-layer);
+  font-size: 14px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
+
+.bedolaga-subsription .RU-3 {
+  margin-left: -2.50px;
+  margin-right: -2.50px;
+  position: relative;
+  width: fit-content;
+  margin-top: -7.50px;
+  margin-bottom: -5.50px;
+  font-family: "Inter-Medium", Helvetica;
+  font-weight: 500;
+  color: var(--x1st-layer);
+  font-size: 14px;
+  letter-spacing: -0.41px;
+  line-height: normal;
+}
