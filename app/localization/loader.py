@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import logging
 import shutil
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict
@@ -161,6 +163,41 @@ def _normalize_locale_dict(data: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+def _directory_is_writable(directory: Path) -> bool:
+    try:
+        current_user = f"{os.geteuid()}:{os.getegid()}"
+        user_hint = f" (running as UID:GID {current_user})"
+    except Exception:  # pragma: no cover - best effort only
+        user_hint = ""
+
+    try:
+        with tempfile.NamedTemporaryFile(dir=directory, prefix=".locale_write_test_", delete=True):
+            pass
+        return True
+    except PermissionError as error:
+        _logger.warning(
+            "Locale directory %s is not writable%s. Ensure the mounted directory allows writes for the container user or configure LOCALES_PATH to a writable path. (%s)",
+            directory,
+            user_hint,
+            error,
+        )
+    except OSError as error:
+        _logger.warning(
+            "Unable to prepare locale directory %s for writing%s: %s. Configure LOCALES_PATH to a writable path.",
+            directory,
+            user_hint,
+            error,
+        )
+    except Exception as error:  # pragma: no cover - defensive logging
+        _logger.warning(
+            "Unexpected error while checking locale directory %s%s: %s",
+            directory,
+            user_hint,
+            error,
+        )
+    return False
+
+
 def ensure_locale_templates() -> None:
     destination = _resolve_user_locales_dir()
     try:
@@ -169,26 +206,47 @@ def ensure_locale_templates() -> None:
         _logger.warning("Unable to create locales directory %s: %s", destination, error)
         return
 
-    if any(destination.glob("*")):
-        return
-
     if not _DEFAULT_LOCALES_DIR.exists():
         _logger.debug("Default locales directory %s is missing", _DEFAULT_LOCALES_DIR)
         return
 
-    for template in _DEFAULT_LOCALES_DIR.iterdir():
-        if not template.is_file():
-            continue
-        target_path = destination / template.name
+    if not _directory_is_writable(destination):
+        return
+
+    destination_has_files = any(destination.glob("*"))
+
+    def _copy_locale(source: Path, target: Path) -> None:
         try:
-            shutil.copyfile(template, target_path)
+            shutil.copyfile(source, target)
         except Exception as error:
             _logger.warning(
                 "Failed to copy default locale %s to %s: %s",
-                template,
-                target_path,
+                source,
+                target,
                 error,
             )
+
+    if not destination_has_files:
+        for template in _DEFAULT_LOCALES_DIR.iterdir():
+            if not template.is_file():
+                continue
+            _copy_locale(template, destination / template.name)
+        return
+
+    for locale_code in ("ru", "en"):
+        source_path = _DEFAULT_LOCALES_DIR / f"{locale_code}.json"
+        target_path = destination / f"{locale_code}.json"
+
+        if target_path.exists():
+            continue
+
+        if not source_path.exists():
+            _logger.debug(
+                "Default locale template %s is missing at %s", locale_code, source_path
+            )
+            continue
+
+        _copy_locale(source_path, target_path)
 
 
 def _load_default_locale(language: str) -> Dict[str, Any]:
