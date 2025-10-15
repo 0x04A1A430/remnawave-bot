@@ -390,6 +390,12 @@ async def process_topup_amount(
             from .mulenpay import process_mulenpay_payment_amount
             async with AsyncSessionLocal() as db:
                 await process_mulenpay_payment_amount(message, db_user, db, amount_kopeks, state)
+        elif payment_method == "wata":
+            from app.database.database import AsyncSessionLocal
+            from .wata import process_wata_payment_amount
+
+            async with AsyncSessionLocal() as db:
+                await process_wata_payment_amount(message, db_user, db, amount_kopeks, state)
         elif payment_method == "pal24":
             from app.database.database import AsyncSessionLocal
             from .pal24 import process_pal24_payment_amount
@@ -488,6 +494,14 @@ async def handle_quick_amount_selection(
             from .mulenpay import process_mulenpay_payment_amount
             async with AsyncSessionLocal() as db:
                 await process_mulenpay_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif payment_method == "wata":
+            from app.database.database import AsyncSessionLocal
+            from .wata import process_wata_payment_amount
+
+            async with AsyncSessionLocal() as db:
+                await process_wata_payment_amount(
                     callback.message, db_user, db, amount_kopeks, state
                 )
         elif payment_method == "pal24":
@@ -627,6 +641,12 @@ def register_balance_handlers(dp: Dispatcher):
         F.data == "topup_mulenpay"
     )
 
+    from .wata import start_wata_payment
+    dp.callback_query.register(
+        start_wata_payment,
+        F.data == "topup_wata"
+    )
+
     from .pal24 import start_pal24_payment
     dp.callback_query.register(
         start_pal24_payment,
@@ -677,6 +697,12 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(
         check_mulenpay_payment_status,
         F.data.startswith("check_mulenpay_")
+    )
+
+    from .wata import check_wata_payment_status
+    dp.callback_query.register(
+        check_wata_payment_status,
+        F.data.startswith("check_wata_")
     )
 
     from .pal24 import check_pal24_payment_status

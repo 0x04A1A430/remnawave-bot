@@ -1,0 +1,358 @@
+"""Mixin for integrating WATA payment links into the payment service."""
+
+from __future__ import annotations
+
+import logging
+import uuid
+from datetime import datetime
+from importlib import import_module
+from typing import Any, Dict, Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.database.models import PaymentMethod, TransactionType
+from app.services.wata_service import WataAPIError, WataService
+from app.utils.user_utils import format_referrer_info
+
+logger = logging.getLogger(__name__)
+
+
+class WataPaymentMixin:
+    """Encapsulates creation and status handling for WATA payment links."""
+
+    async def create_wata_payment(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        amount_kopeks: int,
+        description: str,
+        *,
+        language: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        if not getattr(self, "wata_service", None):
+            logger.error("WATA service is not initialised")
+            return None
+
+        if amount_kopeks < settings.WATA_MIN_AMOUNT_KOPEKS:
+            logger.warning(
+                "Сумма WATA меньше минимальной: %s < %s",
+                amount_kopeks,
+                settings.WATA_MIN_AMOUNT_KOPEKS,
+            )
+            return None
+
+        if amount_kopeks > settings.WATA_MAX_AMOUNT_KOPEKS:
+            logger.warning(
+                "Сумма WATA больше максимальной: %s > %s",
+                amount_kopeks,
+                settings.WATA_MAX_AMOUNT_KOPEKS,
+            )
+            return None
+
+        payment_module = import_module("app.services.payment_service")
+
+        order_id = f"wata_{user_id}_{uuid.uuid4().hex[:12]}"
+
+        try:
+            response = await self.wata_service.create_payment_link(  # type: ignore[union-attr]
+                amount_kopeks=amount_kopeks,
+                currency="RUB",
+                description=description,
+                order_id=order_id,
+            )
+        except WataAPIError as error:
+            logger.error("Ошибка создания WATA платежа: %s", error)
+            return None
+        except Exception as error:  # pragma: no cover - safety net
+            logger.exception("Непредвиденная ошибка при создании WATA платежа: %s", error)
+            return None
+
+        payment_link_id = response.get("id")
+        payment_url = response.get("url") or response.get("paymentUrl")
+        status = response.get("status") or "Opened"
+        terminal_public_id = response.get("terminalPublicId")
+        success_url = response.get("successRedirectUrl")
+        fail_url = response.get("failRedirectUrl")
+
+        if not payment_link_id:
+            logger.error("WATA API не вернула идентификатор платежной ссылки: %s", response)
+            return None
+
+        expiration_raw = response.get("expirationDateTime")
+        expires_at = WataService._parse_datetime(expiration_raw)
+
+        metadata = {
+            "response": response,
+            "language": language or settings.DEFAULT_LANGUAGE,
+        }
+
+        local_payment = await payment_module.create_wata_payment(
+            db=db,
+            user_id=user_id,
+            payment_link_id=payment_link_id,
+            amount_kopeks=amount_kopeks,
+            currency="RUB",
+            description=description,
+            status=status,
+            type_=response.get("type"),
+            url=payment_url,
+            order_id=order_id,
+            metadata=metadata,
+            expires_at=expires_at,
+            terminal_public_id=terminal_public_id,
+            success_redirect_url=success_url,
+            fail_redirect_url=fail_url,
+        )
+
+        logger.info(
+            "Создан WATA платеж %s на %s₽ для пользователя %s",
+            payment_link_id,
+            amount_kopeks / 100,
+            user_id,
+        )
+
+        return {
+            "local_payment_id": local_payment.id,
+            "payment_link_id": payment_link_id,
+            "payment_url": payment_url,
+            "status": status,
+            "order_id": order_id,
+        }
+
+    async def get_wata_payment_status(
+        self,
+        db: AsyncSession,
+        local_payment_id: int,
+    ) -> Optional[Dict[str, Any]]:
+        payment_module = import_module("app.services.payment_service")
+
+        payment = await payment_module.get_wata_payment_by_id(db, local_payment_id)
+        if not payment:
+            return None
+
+        remote_link: Optional[Dict[str, Any]] = None
+        transaction_payload: Optional[Dict[str, Any]] = None
+
+        if getattr(self, "wata_service", None) and payment.payment_link_id:
+            try:
+                remote_link = await self.wata_service.get_payment_link(payment.payment_link_id)  # type: ignore[union-attr]
+            except WataAPIError as error:
+                logger.error("Ошибка получения WATA ссылки %s: %s", payment.payment_link_id, error)
+            except Exception as error:  # pragma: no cover - safety net
+                logger.exception("Непредвиденная ошибка при запросе WATA ссылки: %s", error)
+
+        if remote_link:
+            remote_status = remote_link.get("status") or payment.status
+            if remote_status != payment.status:
+                existing_metadata = dict(getattr(payment, "metadata_json", {}) or {})
+                existing_metadata["link"] = remote_link
+                await payment_module.update_wata_payment_status(
+                    db,
+                    payment=payment,
+                    status=remote_status,
+                    last_status=remote_status,
+                    url=remote_link.get("url") or remote_link.get("paymentUrl"),
+                    metadata=existing_metadata,
+                    terminal_public_id=remote_link.get("terminalPublicId"),
+                )
+                payment = await payment_module.get_wata_payment_by_id(db, local_payment_id)
+
+            remote_status_normalized = (remote_status or "").lower()
+            if remote_status_normalized in {"closed", "paid"} and not payment.is_paid:
+                try:
+                    tx_response = await self.wata_service.search_transactions(  # type: ignore[union-attr]
+                        order_id=payment.order_id,
+                        payment_link_id=payment.payment_link_id,
+                        status="Paid",
+                        limit=5,
+                    )
+                    items = tx_response.get("items") or []
+                    for item in items:
+                        if (item or {}).get("status") == "Paid":
+                            transaction_payload = item
+                            break
+                except WataAPIError as error:
+                    logger.error(
+                        "Ошибка поиска WATA транзакций для %s: %s",
+                        payment.payment_link_id,
+                        error,
+                    )
+                except Exception as error:  # pragma: no cover - safety net
+                    logger.exception("Непредвиденная ошибка при поиске WATA транзакции: %s", error)
+
+        if transaction_payload and not payment.is_paid:
+            payment = await self._finalize_wata_payment(db, payment, transaction_payload)
+
+        return {
+            "payment": payment,
+            "status": payment.status,
+            "is_paid": payment.is_paid,
+            "remote_link": remote_link,
+            "transaction": transaction_payload,
+        }
+
+    async def _finalize_wata_payment(
+        self,
+        db: AsyncSession,
+        payment: Any,
+        transaction_payload: Dict[str, Any],
+    ) -> Any:
+        payment_module = import_module("app.services.payment_service")
+
+        paid_at = WataService._parse_datetime(transaction_payload.get("paymentTime"))
+        existing_metadata = dict(getattr(payment, "metadata_json", {}) or {})
+        existing_metadata["transaction"] = transaction_payload
+
+        await payment_module.update_wata_payment_status(
+            db,
+            payment=payment,
+            status="Paid",
+            is_paid=True,
+            paid_at=paid_at,
+            callback_payload=transaction_payload,
+            metadata=existing_metadata,
+        )
+
+        if payment.transaction_id:
+            logger.info(
+                "WATA платеж %s уже привязан к транзакции %s",
+                payment.payment_link_id,
+                payment.transaction_id,
+            )
+            return payment
+
+        user = await payment_module.get_user_by_id(db, payment.user_id)
+        if not user:
+            logger.error("Пользователь %s не найден при обработке WATA", payment.user_id)
+            return payment
+
+        transaction_external_id = str(transaction_payload.get("id") or transaction_payload.get("transactionId") or "")
+        description = f"Пополнение через WATA ({payment.payment_link_id})"
+
+        transaction = await payment_module.create_transaction(
+            db,
+            user_id=payment.user_id,
+            type=TransactionType.DEPOSIT,
+            amount_kopeks=payment.amount_kopeks,
+            description=description,
+            payment_method=PaymentMethod.WATA,
+            external_id=transaction_external_id or payment.payment_link_id,
+            is_completed=True,
+        )
+
+        await payment_module.link_wata_payment_to_transaction(db, payment, transaction.id)
+
+        old_balance = user.balance_kopeks
+        was_first_topup = not user.has_made_first_topup
+
+        user.balance_kopeks += payment.amount_kopeks
+        user.updated_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(user)
+
+        promo_group = getattr(user, "promo_group", None)
+        subscription = getattr(user, "subscription", None)
+        referrer_info = format_referrer_info(user)
+        topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
+
+        try:
+            from app.services.referral_service import process_referral_topup
+
+            await process_referral_topup(
+                db,
+                user.id,
+                payment.amount_kopeks,
+                getattr(self, "bot", None),
+            )
+        except Exception as error:
+            logger.error("Ошибка обработки реферального пополнения WATA: %s", error)
+
+        if was_first_topup and not user.has_made_first_topup:
+            user.has_made_first_topup = True
+            await db.commit()
+            await db.refresh(user)
+
+        if getattr(self, "bot", None):
+            try:
+                from app.services.admin_notification_service import AdminNotificationService
+
+                notification_service = AdminNotificationService(self.bot)
+                await notification_service.send_balance_topup_notification(
+                    user,
+                    transaction,
+                    old_balance,
+                    topup_status=topup_status,
+                    referrer_info=referrer_info,
+                    subscription=subscription,
+                    promo_group=promo_group,
+                    db=db,
+                )
+            except Exception as error:
+                logger.error("Ошибка отправки админ уведомления WATA: %s", error)
+
+        if getattr(self, "bot", None):
+            try:
+                keyboard = await self.build_topup_success_keyboard(user)
+                await self.bot.send_message(
+                    user.telegram_id,
+                    (
+                        "✅ <b>Пополнение успешно!</b>\n\n"
+                        f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n"
+                        "🦊 Способ: WATA\n"
+                        f"🆔 Транзакция: {transaction.id}\n\n"
+                        "Баланс пополнен автоматически!"
+                    ),
+                    parse_mode="HTML",
+                    reply_markup=keyboard,
+                )
+            except Exception as error:
+                logger.error("Ошибка отправки уведомления пользователю WATA: %s", error)
+
+        try:
+            from app.services.user_cart_service import user_cart_service
+            from aiogram import types
+
+            has_saved_cart = await user_cart_service.has_user_cart(user.id)
+            if has_saved_cart and getattr(self, "bot", None):
+                from app.localization.texts import get_texts
+
+                texts = get_texts(user.language)
+                cart_message = texts.t(
+                    "BALANCE_TOPUP_CART_REMINDER_DETAILED",
+                    "🛒 У вас есть неоформленный заказ.\n\n"
+                    "Вы можете продолжить оформление с теми же параметрами.",
+                )
+
+                keyboard = types.InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            types.InlineKeyboardButton(
+                                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                                callback_data="subscription_resume_checkout",
+                            )
+                        ],
+                        [
+                            types.InlineKeyboardButton(
+                                text="💰 Мой баланс",
+                                callback_data="menu_balance",
+                            )
+                        ],
+                        [
+                            types.InlineKeyboardButton(
+                                text="🏠 Главное меню",
+                                callback_data="back_to_menu",
+                            )
+                        ],
+                    ]
+                )
+
+                await self.bot.send_message(
+                    user.telegram_id,
+                    cart_message,
+                    reply_markup=keyboard,
+                )
+        except Exception as error:
+            logger.debug("Не удалось отправить напоминание о корзине после WATA: %s", error)
+
+        return payment

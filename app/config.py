@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     REMNAWAVE_AUTH_TYPE: str = "api_key"
     REMNAWAVE_USER_DESCRIPTION_TEMPLATE: str = "Bot user: {full_name} {username}"
     REMNAWAVE_USER_DELETE_MODE: str = "delete"  # "delete" или "disable"
+    REMNAWAVE_AUTO_SYNC_ENABLED: bool = False
+    REMNAWAVE_AUTO_SYNC_TIMES: str = "03:00"
     
     TRIAL_DURATION_DAYS: int = 3
     TRIAL_TRAFFIC_LIMIT_GB: int = 10
@@ -230,6 +232,19 @@ class Settings(BaseSettings):
     PAL24_CARD_BUTTON_TEXT: Optional[str] = None
     PAL24_SBP_BUTTON_VISIBLE: bool = True
     PAL24_CARD_BUTTON_VISIBLE: bool = True
+
+    WATA_ENABLED: bool = False
+    WATA_BASE_URL: str = "https://api.wata.pro/api/h2h"
+    WATA_ACCESS_TOKEN: Optional[str] = None
+    WATA_TERMINAL_PUBLIC_ID: Optional[str] = None
+    WATA_PAYMENT_DESCRIPTION: str = "Пополнение баланса"
+    WATA_PAYMENT_TYPE: str = "OneTime"
+    WATA_SUCCESS_REDIRECT_URL: Optional[str] = None
+    WATA_FAIL_REDIRECT_URL: Optional[str] = None
+    WATA_LINK_TTL_MINUTES: Optional[int] = None
+    WATA_MIN_AMOUNT_KOPEKS: int = 10000
+    WATA_MAX_AMOUNT_KOPEKS: int = 100000000
+    WATA_REQUEST_TIMEOUT: int = 30
 
     MAIN_MENU_MODE: str = "default"
     CONNECT_BUTTON_MODE: str = "guide"
@@ -500,6 +515,42 @@ class Settings(BaseSettings):
         description = re.sub(r'\s+', ' ', description).strip()
         return description
 
+    @staticmethod
+    def parse_daily_time_list(raw_value: Optional[str]) -> List[time]:
+        if not raw_value:
+            return []
+
+        segments = re.split(r"[\s,;]+", raw_value.strip())
+        seen: set[tuple[int, int]] = set()
+        parsed: List[time] = []
+
+        for segment in segments:
+            if not segment:
+                continue
+
+            try:
+                hours_str, minutes_str = segment.split(":", 1)
+                hours = int(hours_str)
+                minutes = int(minutes_str)
+            except (ValueError, AttributeError):
+                continue
+
+            if not (0 <= hours < 24 and 0 <= minutes < 60):
+                continue
+
+            key = (hours, minutes)
+            if key in seen:
+                continue
+
+            seen.add(key)
+            parsed.append(time(hour=hours, minute=minutes))
+
+        parsed.sort()
+        return parsed
+
+    def get_remnawave_auto_sync_times(self) -> List[time]:
+        return self.parse_daily_time_list(self.REMNAWAVE_AUTO_SYNC_TIMES)
+
     def get_display_name_banned_keywords(self) -> List[str]:
         raw_value = self.DISPLAY_NAME_BANNED_KEYWORDS
         if raw_value is None:
@@ -735,6 +786,13 @@ class Settings(BaseSettings):
             self.PAL24_ENABLED
             and self.PAL24_API_TOKEN is not None
             and self.PAL24_SHOP_ID is not None
+        )
+
+    def is_wata_enabled(self) -> bool:
+        return (
+            self.WATA_ENABLED
+            and self.WATA_ACCESS_TOKEN is not None
+            and self.WATA_TERMINAL_PUBLIC_ID is not None
         )
 
     def get_cryptobot_base_url(self) -> str:
