@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import logging
 import shutil
 import tempfile
@@ -164,25 +165,34 @@ def _normalize_locale_dict(data: Dict[str, Any]) -> Dict[str, Any]:
 
 def _directory_is_writable(directory: Path) -> bool:
     try:
+        current_user = f"{os.geteuid()}:{os.getegid()}"
+        user_hint = f" (running as UID:GID {current_user})"
+    except Exception:  # pragma: no cover - best effort only
+        user_hint = ""
+
+    try:
         with tempfile.NamedTemporaryFile(dir=directory, prefix=".locale_write_test_", delete=True):
             pass
         return True
     except PermissionError as error:
         _logger.warning(
-            "Locale directory %s is not writable. Configure LOCALES_PATH to a writable path. (%s)",
+            "Locale directory %s is not writable%s. Ensure the mounted directory allows writes for the container user or configure LOCALES_PATH to a writable path. (%s)",
             directory,
+            user_hint,
             error,
         )
     except OSError as error:
         _logger.warning(
-            "Unable to prepare locale directory %s for writing: %s. Configure LOCALES_PATH to a writable path.",
+            "Unable to prepare locale directory %s for writing%s: %s. Configure LOCALES_PATH to a writable path.",
             directory,
+            user_hint,
             error,
         )
     except Exception as error:  # pragma: no cover - defensive logging
         _logger.warning(
-            "Unexpected error while checking locale directory %s: %s",
+            "Unexpected error while checking locale directory %s%s: %s",
             directory,
+            user_hint,
             error,
         )
     return False
