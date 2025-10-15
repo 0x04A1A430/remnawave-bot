@@ -8,7 +8,7 @@
 
 *Полнофункциональное решение с управлением пользователями, платежами и администрированием*
 
-[![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python&logoColor=white)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.13+-blue?logo=python&logoColor=white)](https://python.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue?logo=postgresql&logoColor=white)](https://postgresql.org)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/Fr1ngg/remnawave-bedolaga-telegram-bot?style=social)](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/stargazers)
@@ -35,37 +35,38 @@
 
 ### ⚡ **Полная автоматизация VPN бизнеса**
 - 🎯 **Готовое решение** - разверни за 5 минут, начни продавать сегодня
-- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + YooKassa + MulenPay + PayPalych (СБП)
+- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + YooKassa (СБП + карты) + MulenPay + PayPalych (СБП + карты) + WATA
 - 🔄 **Автоматизация 99%** - от регистрации до продления подписок
+- - 📱 **MiniApp лк** - личный кабинет с возможностью покупки/продления подписки
 - 📊 **Детальная аналитика** - полная картина вашего бизнеса
 - 💬 **Уведомления в топики** об: Активация триала 💎 Покупка подписки 🔄 Конверсия из триала в платную ⏰ Продление подписки 💰 Пополнение баланса 🚧 Включении тех работ ♻️ Появлении новой версии бота
   
 ### 🎛️ **Гибкость конфигурации**
-- 🌍 **Умный выбор серверов** - автоматический пропуск при одном сервере, мультивыбор при нескольких
+- 🌍 **Умный выбор серверов** - автоматический пропуск при одном сервере, мультивыбор
 - 📱 **Управление устройствами** - от 1 до неограниченного количества
 - 📊 **Режимы продажи трафика** - фиксированный лимит или выбор пакетов
 - 🎁 **Промо-система** - коды на деньги, дни подписки, триал-периоды
 - 🔧 **Гибкие тарифы** - от 5GB до безлимита, от 14 дней до года
+- 🛒 **Умная корзина** - сохранение параметров подписки при недостатке баланса
 
 ### 💪 **Enterprise готовность**
-- 🏗️ **Современная архитектура** - AsyncIO, PostgreSQL, Redis
+- 🏗️ **Современная архитектура** - AsyncIO, PostgreSQL, Redis, модульная структура
 - 🔒 **Безопасность** - интеграция с системой защиты панели через куки-аутентификацию
 - 📈 **Масштабируемость** - от стартапа до крупного бизнеса
 - 🔧 **Мониторинг** - автоматическое управление режимом тех. работ
 - 🛡️ **Защита панели** - поддержка [remnawave-reverse-proxy](https://github.com/eGamesAPI/remnawave-reverse-proxy)
-- 🗄️ **Бекапы/Восстановление** - автобекапы и восстановление бд прямо в боте с уведомления в топики
-- ✍️ **Проверка на подписку** - проверяет подписку на канал 
+- 🗄️ **Бекапы/Восстановление** - автобекапы и восстановление бд прямо в боте с уведомлениями в топики
+- ✍️ **Проверка на подписку** - проверяет подписку на канал
+- 🔄 **Автосинхронизация** - фоновая синхронизация серверов с Remnawave по расписанию
 
 ### 📚 Поддерживаемые методы авторизации
 
-Метод | Заголовок | Описание
--- | -- | --
-API Key | X-Api-Key: your_api_key | Стандартный API ключ
-Bearer Token | Authorization: Bearer token | Классический Bearer token
-Basic Auth | X-Api-Key: Basic base64(user:pass) | Basic Authentication
-eGames Cookies | Cookies в формате key:value | Для панелей eGames
-
-
+| Метод | Заголовок | Описание |
+|-------|-----------|----------|
+| API Key | X-Api-Key: your_api_key | Стандартный API ключ |
+| Bearer Token | Authorization: Bearer token | Классический Bearer token |
+| Basic Auth | X-Api-Key: Basic base64(user:pass) | Basic Authentication |
+| eGames Cookies | Cookies в формате key:value | Для панелей eGames |
 
 ---
 
@@ -85,12 +86,12 @@ git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot.git
 cd remnawave-bedolaga-telegram-bot
 
 # 2. Создай необходимые директории
-mkdir -p ./logs ./data ./locales ./data/backups ./data/referral_qr
-chmod -R 755 ./logs ./data ./locales
-sudo chown -R 1000:1000 ./logs ./data ./locales
+mkdir -p ./logs ./data ./data/backups ./data/referral_qr
+chmod -R 755 ./logs ./data
+sudo chown -R 1000:1000 ./logs ./data
 
 # 3. Запусти мастер установки
-chmod +x install_bot.sh   # один раз, если файл не исполняемый
+chmod +x install_bot.sh
 ./install_bot.sh
 ```
 
@@ -104,14 +105,14 @@ chmod +x install_bot.sh   # один раз, если файл не исполн
 
 После установки повторный запуск `./install_bot.sh` открывает **интерактивное меню управления**:
 
-- 📊 Мониторинг состояния контейнеров и ресурсов.
-- ⚙️ Управление сервисами (запуск/остановка/пересборка).
-- 📋 Просмотр и поиск по логам.
-- 🔄 Обновление проекта из Git с автоматическим бэкапом.
-- 💾 Создание и 📦 восстановление резервных копий (включая базу данных).
-- 🧹 Очистка логов, бэкапов и образов.
-- 🌐 Помощник настройки обратного прокси Caddy (webhook + miniapp, обновление `docker-compose`, перезагрузка).
-- ⚙️ Конфигуратор `.env` (редактирование, пересоздание, маскировка секретов).
+- 📊 Мониторинг состояния контейнеров и ресурсов
+- ⚙️ Управление сервисами (запуск/остановка/пересборка)
+- 📋 Просмотр и поиск по логам
+- 🔄 Обновление проекта из Git с автоматическим бэкапом
+- 💾 Создание и 📦 восстановление резервных копий (включая базу данных)
+- 🧹 Очистка логов, бэкапов и образов
+- 🌐 Помощник настройки обратного прокси Caddy (webhook + miniapp, обновление `docker-compose`, перезагрузка)
+- ⚙️ Конфигуратор `.env` (редактирование, пересоздание, маскировка секретов)
 
 > 💡 Скрипт можно запускать сколько угодно раз — он хранит путь установки и понимает, когда конфигурация уже создана. Меню работает и по SSH (достаточно TTY), а для скриптов можно передать путь установки через stdin.
 
@@ -129,9 +130,9 @@ cp .env.example .env
 nano .env  # Заполни токены и настройки
 
 # 3. Создай необходимые директории
-mkdir -p ./logs ./data ./locales ./data/backups ./data/referral_qr
-chmod -R 755 ./logs ./data ./locales
-sudo chown -R 1000:1000 ./logs ./data ./locales
+mkdir -p ./logs ./data ./data/backups ./data/referral_qr
+chmod -R 755 ./logs ./data
+sudo chown -R 1000:1000 ./logs ./data
 
 # 4. Запусти всё разом
 docker compose up -d
@@ -144,10 +145,7 @@ docker compose logs
 
 ## 🌐 Настройка обратного прокси и доменов
 
-> Этот раздел описывает полноценную ручную настройку обратного прокси для **двух разных доменов**: отдельный домен для вебхуков
-> (`hooks.example.com`) и отдельный домен для мини-приложения (`miniapp.example.com`). Оба прокси-сервера (Caddy или nginx) дол
-> жны работать в одной Docker-сети с ботом, чтобы обращаться к сервису по внутреннему имени `remnawave_bot` без проброса порто
-> в наружу.
+> Этот раздел описывает полноценную ручную настройку обратного прокси для **двух разных доменов**: отдельный домен для вебхуков (`hooks.example.com`) и отдельный домен для мини-приложения (`miniapp.example.com`). Оба прокси-сервера (Caddy или nginx) должны работать в одной Docker-сети с ботом, чтобы обращаться к сервису по внутреннему имени `remnawave_bot` без проброса портов наружу.
 
 ### 1. Планирование доменов и переменных окружения
 
@@ -160,17 +158,12 @@ docker compose logs
    WEB_API_ALLOWED_ORIGINS=https://miniapp.example.com
    MINIAPP_CUSTOM_URL=https://miniapp.example.com
    ```
-   При необходимости добавьте пути для дополнительных провайдеров (`TRIBUTE_WEBHOOK_PATH`, `YOOKASSA_WEBHOOK_PATH` и т. д.) —
-   далее в конфигурациях мы их пробрасываем на соответствующие порты контейнера бота.
 
 ### 2. Общая Docker-сеть для бота и прокси
 
 `docker-compose.yml` бота создаёт сеть `bot_network`. Чтобы внешний прокси видел сервис `remnawave_bot`, нужно:
 
 ```bash
-# Если бот уже запущен через docker compose up -d
-docker compose ps
-
 # Убедиться, что сеть существует
 docker network ls | grep bot_network || docker network create bot_network
 
@@ -186,10 +179,6 @@ networks:
     external: true
 ```
 
-Именно так поступает мастер `install_bot.sh`: при первичной установке он создаёт `bot_network` и при повторном запуске в меню №
-8 («🌐 Настройка обратного прокси (Caddy)») может автоматически подготовить `docker-compose` и `Caddyfile`, обновить сеть и пер
-езапустить сервис.
-
 ### 3. Ручная установка Caddy в Docker
 
 1. Создайте каталог для конфигурации:
@@ -197,6 +186,7 @@ networks:
    mkdir -p ~/caddy
    cd ~/caddy
    ```
+
 2. Сохраните docker-compose-файл `docker-compose.caddy.yml`:
    ```yaml
    services:
@@ -211,9 +201,8 @@ networks:
          - ./Caddyfile:/etc/caddy/Caddyfile
          - caddy_data:/data
          - caddy_config:/config
-        # Укажите путь к каталогу miniapp из репозитория бота
-        - /root/remnawave-bedolaga-telegram-bot/miniapp:/miniapp:ro
-        - /root/remnawave-bedolaga-telegram-bot/miniapp/redirect:/miniapp/redirect:ro
+         - /root/remnawave-bedolaga-telegram-bot/miniapp:/miniapp:ro
+         - /root/remnawave-bedolaga-telegram-bot/miniapp/redirect:/miniapp/redirect:ro
        networks:
          - bot_network
 
@@ -225,63 +214,58 @@ networks:
      bot_network:
        external: true
    ```
+
 3. Создайте `Caddyfile` с двумя виртуальными хостами:
    ```caddy
    webhook.domain.com {
-    handle /tribute-webhook* {
-        reverse_proxy localhost:8081
-    }
-    
-    handle /cryptobot-webhook* {
-        reverse_proxy localhost:8081
-    }
-    
-    handle /mulenpay-webhook* {
-        reverse_proxy localhost:8081
-    }
-    
-    handle /pal24-webhook* {
-        reverse_proxy localhost:8084
-    }
-    
-    handle /yookassa-webhook* {
-        reverse_proxy localhost:8082
-    }
-    
-    handle /health {
-        reverse_proxy localhost:8081/health
+       handle /tribute-webhook* {
+           reverse_proxy remnawave_bot:8081
+       }
+       
+       handle /cryptobot-webhook* {
+           reverse_proxy remnawave_bot:8081
+       }
+       
+       handle /mulenpay-webhook* {
+           reverse_proxy remnawave_bot:8081
+       }
+       
+       handle /pal24-webhook* {
+           reverse_proxy remnawave_bot:8084
+       }
+       
+       handle /wata-webhook* {
+           reverse_proxy remnawave_bot:8081
+       }
+       
+       handle /yookassa-webhook* {
+           reverse_proxy remnawave_bot:8082
+       }
+       
+       handle /health {
+           reverse_proxy remnawave_bot:8081/health
        }
    }
-  
-    miniapp.domain.com {
-        encode gzip zstd
-        root * /var/www/remnawave-miniapp
-        file_server
-      
-        @config path /app-config.json
-        header @config Access-Control-Allow-Origin "*"
-        
-        # Redirect for /miniapp/redirect/index.html
-        @redirect path /miniapp/redirect/index.html
-        redir @redirect /miniapp/redirect/index.html permanent
-        
-        reverse_proxy /miniapp/* 127.0.0.1:8080 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-        }
-    }
+   
+   miniapp.domain.com {
+       encode gzip zstd
+       root * /miniapp
+       file_server
+       
+       @config path /app-config.json
+       header @config Access-Control-Allow-Origin "*"
+       
+       reverse_proxy /miniapp/* remnawave_bot:8080 {
+           header_up Host {host}
+           header_up X-Real-IP {remote_host}
+       }
+   }
    ```
-  - Каталог `miniapp` из репозитория должен быть смонтирован в контейнер Caddy по путям `/miniapp` и `/miniapp/redirect`,
-    чтобы статические файлы мини-приложения и страницы редиректа отдавались без дополнительной сборки. Замените
-    `/root/remnawave-bedolaga-telegram-bot` в примере на реальный путь до установленного репозитория.
-   - Caddy автоматически выпустит TLS-сертификаты через ACME, если DNS настроен правильно.
-4. Запустите прокси и убедитесь, что он присоединился к сети бота:
+
+4. Запустите прокси:
    ```bash
    docker compose -f docker-compose.caddy.yml up -d
-   docker network inspect bot_network | grep remnawave_caddy
    ```
-5. Проверьте журналы Caddy и бота, выполните тестовый запрос `curl https://hooks.example.com/webhook` (должен отвечать 405/200
-   в зависимости от webhook).
 
 ### 4. Ручная настройка nginx в Docker
 
@@ -306,16 +290,16 @@ networks:
      bot_network:
        external: true
    ```
-   Сертификаты можно выпускать вручную (certbot) и складывать в `./certs` либо использовать внешний контейнер `certbot`.
-2. Пример `nginx.conf` с двумя серверными блоками:
+
+2. Пример `nginx.conf`:
    ```nginx
    events {}
 
    http {
-     include       /etc/nginx/mime.types;
-     sendfile      on;
-     tcp_nopush    on;
-     tcp_nodelay   on;
+     include /etc/nginx/mime.types;
+     sendfile on;
+     tcp_nopush on;
+     tcp_nodelay on;
      keepalive_timeout 65;
 
      upstream remnawave_bot_hooks {
@@ -335,20 +319,19 @@ networks:
        listen 443 ssl http2;
        server_name hooks.example.com;
 
-       ssl_certificate     /etc/ssl/private/hooks.fullchain.pem;
+       ssl_certificate /etc/ssl/private/hooks.fullchain.pem;
        ssl_certificate_key /etc/ssl/private/hooks.privkey.pem;
 
        location = /webhook { proxy_pass http://remnawave_bot_hooks; }
        location /tribute-webhook { proxy_pass http://remnawave_bot_hooks; }
        location /cryptobot-webhook { proxy_pass http://remnawave_bot_hooks; }
        location /mulenpay-webhook { proxy_pass http://remnawave_bot_hooks; }
+       location /wata-webhook { proxy_pass http://remnawave_bot_hooks; }
        location /pal24-webhook { proxy_pass http://remnawave_bot:8084; }
        location /yookassa-webhook { proxy_pass http://remnawave_bot_yookassa; }
 
        proxy_set_header Host $host;
        proxy_set_header X-Real-IP $remote_addr;
-       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-       proxy_set_header X-Forwarded-Proto $scheme;
      }
 
      server {
@@ -356,47 +339,19 @@ networks:
        listen 443 ssl http2;
        server_name miniapp.example.com;
 
-       ssl_certificate     /etc/ssl/private/miniapp.fullchain.pem;
+       ssl_certificate /etc/ssl/private/miniapp.fullchain.pem;
        ssl_certificate_key /etc/ssl/private/miniapp.privkey.pem;
 
        root /var/www/remnawave-miniapp;
        index index.html;
 
-       location = /app-config.json {
-         add_header Access-Control-Allow-Origin "*";
-         try_files $uri =404;
-       }
-
-       location / {
-         try_files $uri /index.html =404;
-       }
-
        location /miniapp/ {
          proxy_pass http://remnawave_bot_api/miniapp/;
-         proxy_set_header Host $host;
-         proxy_set_header X-Real-IP $remote_addr;
-         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-         proxy_set_header X-Forwarded-Proto $scheme;
          proxy_set_header X-API-Key "КЛЮЧ-WEBAPI";
        }
      }
    }
    ```
-3. Запустите прокси и убедитесь, что он в сети `bot_network`:
-   ```bash
-   docker compose -f docker-compose.nginx.yml up -d
-   docker network inspect bot_network | grep remnawave_nginx
-   ```
-4. После запуска перепроверьте, что `curl -I https://hooks.example.com/webhook` возвращает HTTP-ответ 405/200, а `curl -H "X-AP
-   I-Key: ..." https://miniapp.example.com/miniapp/health` отвечает 200.
-
-### 5. Чек-лист проверки
-
-- [ ] DNS-записи указывают на сервер, сертификаты валидны.
-- [ ] Контейнер прокси присоединён к `bot_network` и видит сервис `remnawave_bot`.
-- [ ] `WEBHOOK_URL` и `MINIAPP_CUSTOM_URL` в `.env` указывают на HTTPS-домены.
-- [ ] В логах бота нет ошибок `connection refused` или `invalid host header` при обращении из прокси.
-- [ ] Триггеры оплаты (Tribute, YooKassa и др.) успешно получают HTTP 200 при тестовых запросах на свои вебхуки.
 
 ---
 
@@ -416,7 +371,7 @@ networks:
 
 Подробное пошаговое руководство по запуску административного веб-API и подключению внешней панели находится в [docs/web-admin-integration.md](docs/web-admin-integration.md).
 
-### 📱 Telegram Mini App с подпиской
+### 📱 Telegram Mini App ЛК
 
 Инструкция по развёртыванию мини-приложения, публикации статической страницы и настройке reverse-proxy доступна в [docs/miniapp-setup.md](docs/miniapp-setup.md).
 
@@ -424,11 +379,9 @@ networks:
 
 | Переменная | Описание | Пример |
 |------------|----------|--------|
-| `SERVER_STATUS_MODE` | Режим работы кнопки: `disabled`, `external_link` (открывает ссылку в браузере), `external_link_miniapp` (открывает ссылку во встроенном мини-приложении Telegram) или `xray` (интеграция с XrayChecker). | `xray` |
-| `SERVER_STATUS_EXTERNAL_URL` | Прямая ссылка на внешний мониторинг (используется в режимах `external_link` и `external_link_miniapp`). | `https://status.example.com` |
-| `SERVER_STATUS_METRICS_URL` | URL страницы метрик XrayChecker (Prometheus формат). | `https://sub.example.com/metrics` |
-| `SERVER_STATUS_METRICS_USERNAME` / `SERVER_STATUS_METRICS_PASSWORD` | Данные Basic Auth, если страница метрик защищена паролем. | `status` / `secret` |
-| `SERVER_STATUS_ITEMS_PER_PAGE` | Количество серверов, показываемых на одной странице в режиме интеграции. | `10` |
+| `SERVER_STATUS_MODE` | Режим работы кнопки: `disabled`, `external_link`, `external_link_miniapp` или `xray` | `xray` |
+| `SERVER_STATUS_EXTERNAL_URL` | Прямая ссылка на внешний мониторинг | `https://status.example.com` |
+| `SERVER_STATUS_METRICS_URL` | URL страницы метрик XrayChecker | `https://sub.example.com/metrics` |
 
 ### 🛡️ Защита панели Remnawave
 
@@ -454,7 +407,7 @@ TRAFFIC_PACKAGES_CONFIG="5:2000:false,10:3500:false,25:7000:false,50:11000:true,
 ```env
 TRAFFIC_SELECTION_MODE=fixed
 FIXED_TRAFFIC_LIMIT_GB=100  # 0 = безлимит
-TRAFFIC_PACKAGES_CONFIG="100:15000:true" # Указать цену обязательно для FIXED_TRAFFIC_LIMIT_GB 
+TRAFFIC_PACKAGES_CONFIG="100:15000:true"
 ```
 
 ### 💰 Система ценообразования
@@ -468,35 +421,6 @@ TRAFFIC_PACKAGES_CONFIG="100:15000:true" # Указать цену обязат�
 - 4 устройства: 50₽/мес × 6 мес = 300₽
 - 2 сервера: 100₽/мес × 6 мес = 1200₽
 - **Итого: 3100₽**
-
-```env
-# Базовая цена подписки
-BASE_SUBSCRIPTION_PRICE=0
-
-# Цены за периоды (в копейках)
-PRICE_14_DAYS=7000
-PRICE_30_DAYS=9900
-PRICE_60_DAYS=25900
-PRICE_90_DAYS=36900
-PRICE_180_DAYS=69900
-PRICE_360_DAYS=109900
-
-# Скидка для Базовых Юзеров (Для других Промогрупп не работает!)
-BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED=false
-# 60:10 = скидка 10% на все доп услуги. 90:20 = 20% за 90 дней и тд
-BASE_PROMO_GROUP_PERIOD_DISCOUNTS=60:10,90:20,180:40,360:70
-
-
-# Выводимые пакеты трафика и их цены в копейках
-TRAFFIC_PACKAGES_CONFIG="5:2000:false,10:3500:false,25:7000:false,50:11000:true,100:15000:true,250:17000:false,500:19000:false,1000:19500:true,0:20000:true"
-
-# Цена за дополнительное устройство
-PRICE_PER_DEVICE=5000
-
-# Настройка доступных периодов
-AVAILABLE_SUBSCRIPTION_PERIODS=30,90,180
-AVAILABLE_RENEWAL_PERIODS=30,90,180
-```
 
 ### 📱 Управление устройствами
 
@@ -514,6 +438,9 @@ MAX_DEVICES_LIMIT=15
 ### 👥 Реферальная система
 
 ```env
+# Включение/выключение реферальной программы
+REFERRAL_PROGRAM_ENABLED=true
+
 # Минимальная сумма пополнения для активации бонусов
 REFERRAL_MINIMUM_TOPUP_KOPEKS=10000
 
@@ -525,10 +452,16 @@ REFERRAL_INVITER_BONUS_KOPEKS=10000
 
 # Процент комиссии с последующих пополнений
 REFERRAL_COMMISSION_PERCENT=25
+```
 
-# Уведомления
-REFERRAL_NOTIFICATIONS_ENABLED=true
-REFERRAL_NOTIFICATION_RETRY_ATTEMPTS=3
+### 🔄 Автосинхронизация Remnawave
+
+```env
+# Включение автоматической синхронизации серверов
+REMNAWAVE_AUTO_SYNC_ENABLED=true
+
+# Время синхронизации (через запятую, формат HH:MM)
+REMNAWAVE_AUTO_SYNC_TIMES=03:00,15:00
 ```
 
 ### 🛡️ Мониторинг и техническое обслуживание
@@ -541,9 +474,13 @@ MAINTENANCE_CHECK_INTERVAL=30
 
 # Интервал проверки состояния панели (секунды)
 MONITORING_INTERVAL=60
+```
 
-# Сообщение для пользователей
-MAINTENANCE_MESSAGE=Ведутся технические работы. Сервис временно недоступен.
+### 🛒 Умная корзина
+
+```env
+# Redis для сохранения корзины (требуется)
+REDIS_URL=redis://redis:6379/0
 ```
 
 <details>
@@ -557,42 +494,33 @@ MAINTENANCE_MESSAGE=Ведутся технические работы. Серв
 # ===== TELEGRAM BOT =====
 BOT_TOKEN=
 ADMIN_IDS=
-# Ссылка на поддержку: Telegram username (например, @support) или полный URL
 SUPPORT_USERNAME=@support
-
 
 # Уведомления администраторов
 ADMIN_NOTIFICATIONS_ENABLED=true
-ADMIN_NOTIFICATIONS_CHAT_ID=-1001234567890   # Замени на ID твоего канала (-100) - ПРЕФИКС ЗАКРЫТОГО КАНАЛА! ВСТАВИТЬ СВОЙ ID СРАЗУ ПОСЛЕ (-100) БЕЗ ПРОБЕЛОВ!
-ADMIN_NOTIFICATIONS_TOPIC_ID=123             # Опционально: ID топика
-ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID=126      # Опционально: ID топика для тикетов
+ADMIN_NOTIFICATIONS_CHAT_ID=-1001234567890
+ADMIN_NOTIFICATIONS_TOPIC_ID=123
+ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID=126
+
 # Автоматические отчеты
 ADMIN_REPORTS_ENABLED=false
-ADMIN_REPORTS_CHAT_ID=                        # Опционально: чат для отчетов (по умолчанию ADMIN_NOTIFICATIONS_CHAT_ID)
-ADMIN_REPORTS_TOPIC_ID=                      # ID топика для отчетов
-ADMIN_REPORTS_SEND_TIME=10:00                # Время отправки (по МСК) ежедневного отчета
+ADMIN_REPORTS_SEND_TIME=10:00
+
 # Обязательная подписка на канал
-CHANNEL_SUB_ID= # Опционально ID твоего канала (-100)
-CHANNEL_IS_REQUIRED_SUB=false # Обязательна ли подписка на канал
-CHANNEL_LINK= # Опционально ссылка на канал
+CHANNEL_SUB_ID=
+CHANNEL_IS_REQUIRED_SUB=false
+CHANNEL_LINK=
 
 # ===== DATABASE CONFIGURATION =====
-# Режим базы данных: "auto", "postgresql", "sqlite"
 DATABASE_MODE=auto
-
-# Основной URL (можно оставить пустым для автоматического выбора)
 DATABASE_URL=
 
-# PostgreSQL настройки (для Docker и кастомных установок)
+# PostgreSQL настройки
 POSTGRES_HOST=postgres
 POSTGRES_PORT=5432
 POSTGRES_DB=remnawave_bot
 POSTGRES_USER=remnawave_user
 POSTGRES_PASSWORD=secure_password_123
-
-# SQLite настройки (для локального запуска)
-SQLITE_PATH=./data/bot.db
-LOCALES_PATH=./locales
 
 # Redis
 REDIS_URL=redis://redis:6379/0
@@ -600,72 +528,33 @@ REDIS_URL=redis://redis:6379/0
 # ===== REMNAWAVE API =====
 REMNAWAVE_API_URL=https://panel.example.com
 REMNAWAVE_API_KEY=your_api_key_here
-
-# Тип авторизации: "api_key", "basic_auth"
 REMNAWAVE_AUTH_TYPE=api_key
-
-# Для панелей с Basic Auth (опционально)
-REMNAWAVE_USERNAME=
-REMNAWAVE_PASSWORD=
-
-# Для панелей установленных скриптом eGames прописывать ключ в формате XXXXXXX:DDDDDDDD
 REMNAWAVE_SECRET_KEY=
 
-# Шаблон описания пользователя в панели Remnawave
-# Доступные плейсхолдеры:
-#   {full_name}         — Имя, Фамилия из Telegram
-#   {username}          — @логин из Telegram (c @)
-#   {username_clean}    — логин из Telegram (без @)
-#   {telegram_id}       — ID Telegram
-REMNAWAVE_USER_DESCRIPTION_TEMPLATE="Bot user: {full_name} {username}"
+# Автосинхронизация
+REMNAWAVE_AUTO_SYNC_ENABLED=true
+REMNAWAVE_AUTO_SYNC_TIMES=03:00,15:00
 
-# Режим удаления пользователей из панели RemnaWave
-# delete - полностью удалить пользователя из панели
-# disable - только деактивировать пользователя
+# Шаблон описания пользователя
+REMNAWAVE_USER_DESCRIPTION_TEMPLATE="Bot user: {full_name} {username}"
 REMNAWAVE_USER_DELETE_MODE=delete
 
-# ========= ПОДПИСКИ =========
-# ===== ТРИАЛ ПОДПИСКА =====
+# ===== ПОДПИСКИ =====
 TRIAL_DURATION_DAYS=3
 TRIAL_TRAFFIC_LIMIT_GB=10
 TRIAL_DEVICE_LIMIT=1
-TRIAL_SQUAD_UUID=
 
-# ===== ПЛАТНАЯ ПОДПИСКА =====
-# Сколько устройств доступно по дефолту при покупке платной подписки
 DEFAULT_DEVICE_LIMIT=3
-
-# Максимум устройств достопных к покупке (0 = Нет лимита)
 MAX_DEVICES_LIMIT=15
 
-# Дефолт параметры для подписок выданных через админку
-DEFAULT_TRAFFIC_LIMIT_GB=100
-
-# ===== ГЛОБАЛЬНЫЙ ПАРАМЕТР ДЛЯ ВСЕХ ПОДПИСОК =====
-DEFAULT_TRAFFIC_RESET_STRATEGY=MONTH
-# Сбрасывать трафик при каждой оплате подписки
-RESET_TRAFFIC_ON_PAYMENT=false
-
 # ===== НАСТРОЙКИ ТРАФИКА =====
-# Режим выбора трафика:
-# "selectable" - пользователи выбирают пакеты трафика (по умолчанию)
-# "fixed" - фиксированный лимит трафика для всех подписок
 TRAFFIC_SELECTION_MODE=selectable
-
-# Фиксированный лимит трафика в ГБ (используется только в режиме "fixed")
-# 0 = безлимит
 FIXED_TRAFFIC_LIMIT_GB=100
-
-# ===== ПЕРИОДЫ ПОДПИСКИ =====
-# Доступные периоды подписки (через запятую)
-# Возможные значения: 14,30,60,90,180,360
 AVAILABLE_SUBSCRIPTION_PERIODS=30,90,180
 AVAILABLE_RENEWAL_PERIODS=30,90,180
 
 # ===== ЦЕНЫ (в копейках) =====
 BASE_SUBSCRIPTION_PRICE=0
-
-# Цены за периоды
 PRICE_14_DAYS=7000
 PRICE_30_DAYS=9900
 PRICE_60_DAYS=25900
@@ -673,26 +562,19 @@ PRICE_90_DAYS=36900
 PRICE_180_DAYS=69900
 PRICE_360_DAYS=109900
 
-# Скидка для Базовых Юзеров (Для других Промогрупп не работает!)
+# Скидки для базовых пользователей
 BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED=false
-# 60:10 = скидка 10% на все доп услуги. 90:20 = 20% за 90 дней и тд
 BASE_PROMO_GROUP_PERIOD_DISCOUNTS=60:10,90:20,180:40,360:70
 
-# Выводимые пакеты трафика и их цены в копейках
-TRAFFIC_PACKAGES_CONFIG="5:2000:false,10:3500:false,25:7000:false,50:11000:true,100:15000:true,250:17000:false,500:19000:false,1000:19500:true,0:20000:true"
-
-# Цена за дополнительное устройство (DEFAULT_DEVICE_LIMIT идет бесплатно!)
+TRAFFIC_PACKAGES_CONFIG="5:2000:false,10:3500:false,25:7000:false,50:11000:true,100:15000:true,0:20000:true"
 PRICE_PER_DEVICE=5000
 
 # ===== РЕФЕРАЛЬНАЯ СИСТЕМА =====
+REFERRAL_PROGRAM_ENABLED=true
 REFERRAL_MINIMUM_TOPUP_KOPEKS=10000
 REFERRAL_FIRST_TOPUP_BONUS_KOPEKS=10000
 REFERRAL_INVITER_BONUS_KOPEKS=10000
 REFERRAL_COMMISSION_PERCENT=25
-
-# Уведомления
-REFERRAL_NOTIFICATIONS_ENABLED=true
-REFERRAL_NOTIFICATION_RETRY_ATTEMPTS=3
 
 # ===== АВТОПРОДЛЕНИЕ =====
 AUTOPAY_WARNING_DAYS=3,1
@@ -702,252 +584,97 @@ MIN_BALANCE_FOR_AUTOPAY_KOPEKS=10000
 
 # ===== ПЛАТЕЖНЫЕ СИСТЕМЫ =====
 
-# Telegram Stars (работает автоматически)
+# Telegram Stars
 TELEGRAM_STARS_ENABLED=true
 TELEGRAM_STARS_RATE_RUB=1.3
 
-# Tribute (https://tribute.app)
+# Tribute
 TRIBUTE_ENABLED=false
 TRIBUTE_API_KEY=
-TRIBUTE_DONATE_LINK=
 TRIBUTE_WEBHOOK_PATH=/tribute-webhook
-TRIBUTE_WEBHOOK_HOST=0.0.0.0
-TRIBUTE_WEBHOOK_PORT=8081
 
-# YooKassa (https://yookassa.ru)
+# YooKassa
 YOOKASSA_ENABLED=false
 YOOKASSA_SHOP_ID=
 YOOKASSA_SECRET_KEY=
-YOOKASSA_RETURN_URL=
-YOOKASSA_DEFAULT_RECEIPT_EMAIL=receipts@yourdomain.com
-
-# Включить оплату через СБП (Систему быстрых платежей)
 YOOKASSA_SBP_ENABLED=false
-
-# Настройки чеков для налоговой
-YOOKASSA_VAT_CODE=1
-# Коды НДС:
-# 1 - НДС не облагается
-# 2 - НДС 0%
-# 3 - НДС 10%
-# 4 - НДС 20%
-# 5 - НДС 10/110
-# 6 - НДС 20/120
-
-YOOKASSA_PAYMENT_MODE=full_payment
-# Способы расчета:
-# full_payment - полная оплата
-# partial_payment - частичная оплата
-# advance - аванс
-# full_prepayment - полная предоплата
-# partial_prepayment - частичная предоплата
-# credit - передача в кредит
-# credit_payment - оплата кредита
-
-YOOKASSA_PAYMENT_SUBJECT=service
-# Предметы расчета:
-# commodity - товар
-# excise - подакцизный товар
-# job - работа
-# service - услуга
-# gambling_bet - ставка в азартной игре
-# gambling_prize - выигрыш в азартной игре
-# lottery - лотерейный билет
-# lottery_prize - выигрыш в лотерее
-# intellectual_activity - результат интеллектуальной деятельности
-# payment - платеж
-# agent_commission - агентское вознаграждение
-# composite - составной предмет расчета
-# another - другое
-
-# Webhook настройки
 YOOKASSA_WEBHOOK_PATH=/yookassa-webhook
-YOOKASSA_WEBHOOK_HOST=0.0.0.0
-YOOKASSA_WEBHOOK_PORT=8082
-YOOKASSA_WEBHOOK_SECRET=your_webhook_secret
 
-# Лимиты сумм пополнения через YooKassa (в копейках)
-YOOKASSA_MIN_AMOUNT_KOPEKS=5000
-YOOKASSA_MAX_AMOUNT_KOPEKS=1000000
-
-# Быстрый выбор суммы пополнения через YooKassa
-YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED=true
-
-# ===== НАСТРОЙКИ ОПИСАНИЙ ПЛАТЕЖЕЙ =====
-# Эти настройки позволяют изменить описания платежей, 
-# чтобы избежать блокировок платежных систем
-PAYMENT_SERVICE_NAME=Интернет-сервис
-PAYMENT_BALANCE_DESCRIPTION=Пополнение баланса
-PAYMENT_SUBSCRIPTION_DESCRIPTION=Оплата подписки
-PAYMENT_BALANCE_TEMPLATE={service_name} - {description}
-PAYMENT_SUBSCRIPTION_TEMPLATE={service_name} - {description}
-
-# CRYPTOBOT
+# CryptoBot
 CRYPTOBOT_ENABLED=false
-CRYPTOBOT_API_TOKEN=123456789:AAzQcZWQqQAbsfgPnOLr4FHC8Doa4L7KryC
-CRYPTOBOT_WEBHOOK_SECRET=your_webhook_secret_here
-CRYPTOBOT_BASE_URL=https://pay.crypt.bot
-CRYPTOBOT_TESTNET=false
+CRYPTOBOT_API_TOKEN=
 CRYPTOBOT_WEBHOOK_PATH=/cryptobot-webhook
-CRYPTOBOT_WEBHOOK_PORT=8081
-CRYPTOBOT_DEFAULT_ASSET=USDT
-CRYPTOBOT_ASSETS=USDT,TON,BTC,ETH,LTC,BNB,TRX,USDC
-CRYPTOBOT_INVOICE_EXPIRES_HOURS=24
 
-# MULENPAY
+# MulenPay
 MULENPAY_ENABLED=false
 MULENPAY_API_KEY=
 MULENPAY_SECRET_KEY=
-MULENPAY_SHOP_ID=<ID магазина>
-# необязательно, есть дефолтные значения
-MULENPAY_BASE_URL=https://mulenpay.ru/api
+MULENPAY_SHOP_ID=
 MULENPAY_WEBHOOK_PATH=/mulenpay-webhook
-MULENPAY_DESCRIPTION="Пополнение баланса"
-MULENPAY_LANGUAGE=ru
-MULENPAY_VAT_CODE=0
-MULENPAY_PAYMENT_SUBJECT=4
-MULENPAY_PAYMENT_MODE=4
-MULENPAY_MIN_AMOUNT_KOPEKS=10000
-MULENPAY_MAX_AMOUNT_KOPEKS=10000000
 
-# PAYPALYCH / PAL24
+# PayPalych / Pal24
 PAL24_ENABLED=false
 PAL24_API_TOKEN=
 PAL24_SHOP_ID=
-PAL24_SIGNATURE_TOKEN=
-PAL24_BASE_URL=https://pal24.pro/api/v1/
 PAL24_WEBHOOK_PATH=/pal24-webhook
-PAL24_WEBHOOK_PORT=8084
-PAL24_PAYMENT_DESCRIPTION="Пополнение баланса"
-PAL24_MIN_AMOUNT_KOPEKS=10000
-PAL24_MAX_AMOUNT_KOPEKS=100000000
-PAL24_REQUEST_TIMEOUT=30
+PAL24_SBP_BUTTON_VISIBLE=true
+PAL24_CARD_BUTTON_VISIBLE=true
+
+# WATA
+WATA_ENABLED=false
+WATA_TOKEN=
+WATA_TERMINAL_ID=
+WATA_WEBHOOK_PATH=/wata-webhook
 
 # ===== ИНТЕРФЕЙС И UX =====
-
-# Включить логотип для всех сообщений (true - с изображением, false - только текст)
 ENABLE_LOGO_MODE=true
 LOGO_FILE=vpn_logo.png
-
-# Режим главного меню (default - классический режим работы бота, text - режим работы с активным ЛК MiniApp, отключает покупку/управление подпиской в меню, заменяет все кнопками открытия в MiniApp ЛК)
 MAIN_MENU_MODE=default
-
-# Скрыть блок с ссылкой подключения в разделе с информацией о подписке
 HIDE_SUBSCRIPTION_LINK=false
-
-# Режим работы кнопки "Подключиться"
-# guide - открывает гайд подключения (режим 1)
-# miniapp_subscription - открывает ссылку подписки в мини-приложении (режим 2)
-# miniapp_custom - открывает заданную ссылку в мини-приложении (режим 3)
-# link - Открывает ссылку напрямую в браузере (режим 4)
-# happ_cryptolink - Вывод cryptoLink ссылки на подписку Happ (режим 5)
 CONNECT_BUTTON_MODE=guide
-
-# URL для режима miniapp_custom (обязателен при CONNECT_BUTTON_MODE=miniapp_custom)
-MINIAPP_CUSTOM_URL=
-MINIAPP_SERVICE_NAME_EN=Bedolaga VPN
-MINIAPP_SERVICE_NAME_RU=Bedolaga VPN
-MINIAPP_SERVICE_DESCRIPTION_EN=Secure & Fast Connection
-MINIAPP_SERVICE_DESCRIPTION_RU=Безопасное и быстрое подключение
-
-# Параметры режима happ_cryptolink
-CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED=false
-HAPP_DOWNLOAD_LINK_IOS=
-HAPP_DOWNLOAD_LINK_ANDROID=
-HAPP_DOWNLOAD_LINK_MACOS=
-HAPP_DOWNLOAD_LINK_WINDOWS=
-# Кнопка (Подключится) с редиректом (тк ссылки с happ:// тг не поддерживает) - Без установленной ссылки на редирект кнопки (подключится) не будет! Пример: https://sub.domain.sub/redirect-page/?redirect_to=
-HAPP_CRYPTOLINK_REDIRECT_TEMPLATE=
-
-# Пропустить принятие правил использования бота
-SKIP_RULES_ACCEPT=false
-# Пропустить запрос реферального кода
-SKIP_REFERRAL_CODE=false
 
 # ===== МОНИТОРИНГ И УВЕДОМЛЕНИЯ =====
 MONITORING_INTERVAL=60
-INACTIVE_USER_DELETE_MONTHS=3
-
-# Уведомления
-TRIAL_WARNING_HOURS=2
 ENABLE_NOTIFICATIONS=true
 NOTIFICATION_RETRY_ATTEMPTS=3
-MONITORING_LOGS_RETENTION_DAYS=30
-NOTIFICATION_CACHE_HOURS=24
 
 # ===== СТАТУС СЕРВЕРОВ =====
-# Режимы: disabled, external_link, external_link_miniapp, xray
 SERVER_STATUS_MODE=disabled
-# Ссылка на внешний мониторинг (для режимов external_link и external_link_miniapp)
 SERVER_STATUS_EXTERNAL_URL=
-# URL метрик XrayChecker (для режима xray)
 SERVER_STATUS_METRICS_URL=
-# Данные Basic Auth (опционально)
-SERVER_STATUS_METRICS_USERNAME=
-SERVER_STATUS_METRICS_PASSWORD=
-# Проверять SSL сертификат при запросе метрик
-SERVER_STATUS_METRICS_VERIFY_SSL=true
-# Таймаут запроса к метрикам (в секундах)
-SERVER_STATUS_REQUEST_TIMEOUT=10
-# Количество серверов на странице в режиме интеграции
 SERVER_STATUS_ITEMS_PER_PAGE=10
 
 # ===== РЕЖИМ ТЕХНИЧЕСКИХ РАБОТ =====
 MAINTENANCE_MODE=false
 MAINTENANCE_CHECK_INTERVAL=30
 MAINTENANCE_AUTO_ENABLE=true
-MAINTENANCE_MESSAGE=Ведутся технические работы. Сервис временно недоступен. Попробуйте позже.
 
 # ===== ЛОКАЛИЗАЦИЯ =====
-# Укажите язык из AVAILABLE_LANGUAGES. При некорректном значении используется ru.
 DEFAULT_LANGUAGE=ru
 AVAILABLE_LANGUAGES=ru,en
-# Включить выбор языка при старте и отображение кнопки в меню
 LANGUAGE_SELECTION_ENABLED=true
-
-# ===== ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ =====
-# Конфигурация приложений для гайда подключения
-APP_CONFIG_PATH=app-config.json
-ENABLE_DEEP_LINKS=true
-APP_CONFIG_CACHE_TTL=3600
 
 # ===== СИСТЕМА БЕКАПОВ =====
 BACKUP_AUTO_ENABLED=true
 BACKUP_INTERVAL_HOURS=24
 BACKUP_TIME=03:00
-# Первый запуск автобекапа выполняется в ближайшее время BACKUP_TIME после старта бота,
-# далее копии создаются каждые BACKUP_INTERVAL_HOURS.
 BACKUP_MAX_KEEP=7
-BACKUP_COMPRESSION=true
-BACKUP_INCLUDE_LOGS=false
-BACKUP_LOCATION=/app/data/backups
-
-# Отправка бэкапов в телеграм
 BACKUP_SEND_ENABLED=true
-BACKUP_SEND_CHAT_ID=-100123456789   # Замени на ID твоего канала (-100) - ПРЕФИКС ЗАКРЫТОГО КАНАЛА!
-# ВСТАВИТЬ СВОЙ ID СРАЗУ ПОСЛЕ (-100) БЕЗ ПРОБЕЛОВ!
-BACKUP_SEND_TOPIC_ID=123             # Опционально: ID топика
 
 # ===== ПРОВЕРКА ОБНОВЛЕНИЙ БОТА =====
 VERSION_CHECK_ENABLED=true
-VERSION_CHECK_REPO=fr1ngg/remnawave-bedolaga-telegram-bot
 VERSION_CHECK_INTERVAL_HOURS=1
 
 # ===== ЛОГИРОВАНИЕ =====
 LOG_LEVEL=INFO
 LOG_FILE=logs/bot.log
-
-# ===== РАЗРАБОТКА =====
-DEBUG=false
-WEBHOOK_URL=
-WEBHOOK_PATH=/webhook
 ```
 
 </details>
 
 ---
 
-## ⭐ Функционал
+#### ⭐ Функционал
 
 <table>
 <tr>
@@ -956,53 +683,79 @@ WEBHOOK_PATH=/webhook
 ### 👤 **Для пользователей**
 
 🧭 **Онбординг и доступ**
-- 🌐 Выбор языка интерфейса, динамическая локализация и настройка кнопки меню.
-- 📜 Принятие правил, оферты и политики конфиденциальности прямо в боте.
-- 📡 Проверка подписки на обязательный канал, deeplink-инвайты и UTM-кампании.
-- 👤 Сбор контактных данных с антиспам-защитой и быстрым восстановлением доступа.
+- 🌐 Выбор языка интерфейса (RU/EN), динамическая локализация
+- 📜 Принятие правил, оферты и политики конфиденциальности
+- 📡 Проверка подписки на обязательный канал
+- 🔗 Deeplink-инвайты, UTM-кампании и реферальные коды
 
 🛒 **Умная покупка подписок**
-- 📅 Гибкие периоды (14–360 дней) и скидки за длительные подписки.
-- 📊 Выбор трафика: фиксированный лимит, квоты или безлимит.
-- 🌍 Автоматический выбор сквада или мультивыбор из десятков серверов.
-- 📱 Настройка количества устройств, стран и доп. услуг прямо в чек-ауте.
-- 🧾 Динамический калькулятор стоимости, черновики и возвращение к незавершённым заказам.
+- 📅 Гибкие периоды (14–360 дней) со скидками
+- 📊 Выбор трафика: фиксированный лимит, пакеты или безлимит
+- 🌍 Автоматический выбор сервера или мультивыбор
+- 📱 Настройка количества устройств и серверов
+- 🧾 Динамический калькулятор стоимости
+- 💾 **Сквозная корзина** - сохранение параметров при недостатке баланса
+- ↩️ Быстрый возврат к оформлению после пополнения
 
 🧪 **Тестовая подписка**
-- Гибко настраиваемый триал и welcome-цепочка.
-- Уведомления об истечении и автоконверсия в платный тариф.
-- Автовыдача бонусов за участие в кампаниях и инвайт-линках.
-- Контроль за обязательной подпиской на канал даже в режиме триала.
+- 🎁 Гибко настраиваемый триал и welcome-цепочка
+- 🔔 Уведомления об истечении и автоконверсия
+- 💎 Автовыдача бонусов за кампании и инвайты
+- 🛡️ Контроль обязательной подписки на канал (отключает подписку при отписке)
 
 💰 **Платежи и баланс**
-- ⭐ Telegram Stars, 💳 Tribute, 💳 YooKassa (СБП + онлайн-чек), 💳 MulenPay, 🏦 PayPalych (СБП), 💰 CryptoBot.
-- 📥 Автогенерация счетов, контроль статусов через вебхуки и уведомления.
-- 💼 История операций с фильтрами, квитанциями и выгрузкой чеков.
-- 🔄 Автоплатёж с настройкой дня списания и уведомлениями об ошибках.
-- 🎁 Реферальные, промо- и кэшбэк-бонусы автоматически начисляются на баланс.
+- ⭐ Telegram Stars
+- 💳 Tribute
+- 💳 YooKassa (СБП + банковские карты)
+- 💰 CryptoBot (USDT, TON, BTC, ETH и др.)
+- 💳 MulenPay (СБП)
+- 🏦 PayPalych/Pal24 (СБП + карты)
+- 💳 **WATA**
+- 📥 Автогенерация счетов и webhook-уведомления
+- 💼 История операций 
+- 🔄 Автоплатёж с настройкой дня списания
+- 🎁 Реферальные и промо-бонусы
+- ⚡ **Быстрое пополнение** с кнопками выбора суммы
 
 📱 **Управление подписками**
-- 📈 Реальный трафик, устройства и география серверов прямо в диалоге.
-- 🌍 Переключение серверов, стран и лимитов без помощи оператора.
-- 📱 Сброс HWID, повторная выдача конфигов и инструкции подключения.
-- 🧩 Смена языка, промогруппы и персональных параметров.
-- 🧾 Просмотр активных услуг, статуса оплаты и сроков действия.
+- 📈 Реальный трафик, устройства и серверы 
+- 🌍 Переключение серверов и стран 
+- 📱 Сброс HWID
+- 🧩 Смена языка, промогруппы и параметров
+- 🧾 Просмотр активных услуг и статуса
+- 🔗 Получение ссылок подключения в один клик
 
 🛟 **Поддержка и самообслуживание**
-- 🎫 Тикеты с приоритетами, вложениями и уведомлениями об ответе.
-- 📚 FAQ, правила, оферта и политика доступны из меню.
-- 💬 Быстрые ссылки на живую поддержку или кастомные каналы связи.
+- 🎫 **Система тикетов** с вложениями
+- 📚 FAQ, правила, оферта и политика
+- 💬 Быстрые ссылки на поддержку
 
-🧩 **Бонусы и рефералы**
-- 🎫 Промокоды на деньги, дни, устройства, страны и расширенные триалы.
-- 👥 Реферальная программа с комиссиями, бонусами и антифрод-фильтрами.
-- 🧾 Подробная аналитика доходов, конверсии и активности приглашённых.
-- 🔗 Генерация реферальных ссылок и QR-кодов в один тап.
+🧩 **Бонусы и промо**
+- 🎫 Промокоды на деньги, дни, триал подписку
+- 🎁 **Персональные промо-предложения** от админов
+- 💰 **Тестовый доступ к серверам** через промо-акции
+- 💸 **Автоматические скидки** при оплате и автопродлении
+- 👥 Реферальная программа с комиссиями и бонусами
+- 📊 Аналитика доходов и конверсии рефералов
+- 🔗 Генерация реферальных ссылок и QR-кодов
 
-🪪 **Mini App и инструкции**
-- 📱 Telegram WebApp с обзором подписки, конфигами и кнопкой «Подключить».
-- 📥 Библиотека загрузочных ссылок для клиентов Happ и кастомных гайдов.
-- 🛰️ Web API для получения статуса подписки в мини-приложениях и внешних витринах.
+💎 **Промо-группы и скидки**
+- 🏷️ **Система промогрупп** с индивидуальными скидками
+- 💰 Скидки на серверы, трафик и устройства
+- 📊 **Скидочные уровни за траты** - прозрачная система лояльности
+- 📈 Автоматическое повышение уровня при достижении порога
+- 🎯 **Скидки за длительные периоды** подписки для базовых юзеров
+
+📱 **Mini App и гайды**
+- 🖥️ **Полноценный личный кабинет** в Telegram WebApp
+- 📊 Управление подпиской и параметрами
+- 💳 Интегрированные платежи
+- 🎁 Активация промо-оферов и промокодов
+- 📱 Управление устройствами
+- 👥 Реферальная статистика
+- 📋 FAQ и юридические документы
+- 📥 Библиотека загрузочных ссылок для клиентов
+- 🛰️ Web API для внешних интеграций
 
 </td>
 <td width="50%" valign="top">
@@ -1010,56 +763,76 @@ WEBHOOK_PATH=/webhook
 ### ⚙️ **Для администраторов**
 
 📊 **Аналитика и отчётность**
-- 📈 Дашборды по пользователям, подпискам, трафику и удержанию.
-- 💰 Детализация платежей по источникам (Stars, YooKassa, Tribute, MulenPay, PayPalych, CryptoBot).
-- 🧮 Продажи по тарифам, устройствам, странам и промогруппам.
-- 📣 Эффективность кампаний, промокодов, UTM-источников и реферальных потоков.
+- 📈 Дашборды по пользователям, подпискам и трафику
+- 💰 Детализация платежей по всем источникам
+- 🧮 Продажи по тарифам, устройствам и странам
+- 📣 Эффективность кампаний, промокодов и UTM
+- 🎯 **Статистика по промо-группам** и скидочным уровням
+- 📊 **Расширенная фильтрация** пользователей (баланс, траты, активность)
 
 👥 **Управление пользователями**
-- 🔍 Поиск, фильтры и детальные карточки с историей операций.
-- 💰 Ручное изменение баланса, компенсации и корректировки.
-- 📱 Изменение лимитов устройств, трафика, стран и подключенных сквадов.
-- 🔄 Сброс HWID, перегенерация подписки и синхронизация с Remnawave.
-- 🎯 Назначение промогрупп, тарифов и ручных продлений/обновлений.
-- 🚫 Блокировки с таймером, полное удаление и аудит действий персонала.
+- 🔍 Поиск, фильтры и детальные карточки
+- 💰 Ручное изменение баланса 
+- 📱 Изменение лимитов устройств, трафика, серверов
+- 🔄 Сброс HWID и перегенерация подписки
+- 🎯 Назначение промогрупп и тарифов
+- 💳 **Покупка подписки пользователю** прямо из админки
+- ⏰ **Продление/сокращение срока** подписки (±365 дней)
+- 🚫 Блокировки с таймером и аудит действий
+- 🛡️ **Защита от запрещенных никнеймов** с настраиваемым список банвордов (автоблокировка подозрительных имен)
 
 🎯 **Продажи, маркетинг и удержание**
-- 🎫 Промокоды (разовые/многоразовые), бонусные предложения и бесплатные пакеты.
-- 💳 Промогруппы со скидками на серверы, трафик, устройства и допуслуги.
-- 📣 Кампании с deeplink-ссылками, UTM и автопродвижением триалов.
-- 📨 Рассылки по сегментам, кастомные кнопки и медиа, отмена «в полёте».
-- 🔘 Настройка кнопок главного меню, приветственных экранов и мини-приложений.
+- 🎫 Промокоды 
+- 💳 Промо-группы со скидками
+- 🎁 **Персональные промо-предложения** с поиском получателей
+- 💸 **Тестовые серверы** - временная выдача доступа
+- 💰 **Автоматические скидки** при оплате
+- 📣 **Рекламные кампании** с deeplink и бонусами (Автовыдача подписки / баланса при переходе)
+- 📨 Рассылки по сегментам с медиа и кнопка
+- 🎨 **Кастомные кнопки** для рассылок (подключение, подписка, поддержка, партнертка и тд)
+- 🔘 Настройка главного меню и приветственных экранов
 
 🛟 **Поддержка и модерация**
-- 🎫 Центр тикетов с приоритетами, статусами и перепиской.
-- 🧑‍⚖️ Разграничение ролей (админы, модераторы), журнал аудита действий.
-- ⏱️ SLA таймеры, автоматические напоминания и уведомления в канал.
-- 🚫 Массовые блокировки нарушителей и автоматическое снятие блокировок.
-- 🧾 История диалогов, прикреплённые файлы и быстрые ответы.
+- 🎫 **Центр тикетов** с приоритетами и статусами
+- ⏱️ **SLA таймеры** и автоуведомления
+- 🧑‍⚖️ Роли модераторов с ограниченным доступом (без выдачи админ прав)
+- 📊 Детальный журнал всех операций
+- 🚫 Блокировки нарушителей
+- 🧾 История диалогов и быстрые ответы
 
 🔔 **Уведомления и коммуникации**
-- 📢 Топики для событий (покупки, триалы, техработы, ошибки интеграций).
-- 🔔 Настройка пользовательских и админских уведомлений, расписаний и каналов.
-- 📨 Шаблоны правил, оферты, FAQ, приветствий и страницы поддержки.
-- 💬 Автоматические сообщения о задолженностях, автоплатежах и продлениях.
+- 📢 **Топики для событий** (покупки, триалы, техработы)
+- 🔔 Настройка уведомлений и расписаний
+- 📨 **Управление контентом** - политика, оферта, FAQ
+- 💬 Автоматические сообщения о задолженностях
 
 🧰 **Обслуживание и DevOps**
-- 🛠️ `install_bot.sh`: управление контейнерами, логами, обновлениями, прокси и резервными копиями.
-- 🚧 Ручной и авто-режим техработ с кастомными сообщениями.
-- 🗒️ Просмотр системных логов, health-check, мониторинг Remnawave и серверов.
-- ♻️ Проверка обновлений репозитория, уведомления о новых версиях и плавный деплой.
+- 🛠️ `install_bot.sh` - **интерактивное меню управления**
+- 🚧 Ручной и авто-режим техработ
+- 🗒️ Просмотр системных логов и health-check
+- 🔄 **Автосинхронизация Remnawave** по расписанию и при старте бота
+- ♻️ Проверка обновлений репозитория
+- 📊 **Мониторинг серверов** (интеграция с XrayChecker)
 
 🗄️ **Бекапы и восстановление**
-- 🗓️ Планировщик авто-бекапов, гибкая политика хранения и компрессия.
-- 📦 Ручные бекапы с выбором содержимого (БД, конфиги, логи).
-- 📤 Отправка архивов в выделенный чат/топик, журнал попыток и статусов.
-- 🔁 Восстановление из бекапа без остановки бота, проверка целостности.
+- 🗓️ **Умные автобекапы** с гибким расписанием
+- 📦 Ручные бекапы с выбором содержимого
+- 📤 Отправка архивов в выделенный чат/топик
+- 🔁 Восстановление без остановки бота
+- ✅ Автоматическая синхронизация sequences после восстановления
 
-💳 **Биллинг и автоплатежи**
-- ⚙️ Глобальные настройки автосписаний, минимального баланса и напоминаний.
-- 🧪 Тестовые платежи для каждого провайдера прямо из админки.
-- 🪝 Управление вебхуками Tribute, YooKassa, CryptoBot, MulenPay и PayPalych.
-- 🧾 Экспорт транзакций, сверка с платёжками и интеграция с бухгалтерией.
+💳 **Биллинг и настройки**
+- ⚙️ **Управление ценами** без перезапуска бота
+- 🔘 **Управление пакетами трафика** (включение/отключение)
+- 🧪 Тестовые платежи для каждого провайдера
+- 🪝 Управление вебхуками всех платёжных систем
+
+🏗️ **REST API для интеграций**
+- 🔌 **FastAPI Web API** с полной документацией
+- 🔑 Управление API-ключами и токенами
+- 📊 Эндпоинты для подписок, пользователей, транзакций
+- 🎁 API промо-системы и рассылок
+- 📋 API управления контентом и настройками
 
 </td>
 </tr>
@@ -1067,227 +840,50 @@ WEBHOOK_PATH=/webhook
 
 ### 🤖 Автоматизация и экосистема
 
-- 🔄 **Мониторинг Remnawave** — регулярная проверка API, автоматическое включение/выключение техработ и сообщения в топики.
-- 🛡️ **Антифрод** — валидация обязательной подписки на канал, проверка уникальности устройств и логирование действий.
-- 🧠 **Асинхронная архитектура** — aiogram 3, PostgreSQL/SQLite, Redis и очередь задач для стабильной работы под нагрузкой.
-- 🌐 **Мультиязычность** — локализации в `locales/`, быстрый выбор языка пользователем, готовность к расширению.
-- 📦 **Интеграция с Remnawave API** — автоматическое создание пользователей, управление сквадами и синхронизация подписок.
-- 🧾 **История операций** — хранение транзакций, уведомлений, рассылок, кампаний и бекапов для аудита.
+- 🔄 **Мониторинг Remnawave** - регулярная проверка API, автоматическое включение/выключение техработ
+- 🔄 **Автосинхронизация серверов** - фоновая синхронизация по расписанию
+- 🛒 **Умная корзина** - сохранение параметров подписки в Redis при недостатке баланса
+- 🛡️ **Антифрод** - валидация подписки на канал
+- 🚫 **Защита от блокировок** - автоблокировка подозрительных никнеймов и имитации фишинг аккаунтов
+- 🧠 **Асинхронная архитектура** - aiogram 3, PostgreSQL/SQLite, Redis и очереди задач
+- 🌐 **Мультиязычность** - локализации RU/EN, быстрый выбор языка
+- 📦 **Интеграция с Remnawave API** - автоматическое создание пользователей и синхронизация
+- 🔄 **Миграция сквадов** - массовый перенос пользователей между серверами
+- 🧾 **История операций** - хранение всех транзакций и действий для аудита
 
-### 🌐 Веб-API, мини-приложение и интеграции
+### 🌐 Веб-API и мини-приложение
 
-- ⚙️ **FastAPI Web API** (`app/webapi`) с эндпоинтами для управления токенами, конфигурациями, рассылками, кампаниями, промогруппами, статистикой, подписками, транзакциями, тикетами и бекапами.
-- 🔑 **Управление API-ключами** — выпуск, отзыв, реактивация и аудит токенов прямо из админки.
-- 🛡️ **Гибкая авторизация** — API-key, Bearer, Basic Auth и cookie eGames для совместимости с внешними панелями.
-- 🛰️ **Mini App** — статический фронтенд в `miniapp/` и proxied эндпоинты `/miniapp/*` для отображения статуса подписки внутри Telegram.
-- 🧭 **App Config** — централизованная раздача ссылок на клиенты и инструкции (`app-config.json`, `miniapp/app-config.json`).
-- 🪝 **Платёжные вебхуки** — встроенные Flask-серверы для Tribute, YooKassa, CryptoBot, MulenPay и PayPalych (Pal24) с health-check и логированием.
-- 📡 **Мониторинг серверов** — REST-эндпоинты для просмотра нод Remnawave, статистики нагрузки и управления сквадами из внешних систем.
+- ⚙️ **FastAPI Web API** с эндпоинтами для управления всеми аспектами бота
+- 🔑 **Управление API-ключами** - выпуск, отзыв, реактивация токенов
+- 🛰️ **Mini App** - полноценный личный кабинет внутри Telegram
+- 💳 **Интегрированные платежи** в Mini App (Stars, Pal24, YooKassa, WATA)
+- 🧭 **App Config** - централизованная раздача ссылок на клиенты
+- 🪝 **Платёжные вебхуки** - встроенные серверы для всех платёжных систем
+- 📡 **Мониторинг серверов** - REST-эндпоинты для просмотра нод и статистики
 
-### 🧭 Навигация по проекту
+## 🚀 Производительность
 
-- `app/bot.py` — точка входа бота и регистрация middlewares/handlers.
-- `app/handlers/` — сценарии общения (пользовательские и административные).
-- `app/services/` — бизнес-логика: подписки, платежи, мониторинг, бекапы, кампании, версия.
-- `app/database/` — модели SQLAlchemy, CRUD и миграции Alembic.
-- `app/localization/` и `locales/` — тексты интерфейса и переводов.
-- `migrations/` — текущие миграции БД для PostgreSQL.
-
-## Локализации
-
-- Каталог `locales/` содержит файлы локализаций в формате `.yml` или `.json` (например, `ru.yml`, `en.yml`). Эти файлы можно редактировать напрямую на рабочем сервере.
-- Структура YAML/JSON повторяет иерархию ключей, объявленных в `app/localization/texts.py`. Например, блок `MENU:` и пара `BALANCE: "Баланс"` соответствуют ключу `MENU_BALANCE`. При добавлении новых ключей сохраняйте верхний регистр и единый стиль именования.
-- Порядок внесения правок:
-  1. Измените нужные значения в файле `locales/<язык>.yml` (или `.json`).
-  2. Перезапустите бота/контейнер (`docker compose restart bot` в Docker) — при старте приложение перечитает локали.
-- Путь до пользовательских локалей задаётся переменной `LOCALES_PATH` (`./locales` по умолчанию; в Docker каталог монтируется в `/app/locales`, см. `docker-compose.yml`).
-- При первом запуске, если каталог пуст, бот копирует шаблоны `ru.yml` и `en.yml` — благодаря этому у владельца сразу есть заготовки для редактирования.
+| Пользователей | Память | CPU | Диск | Описание |
+|---------------|--------|-----|------|----------|
+| **1,000** | 512MB | 1 vCPU | 10GB | ✅ Стартап |
+| **10,000** | 2GB | 2 vCPU | 50GB | ✅ Малый бизнес |
+| **50,000** | 4GB | 4 vCPU | 100GB | ✅ Средний бизнес |
+| **100,000+** | 8GB+ | 8+ vCPU | 200GB+ | 🚀 Enterprise |
 
 ---
 
+## 🏗️ Технологический стек
 
-## 💻 Локальная разработка
+### 💪 Современные технологии
 
-### 🚀 Быстрый запуск для разработки
-
-Для локальной разработки используйте специальный Docker Compose файл:
-
-```bash
-# 1. Клонируйте репозиторий
-git clone https://github.com/fr1ngg/remnawave-bedolaga-telegram-bot.git
-cd remnawave-bedolaga-telegram-bot
-
-# 2. Настройте окружение
-cp env.example .env
-# Отредактируйте .env файл с вашими настройками
-
-# 3. Запустите локально (Windows PowerShell)
-.\start-local.ps1
-
-# Или вручную
-docker-compose -f docker-compose.local.yml up --build
-```
-
-### 📁 Файлы для локальной разработки
-
-- `docker-compose.local.yml` - Docker Compose для локальной разработки
-- `env.example` - Пример конфигурации
-- `start-local.ps1` - Скрипт быстрого запуска (Windows)
-- `start-local.sh` - Скрипт быстрого запуска (Linux/macOS)
-- `stop-local.ps1` - Скрипт остановки (Windows)
-- `README_LOCAL.md` - Подробная документация по локальной разработке
-
-### 🔧 Особенности локальной разработки
-
-- **Локальная сборка** - образ собирается из исходного кода
-- **Горячая перезагрузка** - изменения в коде автоматически применяются
-- **Доступ к БД** - PostgreSQL доступен на localhost:5432
-- **Доступ к Redis** - Redis доступен на localhost:6379
-- **Логи в реальном времени** - все логи выводятся в консоль
-- **Отладка** - полный доступ к контейнерам для отладки
-
-### 📊 Мониторинг разработки
-
-```bash
-# Просмотр логов
-docker-compose -f docker-compose.local.yml logs -f bot
-
-# Проверка статуса
-docker-compose -f docker-compose.local.yml ps
-
-# Health check
-curl http://localhost:8081/health
-
-# Остановка
-docker-compose -f docker-compose.local.yml down
-```
-
----
-
-## 🐳 Docker развертывание
-
-### 📄 docker-compose.yml
-
-```yaml
-services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: remnawave_bot_db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-remnawave_bot}
-      POSTGRES_USER: ${POSTGRES_USER:-remnawave_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_123}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - bot_network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-remnawave_user} -d ${POSTGRES_DB:-remnawave_bot}"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
-  redis:
-    image: redis:7-alpine
-    container_name: remnawave_bot_redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    volumes:
-      - redis_data:/data
-    networks:
-      - bot_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  bot:
-    image: fr1ngg/remnawave-bedolaga-telegram-bot:latest
-    container_name: remnawave_bot
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      DOCKER_ENV: "true"
-      DATABASE_MODE: "auto"
-      POSTGRES_HOST: "postgres"
-      POSTGRES_PORT: "5432"
-      POSTGRES_DB: "${POSTGRES_DB:-remnawave_bot}"
-      POSTGRES_USER: "${POSTGRES_USER:-remnawave_user}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-secure_password_123}"
-      
-      REDIS_URL: "redis://redis:6379/0"
-      
-      TZ: "Europe/Moscow"
-    volumes:
-      # Логи
-      - ./logs:/app/logs:rw
-      # Данные приложения (для SQLite в случае переключения)
-      - ./data:/app/data:rw
-      # Конфигурация приложения
-      # - ./app-config.json:/app/app-config.json:ro
-      # Timezone
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-      # Логотип для сообщений
-      - ./vpn_logo.png:/app/vpn_logo.png:ro
-    ports:
-      - "${TRIBUTE_WEBHOOK_PORT:-8081}:8081"
-      - "${YOOKASSA_WEBHOOK_PORT:-8082}:8082"
-    networks:
-      - bot_network
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import requests; requests.get(\"http://localhost:8081/health\", timeout=5)' || exit 1"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
-
-networks:
-  bot_network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-          gateway: 172.20.0.1
-```
-
-### 🚀 Команды управления
-
-```bash
-# Быстрый старт
-docker compose up -d
-
-# Статус сервисов
-docker compose ps
-
-# Логи
-docker compose logs -f
-
-# Перезапуск
-docker compose restart
-
-# Остановка
-docker compose down
-
-# Полная очистка
-docker compose down -v --remove-orphans
-```
+- **🐍 Python 3.13+** с AsyncIO - максимальная производительность
+- **🗄️ PostgreSQL 15+** - надежное хранение данных
+- **⚡ Redis** - быстрое кеширование и сессии (для корзины)
+- **🐳 Docker** - простое развертывание в любой среде
+- **🔗 SQLAlchemy ORM** - безопасная работа с БД
+- **🚀 aiogram 3** - современная Telegram Bot API
+- **⚡ FastAPI** - высокопроизводительный REST API
+- **📦 Pydantic v2** - валидация данных
 
 ---
 
@@ -1308,10 +904,16 @@ docker compose down -v --remove-orphans
    - **Telegram Stars**: Работает автоматически
    - **Tribute**: Настрой webhook на `https://your-domain.com/tribute-webhook`
    - **YooKassa**: Настрой webhook на `https://your-domain.com/yookassa-webhook`
+   - **CryptoBot**: Настрой webhook на `https://your-domain.com/cryptobot-webhook`
+   - **MulenPay**: Настрой webhook на `https://your-domain.com/mulenpay-webhook`
    - **PayPalych**: Укажи Result URL `https://your-domain.com/pal24-webhook` в кабинете Pal24
+   - **WATA**: Настрой webhook на `https://your-domain.com/wata-webhook`
 
+4. **🔄 Настройка автосинхронизации** (опционально)
+   - В `.env` установи `REMNAWAVE_AUTO_SYNC_ENABLED=true`
+   - Укажи время синхронизации в `REMNAWAVE_AUTO_SYNC_TIMES=03:00,15:00`
 
-### 🛠️ Настройка Уведомлений в топик группы
+### 🛠️ Настройка уведомлений в топик группы
 
 #### 1. Переменные окружения
 
@@ -1322,14 +924,13 @@ docker compose down -v --remove-orphans
 ADMIN_NOTIFICATIONS_ENABLED=true
 ADMIN_NOTIFICATIONS_CHAT_ID=-1001234567890  # ID канала/группы
 ADMIN_NOTIFICATIONS_TOPIC_ID=123             # ID топика (опционально)
+ADMIN_NOTIFICATIONS_TICKET_TOPIC_ID=126      # ID топика для тикетов
 ```
 
 #### 2. Создание канала
 
 1. **Создайте приватный канал** или группу для уведомлений
-2. **Добавьте бота** как администратора с правами:
-   - Отправка сообщений
-   - Использование встроенного режима (если нужно)
+2. **Добавьте бота** как администратора с правами отправки сообщений
 3. **Получите ID канала**:
    - Отправьте любое сообщение в канал
    - Перешлите его боту @userinfobot
@@ -1340,34 +941,8 @@ ADMIN_NOTIFICATIONS_TOPIC_ID=123             # ID топика (опционал
 Если используете супергруппу с топиками:
 
 1. **Включите топики** в настройках группы
-2. **Создайте топик** для уведомлений (например, "Уведомления")
-3. **Получите ID топика**:
-   - Откройте топик в веб-версии Telegram
-   - Скопируйте число после последнего `/` в URL
-   - Или используйте бота для получения message_thread_id
----
-
-## 🚀 Производительность
-
-| Пользователей | Память | CPU | Диск | Описание |
-|---------------|--------|-----|------|----------|
-| **1,000** | 512MB | 1 vCPU | 10GB | ✅ Стартап |
-| **10,000** | 2GB | 2 vCPU | 50GB | ✅ Малый бизнес |
-| **50,000** | 4GB | 4 vCPU | 100GB | ✅ Средний бизнес |
-| **100,000+** | 8GB+ | 8+ vCPU | 200GB+ | 🚀 Enterprise |
-
----
-
-## 🏗️ Архитектура
-
-### 💪 Современный стек технологий
-
-- **🐍 Python 3.11+** с AsyncIO - максимальная производительность
-- **🗄️ PostgreSQL 15+** - надежное хранение данных
-- **⚡ Redis** - быстрое кеширование и сессии
-- **🐳 Docker** - простое развертывание в любой среде
-- **🔗 SQLAlchemy ORM** - безопасная работа с БД
-- **🚀 aiogram 3** - современная Telegram Bot API
+2. **Создайте топики** для уведомлений (например, "Уведомления", "Тикеты")
+3. **Получите ID топика** из URL веб-версии Telegram или используйте бота
 
 ---
 
@@ -1375,6 +950,8 @@ ADMIN_NOTIFICATIONS_TOPIC_ID=123             # ID топика (опционал
 
 ### 🏥 Health Checks
 - **Основной**: `http://localhost:8081/health`
+- **YooKassa**: `http://localhost:8082/health`
+- **Pal24**: `http://localhost:8084/health`
 
 ### 🔧 Полезные команды
 ```bash
@@ -1393,10 +970,13 @@ docker compose exec postgres pg_isready -U remnawave_user
 # Подключение к базе данных
 docker compose exec postgres psql -U remnawave_user -d remnawave_bot
 
+# Проверка Redis
+docker compose exec redis redis-cli ping
+
 # Проверка использования ресурсов
 docker stats
 
-# Очистка логов Docker
+# Очистка Docker
 docker system prune
 ```
 
@@ -1406,118 +986,10 @@ docker system prune
 |----------|-------------|---------|
 | **Бот не отвечает** | `docker logs remnawave_bot` | Проверь `BOT_TOKEN` и интернет |
 | **Ошибки БД** | `docker compose ps postgres` | Проверь статус PostgreSQL |
-| **Webhook не работает** | Проверь порты 8081/8082/8084 | Настрой прокси-сервер правильно |
-| **API недоступен** | Проверь логи бота | Проверь `REMNAWAVE_API_URL` и ключ |
-| **Мониторинг не работает** | Админ панель → Мониторинг | Проверь `MAINTENANCE_AUTO_ENABLE` |
+| **Webhook не работает** | Проверь порты 8081/8082/8084 | Настрой прокси-сервер |
+| **API недоступен** | Проверь логи бота | Проверь `REMNAWAVE_API_URL` |
+| **Корзина не сохраняется** | `docker compose ps redis` | Проверь статус Redis |
 | **Платежи не проходят** | Проверь webhook'и | Настрой URL в платежных системах |
-
-### 🔧 Настройка webhook'ов
-
-#### 🌐 Через Nginx
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    
-    # Для Tribute
-    location /tribute-webhook {
-        proxy_pass http://127.0.0.1:8081;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    
-    # CryptoBot webhook endpoint
-    location /cryptobot-webhook {
-        proxy_pass http://127.0.0.1:8081;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    
-    # MulenPay webhook endpoint
-    location /mulenpay-webhook {
-        proxy_pass http://127.0.0.1:8081;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # PayPalych webhook endpoint
-    location /pal24-webhook {
-        proxy_pass http://127.0.0.1:8084;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Для YooKassa
-    location /yookassa-webhook {
-        proxy_pass http://127.0.0.1:8082;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    
-    # Health check
-    location /health {
-        proxy_pass http://127.0.0.1:8081/health;
-    }
-}
-```
-
-#### ⚡ Через Caddy
-```caddyfile
-your-domain.com {
-    handle /tribute-webhook* {
-        reverse_proxy localhost:8081
-    }
-    
-    handle /cryptobot-webhook* {
-        reverse_proxy localhost:8081
-    }
-    
-    handle /mulenpay-webhook* {
-        reverse_proxy localhost:8081
-    }
-
-    handle /pal24-webhook* {
-        reverse_proxy localhost:8084
-    }
-
-    handle /yookassa-webhook* {
-        reverse_proxy localhost:8082
-    }
-
-    handle /health {
-        reverse_proxy localhost:8081/health
-    }
-}
-```
-
-#### 🧪 Проверка PayPalych postback
-
-```bash
-# Генерируем подпись: md5("100.00:test-order-1:${PAL24_SIGNATURE_TOKEN}")
-SIGNATURE=$(python - <<'PY'
-import hashlib, os
-token = os.environ.get('PAL24_SIGNATURE_TOKEN', 'test_token')
-payload = f"100.00:test-order-1:{token}".encode()
-print(hashlib.md5(payload).hexdigest().upper())
-PY
-)
-
-curl -X POST https://your-domain.com/pal24-webhook \
-  -H "Content-Type: application/json" \
-  -d '{"InvId": "test-order-1", "OutSum": "100.00", "Status": "SUCCESS", "SignatureValue": "'$SIGNATURE'"}'
-```
-
-Ответ `{"status": "ok"}` подтверждает корректную обработку вебхука.
 
 ---
 
@@ -1526,22 +998,28 @@ curl -X POST https://your-domain.com/pal24-webhook \
 ### 👤 **Для пользователей**
 
 1. **🚀 Старт** → Найди бота и нажми `/start`
-2. **📋 Правила** → Прими правила сервиса 
-3. **💰 Баланс** → "💰 Баланс" → пополни через Stars/Tribute/YooKassa
-4. **🛒 Подписка** → "🛒 Купить подписку" → выбор тарифа → оплата
-5. **📱 Управление** → "📋 Мои подписки" → конфигурация → получение ссылки
-6. **👥 Партнерка** → "👥 Партнерка" → поделись ссылкой
+2. **🌐 Язык** → Выбери язык интерфейса (RU/EN)
+3. **📋 Правила** → Прими правила сервиса
+4. **💰 Баланс** → Пополни через любой удобный способ
+5. **🛒 Подписка** → Выбери тариф и параметры
+6. **📱 Подключение** → Получи ссылку или конфиг
+7. **👥 Партнерка** → Поделись ссылкой и получай бонусы
 
 ### ⚙️ **Для администраторов**
 
 Доступ через **"⚙️ Админ панель"**:
 
 - **📦 Подписки** → настройка серверов, цен, синхронизация
-- **👥 Пользователи** → поиск, редактирование, блокировка, управление устройствами
-- **🎁 Промокоды** → создание бонусов, статистика применения
-- **📨 Рассылки** → уведомления по сегментам с HTML разметкой
-- **🖥 Remnawave** → мониторинг панели, синхронизация, диагностика
-- **📊 Статистика** → детальная аналитика бизнеса и финансов
+- **👥 Пользователи** → поиск, редактирование, блокировка
+- **💎 Промо-группы** → управление скидочными группами и уровнями
+- **🎁 Промокоды** → создание и статистика
+- **🎯 Промо-предложения** → персональные акции и скидки
+- **📨 Рассылки** → уведомления по сегментам
+- **📣 Кампании** → управление рекламными кампаниями
+- **🎫 Тикеты** → система поддержки
+- **📄 Контент** → политика, оферта, FAQ
+- **🖥 Remnawave** → мониторинг, синхронизация
+- **📊 Статистика** → детальная аналитика
 
 ---
 
@@ -1549,7 +1027,7 @@ curl -X POST https://your-domain.com/pal24-webhook \
 
 ### 🔐 Защита панели Remnawave
 
-Бот поддерживает интеграцию с системой защиты панели через куки-аутентификацию:
+Бот поддерживает интеграцию с системой защиты панели:
 
 ```env
 # Для защищенных панелей
@@ -1559,8 +1037,6 @@ REMNAWAVE_SECRET_KEY=secret_name:secret_value
 REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 ```
 
-Совместимость с [remnawave-reverse-proxy](https://github.com/eGamesAPI/remnawave-reverse-proxy) для скрытия панели от несанкционированного доступа.
-
 ### 🔒 Дополнительные меры безопасности
 
 - **Валидация всех входящих данных**
@@ -1568,6 +1044,8 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 - **Шифрование чувствительных данных**
 - **Автоматическое управление сессиями**
 - **Мониторинг подозрительной активности**
+- **Защита от запрещенных никнеймов** - автоблокировка имитации официальных аккаунтов
+- **Защита от обфусцированных доменов** в отображаемом имени
 
 ---
 
@@ -1578,6 +1056,7 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 - ⭐ **Ставь звезды** проекту - это мотивирует разработку!
 - 📢 **Рассказывай друзьям** о проекте
 - 💝 **[Поддержи разработку](https://t.me/tribute/app?startapp=duUO)** - помоги проекту расти
+- 🔧 **Отправляй Pull Requests** - внеси свой вклад в код
 
 ---
 
@@ -1586,7 +1065,7 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 ### 📞 **Контакты**
 
 - **💬 Telegram:** [@fringg](https://t.me/fringg) - вопросы по разработке (только по делу!)
-- **💬 Telegram Group:** [Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi) - общение, вопросы, предложения, баги
+- **💬 Telegram Group:** [Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi) - общение, вопросы, предложения
 - **🐛 Issues:** [GitHub Issues](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/issues) - баги и предложения
 
 ### 📚 **Полезные ресурсы**
@@ -1649,7 +1128,7 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 <td>5</td>
 <td><strong>@Legacyyy777</strong></td>
 <td>₽2,900</td>
-<td>За ценные предложения по улучшению</td>
+<td>За ценные предложения и UX улучшения</td>
 </tr>
 
 <tr>
@@ -1659,107 +1138,17 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 <td>За международную поддержку</td>
 </tr>
 
-<tr>
-<td>7</td>
-<td><strong>@bolgov0zero</strong></td>
-<td>₽2,000</td>
-<td>За поддержку и доверие</td>
-</tr>
-
-<tr>
-<td>8</td>
-<td><strong>@i_burjuy</strong></td>
-<td>₽1,300</td>
-<td>За активное участие в проекте</td>
-</tr>
-
-<tr>
-<td>9</td>
-<td><strong>@kr33njee</strong></td>
-<td>₽1,550</td>
-<td>За поддержку и доверие</td>
-</tr>
-
-<tr>
-<td>10</td>
-<td><strong>@Nav1_0</strong></td>
-<td>₽2,000</td>
-<td>За поддержку и доверие</td>
-</tr>
-
-<tr>
-<td>11</td>
-<td><strong>@vitos_7771997</strong></td>
-<td>₽1,500</td>
-<td>За поддержку и доверие</td>
-</tr>
-
-<tr>
-<td>12</td>
-<td><strong>@haxonate</strong></td>
-<td>₽1,500</td>
-<td>За поддержку и доверие</td>
-</tr>
-
-<tr>
-<td>13</td>
-<td><strong>@fso404</strong></td>
-<td>₽1,000</td>
-<td>За поддержку и доверие</td>
-</tr>
-
-<tr>
-<td>14</td>
-<td><strong>@edward_forix</strong></td>
-<td>₽1,000</td>
-<td>За поддержку и доверие</td>
-</tr>
-
-<tr>
-<td>15</td>
-<td><strong>@Илья (@ispanec_nn)</strong></td>
-<td>$30</td>
-<td>За активное тестирование и фидбек</td>
-</tr>
-
-<tr>
-<td>16</td>
-<td><strong>@DonMatteoRU</strong></td>
-<td>₽500</td>
-<td>За участие в развитии</td>
-</tr>
-
-<tr>
-<td>17</td>
-<td><strong>@pedzeo</strong></td>
-<td>₽500</td>
-<td>За участие в развитии</td>
-</tr>
-
-<tr>
-<td>18</td>
-<td><strong>@suzumuj</strong></td>
-<td>₽400</td>
-<td>За участие в развитии</td>
-</tr>
-
-<tr>
-<td>19</td>
-<td><strong>@andrey_93rus</strong></td>
-<td>₽300</td>
-<td>За участие в развитии</td>
-</tr>
-
-<tr>
-<td>20</td>
-<td><strong>@PhiLin58</strong></td>
-<td>₽300</td>
-<td>За участие в развитии</td>
-</tr>
-
 </table>
 
-### 🌟 **Особая благодарность**
+### 🌟 **Особая благодарность контрибьюторам**
+
+- **@yazhog** - легенда проекта! За крутые PR'ы, рефакторинг, автобекапы и навигацию
+- **@Gy9vin** - за модульную архитектуру, быстрое пополнение, админ-функции и тестирование
+- **@Legacyyy777** - за улучшения рассылки, PayPalych, MulenPay и UX фиксы
+- **@SantaSpeen** - за актуализацию app-config.json и кучу рекомендаций
+- **@PEDZEO** - за SLA поддержки и управление модераторами
+
+### 🎉 **Сообщество**
 
 - **Remnawave Team** - за отличную панель и стабильный API
 - **Сообщество Bedolaga** - за активное тестирование и обратную связь
@@ -1771,10 +1160,24 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 ### 🚧 **В разработке**
 
-- 🌎 Вебпанель
-- 🌍 **Мультиязычность** - полная поддержка английского языка
+- 🌎 **Веб-панель** - полноценная административная панель
 - 📊 **Расширенная аналитика** - больше метрик и графиков  
 - 🔄 **API для интеграций** - подключение внешних сервисов
+- 🎨 **Темы оформления** - кастомизация интерфейса Mini App
+
+### ✅ **Недавно добавлено**
+
+- 💳 **WATA** - оплата банковскими картами
+- 🔄 **Автосинхронизация Remnawave** - фоновая синхронизация серверов
+- 🛒 **Умная корзина** - сохранение параметров подписки
+- 🏗️ **Модульная архитектура** - подписок и платежей
+- 🖥️ **Полноценный личный кабинет** в Mini App
+- 💎 **Промо-группы и скидочные уровни** - система лояльности
+- 🎁 **Персональные промо-предложения** - таргетированные акции
+- 📄 **Система управления контентом** - политика, оферта, FAQ
+- 🎫 **Система тикетов** - поддержка пользователей
+- 📊 **Мониторинг серверов** - интеграция с XrayChecker
+- 🛡️ **Защита от блокировок** - антифрод система
 
 ---
 
@@ -1823,6 +1226,299 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 ---
 
-**Made with ❤️ by [@fringg](https://t.me/fringg)**
+## 🔄 Быстрые команды
+
+### 📦 Установка и запуск
+```bash
+# Автоустановка (рекомендуется)
+git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot.git
+cd remnawave-bedolaga-telegram-bot
+chmod +x install_bot.sh
+./install_bot.sh
+
+# Ручной запуск
+docker compose up -d
+docker compose logs -f
+```
+
+### 🔄 Обновление
+```bash
+# Через install_bot.sh (с автобэкапом)
+./install_bot.sh
+# Выбрать: 4. 🔄 Обновить проект из Git
+
+# Ручное обновление
+git pull
+docker compose down
+docker compose pull
+docker compose up -d
+```
+
+### 💾 Бэкап и восстановление
+```bash
+# Создать бэкап через install_bot.sh
+./install_bot.sh
+# Выбрать: 5. 💾 Создать резервную копию
+
+# Восстановить бэкап
+./install_bot.sh
+# Выбрать: 6. 📦 Восстановить из бэкапа
+```
+
+### 📊 Мониторинг
+```bash
+# Статус сервисов
+docker compose ps
+
+# Логи бота
+docker compose logs -f bot
+
+# Проверка здоровья
+curl http://localhost:8081/health
+
+# Использование ресурсов
+docker stats
+```
+
+---
+
+## 📈 Статистика проекта
+
+<div align="center">
+
+![GitHub stars](https://img.shields.io/github/stars/Fr1ngg/remnawave-bedolaga-telegram-bot?style=social)
+![GitHub forks](https://img.shields.io/github/forks/Fr1ngg/remnawave-bedolaga-telegram-bot?style=social)
+![GitHub watchers](https://img.shields.io/github/watchers/Fr1ngg/remnawave-bedolaga-telegram-bot?style=social)
+
+![GitHub last commit](https://img.shields.io/github/last-commit/Fr1ngg/remnawave-bedolaga-telegram-bot)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/Fr1ngg/remnawave-bedolaga-telegram-bot)
+![GitHub contributors](https://img.shields.io/github/contributors/Fr1ngg/remnawave-bedolaga-telegram-bot)
+
+![GitHub issues](https://img.shields.io/github/issues/Fr1ngg/remnawave-bedolaga-telegram-bot)
+![GitHub pull requests](https://img.shields.io/github/issues-pr/Fr1ngg/remnawave-bedolaga-telegram-bot)
+![GitHub closed issues](https://img.shields.io/github/issues-closed/Fr1ngg/remnawave-bedolaga-telegram-bot)
+
+</div>
+
+---
+
+## 🎯 Ключевые особенности в цифрах
+
+<div align="center">
+
+| Метрика | Значение |
+|---------|----------|
+| 💳 **Платёжных систем** | 7 (Stars, YooKassa, Tribute, CryptoBot, MulenPay, Pal24, WATA) |
+| 🌍 **Языков интерфейса** | 2 (RU, EN) с возможностью расширения |
+| 📊 **Периодов подписки** | 6 (от 14 дней до года) |
+| 🎁 **Типов промо-акций** | 5 (коды, группы, предложения, скидки, кампании) |
+| 🔌 **REST API эндпоинтов** | 50+ для полного управления |
+| 📱 **Режимов работы** | 2 (классический бот + MiniApp focus) |
+| 🛡️ **Методов авторизации** | 4 (API Key, Bearer, Basic Auth, eGames) |
+| 🗄️ **Способов хранения** | 2 (PostgreSQL, SQLite) с автовыбором |
+
+</div>
+
+---
+
+## 🔥 Почему выбирают Bedolaga?
+
+### 💼 **Для бизнеса**
+
+✅ **Быстрый запуск** - от установки до первых продаж за 10 минут  
+✅ **Полная автоматизация** - бот работает 24/7 без вашего участия  
+✅ **Прозрачная аналитика** - всегда знаете, сколько зарабатываете  
+✅ **Гибкие тарифы** - настройте цены под свою аудиторию  
+✅ **Система лояльности** - удерживайте клиентов промо-группами и скидками  
+✅ **Масштабируемость** - от 10 до 100,000+ пользователей  
+
+### 🛠️ **Для разработчиков**
+
+✅ **Современный стек** - Python 3.13, AsyncIO, PostgreSQL, Redis  
+✅ **Модульная архитектура** - легко расширять и модифицировать  
+✅ **Полное API** - интегрируйте с любыми сервисами  
+✅ **Docker-ready** - разворачивается за минуты  
+✅ **Подробная документация** - все описано и понятно  
+✅ **Активное сообщество** - помощь в Telegram чате  
+
+### 👥 **Для пользователей**
+
+✅ **Простой интерфейс** - интуитивно понятное меню на родном языке  
+✅ **Много способов оплаты** - выбирайте удобный вариант  
+✅ **Быстрая поддержка** - система тикетов с приоритетами  
+✅ **Прозрачность** - всегда видите, за что платите  
+✅ **Бонусы и скидки** - реферальная программа и промо-акции  
+✅ **Удобное управление** - все в одном месте, в Telegram  
+
+---
+
+## 💡 Советы по оптимизации
+
+### ⚡ Повышение производительности
+
+1. **Используйте Redis** для корзины и кэширования
+2. **Настройте автосинхронизацию** в ночное время
+3. **Включите автобэкапы** с отправкой в Telegram
+4. **Оптимизируйте логирование** - LOG_LEVEL=INFO для продакшена
+5. **Используйте PostgreSQL** вместо SQLite для больших баз
+
+### 💰 Увеличение продаж
+
+1. **Включите реферальную программу** - пользователи приведут друзей
+2. **Настройте промо-группы** - дайте скидки постоянным клиентам
+3. **Используйте персональные акции** - реактивируйте неактивных
+4. **Запускайте кампании** - привлекайте новых через deeplink
+5. **Добавьте быстрое пополнение** - упростите процесс оплаты
+
+### 🎯 Улучшение UX
+
+1. **Включите Mini App режим** - современный интерфейс
+2. **Настройте корзину** - пользователи не потеряют выбор
+3. **Добавьте FAQ** - ответьте на частые вопросы заранее
+4. **Настройте быстрые ответы** - ускорьте поддержку
+5. **Используйте уведомления** - держите пользователей в курсе
+
+---
+
+## 🔐 Безопасность и соответствие
+
+### 🛡️ Защита данных
+
+- ✅ Шифрование чувствительных данных в БД
+- ✅ Безопасное хранение токенов и ключей
+- ✅ Валидация всех входящих данных
+- ✅ Защита от SQL-инъекций через ORM
+- ✅ Rate limiting для предотвращения злоупотреблений
+- ✅ Аудит всех административных действий
+
+### 📋 Юридическое соответствие
+
+- ✅ Политика конфиденциальности (настраивается)
+- ✅ Публичная оферта (настраивается)
+- ✅ Правила использования (настраивается)
+- ✅ История транзакций для аудита
+- ✅ Соответствие требованиям платёжных систем
+- ✅ GDPR-ready (возможность удаления данных)
+
+---
+
+## 📞 Нужна помощь?
+
+### 🆘 Частые вопросы
+
+<details>
+<summary><b>Как начать работу?</b></summary>
+
+1. Скачайте репозиторий
+2. Запустите `install_bot.sh`
+3. Следуйте инструкциям установщика
+4. Синхронизируйте серверы в админке
+5. Готово! 🎉
+
+</details>
+
+<details>
+<summary><b>Какие требования к серверу?</b></summary>
+
+Минимальные:
+- 1 vCPU
+- 512 MB RAM
+- 10 GB диск
+- Ubuntu 20.04+ или Debian 11+
+- Docker и Docker Compose
+
+Рекомендуемые:
+- 2+ vCPU
+- 2+ GB RAM
+- 50+ GB SSD
+- Стабильное интернет-соединение
+
+</details>
+
+<details>
+<summary><b>Как настроить платёжную систему?</b></summary>
+
+1. Получите ключи API в личном кабинете платёжной системы
+2. Добавьте их в `.env` файл
+3. Настройте webhook URL в кабинете провайдера
+4. Протестируйте через админ-панель бота
+5. Включите метод для пользователей
+
+Подробнее: [docs/payment-setup.md](docs/payment-setup.md)
+
+</details>
+
+<details>
+<summary><b>Как обновить бота?</b></summary>
+
+**Через install_bot.sh (рекомендуется):**
+```bash
+./install_bot.sh
+# Выбрать: 4. 🔄 Обновить проект из Git
+```
+
+**Вручную:**
+```bash
+git pull
+docker compose down
+docker compose pull
+docker compose up -d
+```
+
+Скрипт автоматически создаст бэкап перед обновлением!
+
+</details>
+
+<details>
+<summary><b>Как сделать бэкап?</b></summary>
+
+**Автоматически:**
+- Настройте в `.env`: `BACKUP_AUTO_ENABLED=true`
+- Бэкапы создаются по расписанию
+
+**Вручную через install_bot.sh:**
+```bash
+./install_bot.sh
+# Выбрать: 5. 💾 Создать резервную копию
+```
+
+**Через админ-панель:**
+- Админ панель → Настройки → Бэкапы → Создать
+
+</details>
+
+<details>
+<summary><b>Бот не отвечает, что делать?</b></summary>
+
+1. Проверьте статус: `docker compose ps`
+2. Посмотрите логи: `docker compose logs -f bot`
+3. Проверьте BOT_TOKEN в `.env`
+4. Убедитесь, что все контейнеры запущены
+5. Попробуйте перезапустить: `docker compose restart`
+
+Если не помогло - пишите в [чат поддержки](https://t.me/+wTdMtSWq8YdmZmVi)
+
+</details>
+
+### 💬 Куда обратиться?
+
+- 🐛 **Баг?** → [GitHub Issues](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/issues)
+- 💡 **Идея?** → [GitHub Discussions](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/discussions)
+- 🆘 **Вопрос?** → [Bedolaga Chat](https://t.me/+wTdMtSWq8YdmZmVi)
+- 📧 **Личное?** → [@fringg](https://t.me/fringg)
+
+---
+
+**Made with ❤️ by [@fringg](https://t.me/fringg) and amazing [contributors](https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot/graphs/contributors)**
+
+**Версия:** v2.5.2 | **Последнее обновление:** 2024
+
+<div align="center">
+
+### ⭐ Не забудь поставить звезду проекту!
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Fr1ngg/remnawave-bedolaga-telegram-bot&type=Date)](https://star-history.com/#Fr1ngg/remnawave-bedolaga-telegram-bot&Date)
+
+</div>
 
 </div>
