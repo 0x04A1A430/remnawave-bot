@@ -101,7 +101,7 @@ async def test_create_pal24_payment_success(monkeypatch: pytest.MonkeyPatch) -> 
     assert result is not None
     assert result["local_payment_id"] == 321
     assert result["bill_id"] == "BILL-1"
-    assert result["payment_method"] == "CARD"
+    assert result["payment_method"] == "card"
     assert result["link_url"] == "https://pal24/sbp"
     assert result["card_url"] == "https://pal24/card"
     assert stub.calls and stub.calls[0]["amount_kopeks"] == 50000

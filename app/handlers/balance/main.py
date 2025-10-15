@@ -652,6 +652,11 @@ def register_balance_handlers(dp: Dispatcher):
         start_pal24_payment,
         F.data == "topup_pal24"
     )
+    from .pal24 import handle_pal24_method_selection
+    dp.callback_query.register(
+        handle_pal24_method_selection,
+        F.data.startswith("pal24_method_"),
+    )
 
     from .yookassa import check_yookassa_payment_status
     dp.callback_query.register(

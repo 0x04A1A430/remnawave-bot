@@ -86,8 +86,8 @@ async def test_create_payment_link_pal24_uses_selected_option(monkeypatch):
 
     assert response.payment_url == 'https://card'
     assert response.extra['selected_option'] == 'card'
-    assert response.extra['payment_method'] == 'CARD'
-    assert captured_calls and captured_calls[0]['payment_method'] == 'CARD'
+    assert response.extra['payment_method'] == 'card'
+    assert captured_calls and captured_calls[0]['payment_method'] == 'card'
 
 
 @pytest.mark.anyio("asyncio")
@@ -265,7 +265,7 @@ async def test_resolve_pal24_status_includes_identifiers(monkeypatch):
         transaction_id=777,
         bill_id='BILL99',
         order_id='ORD99',
-        payment_method='SBP',
+        payment_method='sbp',
     )
 
     class StubPal24Service:
@@ -297,7 +297,7 @@ async def test_resolve_pal24_status_includes_identifiers(monkeypatch):
     assert result.extra['local_payment_id'] == 321
     assert result.extra['bill_id'] == 'BILL99'
     assert result.extra['order_id'] == 'ORD99'
-    assert result.extra['payment_method'] == 'SBP'
+    assert result.extra['payment_method'] == 'sbp'
     assert result.extra['payload'] == 'pal24_payload'
     assert result.extra['started_at'] == '2024-01-01T00:00:00Z'
     assert result.extra['remote_status'] == 'PAID'
