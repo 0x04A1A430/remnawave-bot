@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any, Dict, Optional
+import json
+from typing import Any, Dict, Optional, Union
 
 from app.config import settings
 from app.external.pal24_client import Pal24Client, Pal24APIError
@@ -35,7 +36,7 @@ class Pal24Service:
         order_id: str,
         description: str,
         ttl_seconds: Optional[int] = None,
-        custom_payload: Optional[Dict[str, Any]] = None,
+        custom_payload: Optional[Union[Dict[str, Any], str]] = None,
         payer_email: Optional[str] = None,
         payment_method: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -43,10 +44,22 @@ class Pal24Service:
             raise Pal24APIError("Pal24 service is not configured")
 
         amount_decimal = Pal24Client.normalize_amount(amount_kopeks)
-        extra_payload: Dict[str, Any] = {
-            "custom": custom_payload or {},
-            "ttl": ttl_seconds,
-        }
+        extra_payload: Dict[str, Any] = {"ttl": ttl_seconds}
+
+        if custom_payload is not None:
+            if isinstance(custom_payload, str):
+                extra_payload["custom"] = custom_payload
+            else:
+                try:
+                    extra_payload["custom"] = json.dumps(
+                        custom_payload,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                except (TypeError, ValueError) as error:
+                    raise Pal24APIError(
+                        "Unable to serialize Pal24 custom payload to JSON"
+                    ) from error
 
         if payer_email:
             extra_payload["payer_email"] = payer_email
