@@ -70,13 +70,15 @@ async def test_create_bill_success(monkeypatch: pytest.MonkeyPatch) -> None:
         ttl_seconds=600,
         custom_payload={"extra": "value"},
         payer_email="user@example.com",
-        payment_method="card",
+        payment_method="BANK_CARD",
     )
 
     assert result["bill_id"] == "BILL42"
     assert client.calls and client.calls[0]["amount"] == Decimal("500.00")
     assert client.calls[0]["shop_id"] == "shop42"
     assert client.calls[0]["description"] == "Пополнение"
+    assert client.calls[0]["custom"] == json.dumps({"extra": "value"}, ensure_ascii=False, separators=(",", ":"))
+    assert client.calls[0]["payment_method"] == "BANK_CARD"
 
 
 @pytest.mark.anyio("asyncio")

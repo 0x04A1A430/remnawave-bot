@@ -535,8 +535,8 @@ class Pal24PaymentMixin:
         """Преобразует нормализованный метод оплаты в значение для Pal24 API."""
 
         api_mapping = {
-            "sbp": "fast_payment",
-            "card": "bank_card",
+            "sbp": "SBP",
+            "card": "BANK_CARD",
         }
 
         return api_mapping.get(normalized_payment_method)
