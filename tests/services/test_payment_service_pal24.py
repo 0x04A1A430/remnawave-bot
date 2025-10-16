@@ -104,8 +104,8 @@ async def test_create_pal24_payment_success(monkeypatch: pytest.MonkeyPatch) -> 
     assert result["payment_method"] == "card"
     assert result["link_url"] == "https://pal24/sbp"
     assert result["card_url"] == "https://pal24/card"
+    assert stub.calls and stub.calls[0]["payment_method"] == "bank_card"
     assert stub.calls and stub.calls[0]["amount_kopeks"] == 50000
-    assert stub.calls[0]["payment_method"] == "bank_card"
     assert "links" in captured_args["metadata"]
 
 
@@ -124,20 +124,21 @@ async def test_create_pal24_payment_default_method(monkeypatch: pytest.MonkeyPat
         fake_create_pal24_payment,
         raising=False,
     )
+
     monkeypatch.setattr(settings, "PAL24_MIN_AMOUNT_KOPEKS", 1000, raising=False)
     monkeypatch.setattr(settings, "PAL24_MAX_AMOUNT_KOPEKS", 1_000_000, raising=False)
 
     result = await service.create_pal24_payment(
         db=db,
         user_id=42,
-        amount_kopeks=150000,
+        amount_kopeks=10_000,
         description="Пополнение",
         language="ru",
     )
 
     assert result is not None
-    assert result["payment_method"] == "sbp"
     assert stub.calls and stub.calls[0]["payment_method"] == "fast_payment"
+    assert result["payment_method"] == "sbp"
 
 
 @pytest.mark.anyio("asyncio")
