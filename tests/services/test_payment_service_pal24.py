@@ -104,7 +104,7 @@ async def test_create_pal24_payment_success(monkeypatch: pytest.MonkeyPatch) -> 
     assert result["payment_method"] == "card"
     assert result["link_url"] == "https://pal24/sbp"
     assert result["card_url"] == "https://pal24/card"
-    assert stub.calls and stub.calls[0]["payment_method"] == "bank_card"
+    assert stub.calls and stub.calls[0]["payment_method"] == "BANK_CARD"
     assert stub.calls and stub.calls[0]["amount_kopeks"] == 50000
     assert "links" in captured_args["metadata"]
 
@@ -137,7 +137,7 @@ async def test_create_pal24_payment_default_method(monkeypatch: pytest.MonkeyPat
     )
 
     assert result is not None
-    assert stub.calls and stub.calls[0]["payment_method"] == "fast_payment"
+    assert stub.calls and stub.calls[0]["payment_method"] == "SBP"
     assert result["payment_method"] == "sbp"
 
 
