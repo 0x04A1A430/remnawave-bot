@@ -64,22 +64,42 @@ class Pal24PaymentMixin:
         }
 
         normalized_payment_method = self._normalize_payment_method(payment_method)
-
         payment_module = import_module("app.services.payment_service")
 
-        try:
-            response = await service.create_bill(
-                amount_kopeks=amount_kopeks,
-                user_id=user_id,
-                order_id=order_id,
-                description=description,
-                ttl_seconds=ttl_seconds,
-                custom_payload=custom_payload,
-                payer_email=payer_email,
-                payment_method=normalized_payment_method,
-            )
-        except Pal24APIError as error:
-            logger.error("Ошибка Pal24 API при создании счета: %s", error)
+        response: Optional[Dict[str, Any]] = None
+        pal24_payment_method: Optional[str] = None
+        last_error: Optional[Exception] = None
+
+        for candidate in self._get_payment_method_candidates(normalized_payment_method):
+            try:
+                response = await service.create_bill(
+                    amount_kopeks=amount_kopeks,
+                    user_id=user_id,
+                    order_id=order_id,
+                    description=description,
+                    ttl_seconds=ttl_seconds,
+                    custom_payload=custom_payload,
+                    payer_email=payer_email,
+                    payment_method=candidate,
+                )
+                pal24_payment_method = candidate
+                break
+            except Pal24APIError as error:
+                last_error = error
+                logger.warning(
+                    "Pal24 отклонил способ оплаты %s для пользователя %s: %s",
+                    candidate or "<default>",
+                    user_id,
+                    error,
+                )
+
+        if response is None:
+            if last_error:
+                logger.error(
+                    "Ошибка Pal24 API при создании счета (метод %s): %s",
+                    normalized_payment_method,
+                    last_error,
+                )
             return None
 
         if not response.get("success", True):
@@ -148,6 +168,7 @@ class Pal24PaymentMixin:
             "links": metadata_links,
             "raw_response": response,
             "selected_method": normalized_payment_method,
+            "provider_method": pal24_payment_method,
         }
 
         payment = await payment_module.create_pal24_payment(
@@ -191,6 +212,7 @@ class Pal24PaymentMixin:
             "transfer_url": transfer_url,
             "link_page_url": link_page_url,
             "payment_url": primary_link,
+            "provider_payment_method": pal24_payment_method,
         }
 
     async def process_pal24_postback(
@@ -528,3 +550,28 @@ class Pal24PaymentMixin:
 
         normalized = payment_method.strip().lower()
         return mapping.get(normalized, "sbp")
+
+    @staticmethod
+    def _get_payment_method_candidates(normalized_method: str) -> list[Optional[str]]:
+        mapping = {
+            "sbp": [
+                "fastpay",
+                "fast_payment",
+                "fastpayment",
+                "sbp",
+                "fast_payment_system",
+            ],
+            "card": [
+                "bank_card",
+                "card",
+            ],
+        }
+
+        candidates = [
+            option
+            for option in mapping.get(normalized_method, [])
+            if option not in (None, "")
+        ]
+
+        candidates.append(None)
+        return candidates
