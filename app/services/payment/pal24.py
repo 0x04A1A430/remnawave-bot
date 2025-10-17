@@ -247,7 +247,15 @@ class Pal24PaymentMixin:
                 return True
 
             if status in {"PAID", "SUCCESS", "OVERPAID"}:
-                payment = await payment_module.update_pal24_payment_status(
+                user = await payment_module.get_user_by_id(db, payment.user_id)
+                if not user:
+                    logger.error(
+                        "Пользователь %s не найден для Pal24 платежа",
+                        payment.user_id,
+                    )
+                    return False
+
+                await payment_module.update_pal24_payment_status(
                     db,
                     payment,
                     status=status,
@@ -262,21 +270,153 @@ class Pal24PaymentMixin:
                         or (payment.metadata_json or {}).get("selected_method")
                         or getattr(payment, "payment_method", None)
                     ),
-                    balance_amount=postback.get("BalanceAmount")
-                    or postback.get("balance_amount"),
-                    balance_currency=postback.get("BalanceCurrency")
-                    or postback.get("balance_currency"),
-                    payer_account=postback.get("AccountNumber")
-                    or postback.get("account")
-                    or postback.get("Account"),
                 )
 
-                return await self._finalize_pal24_payment(
+                if payment.transaction_id:
+                    logger.info(
+                        "Для Pal24 платежа %s уже создана транзакция",
+                        payment.bill_id,
+                    )
+                    return True
+
+                transaction = await payment_module.create_transaction(
                     db,
-                    payment,
-                    payment_id=payment_id,
-                    trigger="postback",
+                    user_id=payment.user_id,
+                    type=TransactionType.DEPOSIT,
+                    amount_kopeks=payment.amount_kopeks,
+                    description=f"Пополнение через Pal24 ({payment_id})",
+                    payment_method=PaymentMethod.PAL24,
+                    external_id=str(payment_id) if payment_id else payment.bill_id,
+                    is_completed=True,
                 )
+
+                await payment_module.link_pal24_payment_to_transaction(db, payment, transaction.id)
+
+                old_balance = user.balance_kopeks
+                was_first_topup = not user.has_made_first_topup
+
+                user.balance_kopeks += payment.amount_kopeks
+                user.updated_at = datetime.utcnow()
+
+                promo_group = getattr(user, "promo_group", None)
+                subscription = getattr(user, "subscription", None)
+                referrer_info = format_referrer_info(user)
+                topup_status = (
+                    "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
+                )
+
+                await db.commit()
+
+                try:
+                    from app.services.referral_service import process_referral_topup
+
+                    await process_referral_topup(
+                        db, user.id, payment.amount_kopeks, getattr(self, "bot", None)
+                    )
+                except Exception as error:
+                    logger.error(
+                        "Ошибка обработки реферального пополнения Pal24: %s",
+                        error,
+                    )
+
+                if was_first_topup and not user.has_made_first_topup:
+                    user.has_made_first_topup = True
+                    await db.commit()
+
+                await db.refresh(user)
+
+                if getattr(self, "bot", None):
+                    try:
+                        from app.services.admin_notification_service import (
+                            AdminNotificationService,
+                        )
+
+                        notification_service = AdminNotificationService(self.bot)
+                        await notification_service.send_balance_topup_notification(
+                            user,
+                            transaction,
+                            old_balance,
+                            topup_status=topup_status,
+                            referrer_info=referrer_info,
+                            subscription=subscription,
+                            promo_group=promo_group,
+                            db=db,
+                        )
+                    except Exception as error:
+                        logger.error(
+                            "Ошибка отправки админ уведомления Pal24: %s", error
+                        )
+
+                if getattr(self, "bot", None):
+                    try:
+                        keyboard = await self.build_topup_success_keyboard(user)
+                        await self.bot.send_message(
+                            user.telegram_id,
+                            (
+                                "✅ <b>Пополнение успешно!</b>\n\n"
+                                f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n"
+                                "🦊 Способ: PayPalych\n"
+                                f"🆔 Транзакция: {transaction.id}\n\n"
+                                "Баланс пополнен автоматически!"
+                            ),
+                            parse_mode="HTML",
+                            reply_markup=keyboard,
+                        )
+                    except Exception as error:
+                        logger.error(
+                            "Ошибка отправки уведомления пользователю Pal24: %s",
+                            error,
+                        )
+
+                # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
+                try:
+                    from app.services.user_cart_service import user_cart_service
+                    from aiogram import types
+                    has_saved_cart = await user_cart_service.has_user_cart(user.id)
+                    if has_saved_cart and getattr(self, "bot", None):
+                        # Если у пользователя есть сохраненная корзина, 
+                        # отправляем ему уведомление с кнопкой вернуться к оформлению
+                        from app.localization.texts import get_texts
+                        
+                        texts = get_texts(user.language)
+                        cart_message = texts.t(
+                            "BALANCE_TOPUP_CART_REMINDER_DETAILED",
+                            "🛒 У вас есть неоформленный заказ.\n\n"
+                            "Вы можете продолжить оформление с теми же параметрами."
+                        )
+                        
+                        # Создаем клавиатуру с кнопками
+                        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                            [types.InlineKeyboardButton(
+                                text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
+                                callback_data="subscription_resume_checkout"
+                            )],
+                            [types.InlineKeyboardButton(
+                                text="💰 Мой баланс",
+                                callback_data="menu_balance"
+                            )],
+                            [types.InlineKeyboardButton(
+                                text="🏠 Главное меню",
+                                callback_data="back_to_menu"
+                            )]
+                        ])
+                        
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=f"✅ Баланс пополнен на {settings.format_price(payment.amount_kopeks)}!\n\n{cart_message}",
+                            reply_markup=keyboard
+                        )
+                        logger.info(f"Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю {user.id}")
+                except Exception as e:
+                    logger.error(f"Ошибка при работе с сохраненной корзиной для пользователя {user.id}: {e}", exc_info=True)
+
+                logger.info(
+                    "✅ Обработан Pal24 платеж %s для пользователя %s",
+                    payment.bill_id,
+                    payment.user_id,
+                )
+
+                return True
 
             await payment_module.update_pal24_payment_status(
                 db,
@@ -291,13 +431,6 @@ class Pal24PaymentMixin:
                     or postback.get("PaymentMethod")
                     or getattr(payment, "payment_method", None)
                 ),
-                balance_amount=postback.get("BalanceAmount")
-                or postback.get("balance_amount"),
-                balance_currency=postback.get("BalanceCurrency")
-                or postback.get("balance_currency"),
-                payer_account=postback.get("AccountNumber")
-                or postback.get("account")
-                or postback.get("Account"),
             )
             logger.info(
                 "Обновили Pal24 платеж %s до статуса %s",
@@ -309,189 +442,6 @@ class Pal24PaymentMixin:
         except Exception as error:
             logger.error("Ошибка обработки Pal24 postback: %s", error, exc_info=True)
             return False
-
-    async def _finalize_pal24_payment(
-        self,
-        db: AsyncSession,
-        payment: Any,
-        *,
-        payment_id: Optional[str],
-        trigger: str,
-    ) -> bool:
-        """Создаёт транзакцию, начисляет баланс и отправляет уведомления."""
-
-        payment_module = import_module("app.services.payment_service")
-
-        if payment.transaction_id:
-            logger.info(
-                "Pal24 платеж %s уже привязан к транзакции (trigger=%s)",
-                payment.bill_id,
-                trigger,
-            )
-            return True
-
-        user = await payment_module.get_user_by_id(db, payment.user_id)
-        if not user:
-            logger.error(
-                "Пользователь %s не найден для Pal24 платежа %s (trigger=%s)",
-                payment.user_id,
-                payment.bill_id,
-                trigger,
-            )
-            return False
-
-        transaction = await payment_module.create_transaction(
-            db,
-            user_id=payment.user_id,
-            type=TransactionType.DEPOSIT,
-            amount_kopeks=payment.amount_kopeks,
-            description=f"Пополнение через Pal24 ({payment_id or payment.bill_id})",
-            payment_method=PaymentMethod.PAL24,
-            external_id=str(payment_id) if payment_id else payment.bill_id,
-            is_completed=True,
-        )
-
-        await payment_module.link_pal24_payment_to_transaction(db, payment, transaction.id)
-
-        old_balance = user.balance_kopeks
-        was_first_topup = not user.has_made_first_topup
-
-        user.balance_kopeks += payment.amount_kopeks
-        user.updated_at = datetime.utcnow()
-
-        promo_group = getattr(user, "promo_group", None)
-        subscription = getattr(user, "subscription", None)
-        referrer_info = format_referrer_info(user)
-        topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
-
-        await db.commit()
-
-        try:
-            from app.services.referral_service import process_referral_topup
-
-            await process_referral_topup(
-                db, user.id, payment.amount_kopeks, getattr(self, "bot", None)
-            )
-        except Exception as error:
-            logger.error(
-                "Ошибка обработки реферального пополнения Pal24: %s",
-                error,
-            )
-
-        if was_first_topup and not user.has_made_first_topup:
-            user.has_made_first_topup = True
-            await db.commit()
-
-        await db.refresh(user)
-        await db.refresh(payment)
-
-        if getattr(self, "bot", None):
-            try:
-                from app.services.admin_notification_service import (
-                    AdminNotificationService,
-                )
-
-                notification_service = AdminNotificationService(self.bot)
-                await notification_service.send_balance_topup_notification(
-                    user,
-                    transaction,
-                    old_balance,
-                    topup_status=topup_status,
-                    referrer_info=referrer_info,
-                    subscription=subscription,
-                    promo_group=promo_group,
-                    db=db,
-                )
-            except Exception as error:
-                logger.error(
-                    "Ошибка отправки админ уведомления Pal24: %s",
-                    error,
-                )
-
-        if getattr(self, "bot", None):
-            try:
-                keyboard = await self.build_topup_success_keyboard(user)
-                await self.bot.send_message(
-                    user.telegram_id,
-                    (
-                        "✅ <b>Пополнение успешно!</b>\n\n"
-                        f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n"
-                        "🦊 Способ: PayPalych\n"
-                        f"🆔 Транзакция: {transaction.id}\n\n"
-                        "Баланс пополнен автоматически!"
-                    ),
-                    parse_mode="HTML",
-                    reply_markup=keyboard,
-                )
-            except Exception as error:
-                logger.error(
-                    "Ошибка отправки уведомления пользователю Pal24: %s",
-                    error,
-                )
-
-        try:
-            from app.services.user_cart_service import user_cart_service
-            from aiogram import types
-
-            has_saved_cart = await user_cart_service.has_user_cart(user.id)
-            if has_saved_cart and getattr(self, "bot", None):
-                from app.localization.texts import get_texts
-
-                texts = get_texts(user.language)
-                cart_message = texts.t(
-                    "BALANCE_TOPUP_CART_REMINDER",
-                    "У вас есть незавершенное оформление подписки. Вернуться?",
-                )
-
-                keyboard = types.InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [
-                            types.InlineKeyboardButton(
-                                text=texts.t(
-                                    "BALANCE_TOPUP_CART_BUTTON",
-                                    "🛒 Продолжить оформление",
-                                ),
-                                callback_data="resume_cart",
-                            )
-                        ],
-                        [
-                            types.InlineKeyboardButton(
-                                text="🏠 Главное меню",
-                                callback_data="back_to_menu",
-                            )
-                        ],
-                    ]
-                )
-
-                await self.bot.send_message(
-                    chat_id=user.telegram_id,
-                    text=(
-                        "✅ Баланс пополнен на "
-                        f"{settings.format_price(payment.amount_kopeks)}!\n\n{cart_message}"
-                    ),
-                    reply_markup=keyboard,
-                )
-                logger.info(
-                    "Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю %s",
-                    user.id,
-                )
-        except Exception as error:
-            logger.error(
-                "Ошибка при работе с сохраненной корзиной для пользователя %s: %s",
-                user.id,
-                error,
-                exc_info=True,
-            )
-
-        logger.info(
-            "✅ Обработан Pal24 платеж %s для пользователя %s (trigger=%s)",
-            payment.bill_id,
-            payment.user_id,
-            trigger,
-        )
-
-        return True
-
 
     async def get_pal24_payment_status(
         self,
@@ -506,70 +456,47 @@ class Pal24PaymentMixin:
             if not payment:
                 return None
 
-            remote_status: Optional[str] = None
-            remote_data: Optional[Dict[str, Any]] = None
+            remote_status = None
+            remote_data = None
 
             service = getattr(self, "pal24_service", None)
             if service and payment.bill_id:
                 try:
                     response = await service.get_bill_status(payment.bill_id)
                     remote_data = response
-                    remote_status = response.get("status") or response.get("bill", {}).get("status")
-
-                    payment_info = self._extract_remote_payment_info(response)
+                    remote_status = response.get("status") or response.get(
+                        "bill", {}
+                    ).get("status")
 
                     if remote_status:
                         normalized_remote = str(remote_status).upper()
-                        update_kwargs: Dict[str, Any] = {
-                            "status": normalized_remote,
-                            "payment_status": payment_info.get("status") or remote_status,
-                        }
+                        if normalized_remote != payment.status:
+                            update_kwargs: Dict[str, Any] = {
+                                "status": normalized_remote,
+                                "payment_status": remote_status,
+                            }
+                            if normalized_remote in getattr(
+                                service, "BILL_SUCCESS_STATES", {"SUCCESS"}
+                            ):
+                                update_kwargs["is_paid"] = True
+                                if not payment.paid_at:
+                                    update_kwargs["paid_at"] = datetime.utcnow()
+                            elif normalized_remote in getattr(
+                                service, "BILL_FAILED_STATES", {"FAIL"}
+                            ):
+                                update_kwargs["is_paid"] = False
 
-                        if payment_info.get("id"):
-                            update_kwargs["payment_id"] = payment_info["id"]
-                        if payment_info.get("method"):
-                            update_kwargs["payment_method"] = payment_info["method"]
-                        if payment_info.get("balance_amount"):
-                            update_kwargs["balance_amount"] = payment_info["balance_amount"]
-                        if payment_info.get("balance_currency"):
-                            update_kwargs["balance_currency"] = payment_info["balance_currency"]
-                        if payment_info.get("account"):
-                            update_kwargs["payer_account"] = payment_info["account"]
-
-                        if normalized_remote in getattr(service, "BILL_SUCCESS_STATES", {"SUCCESS"}):
-                            update_kwargs["is_paid"] = True
-                            if not payment.paid_at:
-                                update_kwargs["paid_at"] = datetime.utcnow()
-                        elif normalized_remote in getattr(service, "BILL_FAILED_STATES", {"FAIL"}):
-                            update_kwargs["is_paid"] = False
-                        elif normalized_remote in getattr(service, "BILL_PENDING_STATES", {"NEW", "PROCESS"}):
-                            update_kwargs.setdefault("is_paid", False)
-
-                        payment = await payment_module.update_pal24_payment_status(
-                            db,
-                            payment,
-                            **update_kwargs,
+                            await payment_module.update_pal24_payment_status(
+                                db,
+                                payment,
+                                **update_kwargs,
+                            )
+                        payment = await payment_module.get_pal24_payment_by_id(
+                            db, local_payment_id
                         )
                 except Pal24APIError as error:
                     logger.error(
                         "Ошибка Pal24 API при получении статуса: %s", error
-                    )
-
-            if payment.is_paid and not payment.transaction_id:
-                try:
-                    finalized = await self._finalize_pal24_payment(
-                        db,
-                        payment,
-                        payment_id=getattr(payment, "payment_id", None),
-                        trigger="status_check",
-                    )
-                    if finalized:
-                        payment = await payment_module.get_pal24_payment_by_id(db, local_payment_id)
-                except Exception as error:
-                    logger.error(
-                        "Ошибка автоматического начисления по Pal24 статусу: %s",
-                        error,
-                        exc_info=True,
                     )
 
             return {
@@ -583,65 +510,6 @@ class Pal24PaymentMixin:
         except Exception as error:
             logger.error("Ошибка получения статуса Pal24: %s", error, exc_info=True)
             return None
-
-
-    @staticmethod
-    def _extract_remote_payment_info(remote_data: Any) -> Dict[str, Optional[str]]:
-        """Извлекает данные о платеже из ответа Pal24."""
-
-        def _pick_candidate(value: Any) -> Optional[Dict[str, Any]]:
-            if isinstance(value, dict):
-                return value
-            if isinstance(value, list):
-                for item in value:
-                    if isinstance(item, dict):
-                        return item
-            return None
-
-        def _normalize(candidate: Dict[str, Any]) -> Dict[str, Optional[str]]:
-            def _stringify(value: Any) -> Optional[str]:
-                if value is None:
-                    return None
-                return str(value)
-
-            return {
-                "id": _stringify(candidate.get("id") or candidate.get("payment_id")),
-                "status": _stringify(candidate.get("status")),
-                "method": _stringify(candidate.get("method") or candidate.get("payment_method")),
-                "balance_amount": _stringify(
-                    candidate.get("balance_amount")
-                    or candidate.get("amount")
-                    or candidate.get("BalanceAmount")
-                ),
-                "balance_currency": _stringify(
-                    candidate.get("balance_currency") or candidate.get("BalanceCurrency")
-                ),
-                "account": _stringify(
-                    candidate.get("account")
-                    or candidate.get("payer_account")
-                    or candidate.get("AccountNumber")
-                ),
-            }
-
-        if not isinstance(remote_data, dict):
-            return {}
-
-        search_spaces = [remote_data]
-        bill_section = remote_data.get("bill") or remote_data.get("Bill")
-        if isinstance(bill_section, dict):
-            search_spaces.append(bill_section)
-
-        for space in search_spaces:
-            for key in ("payment", "Payment", "payment_info", "PaymentInfo"):
-                candidate = _pick_candidate(space.get(key))
-                if candidate:
-                    return _normalize(candidate)
-            for key in ("payments", "Payments"):
-                candidate = _pick_candidate(space.get(key))
-                if candidate:
-                    return _normalize(candidate)
-
-        return {}
 
     @staticmethod
     def _normalize_payment_method(payment_method: Optional[str]) -> str:
