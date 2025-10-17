@@ -246,34 +246,125 @@ async def process_yookassa_sbp_payment_amount(
             return
         
         confirmation_url = payment_result.get("confirmation_url")
-        if not confirmation_url:
-            await message.answer("❌ Ошибка получения ссылки для оплаты через СБП. Обратитесь в поддержку.")
+        qr_confirmation_data = payment_result.get("qr_confirmation_data")
+        
+        if not confirmation_url and not qr_confirmation_data:
+            await message.answer("❌ Ошибка получения данных для оплаты через СБП. Обратитесь в поддержку.")
             await state.clear()
             return
         
-        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-            [types.InlineKeyboardButton(text="🏦 Оплатить через СБП", url=confirmation_url)],
-            [types.InlineKeyboardButton(text="📊 Проверить статус", callback_data=f"check_yookassa_{payment_result['local_payment_id']}")],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")]
-        ])
+        # Подготовим QR-код для вставки в основное сообщение
+        qr_photo = None
+        if qr_confirmation_data:
+            try:
+                # Импортируем необходимые модули для генерации QR-кода
+                import base64
+                from io import BytesIO
+                import qrcode
+                from aiogram.types import BufferedInputFile
+                
+                # Создаем QR-код из полученных данных
+                qr = qrcode.QRCode(version=1, box_size=10, border=5)
+                qr.add_data(qr_confirmation_data)
+                qr.make(fit=True)
+                
+                img = qr.make_image(fill_color="black", back_color="white")
+                
+                # Сохраняем изображение в байты
+                img_bytes = BytesIO()
+                img.save(img_bytes, format='PNG')
+                img_bytes.seek(0)
+                
+                qr_photo = BufferedInputFile(img_bytes.getvalue(), filename="qrcode.png")
+            except ImportError:
+                logger.warning("qrcode библиотека не установлена, QR-код не будет сгенерирован")
+            except Exception as e:
+                logger.error(f"Ошибка генерации QR-кода: {e}")
         
-        await message.answer(
-            f"🏦 <b>Оплата через СБП</b>\n\n"
+        # Если нет QR-данных из YooKassa, но есть URL, генерируем QR-код из URL
+        if not qr_photo and confirmation_url:
+            try:
+                # Импортируем необходимые модули для генерации QR-кода
+                import base64
+                from io import BytesIO
+                import qrcode
+                from aiogram.types import BufferedInputFile
+                
+                # Создаем QR-код из URL
+                qr = qrcode.QRCode(version=1, box_size=10, border=5)
+                qr.add_data(confirmation_url)
+                qr.make(fit=True)
+                
+                img = qr.make_image(fill_color="black", back_color="white")
+                
+                # Сохраняем изображение в байты
+                img_bytes = BytesIO()
+                img.save(img_bytes, format='PNG')
+                img_bytes.seek(0)
+                
+                qr_photo = BufferedInputFile(img_bytes.getvalue(), filename="qrcode.png")
+            except ImportError:
+                logger.warning("qrcode библиотека не установлена, QR-код не будет сгенерирован")
+            except Exception as e:
+                logger.error(f"Ошибка генерации QR-кода из URL: {e}")
+        
+        # Создаем клавиатуру с кнопками для оплаты по ссылке и проверки статуса
+        keyboard_buttons = []
+        
+        # Добавляем кнопку оплаты, если доступна ссылка
+        if confirmation_url:
+            keyboard_buttons.append([types.InlineKeyboardButton(text="🔗 Перейти к оплате", url=confirmation_url)])
+        else:
+            # Если ссылка недоступна, предлагаем оплатить через ID платежа в приложении банка
+            keyboard_buttons.append([types.InlineKeyboardButton(text="📱 Оплатить в приложении банка", callback_data="temp_disabled")])
+        
+        # Добавляем общие кнопки
+        keyboard_buttons.append([types.InlineKeyboardButton(text="📊 Проверить статус", callback_data=f"check_yookassa_{payment_result['local_payment_id']}")])
+        keyboard_buttons.append([types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")])
+        
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        
+        # Подготавливаем текст сообщения
+        message_text = (
+            f"🔗 <b>Оплата через СБП</b>\n\n"
             f"💰 Сумма: {settings.format_price(amount_kopeks)}\n"
             f"🆔 ID платежа: {payment_result['yookassa_payment_id'][:8]}...\n\n"
-            f"📱 <b>Инструкция:</b>\n"
-            f"1. Нажмите кнопку 'Оплатить через СБП'\n"
-            f"2. Вас перенаправит в приложение вашего банка\n"
-            f"3. Подтвердите платеж через СБП\n"
-            f"4. Деньги поступят на баланс автоматически\n\n"
-            f"🔒 Оплата происходит через защищенную систему YooKassa\n"
-            f"✅ Принимаем СБП от всех банков-участников\n\n"
-            f"❓ Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}",
-            reply_markup=keyboard,
-            parse_mode="HTML"
         )
         
-        await state.clear()
+        # Добавляем инструкции в зависимости от доступных способов оплаты
+        if not confirmation_url:
+            message_text += (
+                f"📱 <b>Инструкция по оплате:</b>\n"
+                f"1. Откройте приложение вашего банка\n"
+                f"2. Найдите функцию оплаты по реквизитам или перевод по СБП\n"
+                f"3. Введите ID платежа: <code>{payment_result['yookassa_payment_id']}</code>\n"
+                f"4. Подтвердите платеж в приложении банка\n"
+                f"5. Деньги поступят на баланс автоматически\n\n"
+            )
+        
+        message_text += (
+            f"🔒 Оплата происходит через защищенную систему YooKassa\n"
+            f"✅ Принимаем СБП от всех банков-участников\n\n"
+            f"❓ Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}"
+        )
+        
+        # Отправляем сообщение с инструкциями и клавиатурой
+        # Если есть QR-код, отправляем его как медиа-сообщение
+        if qr_photo:
+            # Используем метод отправки медиа-группы или фото с описанием
+            await message.answer_photo(
+                photo=qr_photo,
+                caption=message_text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        else:
+            # Если QR-код недоступен, отправляем обычное текстовое сообщение
+            await message.answer(
+                message_text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
         
         logger.info(f"Создан платеж YooKassa СБП для пользователя {db_user.telegram_id}: "
                    f"{amount_kopeks//100}₽, ID: {payment_result['yookassa_payment_id']}")
@@ -282,6 +373,9 @@ async def process_yookassa_sbp_payment_amount(
         logger.error(f"Ошибка создания YooKassa СБП платежа: {e}")
         await message.answer("❌ Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.")
         await state.clear()
+
+
+
 
 
 @error_handler

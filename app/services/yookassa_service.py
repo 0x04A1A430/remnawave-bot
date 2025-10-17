@@ -188,6 +188,8 @@ class YooKassaService:
             }
 
         try:
+            # Создаем один платеж с подтверждением через QR
+            # Это позволит получить QR-код для пользователя
             builder = PaymentRequestBuilder()
 
             builder.set_amount({
@@ -197,6 +199,7 @@ class YooKassaService:
 
             builder.set_capture(True)
 
+            # Устанавливаем подтверждение через redirect для получения вебхуков
             builder.set_confirmation({
                 "type": "redirect",
                 "return_url": self.return_url
@@ -234,7 +237,7 @@ class YooKassaService:
             payment_request = builder.build()
 
             logger.info(
-                f"Создание платежа YooKassa СБП (Idempotence-Key: {idempotence_key}). "
+                f"Создание платежа YooKassa СБП с подтверждением 'qr' (Idempotence-Key: {idempotence_key}). "
                 f"Сумма: {amount} {currency}. Метаданные: {metadata}. Чек: {receipt_data_dict}")
 
             loop = asyncio.get_running_loop()
@@ -242,11 +245,14 @@ class YooKassaService:
                 None, lambda: YooKassaPayment.create(payment_request, idempotence_key))
 
             logger.info(
-                f"Ответ YooKassa Payment.create (СБП): ID={response.id}, Status={response.status}, Paid={response.paid}")
+                f"Ответ YooKassa Payment.create (СБП, qr): ID={response.id}, Status={response.status}, Paid={response.paid}")
 
+            # Возвращаем данные платежа с QR-подтверждением
+            # Пользователь может использовать QR-код или оплатить через приложение банка по ID платежа
             return {
                 "id": response.id,
-                "confirmation_url": response.confirmation.confirmation_url if response.confirmation else None,
+                "qr_confirmation_data": response.confirmation.confirmation_data if response.confirmation and hasattr(response.confirmation, 'confirmation_data') else None,
+                "confirmation_url": response.confirmation.confirmation_url if response.confirmation and hasattr(response.confirmation, 'confirmation_url') else None,
                 "status": response.status,
                 "metadata": response.metadata,
                 "amount_value": float(response.amount.value),
@@ -261,6 +267,105 @@ class YooKassaService:
             }
         except Exception as e:
             logger.error(f"Ошибка создания платежа YooKassa СБП: {e}", exc_info=True)
+            return None
+
+    async def _create_sbp_payment_with_confirmation_type(
+            self,
+            amount: float,
+            currency: str,
+            description: str,
+            metadata: Dict[str, Any],
+            customer_contact_for_receipt: Dict[str, str],
+            confirmation_type: str) -> Optional[Dict[str, Any]]:
+        """Создает SBP платеж с указанным типом подтверждения"""
+        try:
+            builder = PaymentRequestBuilder()
+
+            builder.set_amount({
+                "value": str(round(amount, 2)),
+                "currency": currency.upper()
+            })
+
+            builder.set_capture(True)
+
+            if confirmation_type == "qr":
+                builder.set_confirmation({
+                    "type": "qr"
+                })
+            else:  # redirect
+                builder.set_confirmation({
+                    "type": "redirect",
+                    "return_url": self.return_url
+                })
+
+            builder.set_description(description)
+
+            builder.set_metadata(metadata)
+
+            builder.set_payment_method_data({
+                "type": "sbp"
+            })
+
+            receipt_items_list: List[Dict[str, Any]] = [{
+                "description": description[:128],
+                "quantity": "1.00",
+                "amount": {
+                    "value": str(round(amount, 2)),
+                    "currency": currency.upper()
+                },
+                "vat_code": str(getattr(settings, 'YOOKASSA_VAT_CODE', 1)),
+                "payment_mode": getattr(settings, 'YOOKASSA_PAYMENT_MODE', 'full_payment'),
+                "payment_subject": getattr(settings, 'YOOKASSA_PAYMENT_SUBJECT', 'service')
+            }]
+
+            receipt_data_dict: Dict[str, Any] = {
+                "customer": customer_contact_for_receipt,
+                "items": receipt_items_list
+            }
+
+            builder.set_receipt(receipt_data_dict)
+
+            idempotence_key = str(uuid.uuid4())
+
+            payment_request = builder.build()
+
+            logger.info(
+                f"Создание платежа YooKassa СБП с подтверждением '{confirmation_type}' (Idempotence-Key: {idempotence_key}). "
+                f"Сумма: {amount} {currency}. Метаданные: {metadata}. Чек: {receipt_data_dict}")
+
+            loop = asyncio.get_running_loop()
+            response = await loop.run_in_executor(
+                None, lambda: YooKassaPayment.create(payment_request, idempotence_key))
+
+            logger.info(
+                f"Ответ YooKassa Payment.create (СБП, {confirmation_type}): ID={response.id}, Status={response.status}, Paid={response.paid}")
+
+            result = {
+                "id": response.id,
+                "status": response.status,
+                "metadata": response.metadata,
+                "amount_value": float(response.amount.value),
+                "amount_currency": response.amount.currency,
+                "idempotence_key_used": idempotence_key,
+                "paid": response.paid,
+                "refundable": response.refundable,
+                "created_at": response.created_at.isoformat() if hasattr(
+                    response.created_at, 'isoformat') else str(response.created_at),
+                "description_from_yk": response.description,
+                "test_mode": response.test if hasattr(response, 'test') else None
+            }
+
+            # Добавляем данные подтверждения в зависимости от типа
+            if confirmation_type == "qr":
+                if response.confirmation and hasattr(response.confirmation, 'confirmation_data'):
+                    result["confirmation_data"] = response.confirmation.confirmation_data
+            else:  # redirect
+                if response.confirmation and hasattr(response.confirmation, 'confirmation_url'):
+                    result["confirmation_url"] = response.confirmation.confirmation_url
+
+            return result
+        except Exception as e:
+            logger.error(f"Ошибка создания платежа YooKassa СБП с подтверждением '{confirmation_type}': {e}", exc_info=True)
             return None
 
     async def get_payment_info(
