@@ -172,7 +172,7 @@ class YooKassaPaymentMixin:
                 currency="RUB",
                 description=description,
                 status=yookassa_response["status"],
-                confirmation_url=yookassa_response.get("confirmation_url"),
+                confirmation_url=yookassa_response.get("confirmation_url"),  # Используем confirmation URL
                 metadata_json=payment_metadata,
                 payment_method_type="bank_card",
                 yookassa_created_at=None,
@@ -193,7 +193,8 @@ class YooKassaPaymentMixin:
             return {
                 "local_payment_id": local_payment.id,
                 "yookassa_payment_id": yookassa_response["id"],
-                "confirmation_url": yookassa_response.get("confirmation_url"),
+                "confirmation_url": yookassa_response.get("confirmation_url"),  # URL для подтверждения
+                "qr_confirmation_data": yookassa_response.get("qr_confirmation_data"),   # Данные для QR-кода
                 "confirmation_token": confirmation_token,
                 "amount_kopeks": amount_kopeks,
                 "amount_rubles": amount_rubles,
