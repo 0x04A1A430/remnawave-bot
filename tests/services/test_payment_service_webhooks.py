@@ -372,6 +372,9 @@ async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -
         transaction_id=None,
         is_paid=False,
         status="NEW",
+        metadata_json={},
+        payment_method=None,
+        paid_at=None,
     )
 
     async def fake_get_by_order(db, order_id):
@@ -419,6 +422,7 @@ async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -
         subscription=None,
         referred_by_id=None,
         referrer=None,
+        language="ru",
     )
 
     async def fake_get_user(db, user_id):
@@ -439,7 +443,35 @@ async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -
         async def send_balance_topup_notification(self, *args, **kwargs):
             admin_calls.append((args, kwargs))
 
-    monkeypatch.setitem(sys.modules, "app.services.admin_notification_service", SimpleNamespace(AdminNotificationService=lambda bot: DummyAdminServicePal(bot)))
+    monkeypatch.setitem(
+        sys.modules,
+        "app.services.admin_notification_service",
+        SimpleNamespace(AdminNotificationService=lambda bot: DummyAdminServicePal(bot)),
+    )
+
+    user_cart_stub = SimpleNamespace(
+        user_cart_service=SimpleNamespace(has_user_cart=AsyncMock(return_value=True))
+    )
+    monkeypatch.setitem(sys.modules, "app.services.user_cart_service", user_cart_stub)
+
+    class DummyTypes:
+        class InlineKeyboardMarkup:
+            def __init__(self, inline_keyboard=None, **kwargs):
+                self.inline_keyboard = inline_keyboard or []
+                self.kwargs = kwargs
+
+        class InlineKeyboardButton:
+            def __init__(self, *args, **kwargs):
+                self.args = args
+                self.kwargs = kwargs
+
+    monkeypatch.setitem(sys.modules, "aiogram", SimpleNamespace(types=DummyTypes))
+    monkeypatch.setitem(
+        sys.modules,
+        "app.localization.texts",
+        SimpleNamespace(get_texts=lambda language: SimpleNamespace(t=lambda key, default=None: default)),
+    )
+
     service.build_topup_success_keyboard = AsyncMock(return_value=None)
 
     payload = {
@@ -455,8 +487,147 @@ async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -
     assert payment.transaction_id == 654
     assert user.balance_kopeks == 5000
     assert bot.sent_messages
+    saved_cart_message = bot.sent_messages[-1]
+    reply_markup = saved_cart_message["kwargs"].get("reply_markup")
+    assert reply_markup is not None
+    assert reply_markup.inline_keyboard[0][0].kwargs["callback_data"] == "subscription_resume_checkout"
     assert admin_calls
 
+
+@pytest.mark.anyio("asyncio")
+async def test_get_pal24_payment_status_auto_finalize(monkeypatch: pytest.MonkeyPatch) -> None:
+    bot = DummyBot()
+    service = _make_service(bot)
+
+    class DummyPal24Service:
+        BILL_SUCCESS_STATES = {"SUCCESS", "OVERPAID"}
+        BILL_FAILED_STATES = {"FAIL"}
+        BILL_PENDING_STATES = {"NEW", "PROCESS", "UNDERPAID"}
+
+        async def get_bill_status(self, bill_id: str) -> Dict[str, Any]:
+            return {
+                "status": "SUCCESS",
+                "bill": {
+                    "status": "SUCCESS",
+                    "payments": [
+                        {
+                            "id": "trs-auto-1",
+                            "status": "SUCCESS",
+                            "method": "SBP",
+                            "balance_amount": "50.00",
+                            "balance_currency": "RUB",
+                        }
+                    ],
+                },
+            }
+
+    service.pal24_service = DummyPal24Service()
+
+    fake_session = FakeSession()
+    payment = SimpleNamespace(
+        id=77,
+        bill_id="BILL-AUTO",
+        order_id="order-auto",
+        amount_kopeks=5000,
+        user_id=91,
+        transaction_id=None,
+        is_paid=False,
+        status="NEW",
+        metadata_json={},
+        payment_id=None,
+        payment_method=None,
+        paid_at=None,
+    )
+
+    async def fake_get_payment_by_id(db, local_id):
+        return payment
+
+    async def fake_update_payment(db, payment_obj, **kwargs):
+        for key, value in kwargs.items():
+            setattr(payment, key, value)
+        return payment
+
+    async def fake_link_payment(db, payment_obj, transaction_id):
+        payment.transaction_id = transaction_id
+        return payment
+
+    monkeypatch.setattr(payment_service_module, "get_pal24_payment_by_id", fake_get_payment_by_id)
+    monkeypatch.setattr(payment_service_module, "update_pal24_payment_status", fake_update_payment)
+    monkeypatch.setattr(payment_service_module, "link_pal24_payment_to_transaction", fake_link_payment)
+
+    transactions: list[Dict[str, Any]] = []
+
+    async def fake_create_transaction(db, **kwargs):
+        transactions.append(kwargs)
+        payment.transaction_id = 999
+        return SimpleNamespace(id=999, **kwargs)
+
+    monkeypatch.setattr(payment_service_module, "create_transaction", fake_create_transaction)
+
+    user = SimpleNamespace(
+        id=91,
+        telegram_id=9100,
+        balance_kopeks=0,
+        has_made_first_topup=False,
+        promo_group=None,
+        subscription=None,
+        referred_by_id=None,
+        referrer=None,
+        language="ru",
+    )
+
+    async def fake_get_user(db, user_id):
+        return user
+
+    monkeypatch.setattr(payment_service_module, "get_user_by_id", fake_get_user)
+    monkeypatch.setattr(type(settings), "format_price", lambda self, amount: f"{amount / 100:.2f}₽", raising=False)
+
+    referral_stub = SimpleNamespace(process_referral_topup=AsyncMock())
+    monkeypatch.setitem(sys.modules, "app.services.referral_service", referral_stub)
+
+    admin_notifications: list[Any] = []
+
+    class DummyAdminService:
+        def __init__(self, bot):
+            self.bot = bot
+
+        async def send_balance_topup_notification(self, *args, **kwargs):
+            admin_notifications.append((args, kwargs))
+
+    monkeypatch.setitem(
+        sys.modules,
+        "app.services.admin_notification_service",
+        SimpleNamespace(AdminNotificationService=lambda bot: DummyAdminService(bot)),
+    )
+
+    user_cart_stub = SimpleNamespace(
+        user_cart_service=SimpleNamespace(has_user_cart=AsyncMock(return_value=False))
+    )
+    monkeypatch.setitem(sys.modules, "app.services.user_cart_service", user_cart_stub)
+
+    class DummyTypes:
+        class InlineKeyboardMarkup:
+            def __init__(self, inline_keyboard=None, **kwargs):
+                self.inline_keyboard = inline_keyboard or []
+                self.kwargs = kwargs
+
+        class InlineKeyboardButton:
+            def __init__(self, *args, **kwargs):
+                self.args = args
+                self.kwargs = kwargs
+
+    monkeypatch.setitem(sys.modules, "aiogram", SimpleNamespace(types=DummyTypes))
+
+    service.build_topup_success_keyboard = AsyncMock(return_value=None)
+
+    result = await service.get_pal24_payment_status(fake_session, payment.id)
+
+    assert result is not None
+    assert payment.transaction_id == 999
+    assert user.balance_kopeks == 5000
+    assert bot.sent_messages
+    assert admin_notifications
+    assert transactions and transactions[0]["user_id"] == 91
 
 @pytest.mark.anyio("asyncio")
 async def test_process_pal24_postback_payment_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
