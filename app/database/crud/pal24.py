@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from sqlalchemy import select, update
@@ -87,6 +88,7 @@ async def update_pal24_payment_status(
     status: str,
     is_active: Optional[bool] = None,
     is_paid: Optional[bool] = None,
+    paid_at: Optional[datetime] = None,
     payment_id: Optional[str] = None,
     payment_status: Optional[str] = None,
     payment_method: Optional[str] = None,
@@ -103,6 +105,8 @@ async def update_pal24_payment_status(
         update_values["is_active"] = is_active
     if is_paid is not None:
         update_values["is_paid"] = is_paid
+    if paid_at is not None:
+        update_values["paid_at"] = paid_at
     if payment_id is not None:
         update_values["payment_id"] = payment_id
     if payment_status is not None:

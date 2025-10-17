@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 import json
 import logging
 import threading
@@ -13,7 +14,7 @@ from flask import Flask, jsonify, request
 from werkzeug.serving import make_server
 
 from app.config import settings
-from app.database.database import get_db
+from app.database.database import AsyncSessionLocal
 from app.services.pal24_service import Pal24Service, Pal24APIError
 from app.services.payment_service import PaymentService
 
@@ -56,6 +57,8 @@ def create_pal24_flask_app(
             logger.error("Pal24 webhook получен, но сервис не настроен")
             return jsonify({"status": "error", "reason": "service_not_configured"}), 503
 
+        logger.debug("Получен Pal24 webhook: headers=%s", dict(request.headers))
+
         payload = _normalize_payload()
         if not payload:
             logger.warning("Пустой Pal24 webhook")
@@ -68,15 +71,19 @@ def create_pal24_flask_app(
             return jsonify({"status": "error", "reason": str(error)}), 400
 
         async def process() -> bool:
-            async for db in get_db():
+            async with AsyncSessionLocal() as db:
                 try:
                     return await payment_service.process_pal24_postback(db, parsed_payload)
-                finally:
-                    await db.close()
+                except Exception:
+                    await db.rollback()
+                    raise
 
         try:
             future = asyncio.run_coroutine_threadsafe(process(), loop)
-            processed = future.result()
+            processed = future.result(timeout=settings.PAL24_REQUEST_TIMEOUT)
+        except FuturesTimeoutError:
+            logger.error("Обработка Pal24 webhook превысила таймаут %sс", settings.PAL24_REQUEST_TIMEOUT)
+            return jsonify({"status": "error", "reason": "timeout"}), 504
         except Exception as error:  # pragma: no cover - defensive
             logger.exception("Критическая ошибка обработки Pal24 webhook: %s", error)
             return jsonify({"status": "error", "reason": "internal_error"}), 500

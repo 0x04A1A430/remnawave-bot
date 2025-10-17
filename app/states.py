@@ -21,6 +21,7 @@ class SubscriptionStates(StatesGroup):
 
 class BalanceStates(StatesGroup):
     waiting_for_amount = State()
+    waiting_for_pal24_method = State()
     waiting_for_stars_payment = State()
     waiting_for_support_request = State()
 

@@ -101,11 +101,44 @@ async def test_create_pal24_payment_success(monkeypatch: pytest.MonkeyPatch) -> 
     assert result is not None
     assert result["local_payment_id"] == 321
     assert result["bill_id"] == "BILL-1"
-    assert result["payment_method"] == "CARD"
+    assert result["payment_method"] == "card"
     assert result["link_url"] == "https://pal24/sbp"
     assert result["card_url"] == "https://pal24/card"
+    assert stub.calls and stub.calls[0]["payment_method"] == "BANK_CARD"
     assert stub.calls and stub.calls[0]["amount_kopeks"] == 50000
     assert "links" in captured_args["metadata"]
+
+
+@pytest.mark.anyio("asyncio")
+async def test_create_pal24_payment_default_method(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = StubPal24Service()
+    service = _make_service(stub)
+    db = DummySession()
+
+    async def fake_create_pal24_payment(*args: Any, **kwargs: Any) -> DummyLocalPayment:
+        return DummyLocalPayment(payment_id=111)
+
+    monkeypatch.setattr(
+        payment_service_module,
+        "create_pal24_payment",
+        fake_create_pal24_payment,
+        raising=False,
+    )
+
+    monkeypatch.setattr(settings, "PAL24_MIN_AMOUNT_KOPEKS", 1000, raising=False)
+    monkeypatch.setattr(settings, "PAL24_MAX_AMOUNT_KOPEKS", 1_000_000, raising=False)
+
+    result = await service.create_pal24_payment(
+        db=db,
+        user_id=42,
+        amount_kopeks=10_000,
+        description="Пополнение",
+        language="ru",
+    )
+
+    assert result is not None
+    assert stub.calls and stub.calls[0]["payment_method"] == "SBP"
+    assert result["payment_method"] == "sbp"
 
 
 @pytest.mark.anyio("asyncio")
