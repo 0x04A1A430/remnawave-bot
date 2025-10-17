@@ -172,7 +172,13 @@ class WataWebhookHandler:
         processed: Optional[bool] = None
         async for db in get_db():
             processed = await self.payment_service.process_wata_webhook(db, payload)
-            break
+            # Allow the generator to finish naturally so it can commit/rollback.
+            # get_db() yields only once, so exiting the loop body without breaking
+            # triggers the generator cleanup logic on the next iteration attempt.
+
+        if processed is None:
+            logger.error("Не удалось обработать WATA webhook: нет сессии БД")
+            return web.json_response({"status": "error", "reason": "db_session_unavailable"}, status=500)
 
         if processed:
             return web.json_response({"status": "ok"}, status=200)
