@@ -169,11 +169,15 @@ class WataWebhookHandler:
             payload.get("transactionStatus"),
         )
 
+        processed: Optional[bool] = None
         async for db in get_db():
             processed = await self.payment_service.process_wata_webhook(db, payload)
-            if processed:
-                return web.json_response({"status": "ok"}, status=200)
-            return web.json_response({"status": "error", "reason": "not_processed"}, status=400)
+            break
+
+        if processed:
+            return web.json_response({"status": "ok"}, status=200)
+
+        return web.json_response({"status": "error", "reason": "not_processed"}, status=400)
 
     async def health_check(self, request: web.Request) -> web.Response:
         return web.json_response(
