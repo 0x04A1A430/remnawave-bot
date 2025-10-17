@@ -422,6 +422,7 @@ async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -
         subscription=None,
         referred_by_id=None,
         referrer=None,
+        language="ru",
     )
 
     async def fake_get_user(db, user_id):
@@ -449,7 +450,7 @@ async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -
     )
 
     user_cart_stub = SimpleNamespace(
-        user_cart_service=SimpleNamespace(has_user_cart=AsyncMock(return_value=False))
+        user_cart_service=SimpleNamespace(has_user_cart=AsyncMock(return_value=True))
     )
     monkeypatch.setitem(sys.modules, "app.services.user_cart_service", user_cart_stub)
 
@@ -465,6 +466,11 @@ async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -
                 self.kwargs = kwargs
 
     monkeypatch.setitem(sys.modules, "aiogram", SimpleNamespace(types=DummyTypes))
+    monkeypatch.setitem(
+        sys.modules,
+        "app.localization.texts",
+        SimpleNamespace(get_texts=lambda language: SimpleNamespace(t=lambda key, default=None: default)),
+    )
 
     service.build_topup_success_keyboard = AsyncMock(return_value=None)
 
@@ -481,6 +487,10 @@ async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -
     assert payment.transaction_id == 654
     assert user.balance_kopeks == 5000
     assert bot.sent_messages
+    saved_cart_message = bot.sent_messages[-1]
+    reply_markup = saved_cart_message["kwargs"].get("reply_markup")
+    assert reply_markup is not None
+    assert reply_markup.inline_keyboard[0][0].kwargs["callback_data"] == "subscription_resume_checkout"
     assert admin_calls
 
 
