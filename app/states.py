@@ -18,6 +18,9 @@ class SubscriptionStates(StatesGroup):
     extending_subscription = State()
     confirming_traffic_reset = State()
     cart_saved_for_topup = State()
+    
+    # Состояния для простой подписки
+    waiting_for_simple_subscription_payment_method = State()
 
 class BalanceStates(StatesGroup):
     waiting_for_amount = State()
