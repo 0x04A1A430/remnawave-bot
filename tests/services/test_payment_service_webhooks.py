@@ -97,7 +97,7 @@ async def test_process_mulenpay_callback_success(monkeypatch: pytest.MonkeyPatch
 
     async def fake_update_status(db, payment=None, status=None, **kwargs):
         payment.status = status
-        payment.is_paid = kwargs.get("is_paid", payment.is_paid)
+        payment.is_paid = status == "success"
         updated_status.update({"status": status, "kwargs": kwargs})
 
     monkeypatch.setattr(payment_service_module, "update_mulenpay_payment_status", fake_update_status)
@@ -153,8 +153,6 @@ async def test_process_mulenpay_callback_success(monkeypatch: pytest.MonkeyPatch
     assert transactions and transactions[0]["user_id"] == 42
     assert payment.transaction_id == 777
     assert updated_status["status"] == "success"
-    assert updated_status["kwargs"].get("is_paid") is True
-    assert updated_status["kwargs"].get("paid_at") is not None
     assert user.balance_kopeks == 5000
     assert fake_session.commits >= 1
     assert bot.sent_messages  # сообщение пользователю отправлено

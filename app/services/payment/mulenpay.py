@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
 from importlib import import_module
 from typing import Any, Dict, Optional
 
@@ -132,7 +131,6 @@ class MulenPayPaymentMixin:
     ) -> bool:
         """Обрабатывает callback от MulenPay, обновляет статус и начисляет баланс."""
         display_name = settings.get_mulenpay_display_name()
-        display_name_html = settings.get_mulenpay_display_name_html()
         try:
             payment_module = import_module("app.services.payment_service")
             uuid_value = callback_data.get("uuid")
@@ -188,8 +186,6 @@ class MulenPayPaymentMixin:
                     db,
                     payment=payment,
                     status="success",
-                    is_paid=True,
-                    paid_at=datetime.utcnow(),
                     callback_payload=callback_data,
                     mulen_payment_id=mulen_payment_id_int,
                 )
@@ -358,7 +354,6 @@ class MulenPayPaymentMixin:
                     db,
                     payment=payment,
                     status="canceled",
-                    is_paid=False,
                     callback_payload=callback_data,
                     mulen_payment_id=mulen_payment_id_int,
                 )
@@ -369,7 +364,6 @@ class MulenPayPaymentMixin:
                 db,
                 payment=payment,
                 status=payment_status or "unknown",
-                is_paid=False,
                 callback_payload=callback_data,
                 mulen_payment_id=mulen_payment_id_int,
             )
@@ -448,8 +442,6 @@ class MulenPayPaymentMixin:
                                 db,
                                 payment=payment,
                                 status=mapped_status,
-                                is_paid=mapped_status == "success",
-                                paid_at=datetime.utcnow() if mapped_status == "success" else None,
                                 mulen_payment_id=remote_data.get("id"),
                             )
                             payment = await payment_module.get_mulenpay_payment_by_local_id(
