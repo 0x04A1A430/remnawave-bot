@@ -182,6 +182,13 @@ class Settings(BaseSettings):
     YOOKASSA_MAX_AMOUNT_KOPEKS: int = 1000000
     YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED: bool = False
     DISABLE_TOPUP_BUTTONS: bool = False
+    
+    # Настройки простой покупки
+    SIMPLE_SUBSCRIPTION_ENABLED: bool = False
+    SIMPLE_SUBSCRIPTION_PERIOD_DAYS: int = 30
+    SIMPLE_SUBSCRIPTION_DEVICE_LIMIT: int = 1
+    SIMPLE_SUBSCRIPTION_TRAFFIC_GB: int = 0  # 0 означает безлимит
+    SIMPLE_SUBSCRIPTION_SQUAD_UUID: Optional[str] = None
     PAYMENT_BALANCE_DESCRIPTION: str = "Пополнение баланса"
     PAYMENT_SUBSCRIPTION_DESCRIPTION: str = "Оплата подписки"
     PAYMENT_SERVICE_NAME: str = "Интернет-сервис"
@@ -205,6 +212,7 @@ class Settings(BaseSettings):
     MULENPAY_SHOP_ID: Optional[int] = None
     MULENPAY_BASE_URL: str = "https://mulenpay.ru/api"
     MULENPAY_WEBHOOK_PATH: str = "/mulenpay-webhook"
+    MULENPAY_DISPLAY_NAME: str = "Mulen Pay"
     MULENPAY_DESCRIPTION: str = "Пополнение баланса"
     MULENPAY_LANGUAGE: str = "ru"
     MULENPAY_VAT_CODE: int = 0
@@ -785,6 +793,15 @@ class Settings(BaseSettings):
             and self.MULENPAY_SECRET_KEY is not None
             and self.MULENPAY_SHOP_ID is not None
         )
+
+    def get_mulenpay_display_name(self) -> str:
+        name = (self.MULENPAY_DISPLAY_NAME or "").strip()
+        if not name:
+            return "Mulen Pay"
+        return name
+
+    def get_mulenpay_display_name_html(self) -> str:
+        return html.escape(self.get_mulenpay_display_name())
 
     def is_pal24_enabled(self) -> bool:
         return (

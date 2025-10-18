@@ -66,10 +66,30 @@ class UserService:
                     f"Если у вас есть вопросы, обратитесь в поддержку."
                 )
 
+            keyboard_rows = []
+            if getattr(user, "subscription", None) and user.subscription.status in {
+                "active",
+                "expired",
+                "trial",
+            }:
+                keyboard_rows.append([
+                    types.InlineKeyboardButton(
+                        text=get_texts(user.language).t("SUBSCRIPTION_EXTEND", "💎 Продлить подписку"),
+                        callback_data="subscription_extend",
+                    )
+                ])
+
+            reply_markup = (
+                types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+                if keyboard_rows
+                else None
+            )
+
             await bot.send_message(
                 chat_id=user.telegram_id,
                 text=message,
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=reply_markup,
             )
             
             logger.info(f"✅ Уведомление о изменении баланса отправлено пользователю {user.telegram_id}")
@@ -652,7 +672,10 @@ class UserService:
                 mulenpay_payments = mulenpay_result.scalars().all()
 
                 if mulenpay_payments:
-                    logger.info(f"🔄 Удаляем {len(mulenpay_payments)} MulenPay платежей")
+                    mulenpay_name = settings.get_mulenpay_display_name()
+                    logger.info(
+                        f"🔄 Удаляем {len(mulenpay_payments)} {mulenpay_name} платежей"
+                    )
                     await db.execute(
                         update(MulenPayPayment)
                         .where(MulenPayPayment.user_id == user_id)
@@ -664,7 +687,9 @@ class UserService:
                     )
                     await db.flush()
             except Exception as e:
-                logger.error(f"❌ Ошибка удаления MulenPay платежей: {e}")
+                logger.error(
+                    f"❌ Ошибка удаления {settings.get_mulenpay_display_name()} платежей: {e}"
+                )
 
             try:
                 pal24_result = await db.execute(

@@ -102,8 +102,11 @@ class WataService:
 
     @staticmethod
     def _format_datetime(value: datetime) -> str:
-        aware = value.astimezone(timezone.utc)
-        return aware.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+        if value.tzinfo is None:
+            aware = value.replace(tzinfo=timezone.utc)
+        else:
+            aware = value.astimezone(timezone.utc)
+        return aware.isoformat().replace("+00:00", "Z")
 
     @staticmethod
     def _parse_datetime(raw: Optional[str]) -> Optional[datetime]:
@@ -111,7 +114,10 @@ class WataService:
             return None
         try:
             normalized = raw.replace("Z", "+00:00")
-            return datetime.fromisoformat(normalized)
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is None:
+                return parsed
+            return parsed.astimezone(timezone.utc).replace(tzinfo=None)
         except (ValueError, TypeError):
             logger.debug("Failed to parse WATA datetime: %s", raw)
             return None

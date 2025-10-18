@@ -337,12 +337,22 @@ def get_main_menu_keyboard(
         subscription_buttons.append(
             InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data="menu_buy")
         )
+        
+        # Добавляем кнопку простой покупки после кнопки "Купить подписку"
+        if settings.SIMPLE_SUBSCRIPTION_ENABLED:
+            subscription_buttons.append(
+                InlineKeyboardButton(text="⚡ Простая покупка", callback_data="simple_subscription_purchase")
+            )
     
     if subscription_buttons:
         if len(subscription_buttons) == 2:
             keyboard.append(subscription_buttons)
-        else:
+        elif len(subscription_buttons) == 1:
             keyboard.append([subscription_buttons[0]])
+        elif len(subscription_buttons) > 2:
+            # Если больше 2 кнопок, добавляем по отдельности
+            for button in subscription_buttons:
+                keyboard.append([button])
 
     if show_resume_checkout or has_saved_cart:
         keyboard.append([
@@ -870,6 +880,8 @@ def get_subscription_period_keyboard(language: str = DEFAULT_LANGUAGE) -> Inline
                 )
             ])
     
+    # Кнопка "Простая покупка" была убрана из выбора периода подписки
+    
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
     ])
@@ -1089,9 +1101,13 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         ])
 
     if settings.is_mulenpay_enabled():
+        mulenpay_name = settings.get_mulenpay_display_name()
         keyboard.append([
             InlineKeyboardButton(
-                text=texts.t("PAYMENT_CARD_MULENPAY", "💳 Банковская карта (Mulen Pay)"),
+                text=texts.t(
+                    "PAYMENT_CARD_MULENPAY",
+                    "💳 Банковская карта ({mulenpay_name})",
+                ).format(mulenpay_name=mulenpay_name),
                 callback_data=_build_callback("mulenpay")
             )
         ])
@@ -2300,6 +2316,12 @@ def get_admin_tickets_keyboard(
     keyboard.append(switch_row)
 
     if open_rows and scope in ("all", "open"):
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("ADMIN_CLOSE_ALL_OPEN_TICKETS", "🔒 Закрыть все открытые"),
+                callback_data="admin_tickets_close_all_open"
+            )
+        ])
         keyboard.append([InlineKeyboardButton(text=texts.t("OPEN_TICKETS_HEADER", "Открытые тикеты"), callback_data="noop")])
         keyboard.extend(open_rows)
     if closed_rows and scope in ("all", "closed"):

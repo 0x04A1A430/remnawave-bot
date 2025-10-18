@@ -1303,7 +1303,10 @@ def _build_settings_keyboard(
         label = texts.t("PAYMENT_CARD_TRIBUTE", "💳 Банковская карта (Tribute)")
         test_payment_buttons.append([_test_button(f"{label} · тест", "tribute")])
     elif category_key == "MULENPAY":
-        label = texts.t("PAYMENT_CARD_MULENPAY", "💳 Банковская карта (Mulen Pay)")
+        label = texts.t(
+            "PAYMENT_CARD_MULENPAY",
+            "💳 Банковская карта ({mulenpay_name})",
+        ).format(mulenpay_name=settings.get_mulenpay_display_name())
         test_payment_buttons.append([_test_button(f"{label} · тест", "mulenpay")])
     elif category_key == "WATA":
         label = texts.t("PAYMENT_CARD_WATA", "💳 Банковская карта (WATA)")
@@ -1834,8 +1837,13 @@ async def test_payment_provider(
         return
 
     if method == "mulenpay":
+        mulenpay_name = settings.get_mulenpay_display_name()
+        mulenpay_name_html = settings.get_mulenpay_display_name_html()
         if not settings.is_mulenpay_enabled():
-            await callback.answer("❌ MulenPay отключен", show_alert=True)
+            await callback.answer(
+                f"❌ {mulenpay_name} отключен",
+                show_alert=True,
+            )
             return
 
         amount_kopeks = 1 * 100
@@ -1843,18 +1851,21 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description="Тестовый платеж MulenPay (админ)",
+            description=f"Тестовый платеж {mulenpay_name} (админ)",
             language=language,
         )
 
         if not payment_result or not payment_result.get("payment_url"):
-            await callback.answer("❌ Не удалось создать платеж MulenPay", show_alert=True)
+            await callback.answer(
+                f"❌ Не удалось создать платеж {mulenpay_name}",
+                show_alert=True,
+            )
             await _refresh_markup()
             return
 
         payment_url = payment_result["payment_url"]
         message_text = (
-            "🧪 <b>Тестовый платеж MulenPay</b>\n\n"
+            f"🧪 <b>Тестовый платеж {mulenpay_name_html}</b>\n\n"
             f"💰 Сумма: {texts.format_price(amount_kopeks)}\n"
             f"🆔 ID: {payment_result['mulen_payment_id']}"
         )
@@ -1875,7 +1886,10 @@ async def test_payment_provider(
             ]
         )
         await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode="HTML")
-        await callback.answer("✅ Ссылка на платеж MulenPay отправлена", show_alert=True)
+        await callback.answer(
+            f"✅ Ссылка на платеж {mulenpay_name} отправлена",
+            show_alert=True,
+        )
         await _refresh_markup()
         return
 

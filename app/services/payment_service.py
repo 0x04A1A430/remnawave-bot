@@ -209,12 +209,13 @@ class PaymentService(
         )
         self.wata_service = WataService() if settings.is_wata_enabled() else None
 
+        mulenpay_name = settings.get_mulenpay_display_name()
         logger.debug(
-            "PaymentService инициализирован (YooKassa=%s, Stars=%s, CryptoBot=%s, "
-            "MulenPay=%s, Pal24=%s, Wata=%s)",
+            "PaymentService инициализирован (YooKassa=%s, Stars=%s, CryptoBot=%s, %s=%s, Pal24=%s, Wata=%s)",
             bool(self.yookassa_service),
             bool(self.stars_service),
             bool(self.cryptobot_service),
+            mulenpay_name,
             bool(self.mulenpay_service),
             bool(self.pal24_service),
             bool(self.wata_service),

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 from typing import Any, Dict, Optional
@@ -16,6 +16,7 @@ if str(ROOT_DIR) not in sys.path:
 import app.services.payment_service as payment_service_module  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.services.payment_service import PaymentService  # noqa: E402
+from app.services.wata_service import WataService  # noqa: E402
 
 
 @pytest.fixture
@@ -74,6 +75,22 @@ def _make_service(stub: Optional[StubWataService]) -> PaymentService:
     service.stars_service = None
     service.cryptobot_service = None
     return service
+
+
+def test_wata_service_format_datetime_accepts_naive_utc() -> None:
+    value = datetime(2024, 5, 20, 12, 30, 0)
+    formatted = WataService._format_datetime(value)
+    assert formatted == "2024-05-20T12:30:00Z"
+
+
+def test_wata_service_parse_datetime_returns_naive_utc() -> None:
+    parsed = WataService._parse_datetime("2024-05-20T12:30:00Z")
+    assert parsed == datetime(2024, 5, 20, 12, 30, 0)
+    assert parsed.tzinfo is None
+
+    parsed_with_offset = WataService._parse_datetime("2024-05-20T15:30:00+03:00")
+    assert parsed_with_offset == datetime(2024, 5, 20, 12, 30, 0)
+    assert parsed_with_offset.tzinfo is None
 
 
 @pytest.mark.anyio("asyncio")
