@@ -36,6 +36,7 @@ class PromoCodeStates(StatesGroup):
 class AdminStates(StatesGroup):
     
     waiting_for_user_search = State()
+    sending_user_message = State()
     editing_user_balance = State()
     extending_subscription = State()
     adding_traffic = State()
