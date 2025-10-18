@@ -2316,6 +2316,12 @@ def get_admin_tickets_keyboard(
     keyboard.append(switch_row)
 
     if open_rows and scope in ("all", "open"):
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("ADMIN_CLOSE_ALL_OPEN_TICKETS", "🔒 Закрыть все открытые"),
+                callback_data="admin_tickets_close_all_open"
+            )
+        ])
         keyboard.append([InlineKeyboardButton(text=texts.t("OPEN_TICKETS_HEADER", "Открытые тикеты"), callback_data="noop")])
         keyboard.extend(open_rows)
     if closed_rows and scope in ("all", "closed"):
