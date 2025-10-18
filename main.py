@@ -258,9 +258,7 @@ async def main():
                 stage.success("Webhook сервера запущены")
             else:
                 stage.skip(
-                    "Tribute, "
-                    f"{settings.get_mulenpay_display_name()}"
-                    " и CryptoBot отключены"
+                    f"Tribute, {settings.get_mulenpay_display_name()} и CryptoBot отключены"
                 )
 
         async with timeline.stage(
