@@ -461,6 +461,81 @@ async def mark_ticket_as_answered(
         )
 
 
+async def close_all_open_admin_tickets(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession
+):
+    """Закрыть все открытые тикеты."""
+    if not (settings.is_admin(callback.from_user.id) or SupportSettingsService.is_moderator(callback.from_user.id)):
+        texts = get_texts(db_user.language)
+        await callback.answer(texts.ACCESS_DENIED, show_alert=True)
+        return
+
+    texts = get_texts(db_user.language)
+
+    try:
+        closed_ticket_ids = await TicketCRUD.close_all_open_tickets(db)
+    except Exception as error:
+        logger.error("Error closing all open tickets: %s", error)
+        await callback.answer(
+            texts.t("TICKET_UPDATE_ERROR", "❌ Ошибка при обновлении тикета."),
+            show_alert=True
+        )
+        return
+
+    closed_count = len(closed_ticket_ids)
+
+    if closed_count == 0:
+        await callback.answer(
+            texts.t("ADMIN_CLOSE_ALL_OPEN_TICKETS_EMPTY", "ℹ️ Нет открытых тикетов для закрытия."),
+            show_alert=True
+        )
+        return
+
+    try:
+        is_moderator = (
+            not settings.is_admin(callback.from_user.id)
+            and SupportSettingsService.is_moderator(callback.from_user.id)
+        )
+        await TicketCRUD.add_support_audit(
+            db,
+            actor_user_id=db_user.id if db_user else None,
+            actor_telegram_id=callback.from_user.id,
+            is_moderator=is_moderator,
+            action="close_all_tickets",
+            ticket_id=None,
+            target_user_id=None,
+            details={
+                "count": closed_count,
+                "ticket_ids": closed_ticket_ids,
+            }
+        )
+    except Exception as audit_error:
+        logger.warning("Failed to add support audit for bulk close: %s", audit_error)
+
+    # Обновляем список тикетов
+    await show_admin_tickets(callback, db_user, db)
+
+    success_text = texts.t(
+        "ADMIN_CLOSE_ALL_OPEN_TICKETS_SUCCESS",
+        "✅ Закрыто открытых тикетов: {count}"
+    ).format(count=closed_count)
+
+    notification_keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[[types.InlineKeyboardButton(text="🗑 Удалить", callback_data="admin_support_delete_msg")]]
+    )
+
+    try:
+        await callback.message.answer(success_text, reply_markup=notification_keyboard)
+    except Exception:
+        # Если не удалось отправить отдельное сообщение, пробуем ответить алертом
+        try:
+            await callback.answer(success_text, show_alert=True)
+        except Exception:
+            pass
+
+
 async def close_admin_ticket(
     callback: types.CallbackQuery,
     db_user: User,
@@ -935,7 +1010,8 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_admin_tickets, F.data == "admin_tickets")
     dp.callback_query.register(show_admin_tickets, F.data == "admin_tickets_scope_open")
     dp.callback_query.register(show_admin_tickets, F.data == "admin_tickets_scope_closed")
-    
+    dp.callback_query.register(close_all_open_admin_tickets, F.data == "admin_tickets_close_all_open")
+
     dp.callback_query.register(view_admin_ticket, F.data.startswith("admin_view_ticket_"))
     
     # Ответы на тикеты

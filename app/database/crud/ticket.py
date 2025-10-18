@@ -275,6 +275,30 @@ class TicketCRUD:
         )
 
     @staticmethod
+    async def close_all_open_tickets(
+        db: AsyncSession,
+    ) -> List[int]:
+        """Закрыть все открытые тикеты. Возвращает список идентификаторов закрытых тикетов."""
+        open_statuses = [TicketStatus.OPEN.value, TicketStatus.ANSWERED.value]
+        result = await db.execute(
+            select(Ticket.id).where(Ticket.status.in_(open_statuses))
+        )
+        ticket_ids = result.scalars().all()
+
+        if not ticket_ids:
+            return []
+
+        now = datetime.utcnow()
+        await db.execute(
+            update(Ticket)
+            .where(Ticket.id.in_(ticket_ids))
+            .values(status=TicketStatus.CLOSED.value, closed_at=now, updated_at=now)
+        )
+        await db.commit()
+
+        return ticket_ids
+
+    @staticmethod
     async def add_support_audit(
         db: AsyncSession,
         *,

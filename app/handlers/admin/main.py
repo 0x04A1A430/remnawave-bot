@@ -207,6 +207,7 @@ async def show_support_audit(
                 'close_ticket': texts.t("ADMIN_SUPPORT_AUDIT_ACTION_CLOSE_TICKET", "Закрытие тикета"),
                 'block_user_timed': texts.t("ADMIN_SUPPORT_AUDIT_ACTION_BLOCK_TIMED", "Блокировка (время)"),
                 'block_user_perm': texts.t("ADMIN_SUPPORT_AUDIT_ACTION_BLOCK_PERM", "Блокировка (навсегда)"),
+                'close_all_tickets': texts.t("ADMIN_SUPPORT_AUDIT_ACTION_CLOSE_ALL_TICKETS", "Массовое закрытие тикетов"),
                 'unblock_user': texts.t("ADMIN_SUPPORT_AUDIT_ACTION_UNBLOCK", "Снятие блока"),
             }
             action_text = action_map.get(log.action, log.action)
@@ -215,6 +216,8 @@ async def show_support_audit(
             extra = ""
             if log.action == 'block_user_timed' and 'minutes' in details:
                 extra = f" ({details['minutes']} мин)"
+            elif log.action == 'close_all_tickets' and 'count' in details:
+                extra = f" ({details['count']})"
             lines.append(f"{ts} • {role} <code>{log.actor_telegram_id}</code> — {action_text}{ticket_part}{extra}")
 
     # keyboard with pagination
