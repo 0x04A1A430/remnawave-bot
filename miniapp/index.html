@@ -13246,6 +13246,26 @@
                 return false;
             }
 
+            const expirationCandidates = [
+                userData.subscription_expires_at,
+                userData.subscriptionExpiresAt,
+                userData.user.subscription_expires_at,
+                userData.user.subscriptionExpiresAt,
+                userData.user.expires_at,
+                userData.user.expiresAt,
+                userData.expires_at,
+                userData.expiresAt,
+            ];
+            const isExpiredByDate = expirationCandidates.some(candidate => {
+                const expiresAt = parseDate(candidate);
+                return expiresAt instanceof Date
+                    && !Number.isNaN(expiresAt.getTime())
+                    && expiresAt.getTime() <= Date.now();
+            });
+            if (isExpiredByDate) {
+                return false;
+            }
+
             const statusRaw = String(
                 userData.user.subscription_actual_status
                 || userData.user.subscription_status
@@ -13275,26 +13295,6 @@
                 if (['active', 'paid'].includes(statusRaw)) {
                     return true;
                 }
-            }
-
-            const expirationCandidates = [
-                userData.subscription_expires_at,
-                userData.subscriptionExpiresAt,
-                userData.user.subscription_expires_at,
-                userData.user.subscriptionExpiresAt,
-                userData.user.expires_at,
-                userData.user.expiresAt,
-                userData.expires_at,
-                userData.expiresAt,
-            ];
-            const isExpiredByDate = expirationCandidates.some(candidate => {
-                const expiresAt = parseDate(candidate);
-                return expiresAt instanceof Date
-                    && !Number.isNaN(expiresAt.getTime())
-                    && expiresAt.getTime() <= Date.now();
-            });
-            if (isExpiredByDate) {
-                return false;
             }
 
             const hasActiveFlag = userData.user.has_active_subscription;
