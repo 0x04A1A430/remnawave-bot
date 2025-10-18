@@ -13224,15 +13224,25 @@
                 return false;
             }
 
-            const typeRaw = String(userData.subscription_type || '').toLowerCase();
-            if (typeRaw === 'trial') {
+            const missing = coerceBoolean(
+                userData.subscription_missing
+                ?? userData.subscriptionMissing
+                ?? userData.user.subscription_missing
+                ?? userData.user.subscriptionMissing,
+                false,
+            );
+            if (missing) {
                 return false;
             }
-            if (typeRaw === 'paid') {
-                return true;
-            }
 
-            if (userData.user.has_active_subscription === false) {
+            const expiredFlag = coerceBoolean(
+                userData.subscription_expired
+                ?? userData.subscriptionExpired
+                ?? userData.user.subscription_expired
+                ?? userData.user.subscriptionExpired,
+                false,
+            );
+            if (expiredFlag) {
                 return false;
             }
 
@@ -13241,11 +13251,72 @@
                 || userData.user.subscription_status
                 || ''
             ).toLowerCase();
-            if (['trial', 'expired', 'disabled'].includes(statusRaw)) {
+
+            if (statusRaw) {
+                const inactiveStatuses = [
+                    'expired',
+                    'disabled',
+                    'missing',
+                    'inactive',
+                    'cancelled',
+                    'canceled',
+                    'ended',
+                    'paused',
+                    'stopped',
+                ];
+                if (inactiveStatuses.includes(statusRaw)) {
+                    return false;
+                }
+
+                if (['trial', 'trialing'].includes(statusRaw)) {
+                    return false;
+                }
+
+                if (['active', 'paid'].includes(statusRaw)) {
+                    return true;
+                }
+            }
+
+            const expirationCandidates = [
+                userData.subscription_expires_at,
+                userData.subscriptionExpiresAt,
+                userData.user.subscription_expires_at,
+                userData.user.subscriptionExpiresAt,
+                userData.user.expires_at,
+                userData.user.expiresAt,
+                userData.expires_at,
+                userData.expiresAt,
+            ];
+            const isExpiredByDate = expirationCandidates.some(candidate => {
+                const expiresAt = parseDate(candidate);
+                return expiresAt instanceof Date
+                    && !Number.isNaN(expiresAt.getTime())
+                    && expiresAt.getTime() <= Date.now();
+            });
+            if (isExpiredByDate) {
                 return false;
             }
 
-            return true;
+            const hasActiveFlag = userData.user.has_active_subscription;
+            if (hasActiveFlag === false) {
+                return false;
+            }
+
+            const typeRaw = String(
+                userData.subscription_type
+                ?? userData.user.subscription_type
+                ?? ''
+            ).toLowerCase();
+
+            if (['trial', 'expired', 'inactive', 'disabled', 'none', 'missing', 'ended'].includes(typeRaw)) {
+                return false;
+            }
+
+            if (hasActiveFlag === true && typeRaw !== 'trial') {
+                return true;
+            }
+
+            return typeRaw === 'paid';
         }
 
         function normalizeServerEntry(entry) {
