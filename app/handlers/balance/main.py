@@ -511,10 +511,24 @@ async def handle_quick_amount_selection(
                 await process_pal24_payment_amount(
                     callback.message, db_user, db, amount_kopeks, state
                 )
+        elif payment_method == "cryptobot":
+            from app.database.database import AsyncSessionLocal
+            from .cryptobot import process_cryptobot_payment_amount
+
+            async with AsyncSessionLocal() as db:
+                await process_cryptobot_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif payment_method == "stars":
+            from .stars import process_stars_payment_amount
+
+            await process_stars_payment_amount(
+                callback.message, db_user, amount_kopeks, state
+            )
         else:
             await callback.answer("❌ Неизвестный способ оплаты", show_alert=True)
             return
-            
+
     except ValueError:
         await callback.answer("❌ Ошибка обработки суммы", show_alert=True)
     except Exception as e:
