@@ -76,7 +76,7 @@ class BotConfigurationService:
         "CRYPTOBOT": "🪙 CryptoBot",
         "YOOKASSA": "🟣 YooKassa",
         "TRIBUTE": "🎁 Tribute",
-        "MULENPAY": "💰 MulenPay",
+        "MULENPAY": "💰 {mulenpay_name}",
         "PAL24": "🏦 PAL24 / PayPalych",
         "WATA": "💠 Wata",
         "EXTERNAL_ADMIN": "🛡️ Внешняя админка",
@@ -124,7 +124,7 @@ class BotConfigurationService:
         "PAYMENT": "Общие тексты платежей, описания чеков и шаблоны.",
         "YOOKASSA": "Интеграция с YooKassa: идентификаторы магазина и вебхуки.",
         "CRYPTOBOT": "CryptoBot и криптоплатежи через Telegram.",
-        "MULENPAY": "Платежи MulenPay и параметры магазина.",
+        "MULENPAY": "Платежи {mulenpay_name} и параметры магазина.",
         "PAL24": "PAL24 / PayPalych подключения и лимиты.",
         "TRIBUTE": "Tribute и донат-сервисы.",
         "TELEGRAM": "Telegram Stars и их стоимость.",
@@ -165,6 +165,14 @@ class BotConfigurationService:
         "DEBUG": "Отладочные функции и безопасный режим.",
         "MODERATION": "Настройки фильтров отображаемых имен и защиты от фишинга.",
     }
+
+    @staticmethod
+    def _format_dynamic_copy(category_key: Optional[str], value: str) -> str:
+        if not value:
+            return value
+        if category_key == "MULENPAY":
+            return value.format(mulenpay_name=settings.get_mulenpay_display_name())
+        return value
 
     CATEGORY_KEY_OVERRIDES: Dict[str, str] = {
         "DATABASE_URL": "DATABASE",
@@ -459,7 +467,8 @@ class BotConfigurationService:
 
     @classmethod
     def get_category_description(cls, category_key: str) -> str:
-        return cls.CATEGORY_DESCRIPTIONS.get(category_key, "")
+        description = cls.CATEGORY_DESCRIPTIONS.get(category_key, "")
+        return cls._format_dynamic_copy(category_key, description)
 
     @classmethod
     def is_toggle(cls, key: str) -> bool:
@@ -598,6 +607,7 @@ class BotConfigurationService:
                 category_key,
                 category_key.capitalize() if category_key else "Прочее",
             )
+            category_label = cls._format_dynamic_copy(category_key, category_label)
 
             cls._definitions[key] = SettingDefinition(
                 key=key,

@@ -248,7 +248,7 @@ async def main():
                 if settings.TRIBUTE_ENABLED:
                     enabled_services.append("Tribute")
                 if settings.is_mulenpay_enabled():
-                    enabled_services.append("Mulen Pay")
+                    enabled_services.append(settings.get_mulenpay_display_name())
                 if settings.is_cryptobot_enabled():
                     enabled_services.append("CryptoBot")
 
@@ -257,7 +257,11 @@ async def main():
                 stage.log(f"Активированы: {', '.join(enabled_services)}")
                 stage.success("Webhook сервера запущены")
             else:
-                stage.skip("Tribute, Mulen Pay и CryptoBot отключены")
+                stage.skip(
+                    "Tribute, "
+                    f"{settings.get_mulenpay_display_name()}"
+                    " и CryptoBot отключены"
+                )
 
         async with timeline.stage(
             "YooKassa webhook",
@@ -372,7 +376,8 @@ async def main():
                 )
             if settings.is_mulenpay_enabled():
                 webhook_lines.append(
-                    f"Mulen Pay: {settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.MULENPAY_WEBHOOK_PATH}"
+                    f"{settings.get_mulenpay_display_name()}: "
+                    f"{settings.WEBHOOK_URL}:{settings.TRIBUTE_WEBHOOK_PORT}{settings.MULENPAY_WEBHOOK_PATH}"
                 )
             if settings.is_cryptobot_enabled():
                 webhook_lines.append(

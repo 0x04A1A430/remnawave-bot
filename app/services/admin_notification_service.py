@@ -802,11 +802,12 @@ class AdminNotificationService:
         return self.enabled and bool(self.chat_id)
     
     def _get_payment_method_display(self, payment_method: Optional[str]) -> str:
+        mulenpay_name = settings.get_mulenpay_display_name()
         method_names = {
             'telegram_stars': '⭐ Telegram Stars',
             'yookassa': '💳 YooKassa (карта)',
             'tribute': '💎 Tribute (карта)',
-            'mulenpay': '💳 Mulen Pay (карта)',
+            'mulenpay': f'💳 {mulenpay_name} (карта)',
             'pal24': '🏦 PayPalych (СБП)',
             'manual': '🛠️ Вручную (админ)',
             'balance': '💰 С баланса'

@@ -186,8 +186,9 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
         )])
     
     if settings.is_mulenpay_enabled():
+        mulenpay_name = settings.get_mulenpay_display_name()
         keyboard.append([types.InlineKeyboardButton(
-            text="💳 MulenPay",
+            text=f"💳 {mulenpay_name}",
             callback_data="simple_subscription_mulenpay"
         )])
     
@@ -773,12 +774,19 @@ async def handle_simple_subscription_payment_method(
             
         elif payment_method == "mulenpay":
             # Оплата через MulenPay
+            mulenpay_name = settings.get_mulenpay_display_name()
             if not settings.is_mulenpay_enabled():
-                await callback.answer("❌ Оплата через MulenPay временно недоступна", show_alert=True)
+                await callback.answer(
+                    f"❌ Оплата через {mulenpay_name} временно недоступна",
+                    show_alert=True,
+                )
                 return
-            
+
             # Здесь должна быть реализация оплаты через MulenPay
-            await callback.answer("❌ Оплата через MulenPay пока не реализована", show_alert=True)
+            await callback.answer(
+                f"❌ Оплата через {mulenpay_name} пока не реализована",
+                show_alert=True,
+            )
             
         elif payment_method == "pal24":
             # Оплата через PayPalych

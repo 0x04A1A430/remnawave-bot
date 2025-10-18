@@ -3427,18 +3427,19 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей CryptoBot payments")
 
-        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ MULEN PAY ===")
+        mulenpay_name = settings.get_mulenpay_display_name()
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ %s ===", mulenpay_name)
         mulenpay_created = await create_mulenpay_payments_table()
         if mulenpay_created:
-            logger.info("✅ Таблица Mulen Pay payments готова")
+            logger.info("✅ Таблица %s payments готова", mulenpay_name)
         else:
-            logger.warning("⚠️ Проблемы с таблицей Mulen Pay payments")
+            logger.warning("⚠️ Проблемы с таблицей %s payments", mulenpay_name)
 
         mulenpay_schema_ok = await ensure_mulenpay_payment_schema()
         if mulenpay_schema_ok:
-            logger.info("✅ Схема Mulen Pay payments актуальна")
+            logger.info("✅ Схема %s payments актуальна", mulenpay_name)
         else:
-            logger.warning("⚠️ Не удалось обновить схему Mulen Pay payments")
+            logger.warning("⚠️ Не удалось обновить схему %s payments", mulenpay_name)
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PAL24 ===")
         pal24_created = await create_pal24_payments_table()
