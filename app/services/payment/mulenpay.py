@@ -131,10 +131,16 @@ class MulenPayPaymentMixin:
     ) -> bool:
         """Обрабатывает callback от MulenPay, обновляет статус и начисляет баланс."""
         display_name = settings.get_mulenpay_display_name()
+        display_name_html = settings.get_mulenpay_display_name_html()
         try:
             payment_module = import_module("app.services.payment_service")
             uuid_value = callback_data.get("uuid")
-            payment_status = (callback_data.get("payment_status") or "").lower()
+            payment_status_raw = (
+                callback_data.get("payment_status")
+                or callback_data.get("status")
+                or callback_data.get("paymentStatus")
+            )
+            payment_status = (payment_status_raw or "").lower()
             mulen_payment_id_raw = callback_data.get("id")
             mulen_payment_id_int: Optional[int] = None
             if mulen_payment_id_raw is not None:
