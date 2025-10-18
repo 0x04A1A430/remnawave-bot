@@ -63,7 +63,10 @@ def anyio_backend() -> str:
 
 
 @pytest.mark.anyio("asyncio")
-async def test_process_mulenpay_callback_success(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("status_field", ["payment_status", "status", "paymentStatus"])
+async def test_process_mulenpay_callback_success(
+    monkeypatch: pytest.MonkeyPatch, status_field: str
+) -> None:
     bot = DummyBot()
     service = _make_service(bot)
     fake_session = FakeSession()
@@ -142,10 +145,10 @@ async def test_process_mulenpay_callback_success(monkeypatch: pytest.MonkeyPatch
 
     payload = {
         "uuid": "mulen_uuid",
-        "payment_status": "success",
         "id": 123,
         "amount": "50.00",
     }
+    payload[status_field] = "success"
 
     result = await service.process_mulenpay_callback(fake_session, payload)
 
