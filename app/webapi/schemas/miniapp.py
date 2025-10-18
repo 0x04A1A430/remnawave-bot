@@ -361,6 +361,7 @@ class MiniAppPaymentMethodsRequest(BaseModel):
 
 class MiniAppPaymentMethod(BaseModel):
     id: str
+    name: Optional[str] = None
     icon: Optional[str] = None
     requires_amount: bool = False
     currency: str = "RUB"

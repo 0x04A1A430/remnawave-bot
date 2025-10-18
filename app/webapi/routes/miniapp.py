@@ -668,6 +668,7 @@ async def get_payment_methods(
         methods.append(
             MiniAppPaymentMethod(
                 id="mulenpay",
+                name=settings.get_mulenpay_display_name(),
                 icon="💳",
                 requires_amount=True,
                 currency="RUB",

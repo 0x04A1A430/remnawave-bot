@@ -28,13 +28,16 @@ class MulenPayPaymentMixin:
         language: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Создаёт локальный платеж и инициализирует сессию в MulenPay."""
+        display_name = settings.get_mulenpay_display_name()
+        display_name_html = settings.get_mulenpay_display_name_html()
         if not getattr(self, "mulenpay_service", None):
-            logger.error("MulenPay сервис не инициализирован")
+            logger.error("%s сервис не инициализирован", display_name)
             return None
 
         if amount_kopeks < settings.MULENPAY_MIN_AMOUNT_KOPEKS:
             logger.warning(
-                "Сумма MulenPay меньше минимальной: %s < %s",
+                "Сумма %s меньше минимальной: %s < %s",
+                display_name,
                 amount_kopeks,
                 settings.MULENPAY_MIN_AMOUNT_KOPEKS,
             )
@@ -42,7 +45,8 @@ class MulenPayPaymentMixin:
 
         if amount_kopeks > settings.MULENPAY_MAX_AMOUNT_KOPEKS:
             logger.warning(
-                "Сумма MulenPay больше максимальной: %s > %s",
+                "Сумма %s больше максимальной: %s > %s",
+                display_name,
                 amount_kopeks,
                 settings.MULENPAY_MAX_AMOUNT_KOPEKS,
             )
@@ -74,7 +78,7 @@ class MulenPayPaymentMixin:
             )
 
             if not response:
-                logger.error("Ошибка создания MulenPay платежа")
+                logger.error("Ошибка создания %s платежа", display_name)
                 return None
 
             mulen_payment_id = response.get("id")
@@ -100,7 +104,8 @@ class MulenPayPaymentMixin:
             )
 
             logger.info(
-                "Создан MulenPay платеж %s на %s₽ для пользователя %s",
+                "Создан %s платеж %s на %s₽ для пользователя %s",
+                display_name,
                 mulen_payment_id,
                 amount_rubles,
                 user_id,
@@ -116,7 +121,7 @@ class MulenPayPaymentMixin:
             }
 
         except Exception as error:
-            logger.error("Ошибка создания MulenPay платежа: %s", error)
+            logger.error("Ошибка создания %s платежа: %s", display_name, error)
             return None
 
     async def process_mulenpay_callback(
@@ -125,6 +130,7 @@ class MulenPayPaymentMixin:
         callback_data: Dict[str, Any],
     ) -> bool:
         """Обрабатывает callback от MulenPay, обновляет статус и начисляет баланс."""
+        display_name = settings.get_mulenpay_display_name()
         try:
             payment_module = import_module("app.services.payment_service")
             uuid_value = callback_data.get("uuid")
@@ -138,14 +144,15 @@ class MulenPayPaymentMixin:
                     mulen_payment_id_int = None
             amount_value = callback_data.get("amount")
             logger.debug(
-                "MulenPay callback: uuid=%s, status=%s, amount=%s",
+                "%s callback: uuid=%s, status=%s, amount=%s",
+                display_name,
                 uuid_value,
                 payment_status,
                 amount_value,
             )
 
             if not uuid_value and mulen_payment_id_raw is None:
-                logger.error("MulenPay callback без uuid и id")
+                logger.error("%s callback без uuid и id", display_name)
                 return False
 
             payment = None
@@ -159,7 +166,8 @@ class MulenPayPaymentMixin:
 
             if not payment:
                 logger.error(
-                    "MulenPay платеж не найден (uuid=%s, id=%s)",
+                    "%s платеж не найден (uuid=%s, id=%s)",
+                    display_name,
                     uuid_value,
                     mulen_payment_id_raw,
                 )
@@ -167,7 +175,8 @@ class MulenPayPaymentMixin:
 
             if payment.is_paid:
                 logger.info(
-                    "MulenPay платеж %s уже обработан, игнорируем повторный callback",
+                    "%s платеж %s уже обработан, игнорируем повторный callback",
+                    display_name,
                     payment.uuid,
                 )
                 return True
@@ -183,7 +192,8 @@ class MulenPayPaymentMixin:
 
                 if payment.transaction_id:
                     logger.info(
-                        "Для MulenPay платежа %s уже создана транзакция",
+                        "Для %s платежа %s уже создана транзакция",
+                        display_name,
                         payment.uuid,
                     )
                     return True
@@ -199,7 +209,7 @@ class MulenPayPaymentMixin:
                     user_id=payment.user_id,
                     type=TransactionType.DEPOSIT,
                     amount_kopeks=payment.amount_kopeks,
-                    description=f"Пополнение через MulenPay: {payment_description}",
+                    description=f"Пополнение через {display_name}: {payment_description}",
                     payment_method=PaymentMethod.MULENPAY,
                     external_id=payment.uuid,
                     is_completed=True,
@@ -214,8 +224,9 @@ class MulenPayPaymentMixin:
                 user = await payment_module.get_user_by_id(db, payment.user_id)
                 if not user:
                     logger.error(
-                        "Пользователь %s не найден при обработке MulenPay",
+                        "Пользователь %s не найден при обработке %s",
                         payment.user_id,
+                        display_name,
                     )
                     return False
 
@@ -226,7 +237,7 @@ class MulenPayPaymentMixin:
                     db,
                     user,
                     payment.amount_kopeks,
-                    f"Пополнение MulenPay: {payment.amount_kopeks // 100}₽",
+                    f"Пополнение {display_name}: {payment.amount_kopeks // 100}₽",
                 )
 
                 if was_first_topup and not user.has_made_first_topup:
@@ -261,7 +272,8 @@ class MulenPayPaymentMixin:
                         )
                     except Exception as error:
                         logger.error(
-                            "Ошибка отправки уведомления о пополнении MulenPay: %s",
+                            "Ошибка отправки уведомления о пополнении %s: %s",
+                            display_name,
                             error,
                         )
 
@@ -273,7 +285,7 @@ class MulenPayPaymentMixin:
                             (
                                 "✅ <b>Пополнение успешно!</b>\n\n"
                                 f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n"
-                                "🦊 Способ: Mulen Pay\n"
+                                f"🦊 Способ: {display_name_html}\n"
                                 f"🆔 Транзакция: {transaction.id}\n\n"
                                 "Баланс пополнен автоматически!"
                             ),
@@ -282,7 +294,8 @@ class MulenPayPaymentMixin:
                         )
                     except Exception as error:
                         logger.error(
-                            "Ошибка отправки уведомления пользователю MulenPay: %s",
+                            "Ошибка отправки уведомления пользователю %s: %s",
+                            display_name,
                             error,
                         )
 
@@ -329,7 +342,8 @@ class MulenPayPaymentMixin:
                     logger.error(f"Ошибка при работе с сохраненной корзиной для пользователя {user.id}: {e}", exc_info=True)
 
                 logger.info(
-                    "✅ Обработан MulenPay платеж %s для пользователя %s",
+                    "✅ Обработан %s платеж %s для пользователя %s",
+                    display_name,
                     payment.uuid,
                     payment.user_id,
                 )
@@ -343,7 +357,7 @@ class MulenPayPaymentMixin:
                     callback_payload=callback_data,
                     mulen_payment_id=mulen_payment_id_int,
                 )
-                logger.info("MulenPay платеж %s отменен", payment.uuid)
+                logger.info("%s платеж %s отменен", display_name, payment.uuid)
                 return True
 
             await payment_module.update_mulenpay_payment_status(
@@ -354,14 +368,20 @@ class MulenPayPaymentMixin:
                 mulen_payment_id=mulen_payment_id_int,
             )
             logger.info(
-                "Получен MulenPay callback со статусом %s для платежа %s",
+                "Получен %s callback со статусом %s для платежа %s",
+                display_name,
                 payment_status,
                 payment.uuid,
             )
             return True
 
         except Exception as error:
-            logger.error("Ошибка обработки MulenPay callback: %s", error, exc_info=True)
+            logger.error(
+                "Ошибка обработки %s callback: %s",
+                display_name,
+                error,
+                exc_info=True,
+            )
             return False
 
     def _map_mulenpay_status(self, status_code: Optional[int]) -> str:
@@ -383,6 +403,7 @@ class MulenPayPaymentMixin:
         local_payment_id: int,
     ) -> Optional[Dict[str, Any]]:
         """Возвращает текущее состояние платежа и при необходимости синхронизирует его."""
+        display_name = settings.get_mulenpay_display_name()
         try:
             payment_module = import_module("app.services.payment_service")
 
@@ -437,6 +458,9 @@ class MulenPayPaymentMixin:
 
         except Exception as error:
             logger.error(
-                "Ошибка получения статуса MulenPay: %s", error, exc_info=True
+                "Ошибка получения статуса %s: %s",
+                display_name,
+                error,
+                exc_info=True,
             )
             return None

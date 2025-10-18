@@ -21,18 +21,27 @@ async def start_mulenpay_payment(
     state: FSMContext,
 ):
     texts = get_texts(db_user.language)
+    mulenpay_name = settings.get_mulenpay_display_name()
+    mulenpay_name_html = settings.get_mulenpay_display_name_html()
 
     if not settings.is_mulenpay_enabled():
-        await callback.answer("❌ Оплата через Mulen Pay временно недоступна", show_alert=True)
+        await callback.answer(
+            f"❌ Оплата через {mulenpay_name} временно недоступна",
+            show_alert=True,
+        )
         return
 
-    message_text = texts.t(
+    message_template = texts.t(
         "MULENPAY_TOPUP_PROMPT",
         (
-            "💳 <b>Оплата через Mulen Pay</b>\n\n"
+            "💳 <b>Оплата через {mulenpay_name_html}</b>\n\n"
             "Введите сумму для пополнения от 100 до 100 000 ₽.\n"
-            "Оплата происходит через защищенную платформу Mulen Pay."
+            "Оплата происходит через защищенную платформу {mulenpay_name}."
         ),
+    )
+    message_text = message_template.format(
+        mulenpay_name=mulenpay_name,
+        mulenpay_name_html=mulenpay_name_html,
     )
 
     keyboard = get_back_keyboard(db_user.language)
@@ -63,9 +72,11 @@ async def process_mulenpay_payment_amount(
     state: FSMContext,
 ):
     texts = get_texts(db_user.language)
+    mulenpay_name = settings.get_mulenpay_display_name()
+    mulenpay_name_html = settings.get_mulenpay_display_name_html()
 
     if not settings.is_mulenpay_enabled():
-        await message.answer("❌ Оплата через Mulen Pay временно недоступна")
+        await message.answer(f"❌ Оплата через {mulenpay_name} временно недоступна")
         return
 
     if amount_kopeks < settings.MULENPAY_MIN_AMOUNT_KOPEKS:
@@ -96,8 +107,8 @@ async def process_mulenpay_payment_amount(
             await message.answer(
                 texts.t(
                     "MULENPAY_PAYMENT_ERROR",
-                    "❌ Ошибка создания платежа Mulen Pay. Попробуйте позже или обратитесь в поддержку.",
-                )
+                    "❌ Ошибка создания платежа {mulenpay_name}. Попробуйте позже или обратитесь в поддержку.",
+                ).format(mulenpay_name=mulenpay_name)
             )
             await state.clear()
             return
@@ -112,8 +123,8 @@ async def process_mulenpay_payment_amount(
                     types.InlineKeyboardButton(
                         text=texts.t(
                             "MULENPAY_PAY_BUTTON",
-                            "💳 Оплатить через Mulen Pay",
-                        ),
+                            "💳 Оплатить через {mulenpay_name}",
+                        ).format(mulenpay_name=mulenpay_name),
                         url=payment_url,
                     )
                 ],
@@ -132,11 +143,11 @@ async def process_mulenpay_payment_amount(
         message_template = texts.t(
             "MULENPAY_PAYMENT_INSTRUCTIONS",
             (
-                "💳 <b>Оплата через Mulen Pay</b>\n\n"
+                "💳 <b>Оплата через {mulenpay_name_html}</b>\n\n"
                 "💰 Сумма: {amount}\n"
                 "🆔 ID платежа: {payment_id}\n\n"
                 "📱 <b>Инструкция:</b>\n"
-                "1. Нажмите кнопку 'Оплатить через Mulen Pay'\n"
+                "1. Нажмите кнопку 'Оплатить через {mulenpay_name}'\n"
                 "2. Следуйте подсказкам платежной системы\n"
                 "3. Подтвердите перевод\n"
                 "4. Средства зачислятся автоматически\n\n"
@@ -148,6 +159,8 @@ async def process_mulenpay_payment_amount(
             amount=settings.format_price(amount_kopeks),
             payment_id=payment_id_display,
             support=settings.get_support_contact_display_html(),
+            mulenpay_name=mulenpay_name,
+            mulenpay_name_html=mulenpay_name_html,
         )
 
         await message.answer(
@@ -159,19 +172,20 @@ async def process_mulenpay_payment_amount(
         await state.clear()
 
         logger.info(
-            "Создан MulenPay платеж для пользователя %s: %s₽, ID: %s",
+            "Создан %s платеж для пользователя %s: %s₽, ID: %s",
+            mulenpay_name,
             db_user.telegram_id,
             amount_rubles,
             payment_id_display,
         )
 
     except Exception as e:
-        logger.error(f"Ошибка создания MulenPay платежа: {e}")
+        logger.error(f"Ошибка создания {mulenpay_name} платежа: {e}")
         await message.answer(
             texts.t(
                 "MULENPAY_PAYMENT_ERROR",
-                "❌ Ошибка создания платежа Mulen Pay. Попробуйте позже или обратитесь в поддержку.",
-            )
+                "❌ Ошибка создания платежа {mulenpay_name}. Попробуйте позже или обратитесь в поддержку.",
+            ).format(mulenpay_name=mulenpay_name)
         )
         await state.clear()
 
@@ -204,8 +218,9 @@ async def check_mulenpay_payment_status(
 
         emoji, status_text = status_labels.get(payment.status, ("❓", "Неизвестно"))
 
+        mulenpay_name = settings.get_mulenpay_display_name()
         message_lines = [
-            "💳 Статус платежа Mulen Pay:\n\n",
+            f"💳 Статус платежа {mulenpay_name}:\n\n",
             f"🆔 ID: {payment.mulen_payment_id or payment.id}\n",
             f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n",
             f"📊 Статус: {emoji} {status_text}\n",
@@ -234,5 +249,7 @@ async def check_mulenpay_payment_status(
             await callback.answer(message_text, show_alert=True)
 
     except Exception as e:
-        logger.error(f"Ошибка проверки статуса MulenPay: {e}")
+        logger.error(
+            f"Ошибка проверки статуса {settings.get_mulenpay_display_name()}: {e}"
+        )
         await callback.answer("❌ Ошибка проверки статуса", show_alert=True)

@@ -672,7 +672,10 @@ class UserService:
                 mulenpay_payments = mulenpay_result.scalars().all()
 
                 if mulenpay_payments:
-                    logger.info(f"🔄 Удаляем {len(mulenpay_payments)} MulenPay платежей")
+                    mulenpay_name = settings.get_mulenpay_display_name()
+                    logger.info(
+                        f"🔄 Удаляем {len(mulenpay_payments)} {mulenpay_name} платежей"
+                    )
                     await db.execute(
                         update(MulenPayPayment)
                         .where(MulenPayPayment.user_id == user_id)
@@ -684,7 +687,9 @@ class UserService:
                     )
                     await db.flush()
             except Exception as e:
-                logger.error(f"❌ Ошибка удаления MulenPay платежей: {e}")
+                logger.error(
+                    f"❌ Ошибка удаления {settings.get_mulenpay_display_name()} платежей: {e}"
+                )
 
             try:
                 pal24_result = await db.execute(

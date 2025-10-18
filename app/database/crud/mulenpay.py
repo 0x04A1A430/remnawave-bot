@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.models import MulenPayPayment
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,8 @@ async def create_mulenpay_payment(
     await db.refresh(payment)
 
     logger.info(
-        "Создан MulenPay платеж #%s (uuid=%s) на сумму %s копеек для пользователя %s",
+        "Создан %s платеж #%s (uuid=%s) на сумму %s копеек для пользователя %s",
+        settings.get_mulenpay_display_name(),
         payment.mulen_payment_id,
         uuid,
         amount_kopeks,

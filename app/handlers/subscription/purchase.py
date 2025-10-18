@@ -2412,8 +2412,9 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
         )])
     
     if settings.is_mulenpay_enabled():
+        mulenpay_name = settings.get_mulenpay_display_name()
         keyboard.append([types.InlineKeyboardButton(
-            text="💳 MulenPay",
+            text=f"💳 {mulenpay_name}",
             callback_data="simple_subscription_mulenpay"
         )])
     

@@ -48,7 +48,12 @@ class WebhookServer:
         logger.info(f"Webhook сервер настроен:")
         logger.info(f"  - Tribute webhook: POST {settings.TRIBUTE_WEBHOOK_PATH}")
         if settings.is_mulenpay_enabled():
-            logger.info(f"  - Mulen Pay webhook: POST {settings.MULENPAY_WEBHOOK_PATH}")
+            mulenpay_name = settings.get_mulenpay_display_name()
+            logger.info(
+                "  - %s webhook: POST %s",
+                mulenpay_name,
+                settings.MULENPAY_WEBHOOK_PATH,
+            )
         if settings.is_cryptobot_enabled():
             logger.info(f"  - CryptoBot webhook: POST {settings.CRYPTOBOT_WEBHOOK_PATH}")
         logger.info(f"  - Health check: GET /health")
@@ -84,8 +89,10 @@ class WebhookServer:
                 settings.TRIBUTE_WEBHOOK_PATH,
             )
             if settings.is_mulenpay_enabled():
+                mulenpay_name = settings.get_mulenpay_display_name()
                 logger.info(
-                    "Mulen Pay webhook URL: http://%s:%s%s",
+                    "%s webhook URL: http://%s:%s%s",
+                    mulenpay_name,
                     settings.TRIBUTE_WEBHOOK_HOST,
                     settings.TRIBUTE_WEBHOOK_PORT,
                     settings.MULENPAY_WEBHOOK_PATH,
@@ -128,24 +135,37 @@ class WebhookServer:
 
     async def _mulenpay_webhook_handler(self, request: web.Request) -> web.Response:
         try:
-            logger.info(f"Получен Mulen Pay webhook: {request.method} {request.path}")
-            logger.info(f"MulenPay webhook headers: {dict(request.headers)}")
+            mulenpay_name = settings.get_mulenpay_display_name()
+            logger.info(
+                "%s webhook: %s %s",
+                mulenpay_name,
+                request.method,
+                request.path,
+            )
+            logger.info(
+                "%s webhook headers: %s",
+                mulenpay_name,
+                dict(request.headers),
+            )
             raw_body = await request.read()
 
             if not raw_body:
-                logger.warning("Пустой Mulen Pay webhook")
+                logger.warning("Пустой %s webhook", mulenpay_name)
                 return web.json_response({"status": "error", "reason": "empty_body"}, status=400)
 
             # Временно отключаем проверку подписи для отладки
             # TODO: Включить обратно после настройки MulenPay
             if not self._verify_mulenpay_signature(request, raw_body):
-                logger.warning("MulenPay webhook signature verification failed, but processing anyway for debugging")
+                logger.warning(
+                    "%s webhook signature verification failed, but processing anyway for debugging",
+                    mulenpay_name,
+                )
                 # return web.json_response({"status": "error", "reason": "invalid_signature"}, status=401)
 
             try:
                 payload = json.loads(raw_body.decode('utf-8'))
             except json.JSONDecodeError as error:
-                logger.error(f"Ошибка парсинга Mulen Pay webhook: {error}")
+                logger.error(f"Ошибка парсинга {mulenpay_name} webhook: {error}")
                 return web.json_response({"status": "error", "reason": "invalid_json"}, status=400)
 
             payment_service = PaymentService(self.bot)
@@ -160,7 +180,10 @@ class WebhookServer:
                     return web.json_response({"status": "ok"}, status=200)
                 return web.json_response({"status": "error", "reason": "processing_failed"}, status=400)
             except Exception as error:
-                logger.error(f"Ошибка обработки Mulen Pay webhook: {error}", exc_info=True)
+                logger.error(
+                    f"Ошибка обработки {mulenpay_name} webhook: {error}",
+                    exc_info=True,
+                )
                 return web.json_response({"status": "error", "reason": "internal_error"}, status=500)
             finally:
                 try:
@@ -169,7 +192,11 @@ class WebhookServer:
                     pass
 
         except Exception as error:
-            logger.error(f"Критическая ошибка Mulen Pay webhook: {error}", exc_info=True)
+            mulenpay_name = settings.get_mulenpay_display_name()
+            logger.error(
+                f"Критическая ошибка {mulenpay_name} webhook: {error}",
+                exc_info=True,
+            )
             return web.json_response({"status": "error", "reason": "internal_error", "message": str(error)}, status=500)
 
     @staticmethod
@@ -183,12 +210,13 @@ class WebhookServer:
     @staticmethod
     def _verify_mulenpay_signature(request: web.Request, raw_body: bytes) -> bool:
         secret_key = settings.MULENPAY_SECRET_KEY
+        display_name = settings.get_mulenpay_display_name()
         if not secret_key:
-            logger.error("Mulen Pay secret key is not configured")
+            logger.error("%s secret key is not configured", display_name)
             return False
 
         # Логируем все заголовки для отладки
-        logger.info("MulenPay webhook headers for signature verification:")
+        logger.info("%s webhook headers for signature verification:", display_name)
         for header_name, header_value in request.headers.items():
             if any(keyword in header_name.lower() for keyword in ['signature', 'sign', 'token', 'auth']):
                 logger.info(f"  {header_name}: {header_value}")
@@ -239,7 +267,7 @@ class WebhookServer:
             if hmac.compare_digest(normalized_signature_no_padding, expected_urlsafe_base64_signature.rstrip('=')):
                 return True
 
-            logger.error("Неверная подпись Mulen Pay webhook")
+            logger.error("Неверная подпись %s webhook", display_name)
             return False
 
         authorization_header = request.headers.get('Authorization')
@@ -252,7 +280,7 @@ class WebhookServer:
                 if hmac.compare_digest(token, secret_key):
                     return True
 
-                logger.error("Неверный %s токен Mulen Pay webhook", scheme)
+                logger.error("Неверный %s токен %s webhook", scheme, display_name)
                 return False
 
             if not value and hmac.compare_digest(token, secret_key):
@@ -270,11 +298,12 @@ class WebhookServer:
             return True
 
         logger.info(
-            "Mulen Pay webhook headers received: %s",
+            "%s webhook headers received: %s",
+            display_name,
             {key: value for key, value in request.headers.items() if 'authorization' not in key.lower()}
         )
 
-        logger.error("Отсутствует подпись Mulen Pay webhook")
+        logger.error("Отсутствует подпись %s webhook", display_name)
         return False
 
     async def _tribute_webhook_handler(self, request: web.Request) -> web.Response:
