@@ -257,7 +257,8 @@ def get_main_menu_keyboard(
             "💰 Баланс: {balance}",
         ).format(balance=texts.format_price(balance_kopeks))
     
-    keyboard = []
+    keyboard: list[list[InlineKeyboardButton]] = []
+    paired_buttons: list[InlineKeyboardButton] = []
 
     if has_active_subscription and subscription_is_active:
         connect_mode = settings.CONNECT_BUTTON_MODE
@@ -312,15 +313,11 @@ def get_main_menu_keyboard(
         happ_row = get_happ_download_button_row(texts)
         if happ_row:
             keyboard.append(happ_row)
-
-        keyboard.append([
-            InlineKeyboardButton(text=balance_button_text, callback_data="menu_balance"),
+        paired_buttons.append(
             InlineKeyboardButton(text=texts.MENU_SUBSCRIPTION, callback_data="menu_subscription")
-        ])
-    else:
-        keyboard.append([
-            InlineKeyboardButton(text=balance_button_text, callback_data="menu_balance")
-        ])
+        )
+
+    keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data="menu_balance")])
     
     show_trial = not has_had_paid_subscription and not has_active_subscription
     
@@ -332,8 +329,8 @@ def get_main_menu_keyboard(
             callback_data="simple_subscription_purchase",
         )
 
-    subscription_buttons = []
-    
+    subscription_buttons: list[InlineKeyboardButton] = []
+
     if show_trial:
         subscription_buttons.append(
             InlineKeyboardButton(text=texts.MENU_TRIAL, callback_data="menu_trial")
@@ -348,42 +345,33 @@ def get_main_menu_keyboard(
             simple_purchase_button = None
     
     if subscription_buttons:
-        if len(subscription_buttons) == 2:
-            keyboard.append(subscription_buttons)
-        elif len(subscription_buttons) == 1:
-            keyboard.append([subscription_buttons[0]])
-        elif len(subscription_buttons) > 2:
-            # Если больше 2 кнопок, добавляем по отдельности
-            for button in subscription_buttons:
-                keyboard.append([button])
+        paired_buttons.extend(subscription_buttons)
     if simple_purchase_button:
-        keyboard.append([simple_purchase_button])
+        paired_buttons.append(simple_purchase_button)
 
     if show_resume_checkout or has_saved_cart:
-        keyboard.append([
+        paired_buttons.append(
             InlineKeyboardButton(
                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
                 callback_data="subscription_resume_checkout",
             )
-        ])
+        )
 
     if custom_buttons:
         for button in custom_buttons:
             if isinstance(button, InlineKeyboardButton):
-                keyboard.append([button])
+                paired_buttons.append(button)
 
     # Добавляем кнопки промокода и рефералов, учитывая настройки
-    additional_buttons = [
+    paired_buttons.append(
         InlineKeyboardButton(text=texts.MENU_PROMOCODE, callback_data="menu_promocode")
-    ]
+    )
     
     # Добавляем кнопку рефералов только если программа включена
     if settings.is_referral_program_enabled():
-        additional_buttons.append(
+        paired_buttons.append(
             InlineKeyboardButton(text=texts.MENU_REFERRALS, callback_data="menu_referrals")
         )
-    
-    keyboard.append(additional_buttons)
 
     # Support button is configurable (runtime via service)
     try:
@@ -392,21 +380,26 @@ def get_main_menu_keyboard(
     except Exception:
         support_enabled = settings.SUPPORT_MENU_ENABLED
     if support_enabled:
-        keyboard.append([
+        paired_buttons.append(
             InlineKeyboardButton(text=texts.MENU_SUPPORT, callback_data="menu_support")
-        ])
+        )
 
-    keyboard.append([
+    paired_buttons.append(
         InlineKeyboardButton(
             text=texts.t("MENU_INFO", "ℹ️ Инфо"),
             callback_data="menu_info",
         )
-    ])
+    )
 
     if settings.is_language_selection_enabled():
-        keyboard.append([
+        paired_buttons.append(
             InlineKeyboardButton(text=texts.MENU_LANGUAGE, callback_data="menu_language")
-        ])
+        )
+
+    for i in range(0, len(paired_buttons), 2):
+        row = paired_buttons[i : i + 2]
+        keyboard.append(row)
+
     if settings.DEBUG:
         print(f"DEBUG KEYBOARD: is_admin={is_admin}, добавляем админ кнопку: {is_admin}")
 
