@@ -956,11 +956,11 @@ async def handle_simple_subscription_payment_method(
             message_template = texts.t(
                 "MULENPAY_PAYMENT_INSTRUCTIONS",
                 (
-                    "💳 <b>Оплата через Mulen Pay</b>\n\n"
+                    "💳 <b>Оплата через {mulenpay_name_html}</b>\n\n"
                     "💰 Сумма: {amount}\n"
                     "🆔 ID платежа: {payment_id}\n\n"
                     "📱 <b>Инструкция:</b>\n"
-                    "1. Нажмите кнопку 'Оплатить через Mulen Pay'\n"
+                    "1. Нажмите кнопку 'Оплатить через {mulenpay_name}'\n"
                     "2. Следуйте подсказкам платежной системы\n"
                     "3. Подтвердите перевод\n"
                     "4. Средства зачислятся автоматически\n\n"
@@ -970,6 +970,8 @@ async def handle_simple_subscription_payment_method(
 
             await callback.message.edit_text(
                 message_template.format(
+                    mulenpay_name=mulenpay_name,
+                    mulenpay_name_html=settings.get_mulenpay_display_name_html(),
                     amount=settings.format_price(price_kopeks),
                     payment_id=payment_id_display,
                     support=settings.get_support_contact_display_html(),
