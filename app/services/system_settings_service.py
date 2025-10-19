@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, get_args, get_origin
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union, get_args, get_origin
 
 from app.database.universal_migration import ensure_default_web_api_token
 
@@ -81,6 +81,7 @@ class BotConfigurationService:
         "WATA": "💠 Wata",
         "EXTERNAL_ADMIN": "🛡️ Внешняя админка",
         "SUBSCRIPTIONS_CORE": "📅 Подписки и лимиты",
+        "SIMPLE_SUBSCRIPTION": "⚡ Простая покупка",
         "PERIODS": "📆 Периоды подписок",
         "SUBSCRIPTION_PRICES": "💵 Стоимость тарифов",
         "TRAFFIC": "📊 Трафик",
@@ -131,6 +132,7 @@ class BotConfigurationService:
         "WATA": "Wata: токен доступа, тип платежа и пределы сумм.",
         "EXTERNAL_ADMIN": "Токен внешней админки для проверки запросов.",
         "SUBSCRIPTIONS_CORE": "Лимиты устройств, трафика и базовые цены подписок.",
+        "SIMPLE_SUBSCRIPTION": "Параметры упрощённой покупки: период, трафик, устройства и сквады.",
         "PERIODS": "Доступные периоды подписок и продлений.",
         "SUBSCRIPTION_PRICES": "Стоимость подписок по периодам в копейках.",
         "TRAFFIC": "Лимиты трафика и стратегии сброса.",
@@ -230,6 +232,11 @@ class BotConfigurationService:
         "PAYMENT_SUBSCRIPTION_DESCRIPTION": "PAYMENT",
         "PAYMENT_BALANCE_TEMPLATE": "PAYMENT",
         "PAYMENT_SUBSCRIPTION_TEMPLATE": "PAYMENT",
+        "SIMPLE_SUBSCRIPTION_ENABLED": "SIMPLE_SUBSCRIPTION",
+        "SIMPLE_SUBSCRIPTION_PERIOD_DAYS": "SIMPLE_SUBSCRIPTION",
+        "SIMPLE_SUBSCRIPTION_DEVICE_LIMIT": "SIMPLE_SUBSCRIPTION",
+        "SIMPLE_SUBSCRIPTION_TRAFFIC_GB": "SIMPLE_SUBSCRIPTION",
+        "SIMPLE_SUBSCRIPTION_SQUAD_UUID": "SIMPLE_SUBSCRIPTION",
         "DISABLE_TOPUP_BUTTONS": "PAYMENT",
         "ENABLE_NOTIFICATIONS": "NOTIFICATIONS",
         "NOTIFICATION_RETRY_ATTEMPTS": "NOTIFICATIONS",
@@ -284,6 +291,7 @@ class BotConfigurationService:
         "PAYMENT_": "PAYMENT",
         "WATA_": "WATA",
         "EXTERNAL_ADMIN_": "EXTERNAL_ADMIN",
+        "SIMPLE_SUBSCRIPTION_": "SIMPLE_SUBSCRIPTION",
         "CONNECT_BUTTON_HAPP": "HAPP",
         "HAPP_": "HAPP",
         "SKIP_": "SKIP",
@@ -394,11 +402,46 @@ class BotConfigurationService:
 
     SETTING_HINTS: Dict[str, Dict[str, str]] = {
         "YOOKASSA_ENABLED": {
-            "description": "Включает оплату через YooKassa. Требует корректных идентификаторов магазина и секретного ключа.",
+            "description": (
+                "Включает оплату через YooKassa. "
+                "Требует корректных идентификаторов магазина и секретного ключа."
+            ),
             "format": "Булево значение: выберите \"Включить\" или \"Выключить\".",
             "example": "Включено при полностью настроенной интеграции.",
             "warning": "При включении без Shop ID и Secret Key пользователи увидят ошибки при оплате.",
             "dependencies": "YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_RETURN_URL",
+        },
+        "SIMPLE_SUBSCRIPTION_ENABLED": {
+            "description": "Показывает в меню пункт с быстрой покупкой подписки.",
+            "format": "Булево значение.",
+            "example": "true",
+            "warning": "Если остались не настроенные параметры, предложение может вести себя некорректно.",
+        },
+        "SIMPLE_SUBSCRIPTION_PERIOD_DAYS": {
+            "description": "Период подписки, который предлагается при быстрой покупке.",
+            "format": "Выберите один из доступных периодов.",
+            "example": "30 дн. — 990 ₽",
+            "warning": "Не забудьте настроить цену периода в блоке «Стоимость тарифов».",
+        },
+        "SIMPLE_SUBSCRIPTION_DEVICE_LIMIT": {
+            "description": "Сколько устройств получит пользователь вместе с подпиской по быстрой покупке.",
+            "format": "Выберите число устройств.",
+            "example": "2 устройства",
+            "warning": "Значение не должно превышать допустимый лимит в настройках подписок.",
+        },
+        "SIMPLE_SUBSCRIPTION_TRAFFIC_GB": {
+            "description": "Объём трафика, включённый в простую подписку (0 = безлимит).",
+            "format": "Выберите пакет трафика.",
+            "example": "Безлимит",
+        },
+        "SIMPLE_SUBSCRIPTION_SQUAD_UUID": {
+            "description": (
+                "Привязка быстрой подписки к конкретному скваду. "
+                "Оставьте пустым для любого доступного сервера."
+            ),
+            "format": "Выберите сквад из списка или очистите значение.",
+            "example": "d4aa2b8c-9a36-4f31-93a2-6f07dad05fba",
+            "warning": "Убедитесь, что выбранный сквад активен и доступен для подписки.",
         },
         "CRYPTOBOT_ENABLED": {
             "description": "Разрешает принимать криптоплатежи через CryptoBot.",
@@ -422,7 +465,10 @@ class BotConfigurationService:
             "dependencies": "MAINTENANCE_MESSAGE, MAINTENANCE_CHECK_INTERVAL",
         },
         "DISPLAY_NAME_BANNED_KEYWORDS": {
-            "description": "Список слов и фрагментов, при наличии которых в отображаемом имени пользователь будет заблокирован.",
+            "description": (
+                "Список слов и фрагментов, при наличии которых в отображаемом имени "
+                "пользователь будет заблокирован."
+            ),
             "format": "Перечислите ключевые слова через запятую или с новой строки.",
             "example": "support, security, служебн",
             "warning": "Слишком агрессивные фильтры могут блокировать добросовестных пользователей.",
@@ -443,10 +489,16 @@ class BotConfigurationService:
             "dependencies": "REMNAWAVE_AUTO_SYNC_TIMES",
         },
         "REMNAWAVE_AUTO_SYNC_TIMES": {
-            "description": "Список времени в формате HH:MM, когда запускается автосинхронизация в течение суток.",
+            "description": (
+                "Список времени в формате HH:MM, когда запускается автосинхронизация "
+                "в течение суток."
+            ),
             "format": "Перечислите время через запятую или с новой строки (например, 03:00, 15:00).",
             "example": "03:00, 15:00",
-            "warning": "Минимальный интервал между запусками не ограничен, но слишком частые синхронизации нагружают панель.",
+            "warning": (
+                "Минимальный интервал между запусками не ограничен, но слишком частые "
+                "синхронизации нагружают панель."
+            ),
             "dependencies": "REMNAWAVE_AUTO_SYNC_ENABLED",
         },
         "EXTERNAL_ADMIN_TOKEN": {
@@ -515,6 +567,14 @@ class BotConfigurationService:
 
     @classmethod
     def format_value_human(cls, key: str, value: Any) -> str:
+        if key == "SIMPLE_SUBSCRIPTION_SQUAD_UUID":
+            if value is None:
+                return "Любой доступный"
+            if isinstance(value, str):
+                cleaned_value = value.strip()
+                if not cleaned_value:
+                    return "Любой доступный"
+
         if value is None:
             return "—"
 
@@ -743,7 +803,178 @@ class BotConfigurationService:
     @classmethod
     def get_choice_options(cls, key: str) -> List[ChoiceOption]:
         cls.initialize_definitions()
+        dynamic = cls._get_dynamic_choice_options(key)
+        if dynamic is not None:
+            cls.CHOICES[key] = dynamic
+            cls._invalidate_choice_cache(key)
+            return dynamic
         return cls.CHOICES.get(key, [])
+
+    @classmethod
+    def _invalidate_choice_cache(cls, key: str) -> None:
+        cls._choice_tokens.pop(key, None)
+        cls._choice_token_lookup.pop(key, None)
+
+    @classmethod
+    def _get_dynamic_choice_options(cls, key: str) -> Optional[List[ChoiceOption]]:
+        if key == "SIMPLE_SUBSCRIPTION_PERIOD_DAYS":
+            return cls._build_simple_subscription_period_choices()
+        if key == "SIMPLE_SUBSCRIPTION_DEVICE_LIMIT":
+            return cls._build_simple_subscription_device_choices()
+        if key == "SIMPLE_SUBSCRIPTION_TRAFFIC_GB":
+            return cls._build_simple_subscription_traffic_choices()
+        return None
+
+    @staticmethod
+    def _build_simple_subscription_period_choices() -> List[ChoiceOption]:
+        raw_periods = str(getattr(settings, "AVAILABLE_SUBSCRIPTION_PERIODS", "") or "")
+        period_values: set[int] = set()
+
+        for segment in raw_periods.split(","):
+            segment = segment.strip()
+            if not segment:
+                continue
+            try:
+                period = int(segment)
+            except ValueError:
+                continue
+            if period > 0:
+                period_values.add(period)
+
+        fallback_period = getattr(settings, "SIMPLE_SUBSCRIPTION_PERIOD_DAYS", 30) or 30
+        try:
+            fallback_period = int(fallback_period)
+        except (TypeError, ValueError):
+            fallback_period = 30
+        period_values.add(max(1, fallback_period))
+
+        options: List[ChoiceOption] = []
+        for days in sorted(period_values):
+            price_attr = f"PRICE_{days}_DAYS"
+            price_value = getattr(settings, price_attr, None)
+            if not isinstance(price_value, int):
+                price_value = settings.BASE_SUBSCRIPTION_PRICE
+
+            label = f"{days} дн."
+            try:
+                if isinstance(price_value, int):
+                    label = f"{label} — {settings.format_price(price_value)}"
+            except Exception:
+                logger.debug("Не удалось форматировать цену для периода %s", days, exc_info=True)
+
+            options.append(ChoiceOption(days, label))
+
+        return options
+
+    @classmethod
+    def _build_simple_subscription_device_choices(cls) -> List[ChoiceOption]:
+        default_limit = getattr(settings, "DEFAULT_DEVICE_LIMIT", 1) or 1
+        try:
+            default_limit = int(default_limit)
+        except (TypeError, ValueError):
+            default_limit = 1
+
+        max_limit = getattr(settings, "MAX_DEVICES_LIMIT", default_limit) or default_limit
+        try:
+            max_limit = int(max_limit)
+        except (TypeError, ValueError):
+            max_limit = default_limit
+
+        current_limit = getattr(settings, "SIMPLE_SUBSCRIPTION_DEVICE_LIMIT", default_limit) or default_limit
+        try:
+            current_limit = int(current_limit)
+        except (TypeError, ValueError):
+            current_limit = default_limit
+
+        upper_bound = max(default_limit, max_limit, current_limit, 1)
+        upper_bound = min(max(upper_bound, 1), 50)
+
+        options: List[ChoiceOption] = []
+        for count in range(1, upper_bound + 1):
+            label = f"{count} {cls._pluralize_devices(count)}"
+            if count == default_limit:
+                label = f"{label} (по умолчанию)"
+            options.append(ChoiceOption(count, label))
+
+        return options
+
+    @staticmethod
+    def _build_simple_subscription_traffic_choices() -> List[ChoiceOption]:
+        try:
+            packages = settings.get_traffic_packages()
+        except Exception as error:
+            logger.warning("Не удалось получить пакеты трафика: %s", error, exc_info=True)
+            packages = []
+
+        traffic_values: set[int] = {0}
+        for package in packages:
+            gb_value = package.get("gb")
+            try:
+                gb = int(gb_value)
+            except (TypeError, ValueError):
+                continue
+            if gb >= 0:
+                traffic_values.add(gb)
+
+        default_limit = getattr(settings, "DEFAULT_TRAFFIC_LIMIT_GB", 0) or 0
+        try:
+            default_limit = int(default_limit)
+        except (TypeError, ValueError):
+            default_limit = 0
+        if default_limit >= 0:
+            traffic_values.add(default_limit)
+
+        current_limit = getattr(settings, "SIMPLE_SUBSCRIPTION_TRAFFIC_GB", default_limit)
+        try:
+            current_limit = int(current_limit)
+        except (TypeError, ValueError):
+            current_limit = default_limit
+        if current_limit >= 0:
+            traffic_values.add(current_limit)
+
+        options: List[ChoiceOption] = []
+        for gb in sorted(traffic_values):
+            if gb <= 0:
+                label = "Безлимит"
+            else:
+                label = f"{gb} ГБ"
+
+            price_label = None
+            for package in packages:
+                try:
+                    package_gb = int(package.get("gb"))
+                except (TypeError, ValueError):
+                    continue
+                if package_gb != gb:
+                    continue
+                price_raw = package.get("price")
+                try:
+                    price_value = int(price_raw)
+                    if price_value >= 0:
+                        price_label = settings.format_price(price_value)
+                except (TypeError, ValueError):
+                    continue
+                break
+
+            if price_label:
+                label = f"{label} — {price_label}"
+
+            options.append(ChoiceOption(gb, label))
+
+        return options
+
+    @staticmethod
+    def _pluralize_devices(count: int) -> str:
+        count = abs(int(count))
+        last_two = count % 100
+        last_one = count % 10
+        if 11 <= last_two <= 14:
+            return "устройств"
+        if last_one == 1:
+            return "устройство"
+        if 2 <= last_one <= 4:
+            return "устройства"
+        return "устройств"
 
     @classmethod
     def has_choices(cls, key: str) -> bool:
@@ -1055,4 +1286,3 @@ class BotConfigurationService:
 
 
 bot_configuration_service = BotConfigurationService
-

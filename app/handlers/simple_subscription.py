@@ -1,7 +1,10 @@
 """Обработчики для простой покупки подписки."""
+import html
 import logging
+from datetime import datetime
 from typing import Optional, Dict, Any
 from aiogram import types, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,13 +35,9 @@ async def start_simple_subscription_purchase(
         await callback.answer("❌ Простая покупка подписки временно недоступна", show_alert=True)
         return
     
-    # Проверяем, есть ли у пользователя активная подписка
+    # Проверяем, есть ли у пользователя подписка (информируем, но не блокируем покупку)
     from app.database.crud.subscription import get_subscription_by_user_id
     current_subscription = await get_subscription_by_user_id(db, db_user.id)
-    
-    if current_subscription and current_subscription.is_active:
-        await callback.answer("❌ У вас уже есть активная подписка", show_alert=True)
-        return
     
     # Подготовим параметры простой подписки
     subscription_params = {
@@ -91,6 +90,18 @@ async def start_simple_subscription_purchase(
         can_pay_from_balance,
     )
 
+    trial_notice = ""
+    if current_subscription and getattr(current_subscription, "is_trial", False):
+        try:
+            days_left = max(0, (current_subscription.end_date - datetime.utcnow()).days)
+        except Exception:
+            days_left = 0
+        key = "SIMPLE_SUBSCRIPTION_TRIAL_NOTICE_ACTIVE" if current_subscription.is_active else "SIMPLE_SUBSCRIPTION_TRIAL_NOTICE_TRIAL"
+        trial_notice = texts.t(
+            key,
+            "ℹ️ У вас уже есть триальная подписка. Она истекает через {days} дн.",
+        ).format(days=days_left)
+
     message_text = (
         f"⚡ <b>Простая покупка подписки</b>\n\n"
         f"📅 Период: {subscription_params['period_days']} дней\n"
@@ -105,6 +116,9 @@ async def start_simple_subscription_purchase(
             else "Баланс пока недостаточный для мгновенной оплаты. Выберите подходящий способ оплаты:"
         )
     )
+
+    if trial_notice:
+        message_text = f"{trial_notice}\n\n{message_text}"
 
     methods_keyboard = _get_simple_subscription_payment_keyboard(db_user.language)
     keyboard_rows = []
@@ -768,9 +782,112 @@ async def handle_simple_subscription_payment_method(
             if not settings.is_cryptobot_enabled():
                 await callback.answer("❌ Оплата через CryptoBot временно недоступна", show_alert=True)
                 return
-            
-            # Здесь должна быть реализация оплаты через CryptoBot
-            await callback.answer("❌ Оплата через CryptoBot пока не реализована", show_alert=True)
+
+            amount_rubles = price_kopeks / 100
+            if amount_rubles < 100 or amount_rubles > 100000:
+                await callback.answer(
+                    "❌ Сумма должна быть от 100 до 100 000 ₽ для оплаты через CryptoBot",
+                    show_alert=True,
+                )
+                return
+
+            try:
+                from app.utils.currency_converter import currency_converter
+
+                usd_rate = await currency_converter.get_usd_to_rub_rate()
+            except Exception as rate_error:
+                logger.warning("Не удалось получить курс USD: %s", rate_error)
+                usd_rate = 95.0
+
+            amount_usd = round(amount_rubles / usd_rate, 2)
+            if amount_usd < 1:
+                await callback.answer(
+                    "❌ Минимальная сумма для оплаты через CryptoBot — примерно 1 USD",
+                    show_alert=True,
+                )
+                return
+            if amount_usd > 1000:
+                await callback.answer(
+                    "❌ Максимальная сумма для оплаты через CryptoBot — 1000 USD",
+                    show_alert=True,
+                )
+                return
+
+            payment_service = PaymentService(callback.bot)
+            crypto_result = await payment_service.create_cryptobot_payment(
+                db=db,
+                user_id=db_user.id,
+                amount_usd=amount_usd,
+                asset=settings.CRYPTOBOT_DEFAULT_ASSET,
+                description=settings.get_subscription_payment_description(
+                    subscription_params["period_days"],
+                    price_kopeks,
+                ),
+                payload=f"simple_subscription_{db_user.id}_{price_kopeks}",
+            )
+
+            if not crypto_result:
+                await callback.answer(
+                    "❌ Ошибка создания платежа через CryptoBot. Попробуйте позже или обратитесь в поддержку.",
+                    show_alert=True,
+                )
+                return
+
+            payment_url = (
+                crypto_result.get("mini_app_invoice_url")
+                or crypto_result.get("bot_invoice_url")
+                or crypto_result.get("web_app_invoice_url")
+            )
+
+            if not payment_url:
+                await callback.answer(
+                    "❌ Не удалось получить ссылку для оплаты. Обратитесь в поддержку.",
+                    show_alert=True,
+                )
+                return
+
+            keyboard = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text="🪙 Оплатить через CryptoBot",
+                            url=payment_url,
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                            callback_data=f"check_simple_cryptobot_{crypto_result['local_payment_id']}",
+                        )
+                    ],
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription_purchase")],
+                ]
+            )
+
+            message_text = (
+                "🪙 <b>Оплата через CryptoBot</b>\n\n"
+                f"💰 Сумма к оплате: {amount_rubles:.0f} ₽\n"
+                f"💵 В долларах: {amount_usd:.2f} USD\n"
+                f"🪙 Актив: {crypto_result['asset']}\n"
+                f"💱 Курс: 1 USD ≈ {usd_rate:.2f} ₽\n"
+                f"🆔 ID платежа: {crypto_result['invoice_id'][:8]}...\n\n"
+                "📱 <b>Инструкция:</b>\n"
+                "1. Нажмите кнопку 'Оплатить через CryptoBot'\n"
+                "2. Выберите актив и следуйте подсказкам\n"
+                "3. Подтвердите перевод\n"
+                "4. Средства зачислятся автоматически\n\n"
+                f"❓ Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}"
+            )
+
+            await callback.message.edit_text(
+                message_text,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+
+            await state.clear()
+            await callback.answer()
+            return
             
         elif payment_method == "mulenpay":
             # Оплата через MulenPay
@@ -782,29 +899,355 @@ async def handle_simple_subscription_payment_method(
                 )
                 return
 
-            # Здесь должна быть реализация оплаты через MulenPay
-            await callback.answer(
-                f"❌ Оплата через {mulenpay_name} пока не реализована",
-                show_alert=True,
+            if price_kopeks < settings.MULENPAY_MIN_AMOUNT_KOPEKS or price_kopeks > settings.MULENPAY_MAX_AMOUNT_KOPEKS:
+                await callback.answer(
+                    "❌ Сумма для Mulen Pay должна быть в пределах от {min_amount} до {max_amount}".format(
+                        min_amount=settings.format_price(settings.MULENPAY_MIN_AMOUNT_KOPEKS),
+                        max_amount=settings.format_price(settings.MULENPAY_MAX_AMOUNT_KOPEKS),
+                    ),
+                    show_alert=True,
+                )
+                return
+
+            payment_service = PaymentService(callback.bot)
+            mulen_result = await payment_service.create_mulenpay_payment(
+                db=db,
+                user_id=db_user.id,
+                amount_kopeks=price_kopeks,
+                description=settings.get_subscription_payment_description(
+                    subscription_params["period_days"],
+                    price_kopeks,
+                ),
+                language=db_user.language,
             )
+
+            if not mulen_result or not mulen_result.get("payment_url"):
+                await callback.answer(
+                    texts.t(
+                        "MULENPAY_PAYMENT_ERROR",
+                        "❌ Ошибка создания платежа Mulen Pay. Попробуйте позже или обратитесь в поддержку.",
+                    ),
+                    show_alert=True,
+                )
+                return
+
+            payment_url = mulen_result["payment_url"]
+            local_payment_id = mulen_result.get("local_payment_id")
+            payment_id_display = mulen_result.get("mulen_payment_id") or local_payment_id
+
+            keyboard = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t("MULENPAY_PAY_BUTTON", "💳 Оплатить через Mulen Pay"),
+                            url=payment_url,
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                            callback_data=f"check_simple_mulenpay_{local_payment_id}",
+                        )
+                    ],
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription_purchase")],
+                ]
+            )
+
+            message_template = texts.t(
+                "MULENPAY_PAYMENT_INSTRUCTIONS",
+                (
+                    "💳 <b>Оплата через Mulen Pay</b>\n\n"
+                    "💰 Сумма: {amount}\n"
+                    "🆔 ID платежа: {payment_id}\n\n"
+                    "📱 <b>Инструкция:</b>\n"
+                    "1. Нажмите кнопку 'Оплатить через Mulen Pay'\n"
+                    "2. Следуйте подсказкам платежной системы\n"
+                    "3. Подтвердите перевод\n"
+                    "4. Средства зачислятся автоматически\n\n"
+                    "❓ Если возникнут проблемы, обратитесь в {support}"
+                ),
+            )
+
+            await callback.message.edit_text(
+                message_template.format(
+                    amount=settings.format_price(price_kopeks),
+                    payment_id=payment_id_display,
+                    support=settings.get_support_contact_display_html(),
+                ),
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+
+            await state.clear()
+            await callback.answer()
+            return
             
         elif payment_method == "pal24":
             # Оплата через PayPalych
             if not settings.is_pal24_enabled():
                 await callback.answer("❌ Оплата через PayPalych временно недоступна", show_alert=True)
                 return
-            
-            # Здесь должна быть реализация оплаты через PayPalych
-            await callback.answer("❌ Оплата через PayPalych пока не реализована", show_alert=True)
-            
+
+            payment_service = PaymentService(callback.bot)
+            pal24_result = await payment_service.create_pal24_payment(
+                db=db,
+                user_id=db_user.id,
+                amount_kopeks=price_kopeks,
+                description=settings.get_subscription_payment_description(
+                    subscription_params["period_days"],
+                    price_kopeks,
+                ),
+                language=db_user.language,
+            )
+
+            if not pal24_result:
+                await callback.answer(
+                    texts.t(
+                        "PAL24_PAYMENT_ERROR",
+                        "❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.",
+                    ),
+                    show_alert=True,
+                )
+                return
+
+            sbp_url = pal24_result.get("sbp_url") or pal24_result.get("transfer_url")
+            card_url = pal24_result.get("card_url")
+            fallback_url = pal24_result.get("link_page_url") or pal24_result.get("link_url")
+
+            if not (sbp_url or card_url or fallback_url):
+                await callback.answer(
+                    texts.t(
+                        "PAL24_PAYMENT_ERROR",
+                        "❌ Ошибка создания платежа PayPalych. Попробуйте позже или обратитесь в поддержку.",
+                    ),
+                    show_alert=True,
+                )
+                return
+
+            if not sbp_url:
+                sbp_url = fallback_url
+
+            bill_id = pal24_result.get("bill_id")
+            local_payment_id = pal24_result.get("local_payment_id")
+
+            pay_buttons: list[list[types.InlineKeyboardButton]] = []
+            steps: list[str] = []
+            step_counter = 1
+
+            default_sbp_text = texts.t(
+                "PAL24_SBP_PAY_BUTTON",
+                "🏦 Оплатить через PayPalych (СБП)",
+            )
+            sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
+
+            if sbp_url and settings.is_pal24_sbp_button_visible():
+                pay_buttons.append(
+                    [
+                        types.InlineKeyboardButton(
+                            text=sbp_button_text,
+                            url=sbp_url,
+                        )
+                    ]
+                )
+                steps.append(
+                    texts.t(
+                        "PAL24_INSTRUCTION_BUTTON",
+                        "{step}. Нажмите кнопку «{button}»",
+                    ).format(step=step_counter, button=html.escape(sbp_button_text))
+                )
+                step_counter += 1
+
+            default_card_text = texts.t(
+                "PAL24_CARD_PAY_BUTTON",
+                "💳 Оплатить банковской картой (PayPalych)",
+            )
+            card_button_text = settings.get_pal24_card_button_text(default_card_text)
+
+            if card_url and card_url != sbp_url and settings.is_pal24_card_button_visible():
+                pay_buttons.append(
+                    [
+                        types.InlineKeyboardButton(
+                            text=card_button_text,
+                            url=card_url,
+                        )
+                    ]
+                )
+                steps.append(
+                    texts.t(
+                        "PAL24_INSTRUCTION_BUTTON",
+                        "{step}. Нажмите кнопку «{button}»",
+                    ).format(step=step_counter, button=html.escape(card_button_text))
+                )
+                step_counter += 1
+
+            if not pay_buttons and fallback_url and settings.is_pal24_sbp_button_visible():
+                pay_buttons.append(
+                    [
+                        types.InlineKeyboardButton(
+                            text=sbp_button_text,
+                            url=fallback_url,
+                        )
+                    ]
+                )
+                steps.append(
+                    texts.t(
+                        "PAL24_INSTRUCTION_BUTTON",
+                        "{step}. Нажмите кнопку «{button}»",
+                    ).format(step=step_counter, button=html.escape(sbp_button_text))
+                )
+                step_counter += 1
+
+            follow_template = texts.t(
+                "PAL24_INSTRUCTION_FOLLOW",
+                "{step}. Следуйте подсказкам платёжной системы",
+            )
+            steps.append(follow_template.format(step=step_counter))
+            step_counter += 1
+
+            confirm_template = texts.t(
+                "PAL24_INSTRUCTION_CONFIRM",
+                "{step}. Подтвердите перевод",
+            )
+            steps.append(confirm_template.format(step=step_counter))
+            step_counter += 1
+
+            success_template = texts.t(
+                "PAL24_INSTRUCTION_COMPLETE",
+                "{step}. Средства зачислятся автоматически",
+            )
+            steps.append(success_template.format(step=step_counter))
+
+            message_template = texts.t(
+                "PAL24_PAYMENT_INSTRUCTIONS",
+                (
+                    "🏦 <b>Оплата через PayPalych</b>\n\n"
+                    "💰 Сумма: {amount}\n"
+                    "🆔 ID счета: {bill_id}\n\n"
+                    "📱 <b>Инструкция:</b>\n{steps}\n\n"
+                    "❓ Если возникнут проблемы, обратитесь в {support}"
+                ),
+            )
+
+            keyboard_rows = pay_buttons + [
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                        callback_data=f"check_simple_pal24_{local_payment_id}",
+                    )
+                ],
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription_purchase")],
+            ]
+
+            keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+            message_text = message_template.format(
+                amount=settings.format_price(price_kopeks),
+                bill_id=bill_id,
+                steps="\n".join(steps),
+                support=settings.get_support_contact_display_html(),
+            )
+
+            await callback.message.edit_text(
+                message_text,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+
+            await state.clear()
+            await callback.answer()
+            return
+
         elif payment_method == "wata":
             # Оплата через WATA
             if not settings.is_wata_enabled():
                 await callback.answer("❌ Оплата через WATA временно недоступна", show_alert=True)
                 return
-            
-            # Здесь должна быть реализация оплаты через WATA
-            await callback.answer("❌ Оплата через WATA пока не реализована", show_alert=True)
+            if price_kopeks < settings.WATA_MIN_AMOUNT_KOPEKS or price_kopeks > settings.WATA_MAX_AMOUNT_KOPEKS:
+                await callback.answer(
+                    "❌ Сумма для WATA должна быть между {min_amount} и {max_amount}.".format(
+                        min_amount=settings.format_price(settings.WATA_MIN_AMOUNT_KOPEKS),
+                        max_amount=settings.format_price(settings.WATA_MAX_AMOUNT_KOPEKS),
+                    ),
+                    show_alert=True,
+                )
+                return
+
+            payment_service = PaymentService(callback.bot)
+            try:
+                wata_result = await payment_service.create_wata_payment(
+                    db=db,
+                    user_id=db_user.id,
+                    amount_kopeks=price_kopeks,
+                    description=settings.get_subscription_payment_description(
+                        subscription_params["period_days"],
+                        price_kopeks,
+                    ),
+                    language=db_user.language,
+                )
+            except Exception as error:
+                logger.error("Ошибка создания WATA платежа: %s", error)
+                wata_result = None
+
+            if not wata_result or not wata_result.get("payment_url"):
+                await callback.answer(
+                    texts.t(
+                        "WATA_PAYMENT_ERROR",
+                        "❌ Ошибка создания платежа WATA. Попробуйте позже или обратитесь в поддержку.",
+                    ),
+                    show_alert=True,
+                )
+                return
+
+            payment_url = wata_result["payment_url"]
+            payment_link_id = wata_result.get("payment_link_id")
+            local_payment_id = wata_result.get("local_payment_id")
+
+            keyboard = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t("WATA_PAY_BUTTON", "💳 Оплатить через WATA"),
+                            url=payment_url,
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                            callback_data=f"check_simple_wata_{local_payment_id}",
+                        )
+                    ],
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription_purchase")],
+                ]
+            )
+
+            message_template = texts.t(
+                "WATA_PAYMENT_INSTRUCTIONS",
+                (
+                    "💳 <b>Оплата через WATA</b>\n\n"
+                    "💰 Сумма: {amount}\n"
+                    "🆔 ID платежа: {payment_id}\n\n"
+                    "📱 <b>Инструкция:</b>\n"
+                    "1. Нажмите кнопку 'Оплатить через WATA'\n"
+                    "2. Следуйте подсказкам платежной системы\n"
+                    "3. Подтвердите перевод\n"
+                    "4. Средства зачислятся автоматически\n\n"
+                    "❓ Если возникнут проблемы, обратитесь в {support}"
+                ),
+            )
+
+            await callback.message.edit_text(
+                message_template.format(
+                    amount=settings.format_price(price_kopeks),
+                    payment_id=payment_link_id,
+                    support=settings.get_support_contact_display_html(),
+                ),
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+
+            await state.clear()
+            await callback.answer()
+            return
             
         else:
             await callback.answer("❌ Неизвестный способ оплаты", show_alert=True)
@@ -814,6 +1257,311 @@ async def handle_simple_subscription_payment_method(
         await callback.answer("❌ Ошибка обработки запроса. Попробуйте позже или обратитесь в поддержку.", show_alert=True)
         await state.clear()
 
+
+@error_handler
+async def check_simple_pal24_payment_status(
+    callback: types.CallbackQuery,
+    db: AsyncSession,
+):
+    try:
+        local_payment_id = int(callback.data.rsplit('_', 1)[-1])
+        payment_service = PaymentService(callback.bot)
+        status_info = await payment_service.get_pal24_payment_status(db, local_payment_id)
+
+        if not status_info:
+            await callback.answer("❌ Платеж не найден", show_alert=True)
+            return
+
+        payment = status_info["payment"]
+
+        status_labels = {
+            "NEW": ("⏳", "Ожидает оплаты"),
+            "PROCESS": ("⌛", "Обрабатывается"),
+            "SUCCESS": ("✅", "Оплачен"),
+            "FAIL": ("❌", "Отменен"),
+            "UNDERPAID": ("⚠️", "Недоплата"),
+            "OVERPAID": ("⚠️", "Переплата"),
+        }
+
+        emoji, status_text = status_labels.get(payment.status, ("❓", "Неизвестно"))
+
+        metadata = payment.metadata_json or {}
+        links_meta = metadata.get("links") if isinstance(metadata, dict) else {}
+        if not isinstance(links_meta, dict):
+            links_meta = {}
+
+        sbp_link = links_meta.get("sbp") or payment.link_url
+        card_link = links_meta.get("card")
+        if not card_link and payment.link_page_url and payment.link_page_url != sbp_link:
+            card_link = payment.link_page_url
+
+        db_user = getattr(callback, "db_user", None)
+        texts = get_texts(db_user.language if db_user else settings.DEFAULT_LANGUAGE)
+
+        message_lines = [
+            "🏦 Статус платежа PayPalych:",
+            "",
+            f"🆔 ID счета: {payment.bill_id}",
+            f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}",
+            f"📊 Статус: {emoji} {status_text}",
+            f"📅 Создан: {payment.created_at.strftime('%d.%m.%Y %H:%M')}",
+        ]
+
+        if payment.is_paid:
+            message_lines += ["", "✅ Платеж успешно завершен! Средства уже зачислены."]
+        elif payment.status in {"NEW", "PROCESS"}:
+            message_lines += [
+                "",
+                "⏳ Платеж еще не завершен. Оплатите счет и проверьте статус позже.",
+            ]
+            if sbp_link:
+                message_lines += ["", f"🏦 СБП: {sbp_link}"]
+            if card_link and card_link != sbp_link:
+                message_lines.append(f"💳 Карта: {card_link}")
+        elif payment.status in {"FAIL", "UNDERPAID", "OVERPAID"}:
+            message_lines += [
+                "",
+                f"❌ Платеж не завершен корректно. Обратитесь в {settings.get_support_contact_display()}",
+            ]
+
+        keyboard = types.InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                        callback_data=f"check_simple_pal24_{local_payment_id}",
+                    )
+                ],
+                [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription_purchase")],
+            ]
+        )
+
+        await callback.answer()
+        try:
+            await callback.message.edit_text(
+                "\n".join(message_lines),
+                reply_markup=keyboard,
+                disable_web_page_preview=True,
+            )
+        except TelegramBadRequest as error:
+            if "message is not modified" in str(error).lower():
+                await callback.answer(texts.t("CHECK_STATUS_NO_CHANGES", "Статус не изменился"))
+            else:
+                raise
+
+    except Exception as error:
+        logger.error(f"Ошибка проверки статуса PayPalych для простой подписки: {error}")
+        await callback.answer("❌ Ошибка проверки статуса", show_alert=True)
+
+
+@error_handler
+async def check_simple_mulenpay_payment_status(
+    callback: types.CallbackQuery,
+    db: AsyncSession,
+):
+    try:
+        local_payment_id = int(callback.data.rsplit('_', 1)[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Некорректный идентификатор платежа", show_alert=True)
+        return
+
+    payment_service = PaymentService(callback.bot)
+    status_info = await payment_service.get_mulenpay_payment_status(db, local_payment_id)
+
+    if not status_info:
+        await callback.answer("❌ Платеж не найден", show_alert=True)
+        return
+
+    payment = status_info["payment"]
+
+    user_language = settings.DEFAULT_LANGUAGE
+    try:
+        from app.services.payment_service import get_user_by_id as fetch_user_by_id
+
+        user = await fetch_user_by_id(db, payment.user_id)
+        if user and getattr(user, "language", None):
+            user_language = user.language
+    except Exception as error:
+        logger.debug("Не удалось получить пользователя для MulenPay статуса: %s", error)
+
+    texts = get_texts(user_language)
+    status_labels = {
+        "created": ("⏳", "Ожидает оплаты"),
+        "processing": ("⌛", "Обрабатывается"),
+        "success": ("✅", "Оплачен"),
+        "canceled": ("❌", "Отменен"),
+        "error": ("⚠️", "Ошибка"),
+        "hold": ("🔒", "Холд"),
+        "unknown": ("❓", "Неизвестно"),
+    }
+
+    emoji, status_text = status_labels.get(payment.status, ("❓", "Неизвестно"))
+
+    message_lines = [
+        "💳 Статус платежа Mulen Pay:",
+        "",
+        f"🆔 ID: {payment.mulen_payment_id or payment.id}",
+        f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}",
+        f"📊 Статус: {emoji} {status_text}",
+        f"📅 Создан: {payment.created_at.strftime('%d.%m.%Y %H:%M') if payment.created_at else '—'}",
+    ]
+
+    if payment.is_paid:
+        message_lines.append("\n✅ Платеж успешно завершен! Средства уже зачислены.")
+    elif payment.status in {"created", "processing"}:
+        message_lines.append("\n⏳ Платеж еще не завершен. Завершите оплату и проверьте статус позже.")
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                    callback_data=f"check_simple_mulenpay_{local_payment_id}",
+                )
+            ],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription_purchase")],
+        ]
+    )
+
+    await callback.answer()
+    await callback.message.edit_text(
+        "\n".join(message_lines),
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
+
+
+@error_handler
+async def check_simple_cryptobot_payment_status(
+    callback: types.CallbackQuery,
+    db: AsyncSession,
+):
+    try:
+        local_payment_id = int(callback.data.rsplit('_', 1)[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Некорректный идентификатор платежа", show_alert=True)
+        return
+
+    from app.database.crud.cryptobot import get_cryptobot_payment_by_id
+
+    payment = await get_cryptobot_payment_by_id(db, local_payment_id)
+    if not payment:
+        await callback.answer("❌ Платеж не найден", show_alert=True)
+        return
+
+    status_labels = {
+        "active": ("⏳", "Ожидает оплаты"),
+        "paid": ("✅", "Оплачен"),
+        "expired": ("❌", "Истек"),
+    }
+    emoji, status_text = status_labels.get(payment.status, ("❓", "Неизвестно"))
+
+    language = settings.DEFAULT_LANGUAGE
+    try:
+        from app.services.payment_service import get_user_by_id as fetch_user_by_id
+
+        user = await fetch_user_by_id(db, payment.user_id)
+        if user and getattr(user, "language", None):
+            language = user.language
+    except Exception as error:
+        logger.debug("Не удалось получить пользователя для CryptoBot статуса: %s", error)
+
+    texts = get_texts(language)
+    message_lines = [
+        "🪙 <b>Статус платежа CryptoBot</b>",
+        "",
+        f"🆔 ID: {payment.invoice_id}",
+        f"💰 Сумма: {payment.amount} {payment.asset}",
+        f"📊 Статус: {emoji} {status_text}",
+        f"📅 Создан: {payment.created_at.strftime('%d.%m.%Y %H:%M') if payment.created_at else '—'}",
+    ]
+
+    if payment.status == "paid":
+        message_lines.append("\n✅ Платеж подтвержден. Средства уже зачислены.")
+    elif payment.status == "active":
+        message_lines.append("\n⏳ Платеж еще ожидает подтверждения. Оплатите счет и проверьте статус позже.")
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                    callback_data=f"check_simple_cryptobot_{local_payment_id}",
+                )
+            ],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription_purchase")],
+        ]
+    )
+
+    await callback.answer()
+    await callback.message.edit_text(
+        "\n".join(message_lines),
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
+
+
+@error_handler
+async def check_simple_wata_payment_status(
+    callback: types.CallbackQuery,
+    db: AsyncSession,
+):
+    try:
+        local_payment_id = int(callback.data.rsplit('_', 1)[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Некорректный идентификатор платежа", show_alert=True)
+        return
+
+    payment_service = PaymentService(callback.bot)
+    status_info = await payment_service.get_wata_payment_status(db, local_payment_id)
+
+    if not status_info:
+        await callback.answer("❌ Платеж не найден", show_alert=True)
+        return
+
+    payment = status_info["payment"]
+    texts = get_texts(settings.DEFAULT_LANGUAGE)
+
+    status_labels = {
+        "Opened": ("⏳", texts.t("WATA_STATUS_OPENED", "Ожидает оплаты")),
+        "Closed": ("⌛", texts.t("WATA_STATUS_CLOSED", "Обрабатывается")),
+        "Paid": ("✅", texts.t("WATA_STATUS_PAID", "Оплачен")),
+        "Declined": ("❌", texts.t("WATA_STATUS_DECLINED", "Отклонен")),
+    }
+    emoji, status_text = status_labels.get(payment.status, ("❓", texts.t("WATA_STATUS_UNKNOWN", "Неизвестно")))
+
+    message_lines = [
+        texts.t("WATA_STATUS_TITLE", "💳 <b>Статус платежа WATA</b>"),
+        "",
+        f"🆔 ID: {payment.payment_link_id}",
+        f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}",
+        f"📊 Статус: {emoji} {status_text}",
+        f"📅 Создан: {payment.created_at.strftime('%d.%m.%Y %H:%M') if payment.created_at else '—'}",
+    ]
+
+    if payment.is_paid:
+        message_lines.append("\n✅ Платеж успешно завершен! Средства уже зачислены.")
+    elif payment.status in {"Opened", "Closed"}:
+        message_lines.append("\n⏳ Платеж еще не завершен. Завершите оплату и проверьте статус позже.")
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                    callback_data=f"check_simple_wata_{local_payment_id}",
+                )
+            ],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription_purchase")],
+        ]
+    )
+
+    await callback.answer()
+    await callback.message.edit_text(
+        "\n".join(message_lines),
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
 
 def register_simple_subscription_handlers(dp):
     """Регистрирует обработчики простой покупки подписки."""
@@ -841,4 +1589,29 @@ def register_simple_subscription_handlers(dp):
     dp.callback_query.register(
         handle_simple_subscription_payment_method,
         F.data.startswith("simple_subscription_")
+    )
+
+    dp.callback_query.register(
+        check_simple_pal24_payment_status,
+        F.data.startswith("check_simple_pal24_")
+    )
+
+    dp.callback_query.register(
+        check_simple_mulenpay_payment_status,
+        F.data.startswith("check_simple_mulenpay_")
+    )
+
+    dp.callback_query.register(
+        check_simple_cryptobot_payment_status,
+        F.data.startswith("check_simple_cryptobot_")
+    )
+
+    dp.callback_query.register(
+        check_simple_wata_payment_status,
+        F.data.startswith("check_simple_wata_")
+    )
+
+    dp.callback_query.register(
+        check_simple_pal24_payment_status,
+        F.data.startswith("check_simple_pal24_")
     )
