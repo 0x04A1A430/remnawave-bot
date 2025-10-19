@@ -325,7 +325,13 @@ def get_main_menu_keyboard(
     show_trial = not has_had_paid_subscription and not has_active_subscription
     
     show_buy = not has_active_subscription or not subscription_is_active
-    
+    simple_purchase_button = None
+    if settings.SIMPLE_SUBSCRIPTION_ENABLED:
+        simple_purchase_button = InlineKeyboardButton(
+            text=texts.MENU_SIMPLE_SUBSCRIPTION,
+            callback_data="simple_subscription_purchase",
+        )
+
     subscription_buttons = []
     
     if show_trial:
@@ -337,12 +343,9 @@ def get_main_menu_keyboard(
         subscription_buttons.append(
             InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data="menu_buy")
         )
-        
-        # Добавляем кнопку простой покупки после кнопки "Купить подписку"
-        if settings.SIMPLE_SUBSCRIPTION_ENABLED:
-            subscription_buttons.append(
-                InlineKeyboardButton(text="⚡ Простая покупка", callback_data="simple_subscription_purchase")
-            )
+        if simple_purchase_button:
+            subscription_buttons.append(simple_purchase_button)
+            simple_purchase_button = None
     
     if subscription_buttons:
         if len(subscription_buttons) == 2:
@@ -353,6 +356,8 @@ def get_main_menu_keyboard(
             # Если больше 2 кнопок, добавляем по отдельности
             for button in subscription_buttons:
                 keyboard.append([button])
+    if simple_purchase_button:
+        keyboard.append([simple_purchase_button])
 
     if show_resume_checkout or has_saved_cart:
         keyboard.append([
