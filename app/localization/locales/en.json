@@ -1343,5 +1343,7 @@
   "WATA_TOPUP_PROMPT": "💳 <b>Pay via WATA</b>\n\nEnter the amount to top up. Minimum amount — {min_amount}, maximum — {max_amount}.\nPayments are processed through the secure WATA form.",
   "WELCOME": "\n🎉 <b>Welcome to VPN Service!</b>\n\nOur service provides fast and secure internet access without restrictions.\n\n🔐 <b>Advantages:</b>\n• High connection speed\n• Servers in different countries  \n• Reliable data protection\n• 24/7 support\n\nTo get started, select interface language:\n",
   "WELCOME_FALLBACK": "Welcome, {user_name}!",
-  "YES": "✅ Yes"
+  "YES": "✅ Yes",
+  "SIMPLE_SUBSCRIPTION_TRIAL_NOTICE_ACTIVE": "ℹ️ Your trial subscription is active for another {days} days. Purchasing a new plan will extend the validity.",
+  "SIMPLE_SUBSCRIPTION_TRIAL_NOTICE_TRIAL": "ℹ️ Your trial is still running (expires in {days} days). Buying a paid plan will extend it automatically."
 }
