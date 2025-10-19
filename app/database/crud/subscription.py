@@ -1309,12 +1309,10 @@ async def activate_pending_subscription(
     
     # Если указан период, обновляем дату окончания
     if period_days is not None:
-        if pending_subscription.end_date <= current_time:
-            # Если текущая дата окончания уже прошла, устанавливаем новую
-            pending_subscription.end_date = current_time + timedelta(days=period_days)
-        else:
-            # Если дата окончания в будущем, продляем её
-            pending_subscription.end_date = pending_subscription.end_date + timedelta(days=period_days)
+        effective_start = pending_subscription.start_date or current_time
+        if effective_start < current_time:
+            effective_start = current_time
+        pending_subscription.end_date = effective_start + timedelta(days=period_days)
     
     # Обновляем дату начала, если она не установлена или в прошлом
     if not pending_subscription.start_date or pending_subscription.start_date < current_time:
