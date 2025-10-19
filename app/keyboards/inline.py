@@ -1101,9 +1101,13 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         ])
 
     if settings.is_mulenpay_enabled():
+        mulenpay_name = settings.get_mulenpay_display_name()
         keyboard.append([
             InlineKeyboardButton(
-                text=texts.t("PAYMENT_CARD_MULENPAY", "💳 Банковская карта (Mulen Pay)"),
+                text=texts.t(
+                    "PAYMENT_CARD_MULENPAY",
+                    "💳 Банковская карта ({mulenpay_name})",
+                ).format(mulenpay_name=mulenpay_name),
                 callback_data=_build_callback("mulenpay")
             )
         ])
@@ -2312,6 +2316,12 @@ def get_admin_tickets_keyboard(
     keyboard.append(switch_row)
 
     if open_rows and scope in ("all", "open"):
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("ADMIN_CLOSE_ALL_OPEN_TICKETS", "🔒 Закрыть все открытые"),
+                callback_data="admin_tickets_close_all_open"
+            )
+        ])
         keyboard.append([InlineKeyboardButton(text=texts.t("OPEN_TICKETS_HEADER", "Открытые тикеты"), callback_data="noop")])
         keyboard.extend(open_rows)
     if closed_rows and scope in ("all", "closed"):

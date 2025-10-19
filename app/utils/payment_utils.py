@@ -46,11 +46,12 @@ def get_available_payment_methods() -> List[Dict[str, str]]:
         })
 
     if settings.is_mulenpay_enabled():
+        mulenpay_name = settings.get_mulenpay_display_name()
         methods.append({
             "id": "mulenpay",
             "name": "Банковская карта",
             "icon": "💳",
-            "description": "через Mulen Pay",
+            "description": f"через {mulenpay_name}",
             "callback": "topup_mulenpay"
         })
 
@@ -129,6 +130,12 @@ def get_payment_methods_text(language: str) -> str:
             f"PAYMENT_METHOD_{method_id}_DESCRIPTION",
             method['description'],
         )
+        if method_id == "MULENPAY":
+            mulenpay_name = settings.get_mulenpay_display_name()
+            mulenpay_name_html = settings.get_mulenpay_display_name_html()
+            name = name.format(mulenpay_name=mulenpay_name_html)
+            description = description.format(mulenpay_name=mulenpay_name)
+
         text += f"{name} - {description}\n"
 
     text += "\n" + texts.t(
