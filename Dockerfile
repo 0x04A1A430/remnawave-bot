@@ -1,11 +1,7 @@
-FROM python:3.14-slim AS builder
+FROM python:3.13-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    g++ \
-    make \
-    libc6-dev \
-    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m venv /opt/venv
@@ -16,7 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-FROM python:3.14-slim
+FROM python:3.13-slim
 
 ARG VERSION="v2.5.3"
 ARG BUILD_DATE
@@ -24,7 +20,6 @@ ARG VCS_REF
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
-    libpq5 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -50,7 +45,7 @@ ENV PYTHONPATH=/app \
     BUILD_DATE=${BUILD_DATE} \
     VCS_REF=${VCS_REF}
 
-EXPOSE 8080 8081 8082 8083
+EXPOSE 8080 8081 8082 
 
 LABEL org.opencontainers.image.title="Bedolaga RemnaWave Bot" \
       org.opencontainers.image.description="Telegram bot for RemnaWave VPN service" \
