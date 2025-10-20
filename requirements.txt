@@ -7,7 +7,7 @@ alembic==1.17.0
 aiosqlite==0.21.0
 
 # Дополнительные зависимости
-pydantic==2.12.3
+pydantic==2.11.1
 pydantic-settings==2.11.0
 python-dotenv==1.1.1
 redis==5.0.1
