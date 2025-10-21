@@ -320,10 +320,16 @@ def get_main_menu_keyboard(
     keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data="menu_balance")])
     
     show_trial = not has_had_paid_subscription and not has_active_subscription
-    
+
     show_buy = not has_active_subscription or not subscription_is_active
+    current_subscription = subscription
+    has_active_paid_subscription = bool(
+        current_subscription
+        and not getattr(current_subscription, "is_trial", False)
+        and getattr(current_subscription, "is_active", False)
+    )
     simple_purchase_button = None
-    if settings.SIMPLE_SUBSCRIPTION_ENABLED:
+    if settings.SIMPLE_SUBSCRIPTION_ENABLED and not has_active_paid_subscription:
         simple_purchase_button = InlineKeyboardButton(
             text=texts.MENU_SIMPLE_SUBSCRIPTION,
             callback_data="simple_subscription_purchase",
@@ -1134,6 +1140,14 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
             )
         ])
 
+    if settings.is_heleket_enabled():
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("PAYMENT_HELEKET", "🪙 Криптовалюта (Heleket)"),
+                callback_data=_build_callback("heleket")
+            )
+        ])
+
     keyboard.append([
         InlineKeyboardButton(
             text=texts.t("PAYMENT_VIA_SUPPORT", "🛠️ Через поддержку"),
@@ -1370,7 +1384,7 @@ def get_autopay_days_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboar
     for days in [1, 3, 7, 14]:
         keyboard.append([
             InlineKeyboardButton(
-                text=f"{days} дн{_get_days_suffix(days)}",
+                text=f"{days} {_get_days_word(days)}",
                 callback_data=f"autopay_days_{days}"
             )
         ])
@@ -1382,13 +1396,12 @@ def get_autopay_days_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboar
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def _get_days_suffix(days: int) -> str:
-    if days == 1:
-        return "ь"
-    elif 2 <= days <= 4:
-        return "я"
-    else:
-        return "ей"
+def _get_days_word(days: int) -> str:
+    if days % 10 == 1 and days % 100 != 11:
+        return "день"
+    if 2 <= days % 10 <= 4 and not (12 <= days % 100 <= 14):
+        return "дня"
+    return "дней"
 
 
 

@@ -11,6 +11,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from app.services.payment import (  # noqa: E402
     CryptoBotPaymentMixin,
+    HeleketPaymentMixin,
     MulenPayPaymentMixin,
     Pal24PaymentMixin,
     PaymentCommonMixin,
@@ -30,6 +31,7 @@ def test_payment_service_mro_contains_all_mixins() -> None:
         YooKassaPaymentMixin,
         TributePaymentMixin,
         CryptoBotPaymentMixin,
+        HeleketPaymentMixin,
         MulenPayPaymentMixin,
         Pal24PaymentMixin,
         WataPaymentMixin,
@@ -46,6 +48,7 @@ def test_payment_service_mro_contains_all_mixins() -> None:
         "create_yookassa_payment",
         "create_tribute_payment",
         "create_cryptobot_payment",
+        "create_heleket_payment",
         "create_mulenpay_payment",
         "create_pal24_payment",
         "create_wata_payment",

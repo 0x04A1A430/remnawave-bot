@@ -61,6 +61,7 @@ def _make_service(stub: Optional[StubPal24Service]) -> PaymentService:
     service.yookassa_service = None
     service.cryptobot_service = None
     service.stars_service = None
+    service.heleket_service = None
     return service
 
 

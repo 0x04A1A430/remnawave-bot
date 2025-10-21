@@ -231,6 +231,16 @@ async def handle_subscription_config_back(
             )
             await state.set_state(SubscriptionStates.selecting_period)
 
+    elif current_state == SubscriptionStates.confirming_purchase.state:
+        data = await state.get_data()
+        selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+
+        await callback.message.edit_text(
+            texts.SELECT_DEVICES,
+            reply_markup=get_devices_keyboard(selected_devices, db_user.language)
+        )
+        await state.set_state(SubscriptionStates.selecting_devices)
+
     else:
         from app.handlers.menu import show_main_menu
         await show_main_menu(callback, db_user, db)

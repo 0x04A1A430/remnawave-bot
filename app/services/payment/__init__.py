@@ -9,6 +9,7 @@ from .stars import TelegramStarsMixin
 from .yookassa import YooKassaPaymentMixin
 from .tribute import TributePaymentMixin
 from .cryptobot import CryptoBotPaymentMixin
+from .heleket import HeleketPaymentMixin
 from .mulenpay import MulenPayPaymentMixin
 from .pal24 import Pal24PaymentMixin
 from .wata import WataPaymentMixin
@@ -19,6 +20,7 @@ __all__ = [
     "YooKassaPaymentMixin",
     "TributePaymentMixin",
     "CryptoBotPaymentMixin",
+    "HeleketPaymentMixin",
     "MulenPayPaymentMixin",
     "Pal24PaymentMixin",
     "WataPaymentMixin",

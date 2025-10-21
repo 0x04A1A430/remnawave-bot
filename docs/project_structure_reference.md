@@ -74,6 +74,9 @@
 - `app/database/crud/cryptobot.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `app/database/crud/heleket.py` — Python-модуль
+  Классы: нет
+  Функции: нет
 - `app/database/crud/discount_offer.py` — Python-модуль
   Классы: нет
   Функции: нет
@@ -158,6 +161,12 @@
 - `app/external/cryptobot.py` — Python-модуль
   Классы: `CryptoBotService` (2 методов)
   Функции: нет
+- `app/external/heleket.py` — Python-модуль
+  Классы: `HeleketService` (3 методов)
+  Функции: нет
+- `app/external/heleket_webhook.py` — Python-модуль
+  Классы: `HeleketWebhookHandler` (3 методов)
+  Функции: `create_heleket_app`, `start_heleket_webhook_server`
 - `app/external/pal24_client.py` — Async client for PayPalych (Pal24) API.
   Классы: `Pal24APIError` — Base error for Pal24 API operations., `Pal24Response` (2 методов) — Wrapper for Pal24 API responses., `Pal24Client` (5 методов) — Async client implementing PayPalych API methods.
   Функции: нет
@@ -323,7 +332,7 @@
   Функции: `_t` — Helper for localized button labels with fallbacks., `get_admin_main_keyboard`, `get_admin_users_submenu_keyboard`, `get_admin_promo_submenu_keyboard`, `get_admin_communications_submenu_keyboard`, `get_admin_support_submenu_keyboard`, `get_admin_settings_submenu_keyboard`, `get_admin_system_submenu_keyboard`, `get_admin_reports_keyboard`, `get_admin_report_result_keyboard`, `get_admin_users_keyboard`, `get_admin_users_filters_keyboard`, `get_admin_subscriptions_keyboard`, `get_admin_promocodes_keyboard`, `get_admin_campaigns_keyboard`, `get_campaign_management_keyboard`, `get_campaign_edit_keyboard`, `get_campaign_bonus_type_keyboard`, `get_promocode_management_keyboard`, `get_admin_messages_keyboard`, `get_admin_monitoring_keyboard`, `get_admin_remnawave_keyboard`, `get_admin_statistics_keyboard`, `get_user_management_keyboard`, `get_user_promo_group_keyboard`, `get_confirmation_keyboard`, `get_promocode_type_keyboard`, `get_promocode_list_keyboard`, `get_broadcast_target_keyboard`, `get_custom_criteria_keyboard`, `get_broadcast_history_keyboard`, `get_sync_options_keyboard`, `get_sync_confirmation_keyboard`, `get_sync_result_keyboard`, `get_period_selection_keyboard`, `get_node_management_keyboard`, `get_squad_management_keyboard`, `get_squad_edit_keyboard`, `get_monitoring_keyboard`, `get_monitoring_logs_keyboard`, `get_monitoring_logs_navigation_keyboard`, `get_log_detail_keyboard`, `get_monitoring_clear_confirm_keyboard`, `get_monitoring_status_keyboard`, `get_monitoring_settings_keyboard`, `get_log_type_filter_keyboard`, `get_admin_servers_keyboard`, `get_server_edit_keyboard`, `get_admin_pagination_keyboard`, `get_maintenance_keyboard`, `get_sync_simplified_keyboard`, `get_welcome_text_keyboard`, `get_broadcast_button_config`, `get_broadcast_button_labels`, `get_message_buttons_selector_keyboard`, `get_broadcast_media_keyboard`, `get_media_confirm_keyboard`, `get_updated_message_buttons_selector_keyboard_with_media`
 - `app/keyboards/inline.py` — Python-модуль
   Классы: нет
-  Функции: `_get_localized_value`, `_build_additional_buttons`, `get_rules_keyboard`, `get_channel_sub_keyboard`, `get_post_registration_keyboard`, `get_language_selection_keyboard`, `_build_text_main_menu_keyboard`, `get_main_menu_keyboard`, `get_info_menu_keyboard`, `get_happ_download_button_row`, `get_happ_cryptolink_keyboard`, `get_happ_download_platform_keyboard`, `get_happ_download_link_keyboard`, `get_back_keyboard`, `get_server_status_keyboard`, `get_insufficient_balance_keyboard`, `get_subscription_keyboard`, `get_payment_methods_keyboard_with_cart`, `get_subscription_confirm_keyboard_with_cart`, `get_insufficient_balance_keyboard_with_cart`, `get_trial_keyboard`, `get_subscription_period_keyboard`, `get_traffic_packages_keyboard`, `get_countries_keyboard`, `get_devices_keyboard`, `_get_device_declension`, `get_subscription_confirm_keyboard`, `get_balance_keyboard`, `get_payment_methods_keyboard`, `get_yookassa_payment_keyboard`, `get_autopay_notification_keyboard`, `get_subscription_expiring_keyboard`, `get_referral_keyboard`, `get_support_keyboard`, `get_pagination_keyboard`, `get_confirmation_keyboard`, `get_autopay_keyboard`, `get_autopay_days_keyboard`, `_get_days_suffix`, `get_extend_subscription_keyboard`, `get_add_traffic_keyboard`, `get_change_devices_keyboard`, `get_confirm_change_devices_keyboard`, `get_reset_traffic_confirm_keyboard`, `get_manage_countries_keyboard`, `get_device_selection_keyboard`, `get_connection_guide_keyboard`, `get_app_selection_keyboard`, `get_specific_app_keyboard`, `get_extend_subscription_keyboard_with_prices`, `get_cryptobot_payment_keyboard`, `get_devices_management_keyboard`, `get_updated_subscription_settings_keyboard`, `get_device_reset_confirm_keyboard`, `get_device_management_help_keyboard`, `get_ticket_cancel_keyboard`, `get_my_tickets_keyboard`, `get_ticket_view_keyboard`, `get_ticket_reply_cancel_keyboard`, `get_admin_tickets_keyboard`, `get_admin_ticket_view_keyboard`, `get_admin_ticket_reply_cancel_keyboard`
+  Функции: `_get_localized_value`, `_build_additional_buttons`, `get_rules_keyboard`, `get_channel_sub_keyboard`, `get_post_registration_keyboard`, `get_language_selection_keyboard`, `_build_text_main_menu_keyboard`, `get_main_menu_keyboard`, `get_info_menu_keyboard`, `get_happ_download_button_row`, `get_happ_cryptolink_keyboard`, `get_happ_download_platform_keyboard`, `get_happ_download_link_keyboard`, `get_back_keyboard`, `get_server_status_keyboard`, `get_insufficient_balance_keyboard`, `get_subscription_keyboard`, `get_payment_methods_keyboard_with_cart`, `get_subscription_confirm_keyboard_with_cart`, `get_insufficient_balance_keyboard_with_cart`, `get_trial_keyboard`, `get_subscription_period_keyboard`, `get_traffic_packages_keyboard`, `get_countries_keyboard`, `get_devices_keyboard`, `_get_device_declension`, `get_subscription_confirm_keyboard`, `get_balance_keyboard`, `get_payment_methods_keyboard`, `get_yookassa_payment_keyboard`, `get_autopay_notification_keyboard`, `get_subscription_expiring_keyboard`, `get_referral_keyboard`, `get_support_keyboard`, `get_pagination_keyboard`, `get_confirmation_keyboard`, `get_autopay_keyboard`, `get_autopay_days_keyboard`, `_get_days_word`, `get_extend_subscription_keyboard`, `get_add_traffic_keyboard`, `get_change_devices_keyboard`, `get_confirm_change_devices_keyboard`, `get_reset_traffic_confirm_keyboard`, `get_manage_countries_keyboard`, `get_device_selection_keyboard`, `get_connection_guide_keyboard`, `get_app_selection_keyboard`, `get_specific_app_keyboard`, `get_extend_subscription_keyboard_with_prices`, `get_cryptobot_payment_keyboard`, `get_devices_management_keyboard`, `get_updated_subscription_settings_keyboard`, `get_device_reset_confirm_keyboard`, `get_device_management_help_keyboard`, `get_ticket_cancel_keyboard`, `get_my_tickets_keyboard`, `get_ticket_view_keyboard`, `get_ticket_reply_cancel_keyboard`, `get_admin_tickets_keyboard`, `get_admin_ticket_view_keyboard`, `get_admin_ticket_reply_cancel_keyboard`
 - `app/keyboards/reply.py` — Python-модуль
   Классы: нет
   Функции: `get_main_reply_keyboard`, `get_admin_reply_keyboard`, `get_cancel_keyboard`, `get_confirmation_reply_keyboard`, `get_skip_keyboard`, `remove_keyboard`, `get_contact_keyboard`, `get_location_keyboard`
@@ -725,6 +734,9 @@
   Функции: `_enable_pal24`, `anyio_backend`, `test_parse_postback_success`, `test_parse_postback_missing_fields`, `test_convert_to_kopeks_and_expiration`
 - `tests/services/test_payment_service_cryptobot.py` — Тесты сценариев CryptoBot в PaymentService.
   Классы: `DummySession` (2 методов), `DummyLocalPayment` (1 методов), `StubCryptoBotService` (1 методов)
+  Функции: `anyio_backend`, `_make_service`
+- `tests/services/test_payment_service_heleket.py` — Тесты сценариев Heleket в PaymentService.
+  Классы: `DummySession` (2 методов), `DummyLocalPayment` (1 методов), `StubHeleketService` (1 методов)
   Функции: `anyio_backend`, `_make_service`
 - `tests/services/test_payment_service_mulenpay.py` — Тесты для сценариев MulenPay в PaymentService.
   Классы: `DummySession`, `DummyLocalPayment` (1 методов), `StubMulenPayService` (1 методов)

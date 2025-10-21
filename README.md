@@ -35,7 +35,7 @@
 
 ### ⚡ **Полная автоматизация VPN бизнеса**
 - 🎯 **Готовое решение** - разверни за 5 минут, начни продавать сегодня
-- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + YooKassa (СБП + карты) + MulenPay + PayPalych (СБП + карты) + WATA
+- 💰 **Многоканальные платежи** - Telegram Stars + Tribute + CryptoBot + Heleket + YooKassa (СБП + карты) + MulenPay + PayPalych (СБП + карты) + WATA
 - 🔄 **Автоматизация 99%** - от регистрации до продления подписок
 - - 📱 **MiniApp лк** - личный кабинет с возможностью покупки/продления подписки
 - 📊 **Детальная аналитика** - полная картина вашего бизнеса
@@ -605,6 +605,13 @@ CRYPTOBOT_ENABLED=false
 CRYPTOBOT_API_TOKEN=
 CRYPTOBOT_WEBHOOK_PATH=/cryptobot-webhook
 
+# Heleket
+HELEKET_ENABLED=false
+HELEKET_MERCHANT_ID=
+HELEKET_API_KEY=
+HELEKET_WEBHOOK_PATH=/heleket-webhook
+HELEKET_WEBHOOK_PORT=8086
+
 # MulenPay
 MULENPAY_ENABLED=false
 MULENPAY_API_KEY=
@@ -710,6 +717,7 @@ LOG_FILE=logs/bot.log
 - 💳 Tribute
 - 💳 YooKassa (СБП + банковские карты)
 - 💰 CryptoBot (USDT, TON, BTC, ETH и др.)
+- 🪙 Heleket (криптовалюта с наценкой)
 - 💳 MulenPay (СБП)
 - 🏦 PayPalych/Pal24 (СБП + карты)
 - 💳 **WATA**
@@ -907,6 +915,7 @@ LOG_FILE=logs/bot.log
    - **Tribute**: Настрой webhook на `https://your-domain.com/tribute-webhook`
    - **YooKassa**: Настрой webhook на `https://your-domain.com/yookassa-webhook`
    - **CryptoBot**: Настрой webhook на `https://your-domain.com/cryptobot-webhook`
+   - **Heleket**: Настрой webhook на `https://your-domain.com/heleket-webhook`
    - **MulenPay**: Настрой webhook на `https://your-domain.com/mulenpay-webhook`
    - **PayPalych**: Укажи Result URL `https://your-domain.com/pal24-webhook` в кабинете Pal24
    - **WATA**: Настрой webhook на `https://your-domain.com/wata-webhook`
@@ -1310,7 +1319,7 @@ docker stats
 
 | Метрика | Значение |
 |---------|----------|
-| 💳 **Платёжных систем** | 7 (Stars, YooKassa, Tribute, CryptoBot, MulenPay, Pal24, WATA) |
+| 💳 **Платёжных систем** | 8 (Stars, YooKassa, Tribute, CryptoBot, Heleket, MulenPay, Pal24, WATA) |
 | 🌍 **Языков интерфейса** | 2 (RU, EN) с возможностью расширения |
 | 📊 **Периодов подписки** | 6 (от 14 дней до года) |
 | 🎁 **Типов промо-акций** | 5 (коды, группы, предложения, скидки, кампании) |

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from enum import Enum
 
 from sqlalchemy import (
@@ -76,6 +76,7 @@ class PaymentMethod(Enum):
     TRIBUTE = "tribute"
     YOOKASSA = "yookassa"
     CRYPTOBOT = "cryptobot"
+    HELEKET = "heleket"
     MULENPAY = "mulenpay"
     PAL24 = "pal24"
     WATA = "wata"
@@ -188,6 +189,72 @@ class CryptoBotPayment(Base):
     
     def __repr__(self):
         return f"<CryptoBotPayment(id={self.id}, invoice_id={self.invoice_id}, amount={self.amount} {self.asset}, status={self.status})>"
+
+
+class HeleketPayment(Base):
+    __tablename__ = "heleket_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    uuid = Column(String(255), unique=True, nullable=False, index=True)
+    order_id = Column(String(128), unique=True, nullable=False, index=True)
+
+    amount = Column(String(50), nullable=False)
+    currency = Column(String(10), nullable=False)
+    payer_amount = Column(String(50), nullable=True)
+    payer_currency = Column(String(10), nullable=True)
+    exchange_rate = Column(Float, nullable=True)
+    discount_percent = Column(Integer, nullable=True)
+
+    status = Column(String(50), nullable=False)
+    payment_url = Column(Text, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+
+    paid_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    user = relationship("User", backref="heleket_payments")
+    transaction = relationship("Transaction", backref="heleket_payment")
+
+    @property
+    def amount_float(self) -> float:
+        try:
+            return float(self.amount)
+        except (TypeError, ValueError):
+            return 0.0
+
+    @property
+    def amount_kopeks(self) -> int:
+        return int(round(self.amount_float * 100))
+
+    @property
+    def payer_amount_float(self) -> float:
+        try:
+            return float(self.payer_amount) if self.payer_amount is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    @property
+    def is_paid(self) -> bool:
+        return self.status in {"paid", "paid_over"}
+
+    def __repr__(self):
+        return (
+            "<HeleketPayment(id={id}, uuid={uuid}, order_id={order_id}, amount={amount}"
+            " {currency}, status={status})>"
+        ).format(
+            id=self.id,
+            uuid=self.uuid,
+            order_id=self.order_id,
+            amount=self.amount,
+            currency=self.currency,
+            status=self.status,
+        )
 
 
 class MulenPayPayment(Base):

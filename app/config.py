@@ -206,6 +206,21 @@ class Settings(BaseSettings):
     CRYPTOBOT_ASSETS: str = "USDT,TON,BTC,ETH"
     CRYPTOBOT_INVOICE_EXPIRES_HOURS: int = 24
 
+    HELEKET_ENABLED: bool = False
+    HELEKET_MERCHANT_ID: Optional[str] = None
+    HELEKET_API_KEY: Optional[str] = None
+    HELEKET_BASE_URL: str = "https://api.heleket.com/v1"
+    HELEKET_DEFAULT_CURRENCY: str = "USDT"
+    HELEKET_DEFAULT_NETWORK: Optional[str] = None
+    HELEKET_INVOICE_LIFETIME: int = 3600
+    HELEKET_MARKUP_PERCENT: float = 0.0
+    HELEKET_WEBHOOK_PATH: str = "/heleket-webhook"
+    HELEKET_WEBHOOK_HOST: str = "0.0.0.0"
+    HELEKET_WEBHOOK_PORT: int = 8086
+    HELEKET_CALLBACK_URL: Optional[str] = None
+    HELEKET_RETURN_URL: Optional[str] = None
+    HELEKET_SUCCESS_URL: Optional[str] = None
+
     MULENPAY_ENABLED: bool = False
     MULENPAY_API_KEY: Optional[str] = None
     MULENPAY_SECRET_KEY: Optional[str] = None
@@ -786,6 +801,13 @@ class Settings(BaseSettings):
         return (self.CRYPTOBOT_ENABLED and
                 self.CRYPTOBOT_API_TOKEN is not None)
 
+    def is_heleket_enabled(self) -> bool:
+        return (
+            self.HELEKET_ENABLED
+            and self.HELEKET_MERCHANT_ID is not None
+            and self.HELEKET_API_KEY is not None
+        )
+
     def is_mulenpay_enabled(self) -> bool:
         return (
             self.MULENPAY_ENABLED
@@ -833,6 +855,26 @@ class Settings(BaseSettings):
     
     def get_cryptobot_invoice_expires_seconds(self) -> int:
         return self.CRYPTOBOT_INVOICE_EXPIRES_HOURS * 3600
+
+    def get_heleket_markup_percent(self) -> float:
+        try:
+            return float(self.HELEKET_MARKUP_PERCENT)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def get_heleket_lifetime(self) -> int:
+        try:
+            value = int(self.HELEKET_INVOICE_LIFETIME)
+        except (TypeError, ValueError):
+            value = 3600
+        return max(300, min(43200, value))
+
+    def get_heleket_callback_url(self) -> Optional[str]:
+        if self.HELEKET_CALLBACK_URL:
+            return self.HELEKET_CALLBACK_URL
+        if self.WEBHOOK_URL:
+            return f"{self.WEBHOOK_URL}{self.HELEKET_WEBHOOK_PATH}"
+        return None
 
     def is_happ_cryptolink_mode(self) -> bool:
         return self.CONNECT_BUTTON_MODE == "happ_cryptolink"

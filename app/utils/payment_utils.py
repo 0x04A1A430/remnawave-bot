@@ -81,6 +81,15 @@ def get_available_payment_methods() -> List[Dict[str, str]]:
             "description": "через CryptoBot",
             "callback": "topup_cryptobot"
         })
+
+    if settings.is_heleket_enabled():
+        methods.append({
+            "id": "heleket",
+            "name": "Криптовалюта",
+            "icon": "🪙",
+            "description": "через Heleket",
+            "callback": "topup_heleket"
+        })
     
     # Поддержка всегда доступна
     methods.append({
@@ -163,6 +172,8 @@ def is_payment_method_available(method_id: str) -> bool:
         return settings.is_pal24_enabled()
     elif method_id == "cryptobot":
         return settings.is_cryptobot_enabled()
+    elif method_id == "heleket":
+        return settings.is_heleket_enabled()
     elif method_id == "support":
         return True  # Поддержка всегда доступна
     else:
@@ -180,6 +191,7 @@ def get_payment_method_status() -> Dict[str, bool]:
         "wata": settings.is_wata_enabled(),
         "pal24": settings.is_pal24_enabled(),
         "cryptobot": settings.is_cryptobot_enabled(),
+        "heleket": settings.is_heleket_enabled(),
         "support": True
     }
 
@@ -201,5 +213,7 @@ def get_enabled_payment_methods_count() -> int:
     if settings.is_pal24_enabled():
         count += 1
     if settings.is_cryptobot_enabled():
+        count += 1
+    if settings.is_heleket_enabled():
         count += 1
     return count
