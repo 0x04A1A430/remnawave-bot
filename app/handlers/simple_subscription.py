@@ -54,6 +54,14 @@ async def start_simple_subscription_purchase(
     user_balance_kopeks = getattr(db_user, "balance_kopeks", 0)
     # Рассчитываем цену подписки
     price_kopeks = _calculate_simple_subscription_price(subscription_params)
+    data = await state.get_data()
+    resolved_squad_uuid = await _ensure_simple_subscription_squad_uuid(
+        db,
+        state,
+        subscription_params,
+        user_id=db_user.id,
+        state_data=data,
+    )
     period_days = subscription_params["period_days"]
     recorded_price = getattr(settings, f"PRICE_{period_days}_DAYS", price_kopeks)
     direct_purchase_min_balance = recorded_price
@@ -102,12 +110,17 @@ async def start_simple_subscription_purchase(
             "ℹ️ У вас уже есть триальная подписка. Она истекает через {days} дн.",
         ).format(days=days_left)
 
+    server_label = _get_simple_subscription_server_label(
+        texts,
+        subscription_params,
+        resolved_squad_uuid,
+    )
     message_text = (
         f"⚡ <b>Простая покупка подписки</b>\n\n"
         f"📅 Период: {subscription_params['period_days']} дней\n"
         f"📱 Устройства: {subscription_params['device_limit']}\n"
         f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}\n"
-        f"🌍 Сервер: {'Любой доступный' if not subscription_params['squad_uuid'] else 'Выбранный'}\n\n"
+        f"🌍 Сервер: {server_label}\n\n"
         f"💰 Стоимость: {settings.format_price(price_kopeks)}\n"
         f"💳 Ваш баланс: {settings.format_price(user_balance_kopeks)}\n\n"
         + (
@@ -198,6 +211,12 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
             text="🪙 CryptoBot",
             callback_data="simple_subscription_cryptobot"
         )])
+
+    if settings.is_heleket_enabled():
+        keyboard.append([types.InlineKeyboardButton(
+            text="🪙 Heleket",
+            callback_data="simple_subscription_heleket"
+        )])
     
     if settings.is_mulenpay_enabled():
         mulenpay_name = settings.get_mulenpay_display_name()
@@ -223,8 +242,71 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
         text=texts.BACK,
         callback_data="subscription_purchase"
     )])
-    
+
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def _get_simple_subscription_server_label(
+    texts,
+    subscription_params: Dict[str, Any],
+    resolved_squad_uuid: Optional[str] = None,
+) -> str:
+    """Возвращает локализованное описание выбранного сервера."""
+
+    if subscription_params.get("squad_uuid"):
+        return texts.t("SIMPLE_SUBSCRIPTION_SERVER_SELECTED", "Выбранный")
+
+    if resolved_squad_uuid:
+        return texts.t(
+            "SIMPLE_SUBSCRIPTION_SERVER_ASSIGNED",
+            "Назначен автоматически",
+        )
+
+    return texts.t("SIMPLE_SUBSCRIPTION_SERVER_ANY", "Любой доступный")
+
+
+async def _ensure_simple_subscription_squad_uuid(
+    db: AsyncSession,
+    state: FSMContext,
+    subscription_params: Dict[str, Any],
+    *,
+    user_id: Optional[int] = None,
+    state_data: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    """Определяет UUID сквада для простой подписки."""
+
+    explicit_uuid = subscription_params.get("squad_uuid")
+    if explicit_uuid:
+        return explicit_uuid
+
+    if state_data is None:
+        state_data = await state.get_data()
+
+    resolved_uuid = state_data.get("resolved_squad_uuid")
+    if resolved_uuid:
+        return resolved_uuid
+
+    try:
+        from app.database.crud.server_squad import get_random_active_squad_uuid
+
+        resolved_uuid = await get_random_active_squad_uuid(db)
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.error(
+            "SIMPLE_SUBSCRIPTION_RANDOM_SQUAD_ERROR | user=%s | error=%s",
+            user_id,
+            error,
+        )
+        return None
+
+    if resolved_uuid:
+        await state.update_data(resolved_squad_uuid=resolved_uuid)
+        logger.info(
+            "SIMPLE_SUBSCRIPTION_RANDOM_SQUAD_ASSIGNED | user=%s | squad=%s",
+            user_id,
+            resolved_uuid,
+        )
+
+    return resolved_uuid
 
 
 @error_handler
@@ -243,7 +325,15 @@ async def handle_simple_subscription_pay_with_balance(
     if not subscription_params:
         await callback.answer("❌ Данные подписки устарели. Пожалуйста, начните сначала.", show_alert=True)
         return
-    
+
+    resolved_squad_uuid = await _ensure_simple_subscription_squad_uuid(
+        db,
+        state,
+        subscription_params,
+        user_id=db_user.id,
+        state_data=data,
+    )
+
     # Рассчитываем цену подписки
     price_kopeks = _calculate_simple_subscription_price(subscription_params)
     recorded_price = getattr(settings, f"PRICE_{subscription_params['period_days']}_DAYS", price_kopeks)
@@ -307,8 +397,8 @@ async def handle_simple_subscription_pay_with_balance(
             # Обновляем параметры подписки
             subscription.traffic_limit_gb = subscription_params["traffic_limit_gb"]
             subscription.device_limit = subscription_params["device_limit"]
-            if subscription_params["squad_uuid"]:
-                subscription.connected_squads = [subscription_params["squad_uuid"]]
+            if resolved_squad_uuid:
+                subscription.connected_squads = [resolved_squad_uuid]
             
             await db.commit()
             await db.refresh(subscription)
@@ -321,7 +411,7 @@ async def handle_simple_subscription_pay_with_balance(
                 duration_days=subscription_params["period_days"],
                 traffic_limit_gb=subscription_params["traffic_limit_gb"],
                 device_limit=subscription_params["device_limit"],
-                connected_squads=[subscription_params["squad_uuid"]] if subscription_params["squad_uuid"] else [],
+                connected_squads=[resolved_squad_uuid] if resolved_squad_uuid else [],
                 update_server_counters=True,
             )
         
@@ -351,12 +441,17 @@ async def handle_simple_subscription_pay_with_balance(
             logger.error(f"Ошибка синхронизации подписки с RemnaWave для пользователя {db_user.id}: {sync_error}", exc_info=True)
         
         # Отправляем уведомление об успешной покупке
+        server_label = _get_simple_subscription_server_label(
+            texts,
+            subscription_params,
+            resolved_squad_uuid,
+        )
         success_message = (
             f"✅ <b>Подписка успешно активирована!</b>\n\n"
             f"📅 Период: {subscription_params['period_days']} дней\n"
             f"📱 Устройства: {subscription_params['device_limit']}\n"
             f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}\n"
-            f"🌍 Сервер: {'Любой доступный' if not subscription_params['squad_uuid'] else 'Выбранный'}\n\n"
+            f"🌍 Сервер: {server_label}\n\n"
             f"💰 Списано с баланса: {settings.format_price(price_kopeks)}\n"
             f"💳 Ваш баланс: {settings.format_price(db_user.balance_kopeks)}\n\n"
             f"🔗 Для подключения перейдите в раздел 'Подключиться'"
@@ -495,14 +590,14 @@ async def handle_simple_subscription_other_payment_methods(
     
     data = await state.get_data()
     subscription_params = data.get("subscription_params", {})
-    
+
     if not subscription_params:
         await callback.answer("❌ Данные подписки устарели. Пожалуйста, начните сначала.", show_alert=True)
         return
-    
+
     # Рассчитываем цену подписки
     price_kopeks = _calculate_simple_subscription_price(subscription_params)
-    
+
     user_balance_kopeks = getattr(db_user, "balance_kopeks", 0)
     recorded_price = getattr(settings, f"PRICE_{subscription_params['period_days']}_DAYS", price_kopeks)
     total_required = recorded_price
@@ -522,12 +617,18 @@ async def handle_simple_subscription_other_payment_methods(
     )
 
     # Отображаем доступные методы оплаты
+    resolved_squad_uuid = data.get("resolved_squad_uuid")
+    server_label = _get_simple_subscription_server_label(
+        texts,
+        subscription_params,
+        resolved_squad_uuid,
+    )
     message_text = (
         f"💳 <b>Оплата подписки</b>\n\n"
         f"📅 Период: {subscription_params['period_days']} дней\n"
         f"📱 Устройства: {subscription_params['device_limit']}\n"
         f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}\n"
-        f"🌍 Сервер: {'Любой доступный' if not subscription_params['squad_uuid'] else 'Выбранный'}\n\n"
+        f"🌍 Сервер: {server_label}\n\n"
         f"💰 Стоимость: {settings.format_price(price_kopeks)}\n\n"
         + (
             "Вы можете оплатить подписку с баланса или выбрать другой способ оплаты:"
@@ -625,7 +726,7 @@ async def handle_simple_subscription_payment_method(
                 period_days=subscription_params["period_days"],
                 device_limit=subscription_params["device_limit"],
                 traffic_limit_gb=subscription_params["traffic_limit_gb"],
-                squad_uuid=subscription_params["squad_uuid"],
+                squad_uuid=resolved_squad_uuid,
                 payment_method="yookassa_sbp" if payment_method == "yookassa_sbp" else "yookassa",
                 total_price_kopeks=price_kopeks
             )
@@ -888,7 +989,121 @@ async def handle_simple_subscription_payment_method(
             await state.clear()
             await callback.answer()
             return
-            
+
+        elif payment_method == "heleket":
+            if not settings.is_heleket_enabled():
+                await callback.answer("❌ Оплата через Heleket временно недоступна", show_alert=True)
+                return
+
+            amount_rubles = price_kopeks / 100
+            if amount_rubles < 100 or amount_rubles > 100000:
+                await callback.answer(
+                    "❌ Сумма должна быть от 100 до 100 000 ₽ для оплаты через Heleket",
+                    show_alert=True,
+                )
+                return
+
+            heleket_result = await payment_service.create_heleket_payment(
+                db=db,
+                user_id=db_user.id,
+                amount_kopeks=price_kopeks,
+                description=settings.get_subscription_payment_description(
+                    subscription_params["period_days"],
+                    price_kopeks,
+                ),
+                language=db_user.language,
+            )
+
+            if not heleket_result:
+                await callback.answer(
+                    "❌ Ошибка создания платежа Heleket. Попробуйте позже или обратитесь в поддержку.",
+                    show_alert=True,
+                )
+                return
+
+            payment_url = heleket_result.get("payment_url")
+            if not payment_url:
+                await callback.answer(
+                    "❌ Не удалось получить ссылку для оплаты Heleket. Обратитесь в поддержку.",
+                    show_alert=True,
+                )
+                return
+
+            local_payment_id = heleket_result.get("local_payment_id")
+            payer_amount = heleket_result.get("payer_amount")
+            payer_currency = heleket_result.get("payer_currency")
+            discount_percent = heleket_result.get("discount_percent")
+
+            markup_percent = None
+            if discount_percent is not None:
+                try:
+                    markup_percent = -int(discount_percent)
+                except (TypeError, ValueError):
+                    markup_percent = None
+
+            keyboard = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text="🪙 Оплатить через Heleket",
+                            url=payment_url,
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                            callback_data=f"check_simple_heleket_{local_payment_id}",
+                        )
+                    ],
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription_purchase")],
+                ]
+            )
+
+            message_lines = [
+                "🪙 <b>Оплата через Heleket</b>",
+                "",
+                f"💰 Сумма: {settings.format_price(price_kopeks)}",
+            ]
+
+            if payer_amount and payer_currency:
+                message_lines.append(f"🪙 К оплате: {payer_amount} {payer_currency}")
+                try:
+                    payer_amount_float = float(payer_amount)
+                    if payer_amount_float > 0:
+                        rub_per_currency = amount_rubles / payer_amount_float
+                        message_lines.append(
+                            f"💱 Курс: 1 {payer_currency} ≈ {rub_per_currency:.2f} ₽"
+                        )
+                except (TypeError, ValueError, ZeroDivisionError):
+                    pass
+
+            if markup_percent:
+                sign = "+" if markup_percent > 0 else ""
+                message_lines.append(f"📈 Наценка: {sign}{markup_percent}%")
+
+            message_lines.extend(
+                [
+                    "",
+                    "📱 <b>Инструкция:</b>",
+                    "1. Нажмите кнопку 'Оплатить через Heleket'",
+                    "2. Следуйте подсказкам на странице оплаты",
+                    "3. Подтвердите перевод",
+                    "4. Средства зачислятся автоматически",
+                    "",
+                    f"❓ Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}",
+                ]
+            )
+
+            await callback.message.edit_text(
+                "\n".join(message_lines),
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+
+            await state.clear()
+            await callback.answer()
+            return
+
         elif payment_method == "mulenpay":
             # Оплата через MulenPay
             mulenpay_name = settings.get_mulenpay_display_name()
@@ -1504,6 +1719,94 @@ async def check_simple_cryptobot_payment_status(
 
 
 @error_handler
+async def check_simple_heleket_payment_status(
+    callback: types.CallbackQuery,
+    db: AsyncSession,
+):
+    try:
+        local_payment_id = int(callback.data.rsplit('_', 1)[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Некорректный идентификатор платежа", show_alert=True)
+        return
+
+    from app.database.crud.heleket import get_heleket_payment_by_id
+
+    payment = await get_heleket_payment_by_id(db, local_payment_id)
+    if not payment:
+        await callback.answer("❌ Платеж не найден", show_alert=True)
+        return
+
+    status_labels = {
+        "check": ("⏳", "Ожидает оплаты"),
+        "paid": ("✅", "Оплачен"),
+        "paid_over": ("✅", "Оплачен (переплата)"),
+        "wrong_amount": ("⚠️", "Неверная сумма"),
+        "cancel": ("❌", "Отменен"),
+        "fail": ("❌", "Ошибка"),
+        "process": ("⌛", "Обрабатывается"),
+        "confirm_check": ("⌛", "Ожидает подтверждения"),
+    }
+
+    emoji, status_text = status_labels.get(payment.status, ("❓", "Неизвестно"))
+
+    language = settings.DEFAULT_LANGUAGE
+    try:
+        from app.services.payment_service import get_user_by_id as fetch_user_by_id
+
+        user = await fetch_user_by_id(db, payment.user_id)
+        if user and getattr(user, "language", None):
+            language = user.language
+    except Exception as error:
+        logger.debug("Не удалось получить пользователя для Heleket статуса: %s", error)
+
+    texts = get_texts(language)
+
+    message_lines = [
+        "🪙 Статус платежа Heleket:",
+        "",
+        f"🆔 UUID: {payment.uuid[:8]}...",
+        f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}",
+        f"📊 Статус: {emoji} {status_text}",
+        f"📅 Создан: {payment.created_at.strftime('%d.%m.%Y %H:%M') if payment.created_at else '—'}",
+    ]
+
+    if payment.payer_amount and payment.payer_currency:
+        message_lines.append(
+            f"🪙 Оплата: {payment.payer_amount} {payment.payer_currency}"
+        )
+
+    if payment.is_paid:
+        message_lines.append("\n✅ Платеж успешно завершен! Средства уже зачислены.")
+    elif payment.status in {"check", "process", "confirm_check"}:
+        message_lines.append("\n⏳ Платеж еще обрабатывается. Завершите оплату и проверьте статус позже.")
+        if payment.payment_url:
+            message_lines.append(f"\n🔗 Ссылка на оплату: {payment.payment_url}")
+    elif payment.status in {"fail", "cancel", "wrong_amount"}:
+        message_lines.append(
+            f"\n❌ Платеж не завершен корректно. Обратитесь в {settings.get_support_contact_display()}"
+        )
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                    callback_data=f"check_simple_heleket_{local_payment_id}",
+                )
+            ],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription_purchase")],
+        ]
+    )
+
+    await callback.answer()
+    await callback.message.edit_text(
+        "\n".join(message_lines),
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
+
+
+@error_handler
 async def check_simple_wata_payment_status(
     callback: types.CallbackQuery,
     db: AsyncSession,
@@ -1606,6 +1909,11 @@ def register_simple_subscription_handlers(dp):
     dp.callback_query.register(
         check_simple_cryptobot_payment_status,
         F.data.startswith("check_simple_cryptobot_")
+    )
+
+    dp.callback_query.register(
+        check_simple_heleket_payment_status,
+        F.data.startswith("check_simple_heleket_")
     )
 
     dp.callback_query.register(

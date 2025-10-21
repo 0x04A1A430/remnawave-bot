@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from __future__ import annotations
+
 from pathlib import Path
 from types import SimpleNamespace, ModuleType
 from typing import Any, Dict
@@ -16,6 +18,7 @@ if str(ROOT_DIR) not in sys.path:
 
 import app.services.payment_service as payment_service_module  # noqa: E402
 from app.services.payment_service import PaymentService  # noqa: E402
+from app.database.models import PaymentMethod  # noqa: E402
 from app.config import settings  # noqa: E402
 
 
@@ -54,6 +57,7 @@ def _make_service(bot: DummyBot) -> PaymentService:
     service.mulenpay_service = None
     service.pal24_service = None
     service.cryptobot_service = None
+    service.heleket_service = None
     return service
 
 
@@ -254,6 +258,146 @@ async def test_process_cryptobot_webhook_success(monkeypatch: pytest.MonkeyPatch
     assert bot.sent_messages
     assert admin_calls
 
+
+@pytest.mark.anyio("asyncio")
+async def test_process_heleket_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    bot = DummyBot()
+    service = _make_service(bot)
+    fake_session = FakeSession()
+
+    payment = SimpleNamespace(
+        uuid="heleket-uuid",
+        order_id="heleket-order",
+        user_id=77,
+        amount="150.00",
+        amount_float=150.0,
+        amount_kopeks=15000,
+        status="check",
+        payer_amount=None,
+        payer_currency=None,
+        exchange_rate=None,
+        discount_percent=None,
+        payment_url=None,
+        transaction_id=None,
+    )
+
+    async def fake_get_by_uuid(db, uuid):
+        return payment if uuid == payment.uuid else None
+
+    async def fake_get_by_order(db, order_id):
+        return payment if order_id == payment.order_id else None
+
+    async def fake_update(
+        db,
+        uuid,
+        *,
+        status=None,
+        payer_amount=None,
+        payer_currency=None,
+        exchange_rate=None,
+        discount_percent=None,
+        paid_at=None,
+        payment_url=None,
+        metadata=None,
+    ):
+        if status is not None:
+            payment.status = status
+        if payer_amount is not None:
+            payment.payer_amount = payer_amount
+        if payer_currency is not None:
+            payment.payer_currency = payer_currency
+        if exchange_rate is not None:
+            payment.exchange_rate = exchange_rate
+        if discount_percent is not None:
+            payment.discount_percent = discount_percent
+        if payment_url is not None:
+            payment.payment_url = payment_url
+        payment.paid_at = paid_at
+        if metadata:
+            payment.metadata_json = metadata
+        return payment
+
+    async def fake_link(db, uuid, transaction_id):
+        payment.transaction_id = transaction_id
+        return payment
+
+    heleket_module = ModuleType("app.database.crud.heleket")
+    heleket_module.get_heleket_payment_by_uuid = fake_get_by_uuid
+    heleket_module.get_heleket_payment_by_order_id = fake_get_by_order
+    heleket_module.update_heleket_payment = fake_update
+    heleket_module.link_heleket_payment_to_transaction = fake_link
+    monkeypatch.setitem(sys.modules, "app.database.crud.heleket", heleket_module)
+
+    transactions: list[Dict[str, Any]] = []
+
+    async def fake_create_transaction(db, **kwargs):
+        transactions.append(kwargs)
+        return SimpleNamespace(id=321, **kwargs)
+
+    monkeypatch.setattr(payment_service_module, "create_transaction", fake_create_transaction)
+
+    user = SimpleNamespace(
+        id=77,
+        telegram_id=7700,
+        balance_kopeks=0,
+        has_made_first_topup=False,
+        promo_group=None,
+        subscription=None,
+        referred_by_id=None,
+        referrer=None,
+        language="ru",
+    )
+
+    async def fake_get_user(db, user_id):
+        return user if user_id == user.id else None
+
+    monkeypatch.setattr(payment_service_module, "get_user_by_id", fake_get_user)
+    monkeypatch.setattr("app.services.payment.heleket.format_referrer_info", lambda u: "")
+
+    monkeypatch.setattr(type(settings), "format_price", lambda self, amount: f"{amount / 100:.2f}₽", raising=False)
+
+    referral_stub = SimpleNamespace(process_referral_topup=AsyncMock())
+    monkeypatch.setitem(sys.modules, "app.services.referral_service", referral_stub)
+
+    admin_calls: list[Any] = []
+
+    class DummyAdminService:
+        def __init__(self, bot):
+            self.bot = bot
+
+        async def send_balance_topup_notification(self, *args, **kwargs):
+            admin_calls.append((args, kwargs))
+
+    monkeypatch.setitem(
+        sys.modules,
+        "app.services.admin_notification_service",
+        SimpleNamespace(AdminNotificationService=lambda bot: DummyAdminService(bot)),
+    )
+
+    service.build_topup_success_keyboard = AsyncMock(return_value=None)
+
+    payload = {
+        "uuid": "heleket-uuid",
+        "status": "paid",
+        "payer_amount": "2.50",
+        "payer_currency": "USDT",
+        "discount_percent": -5,
+        "payer_amount_exchange_rate": "0.0166",
+        "paid_at": "2024-01-02T12:00:00Z",
+        "url": "https://pay.example",
+    }
+
+    result = await service.process_heleket_webhook(fake_session, payload)
+
+    assert result is True
+    assert transactions and transactions[0]["payment_method"] == PaymentMethod.HELEKET
+    assert payment.transaction_id == 321
+    assert user.balance_kopeks == 15000
+    assert user.has_made_first_topup is True
+    assert fake_session.commits >= 1
+    assert bot.sent_messages
+    assert admin_calls
+    referral_stub.process_referral_topup.assert_awaited_once()
 
 @pytest.mark.anyio("asyncio")
 async def test_process_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:

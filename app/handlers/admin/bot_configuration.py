@@ -52,12 +52,13 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
     },
     "payments": {
         "title": "💳 Платежные системы",
-        "description": "YooKassa, CryptoBot, MulenPay, PAL24, Wata, Tribute и Telegram Stars.",
+        "description": "YooKassa, CryptoBot, Heleket, MulenPay, PAL24, Wata, Tribute и Telegram Stars.",
         "icon": "💳",
         "categories": (
             "PAYMENT",
             "YOOKASSA",
             "CRYPTOBOT",
+            "HELEKET",
             "MULENPAY",
             "PAL24",
             "WATA",

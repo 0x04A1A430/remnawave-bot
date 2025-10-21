@@ -11,11 +11,13 @@ from aiogram import Bot
 from app.config import settings
 from app.utils.currency_converter import currency_converter  # noqa: F401
 from app.external.cryptobot import CryptoBotService
+from app.external.heleket import HeleketService
 from app.external.telegram_stars import TelegramStarsService
 from app.services.mulenpay_service import MulenPayService
 from app.services.pal24_service import Pal24Service
 from app.services.payment import (
     CryptoBotPaymentMixin,
+    HeleketPaymentMixin,
     MulenPayPaymentMixin,
     Pal24PaymentMixin,
     PaymentCommonMixin,
@@ -178,12 +180,38 @@ async def link_cryptobot_payment_to_transaction(*args, **kwargs):
     return await crypto_crud.link_cryptobot_payment_to_transaction(*args, **kwargs)
 
 
+async def create_heleket_payment(*args, **kwargs):
+    heleket_crud = import_module("app.database.crud.heleket")
+    return await heleket_crud.create_heleket_payment(*args, **kwargs)
+
+
+async def get_heleket_payment_by_uuid(*args, **kwargs):
+    heleket_crud = import_module("app.database.crud.heleket")
+    return await heleket_crud.get_heleket_payment_by_uuid(*args, **kwargs)
+
+
+async def get_heleket_payment_by_id(*args, **kwargs):
+    heleket_crud = import_module("app.database.crud.heleket")
+    return await heleket_crud.get_heleket_payment_by_id(*args, **kwargs)
+
+
+async def update_heleket_payment(*args, **kwargs):
+    heleket_crud = import_module("app.database.crud.heleket")
+    return await heleket_crud.update_heleket_payment(*args, **kwargs)
+
+
+async def link_heleket_payment_to_transaction(*args, **kwargs):
+    heleket_crud = import_module("app.database.crud.heleket")
+    return await heleket_crud.link_heleket_payment_to_transaction(*args, **kwargs)
+
+
 class PaymentService(
     PaymentCommonMixin,
     TelegramStarsMixin,
     YooKassaPaymentMixin,
     TributePaymentMixin,
     CryptoBotPaymentMixin,
+    HeleketPaymentMixin,
     MulenPayPaymentMixin,
     Pal24PaymentMixin,
     WataPaymentMixin,
@@ -201,6 +229,9 @@ class PaymentService(
         self.cryptobot_service = (
             CryptoBotService() if settings.is_cryptobot_enabled() else None
         )
+        self.heleket_service = (
+            HeleketService() if settings.is_heleket_enabled() else None
+        )
         self.mulenpay_service = (
             MulenPayService() if settings.is_mulenpay_enabled() else None
         )
@@ -211,10 +242,11 @@ class PaymentService(
 
         mulenpay_name = settings.get_mulenpay_display_name()
         logger.debug(
-            "PaymentService инициализирован (YooKassa=%s, Stars=%s, CryptoBot=%s, %s=%s, Pal24=%s, Wata=%s)",
+            "PaymentService инициализирован (YooKassa=%s, Stars=%s, CryptoBot=%s, Heleket=%s, %s=%s, Pal24=%s, Wata=%s)",
             bool(self.yookassa_service),
             bool(self.stars_service),
             bool(self.cryptobot_service),
+            bool(self.heleket_service),
             mulenpay_name,
             bool(self.mulenpay_service),
             bool(self.pal24_service),

@@ -715,6 +715,18 @@ async def get_payment_methods(
             )
         )
 
+    if settings.is_heleket_enabled():
+        methods.append(
+            MiniAppPaymentMethod(
+                id="heleket",
+                icon="🪙",
+                requires_amount=True,
+                currency="RUB",
+                min_amount_kopeks=100 * 100,
+                max_amount_kopeks=100_000 * 100,
+            )
+        )
+
     if settings.TRIBUTE_ENABLED:
         methods.append(
             MiniAppPaymentMethod(
@@ -733,7 +745,8 @@ async def get_payment_methods(
         "pal24": 5,
         "wata": 6,
         "cryptobot": 7,
-        "tribute": 8,
+        "heleket": 8,
+        "tribute": 9,
     }
     methods.sort(key=lambda item: order_map.get(item.id, 99))
 
@@ -1071,6 +1084,53 @@ async def create_payment_link(
             },
         )
 
+    if method == "heleket":
+        if not settings.is_heleket_enabled():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Payment method is unavailable")
+        if amount_kopeks is None or amount_kopeks <= 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Amount must be positive")
+
+        min_amount_kopeks = 100 * 100
+        max_amount_kopeks = 100_000 * 100
+        if amount_kopeks < min_amount_kopeks:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Amount is below minimum ({min_amount_kopeks / 100:.2f} RUB)",
+            )
+        if amount_kopeks > max_amount_kopeks:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Amount exceeds maximum ({max_amount_kopeks / 100:.2f} RUB)",
+            )
+
+        payment_service = PaymentService()
+        result = await payment_service.create_heleket_payment(
+            db=db,
+            user_id=user.id,
+            amount_kopeks=amount_kopeks,
+            description=settings.get_balance_payment_description(amount_kopeks),
+            language=user.language or settings.DEFAULT_LANGUAGE,
+        )
+
+        if not result or not result.get("payment_url"):
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="Failed to create payment")
+
+        return MiniAppPaymentCreateResponse(
+            method=method,
+            payment_url=result["payment_url"],
+            amount_kopeks=amount_kopeks,
+            extra={
+                "local_payment_id": result.get("local_payment_id"),
+                "uuid": result.get("uuid"),
+                "order_id": result.get("order_id"),
+                "payer_amount": result.get("payer_amount"),
+                "payer_currency": result.get("payer_currency"),
+                "discount_percent": result.get("discount_percent"),
+                "exchange_rate": result.get("exchange_rate"),
+                "requested_at": _current_request_timestamp(),
+            },
+        )
+
     if method == "tribute":
         if not settings.TRIBUTE_ENABLED:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Payment method is unavailable")
@@ -1163,6 +1223,8 @@ async def _resolve_payment_status_entry(
         return await _resolve_pal24_payment_status(payment_service, db, user, query)
     if method == "cryptobot":
         return await _resolve_cryptobot_payment_status(db, user, query)
+    if method == "heleket":
+        return await _resolve_heleket_payment_status(db, user, query)
     if method == "stars":
         return await _resolve_stars_payment_status(db, user, query)
     if method == "tribute":
@@ -1546,6 +1608,74 @@ async def _resolve_cryptobot_payment_status(
             "asset": payment.asset,
             "local_payment_id": payment.id,
             "invoice_id": payment.invoice_id,
+            "payload": query.payload,
+            "started_at": query.started_at,
+        },
+    )
+
+
+async def _resolve_heleket_payment_status(
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    from app.database.crud.heleket import (
+        get_heleket_payment_by_id,
+        get_heleket_payment_by_order_id,
+        get_heleket_payment_by_uuid,
+    )
+
+    payment = None
+    if query.local_payment_id:
+        payment = await get_heleket_payment_by_id(db, query.local_payment_id)
+    if not payment and query.payment_id:
+        payment = await get_heleket_payment_by_uuid(db, query.payment_id)
+    if not payment and query.invoice_id:
+        payment = await get_heleket_payment_by_uuid(db, query.invoice_id)
+    if not payment and query.bill_id:
+        payment = await get_heleket_payment_by_order_id(db, query.bill_id)
+
+    if not payment or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(
+            method="heleket",
+            status="pending",
+            is_paid=False,
+            amount_kopeks=query.amount_kopeks,
+            message="Payment not found",
+            extra={
+                "local_payment_id": query.local_payment_id,
+                "uuid": query.payment_id or query.invoice_id,
+                "order_id": query.bill_id,
+                "payload": query.payload,
+                "started_at": query.started_at,
+            },
+        )
+
+    status_raw = payment.status
+    is_paid = bool(payment.is_paid)
+    status = _classify_status(status_raw, is_paid)
+    completed_at = payment.paid_at or payment.updated_at or payment.created_at
+
+    return MiniAppPaymentStatusResult(
+        method="heleket",
+        status=status,
+        is_paid=status == "paid",
+        amount_kopeks=payment.amount_kopeks,
+        currency=payment.currency,
+        completed_at=completed_at,
+        transaction_id=payment.transaction_id,
+        external_id=payment.uuid,
+        message=None,
+        extra={
+            "status": payment.status,
+            "local_payment_id": payment.id,
+            "uuid": payment.uuid,
+            "order_id": payment.order_id,
+            "payer_amount": payment.payer_amount,
+            "payer_currency": payment.payer_currency,
+            "discount_percent": payment.discount_percent,
+            "exchange_rate": payment.exchange_rate,
+            "payment_url": payment.payment_url,
             "payload": query.payload,
             "started_at": query.started_at,
         },

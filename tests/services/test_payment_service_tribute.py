@@ -28,6 +28,7 @@ def _make_service() -> PaymentService:
     service.pal24_service = None
     service.cryptobot_service = None
     service.stars_service = None
+    service.heleket_service = None
     return service
 
 
