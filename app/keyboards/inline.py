@@ -1370,7 +1370,7 @@ def get_autopay_days_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboar
     for days in [1, 3, 7, 14]:
         keyboard.append([
             InlineKeyboardButton(
-                text=f"{days} дн{_get_days_suffix(days)}",
+                text=f"{days} {_get_days_word(days)}",
                 callback_data=f"autopay_days_{days}"
             )
         ])
@@ -1382,13 +1382,12 @@ def get_autopay_days_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboar
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def _get_days_suffix(days: int) -> str:
-    if days == 1:
-        return "ь"
-    elif 2 <= days <= 4:
-        return "я"
-    else:
-        return "ей"
+def _get_days_word(days: int) -> str:
+    if days % 10 == 1 and days % 100 != 11:
+        return "день"
+    if 2 <= days % 10 <= 4 and not (12 <= days % 100 <= 14):
+        return "дня"
+    return "дней"
 
 
 
