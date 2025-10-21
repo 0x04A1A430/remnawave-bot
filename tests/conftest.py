@@ -1,5 +1,7 @@
 """Глобальные фикстуры и настройки окружения для тестов."""
 
+import asyncio
+import inspect
 import os
 import sys
 import types
@@ -149,3 +151,50 @@ if "yookassa" not in sys.modules:
 def fixed_datetime() -> datetime:
     """Возвращает фиксированную отметку времени для воспроизводимых проверок."""
     return datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Регистрируем маркеры для асинхронных тестов."""
+
+    config.addinivalue_line(
+        "markers",
+        "asyncio: запуск асинхронного теста через встроенный цикл событий",
+    )
+    config.addinivalue_line(
+        "markers",
+        "anyio: запуск асинхронного теста через встроенный цикл событий",
+    )
+
+
+def _unwrap_test(obj):  # noqa: ANN001 - вспомогательная функция для определения coroutine
+    """Возвращает исходную функцию, снимая обёртки pytest и декораторов."""
+
+    unwrapped = obj
+    while hasattr(unwrapped, "__wrapped__"):
+        unwrapped = unwrapped.__wrapped__
+    return unwrapped
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
+    """Позволяет запускать async def тесты без дополнительных плагинов."""
+
+    test_func = _unwrap_test(pyfuncitem.obj)
+    if not inspect.iscoroutinefunction(test_func):
+        return None
+
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        signature = inspect.signature(test_func)
+        call_kwargs = {
+            name: value
+            for name, value in pyfuncitem.funcargs.items()
+            if name in signature.parameters
+        }
+        loop.run_until_complete(pyfuncitem.obj(**call_kwargs))
+    finally:
+        asyncio.set_event_loop(None)
+        loop.close()
+
+    return True
