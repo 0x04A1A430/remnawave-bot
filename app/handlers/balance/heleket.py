@@ -203,8 +203,56 @@ async def check_heleket_payment_status(
         await callback.answer("Платёж не найден", show_alert=True)
         return
 
+    language = getattr(payment.user, "language", None) or settings.DEFAULT_LANGUAGE
+    texts = get_texts(language)
+
     if payment.is_paid:
-        await callback.answer("✅ Платёж уже оплачен", show_alert=True)
+        message = texts.t("HELEKET_PAYMENT_ALREADY_PAID", "✅ Платёж уже зачислен")
+        await callback.answer(message, show_alert=True)
         return
 
-    await callback.answer("Платёж ещё не оплачен", show_alert=True)
+    payment_service = PaymentService(callback.bot)
+    updated_payment = await payment_service.sync_heleket_payment_status(
+        db,
+        local_payment_id=local_payment_id,
+    )
+
+    if updated_payment:
+        payment = updated_payment
+
+    if payment.is_paid:
+        message = texts.t("HELEKET_PAYMENT_SUCCESS", "✅ Платёж зачислен на баланс")
+        await callback.answer(message, show_alert=True)
+        return
+
+    status_normalized = (payment.status or "").lower()
+    status_messages = {
+        "check": texts.t("HELEKET_STATUS_CHECK", "⏳ Ожидание оплаты"),
+        "process": texts.t("HELEKET_STATUS_PROCESS", "⚙️ Платёж обрабатывается"),
+        "confirm_check": texts.t("HELEKET_STATUS_CONFIRM_CHECK", "⛓ Ожидание подтверждений сети"),
+        "wrong_amount": texts.t("HELEKET_STATUS_WRONG_AMOUNT", "❗️ Оплачена неверная сумма"),
+        "wrong_amount_waiting": texts.t(
+            "HELEKET_STATUS_WRONG_AMOUNT_WAITING",
+            "❗️ Недостаточная сумма, ожидаем доплату",
+        ),
+        "paid_over": texts.t("HELEKET_STATUS_PAID_OVER", "✅ Платёж зачислен (с переплатой)"),
+        "paid": texts.t("HELEKET_STATUS_PAID", "✅ Платёж зачислен"),
+        "cancel": texts.t("HELEKET_STATUS_CANCEL", "🚫 Платёж отменён"),
+        "fail": texts.t("HELEKET_STATUS_FAIL", "❌ Ошибка при оплате"),
+        "system_fail": texts.t("HELEKET_STATUS_SYSTEM_FAIL", "❌ Системная ошибка Heleket"),
+        "refund_process": texts.t("HELEKET_STATUS_REFUND_PROCESS", "↩️ Возврат обрабатывается"),
+        "refund_fail": texts.t("HELEKET_STATUS_REFUND_FAIL", "⚠️ Ошибка возврата"),
+        "refund_paid": texts.t("HELEKET_STATUS_REFUND_PAID", "✅ Возврат выполнен"),
+        "locked": texts.t("HELEKET_STATUS_LOCKED", "🔒 Средства заблокированы"),
+    }
+
+    message = status_messages.get(status_normalized)
+    if message is None:
+        template = texts.t("HELEKET_STATUS_UNKNOWN", "ℹ️ Статус платежа: {status}")
+        status_value = payment.status or status_normalized or "—"
+        try:
+            message = template.format(status=status_value)
+        except Exception:  # pragma: no cover - defensive formatting
+            message = f"ℹ️ Статус платежа: {status_value}"
+
+    await callback.answer(message, show_alert=True)
