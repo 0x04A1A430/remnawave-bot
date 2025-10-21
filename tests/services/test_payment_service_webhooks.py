@@ -490,6 +490,7 @@ async def test_process_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch)
     assert result is True
     assert transactions and transactions[0]["amount_kopeks"] == 10000
     assert payment.transaction_id == 999
+    assert payment.is_paid is True
     assert user.balance_kopeks == 10000
     assert bot.sent_messages
     assert admin_calls
