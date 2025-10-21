@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any, Tuple, Optional
 from urllib.parse import quote
 from aiogram import Dispatcher, types, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -528,11 +529,12 @@ async def start_subscription_purchase(
     texts = get_texts(db_user.language)
 
     keyboard = get_subscription_period_keyboard(db_user.language)
+    prompt_text = await _build_subscription_period_prompt(db_user, texts, db)
 
-    await callback.message.edit_text(
-        await _build_subscription_period_prompt(db_user, texts, db),
-        reply_markup=keyboard,
-        parse_mode="HTML",
+    await _edit_message_text_or_caption(
+        callback.message,
+        prompt_text,
+        keyboard,
     )
 
     subscription = getattr(db_user, 'subscription', None)
@@ -556,6 +558,46 @@ async def start_subscription_purchase(
     await state.set_data(initial_data)
     await state.set_state(SubscriptionStates.selecting_period)
     await callback.answer()
+
+
+async def _edit_message_text_or_caption(
+    message: types.Message,
+    text: str,
+    reply_markup: InlineKeyboardMarkup,
+    parse_mode: Optional[str] = "HTML",
+) -> None:
+    """Edits message text when possible, falls back to caption or re-sends message."""
+
+    try:
+        await message.edit_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode,
+        )
+    except TelegramBadRequest as error:
+        error_message = str(error).lower()
+
+        if "message is not modified" in error_message:
+            return
+
+        if "there is no text in the message to edit" in error_message:
+            if message.caption is not None:
+                await message.edit_caption(
+                    caption=text,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode,
+                )
+                return
+
+            await message.delete()
+            await message.answer(
+                text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode,
+            )
+            return
+
+        raise
 
 async def save_cart_and_redirect_to_topup(
         callback: types.CallbackQuery,
