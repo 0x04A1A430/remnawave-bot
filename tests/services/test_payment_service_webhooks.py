@@ -54,6 +54,7 @@ def _make_service(bot: DummyBot) -> PaymentService:
     service.mulenpay_service = None
     service.pal24_service = None
     service.cryptobot_service = None
+    service.heleket_service = None
     return service
 
 

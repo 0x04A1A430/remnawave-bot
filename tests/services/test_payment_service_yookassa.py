@@ -68,6 +68,7 @@ def _make_service(yookassa_service: Optional[StubYooKassaService]) -> PaymentSer
     service.pal24_service = None
     service.mulenpay_service = None
     service.cryptobot_service = None
+    service.heleket_service = None
     return service
 
 

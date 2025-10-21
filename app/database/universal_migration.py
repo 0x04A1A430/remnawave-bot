@@ -576,6 +576,120 @@ async def create_cryptobot_payments_table():
         return False
 
 
+async def create_heleket_payments_table():
+    table_exists = await check_table_exists('heleket_payments')
+    if table_exists:
+        logger.info("Таблица heleket_payments уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                create_sql = """
+                CREATE TABLE heleket_payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    uuid VARCHAR(255) UNIQUE NOT NULL,
+                    order_id VARCHAR(128) UNIQUE NOT NULL,
+                    amount VARCHAR(50) NOT NULL,
+                    currency VARCHAR(10) NOT NULL,
+                    payer_amount VARCHAR(50) NULL,
+                    payer_currency VARCHAR(10) NULL,
+                    exchange_rate DOUBLE PRECISION NULL,
+                    discount_percent INTEGER NULL,
+                    status VARCHAR(50) NOT NULL,
+                    payment_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    paid_at DATETIME NULL,
+                    expires_at DATETIME NULL,
+                    transaction_id INTEGER NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_heleket_payments_user_id ON heleket_payments(user_id);
+                CREATE INDEX idx_heleket_payments_uuid ON heleket_payments(uuid);
+                CREATE INDEX idx_heleket_payments_order_id ON heleket_payments(order_id);
+                CREATE INDEX idx_heleket_payments_status ON heleket_payments(status);
+                """
+
+            elif db_type == 'postgresql':
+                create_sql = """
+                CREATE TABLE heleket_payments (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    uuid VARCHAR(255) UNIQUE NOT NULL,
+                    order_id VARCHAR(128) UNIQUE NOT NULL,
+                    amount VARCHAR(50) NOT NULL,
+                    currency VARCHAR(10) NOT NULL,
+                    payer_amount VARCHAR(50) NULL,
+                    payer_currency VARCHAR(10) NULL,
+                    exchange_rate DOUBLE PRECISION NULL,
+                    discount_percent INTEGER NULL,
+                    status VARCHAR(50) NOT NULL,
+                    payment_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    paid_at TIMESTAMP NULL,
+                    expires_at TIMESTAMP NULL,
+                    transaction_id INTEGER NULL REFERENCES transactions(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX idx_heleket_payments_user_id ON heleket_payments(user_id);
+                CREATE INDEX idx_heleket_payments_uuid ON heleket_payments(uuid);
+                CREATE INDEX idx_heleket_payments_order_id ON heleket_payments(order_id);
+                CREATE INDEX idx_heleket_payments_status ON heleket_payments(status);
+                """
+
+            elif db_type == 'mysql':
+                create_sql = """
+                CREATE TABLE heleket_payments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    uuid VARCHAR(255) UNIQUE NOT NULL,
+                    order_id VARCHAR(128) UNIQUE NOT NULL,
+                    amount VARCHAR(50) NOT NULL,
+                    currency VARCHAR(10) NOT NULL,
+                    payer_amount VARCHAR(50) NULL,
+                    payer_currency VARCHAR(10) NULL,
+                    exchange_rate DOUBLE NULL,
+                    discount_percent INT NULL,
+                    status VARCHAR(50) NOT NULL,
+                    payment_url TEXT NULL,
+                    metadata_json JSON NULL,
+                    paid_at DATETIME NULL,
+                    expires_at DATETIME NULL,
+                    transaction_id INT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                );
+
+                CREATE INDEX idx_heleket_payments_user_id ON heleket_payments(user_id);
+                CREATE INDEX idx_heleket_payments_uuid ON heleket_payments(uuid);
+                CREATE INDEX idx_heleket_payments_order_id ON heleket_payments(order_id);
+                CREATE INDEX idx_heleket_payments_status ON heleket_payments(status);
+                """
+
+            else:
+                logger.error(f"Неподдерживаемый тип БД для таблицы heleket_payments: {db_type}")
+                return False
+
+            await conn.execute(text(create_sql))
+            logger.info("Таблица heleket_payments успешно создана")
+            return True
+
+    except Exception as e:
+        logger.error(f"Ошибка создания таблицы heleket_payments: {e}")
+        return False
+
+
 async def create_mulenpay_payments_table():
     table_exists = await check_table_exists('mulenpay_payments')
     if table_exists:
@@ -3427,6 +3541,13 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с таблицей CryptoBot payments")
 
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ HELEKET ===")
+        heleket_created = await create_heleket_payments_table()
+        if heleket_created:
+            logger.info("✅ Таблица Heleket payments готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей Heleket payments")
+
         mulenpay_name = settings.get_mulenpay_display_name()
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ %s ===", mulenpay_name)
         mulenpay_created = await create_mulenpay_payments_table()
@@ -3695,6 +3816,7 @@ async def run_universal_migration():
                 logger.info("=== МИГРАЦИЯ ЗАВЕРШЕНА УСПЕШНО ===")
                 logger.info("✅ Реферальная система обновлена")
                 logger.info("✅ CryptoBot таблица готова")
+                logger.info("✅ Heleket таблица готова")
                 logger.info("✅ Таблица конверсий подписок создана")
                 logger.info("✅ Таблица welcome_texts с полем is_enabled готова")
                 logger.info("✅ Медиа поля в broadcast_history добавлены")
@@ -3712,6 +3834,7 @@ async def check_migration_status():
         status = {
             "has_made_first_topup_column": False,
             "cryptobot_table": False,
+            "heleket_table": False,
             "user_messages_table": False,
             "welcome_texts_table": False,
             "welcome_texts_is_enabled_column": False,
@@ -3745,6 +3868,7 @@ async def check_migration_status():
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
         
         status["cryptobot_table"] = await check_table_exists('cryptobot_payments')
+        status["heleket_table"] = await check_table_exists('heleket_payments')
         status["user_messages_table"] = await check_table_exists('user_messages')
         status["welcome_texts_table"] = await check_table_exists('welcome_texts')
         status["privacy_policies_table"] = await check_table_exists('privacy_policies')
@@ -3797,6 +3921,7 @@ async def check_migration_status():
         check_names = {
             "has_made_first_topup_column": "Колонка реферальной системы",
             "cryptobot_table": "Таблица CryptoBot payments",
+            "heleket_table": "Таблица Heleket payments",
             "user_messages_table": "Таблица пользовательских сообщений",
             "welcome_texts_table": "Таблица приветственных текстов",
             "privacy_policies_table": "Таблица политик конфиденциальности",

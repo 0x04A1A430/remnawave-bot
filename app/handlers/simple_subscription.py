@@ -211,6 +211,12 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
             text="🪙 CryptoBot",
             callback_data="simple_subscription_cryptobot"
         )])
+
+    if settings.is_heleket_enabled():
+        keyboard.append([types.InlineKeyboardButton(
+            text="🪙 Heleket",
+            callback_data="simple_subscription_heleket"
+        )])
     
     if settings.is_mulenpay_enabled():
         mulenpay_name = settings.get_mulenpay_display_name()
@@ -983,7 +989,121 @@ async def handle_simple_subscription_payment_method(
             await state.clear()
             await callback.answer()
             return
-            
+
+        elif payment_method == "heleket":
+            if not settings.is_heleket_enabled():
+                await callback.answer("❌ Оплата через Heleket временно недоступна", show_alert=True)
+                return
+
+            amount_rubles = price_kopeks / 100
+            if amount_rubles < 100 or amount_rubles > 100000:
+                await callback.answer(
+                    "❌ Сумма должна быть от 100 до 100 000 ₽ для оплаты через Heleket",
+                    show_alert=True,
+                )
+                return
+
+            heleket_result = await payment_service.create_heleket_payment(
+                db=db,
+                user_id=db_user.id,
+                amount_kopeks=price_kopeks,
+                description=settings.get_subscription_payment_description(
+                    subscription_params["period_days"],
+                    price_kopeks,
+                ),
+                language=db_user.language,
+            )
+
+            if not heleket_result:
+                await callback.answer(
+                    "❌ Ошибка создания платежа Heleket. Попробуйте позже или обратитесь в поддержку.",
+                    show_alert=True,
+                )
+                return
+
+            payment_url = heleket_result.get("payment_url")
+            if not payment_url:
+                await callback.answer(
+                    "❌ Не удалось получить ссылку для оплаты Heleket. Обратитесь в поддержку.",
+                    show_alert=True,
+                )
+                return
+
+            local_payment_id = heleket_result.get("local_payment_id")
+            payer_amount = heleket_result.get("payer_amount")
+            payer_currency = heleket_result.get("payer_currency")
+            discount_percent = heleket_result.get("discount_percent")
+
+            markup_percent = None
+            if discount_percent is not None:
+                try:
+                    markup_percent = -int(discount_percent)
+                except (TypeError, ValueError):
+                    markup_percent = None
+
+            keyboard = types.InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        types.InlineKeyboardButton(
+                            text="🪙 Оплатить через Heleket",
+                            url=payment_url,
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                            callback_data=f"check_simple_heleket_{local_payment_id}",
+                        )
+                    ],
+                    [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription_purchase")],
+                ]
+            )
+
+            message_lines = [
+                "🪙 <b>Оплата через Heleket</b>",
+                "",
+                f"💰 Сумма: {settings.format_price(price_kopeks)}",
+            ]
+
+            if payer_amount and payer_currency:
+                message_lines.append(f"🪙 К оплате: {payer_amount} {payer_currency}")
+                try:
+                    payer_amount_float = float(payer_amount)
+                    if payer_amount_float > 0:
+                        rub_per_currency = amount_rubles / payer_amount_float
+                        message_lines.append(
+                            f"💱 Курс: 1 {payer_currency} ≈ {rub_per_currency:.2f} ₽"
+                        )
+                except (TypeError, ValueError, ZeroDivisionError):
+                    pass
+
+            if markup_percent:
+                sign = "+" if markup_percent > 0 else ""
+                message_lines.append(f"📈 Наценка: {sign}{markup_percent}%")
+
+            message_lines.extend(
+                [
+                    "",
+                    "📱 <b>Инструкция:</b>",
+                    "1. Нажмите кнопку 'Оплатить через Heleket'",
+                    "2. Следуйте подсказкам на странице оплаты",
+                    "3. Подтвердите перевод",
+                    "4. Средства зачислятся автоматически",
+                    "",
+                    f"❓ Если возникнут проблемы, обратитесь в {settings.get_support_contact_display_html()}",
+                ]
+            )
+
+            await callback.message.edit_text(
+                "\n".join(message_lines),
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
+
+            await state.clear()
+            await callback.answer()
+            return
+
         elif payment_method == "mulenpay":
             # Оплата через MulenPay
             mulenpay_name = settings.get_mulenpay_display_name()
@@ -1599,6 +1719,94 @@ async def check_simple_cryptobot_payment_status(
 
 
 @error_handler
+async def check_simple_heleket_payment_status(
+    callback: types.CallbackQuery,
+    db: AsyncSession,
+):
+    try:
+        local_payment_id = int(callback.data.rsplit('_', 1)[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Некорректный идентификатор платежа", show_alert=True)
+        return
+
+    from app.database.crud.heleket import get_heleket_payment_by_id
+
+    payment = await get_heleket_payment_by_id(db, local_payment_id)
+    if not payment:
+        await callback.answer("❌ Платеж не найден", show_alert=True)
+        return
+
+    status_labels = {
+        "check": ("⏳", "Ожидает оплаты"),
+        "paid": ("✅", "Оплачен"),
+        "paid_over": ("✅", "Оплачен (переплата)"),
+        "wrong_amount": ("⚠️", "Неверная сумма"),
+        "cancel": ("❌", "Отменен"),
+        "fail": ("❌", "Ошибка"),
+        "process": ("⌛", "Обрабатывается"),
+        "confirm_check": ("⌛", "Ожидает подтверждения"),
+    }
+
+    emoji, status_text = status_labels.get(payment.status, ("❓", "Неизвестно"))
+
+    language = settings.DEFAULT_LANGUAGE
+    try:
+        from app.services.payment_service import get_user_by_id as fetch_user_by_id
+
+        user = await fetch_user_by_id(db, payment.user_id)
+        if user and getattr(user, "language", None):
+            language = user.language
+    except Exception as error:
+        logger.debug("Не удалось получить пользователя для Heleket статуса: %s", error)
+
+    texts = get_texts(language)
+
+    message_lines = [
+        "🪙 Статус платежа Heleket:",
+        "",
+        f"🆔 UUID: {payment.uuid[:8]}...",
+        f"💰 Сумма: {settings.format_price(payment.amount_kopeks)}",
+        f"📊 Статус: {emoji} {status_text}",
+        f"📅 Создан: {payment.created_at.strftime('%d.%m.%Y %H:%M') if payment.created_at else '—'}",
+    ]
+
+    if payment.payer_amount and payment.payer_currency:
+        message_lines.append(
+            f"🪙 Оплата: {payment.payer_amount} {payment.payer_currency}"
+        )
+
+    if payment.is_paid:
+        message_lines.append("\n✅ Платеж успешно завершен! Средства уже зачислены.")
+    elif payment.status in {"check", "process", "confirm_check"}:
+        message_lines.append("\n⏳ Платеж еще обрабатывается. Завершите оплату и проверьте статус позже.")
+        if payment.payment_url:
+            message_lines.append(f"\n🔗 Ссылка на оплату: {payment.payment_url}")
+    elif payment.status in {"fail", "cancel", "wrong_amount"}:
+        message_lines.append(
+            f"\n❌ Платеж не завершен корректно. Обратитесь в {settings.get_support_contact_display()}"
+        )
+
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                    callback_data=f"check_simple_heleket_{local_payment_id}",
+                )
+            ],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data="subscription_purchase")],
+        ]
+    )
+
+    await callback.answer()
+    await callback.message.edit_text(
+        "\n".join(message_lines),
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
+
+
+@error_handler
 async def check_simple_wata_payment_status(
     callback: types.CallbackQuery,
     db: AsyncSession,
@@ -1701,6 +1909,11 @@ def register_simple_subscription_handlers(dp):
     dp.callback_query.register(
         check_simple_cryptobot_payment_status,
         F.data.startswith("check_simple_cryptobot_")
+    )
+
+    dp.callback_query.register(
+        check_simple_heleket_payment_status,
+        F.data.startswith("check_simple_heleket_")
     )
 
     dp.callback_query.register(
