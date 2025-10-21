@@ -81,14 +81,64 @@ from app.utils.promo_offer import (
 )
 
 from .common import _apply_promo_offer_discount, _get_promo_offer_discount_percent, logger, update_traffic_prices
-from .autopay import handle_autopay_menu, handle_subscription_cancel, handle_subscription_config_back, set_autopay_days, show_autopay_days, toggle_autopay
-from .countries import _get_available_countries, _should_show_countries_management, apply_countries_changes, countries_continue, handle_add_countries, handle_manage_country, select_country
-from .devices import confirm_add_devices, confirm_change_devices, confirm_reset_devices, execute_change_devices, get_current_devices_count, get_servers_display_names, handle_all_devices_reset_from_management, handle_app_selection, handle_change_devices, handle_device_guide, handle_device_management, handle_devices_page, handle_reset_devices, handle_single_device_reset, handle_specific_app_guide, show_device_connection_help
-from .happ import handle_happ_download_back, handle_happ_download_close, handle_happ_download_platform_choice, handle_happ_download_request
+from .autopay import (
+    handle_autopay_menu,
+    handle_subscription_cancel,
+    handle_subscription_config_back,
+    set_autopay_days,
+    show_autopay_days,
+    toggle_autopay,
+)
+from .countries import (
+    _get_available_countries,
+    _should_show_countries_management,
+    apply_countries_changes,
+    countries_continue,
+    handle_add_countries,
+    handle_manage_country,
+    select_country,
+)
+from .devices import (
+    confirm_add_devices,
+    confirm_change_devices,
+    confirm_reset_devices,
+    execute_change_devices,
+    get_current_devices_count,
+    get_servers_display_names,
+    handle_all_devices_reset_from_management,
+    handle_app_selection,
+    handle_change_devices,
+    handle_device_guide,
+    handle_device_management,
+    handle_devices_page,
+    handle_reset_devices,
+    handle_single_device_reset,
+    handle_specific_app_guide,
+    show_device_connection_help,
+)
+from .happ import (
+    handle_happ_download_back,
+    handle_happ_download_close,
+    handle_happ_download_platform_choice,
+    handle_happ_download_request,
+)
 from .links import handle_connect_subscription, handle_open_subscription_link
 from .pricing import _build_subscription_period_prompt, _prepare_subscription_summary
-from .promo import _build_promo_group_discount_text, _get_promo_offer_hint, claim_discount_offer, handle_promo_offer_close
-from .traffic import confirm_reset_traffic, confirm_switch_traffic, execute_switch_traffic, handle_no_traffic_packages, handle_reset_traffic, handle_switch_traffic, select_traffic
+from .promo import (
+    _build_promo_group_discount_text,
+    _get_promo_offer_hint,
+    claim_discount_offer,
+    handle_promo_offer_close,
+)
+from .traffic import (
+    confirm_reset_traffic,
+    confirm_switch_traffic,
+    execute_switch_traffic,
+    handle_no_traffic_packages,
+    handle_reset_traffic,
+    handle_switch_traffic,
+    select_traffic,
+)
 
 async def show_subscription_info(
         callback: types.CallbackQuery,
@@ -2352,6 +2402,11 @@ async def handle_simple_subscription_purchase(
     user_balance_kopeks = getattr(db_user, "balance_kopeks", 0)
     # Рассчитываем цену подписки
     price_kopeks = _calculate_simple_subscription_price(subscription_params)
+    traffic_text = (
+        "Безлимит"
+        if subscription_params["traffic_limit_gb"] == 0
+        else f"{subscription_params['traffic_limit_gb']} ГБ"
+    )
     
     if user_balance_kopeks >= price_kopeks:
         # Если баланс достаточный, предлагаем оплатить с баланса
@@ -2359,7 +2414,7 @@ async def handle_simple_subscription_purchase(
             f"⚡ <b>Простая покупка подписки</b>\n\n"
             f"📅 Период: {subscription_params['period_days']} дней\n"
             f"📱 Устройства: {subscription_params['device_limit']}\n"
-            f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}\n"
+            f"📊 Трафик: {traffic_text}\n"
             f"🌍 Сервер: {'Любой доступный' if not subscription_params['squad_uuid'] else 'Выбранный'}\n\n"
             f"💰 Стоимость: {settings.format_price(price_kopeks)}\n"
             f"💳 Ваш баланс: {settings.format_price(user_balance_kopeks)}\n\n"
@@ -2377,7 +2432,7 @@ async def handle_simple_subscription_purchase(
             f"⚡ <b>Простая покупка подписки</b>\n\n"
             f"📅 Период: {subscription_params['period_days']} дней\n"
             f"📱 Устройства: {subscription_params['device_limit']}\n"
-            f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}\n"
+            f"📊 Трафик: {traffic_text}\n"
             f"🌍 Сервер: {'Любой доступный' if not subscription_params['squad_uuid'] else 'Выбранный'}\n\n"
             f"💰 Стоимость: {settings.format_price(price_kopeks)}\n"
             f"💳 Ваш баланс: {settings.format_price(user_balance_kopeks)}\n\n"
