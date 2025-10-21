@@ -170,14 +170,16 @@ class HeleketPaymentMixin:
             "discount_percent": discount_percent,
         }
 
-    async def process_heleket_webhook(
+    async def _process_heleket_payload(
         self,
         db: AsyncSession,
         payload: Dict[str, Any],
-    ) -> bool:
+        *,
+        metadata_key: str,
+    ) -> Optional["HeleketPayment"]:
         if not isinstance(payload, dict):
             logger.error("Heleket webhook payload не является словарём: %s", payload)
-            return False
+            return None
 
         heleket_crud = import_module("app.database.crud.heleket")
         payment_module = import_module("app.services.payment_service")
@@ -188,7 +190,7 @@ class HeleketPaymentMixin:
 
         if not uuid and not order_id:
             logger.error("Heleket webhook без uuid/order_id: %s", payload)
-            return False
+            return None
 
         payment = None
         if uuid:
@@ -202,7 +204,7 @@ class HeleketPaymentMixin:
                 uuid,
                 order_id,
             )
-            return False
+            return None
 
         payer_amount = payload.get("payer_amount") or payload.get("payment_amount")
         payer_currency = payload.get("payer_currency") or payload.get("currency")
@@ -244,11 +246,11 @@ class HeleketPaymentMixin:
             discount_percent=int(discount_percent) if isinstance(discount_percent, (int, float)) else None,
             paid_at=paid_at,
             payment_url=payment_url,
-            metadata={"last_webhook": payload},
+            metadata={metadata_key: payload},
         )
 
         if updated_payment is None:
-            return False
+            return None
 
         if updated_payment.transaction_id:
             logger.info(
@@ -256,17 +258,17 @@ class HeleketPaymentMixin:
                 updated_payment.uuid,
                 updated_payment.transaction_id,
             )
-            return True
+            return updated_payment
 
         status_normalized = (status or "").lower()
         if status_normalized not in {"paid", "paid_over"}:
             logger.info("Heleket платеж %s в статусе %s, зачисление не требуется", updated_payment.uuid, status)
-            return True
+            return updated_payment
 
         amount_kopeks = updated_payment.amount_kopeks
         if amount_kopeks <= 0:
             logger.error("Heleket платеж %s имеет некорректную сумму: %s", updated_payment.uuid, updated_payment.amount)
-            return False
+            return None
 
         transaction = await payment_module.create_transaction(
             db,
@@ -286,13 +288,19 @@ class HeleketPaymentMixin:
             is_completed=True,
         )
 
-        await heleket_crud.link_heleket_payment_to_transaction(db, updated_payment.uuid, transaction.id)
+        linked_payment = await heleket_crud.link_heleket_payment_to_transaction(
+            db,
+            updated_payment.uuid,
+            transaction.id,
+        )
+        if linked_payment:
+            updated_payment = linked_payment
 
         get_user_by_id = payment_module.get_user_by_id
         user = await get_user_by_id(db, updated_payment.user_id)
         if not user:
             logger.error("Пользователь %s не найден для Heleket платежа", updated_payment.user_id)
-            return False
+            return None
 
         old_balance = user.balance_kopeks
         was_first_topup = not user.has_made_first_topup
@@ -374,4 +382,66 @@ class HeleketPaymentMixin:
             except Exception as error:  # pragma: no cover
                 logger.error("Ошибка отправки уведомления пользователю Heleket: %s", error)
 
-        return True
+        return updated_payment
+
+    async def process_heleket_webhook(
+        self,
+        db: AsyncSession,
+        payload: Dict[str, Any],
+    ) -> bool:
+        result = await self._process_heleket_payload(
+            db,
+            payload,
+            metadata_key="last_webhook",
+        )
+
+        return result is not None
+
+    async def sync_heleket_payment_status(
+        self,
+        db: AsyncSession,
+        *,
+        local_payment_id: int,
+    ) -> Optional["HeleketPayment"]:
+        if not getattr(self, "heleket_service", None):
+            logger.error("Heleket сервис не инициализирован")
+            return None
+
+        heleket_crud = import_module("app.database.crud.heleket")
+
+        payment = await heleket_crud.get_heleket_payment_by_id(db, local_payment_id)
+        if not payment:
+            logger.error("Heleket платеж с id=%s не найден", local_payment_id)
+            return None
+
+        try:
+            response = await self.heleket_service.get_payment_info(  # type: ignore[union-attr]
+                uuid=payment.uuid,
+                order_id=payment.order_id,
+            )
+        except Exception as error:  # pragma: no cover - defensive
+            logger.exception("Ошибка получения статуса Heleket платежа %s: %s", payment.uuid, error)
+            return payment
+
+        if not response:
+            logger.warning(
+                "Heleket API вернул пустой ответ при проверке платежа %s", payment.uuid
+            )
+            return payment
+
+        result = response.get("result") if isinstance(response, dict) else None
+        if not isinstance(result, dict):
+            logger.error("Некорректный ответ Heleket API при проверке платежа %s: %s", payment.uuid, response)
+            return payment
+
+        payload: Dict[str, Any] = dict(result)
+        payload.setdefault("uuid", payment.uuid)
+        payload.setdefault("order_id", payment.order_id)
+
+        updated_payment = await self._process_heleket_payload(
+            db,
+            payload,
+            metadata_key="last_status_check",
+        )
+
+        return updated_payment or payment
