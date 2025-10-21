@@ -550,13 +550,13 @@ class YooKassaPaymentMixin:
         payment.status = event_object.get("status", payment.status)
         payment.confirmation_url = event_object.get("confirmation_url")
 
-        current_paid = bool(getattr(payment, "is_paid", getattr(payment, "paid", False)))
-        payment.is_paid = bool(event_object.get("paid", current_paid))
+        current_paid = getattr(payment, "paid", False)
+        payment.paid = event_object.get("paid", current_paid)
 
         await db.commit()
         await db.refresh(payment)
 
-        if payment.status == "succeeded" and payment.is_paid:
+        if payment.status == "succeeded" and payment.paid:
             return await self._process_successful_yookassa_payment(db, payment)
 
         logger.info(
