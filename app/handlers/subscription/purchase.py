@@ -64,6 +64,7 @@ from app.states import SubscriptionStates
 from app.utils.pagination import paginate_list
 from app.utils.pricing_utils import (
     calculate_months_from_days,
+    compute_simple_subscription_price,
     get_remaining_months,
     calculate_prorated_price,
     validate_pricing_calculation,
@@ -2412,7 +2413,22 @@ async def handle_simple_subscription_purchase(
     # Проверяем баланс пользователя
     user_balance_kopeks = getattr(db_user, "balance_kopeks", 0)
     # Рассчитываем цену подписки
-    price_kopeks = _calculate_simple_subscription_price(subscription_params)
+    price_kopeks, price_breakdown = await _calculate_simple_subscription_price(
+        db,
+        subscription_params,
+        user=db_user,
+        resolved_squad_uuid=subscription_params.get("squad_uuid"),
+    )
+    logger.debug(
+        "SIMPLE_SUBSCRIPTION_PURCHASE_PRICE | user=%s | total=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s",
+        db_user.id,
+        price_kopeks,
+        price_breakdown.get("base_price", 0),
+        price_breakdown.get("traffic_price", 0),
+        price_breakdown.get("devices_price", 0),
+        price_breakdown.get("servers_price", 0),
+        price_breakdown.get("total_discount", 0),
+    )
     traffic_text = (
         "Безлимит"
         if subscription_params["traffic_limit_gb"] == 0
@@ -2464,16 +2480,22 @@ async def handle_simple_subscription_purchase(
     
 
 
-def _calculate_simple_subscription_price(params: dict) -> int:
+async def _calculate_simple_subscription_price(
+    db: AsyncSession,
+    params: dict,
+    *,
+    user: Optional[User] = None,
+    resolved_squad_uuid: Optional[str] = None,
+) -> Tuple[int, Dict[str, Any]]:
     """Рассчитывает цену простой подписки."""
-    period_days = params.get("period_days", 30)
-    
-    # Получаем цену для стандартного периода
-    if hasattr(settings, f'PRICE_{period_days}_DAYS'):
-        return getattr(settings, f'PRICE_{period_days}_DAYS')
-    else:
-        # Если нет цены для конкретного периода, используем базовую цену
-        return settings.BASE_SUBSCRIPTION_PRICE
+
+    resolved_uuids = [resolved_squad_uuid] if resolved_squad_uuid else None
+    return await compute_simple_subscription_price(
+        db,
+        params,
+        user=user,
+        resolved_squad_uuids=resolved_uuids,
+    )
 
 
 def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyboardMarkup:
@@ -2564,7 +2586,22 @@ async def _extend_existing_subscription(
         "traffic_limit_gb": traffic_limit_gb,
         "squad_uuid": squad_uuid
     }
-    price_kopeks = _calculate_simple_subscription_price(subscription_params)
+    price_kopeks, price_breakdown = await _calculate_simple_subscription_price(
+        db,
+        subscription_params,
+        user=db_user,
+        resolved_squad_uuid=squad_uuid,
+    )
+    logger.debug(
+        "SIMPLE_SUBSCRIPTION_EXTEND_PRICE | user=%s | total=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s",
+        db_user.id,
+        price_kopeks,
+        price_breakdown.get("base_price", 0),
+        price_breakdown.get("traffic_price", 0),
+        price_breakdown.get("devices_price", 0),
+        price_breakdown.get("servers_price", 0),
+        price_breakdown.get("total_discount", 0),
+    )
     
     # Проверяем баланс пользователя
     if db_user.balance_kopeks < price_kopeks:
