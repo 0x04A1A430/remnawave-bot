@@ -320,10 +320,16 @@ def get_main_menu_keyboard(
     keyboard.append([InlineKeyboardButton(text=balance_button_text, callback_data="menu_balance")])
     
     show_trial = not has_had_paid_subscription and not has_active_subscription
-    
+
     show_buy = not has_active_subscription or not subscription_is_active
+    current_subscription = subscription
+    has_active_paid_subscription = bool(
+        current_subscription
+        and not getattr(current_subscription, "is_trial", False)
+        and getattr(current_subscription, "is_active", False)
+    )
     simple_purchase_button = None
-    if settings.SIMPLE_SUBSCRIPTION_ENABLED:
+    if settings.SIMPLE_SUBSCRIPTION_ENABLED and not has_active_paid_subscription:
         simple_purchase_button = InlineKeyboardButton(
             text=texts.MENU_SIMPLE_SUBSCRIPTION,
             callback_data="simple_subscription_purchase",
