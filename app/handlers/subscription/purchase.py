@@ -527,18 +527,7 @@ async def start_subscription_purchase(
 ):
     texts = get_texts(db_user.language)
 
-    # Если включена простая покупка, показываем дополнительную кнопку
     keyboard = get_subscription_period_keyboard(db_user.language)
-    
-    if settings.SIMPLE_SUBSCRIPTION_ENABLED:
-        # Добавляем кнопку простой подписки в начало клавиатуры
-        simple_subscription_button = [types.InlineKeyboardButton(
-            text="⚡ Простая покупка",
-            callback_data="simple_subscription_purchase"
-        )]
-        
-        # Вставляем кнопку в начало списка кнопок
-        keyboard.inline_keyboard.insert(0, simple_subscription_button)
 
     await callback.message.edit_text(
         await _build_subscription_period_prompt(db_user, texts, db),

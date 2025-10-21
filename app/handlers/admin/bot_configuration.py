@@ -13,6 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import SystemSetting, User
+from app.database.crud.server_squad import (
+    get_all_server_squads,
+    get_server_squad_by_id,
+    get_server_squad_by_uuid,
+)
 from app.localization.texts import get_texts
 from app.config import settings
 from app.services.remnawave_service import RemnaWaveService
@@ -30,6 +35,7 @@ from app.external.telegram_stars import TelegramStarsService
 
 CATEGORY_PAGE_SIZE = 10
 SETTINGS_PAGE_SIZE = 8
+SIMPLE_SUBSCRIPTION_SQUADS_PAGE_SIZE = 6
 
 CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
     "core": {
@@ -61,9 +67,17 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
     },
     "subscriptions": {
         "title": "📅 Подписки и цены",
-        "description": "Тарифы, периоды, лимиты трафика и автопродление.",
+        "description": "Тарифы, простая покупка, периоды, лимиты трафика и автопродление.",
         "icon": "📅",
-        "categories": ("SUBSCRIPTIONS_CORE", "PERIODS", "SUBSCRIPTION_PRICES", "TRAFFIC", "TRAFFIC_PACKAGES", "AUTOPAY"),
+        "categories": (
+            "SUBSCRIPTIONS_CORE",
+            "SIMPLE_SUBSCRIPTION",
+            "PERIODS",
+            "SUBSCRIPTION_PRICES",
+            "TRAFFIC",
+            "TRAFFIC_PACKAGES",
+            "AUTOPAY",
+        ),
     },
     "trial": {
         "title": "🎁 Пробный период",
@@ -1417,6 +1431,16 @@ def _build_setting_keyboard(
         for chunk in _chunk(choice_buttons, 2):
             rows.append(list(chunk))
 
+    if key == "SIMPLE_SUBSCRIPTION_SQUAD_UUID" and not is_read_only:
+        rows.append([
+            types.InlineKeyboardButton(
+                text="🌍 Выбрать сквад",
+                callback_data=(
+                    f"botcfg_simple_squad:{group_key}:{category_page}:{settings_page}:{callback_token}:1"
+                ),
+            )
+        ])
+
     if definition.python_type is bool and not is_read_only:
         rows.append([
             types.InlineKeyboardButton(
@@ -1643,6 +1667,217 @@ async def show_bot_config_category(
         parse_mode="HTML",
     )
     await callback.answer()
+
+
+@admin_required
+@error_handler
+async def show_simple_subscription_squad_selector(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    parts = callback.data.split(":", 5)
+    group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
+    try:
+        category_page = max(1, int(parts[2])) if len(parts) > 2 else 1
+    except ValueError:
+        category_page = 1
+    try:
+        settings_page = max(1, int(parts[3])) if len(parts) > 3 else 1
+    except ValueError:
+        settings_page = 1
+    token = parts[4] if len(parts) > 4 else ""
+
+    try:
+        key = bot_configuration_service.resolve_callback_token(token)
+    except KeyError:
+        await callback.answer("Эта настройка больше недоступна", show_alert=True)
+        return
+
+    if key != "SIMPLE_SUBSCRIPTION_SQUAD_UUID":
+        await callback.answer("Эта настройка больше недоступна", show_alert=True)
+        return
+
+    try:
+        page = max(1, int(parts[5])) if len(parts) > 5 else 1
+    except ValueError:
+        page = 1
+
+    limit = SIMPLE_SUBSCRIPTION_SQUADS_PAGE_SIZE
+    squads, total_count = await get_all_server_squads(
+        db,
+        available_only=False,
+        page=page,
+        limit=limit,
+    )
+
+    total_count = total_count or 0
+    total_pages = max(1, math.ceil(total_count / limit)) if total_count else 1
+    if total_count and page > total_pages:
+        page = total_pages
+        squads, total_count = await get_all_server_squads(
+            db,
+            available_only=False,
+            page=page,
+            limit=limit,
+        )
+
+    current_uuid = bot_configuration_service.get_current_value(key) or ""
+    current_display = "Любой доступный"
+
+    if current_uuid:
+        selected_server = next((srv for srv in squads if srv.squad_uuid == current_uuid), None)
+        if not selected_server:
+            selected_server = await get_server_squad_by_uuid(db, current_uuid)
+        if selected_server:
+            current_display = selected_server.display_name
+        else:
+            current_display = current_uuid
+
+    lines = [
+        "🌍 <b>Выберите сквад для простой покупки</b>",
+        "",
+        f"Текущий выбор: {html.escape(current_display)}" if current_display else "Текущий выбор: —",
+        "",
+    ]
+
+    if total_count == 0:
+        lines.append("❌ Доступные сервера не найдены.")
+    else:
+        lines.append("Выберите сервер из списка ниже.")
+        if total_pages > 1:
+            lines.append(f"Страница {page}/{total_pages}")
+
+    text = "\n".join(lines)
+
+    keyboard_rows: List[List[types.InlineKeyboardButton]] = []
+
+    for server in squads:
+        status_icon = (
+            "✅" if server.squad_uuid == current_uuid else ("🟢" if server.is_available else "🔒")
+        )
+        label_parts = [status_icon, server.display_name]
+        if server.country_code:
+            label_parts.append(f"({server.country_code.upper()})")
+        if isinstance(server.price_kopeks, int) and server.price_kopeks > 0:
+            try:
+                label_parts.append(f"— {settings.format_price(server.price_kopeks)}")
+            except Exception:
+                pass
+        label = " ".join(label_parts)
+
+        keyboard_rows.append([
+            types.InlineKeyboardButton(
+                text=label,
+                callback_data=(
+                    f"botcfg_simple_squad_select:{group_key}:{category_page}:{settings_page}:{token}:{server.id}:{page}"
+                ),
+            )
+        ])
+
+    if total_pages > 1:
+        nav_row: List[types.InlineKeyboardButton] = []
+        if page > 1:
+            nav_row.append(
+                types.InlineKeyboardButton(
+                    text="⬅️",
+                    callback_data=(
+                        f"botcfg_simple_squad:{group_key}:{category_page}:{settings_page}:{token}:{page - 1}"
+                    ),
+                )
+            )
+        if page < total_pages:
+            nav_row.append(
+                types.InlineKeyboardButton(
+                    text="➡️",
+                    callback_data=(
+                        f"botcfg_simple_squad:{group_key}:{category_page}:{settings_page}:{token}:{page + 1}"
+                    ),
+                )
+            )
+        if nav_row:
+            keyboard_rows.append(nav_row)
+
+    keyboard_rows.append([
+        types.InlineKeyboardButton(
+            text="⬅️ Назад",
+            callback_data=(
+                f"botcfg_setting:{group_key}:{category_page}:{settings_page}:{token}"
+            ),
+        )
+    ])
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def select_simple_subscription_squad(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    parts = callback.data.split(":", 6)
+    group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
+    try:
+        category_page = max(1, int(parts[2])) if len(parts) > 2 else 1
+    except ValueError:
+        category_page = 1
+    try:
+        settings_page = max(1, int(parts[3])) if len(parts) > 3 else 1
+    except ValueError:
+        settings_page = 1
+    token = parts[4] if len(parts) > 4 else ""
+    try:
+        server_id = int(parts[5]) if len(parts) > 5 else None
+    except ValueError:
+        server_id = None
+
+    if server_id is None:
+        await callback.answer("Не удалось определить сервер", show_alert=True)
+        return
+
+    try:
+        key = bot_configuration_service.resolve_callback_token(token)
+    except KeyError:
+        await callback.answer("Эта настройка больше недоступна", show_alert=True)
+        return
+
+    if bot_configuration_service.is_read_only(key):
+        await callback.answer("Эта настройка доступна только для чтения", show_alert=True)
+        return
+
+    server = await get_server_squad_by_id(db, server_id)
+    if not server:
+        await callback.answer("Сервер не найден", show_alert=True)
+        return
+
+    try:
+        await bot_configuration_service.set_value(db, key, server.squad_uuid)
+    except ReadOnlySettingError:
+        await callback.answer("Эта настройка доступна только для чтения", show_alert=True)
+        return
+
+    await db.commit()
+
+    text = _render_setting_text(key)
+    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await _store_setting_context(
+        state,
+        key=key,
+        group_key=group_key,
+        category_page=category_page,
+        settings_page=settings_page,
+    )
+    await callback.answer("Сквад выбран")
 
 
 @admin_required
@@ -2520,6 +2755,14 @@ def register_handlers(dp: Dispatcher) -> None:
         F.data.startswith("botcfg_test_payment:"),
     )
     dp.callback_query.register(
+        select_simple_subscription_squad,
+        F.data.startswith("botcfg_simple_squad_select:"),
+    )
+    dp.callback_query.register(
+        show_simple_subscription_squad_selector,
+        F.data.startswith("botcfg_simple_squad:"),
+    )
+    dp.callback_query.register(
         show_bot_config_setting,
         F.data.startswith("botcfg_setting:"),
     )
@@ -2557,4 +2800,3 @@ def register_handlers(dp: Dispatcher) -> None:
         handle_import_message,
         BotConfigStates.waiting_for_import_file,
     )
-

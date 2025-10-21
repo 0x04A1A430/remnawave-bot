@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select, update, func
-from aiogram import Bot
+from aiogram import Bot, types
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from app.database.crud.user import (
     get_user_by_id, get_user_by_telegram_id, get_users_list,
@@ -26,6 +26,7 @@ from app.database.models import (
     TransactionType
 )
 from app.config import settings
+from app.localization.texts import get_texts
 
 logger = logging.getLogger(__name__)
 
