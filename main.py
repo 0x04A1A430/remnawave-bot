@@ -15,6 +15,7 @@ from app.services.maintenance_service import maintenance_service
 from app.services.payment_service import PaymentService
 from app.services.version_service import version_service
 from app.external.webhook_server import WebhookServer
+from app.external.heleket_webhook import start_heleket_webhook_server
 from app.external.yookassa_webhook import start_yookassa_webhook_server
 from app.external.pal24_webhook import start_pal24_webhook_server, Pal24WebhookServer
 from app.external.wata_webhook import start_wata_webhook_server
@@ -74,6 +75,7 @@ async def main():
     webhook_server = None
     yookassa_server_task = None
     wata_server_task = None
+    heleket_server_task = None
     pal24_server: Pal24WebhookServer | None = None
     monitoring_task = None
     maintenance_task = None
@@ -305,6 +307,21 @@ async def main():
                 stage.skip("WATA отключен настройками")
 
         async with timeline.stage(
+            "Heleket webhook",
+            "🪙",
+            success_message="Heleket webhook запущен",
+        ) as stage:
+            if settings.is_heleket_enabled():
+                heleket_server_task = asyncio.create_task(
+                    start_heleket_webhook_server(payment_service)
+                )
+                stage.log(
+                    f"Endpoint: {settings.WEBHOOK_URL}:{settings.HELEKET_WEBHOOK_PORT}{settings.HELEKET_WEBHOOK_PATH}"
+                )
+            else:
+                stage.skip("Heleket отключен настройками")
+
+        async with timeline.stage(
             "Служба мониторинга",
             "📈",
             success_message="Служба мониторинга запущена",
@@ -436,6 +453,18 @@ async def main():
                         else:
                             wata_server_task = None
 
+                if heleket_server_task and heleket_server_task.done():
+                    exception = heleket_server_task.exception()
+                    if exception:
+                        logger.error(f"Heleket webhook сервер завершился с ошибкой: {exception}")
+                        logger.info("🔄 Перезапуск Heleket webhook сервера...")
+                        if settings.is_heleket_enabled():
+                            heleket_server_task = asyncio.create_task(
+                                start_heleket_webhook_server(payment_service)
+                            )
+                        else:
+                            heleket_server_task = None
+
                 if monitoring_task.done():
                     exception = monitoring_task.exception()
                     if exception:
@@ -488,6 +517,14 @@ async def main():
             wata_server_task.cancel()
             try:
                 await wata_server_task
+            except asyncio.CancelledError:
+                pass
+
+        if heleket_server_task and not heleket_server_task.done():
+            logger.info("ℹ️ Остановка Heleket webhook сервера...")
+            heleket_server_task.cancel()
+            try:
+                await heleket_server_task
             except asyncio.CancelledError:
                 pass
 

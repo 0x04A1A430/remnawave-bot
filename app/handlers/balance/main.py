@@ -406,6 +406,11 @@ async def process_topup_amount(
             from .cryptobot import process_cryptobot_payment_amount
             async with AsyncSessionLocal() as db:
                 await process_cryptobot_payment_amount(message, db_user, db, amount_kopeks, state)
+        elif payment_method == "heleket":
+            from app.database.database import AsyncSessionLocal
+            from .heleket import process_heleket_payment_amount
+            async with AsyncSessionLocal() as db:
+                await process_heleket_payment_amount(message, db_user, db, amount_kopeks, state)
         else:
             await message.answer("Неизвестный способ оплаты")
         
@@ -519,6 +524,14 @@ async def handle_quick_amount_selection(
                 await process_cryptobot_payment_amount(
                     callback.message, db_user, db, amount_kopeks, state
                 )
+        elif payment_method == "heleket":
+            from app.database.database import AsyncSessionLocal
+            from .heleket import process_heleket_payment_amount
+
+            async with AsyncSessionLocal() as db:
+                await process_heleket_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
         elif payment_method == "stars":
             from .stars import process_stars_payment_amount
 
@@ -587,6 +600,13 @@ async def handle_topup_amount_callback(
             from .cryptobot import process_cryptobot_payment_amount
             async with AsyncSessionLocal() as db:
                 await process_cryptobot_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "heleket":
+            from app.database.database import AsyncSessionLocal
+            from .heleket import process_heleket_payment_amount
+            async with AsyncSessionLocal() as db:
+                await process_heleket_payment_amount(
                     callback.message, db_user, db, amount_kopeks, state
                 )
         elif method == "stars":
@@ -710,6 +730,16 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(
         check_cryptobot_payment_status,
         F.data.startswith("check_cryptobot_")
+    )
+
+    from .heleket import start_heleket_payment, check_heleket_payment_status
+    dp.callback_query.register(
+        start_heleket_payment,
+        F.data == "topup_heleket"
+    )
+    dp.callback_query.register(
+        check_heleket_payment_status,
+        F.data.startswith("check_heleket_")
     )
 
     from .mulenpay import check_mulenpay_payment_status
