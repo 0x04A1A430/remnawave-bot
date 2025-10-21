@@ -2,7 +2,7 @@
 import html
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional, Dict, Any
 from aiogram import types, F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -17,7 +17,6 @@ from app.services.subscription_purchase_service import SubscriptionPurchaseServi
 from app.utils.decorators import error_handler
 from app.states import SubscriptionStates
 from app.utils.subscription_utils import get_display_subscription_link
-from app.utils.pricing_utils import compute_simple_subscription_price
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,11 @@ async def start_simple_subscription_purchase(
     
     # Сохраняем параметры в состояние
     await state.update_data(subscription_params=subscription_params)
-
+    
+    # Проверяем баланс пользователя
+    user_balance_kopeks = getattr(db_user, "balance_kopeks", 0)
+    # Рассчитываем цену подписки
+    price_kopeks = _calculate_simple_subscription_price(subscription_params)
     data = await state.get_data()
     resolved_squad_uuid = await _ensure_simple_subscription_squad_uuid(
         db,
@@ -59,38 +62,39 @@ async def start_simple_subscription_purchase(
         user_id=db_user.id,
         state_data=data,
     )
-
-    price_kopeks, price_breakdown = await _calculate_simple_subscription_price(
-        db,
-        subscription_params,
-        user=db_user,
-        resolved_squad_uuid=resolved_squad_uuid,
-    )
-
     period_days = subscription_params["period_days"]
-    user_balance_kopeks = getattr(db_user, "balance_kopeks", 0)
+    recorded_price = getattr(settings, f"PRICE_{period_days}_DAYS", price_kopeks)
+    direct_purchase_min_balance = recorded_price
+    extra_components = []
+    traffic_limit = subscription_params.get("traffic_limit_gb", 0)
+    if traffic_limit and traffic_limit > 0:
+        traffic_price = settings.get_traffic_price(traffic_limit)
+        direct_purchase_min_balance += traffic_price
+        extra_components.append(f"traffic={traffic_limit}GB->{traffic_price}")
 
+    device_limit = subscription_params.get("device_limit", 1)
+    if device_limit and device_limit > settings.DEFAULT_DEVICE_LIMIT:
+        additional_devices = device_limit - settings.DEFAULT_DEVICE_LIMIT
+        devices_price = additional_devices * settings.PRICE_PER_DEVICE
+        direct_purchase_min_balance += devices_price
+        extra_components.append(f"devices+{additional_devices}->{devices_price}")
     logger.warning(
-        "SIMPLE_SUBSCRIPTION_DEBUG_START | user=%s | period=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s | total=%s | squads=%s",
+        "SIMPLE_SUBSCRIPTION_DEBUG_START | user=%s | period=%s | base_price=%s | recorded_price=%s | extras=%s | total=%s | env_PRICE_30=%s",
         db_user.id,
         period_days,
-        price_breakdown.get("base_price", 0),
-        price_breakdown.get("traffic_price", 0),
-        price_breakdown.get("devices_price", 0),
-        price_breakdown.get("servers_price", 0),
-        price_breakdown.get("total_discount", 0),
         price_kopeks,
-        ",".join(price_breakdown.get("resolved_squad_uuids", []))
-        if price_breakdown.get("resolved_squad_uuids")
-        else "none",
+        recorded_price,
+        ",".join(extra_components) if extra_components else "none",
+        direct_purchase_min_balance,
+        getattr(settings, "PRICE_30_DAYS", None),
     )
 
-    can_pay_from_balance = user_balance_kopeks >= price_kopeks
+    can_pay_from_balance = user_balance_kopeks >= direct_purchase_min_balance
     logger.warning(
         "SIMPLE_SUBSCRIPTION_DEBUG_START_BALANCE | user=%s | balance=%s | min_required=%s | can_pay=%s",
         db_user.id,
         user_balance_kopeks,
-        price_kopeks,
+        direct_purchase_min_balance,
         can_pay_from_balance,
     )
 
@@ -154,22 +158,26 @@ async def start_simple_subscription_purchase(
     await callback.answer()
 
 
-async def _calculate_simple_subscription_price(
-    db: AsyncSession,
-    params: dict,
-    *,
-    user: Optional[User] = None,
-    resolved_squad_uuid: Optional[str] = None,
-) -> Tuple[int, Dict[str, Any]]:
+def _calculate_simple_subscription_price(params: dict) -> int:
     """Рассчитывает цену простой подписки."""
+    period_days = params.get("period_days", 30)
+    attr_name = f"PRICE_{period_days}_DAYS"
+    attr_value = getattr(settings, attr_name, None)
 
-    resolved_uuids = [resolved_squad_uuid] if resolved_squad_uuid else None
-    return await compute_simple_subscription_price(
-        db,
-        params,
-        user=user,
-        resolved_squad_uuids=resolved_uuids,
+    logger.warning(
+        "SIMPLE_SUBSCRIPTION_DEBUG_PRICE_FUNC | period=%s | attr=%s | attr_value=%s | base_price=%s",
+        period_days,
+        attr_name,
+        attr_value,
+        settings.BASE_SUBSCRIPTION_PRICE,
     )
+
+    # Получаем цену для стандартного периода
+    if attr_value is not None:
+        return attr_value
+    else:
+        # Если нет цены для конкретного периода, используем базовую цену
+        return settings.BASE_SUBSCRIPTION_PRICE
 
 
 def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyboardMarkup:
@@ -327,22 +335,27 @@ async def handle_simple_subscription_pay_with_balance(
     )
 
     # Рассчитываем цену подписки
-    price_kopeks, price_breakdown = await _calculate_simple_subscription_price(
-        db,
-        subscription_params,
-        user=db_user,
-        resolved_squad_uuid=resolved_squad_uuid,
-    )
-    total_required = price_kopeks
+    price_kopeks = _calculate_simple_subscription_price(subscription_params)
+    recorded_price = getattr(settings, f"PRICE_{subscription_params['period_days']}_DAYS", price_kopeks)
+    total_required = recorded_price
+    extras = []
+    traffic_limit = subscription_params.get("traffic_limit_gb", 0)
+    if traffic_limit and traffic_limit > 0:
+        traffic_price = settings.get_traffic_price(traffic_limit)
+        total_required += traffic_price
+        extras.append(f"traffic={traffic_limit}GB->{traffic_price}")
+    device_limit = subscription_params.get("device_limit", 1)
+    if device_limit and device_limit > settings.DEFAULT_DEVICE_LIMIT:
+        additional_devices = device_limit - settings.DEFAULT_DEVICE_LIMIT
+        devices_price = additional_devices * settings.PRICE_PER_DEVICE
+        total_required += devices_price
+        extras.append(f"devices+{additional_devices}->{devices_price}")
     logger.warning(
-        "SIMPLE_SUBSCRIPTION_DEBUG_PAY_BALANCE | user=%s | period=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s | total_required=%s | balance=%s",
+        "SIMPLE_SUBSCRIPTION_DEBUG_PAY_BALANCE | user=%s | period=%s | base_price=%s | extras=%s | total_required=%s | balance=%s",
         db_user.id,
         subscription_params["period_days"],
-        price_breakdown.get("base_price", 0),
-        price_breakdown.get("traffic_price", 0),
-        price_breakdown.get("devices_price", 0),
-        price_breakdown.get("servers_price", 0),
-        price_breakdown.get("total_discount", 0),
+        price_kopeks,
+        ",".join(extras) if extras else "none",
         total_required,
         getattr(db_user, "balance_kopeks", 0),
     )
@@ -582,38 +595,29 @@ async def handle_simple_subscription_other_payment_methods(
         await callback.answer("❌ Данные подписки устарели. Пожалуйста, начните сначала.", show_alert=True)
         return
 
-    resolved_squad_uuid = await _ensure_simple_subscription_squad_uuid(
-        db,
-        state,
-        subscription_params,
-        user_id=db_user.id,
-        state_data=data,
-    )
-
     # Рассчитываем цену подписки
-    price_kopeks, price_breakdown = await _calculate_simple_subscription_price(
-        db,
-        subscription_params,
-        user=db_user,
-        resolved_squad_uuid=resolved_squad_uuid,
-    )
+    price_kopeks = _calculate_simple_subscription_price(subscription_params)
 
     user_balance_kopeks = getattr(db_user, "balance_kopeks", 0)
-    can_pay_from_balance = user_balance_kopeks >= price_kopeks
+    recorded_price = getattr(settings, f"PRICE_{subscription_params['period_days']}_DAYS", price_kopeks)
+    total_required = recorded_price
+    if subscription_params.get("traffic_limit_gb", 0) > 0:
+        total_required += settings.get_traffic_price(subscription_params["traffic_limit_gb"])
+    if subscription_params.get("device_limit", 1) > settings.DEFAULT_DEVICE_LIMIT:
+        additional_devices = subscription_params["device_limit"] - settings.DEFAULT_DEVICE_LIMIT
+        total_required += additional_devices * settings.PRICE_PER_DEVICE
+    can_pay_from_balance = user_balance_kopeks >= total_required
     logger.warning(
-        "SIMPLE_SUBSCRIPTION_DEBUG_METHODS | user=%s | balance=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s | total_required=%s | can_pay=%s",
+        "SIMPLE_SUBSCRIPTION_DEBUG_METHODS | user=%s | balance=%s | base_price=%s | total_required=%s | can_pay=%s",
         db_user.id,
         user_balance_kopeks,
-        price_breakdown.get("base_price", 0),
-        price_breakdown.get("traffic_price", 0),
-        price_breakdown.get("devices_price", 0),
-        price_breakdown.get("servers_price", 0),
-        price_breakdown.get("total_discount", 0),
         price_kopeks,
+        total_required,
         can_pay_from_balance,
     )
 
     # Отображаем доступные методы оплаты
+    resolved_squad_uuid = data.get("resolved_squad_uuid")
     server_label = _get_simple_subscription_server_label(
         texts,
         subscription_params,
@@ -673,8 +677,11 @@ async def handle_simple_subscription_payment_method(
         await callback.answer("❌ Данные подписки устарели. Пожалуйста, начните сначала.", show_alert=True)
         return
     
+    # Рассчитываем цену подписки
+    price_kopeks = _calculate_simple_subscription_price(subscription_params)
+    
     payment_method = callback.data.replace("simple_subscription_", "")
-
+    
     try:
         payment_service = PaymentService(callback.bot)
 
@@ -684,14 +691,6 @@ async def handle_simple_subscription_payment_method(
             subscription_params,
             user_id=db_user.id,
             state_data=data,
-        )
-
-        # Рассчитываем цену подписки
-        price_kopeks, _ = await _calculate_simple_subscription_price(
-            db,
-            subscription_params,
-            user=db_user,
-            resolved_squad_uuid=resolved_squad_uuid,
         )
 
         if payment_method == "stars":
