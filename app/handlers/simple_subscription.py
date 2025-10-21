@@ -54,13 +54,6 @@ async def start_simple_subscription_purchase(
     user_balance_kopeks = getattr(db_user, "balance_kopeks", 0)
     # Рассчитываем цену подписки
     price_kopeks = _calculate_simple_subscription_price(subscription_params)
-    resolved_squad_uuid = await _ensure_simple_subscription_squad_uuid(
-        db,
-        state,
-        subscription_params,
-        user_id=db_user.id,
-        state_data=data,
-    )
     period_days = subscription_params["period_days"]
     recorded_price = getattr(settings, f"PRICE_{period_days}_DAYS", price_kopeks)
     direct_purchase_min_balance = recorded_price
@@ -109,17 +102,12 @@ async def start_simple_subscription_purchase(
             "ℹ️ У вас уже есть триальная подписка. Она истекает через {days} дн.",
         ).format(days=days_left)
 
-    server_label = _get_simple_subscription_server_label(
-        texts,
-        subscription_params,
-        resolved_squad_uuid,
-    )
     message_text = (
         f"⚡ <b>Простая покупка подписки</b>\n\n"
         f"📅 Период: {subscription_params['period_days']} дней\n"
         f"📱 Устройства: {subscription_params['device_limit']}\n"
         f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}\n"
-        f"🌍 Сервер: {server_label}\n\n"
+        f"🌍 Сервер: {'Любой доступный' if not subscription_params['squad_uuid'] else 'Выбранный'}\n\n"
         f"💰 Стоимость: {settings.format_price(price_kopeks)}\n"
         f"💳 Ваш баланс: {settings.format_price(user_balance_kopeks)}\n\n"
         + (
@@ -235,71 +223,8 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
         text=texts.BACK,
         callback_data="subscription_purchase"
     )])
-
+    
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
-def _get_simple_subscription_server_label(
-    texts,
-    subscription_params: Dict[str, Any],
-    resolved_squad_uuid: Optional[str] = None,
-) -> str:
-    """Возвращает локализованное описание выбранного сервера."""
-
-    if subscription_params.get("squad_uuid"):
-        return texts.t("SIMPLE_SUBSCRIPTION_SERVER_SELECTED", "Выбранный")
-
-    if resolved_squad_uuid:
-        return texts.t(
-            "SIMPLE_SUBSCRIPTION_SERVER_ASSIGNED",
-            "Назначен автоматически",
-        )
-
-    return texts.t("SIMPLE_SUBSCRIPTION_SERVER_ANY", "Любой доступный")
-
-
-async def _ensure_simple_subscription_squad_uuid(
-    db: AsyncSession,
-    state: FSMContext,
-    subscription_params: Dict[str, Any],
-    *,
-    user_id: Optional[int] = None,
-    state_data: Optional[Dict[str, Any]] = None,
-) -> Optional[str]:
-    """Определяет UUID сквада для простой подписки."""
-
-    explicit_uuid = subscription_params.get("squad_uuid")
-    if explicit_uuid:
-        return explicit_uuid
-
-    if state_data is None:
-        state_data = await state.get_data()
-
-    resolved_uuid = state_data.get("resolved_squad_uuid")
-    if resolved_uuid:
-        return resolved_uuid
-
-    try:
-        from app.database.crud.server_squad import get_random_active_squad_uuid
-
-        resolved_uuid = await get_random_active_squad_uuid(db)
-    except Exception as error:  # pragma: no cover - defensive logging
-        logger.error(
-            "SIMPLE_SUBSCRIPTION_RANDOM_SQUAD_ERROR | user=%s | error=%s",
-            user_id,
-            error,
-        )
-        return None
-
-    if resolved_uuid:
-        await state.update_data(resolved_squad_uuid=resolved_uuid)
-        logger.info(
-            "SIMPLE_SUBSCRIPTION_RANDOM_SQUAD_ASSIGNED | user=%s | squad=%s",
-            user_id,
-            resolved_uuid,
-        )
-
-    return resolved_uuid
 
 
 @error_handler
@@ -318,15 +243,7 @@ async def handle_simple_subscription_pay_with_balance(
     if not subscription_params:
         await callback.answer("❌ Данные подписки устарели. Пожалуйста, начните сначала.", show_alert=True)
         return
-
-    resolved_squad_uuid = await _ensure_simple_subscription_squad_uuid(
-        db,
-        state,
-        subscription_params,
-        user_id=db_user.id,
-        state_data=data,
-    )
-
+    
     # Рассчитываем цену подписки
     price_kopeks = _calculate_simple_subscription_price(subscription_params)
     recorded_price = getattr(settings, f"PRICE_{subscription_params['period_days']}_DAYS", price_kopeks)
@@ -390,8 +307,8 @@ async def handle_simple_subscription_pay_with_balance(
             # Обновляем параметры подписки
             subscription.traffic_limit_gb = subscription_params["traffic_limit_gb"]
             subscription.device_limit = subscription_params["device_limit"]
-            if resolved_squad_uuid:
-                subscription.connected_squads = [resolved_squad_uuid]
+            if subscription_params["squad_uuid"]:
+                subscription.connected_squads = [subscription_params["squad_uuid"]]
             
             await db.commit()
             await db.refresh(subscription)
@@ -404,7 +321,7 @@ async def handle_simple_subscription_pay_with_balance(
                 duration_days=subscription_params["period_days"],
                 traffic_limit_gb=subscription_params["traffic_limit_gb"],
                 device_limit=subscription_params["device_limit"],
-                connected_squads=[resolved_squad_uuid] if resolved_squad_uuid else [],
+                connected_squads=[subscription_params["squad_uuid"]] if subscription_params["squad_uuid"] else [],
                 update_server_counters=True,
             )
         
@@ -434,17 +351,12 @@ async def handle_simple_subscription_pay_with_balance(
             logger.error(f"Ошибка синхронизации подписки с RemnaWave для пользователя {db_user.id}: {sync_error}", exc_info=True)
         
         # Отправляем уведомление об успешной покупке
-        server_label = _get_simple_subscription_server_label(
-            texts,
-            subscription_params,
-            resolved_squad_uuid,
-        )
         success_message = (
             f"✅ <b>Подписка успешно активирована!</b>\n\n"
             f"📅 Период: {subscription_params['period_days']} дней\n"
             f"📱 Устройства: {subscription_params['device_limit']}\n"
             f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}\n"
-            f"🌍 Сервер: {server_label}\n\n"
+            f"🌍 Сервер: {'Любой доступный' if not subscription_params['squad_uuid'] else 'Выбранный'}\n\n"
             f"💰 Списано с баланса: {settings.format_price(price_kopeks)}\n"
             f"💳 Ваш баланс: {settings.format_price(db_user.balance_kopeks)}\n\n"
             f"🔗 Для подключения перейдите в раздел 'Подключиться'"
@@ -583,14 +495,14 @@ async def handle_simple_subscription_other_payment_methods(
     
     data = await state.get_data()
     subscription_params = data.get("subscription_params", {})
-
+    
     if not subscription_params:
         await callback.answer("❌ Данные подписки устарели. Пожалуйста, начните сначала.", show_alert=True)
         return
-
+    
     # Рассчитываем цену подписки
     price_kopeks = _calculate_simple_subscription_price(subscription_params)
-
+    
     user_balance_kopeks = getattr(db_user, "balance_kopeks", 0)
     recorded_price = getattr(settings, f"PRICE_{subscription_params['period_days']}_DAYS", price_kopeks)
     total_required = recorded_price
@@ -610,18 +522,12 @@ async def handle_simple_subscription_other_payment_methods(
     )
 
     # Отображаем доступные методы оплаты
-    resolved_squad_uuid = data.get("resolved_squad_uuid")
-    server_label = _get_simple_subscription_server_label(
-        texts,
-        subscription_params,
-        resolved_squad_uuid,
-    )
     message_text = (
         f"💳 <b>Оплата подписки</b>\n\n"
         f"📅 Период: {subscription_params['period_days']} дней\n"
         f"📱 Устройства: {subscription_params['device_limit']}\n"
         f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}\n"
-        f"🌍 Сервер: {server_label}\n\n"
+        f"🌍 Сервер: {'Любой доступный' if not subscription_params['squad_uuid'] else 'Выбранный'}\n\n"
         f"💰 Стоимость: {settings.format_price(price_kopeks)}\n\n"
         + (
             "Вы можете оплатить подписку с баланса или выбрать другой способ оплаты:"
@@ -719,7 +625,7 @@ async def handle_simple_subscription_payment_method(
                 period_days=subscription_params["period_days"],
                 device_limit=subscription_params["device_limit"],
                 traffic_limit_gb=subscription_params["traffic_limit_gb"],
-                squad_uuid=resolved_squad_uuid,
+                squad_uuid=subscription_params["squad_uuid"],
                 payment_method="yookassa_sbp" if payment_method == "yookassa_sbp" else "yookassa",
                 total_price_kopeks=price_kopeks
             )

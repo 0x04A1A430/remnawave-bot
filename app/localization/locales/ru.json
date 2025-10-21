@@ -1350,8 +1350,5 @@
   "YES": "✅ Да",
   "SIMPLE_SUBSCRIPTION_TRIAL_NOTICE_ACTIVE": "ℹ️ У вас уже есть активная триальная подписка. Она будет действовать ещё {days} дн. После покупки к сроку добавится оплаченный период.",
   "SIMPLE_SUBSCRIPTION_TRIAL_NOTICE_TRIAL": "ℹ️ У вас сейчас триальная подписка. Она истекает через {days} дн. Покупка новой продлит срок автоматически.",
-  "SIMPLE_SUBSCRIPTION_SERVER_ANY": "Любой доступный",
-  "SIMPLE_SUBSCRIPTION_SERVER_SELECTED": "Выбранный",
-  "SIMPLE_SUBSCRIPTION_SERVER_ASSIGNED": "Назначен автоматически",
   "MENU_SIMPLE_SUBSCRIPTION": "⚡ Простая покупка"
 }
