@@ -112,7 +112,6 @@ async def test_delete_user_cart_not_found(user_cart_service):
     
     assert result is False
 
-
 @pytest.mark.asyncio
 async def test_has_user_cart(user_cart_service, mock_redis):
     """Тест проверки наличия корзины пользователя"""
