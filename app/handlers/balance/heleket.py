@@ -31,15 +31,11 @@ async def start_heleket_payment(
     markup = settings.get_heleket_markup_percent()
     markup_text: Optional[str]
     if markup > 0:
-        markup_text = texts.t(
-            "PAYMENT_HELEKET_MARKUP",
-            f"Наценка провайдера: {markup:.0f}%",  # fallback
-        )
+        label = texts.t("PAYMENT_HELEKET_MARKUP_LABEL", "Наценка провайдера")
+        markup_text = f"{label}: {markup:.0f}%"
     elif markup < 0:
-        markup_text = texts.t(
-            "PAYMENT_HELEKET_DISCOUNT",
-            f"Скидка провайдера: {abs(markup):.0f}%",
-        )
+        label = texts.t("PAYMENT_HELEKET_DISCOUNT_LABEL", "Скидка провайдера")
+        markup_text = f"{label}: {abs(markup):.0f}%"
     else:
         markup_text = None
 
@@ -144,8 +140,13 @@ async def process_heleket_payment_amount(
             markup_percent = None
 
     if markup_percent:
-        sign = "+" if markup_percent > 0 else ""
-        details.append(f"📈 Наценка: {sign}{markup_percent}%")
+        label_markup = texts.t("PAYMENT_HELEKET_MARKUP_LABEL", "Наценка провайдера")
+        label_discount = texts.t("PAYMENT_HELEKET_DISCOUNT_LABEL", "Скидка провайдера")
+        absolute = abs(markup_percent)
+        if markup_percent > 0:
+            details.append(f"📈 {label_markup}: +{absolute}%")
+        else:
+            details.append(f"📉 {label_discount}: {absolute}%")
 
     if payer_amount and payer_currency:
         try:

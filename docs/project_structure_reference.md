@@ -74,6 +74,9 @@
 - `app/database/crud/cryptobot.py` — Python-модуль
   Классы: нет
   Функции: нет
+- `app/database/crud/heleket.py` — Python-модуль
+  Классы: нет
+  Функции: нет
 - `app/database/crud/discount_offer.py` — Python-модуль
   Классы: нет
   Функции: нет
@@ -158,6 +161,12 @@
 - `app/external/cryptobot.py` — Python-модуль
   Классы: `CryptoBotService` (2 методов)
   Функции: нет
+- `app/external/heleket.py` — Python-модуль
+  Классы: `HeleketService` (3 методов)
+  Функции: нет
+- `app/external/heleket_webhook.py` — Python-модуль
+  Классы: `HeleketWebhookHandler` (3 методов)
+  Функции: `create_heleket_app`, `start_heleket_webhook_server`
 - `app/external/pal24_client.py` — Async client for PayPalych (Pal24) API.
   Классы: `Pal24APIError` — Base error for Pal24 API operations., `Pal24Response` (2 методов) — Wrapper for Pal24 API responses., `Pal24Client` (5 методов) — Async client implementing PayPalych API methods.
   Функции: нет
@@ -725,6 +734,9 @@
   Функции: `_enable_pal24`, `anyio_backend`, `test_parse_postback_success`, `test_parse_postback_missing_fields`, `test_convert_to_kopeks_and_expiration`
 - `tests/services/test_payment_service_cryptobot.py` — Тесты сценариев CryptoBot в PaymentService.
   Классы: `DummySession` (2 методов), `DummyLocalPayment` (1 методов), `StubCryptoBotService` (1 методов)
+  Функции: `anyio_backend`, `_make_service`
+- `tests/services/test_payment_service_heleket.py` — Тесты сценариев Heleket в PaymentService.
+  Классы: `DummySession` (2 методов), `DummyLocalPayment` (1 методов), `StubHeleketService` (1 методов)
   Функции: `anyio_backend`, `_make_service`
 - `tests/services/test_payment_service_mulenpay.py` — Тесты для сценариев MulenPay в PaymentService.
   Классы: `DummySession`, `DummyLocalPayment` (1 методов), `StubMulenPayService` (1 методов)
