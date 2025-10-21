@@ -2291,8 +2291,19 @@ async def handle_simple_subscription_purchase(
     from app.database.crud.subscription import get_subscription_by_user_id
     current_subscription = await get_subscription_by_user_id(db, db_user.id)
     
+    # Если у пользователя уже есть активная подписка, продлеваем её
     if current_subscription and current_subscription.is_active:
-        await callback.answer("❌ У вас уже есть активная подписка", show_alert=True)
+        # Продлеваем существующую подписку
+        await _extend_existing_subscription(
+            callback=callback,
+            db_user=db_user,
+            db=db,
+            current_subscription=current_subscription,
+            period_days=settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS,
+            device_limit=settings.SIMPLE_SUBSCRIPTION_DEVICE_LIMIT,
+            traffic_limit_gb=settings.SIMPLE_SUBSCRIPTION_TRAFFIC_GB,
+            squad_uuid=settings.SIMPLE_SUBSCRIPTION_SQUAD_UUID
+        )
         return
     
     # Подготовим параметры простой подписки
@@ -2426,3 +2437,193 @@ def _get_simple_subscription_payment_keyboard(language: str) -> types.InlineKeyb
     )])
     
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+async def _extend_existing_subscription(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    current_subscription: Subscription,
+    period_days: int,
+    device_limit: int,
+    traffic_limit_gb: int,
+    squad_uuid: str
+):
+    """Продлевает существующую подписку."""
+    from app.services.admin_notification_service import AdminNotificationService
+    from app.database.crud.transaction import create_transaction
+    from app.database.crud.user import subtract_user_balance
+    from app.database.models import TransactionType
+    from app.services.subscription_service import SubscriptionService
+    from app.utils.pricing_utils import calculate_months_from_days
+    from datetime import datetime, timedelta
+    
+    texts = get_texts(db_user.language)
+    
+    # Рассчитываем цену подписки
+    subscription_params = {
+        "period_days": period_days,
+        "device_limit": device_limit,
+        "traffic_limit_gb": traffic_limit_gb,
+        "squad_uuid": squad_uuid
+    }
+    price_kopeks = _calculate_simple_subscription_price(subscription_params)
+    
+    # Проверяем баланс пользователя
+    if db_user.balance_kopeks < price_kopeks:
+        missing_kopeks = price_kopeks - db_user.balance_kopeks
+        message_text = texts.t(
+            "ADDON_INSUFFICIENT_FUNDS_MESSAGE",
+            (
+                "⚠️ <b>Недостаточно средств</b>\n\n"
+                "Стоимость услуги: {required}\n"
+                "На балансе: {balance}\n"
+                "Не хватает: {missing}\n\n"
+                "Выберите способ пополнения. Сумма подставится автоматически."
+            ),
+        ).format(
+            required=texts.format_price(price_kopeks),
+            balance=texts.format_price(db_user.balance_kopeks),
+            missing=texts.format_price(missing_kopeks),
+        )
+        
+        # Подготовим данные для сохранения в корзину
+        from app.services.user_cart_service import user_cart_service
+        cart_data = {
+            'period_days': period_days,
+            'total_price': price_kopeks,
+            'user_id': db_user.id,
+            'saved_cart': True,
+            'missing_amount': missing_kopeks,
+            'return_to_cart': True
+        }
+        
+        await user_cart_service.save_user_cart(db_user.id, cart_data)
+        
+        await callback.message.edit_text(
+            message_text,
+            reply_markup=get_insufficient_balance_keyboard(
+                db_user.language,
+                amount_kopeks=missing_kopeks,
+                has_saved_cart=True
+            ),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+    
+    # Списываем средства
+    success = await subtract_user_balance(
+        db,
+        db_user,
+        price_kopeks,
+        f"Продление подписки на {period_days} дней",
+        consume_promo_offer=False,  # Простая покупка не использует промо-скидки
+    )
+    
+    if not success:
+        await callback.answer("⚠ Ошибка списания средств", show_alert=True)
+        return
+    
+    # Обновляем параметры подписки
+    current_time = datetime.utcnow()
+    old_end_date = current_subscription.end_date
+    
+    # Обновляем параметры в зависимости от типа текущей подписки
+    if current_subscription.is_trial:
+        # При продлении триальной подписки переводим её в обычную
+        current_subscription.is_trial = False
+        current_subscription.status = "active"
+        # Убираем ограничения с триальной подписки
+        current_subscription.traffic_limit_gb = traffic_limit_gb
+        current_subscription.device_limit = device_limit
+        # Если указан squad_uuid, добавляем его к существующим серверам
+        if squad_uuid and squad_uuid not in current_subscription.connected_squads:
+            current_subscription.connected_squads.append(squad_uuid)
+    else:
+        # Для обычной подписки просто продлеваем
+        # Обновляем трафик и устройства, если нужно
+        if traffic_limit_gb != 0:  # Если не безлимит, обновляем
+            current_subscription.traffic_limit_gb = traffic_limit_gb
+        if device_limit > current_subscription.device_limit:
+            current_subscription.device_limit = device_limit
+        # Если указан squad_uuid и его ещё нет в подписке, добавляем
+        if squad_uuid and squad_uuid not in current_subscription.connected_squads:
+            current_subscription.connected_squads.append(squad_uuid)
+    
+    # Продлеваем подписку
+    if current_subscription.end_date > current_time:
+        # Если подписка ещё активна, добавляем дни к текущей дате окончания
+        new_end_date = current_subscription.end_date + timedelta(days=period_days)
+    else:
+        # Если подписка уже истекла, начинаем от текущего времени
+        new_end_date = current_time + timedelta(days=period_days)
+    
+    current_subscription.end_date = new_end_date
+    current_subscription.updated_at = current_time
+    
+    # Сохраняем изменения
+    await db.commit()
+    await db.refresh(current_subscription)
+    await db.refresh(db_user)
+    
+    # Обновляем пользователя в Remnawave
+    subscription_service = SubscriptionService()
+    try:
+        remnawave_result = await subscription_service.update_remnawave_user(
+            db,
+            current_subscription,
+            reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
+            reset_reason="продление подписки",
+        )
+        if remnawave_result:
+            logger.info("✅ RemnaWave обновлен успешно")
+        else:
+            logger.error("⚠ ОШИБКА ОБНОВЛЕНИЯ REMNAWAVE")
+    except Exception as e:
+        logger.error(f"⚠ ИСКЛЮЧЕНИЕ ПРИ ОБНОВЛЕНИИ REMNAWAVE: {e}")
+    
+    # Создаём транзакцию
+    transaction = await create_transaction(
+        db=db,
+        user_id=db_user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=price_kopeks,
+        description=f"Продление подписки на {period_days} дней"
+    )
+    
+    # Отправляем уведомление админу
+    try:
+        notification_service = AdminNotificationService(callback.bot)
+        await notification_service.send_subscription_extension_notification(
+            db,
+            db_user,
+            current_subscription,
+            transaction,
+            period_days,
+            old_end_date,
+            new_end_date=new_end_date,
+            balance_after=db_user.balance_kopeks,
+        )
+    except Exception as e:
+        logger.error(f"Ошибка отправки уведомления о продлении: {e}")
+    
+    # Отправляем сообщение пользователю
+    success_message = (
+        "✅ Подписка успешно продлена!\n\n"
+        f"⏰ Добавлено: {period_days} дней\n"
+        f"Действует до: {new_end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+        f"💰 Списано: {texts.format_price(price_kopeks)}"
+    )
+    
+    # Если это была триальная подписка, добавляем информацию о преобразовании
+    if current_subscription.is_trial:
+        success_message += "\n🎯 Триальная подписка преобразована в платную"
+    
+    await callback.message.edit_text(
+        success_message,
+        reply_markup=get_back_keyboard(db_user.language)
+    )
+    
+    logger.info(f"✅ Пользователь {db_user.telegram_id} продлил подписку на {period_days} дней за {price_kopeks / 100}₽")
+    await callback.answer()
