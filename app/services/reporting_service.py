@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from enum import Enum
+from html import escape
 from typing import Dict, List, Optional, Tuple
 
 from zoneinfo import ZoneInfo
@@ -321,7 +322,10 @@ class ReportingService:
         lines += ["🤝 <b>Топ по рефералам (за период)</b>"]
         if top_referrers:
             for index, row in enumerate(top_referrers, 1):
-                lines.append(f"{index}. {row['referrer_label']}: {row['count']} приглашений")
+                referrer_label = escape(row["referrer_label"], quote=False)
+                lines.append(
+                    f"{index}. {referrer_label}: {row['count']} приглашений"
+                )
         else:
             lines.append("— данных нет")
 
