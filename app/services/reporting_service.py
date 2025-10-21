@@ -3,13 +3,15 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
-from sqlalchemy import func, select
+from sqlalchemy import cast, func, not_, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.sql import false, true
 
 from app.config import settings
 from app.database.crud.subscription import get_subscriptions_statistics
@@ -17,10 +19,12 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import (
     Subscription,
     SubscriptionConversion,
+    SubscriptionStatus,
     Ticket,
     TicketStatus,
     Transaction,
     TransactionType,
+    User,
 )
 
 
@@ -45,7 +49,7 @@ class ReportPeriodRange:
 
 
 class ReportingService:
-    """Generates admin summary reports and can schedule daily delivery."""
+    """Generates admin summary reports (text only, no charts)."""
 
     def __init__(self) -> None:
         self.bot: Optional[Bot] = None
@@ -170,10 +174,63 @@ class ReportingService:
                 chat_id=chat_id,
                 text=report_text,
                 message_thread_id=topic_id,
+                parse_mode="HTML",
             )
         except (TelegramBadRequest, TelegramForbiddenError) as exc:
             logger.error("Не удалось отправить отчет: %s", exc)
             raise ReportingServiceError("Не удалось отправить отчет в чат") from exc
+
+    # ---------- referral helpers ----------
+
+    def _referral_markers(self) -> List:
+        """
+        Набор условий, по которым операция помечается как реферальная (если вдруг записана типом DEPOSIT).
+        """
+        clauses = []
+
+        # Явные флаги
+        if hasattr(Transaction, "is_referral_bonus"):
+            clauses.append(Transaction.is_referral_bonus == true())
+        if hasattr(Transaction, "is_bonus"):
+            clauses.append(Transaction.is_bonus == true())
+
+        # Источник/причина
+        if hasattr(Transaction, "source"):
+            clauses.append(Transaction.source == "referral")
+            clauses.append(Transaction.source == "referral_bonus")
+        if hasattr(Transaction, "reason"):
+            clauses.append(Transaction.reason == "referral")
+            clauses.append(Transaction.reason == "referral_bonus")
+            clauses.append(Transaction.reason == "referral_reward")
+
+        # Текстовые поля
+        like_patterns = ["%реферал%", "%реферальн%", "%referral%"]
+        if hasattr(Transaction, "description"):
+            for pattern in like_patterns:
+                try:
+                    clauses.append(Transaction.description.ilike(pattern))
+                except Exception:  # noqa: BLE001 - best effort
+                    pass
+        if hasattr(Transaction, "comment"):
+            for pattern in like_patterns:
+                try:
+                    clauses.append(Transaction.comment.ilike(pattern))
+                except Exception:  # noqa: BLE001 - best effort
+                    pass
+
+        return [clause for clause in clauses if clause is not None]
+
+    def _exclude_referral_deposits_condition(self):
+        """
+        Условие «это НЕ реферальный бонус».
+        Если нет ни одного маркера — ничего не исключаем.
+        """
+        markers = self._referral_markers()
+        if not markers:
+            return true()
+        return not_(or_(*markers))
+
+    # --------------------------------------
 
     async def _build_report(
         self,
@@ -186,37 +243,87 @@ class ReportingService:
 
         async with AsyncSessionLocal() as session:
             totals = await self._collect_current_totals(session)
-            period_stats = await self._collect_period_stats(session, start_utc, end_utc)
+            stats = await self._collect_period_stats(session, start_utc, end_utc)
+            top_referrers = await self._get_top_referrers(session, start_utc, end_utc, limit=5)
+            usage = await self._get_user_usage_stats(session)
 
+        conversion_rate = (
+            (stats["trial_to_paid_conversions"] / stats["new_trials"] * 100)
+            if stats["new_trials"] > 0
+            else 0.0
+        )
+
+        lines: List[str] = []
         header = (
             f"📊 <b>Отчет за {period_range.label}</b>"
             if period == ReportPeriod.DAILY
             else f"📊 <b>Отчет за период {period_range.label}</b>"
         )
+        lines += [header, ""]
 
-        lines = [
-            header,
+        # TL;DR
+        lines += [
+            "🧭 <b>Итог по периоду</b>",
+            f"• Новых пользователей: <b>{stats['new_users']}</b>",
+            f"• Новых триалов: <b>{stats['new_trials']}</b>",
+            (
+                f"• Конверсий триал → платная: <b>{stats['trial_to_paid_conversions']}</b> "
+                f"(<i>{conversion_rate:.1f}%</i>)"
+            ),
+            f"• Новых платных (всего): <b>{stats['new_paid_subscriptions']}</b>",
+            f"• Поступления всего (только пополнения): <b>{self._format_amount(stats['deposits_amount'])}</b>",
             "",
-            "🎯 <b>Триалы</b>",
-            f"• Активных сейчас: {totals['active_trials']}",
-            f"• Новых за период: {period_stats['new_trials']}",
-            "",
-            "💎 <b>Платные подписки</b>",
-            f"• Активных сейчас: {totals['active_paid']}",
-            f"• Новых за период: {period_stats['new_paid_subscriptions']}",
-            "",
-            "🎟️ <b>Тикеты поддержки</b>",
-            f"• Активных сейчас: {totals['open_tickets']}",
-            f"• Новых за период: {period_stats['new_tickets']}",
-            "",
-            "💰 <b>Платежи</b>",
-            f"• Оплат подписок: {period_stats['subscription_payments_count']} на сумму "
-            f"{self._format_amount(period_stats['subscription_payments_amount'])}",
-            f"• Пополнений: {period_stats['deposits_count']} на сумму "
-            f"{self._format_amount(period_stats['deposits_amount'])}",
-            f"• Всего поступлений: {period_stats['total_payments_count']} на сумму "
-            f"{self._format_amount(period_stats['total_payments_amount'])}",
         ]
+
+        # Подписки
+        lines += [
+            "💎 <b>Подписки</b>",
+            f"• Активные триалы сейчас: {totals['active_trials']}",
+            f"• Активные платные сейчас: {totals['active_paid']}",
+            "",
+        ]
+
+        # Финансы
+        lines += [
+            "💰 <b>Финансы</b>",
+            (
+                "• Оплаты подписок: "
+                f"{stats['subscription_payments_count']} на сумму {self._format_amount(stats['subscription_payments_amount'])}"
+            ),
+            (
+                "• Пополнения: "
+                f"{stats['deposits_count']} на сумму {self._format_amount(stats['deposits_amount'])}"
+            ),
+            (
+                "<i>Примечание: «Поступления всего» учитывают только пополнения; покупки подписок и реферальные бонусы "
+                "исключены.</i>"
+            ),
+            "",
+        ]
+
+        # Поддержка
+        lines += [
+            "🎟️ <b>Поддержка</b>",
+            f"• Новых тикетов: {stats['new_tickets']}",
+            f"• Активных тикетов сейчас: {totals['open_tickets']}",
+            "",
+        ]
+
+        # Активность пользователей
+        lines += [
+            "👤 <b>Активность пользователей</b>",
+            f"• Пользователей с активной платной подпиской: {usage['active_paid_users']}",
+            f"• Пользователей, ни разу не подключившихся: {usage['never_connected_users']}",
+            "",
+        ]
+
+        # Топ по рефералам
+        lines += ["🤝 <b>Топ по рефералам (за период)</b>"]
+        if top_referrers:
+            for index, row in enumerate(top_referrers, 1):
+                lines.append(f"{index}. {row['referrer_label']}: {row['count']} приглашений")
+        else:
+            lines.append("— данных нет")
 
         return "\n".join(lines)
 
@@ -273,86 +380,196 @@ class ReportingService:
         start_utc: datetime,
         end_utc: datetime,
     ) -> dict:
-        new_trials_result = await session.execute(
-            select(func.count(Subscription.id)).where(
-                Subscription.created_at >= start_utc,
-                Subscription.created_at < end_utc,
-                Subscription.is_trial == True,  # noqa: E712
-            )
-        )
-        new_trials = int(new_trials_result.scalar() or 0)
-
-        direct_paid_result = await session.execute(
-            select(func.count(Subscription.id)).where(
-                Subscription.created_at >= start_utc,
-                Subscription.created_at < end_utc,
-                Subscription.is_trial == False,  # noqa: E712
-            )
-        )
-        direct_paid = int(direct_paid_result.scalar() or 0)
-
-        conversions_result = await session.execute(
-            select(func.count(SubscriptionConversion.id)).where(
-                SubscriptionConversion.converted_at >= start_utc,
-                SubscriptionConversion.converted_at < end_utc,
-            )
-        )
-        conversions_count = int(conversions_result.scalar() or 0)
-
-        subscription_payments_row = (
-            await session.execute(
-                select(
-                    func.count(Transaction.id),
-                    func.coalesce(func.sum(Transaction.amount_kopeks), 0),
-                ).where(
-                    Transaction.type == TransactionType.SUBSCRIPTION_PAYMENT.value,
-                    Transaction.is_completed == True,  # noqa: E712
-                    Transaction.created_at >= start_utc,
-                    Transaction.created_at < end_utc,
+        new_users = int(
+            (
+                await session.execute(
+                    select(func.count(User.id)).where(
+                        User.created_at >= start_utc,
+                        User.created_at < end_utc,
+                    )
                 )
-            )
-        ).one()
-
-        deposits_row = (
-            await session.execute(
-                select(
-                    func.count(Transaction.id),
-                    func.coalesce(func.sum(Transaction.amount_kopeks), 0),
-                ).where(
-                    Transaction.type == TransactionType.DEPOSIT.value,
-                    Transaction.is_completed == True,  # noqa: E712
-                    Transaction.created_at >= start_utc,
-                    Transaction.created_at < end_utc,
-                )
-            )
-        ).one()
-
-        subscription_payments_count = int(subscription_payments_row[0] or 0)
-        subscription_payments_amount = int(subscription_payments_row[1] or 0)
-        deposits_count = int(deposits_row[0] or 0)
-        deposits_amount = int(deposits_row[1] or 0)
-
-        total_payments_count = subscription_payments_count + deposits_count
-        total_payments_amount = subscription_payments_amount + deposits_amount
-        new_tickets_result = await session.execute(
-            select(func.count(Ticket.id)).where(
-                Ticket.created_at >= start_utc,
-                Ticket.created_at < end_utc,
-            )
+            ).scalar()
+            or 0
         )
-        new_tickets = int(new_tickets_result.scalar() or 0)
+
+        new_trials = int(
+            (
+                await session.execute(
+                    select(func.count(Subscription.id)).where(
+                        Subscription.created_at >= start_utc,
+                        Subscription.created_at < end_utc,
+                        Subscription.is_trial == true(),
+                    )
+                )
+            ).scalar()
+            or 0
+        )
+
+        direct_paid = int(
+            (
+                await session.execute(
+                    select(func.count(Subscription.id)).where(
+                        Subscription.created_at >= start_utc,
+                        Subscription.created_at < end_utc,
+                        Subscription.is_trial == false(),
+                    )
+                )
+            ).scalar()
+            or 0
+        )
+
+        trial_to_paid_conversions = int(
+            (
+                await session.execute(
+                    select(func.count(SubscriptionConversion.id)).where(
+                        SubscriptionConversion.converted_at >= start_utc,
+                        SubscriptionConversion.converted_at < end_utc,
+                    )
+                )
+            ).scalar()
+            or 0
+        )
+
+        subscription_payments_count, subscription_payments_amount = (
+            (
+                await session.execute(
+                    self._txn_query_base(
+                        TransactionType.SUBSCRIPTION_PAYMENT.value,
+                        start_utc,
+                        end_utc,
+                    )
+                )
+            ).one()
+        )
+
+        deposits_count, deposits_amount = (
+            (
+                await session.execute(
+                    self._deposit_query_excluding_referrals(start_utc, end_utc)
+                )
+            ).one()
+        )
+
+        new_tickets = int(
+            (
+                await session.execute(
+                    select(func.count(Ticket.id)).where(
+                        Ticket.created_at >= start_utc,
+                        Ticket.created_at < end_utc,
+                    )
+                )
+            ).scalar()
+            or 0
+        )
 
         return {
+            "new_users": new_users,
             "new_trials": new_trials,
-            "new_paid_subscriptions": direct_paid + conversions_count,
-            "subscription_payments_count": subscription_payments_count,
-            "subscription_payments_amount": subscription_payments_amount,
-            "deposits_count": deposits_count,
-            "deposits_amount": deposits_amount,
-            "total_payments_count": total_payments_count,
-            "total_payments_amount": total_payments_amount,
+            "new_paid_subscriptions": direct_paid + trial_to_paid_conversions,
+            "trial_to_paid_conversions": trial_to_paid_conversions,
+            "subscription_payments_count": int(subscription_payments_count or 0),
+            "subscription_payments_amount": int(subscription_payments_amount or 0),
+            "deposits_count": int(deposits_count or 0),
+            "deposits_amount": int(deposits_amount or 0),
             "new_tickets": new_tickets,
         }
+
+    def _txn_query_base(self, txn_type: str, start_utc: datetime, end_utc: datetime):
+        return select(
+            func.count(Transaction.id),
+            func.coalesce(func.sum(Transaction.amount_kopeks), 0),
+        ).where(
+            Transaction.type == txn_type,
+            Transaction.is_completed == true(),
+            Transaction.created_at >= start_utc,
+            Transaction.created_at < end_utc,
+        )
+
+    def _deposit_query_excluding_referrals(self, start_utc: datetime, end_utc: datetime):
+        return select(
+            func.count(Transaction.id),
+            func.coalesce(func.sum(Transaction.amount_kopeks), 0),
+        ).where(
+            Transaction.type == TransactionType.DEPOSIT.value,
+            Transaction.is_completed == true(),
+            Transaction.created_at >= start_utc,
+            Transaction.created_at < end_utc,
+            self._exclude_referral_deposits_condition(),
+        )
+
+    async def _get_top_referrers(
+        self,
+        session,
+        start_utc: datetime,
+        end_utc: datetime,
+        limit: int = 5,
+    ) -> List[Dict]:
+        rows = await session.execute(
+            select(
+                User.referred_by_id,
+                func.count(User.id).label("cnt"),
+            )
+            .where(
+                User.created_at >= start_utc,
+                User.created_at < end_utc,
+                User.referred_by_id.isnot(None),
+            )
+            .group_by(User.referred_by_id)
+            .order_by(func.count(User.id).desc())
+            .limit(limit)
+        )
+        rows = rows.all()
+        if not rows:
+            return []
+        ref_ids = [row[0] for row in rows if row[0] is not None]
+        users_map: Dict[int, str] = {}
+        if ref_ids:
+            urows = await session.execute(select(User).where(User.id.in_(ref_ids)))
+            for user in urows.scalars().all():
+                users_map[user.id] = self._user_label(user)
+        return [
+            {"referrer_label": users_map.get(ref_id, f"User #{ref_id}"), "count": int(count or 0)}
+            for ref_id, count in rows
+        ]
+
+    async def _get_user_usage_stats(self, session) -> Dict[str, int]:
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        active_paid_q = await session.execute(
+            select(func.count(func.distinct(Subscription.user_id))).where(
+                Subscription.is_trial == false(),
+                Subscription.status == SubscriptionStatus.ACTIVE.value,
+                Subscription.end_date > now_utc,
+            )
+        )
+        active_paid_users = int(active_paid_q.scalar() or 0)
+
+        never_connected_q = await session.execute(
+            select(func.count(func.distinct(Subscription.user_id))).where(
+                or_(
+                    Subscription.connected_squads.is_(None),
+                    func.jsonb_array_length(cast(Subscription.connected_squads, JSONB)) == 0,
+                )
+            )
+        )
+        never_connected_users = int(never_connected_q.scalar() or 0)
+
+        return {
+            "active_paid_users": active_paid_users,
+            "never_connected_users": never_connected_users,
+        }
+
+    def _user_label(self, user: User) -> str:
+        if getattr(user, "username", None):
+            return f"@{user.username}"
+        parts = []
+        if getattr(user, "first_name", None):
+            parts.append(user.first_name)
+        if getattr(user, "last_name", None):
+            parts.append(user.last_name)
+        if parts:
+            return " ".join(parts)
+        return f"User #{getattr(user, 'id', '?')}"
 
     def _format_period_label(self, start: datetime, end: datetime) -> str:
         start_date = start.astimezone(self._moscow_tz).date()
@@ -362,15 +579,10 @@ class ReportingService:
         if start_date == end_date:
             return start_date.strftime("%d.%m.%Y")
 
-        return (
-            f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
-        )
+        return f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
 
     def _format_amount(self, amount_kopeks: int) -> str:
-        if not amount_kopeks:
-            return "0 ₽"
-
-        rubles = amount_kopeks / 100
+        rubles = (amount_kopeks or 0) / 100
         return f"{rubles:,.2f} ₽".replace(",", " ")
 
 
