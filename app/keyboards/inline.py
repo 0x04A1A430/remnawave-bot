@@ -329,7 +329,7 @@ def get_main_menu_keyboard(
         and getattr(current_subscription, "is_active", False)
     )
     simple_purchase_button = None
-    if settings.SIMPLE_SUBSCRIPTION_ENABLED and not has_active_paid_subscription:
+    if settings.SIMPLE_SUBSCRIPTION_ENABLED:
         simple_purchase_button = InlineKeyboardButton(
             text=texts.MENU_SIMPLE_SUBSCRIPTION,
             callback_data="simple_subscription_purchase",
@@ -346,9 +346,6 @@ def get_main_menu_keyboard(
         subscription_buttons.append(
             InlineKeyboardButton(text=texts.MENU_BUY_SUBSCRIPTION, callback_data="menu_buy")
         )
-        if simple_purchase_button:
-            subscription_buttons.append(simple_purchase_button)
-            simple_purchase_button = None
     
     if subscription_buttons:
         paired_buttons.extend(subscription_buttons)
