@@ -103,6 +103,12 @@ def get_admin_communications_submenu_keyboard(language: str = "ru") -> InlineKey
         ],
         [
             InlineKeyboardButton(
+                text=_t(texts, "ADMIN_COMMUNICATIONS_POLLS", "🗳️ Опросы"),
+                callback_data="admin_polls",
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 text=_t(texts, "ADMIN_COMMUNICATIONS_PROMO_OFFERS", "🎯 Промо-предложения"),
                 callback_data="admin_promo_offers"
             )
