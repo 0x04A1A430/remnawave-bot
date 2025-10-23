@@ -2,7 +2,8 @@
 
 <div align="center">
 
-![Logo](./assets/logo2.svg)
+<img width="1024" height="1024" alt="ChatGPT Image 23 окт  2025 г , 13_18_33" src="https://github.com/user-attachments/assets/17ad0128-231d-4553-9f4b-ce0644da796c" />
+
 
 **🤖 Современный Telegram-бот для управления VPN подписками через Remnawave API**
 
