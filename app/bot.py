@@ -16,18 +16,9 @@ from app.services.maintenance_service import maintenance_service
 from app.utils.cache import cache 
 
 from app.handlers import (
-    start,
-    menu,
-    subscription,
-    balance,
-    promocode,
-    referral,
-    support,
-    server_status,
-    common,
-    tickets,
+    start, menu, subscription, balance, promocode,
+    referral, support, server_status, common, tickets
 )
-from app.handlers import polls as user_polls
 from app.handlers import simple_subscription
 from app.handlers.admin import (
     main as admin_main,
@@ -40,7 +31,6 @@ from app.handlers.admin import (
     rules as admin_rules,
     remnawave as admin_remnawave,
     statistics as admin_statistics,
-    polls as admin_polls,
     servers as admin_servers,
     maintenance as admin_maintenance,
     promo_groups as admin_promo_groups,
@@ -155,7 +145,6 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_rules.register_handlers(dp)
     admin_remnawave.register_handlers(dp)
     admin_statistics.register_handlers(dp)
-    admin_polls.register_handlers(dp)
     admin_promo_groups.register_handlers(dp)
     admin_campaigns.register_handlers(dp)
     admin_promo_offers.register_handlers(dp)
@@ -174,7 +163,6 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_faq.register_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
-    user_polls.register_handlers(dp)
     simple_subscription.register_simple_subscription_handlers(dp)
     logger.info("⭐ Зарегистрированы обработчики Telegram Stars платежей")
     logger.info("⚡ Зарегистрированы обработчики простой покупки")
