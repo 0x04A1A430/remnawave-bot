@@ -3,7 +3,6 @@ import logging
 from datetime import datetime
 
 from aiogram import Dispatcher, F, types
-from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -40,44 +39,6 @@ async def _render_question_text(
     )
     lines = [f"🗳️ <b>{poll_title}</b>", "", header, "", question.text]
     return "\n".join(lines)
-
-
-async def _update_poll_message(
-    message: types.Message,
-    text: str,
-    *,
-    reply_markup: types.InlineKeyboardMarkup | None = None,
-    parse_mode: str | None = "HTML",
-) -> bool:
-    try:
-        await message.edit_text(
-            text,
-            reply_markup=reply_markup,
-            parse_mode=parse_mode,
-        )
-        return True
-    except TelegramBadRequest as error:
-        error_text = str(error).lower()
-        if "message is not modified" in error_text:
-            logger.debug(
-                "Опросное сообщение уже актуально, пропускаем обновление: %s",
-                error,
-            )
-            return True
-
-        logger.warning(
-            "Не удалось обновить сообщение опроса %s: %s",
-            message.message_id,
-            error,
-        )
-    except Exception as error:  # pragma: no cover - defensive logging
-        logger.exception(
-            "Непредвиденная ошибка при обновлении сообщения опроса %s: %s",
-            message.message_id,
-            error,
-        )
-
-    return False
 
 
 def _build_options_keyboard(response_id: int, question: PollQuestion) -> types.InlineKeyboardMarkup:
@@ -137,13 +98,11 @@ async def handle_poll_start(
         db_user.language,
     )
 
-    if not await _update_poll_message(
-        callback.message,
+    await callback.message.edit_text(
         question_text,
         reply_markup=_build_options_keyboard(response.id, question),
-    ):
-        await callback.answer(texts.t("POLL_ERROR", "Не удалось показать вопрос."), show_alert=True)
-        return
+        parse_mode="HTML",
+    )
     await callback.answer()
 
 
@@ -204,13 +163,11 @@ async def handle_poll_answer(
             len(response.poll.questions),
             db_user.language,
         )
-        if not await _update_poll_message(
-            callback.message,
+        await callback.message.edit_text(
             question_text,
             reply_markup=_build_options_keyboard(response.id, next_question),
-        ):
-            await callback.answer(texts.t("POLL_ERROR", "Не удалось показать вопрос."), show_alert=True)
-            return
+            parse_mode="HTML",
+        )
         await callback.answer()
         return
 
@@ -228,12 +185,7 @@ async def handle_poll_answer(
             ).format(amount=settings.format_price(reward_amount))
         )
 
-    if not await _update_poll_message(
-        callback.message,
-        "\n\n".join(thanks_lines),
-    ):
-        await callback.answer(texts.t("POLL_COMPLETED", "🙏 Спасибо за участие в опросе!"))
-        return
+    await callback.message.edit_text("\n\n".join(thanks_lines), parse_mode="HTML")
     asyncio.create_task(
         _delete_message_later(callback.bot, callback.message.chat.id, callback.message.message_id)
     )
