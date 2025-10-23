@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from types import SimpleNamespace
 from typing import Iterable
 
 from aiogram import Bot
@@ -18,7 +17,6 @@ from app.database.models import (
     TransactionType,
     User,
 )
-from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 
 logger = logging.getLogger(__name__)
@@ -72,42 +70,11 @@ async def send_poll_to_users(
     failed = 0
     skipped = 0
 
-    poll_id = poll.id
-    poll_snapshot = SimpleNamespace(
-        title=poll.title,
-        description=poll.description,
-        reward_enabled=poll.reward_enabled,
-        reward_amount_kopeks=poll.reward_amount_kopeks,
-    )
-
-    user_snapshots: list[SimpleNamespace] = []
-    for raw_user in users:
-        try:
-            user_id = getattr(raw_user, "id")
-            telegram_id = getattr(raw_user, "telegram_id")
-        except AttributeError as error:  # pragma: no cover - defensive logging
-            logger.warning("Пропускаем пользователя без обязательных полей: %s", error)
-            continue
-
-        language = getattr(raw_user, "language", None) or DEFAULT_LANGUAGE
-        user_snapshots.append(
-            SimpleNamespace(id=user_id, telegram_id=telegram_id, language=language)
-        )
-
-    for index, user in enumerate(user_snapshots, start=1):
-        if not user.telegram_id:
-            failed += 1
-            logger.error(
-                "❌ Ошибка отправки опроса %s: у пользователя %s отсутствует telegram_id",
-                poll_id,
-                user.id,
-            )
-            continue
-
+    for index, user in enumerate(users, start=1):
         existing_response = await db.execute(
             select(PollResponse.id).where(
                 and_(
-                    PollResponse.poll_id == poll_id,
+                    PollResponse.poll_id == poll.id,
                     PollResponse.user_id == user.id,
                 )
             )
@@ -117,7 +84,7 @@ async def send_poll_to_users(
             continue
 
         response = PollResponse(
-            poll_id=poll_id,
+            poll_id=poll.id,
             user_id=user.id,
         )
         db.add(response)
@@ -125,7 +92,7 @@ async def send_poll_to_users(
         try:
             await db.flush()
 
-            text = _build_poll_invitation_text(poll_snapshot, user)
+            text = _build_poll_invitation_text(poll, user)
             keyboard = build_start_keyboard(response.id, user.language)
 
             await bot.send_message(
@@ -145,7 +112,7 @@ async def send_poll_to_users(
             failed += 1
             logger.error(
                 "❌ Ошибка отправки опроса %s пользователю %s: %s",
-                poll_id,
+                poll.id,
                 user.telegram_id,
                 error,
             )
