@@ -58,11 +58,12 @@ class SubscriptionStatus(Enum):
 
 
 class TransactionType(Enum):
-    DEPOSIT = "deposit"  
-    WITHDRAWAL = "withdrawal"  
-    SUBSCRIPTION_PAYMENT = "subscription_payment"  
-    REFUND = "refund" 
-    REFERRAL_REWARD = "referral_reward"  
+    DEPOSIT = "deposit"
+    WITHDRAWAL = "withdrawal"
+    SUBSCRIPTION_PAYMENT = "subscription_payment"
+    REFUND = "refund"
+    REFERRAL_REWARD = "referral_reward"
+    POLL_REWARD = "poll_reward"
 
 
 class PromoCodeType(Enum):
@@ -530,6 +531,7 @@ class User(Base):
     has_made_first_topup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="RESTRICT"), nullable=False, index=True)
     promo_group = relationship("PromoGroup", back_populates="users")
+    poll_responses = relationship("PollResponse", back_populates="user")
     
     @property
     def balance_rubles(self) -> float:
@@ -1061,9 +1063,9 @@ class PromoOfferLog(Base):
 
 class BroadcastHistory(Base):
     __tablename__ = "broadcast_history"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    target_type = Column(String(100), nullable=False)  
+    target_type = Column(String(100), nullable=False)
     message_text = Column(Text, nullable=False)  
     has_media = Column(Boolean, default=False)
     media_type = Column(String(20), nullable=True) 
@@ -1078,6 +1080,106 @@ class BroadcastHistory(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
     admin = relationship("User", back_populates="broadcasts")
+
+
+class Poll(Base):
+    __tablename__ = "polls"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    reward_enabled = Column(Boolean, nullable=False, default=False)
+    reward_amount_kopeks = Column(Integer, nullable=False, default=0)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    creator = relationship("User", backref="created_polls", foreign_keys=[created_by])
+    questions = relationship(
+        "PollQuestion",
+        back_populates="poll",
+        cascade="all, delete-orphan",
+        order_by="PollQuestion.order",
+    )
+    responses = relationship(
+        "PollResponse",
+        back_populates="poll",
+        cascade="all, delete-orphan",
+    )
+
+
+class PollQuestion(Base):
+    __tablename__ = "poll_questions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    poll_id = Column(Integer, ForeignKey("polls.id", ondelete="CASCADE"), nullable=False, index=True)
+    text = Column(Text, nullable=False)
+    order = Column(Integer, nullable=False, default=0)
+
+    poll = relationship("Poll", back_populates="questions")
+    options = relationship(
+        "PollOption",
+        back_populates="question",
+        cascade="all, delete-orphan",
+        order_by="PollOption.order",
+    )
+    answers = relationship("PollAnswer", back_populates="question")
+
+
+class PollOption(Base):
+    __tablename__ = "poll_options"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question_id = Column(Integer, ForeignKey("poll_questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    text = Column(Text, nullable=False)
+    order = Column(Integer, nullable=False, default=0)
+
+    question = relationship("PollQuestion", back_populates="options")
+    answers = relationship("PollAnswer", back_populates="option")
+
+
+class PollResponse(Base):
+    __tablename__ = "poll_responses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    poll_id = Column(Integer, ForeignKey("polls.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    sent_at = Column(DateTime, default=func.now(), nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    reward_given = Column(Boolean, nullable=False, default=False)
+    reward_amount_kopeks = Column(Integer, nullable=False, default=0)
+
+    poll = relationship("Poll", back_populates="responses")
+    user = relationship("User", back_populates="poll_responses")
+    answers = relationship(
+        "PollAnswer",
+        back_populates="response",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        UniqueConstraint("poll_id", "user_id", name="uq_poll_user"),
+    )
+
+
+class PollAnswer(Base):
+    __tablename__ = "poll_answers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    response_id = Column(Integer, ForeignKey("poll_responses.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey("poll_questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    option_id = Column(Integer, ForeignKey("poll_options.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    response = relationship("PollResponse", back_populates="answers")
+    question = relationship("PollQuestion", back_populates="answers")
+    option = relationship("PollOption", back_populates="answers")
+
+    __table_args__ = (
+        UniqueConstraint("response_id", "question_id", name="uq_poll_answer_unique"),
+    )
+
 
 class ServerSquad(Base):
     __tablename__ = "server_squads"
