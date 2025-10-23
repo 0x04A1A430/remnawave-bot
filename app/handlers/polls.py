@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 
 from aiogram import Dispatcher, F, types
+from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -39,6 +40,63 @@ async def _render_question_text(
     )
     lines = [f"🗳️ <b>{poll_title}</b>", "", header, "", question.text]
     return "\n".join(lines)
+
+
+async def _update_poll_message(
+    message: types.Message,
+    text: str,
+    *,
+    reply_markup: types.InlineKeyboardMarkup | None = None,
+    parse_mode: str | None = "HTML",
+) -> bool:
+    current_markup = None
+    if message.reply_markup is not None:
+        try:
+            current_markup = message.reply_markup.model_dump()
+        except AttributeError:  # pragma: no cover - aiogram v3 compatibility
+            current_markup = message.reply_markup.to_python()
+
+    new_markup = None
+    if reply_markup is not None:
+        try:
+            new_markup = reply_markup.model_dump()
+        except AttributeError:  # pragma: no cover - aiogram v3 compatibility
+            new_markup = reply_markup.to_python()
+
+    if message.text == text and current_markup == new_markup:
+        return True
+
+    try:
+        await message.edit_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode,
+        )
+        message.text = text
+        message.reply_markup = reply_markup
+        return True
+    except TelegramBadRequest as error:
+        error_text = str(error).lower()
+        if "message is not modified" in error_text:
+            logger.debug(
+                "Опросное сообщение уже актуально, пропускаем обновление: %s",
+                error,
+            )
+            return True
+
+        logger.warning(
+            "Не удалось обновить сообщение опроса %s: %s",
+            message.message_id,
+            error,
+        )
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.exception(
+            "Непредвиденная ошибка при обновлении сообщения опроса %s: %s",
+            message.message_id,
+            error,
+        )
+
+    return False
 
 
 def _build_options_keyboard(response_id: int, question: PollQuestion) -> types.InlineKeyboardMarkup:
@@ -98,11 +156,13 @@ async def handle_poll_start(
         db_user.language,
     )
 
-    await callback.message.edit_text(
+    if not await _update_poll_message(
+        callback.message,
         question_text,
         reply_markup=_build_options_keyboard(response.id, question),
-        parse_mode="HTML",
-    )
+    ):
+        await callback.answer(texts.t("POLL_ERROR", "Не удалось показать вопрос."), show_alert=True)
+        return
     await callback.answer()
 
 
@@ -163,12 +223,14 @@ async def handle_poll_answer(
             len(response.poll.questions),
             db_user.language,
         )
-        await callback.message.edit_text(
+        if not await _update_poll_message(
+            callback.message,
             question_text,
             reply_markup=_build_options_keyboard(response.id, next_question),
-            parse_mode="HTML",
-        )
-        await callback.answer()
+        ):
+            await callback.answer(texts.t("POLL_ERROR", "Не удалось показать вопрос."), show_alert=True)
+            return
+        await callback.answer(texts.t("POLL_ANSWER_ACCEPTED", "✅ Ответ принят"))
         return
 
     response.completed_at = datetime.utcnow()
@@ -185,11 +247,16 @@ async def handle_poll_answer(
             ).format(amount=settings.format_price(reward_amount))
         )
 
-    await callback.message.edit_text("\n\n".join(thanks_lines), parse_mode="HTML")
+    if not await _update_poll_message(
+        callback.message,
+        "\n\n".join(thanks_lines),
+    ):
+        await callback.answer(texts.t("POLL_COMPLETED", "🙏 Спасибо за участие в опросе!"))
+        return
     asyncio.create_task(
         _delete_message_later(callback.bot, callback.message.chat.id, callback.message.message_id)
     )
-    await callback.answer()
+    await callback.answer(texts.t("POLL_ANSWER_ACCEPTED", "✅ Ответ принят"))
 
 
 def register_handlers(dp: Dispatcher):
