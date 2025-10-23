@@ -246,6 +246,22 @@ class MulenPayPaymentMixin:
                     f"Пополнение {display_name}: {payment.amount_kopeks // 100}₽",
                 )
 
+                try:
+                    from app.services.referral_service import process_referral_topup
+
+                    await process_referral_topup(
+                        db,
+                        user.id,
+                        payment.amount_kopeks,
+                        getattr(self, "bot", None),
+                    )
+                except Exception as error:
+                    logger.error(
+                        "Ошибка обработки реферального пополнения %s: %s",
+                        display_name,
+                        error,
+                    )
+
                 if was_first_topup and not user.has_made_first_topup:
                     user.has_made_first_topup = True
                     await db.commit()
