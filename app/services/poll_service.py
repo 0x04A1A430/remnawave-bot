@@ -1,10 +1,8 @@
 import asyncio
 import logging
-from types import SimpleNamespace
 from typing import Iterable
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,8 +22,8 @@ from app.localization.texts import get_texts
 logger = logging.getLogger(__name__)
 
 
-def _build_poll_invitation_text(poll: Poll, language: str) -> str:
-    texts = get_texts(language)
+def _build_poll_invitation_text(poll: Poll, user: User) -> str:
+    texts = get_texts(user.language)
 
     lines: list[str] = [f"🗳️ <b>{poll.title}</b>"]
     if poll.description:
@@ -72,28 +70,11 @@ async def send_poll_to_users(
     failed = 0
     skipped = 0
 
-    poll_id = poll.id
-    poll_snapshot = SimpleNamespace(
-        title=poll.title,
-        description=poll.description,
-        reward_enabled=poll.reward_enabled,
-        reward_amount_kopeks=poll.reward_amount_kopeks,
-    )
-
-    user_snapshots = [
-        SimpleNamespace(
-            id=user.id,
-            telegram_id=user.telegram_id,
-            language=user.language,
-        )
-        for user in users
-    ]
-
-    for index, user in enumerate(user_snapshots, start=1):
+    for index, user in enumerate(users, start=1):
         existing_response = await db.execute(
             select(PollResponse.id).where(
                 and_(
-                    PollResponse.poll_id == poll_id,
+                    PollResponse.poll_id == poll.id,
                     PollResponse.user_id == user.id,
                 )
             )
@@ -103,7 +84,7 @@ async def send_poll_to_users(
             continue
 
         response = PollResponse(
-            poll_id=poll_id,
+            poll_id=poll.id,
             user_id=user.id,
         )
         db.add(response)
@@ -111,7 +92,7 @@ async def send_poll_to_users(
         try:
             await db.flush()
 
-            text = _build_poll_invitation_text(poll_snapshot, user.language)
+            text = _build_poll_invitation_text(poll, user)
             keyboard = build_start_keyboard(response.id, user.language)
 
             await bot.send_message(
@@ -127,30 +108,11 @@ async def send_poll_to_users(
 
             if index % 20 == 0:
                 await asyncio.sleep(1)
-        except TelegramBadRequest as error:
-            error_text = str(error).lower()
-            if "chat not found" in error_text or "bot was blocked by the user" in error_text:
-                skipped += 1
-                logger.info(
-                    "ℹ️ Пропуск пользователя %s при отправке опроса %s: %s",
-                    user.telegram_id,
-                    poll_id,
-                    error,
-                )
-            else:  # pragma: no cover - unexpected telegram error
-                failed += 1
-                logger.error(
-                    "❌ Ошибка отправки опроса %s пользователю %s: %s",
-                    poll_id,
-                    user.telegram_id,
-                    error,
-                )
-            await db.rollback()
         except Exception as error:  # pragma: no cover - defensive logging
             failed += 1
             logger.error(
                 "❌ Ошибка отправки опроса %s пользователю %s: %s",
-                poll_id,
+                poll.id,
                 user.telegram_id,
                 error,
             )
