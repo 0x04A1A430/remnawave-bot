@@ -70,6 +70,12 @@ class AdminStates(StatesGroup):
     waiting_for_broadcast_media = State()
     confirming_broadcast = State()
 
+    creating_poll_title = State()
+    creating_poll_description = State()
+    creating_poll_question_text = State()
+    creating_poll_question_options = State()
+    creating_poll_reward_amount = State()
+
     creating_promo_group_name = State()
     creating_promo_group_traffic_discount = State()
     creating_promo_group_server_discount = State()
