@@ -17,7 +17,7 @@ from app.utils.cache import cache
 
 from app.handlers import (
     start, menu, subscription, balance, promocode,
-    referral, support, server_status, common, tickets
+    referral, support, server_status, common, tickets, polls
 )
 from app.handlers import simple_subscription
 from app.handlers.admin import (
@@ -48,6 +48,7 @@ from app.handlers.admin import (
     privacy_policy as admin_privacy_policy,
     public_offer as admin_public_offer,
     faq as admin_faq,
+    polls as admin_polls,
 )
 from app.handlers.stars_payments import register_stars_handlers
 
@@ -134,6 +135,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     support.register_handlers(dp)
     server_status.register_handlers(dp)
     tickets.register_handlers(dp)
+    polls.register_handlers(dp)
     admin_main.register_handlers(dp)
     admin_users.register_handlers(dp)
     admin_subscriptions.register_handlers(dp)
@@ -161,6 +163,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_privacy_policy.register_handlers(dp)
     admin_public_offer.register_handlers(dp)
     admin_faq.register_handlers(dp)
+    admin_polls.register_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
     simple_subscription.register_simple_subscription_handlers(dp)
