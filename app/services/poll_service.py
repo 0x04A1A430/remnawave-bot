@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from types import SimpleNamespace
 from typing import Iterable
 
 from aiogram import Bot
@@ -71,19 +70,11 @@ async def send_poll_to_users(
     failed = 0
     skipped = 0
 
-    poll_id = poll.id
-    poll_snapshot = SimpleNamespace(
-        title=poll.title,
-        description=poll.description,
-        reward_enabled=poll.reward_enabled,
-        reward_amount_kopeks=poll.reward_amount_kopeks,
-    )
-
     for index, user in enumerate(users, start=1):
         existing_response = await db.execute(
             select(PollResponse.id).where(
                 and_(
-                    PollResponse.poll_id == poll_id,
+                    PollResponse.poll_id == poll.id,
                     PollResponse.user_id == user.id,
                 )
             )
@@ -93,7 +84,7 @@ async def send_poll_to_users(
             continue
 
         response = PollResponse(
-            poll_id=poll_id,
+            poll_id=poll.id,
             user_id=user.id,
         )
         db.add(response)
@@ -101,7 +92,7 @@ async def send_poll_to_users(
         try:
             await db.flush()
 
-            text = _build_poll_invitation_text(poll_snapshot, user)
+            text = _build_poll_invitation_text(poll, user)
             keyboard = build_start_keyboard(response.id, user.language)
 
             await bot.send_message(
@@ -121,7 +112,7 @@ async def send_poll_to_users(
             failed += 1
             logger.error(
                 "❌ Ошибка отправки опроса %s пользователю %s: %s",
-                poll_id,
+                poll.id,
                 user.telegram_id,
                 error,
             )
