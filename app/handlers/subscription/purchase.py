@@ -2673,7 +2673,8 @@ async def _extend_existing_subscription(
         current_subscription.device_limit = device_limit
         # Если указан squad_uuid, добавляем его к существующим серверам
         if squad_uuid and squad_uuid not in current_subscription.connected_squads:
-            current_subscription.connected_squads.append(squad_uuid)
+            # Используем += для безопасного добавления в список SQLAlchemy
+            current_subscription.connected_squads = current_subscription.connected_squads + [squad_uuid]
     else:
         # Для обычной подписки просто продлеваем
         # Обновляем трафик и устройства, если нужно
@@ -2683,7 +2684,8 @@ async def _extend_existing_subscription(
             current_subscription.device_limit = device_limit
         # Если указан squad_uuid и его ещё нет в подписке, добавляем
         if squad_uuid and squad_uuid not in current_subscription.connected_squads:
-            current_subscription.connected_squads.append(squad_uuid)
+            # Используем += для безопасного добавления в список SQLAlchemy
+            current_subscription.connected_squads = current_subscription.connected_squads + [squad_uuid]
     
     # Продлеваем подписку
     if current_subscription.end_date > current_time:
