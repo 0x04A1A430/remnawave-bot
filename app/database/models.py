@@ -1061,7 +1061,7 @@ class PromoOfferLog(Base):
 
 class BroadcastHistory(Base):
     __tablename__ = "broadcast_history"
-
+    
     id = Column(Integer, primary_key=True, index=True)
     target_type = Column(String(100), nullable=False)  
     message_text = Column(Text, nullable=False)  
@@ -1078,130 +1078,6 @@ class BroadcastHistory(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
     admin = relationship("User", back_populates="broadcasts")
-
-
-class Poll(Base):
-    __tablename__ = "polls"
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), nullable=False)
-    description = Column(Text, nullable=False)
-    reward_enabled = Column(Boolean, default=False, nullable=False)
-    reward_amount_kopeks = Column(Integer, default=0, nullable=False)
-    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-
-    questions = relationship(
-        "PollQuestion",
-        back_populates="poll",
-        cascade="all, delete-orphan",
-        order_by="PollQuestion.order",
-    )
-    runs = relationship(
-        "PollRun",
-        back_populates="poll",
-        cascade="all, delete-orphan",
-        order_by="PollRun.created_at.desc()",
-    )
-    responses = relationship(
-        "PollResponse",
-        back_populates="poll",
-        cascade="all, delete-orphan",
-    )
-    creator = relationship("User", backref="created_polls")
-
-
-class PollQuestion(Base):
-    __tablename__ = "poll_questions"
-
-    id = Column(Integer, primary_key=True, index=True)
-    poll_id = Column(Integer, ForeignKey("polls.id", ondelete="CASCADE"), nullable=False)
-    order = Column(Integer, nullable=False, default=0)
-    text = Column(Text, nullable=False)
-
-    poll = relationship("Poll", back_populates="questions")
-    options = relationship(
-        "PollOption",
-        back_populates="question",
-        cascade="all, delete-orphan",
-        order_by="PollOption.order",
-    )
-
-
-class PollOption(Base):
-    __tablename__ = "poll_options"
-
-    id = Column(Integer, primary_key=True, index=True)
-    question_id = Column(Integer, ForeignKey("poll_questions.id", ondelete="CASCADE"), nullable=False)
-    order = Column(Integer, nullable=False, default=0)
-    text = Column(String(255), nullable=False)
-
-    question = relationship("PollQuestion", back_populates="options")
-
-
-class PollRun(Base):
-    __tablename__ = "poll_runs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    poll_id = Column(Integer, ForeignKey("polls.id", ondelete="CASCADE"), nullable=False)
-    target_type = Column(String(100), nullable=False)
-    status = Column(String(50), default="scheduled", nullable=False)
-    total_count = Column(Integer, default=0)
-    sent_count = Column(Integer, default=0)
-    failed_count = Column(Integer, default=0)
-    completed_count = Column(Integer, default=0)
-    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
-
-    poll = relationship("Poll", back_populates="runs")
-    creator = relationship("User", backref="created_poll_runs")
-
-
-class PollResponse(Base):
-    __tablename__ = "poll_responses"
-    __table_args__ = (
-        UniqueConstraint("poll_id", "user_id", name="uq_poll_user"),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    poll_id = Column(Integer, ForeignKey("polls.id", ondelete="CASCADE"), nullable=False)
-    run_id = Column(Integer, ForeignKey("poll_runs.id", ondelete="SET NULL"), nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    current_question_id = Column(Integer, ForeignKey("poll_questions.id", ondelete="SET NULL"), nullable=True)
-    message_id = Column(Integer, nullable=True)
-    chat_id = Column(BigInteger, nullable=True)
-    is_completed = Column(Boolean, default=False, nullable=False)
-    reward_given = Column(Boolean, default=False, nullable=False)
-    reward_amount_kopeks = Column(Integer, default=0, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    completed_at = Column(DateTime(timezone=True), nullable=True)
-
-    poll = relationship("Poll", back_populates="responses")
-    run = relationship("PollRun", backref="responses")
-    user = relationship("User", backref="poll_responses")
-    current_question = relationship("PollQuestion")
-    answers = relationship(
-        "PollAnswer",
-        back_populates="response",
-        cascade="all, delete-orphan",
-    )
-
-
-class PollAnswer(Base):
-    __tablename__ = "poll_answers"
-
-    id = Column(Integer, primary_key=True, index=True)
-    response_id = Column(Integer, ForeignKey("poll_responses.id", ondelete="CASCADE"), nullable=False)
-    question_id = Column(Integer, ForeignKey("poll_questions.id", ondelete="CASCADE"), nullable=False)
-    option_id = Column(Integer, ForeignKey("poll_options.id", ondelete="CASCADE"), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    response = relationship("PollResponse", back_populates="answers")
-    question = relationship("PollQuestion")
-    option = relationship("PollOption")
 
 class ServerSquad(Base):
     __tablename__ = "server_squads"
