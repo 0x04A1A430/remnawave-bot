@@ -219,8 +219,7 @@ async def add_user_balance(
     amount_kopeks: int,
     description: str = "Пополнение баланса",
     create_transaction: bool = True,
-    transaction_type: TransactionType = TransactionType.DEPOSIT,
-    bot = None
+    bot = None 
 ) -> bool:
     try:
         old_balance = user.balance_kopeks
@@ -229,11 +228,12 @@ async def add_user_balance(
         
         if create_transaction:
             from app.database.crud.transaction import create_transaction as create_trans
-
+            from app.database.models import TransactionType
+            
             await create_trans(
                 db=db,
                 user_id=user.id,
-                type=transaction_type,
+                type=TransactionType.DEPOSIT,
                 amount_kopeks=amount_kopeks,
                 description=description
             )
@@ -253,10 +253,9 @@ async def add_user_balance(
 
 async def add_user_balance_by_id(
     db: AsyncSession,
-    telegram_id: int,
+    telegram_id: int, 
     amount_kopeks: int,
-    description: str = "Пополнение баланса",
-    transaction_type: TransactionType = TransactionType.DEPOSIT,
+    description: str = "Пополнение баланса"
 ) -> bool:
     try:
         user = await get_user_by_telegram_id(db, telegram_id)
@@ -264,13 +263,7 @@ async def add_user_balance_by_id(
             logger.error(f"Пользователь с telegram_id {telegram_id} не найден")
             return False
         
-        return await add_user_balance(
-            db,
-            user,
-            amount_kopeks,
-            description,
-            transaction_type=transaction_type,
-        )
+        return await add_user_balance(db, user, amount_kopeks, description)
         
     except Exception as e:
         logger.error(f"Ошибка пополнения баланса пользователя {telegram_id}: {e}")
