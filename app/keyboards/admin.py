@@ -96,16 +96,10 @@ def get_admin_promo_submenu_keyboard(language: str = "ru") -> InlineKeyboardMark
 
 def get_admin_communications_submenu_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     texts = get_texts(language)
-
+    
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text=texts.ADMIN_MESSAGES, callback_data="admin_messages")
-        ],
-        [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_COMMUNICATIONS_POLLS", "📋 Опросы"),
-                callback_data="admin_polls"
-            )
         ],
         [
             InlineKeyboardButton(
@@ -975,54 +969,6 @@ def get_broadcast_target_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             )
         ],
         [InlineKeyboardButton(text=texts.BACK, callback_data="admin_messages")]
-    ])
-
-
-def get_poll_target_keyboard(poll_id: int, language: str = "ru") -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_BROADCAST_TARGET_ALL", "👥 Всем"),
-                callback_data=f"poll_target_{poll_id}_all"
-            ),
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_BROADCAST_TARGET_ACTIVE", "📱 С подпиской"),
-                callback_data=f"poll_target_{poll_id}_active"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_BROADCAST_TARGET_TRIAL", "🎁 Триал"),
-                callback_data=f"poll_target_{poll_id}_trial"
-            ),
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_BROADCAST_TARGET_NO_SUB", "❌ Без подписки"),
-                callback_data=f"poll_target_{poll_id}_no"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_BROADCAST_TARGET_EXPIRING", "⏰ Истекающие"),
-                callback_data=f"poll_target_{poll_id}_expiring"
-            ),
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_BROADCAST_TARGET_EXPIRED", "🔚 Истекшие"),
-                callback_data=f"poll_target_{poll_id}_expired"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_BROADCAST_TARGET_ACTIVE_ZERO", "🧊 Активна 0 ГБ"),
-                callback_data=f"poll_target_{poll_id}_active_zero"
-            ),
-            InlineKeyboardButton(
-                text=_t(texts, "ADMIN_BROADCAST_TARGET_TRIAL_ZERO", "🥶 Триал 0 ГБ"),
-                callback_data=f"poll_target_{poll_id}_trial_zero"
-            )
-        ],
-        [InlineKeyboardButton(text=texts.BACK, callback_data=f"admin_poll_{poll_id}")]
     ])
 
 
