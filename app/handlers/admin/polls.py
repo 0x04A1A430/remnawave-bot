@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Optional
 
 from aiogram import Dispatcher, F, types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +39,156 @@ class PollCreationStates(StatesGroup):
     waiting_for_description = State()
     waiting_for_reward = State()
     waiting_for_questions = State()
+
+
+async def _delete_message_safely(message: types.Message) -> None:
+    try:
+        await message.delete()
+    except TelegramBadRequest:
+        pass
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.debug("Failed to delete message: %s", error)
+
+
+def _render_poll_creation_message(
+    texts,
+    data: dict,
+    current_state: str | None,
+    status_message: str | None = None,
+) -> str:
+    missing = object()
+
+    title = data.get("title")
+    description = data.get("description", missing)
+    reward_enabled = data.get("reward_enabled", missing)
+    reward_amount = data.get("reward_amount_kopeks", 0)
+    questions = data.get("questions", [])
+
+    lines: list[str] = [texts.t("ADMIN_POLLS_CREATION_HEADER", "🗳️ <b>Создание опроса</b>"), ""]
+
+    lines.append(texts.t("ADMIN_POLLS_CREATION_TITLE_LABEL", "Введите заголовок опроса:"))
+    if title:
+        lines.append(f"- {html.escape(title)}")
+    lines.append("")
+
+    lines.append(
+        texts.t(
+            "ADMIN_POLLS_CREATION_DESCRIPTION_LABEL",
+            "Введите описание опроса. HTML разрешён.\nОтправьте /skip, чтобы пропустить.",
+        )
+    )
+    lines.append("")
+    lines.append(get_html_help_text())
+    if description is not missing:
+        lines.append("")
+        if description:
+            lines.append(f"- {description}")
+        else:
+            lines.append(
+                texts.t(
+                    "ADMIN_POLLS_CREATION_DESCRIPTION_SKIPPED",
+                    "- <i>Описание пропущено</i>",
+                )
+            )
+    lines.append("")
+
+    lines.append(
+        texts.t(
+            "ADMIN_POLLS_CREATION_REWARD_PROMPT",
+            "Введите сумму награды в рублях. Отправьте 0 чтобы отключить награду.",
+        )
+    )
+    if reward_enabled is not missing:
+        if reward_enabled:
+            lines.append(
+                texts.t("ADMIN_POLLS_CREATION_REWARD_VALUE", "- {amount}").format(
+                    amount=settings.format_price(reward_amount)
+                )
+            )
+        else:
+            lines.append(texts.t("ADMIN_POLLS_CREATION_REWARD_DISABLED_NOTE", "- 0"))
+    lines.append("")
+
+    question_prompt = texts.t(
+        "ADMIN_POLLS_CREATION_QUESTION_PROMPT",
+        (
+            "Введите вопрос и варианты ответов.\n"
+            "Каждая строка — отдельный вариант.\n"
+            "Первая строка — текст вопроса.\n"
+            "Отправьте /done, когда вопросы будут добавлены."
+        ),
+    )
+    lines.append(question_prompt)
+    if questions:
+        for index, question in enumerate(questions, start=1):
+            lines.append("")
+            lines.append(f"{index}. <b>{html.escape(question['text'])}</b>")
+            for option in question["options"]:
+                lines.append(f"• {html.escape(option)}")
+
+    if status_message:
+        lines.extend(["", status_message])
+
+    return "\n".join(lines)
+
+
+async def _edit_prompt_message(
+    bot,
+    data: dict,
+    text: str,
+    reply_markup: types.InlineKeyboardMarkup | None = None,
+) -> None:
+    chat_id = data.get("prompt_chat_id")
+    message_id = data.get("prompt_message_id")
+    if not chat_id or not message_id:
+        return
+
+    try:
+        await bot.edit_message_text(
+            text=text,
+            chat_id=chat_id,
+            message_id=message_id,
+            parse_mode="HTML",
+            reply_markup=reply_markup,
+            disable_web_page_preview=True,
+        )
+    except TelegramBadRequest:
+        pass
+
+
+async def _update_creation_status(
+    bot,
+    state: FSMContext,
+    texts,
+    status_message: str | None = None,
+) -> None:
+    data = await state.get_data()
+    current_state = await state.get_state()
+    text = _render_poll_creation_message(texts, data, current_state, status_message=status_message)
+    await _edit_prompt_message(bot, data, text)
+
+
+async def _cancel_poll_creation(
+    message: types.Message,
+    state: FSMContext,
+    texts,
+    language: str,
+) -> None:
+    await _delete_message_safely(message)
+    data = await state.get_data()
+    prompt_info = {
+        "prompt_chat_id": data.get("prompt_chat_id"),
+        "prompt_message_id": data.get("prompt_message_id"),
+    }
+    await state.clear()
+
+    cancel_text = texts.t("ADMIN_POLLS_CREATION_CANCELLED", "❌ Создание опроса отменено.")
+    keyboard = get_admin_communications_submenu_keyboard(language)
+
+    if prompt_info["prompt_chat_id"] and prompt_info["prompt_message_id"]:
+        await _edit_prompt_message(message.bot, prompt_info, cancel_text, reply_markup=keyboard)
+    else:
+        await message.answer(cancel_text, reply_markup=keyboard)
 
 
 def _build_polls_keyboard(polls: list[Poll], language: str) -> types.InlineKeyboardMarkup:
@@ -277,15 +428,13 @@ async def start_poll_creation(
     texts = get_texts(db_user.language)
     await state.clear()
     await state.set_state(PollCreationStates.waiting_for_title)
-    await state.update_data(questions=[])
-
-    await callback.message.edit_text(
-        texts.t(
-            "ADMIN_POLLS_CREATION_TITLE_PROMPT",
-            "🗳️ <b>Создание опроса</b>\n\nВведите заголовок опроса:",
-        ),
-        parse_mode="HTML",
+    await state.update_data(
+        questions=[],
+        prompt_message_id=callback.message.message_id,
+        prompt_chat_id=callback.message.chat.id,
     )
+
+    await _update_creation_status(callback.bot, state, texts)
     await callback.answer()
 
 
@@ -297,31 +446,31 @@ async def process_poll_title(
     state: FSMContext,
     db: AsyncSession,
 ):
+    texts = get_texts(db_user.language)
+
     if message.text == "/cancel":
-        await state.clear()
-        await message.answer(
-            get_texts(db_user.language).t("ADMIN_POLLS_CREATION_CANCELLED", "❌ Создание опроса отменено."),
-            reply_markup=get_admin_communications_submenu_keyboard(db_user.language),
-        )
+        await _cancel_poll_creation(message, state, texts, db_user.language)
         return
 
     title = message.text.strip()
+    await _delete_message_safely(message)
+
     if not title:
-        await message.answer("❌ Заголовок не может быть пустым. Попробуйте снова.")
+        await _update_creation_status(
+            message.bot,
+            state,
+            texts,
+            status_message=texts.t(
+                "ADMIN_POLLS_CREATION_TITLE_EMPTY",
+                "❌ Заголовок не может быть пустым. Попробуйте снова.",
+            ),
+        )
         return
 
     await state.update_data(title=title)
     await state.set_state(PollCreationStates.waiting_for_description)
 
-    texts = get_texts(db_user.language)
-    await message.answer(
-        texts.t(
-            "ADMIN_POLLS_CREATION_DESCRIPTION_PROMPT",
-            "Введите описание опроса. HTML разрешён.\nОтправьте /skip, чтобы пропустить.",
-        )
-        + f"\n\n{get_html_help_text()}",
-        parse_mode="HTML",
-    )
+    await _update_creation_status(message.bot, state, texts)
 
 
 @admin_required
@@ -335,11 +484,7 @@ async def process_poll_description(
     texts = get_texts(db_user.language)
 
     if message.text == "/cancel":
-        await state.clear()
-        await message.answer(
-            texts.t("ADMIN_POLLS_CREATION_CANCELLED", "❌ Создание опроса отменено."),
-            reply_markup=get_admin_communications_submenu_keyboard(db_user.language),
-        )
+        await _cancel_poll_creation(message, state, texts, db_user.language)
         return
 
     description: Optional[str]
@@ -349,20 +494,23 @@ async def process_poll_description(
         description = message.text.strip()
         is_valid, error_message = validate_html_tags(description)
         if not is_valid:
-            await message.answer(
-                texts.t("ADMIN_POLLS_CREATION_INVALID_HTML", "❌ Ошибка в HTML: {error}").format(error=error_message)
+            await _delete_message_safely(message)
+            await _update_creation_status(
+                message.bot,
+                state,
+                texts,
+                status_message=texts.t(
+                    "ADMIN_POLLS_CREATION_INVALID_HTML",
+                    "❌ Ошибка в HTML: {error}",
+                ).format(error=error_message),
             )
             return
 
+    await _delete_message_safely(message)
     await state.update_data(description=description)
     await state.set_state(PollCreationStates.waiting_for_reward)
 
-    await message.answer(
-        texts.t(
-            "ADMIN_POLLS_CREATION_REWARD_PROMPT",
-            "Введите сумму награды в рублях. Отправьте 0 чтобы отключить награду.",
-        )
-    )
+    await _update_creation_status(message.bot, state, texts)
 
 
 def _parse_reward_amount(message_text: str) -> int | None:
@@ -390,16 +538,22 @@ async def process_poll_reward(
     texts = get_texts(db_user.language)
 
     if message.text == "/cancel":
-        await state.clear()
-        await message.answer(
-            texts.t("ADMIN_POLLS_CREATION_CANCELLED", "❌ Создание опроса отменено."),
-            reply_markup=get_admin_communications_submenu_keyboard(db_user.language),
-        )
+        await _cancel_poll_creation(message, state, texts, db_user.language)
         return
+
+    await _delete_message_safely(message)
 
     reward_kopeks = _parse_reward_amount(message.text)
     if reward_kopeks is None:
-        await message.answer(texts.t("ADMIN_POLLS_CREATION_REWARD_INVALID", "❌ Некорректная сумма. Попробуйте ещё раз."))
+        await _update_creation_status(
+            message.bot,
+            state,
+            texts,
+            status_message=texts.t(
+                "ADMIN_POLLS_CREATION_REWARD_INVALID",
+                "❌ Некорректная сумма. Попробуйте ещё раз.",
+            ),
+        )
         return
 
     reward_enabled = reward_kopeks > 0
@@ -409,16 +563,7 @@ async def process_poll_reward(
     )
     await state.set_state(PollCreationStates.waiting_for_questions)
 
-    prompt = texts.t(
-        "ADMIN_POLLS_CREATION_QUESTION_PROMPT",
-        (
-            "Введите вопрос и варианты ответов.\n"
-            "Каждая строка — отдельный вариант.\n"
-            "Первая строка — текст вопроса.\n"
-            "Отправьте /done, когда вопросы будут добавлены."
-        ),
-    )
-    await message.answer(prompt)
+    await _update_creation_status(message.bot, state, texts)
 
 
 @admin_required
@@ -431,19 +576,23 @@ async def process_poll_question(
 ):
     texts = get_texts(db_user.language)
     if message.text == "/cancel":
-        await state.clear()
-        await message.answer(
-            texts.t("ADMIN_POLLS_CREATION_CANCELLED", "❌ Создание опроса отменено."),
-            reply_markup=get_admin_communications_submenu_keyboard(db_user.language),
-        )
+        await _cancel_poll_creation(message, state, texts, db_user.language)
         return
+
+    await _delete_message_safely(message)
 
     if message.text == "/done":
         data = await state.get_data()
         questions = data.get("questions", [])
         if not questions:
-            await message.answer(
-                texts.t("ADMIN_POLLS_CREATION_NEEDS_QUESTION", "❌ Добавьте хотя бы один вопрос."),
+            await _update_creation_status(
+                message.bot,
+                state,
+                texts,
+                status_message=texts.t(
+                    "ADMIN_POLLS_CREATION_NEEDS_QUESTION",
+                    "❌ Добавьте хотя бы один вопрос.",
+                ),
             )
             return
 
@@ -462,30 +611,48 @@ async def process_poll_question(
             questions=questions,
         )
 
+        reward_text = _format_reward_text(poll, db_user.language)
+        prompt_info = {
+            "prompt_chat_id": data.get("prompt_chat_id"),
+            "prompt_message_id": data.get("prompt_message_id"),
+        }
+        keyboard = _build_polls_keyboard(await list_polls(db), db_user.language)
+        success_text = texts.t(
+            "ADMIN_POLLS_CREATION_FINISHED",
+            "✅ Опрос «{title}» создан. Вопросов: {count}. {reward}",
+        ).format(
+            title=poll.title,
+            count=len(poll.questions),
+            reward=reward_text,
+        )
+
         await state.clear()
 
-        reward_text = _format_reward_text(poll, db_user.language)
-        await message.answer(
-            texts.t(
-                "ADMIN_POLLS_CREATION_FINISHED",
-                "✅ Опрос «{title}» создан. Вопросов: {count}. {reward}",
-            ).format(
-                title=poll.title,
-                count=len(poll.questions),
-                reward=reward_text,
-            ),
-            reply_markup=_build_polls_keyboard(await list_polls(db), db_user.language),
-            parse_mode="HTML",
-        )
+        if prompt_info["prompt_chat_id"] and prompt_info["prompt_message_id"]:
+            await _edit_prompt_message(
+                message.bot,
+                prompt_info,
+                success_text,
+                reply_markup=keyboard,
+            )
+        else:
+            await message.answer(
+                success_text,
+                reply_markup=keyboard,
+                parse_mode="HTML",
+            )
         return
 
     lines = [line.strip() for line in message.text.splitlines() if line.strip()]
     if len(lines) < 3:
-        await message.answer(
-            texts.t(
+        await _update_creation_status(
+            message.bot,
+            state,
+            texts,
+            status_message=texts.t(
                 "ADMIN_POLLS_CREATION_MIN_OPTIONS",
                 "❌ Нужен вопрос и минимум два варианта ответа.",
-            )
+            ),
         )
         return
 
@@ -496,12 +663,14 @@ async def process_poll_question(
     questions.append({"text": question_text, "options": options})
     await state.update_data(questions=questions)
 
-    await message.answer(
-        texts.t(
+    await _update_creation_status(
+        message.bot,
+        state,
+        texts,
+        status_message=texts.t(
             "ADMIN_POLLS_CREATION_ADDED_QUESTION",
             "Вопрос добавлен: «{question}». Добавьте следующий вопрос или отправьте /done.",
-        ).format(question=question_text),
-        parse_mode="HTML",
+        ).format(question=html.escape(question_text)),
     )
 
 
@@ -689,7 +858,7 @@ async def confirm_poll_send(
 
     await callback.message.edit_text(
         result_text,
-        reply_markup=_build_poll_details_keyboard(poll.id, db_user.language),
+        reply_markup=_build_poll_details_keyboard(poll_id, db_user.language),
         parse_mode="HTML",
     )
     await callback.answer()

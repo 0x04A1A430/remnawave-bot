@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Iterable
 
 from aiogram import Bot
@@ -22,7 +23,16 @@ from app.localization.texts import get_texts
 logger = logging.getLogger(__name__)
 
 
-def _build_poll_invitation_text(poll: Poll, user: User) -> str:
+@dataclass(slots=True)
+class _PollSnapshot:
+    id: int
+    title: str
+    description: str | None
+    reward_enabled: bool
+    reward_amount_kopeks: int
+
+
+def _build_poll_invitation_text(poll: _PollSnapshot, user: User) -> str:
     texts = get_texts(user.language)
 
     lines: list[str] = [f"🗳️ <b>{poll.title}</b>"]
@@ -70,11 +80,19 @@ async def send_poll_to_users(
     failed = 0
     skipped = 0
 
+    poll_snapshot = _PollSnapshot(
+        id=poll.id,
+        title=poll.title,
+        description=poll.description,
+        reward_enabled=poll.reward_enabled,
+        reward_amount_kopeks=poll.reward_amount_kopeks,
+    )
+
     for index, user in enumerate(users, start=1):
         existing_response = await db.execute(
             select(PollResponse.id).where(
                 and_(
-                    PollResponse.poll_id == poll.id,
+                    PollResponse.poll_id == poll_snapshot.id,
                     PollResponse.user_id == user.id,
                 )
             )
@@ -84,7 +102,7 @@ async def send_poll_to_users(
             continue
 
         response = PollResponse(
-            poll_id=poll.id,
+            poll_id=poll_snapshot.id,
             user_id=user.id,
         )
         db.add(response)
@@ -92,7 +110,7 @@ async def send_poll_to_users(
         try:
             await db.flush()
 
-            text = _build_poll_invitation_text(poll, user)
+            text = _build_poll_invitation_text(poll_snapshot, user)
             keyboard = build_start_keyboard(response.id, user.language)
 
             await bot.send_message(
@@ -112,7 +130,7 @@ async def send_poll_to_users(
             failed += 1
             logger.error(
                 "❌ Ошибка отправки опроса %s пользователю %s: %s",
-                poll.id,
+                poll_snapshot.id,
                 user.telegram_id,
                 error,
             )
