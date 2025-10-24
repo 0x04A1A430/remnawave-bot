@@ -168,6 +168,8 @@ async def reward_user_for_poll(
     db: AsyncSession,
     response: PollResponse,
 ) -> int:
+    await db.refresh(response, with_for_update=True)
+
     poll = response.poll
     if not poll.reward_enabled or poll.reward_amount_kopeks <= 0:
         return 0
@@ -177,6 +179,9 @@ async def reward_user_for_poll(
 
     user = response.user
     description = f"Награда за участие в опросе \"{poll.title}\""
+
+    response.reward_given = True
+    response.reward_amount_kopeks = poll.reward_amount_kopeks
 
     success = await add_user_balance(
         db,
@@ -189,9 +194,10 @@ async def reward_user_for_poll(
     if not success:
         return 0
 
-    response.reward_given = True
-    response.reward_amount_kopeks = poll.reward_amount_kopeks
-    await db.commit()
+    await db.refresh(
+        response,
+        attribute_names=["reward_given", "reward_amount_kopeks"],
+    )
 
     return poll.reward_amount_kopeks
 
