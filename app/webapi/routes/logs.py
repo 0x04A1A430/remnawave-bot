@@ -1,11 +1,17 @@
 """Маршруты административного API для просмотра логов."""
 from __future__ import annotations
 
+import logging
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Query, Security
+from fastapi import APIRouter, Depends, HTTPException, Query, Security
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.ticket import TicketCRUD
 from app.services.monitoring_service import monitoring_service
 
@@ -17,9 +23,122 @@ from ..schemas.logs import (
     SupportAuditActionsResponse,
     SupportAuditLogEntry,
     SupportAuditLogListResponse,
+    SystemLogPreviewResponse,
 )
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
+
+
+SYSTEM_LOG_PREVIEW_LIMIT_DEFAULT = 4000
+SYSTEM_LOG_PREVIEW_LIMIT_MAX = 20000
+
+
+def _resolve_system_log_path() -> Path:
+    path = Path(settings.LOG_FILE)
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    return path
+
+
+async def _read_system_log(path: Path) -> tuple[str, int, Optional[float]]:
+    def _read() -> tuple[str, int, float]:
+        content = path.read_text(encoding="utf-8", errors="ignore")
+        stats = path.stat()
+        return content, stats.st_size, stats.st_mtime
+
+    return await run_in_threadpool(_read)
+
+
+def _format_timestamp(timestamp: Optional[float]) -> Optional[datetime]:
+    if timestamp is None:
+        return None
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+
+
+@router.get("/system", response_model=SystemLogPreviewResponse)
+async def get_system_log_preview(
+    _: Any = Security(require_api_token),
+    preview_limit: int = Query(
+        SYSTEM_LOG_PREVIEW_LIMIT_DEFAULT,
+        ge=500,
+        le=SYSTEM_LOG_PREVIEW_LIMIT_MAX,
+        description="Количество символов предпросмотра от конца файла",
+    ),
+) -> SystemLogPreviewResponse:
+    """Получить предпросмотр системного лог-файла бота."""
+
+    log_path = _resolve_system_log_path()
+
+    if not log_path.exists() or not log_path.is_file():
+        return SystemLogPreviewResponse(
+            path=str(log_path),
+            exists=False,
+            updated_at=None,
+            size_bytes=0,
+            size_chars=0,
+            preview="",
+            preview_chars=0,
+            preview_truncated=False,
+            download_url="/logs/system/download",
+        )
+
+    try:
+        content, size_bytes, mtime = await _read_system_log(log_path)
+    except FileNotFoundError:
+        logger.warning("Лог-файл %s исчез во время чтения", log_path)
+        return SystemLogPreviewResponse(
+            path=str(log_path),
+            exists=False,
+            updated_at=None,
+            size_bytes=0,
+            size_chars=0,
+            preview="",
+            preview_chars=0,
+            preview_truncated=False,
+            download_url="/logs/system/download",
+        )
+    except Exception as error:  # pragma: no cover - защита от неожиданных ошибок чтения
+        logger.error("Ошибка чтения лог-файла %s: %s", log_path, error)
+        raise HTTPException(status_code=500, detail="Не удалось прочитать лог-файл") from error
+
+    preview_text = content[-preview_limit:] if preview_limit > 0 else ""
+    truncated = len(content) > len(preview_text)
+
+    return SystemLogPreviewResponse(
+        path=str(log_path),
+        exists=True,
+        updated_at=_format_timestamp(mtime),
+        size_bytes=size_bytes,
+        size_chars=len(content),
+        preview=preview_text,
+        preview_chars=len(preview_text),
+        preview_truncated=truncated,
+        download_url="/logs/system/download",
+    )
+
+
+@router.get("/system/download")
+async def download_system_log(
+    _: Any = Security(require_api_token),
+) -> FileResponse:
+    """Скачать полный лог-файл бота."""
+
+    log_path = _resolve_system_log_path()
+
+    if not log_path.exists() or not log_path.is_file():
+        raise HTTPException(status_code=404, detail="Лог-файл не найден")
+
+    try:
+        return FileResponse(
+            log_path,
+            media_type="text/plain",
+            filename=log_path.name,
+        )
+    except Exception as error:  # pragma: no cover - защита от неожиданных ошибок отдачи файла
+        logger.error("Ошибка отправки лог-файла %s: %s", log_path, error)
+        raise HTTPException(status_code=500, detail="Не удалось отправить лог-файл") from error
 
 
 @router.get("/monitoring", response_model=MonitoringLogListResponse)
