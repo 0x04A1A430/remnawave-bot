@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import secrets
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from importlib import import_module
 from typing import Any, Dict, Optional
 
@@ -235,6 +235,9 @@ class HeleketPaymentMixin:
                     paid_at = datetime.fromisoformat(str(paid_at_raw).replace("Z", "+00:00"))
             except (ValueError, TypeError):
                 paid_at = None
+
+        if paid_at and paid_at.tzinfo is not None:
+            paid_at = paid_at.astimezone(timezone.utc).replace(tzinfo=None)
 
         updated_payment = await heleket_crud.update_heleket_payment(
             db,
