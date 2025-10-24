@@ -13,8 +13,9 @@ from .routes import (
     config,
     health,
     main_menu_buttons,
-    promocodes,
     miniapp,
+    polls,
+    promocodes,
     promo_groups,
     promo_offers,
     pages,
@@ -25,6 +26,7 @@ from .routes import (
     tokens,
     transactions,
     users,
+    logs,
 )
 
 
@@ -70,6 +72,12 @@ OPENAPI_TAGS = [
         "description": "Управление промо-предложениями, шаблонами и журналом событий.",
     },
     {
+        "name": "logs",
+        "description": (
+            "Журналы мониторинга бота, действий модераторов поддержки и системный лог-файл."
+        ),
+    },
+    {
         "name": "auth",
         "description": "Управление токенами доступа к административному API.",
     },
@@ -83,6 +91,10 @@ OPENAPI_TAGS = [
     {
         "name": "miniapp",
         "description": "Endpoint для Telegram Mini App с информацией о подписке пользователя.",
+    },
+    {
+        "name": "polls",
+        "description": "Создание опросов, удаление, статистика и ответы пользователей.",
     },
     {
         "name": "pages",
@@ -138,5 +150,7 @@ def create_web_api_app() -> FastAPI:
     app.include_router(tokens.router, prefix="/tokens", tags=["auth"])
     app.include_router(remnawave.router, prefix="/remnawave", tags=["remnawave"])
     app.include_router(miniapp.router, prefix="/miniapp", tags=["miniapp"])
+    app.include_router(polls.router, prefix="/polls", tags=["polls"])
+    app.include_router(logs.router, prefix="/logs", tags=["logs"])
 
     return app

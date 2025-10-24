@@ -3,6 +3,7 @@ from . import (
     health,
     main_menu_buttons,
     miniapp,
+    polls,
     promo_offers,
     pages,
     promo_groups,
@@ -13,6 +14,7 @@ from . import (
     tokens,
     transactions,
     users,
+    logs,
 )
 
 __all__ = [
@@ -20,6 +22,7 @@ __all__ = [
     "health",
     "main_menu_buttons",
     "miniapp",
+    "polls",
     "promo_offers",
     "pages",
     "promo_groups",
@@ -30,4 +33,5 @@ __all__ = [
     "tokens",
     "transactions",
     "users",
+    "logs",
 ]
