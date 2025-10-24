@@ -25,6 +25,7 @@ from .routes import (
     tokens,
     transactions,
     users,
+    logs,
 )
 
 
@@ -68,6 +69,10 @@ OPENAPI_TAGS = [
     {
         "name": "promo-offers",
         "description": "Управление промо-предложениями, шаблонами и журналом событий.",
+    },
+    {
+        "name": "logs",
+        "description": "Журналы мониторинга бота и действий модераторов поддержки.",
     },
     {
         "name": "auth",
@@ -138,5 +143,6 @@ def create_web_api_app() -> FastAPI:
     app.include_router(tokens.router, prefix="/tokens", tags=["auth"])
     app.include_router(remnawave.router, prefix="/remnawave", tags=["remnawave"])
     app.include_router(miniapp.router, prefix="/miniapp", tags=["miniapp"])
+    app.include_router(logs.router, prefix="/logs", tags=["logs"])
 
     return app

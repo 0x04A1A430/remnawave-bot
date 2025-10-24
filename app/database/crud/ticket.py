@@ -333,18 +333,42 @@ class TicketCRUD:
         *,
         limit: int = 50,
         offset: int = 0,
+        action: Optional[str] = None,
     ) -> List[SupportAuditLog]:
         from sqlalchemy import select, desc
-        result = await db.execute(
-            select(SupportAuditLog).order_by(desc(SupportAuditLog.created_at)).offset(offset).limit(limit)
-        )
+
+        query = select(SupportAuditLog).order_by(desc(SupportAuditLog.created_at))
+
+        if action:
+            query = query.where(SupportAuditLog.action == action)
+
+        result = await db.execute(query.offset(offset).limit(limit))
         return result.scalars().all()
 
     @staticmethod
-    async def count_support_audit(db: AsyncSession) -> int:
+    async def count_support_audit(db: AsyncSession, action: Optional[str] = None) -> int:
         from sqlalchemy import select, func
-        result = await db.execute(select(func.count()).select_from(SupportAuditLog))
+
+        query = select(func.count()).select_from(SupportAuditLog)
+
+        if action:
+            query = query.where(SupportAuditLog.action == action)
+
+        result = await db.execute(query)
         return int(result.scalar() or 0)
+
+    @staticmethod
+    async def list_support_audit_actions(db: AsyncSession) -> List[str]:
+        from sqlalchemy import select
+
+        result = await db.execute(
+            select(SupportAuditLog.action)
+            .where(SupportAuditLog.action.isnot(None))
+            .distinct()
+            .order_by(SupportAuditLog.action)
+        )
+
+        return [row[0] for row in result.fetchall()]
     
     @staticmethod
     async def get_open_tickets_count(db: AsyncSession) -> int:

@@ -1759,26 +1759,43 @@ class MonitoringService:
             return []
 
     async def get_monitoring_logs_count(
-        self, 
+        self,
         db: AsyncSession,
         event_type: Optional[str] = None
     ) -> int:
         try:
             from sqlalchemy import select, func
-            
+
             query = select(func.count(MonitoringLog.id))
-            
+
             if event_type:
                 query = query.where(MonitoringLog.event_type == event_type)
-            
+
             result = await db.execute(query)
             count = result.scalar()
-            
+
             return count or 0
-            
+
         except Exception as e:
             logger.error(f"Ошибка получения количества логов: {e}")
             return 0
+
+    async def get_monitoring_event_types(self, db: AsyncSession) -> List[str]:
+        try:
+            from sqlalchemy import select
+
+            result = await db.execute(
+                select(MonitoringLog.event_type)
+                .where(MonitoringLog.event_type.isnot(None))
+                .distinct()
+                .order_by(MonitoringLog.event_type)
+            )
+
+            return [row[0] for row in result.fetchall() if row[0]]
+
+        except Exception as e:
+            logger.error(f"Ошибка получения списка типов событий мониторинга: {e}")
+            return []
     
     async def cleanup_old_logs(self, db: AsyncSession, days: int = 30) -> int:
         try:
