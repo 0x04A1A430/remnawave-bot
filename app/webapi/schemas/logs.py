@@ -63,3 +63,28 @@ class SupportAuditActionsResponse(BaseModel):
     """Ответ со списком доступных действий аудита поддержки."""
 
     items: List[str] = Field(default_factory=list)
+
+
+class SystemLogPreviewResponse(BaseModel):
+    """Ответ с превью системного лог-файла бота."""
+
+    path: str = Field(..., description="Абсолютный путь до лог-файла")
+    exists: bool = Field(..., description="Флаг наличия лог-файла")
+    updated_at: Optional[datetime] = Field(
+        default=None,
+        description="Дата и время последнего изменения лог-файла",
+    )
+    size_bytes: int = Field(..., ge=0, description="Размер лог-файла в байтах")
+    size_chars: int = Field(..., ge=0, description="Количество символов в лог-файле")
+    preview: str = Field(
+        default="",
+        description="Фрагмент содержимого лог-файла, возвращаемый для предпросмотра",
+    )
+    preview_chars: int = Field(..., ge=0, description="Размер предпросмотра в символах")
+    preview_truncated: bool = Field(
+        ..., description="Флаг усечения предпросмотра относительно полного файла"
+    )
+    download_url: Optional[str] = Field(
+        default=None,
+        description="Относительный путь до endpoint для скачивания лог-файла",
+    )
