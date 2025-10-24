@@ -263,35 +263,3 @@ async def get_poll_statistics(db: AsyncSession, poll_id: int) -> dict:
         "reward_sum_kopeks": reward_sum,
         "questions": questions,
     }
-
-
-async def get_poll_responses_with_answers(
-    db: AsyncSession,
-    poll_id: int,
-    *,
-    limit: int,
-    offset: int,
-) -> tuple[list[PollResponse], int]:
-    total_result = await db.execute(
-        select(func.count()).select_from(PollResponse).where(PollResponse.poll_id == poll_id)
-    )
-    total = int(total_result.scalar_one() or 0)
-
-    if total == 0:
-        return [], 0
-
-    result = await db.execute(
-        select(PollResponse)
-        .options(
-            selectinload(PollResponse.user),
-            selectinload(PollResponse.answers).selectinload(PollAnswer.question),
-            selectinload(PollResponse.answers).selectinload(PollAnswer.option),
-        )
-        .where(PollResponse.poll_id == poll_id)
-        .order_by(PollResponse.sent_at.asc())
-        .offset(offset)
-        .limit(limit)
-    )
-
-    responses = result.scalars().unique().all()
-    return responses, total
