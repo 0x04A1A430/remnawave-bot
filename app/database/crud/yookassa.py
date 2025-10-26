@@ -1,9 +1,8 @@
 import logging
-from datetime import datetime, timedelta
 from typing import Optional, List
-
-from sqlalchemy import select, update, and_
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, and_
 from sqlalchemy.orm import selectinload
 
 from app.database.models import YooKassaPayment, User, Transaction
@@ -164,22 +163,15 @@ async def get_user_yookassa_payments(
 async def get_pending_yookassa_payments(
     db: AsyncSession,
     user_id: Optional[int] = None,
-    limit: int = 100,
-    max_age_hours: int = 24,
+    limit: int = 100
 ) -> List[YooKassaPayment]:
-
+    
     query = select(YooKassaPayment).options(selectinload(YooKassaPayment.user))
-
-    cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
-
-    conditions = [
-        YooKassaPayment.status.in_(["pending", "waiting_for_capture"]),
-        YooKassaPayment.is_paid.is_(False),
-        YooKassaPayment.created_at >= cutoff,
-    ]
+    
+    conditions = [YooKassaPayment.status.in_(["pending", "waiting_for_capture"])]
     if user_id:
         conditions.append(YooKassaPayment.user_id == user_id)
-
+    
     result = await db.execute(
         query.where(and_(*conditions))
         .order_by(YooKassaPayment.created_at.desc())
