@@ -1069,12 +1069,16 @@ async def confirm_extend_subscription(
 
         # Подготовим данные для сохранения в корзину
         cart_data = {
+            'cart_mode': 'extend',
+            'subscription_id': subscription.id,
             'period_days': days,
             'total_price': price,
             'user_id': db_user.id,
             'saved_cart': True,
             'missing_amount': missing_kopeks,
-            'return_to_cart': True
+            'return_to_cart': True,
+            'description': f"Продление подписки на {days} дней",
+            'consume_promo_offer': bool(promo_component["discount"] > 0),
         }
         
         await user_cart_service.save_user_cart(db_user.id, cart_data)
@@ -2624,12 +2628,19 @@ async def _extend_existing_subscription(
         # Подготовим данные для сохранения в корзину
         from app.services.user_cart_service import user_cart_service
         cart_data = {
+            'cart_mode': 'extend',
+            'subscription_id': current_subscription.id,
             'period_days': period_days,
             'total_price': price_kopeks,
             'user_id': db_user.id,
             'saved_cart': True,
             'missing_amount': missing_kopeks,
-            'return_to_cart': True
+            'return_to_cart': True,
+            'description': f"Продление подписки на {period_days} дней",
+            'device_limit': device_limit,
+            'traffic_limit_gb': traffic_limit_gb,
+            'squad_uuid': squad_uuid,
+            'consume_promo_offer': False,
         }
         
         await user_cart_service.save_user_cart(db_user.id, cart_data)
