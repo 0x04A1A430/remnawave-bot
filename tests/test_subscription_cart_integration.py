@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, User as TgUser, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.handlers.subscription.purchase import save_cart_and_redirect_to_topup, return_to_saved_cart, clear_saved_cart
+from app.handlers.subscription.autopay import handle_subscription_cancel
 from app.database.models import User, Subscription
 
 @pytest.fixture
@@ -208,3 +209,25 @@ async def test_clear_saved_cart(mock_callback_query, mock_state, mock_user, mock
 
         # Проверяем, что вызван answer
         mock_callback_query.answer.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_handle_subscription_cancel_clears_saved_cart(mock_callback_query, mock_state, mock_user, mock_db):
+    """Отмена покупки должна очищать сохраненную корзину"""
+    mock_clear_draft = AsyncMock()
+    mock_show_main_menu = AsyncMock()
+
+    with patch('app.handlers.subscription.autopay.user_cart_service') as mock_cart_service, \
+         patch('app.handlers.subscription.autopay.clear_subscription_checkout_draft', new=mock_clear_draft), \
+         patch('app.localization.texts.get_texts', return_value=MagicMock()) as _, \
+         patch('app.handlers.menu.show_main_menu', new=mock_show_main_menu):
+
+        mock_cart_service.delete_user_cart = AsyncMock(return_value=True)
+
+        await handle_subscription_cancel(mock_callback_query, mock_state, mock_user, mock_db)
+
+        mock_state.clear.assert_called_once()
+        mock_clear_draft.assert_awaited_once_with(mock_user.id)
+        mock_cart_service.delete_user_cart.assert_awaited_once_with(mock_user.id)
+        mock_show_main_menu.assert_awaited_once_with(mock_callback_query, mock_user, mock_db)
+        mock_callback_query.answer.assert_called_once_with("❌ Покупка отменена")
+
