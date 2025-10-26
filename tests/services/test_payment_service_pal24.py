@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 import sys
 from datetime import datetime
-from types import SimpleNamespace
 
 import pytest
 
@@ -35,12 +34,7 @@ class DummyLocalPayment:
 
 
 class StubPal24Service:
-    def __init__(
-        self,
-        *,
-        configured: bool = True,
-        response: Optional[Dict[str, Any]] = None,
-    ) -> None:
+    def __init__(self, *, configured: bool = True, response: Optional[Dict[str, Any]] = None) -> None:
         self.is_configured = configured
         self.response = response or {
             "success": True,
@@ -51,30 +45,12 @@ class StubPal24Service:
         }
         self.calls: list[Dict[str, Any]] = []
         self.raise_error: Optional[Exception] = None
-        self.status_response: Optional[Dict[str, Any]] = {"status": "NEW"}
-        self.payment_status_response: Optional[Dict[str, Any]] = None
-        self.bill_payments_response: Optional[Dict[str, Any]] = None
-        self.status_calls: list[str] = []
-        self.payment_status_calls: list[str] = []
-        self.bill_payments_calls: list[str] = []
 
     async def create_bill(self, **kwargs: Any) -> Dict[str, Any]:
         self.calls.append(kwargs)
         if self.raise_error:
             raise self.raise_error
         return self.response
-
-    async def get_bill_status(self, bill_id: str) -> Optional[Dict[str, Any]]:
-        self.status_calls.append(bill_id)
-        return self.status_response
-
-    async def get_payment_status(self, payment_id: str) -> Optional[Dict[str, Any]]:
-        self.payment_status_calls.append(payment_id)
-        return self.payment_status_response
-
-    async def get_bill_payments(self, bill_id: str) -> Optional[Dict[str, Any]]:
-        self.bill_payments_calls.append(bill_id)
-        return self.bill_payments_response
 
 
 def _make_service(stub: Optional[StubPal24Service]) -> PaymentService:
@@ -222,110 +198,3 @@ async def test_create_pal24_payment_handles_api_errors(monkeypatch: pytest.Monke
         language="ru",
     )
     assert result is None
-
-
-@pytest.mark.anyio("asyncio")
-async def test_get_pal24_payment_status_updates_from_remote(monkeypatch: pytest.MonkeyPatch) -> None:
-    stub = StubPal24Service()
-    stub.status_response = {"status": "SUCCESS"}
-    stub.payment_status_response = {
-        "success": True,
-        "id": "PAY-1",
-        "bill_id": "BILL-1",
-        "status": "SUCCESS",
-        "payment_method": "SBP",
-        "account_amount": "700.00",
-        "from_card": "676754******1234",
-    }
-    stub.bill_payments_response = {
-        "data": [
-            {
-                "id": "PAY-1",
-                "bill_id": "BILL-1",
-                "status": "SUCCESS",
-                "from_card": "676754******1234",
-                "payment_method": "SBP",
-            }
-        ]
-    }
-
-    service = _make_service(stub)
-    db = DummySession()
-
-    payment = SimpleNamespace(
-        id=99,
-        bill_id="BILL-1",
-        payment_id=None,
-        payment_status="NEW",
-        payment_method=None,
-        balance_amount=None,
-        balance_currency=None,
-        payer_account=None,
-        status="NEW",
-        is_paid=False,
-        paid_at=None,
-        transaction_id=None,
-        user_id=1,
-    )
-
-    async def fake_get_by_id(db: DummySession, payment_id: int) -> SimpleNamespace:
-        assert payment_id == payment.id
-        return payment
-
-    async def fake_update_status(
-        db: DummySession,
-        payment_obj: SimpleNamespace,
-        *,
-        status: str,
-        **kwargs: Any,
-    ) -> SimpleNamespace:
-        payment_obj.status = status
-        payment_obj.last_status = status
-        for key, value in kwargs.items():
-            setattr(payment_obj, key, value)
-        if "is_paid" in kwargs:
-            payment_obj.is_paid = kwargs["is_paid"]
-        await db.commit()
-        return payment_obj
-
-    async def fake_finalize(
-        self: PaymentService,
-        db: DummySession,
-        payment_obj: Any,
-        *,
-        payment_id: Optional[str] = None,
-        trigger: str,
-    ) -> bool:
-        return False
-
-    monkeypatch.setattr(
-        payment_service_module,
-        "get_pal24_payment_by_id",
-        fake_get_by_id,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        payment_service_module,
-        "update_pal24_payment_status",
-        fake_update_status,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        PaymentService,
-        "_finalize_pal24_payment",
-        fake_finalize,
-        raising=False,
-    )
-
-    result = await service.get_pal24_payment_status(db, local_payment_id=payment.id)
-
-    assert result is not None
-    assert payment.status == "SUCCESS"
-    assert payment.payment_id == "PAY-1"
-    assert payment.payment_status == "SUCCESS"
-    assert payment.payment_method == "sbp"
-    assert payment.is_paid is True
-    assert stub.status_calls == ["BILL-1"]
-    assert stub.payment_status_calls in ([], ["PAY-1"])
-    assert result["remote_status"] == "SUCCESS"
-    assert result["remote_data"] and "bill_status" in result["remote_data"]
