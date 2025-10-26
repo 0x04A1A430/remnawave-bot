@@ -529,6 +529,7 @@ class User(Base):
     vless_uuid = Column(String(255), nullable=True)
     ss_password = Column(String(255), nullable=True)
     has_made_first_topup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    auto_purchase_after_topup_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="RESTRICT"), nullable=False, index=True)
     promo_group = relationship("PromoGroup", back_populates="users")
     poll_responses = relationship("PollResponse", back_populates="user")

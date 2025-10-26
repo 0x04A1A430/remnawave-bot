@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
+from app.services.auto_purchase_service import try_auto_purchase_after_topup
+from app.services.user_cart_service import user_cart_service
 from app.utils.user_utils import format_referrer_info
 
 logger = logging.getLogger(__name__)
@@ -323,11 +325,19 @@ class MulenPayPaymentMixin:
 
                 # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
                 try:
-                    from app.services.user_cart_service import user_cart_service
+                    autopurchase_result = await try_auto_purchase_after_topup(db, user, getattr(self, "bot", None))
+                    if autopurchase_result.triggered:
+                        logger.info(
+                            "Автопокупка после пополнения %s для пользователя %s",
+                            "успешна" if autopurchase_result.success else "не выполнена",
+                            user.id,
+                        )
+                        return True
+
                     from aiogram import types
                     has_saved_cart = await user_cart_service.has_user_cart(user.id)
                     if has_saved_cart and getattr(self, "bot", None):
-                        # Если у пользователя есть сохраненная корзина, 
+                        # Если у пользователя есть сохраненная корзина,
                         # отправляем ему уведомление с кнопкой вернуться к оформлению
                         from app.localization.texts import get_texts
                         
