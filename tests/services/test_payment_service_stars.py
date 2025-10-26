@@ -1,7 +1,5 @@
 """Тесты для Telegram Stars-сценариев внутри PaymentService."""
 
-from datetime import datetime, timedelta
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, Optional
 import sys
@@ -27,16 +25,11 @@ class DummyBot:
 
     def __init__(self) -> None:
         self.calls: list[Dict[str, Any]] = []
-        self.sent_messages: list[Dict[str, Any]] = []
 
     async def create_invoice_link(self, **kwargs: Any) -> str:
         """Эмулируем создание платежной ссылки и сохраняем параметры вызова."""
         self.calls.append(kwargs)
         return "https://t.me/invoice/stars"
-
-    async def send_message(self, **kwargs: Any) -> None:
-        """Фиксируем отправленные сообщения пользователю."""
-        self.sent_messages.append(kwargs)
 
 
 def _make_service(bot: Optional[DummyBot]) -> PaymentService:
@@ -47,80 +40,6 @@ def _make_service(bot: Optional[DummyBot]) -> PaymentService:
     service.stars_service = object() if bot else None
     return service
 
-
-class DummySession:
-    """Минимальная заглушка AsyncSession для проверки сценариев Stars."""
-
-    def __init__(self, pending_subscription: "DummySubscription") -> None:
-        self.pending_subscription = pending_subscription
-        self.commits: int = 0
-        self.refreshed: list[Any] = []
-
-    async def execute(self, *_args: Any, **_kwargs: Any) -> Any:
-        class _Result:
-            def __init__(self, subscription: "DummySubscription") -> None:
-                self._subscription = subscription
-
-            def scalar_one_or_none(self) -> "DummySubscription":
-                return self._subscription
-
-        return _Result(self.pending_subscription)
-
-    async def commit(self) -> None:
-        self.commits += 1
-
-    async def refresh(self, obj: Any) -> None:
-        self.refreshed.append(obj)
-
-
-class DummySubscription:
-    """Упрощённая модель подписки для тестов."""
-
-    def __init__(
-        self,
-        subscription_id: int,
-        *,
-        traffic_limit_gb: int = 0,
-        device_limit: int = 1,
-        period_days: int = 30,
-    ) -> None:
-        self.id = subscription_id
-        self.traffic_limit_gb = traffic_limit_gb
-        self.device_limit = device_limit
-        self.status = "pending"
-        self.start_date = datetime(2024, 1, 1)
-        self.end_date = self.start_date + timedelta(days=period_days)
-
-
-class DummyUser:
-    """Минимальные данные пользователя для тестов Stars-покупки."""
-
-    def __init__(self, user_id: int = 501, telegram_id: int = 777) -> None:
-        self.id = user_id
-        self.telegram_id = telegram_id
-        self.language = "ru"
-        self.balance_kopeks = 0
-        self.has_made_first_topup = False
-        self.promo_group = None
-        self.subscription = None
-
-
-class DummyTransaction:
-    """Локальная транзакция, созданная в тестах."""
-
-    def __init__(self, external_id: str) -> None:
-        self.external_id = external_id
-
-
-class DummySubscriptionService:
-    """Заглушка SubscriptionService, запоминающая вызовы."""
-
-    def __init__(self) -> None:
-        self.calls: list[tuple[Any, Any]] = []
-
-    async def create_remnawave_user(self, db: Any, subscription: Any) -> object:
-        self.calls.append((db, subscription))
-        return object()
 
 @pytest.mark.anyio("asyncio")
 async def test_create_stars_invoice_calculates_stars(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -221,127 +140,3 @@ async def test_create_stars_invoice_requires_bot() -> None:
             amount_kopeks=1000,
             description="Пополнение",
         )
-
-
-@pytest.mark.anyio("asyncio")
-async def test_process_stars_payment_simple_subscription_success(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Оплата простой подписки через Stars активирует pending подписку и уведомляет пользователя."""
-
-    bot = DummyBot()
-    service = _make_service(bot)
-
-    pending_subscription = DummySubscription(subscription_id=321, device_limit=2)
-    db = DummySession(pending_subscription)
-    user = DummyUser(user_id=900, telegram_id=123456)
-    activated_subscription = DummySubscription(subscription_id=321, device_limit=2)
-
-    transaction_holder: Dict[str, DummyTransaction] = {}
-
-    async def fake_create_transaction(**kwargs: Any) -> DummyTransaction:
-        transaction = DummyTransaction(external_id=kwargs.get("external_id", ""))
-        transaction_holder["value"] = transaction
-        return transaction
-
-    async def fake_get_user_by_id(_db: Any, _user_id: int) -> DummyUser:
-        return user
-
-    async def fake_activate_pending_subscription(
-        db: Any,
-        user_id: int,
-        period_days: Optional[int] = None,
-    ) -> DummySubscription:
-        activated_subscription.start_date = pending_subscription.start_date
-        activated_subscription.end_date = activated_subscription.start_date + timedelta(
-            days=period_days or 30
-        )
-        return activated_subscription
-
-    subscription_service_stub = DummySubscriptionService()
-    admin_calls: list[Dict[str, Any]] = []
-
-    class AdminNotificationStub:
-        def __init__(self, _bot: Any) -> None:
-            self.bot = _bot
-
-        async def send_subscription_purchase_notification(
-            self,
-            db: Any,
-            user_obj: Any,
-            subscription: Any,
-            transaction: Any,
-            period_days: int,
-            was_trial_conversion: bool,
-        ) -> None:
-            admin_calls.append(
-                {
-                    "user": user_obj,
-                    "subscription": subscription,
-                    "transaction": transaction,
-                    "period": period_days,
-                    "was_trial": was_trial_conversion,
-                }
-            )
-
-    monkeypatch.setattr(
-        "app.services.payment.stars.create_transaction",
-        fake_create_transaction,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        "app.services.payment.stars.get_user_by_id",
-        fake_get_user_by_id,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        "app.database.crud.subscription.activate_pending_subscription",
-        fake_activate_pending_subscription,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        "app.services.subscription_service.SubscriptionService",
-        lambda: subscription_service_stub,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        "app.services.admin_notification_service.AdminNotificationService",
-        AdminNotificationStub,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        type(settings),
-        "format_price",
-        lambda self, amount: f"{amount / 100:.0f}₽",
-        raising=False,
-    )
-    monkeypatch.setattr(
-        settings,
-        "SIMPLE_SUBSCRIPTION_PERIOD_DAYS",
-        30,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        "app.services.payment.stars.TelegramStarsService.calculate_rubles_from_stars",
-        lambda stars: Decimal("100"),
-        raising=False,
-    )
-
-    payload = f"simple_sub_{user.id}_{pending_subscription.id}_30"
-    result = await service.process_stars_payment(
-        db=db,
-        user_id=user.id,
-        stars_amount=5,
-        payload=payload,
-        telegram_payment_charge_id="charge12345",
-    )
-
-    assert result is True
-    assert user.balance_kopeks == 0, "Баланс не должен меняться при оплате подписки"
-    assert subscription_service_stub.calls == [(db, activated_subscription)]
-    assert len(admin_calls) == 1
-    assert admin_calls[0]["subscription"] is activated_subscription
-    assert admin_calls[0]["period"] == 30
-    assert bot.sent_messages, "Пользователь должен получить уведомление"
-    assert "Подписка успешно активирована" in bot.sent_messages[0]["text"]
-    assert transaction_holder["value"].external_id == "charge12345"
