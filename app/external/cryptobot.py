@@ -19,10 +19,10 @@ class CryptoBotService:
         self.webhook_secret = settings.CRYPTOBOT_WEBHOOK_SECRET
     
     async def _make_request(
-        self,
-        method: str,
-        endpoint: str,
-        data: Optional[Dict] = None,
+        self, 
+        method: str, 
+        endpoint: str, 
+        data: Optional[Dict] = None
     ) -> Optional[Dict[str, Any]]:
         
         if not self.api_token:
@@ -37,18 +37,11 @@ class CryptoBotService:
         
         try:
             async with aiohttp.ClientSession() as session:
-                request_kwargs: Dict[str, Any] = {"headers": headers}
-
-                if method.upper() == "GET":
-                    if data:
-                        request_kwargs["params"] = data
-                elif data:
-                    request_kwargs["json"] = data
-
                 async with session.request(
-                    method,
-                    url,
-                    **request_kwargs,
+                    method, 
+                    url, 
+                    headers=headers,
+                    json=data if data else None
                 ) as response:
                     
                     response_data = await response.json()
@@ -102,34 +95,21 @@ class CryptoBotService:
         asset: Optional[str] = None,
         status: Optional[str] = None,
         offset: int = 0,
-        count: int = 100,
-        invoice_ids: Optional[list] = None,
+        count: int = 100
     ) -> Optional[list]:
-
+        
         data = {
             'offset': offset,
             'count': count
         }
-
+        
         if asset:
             data['asset'] = asset
-
+        
         if status:
             data['status'] = status
-
-        if invoice_ids:
-            data['invoice_ids'] = invoice_ids
-
-        result = await self._make_request('GET', 'getInvoices', data)
-
-        if isinstance(result, dict):
-            items = result.get('items')
-            return items if isinstance(items, list) else []
-
-        if isinstance(result, list):
-            return result
-
-        return []
+        
+        return await self._make_request('GET', 'getInvoices', data)
     
     async def get_balance(self) -> Optional[list]:
         return await self._make_request('GET', 'getBalance')
