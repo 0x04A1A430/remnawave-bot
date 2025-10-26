@@ -1,6 +1,7 @@
 import html
 import logging
 from aiogram import Dispatcher, types, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -182,15 +183,36 @@ async def show_payment_methods(
     state: FSMContext
 ):
     from app.utils.payment_utils import get_payment_methods_text
-    
+
     texts = get_texts(db_user.language)
     payment_text = get_payment_methods_text(db_user.language)
-    
-    await callback.message.edit_text(
-        payment_text,
-        reply_markup=get_payment_methods_keyboard(0, db_user.language), 
-        parse_mode="HTML"
-    )
+
+    keyboard = get_payment_methods_keyboard(0, db_user.language)
+
+    try:
+        await callback.message.edit_text(
+            payment_text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    except TelegramBadRequest:
+        try:
+            await callback.message.edit_caption(
+                payment_text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        except TelegramBadRequest:
+            try:
+                await callback.message.delete()
+            except TelegramBadRequest:
+                pass
+            await callback.message.answer(
+                payment_text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+
     await callback.answer()
 
 
