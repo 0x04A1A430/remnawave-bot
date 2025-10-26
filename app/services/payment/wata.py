@@ -12,6 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
+from app.services.subscription_auto_purchase_service import (
+    auto_purchase_saved_cart_after_topup,
+)
 from app.services.wata_service import WataAPIError, WataService
 from app.utils.user_utils import format_referrer_info
 
@@ -524,6 +527,25 @@ class WataPaymentMixin:
             from aiogram import types
 
             has_saved_cart = await user_cart_service.has_user_cart(user.id)
+            auto_purchase_success = False
+            if has_saved_cart:
+                try:
+                    auto_purchase_success = await auto_purchase_saved_cart_after_topup(
+                        db,
+                        user,
+                        bot=getattr(self, "bot", None),
+                    )
+                except Exception as auto_error:
+                    logger.error(
+                        "Ошибка автоматической покупки подписки для пользователя %s: %s",
+                        user.id,
+                        auto_error,
+                        exc_info=True,
+                    )
+
+                if auto_purchase_success:
+                    has_saved_cart = False
+
             if has_saved_cart and getattr(self, "bot", None):
                 from app.localization.texts import get_texts
 
