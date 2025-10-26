@@ -101,58 +101,6 @@ class PaymentCommonMixin:
             db=db,
         )
 
-        if settings.is_autobuy_after_topup_enabled():
-            full_user = user
-            session_for_purchase: AsyncSession | None = db
-
-            if full_user is None and db is not None:
-                try:
-                    full_user = await get_user_by_telegram_id(db, telegram_id)
-                except Exception as fetch_error:
-                    logger.warning(
-                        "Не удалось получить пользователя %s из переданной сессии для автопокупки: %s",
-                        telegram_id,
-                        fetch_error,
-                    )
-
-            if full_user is None:
-                try:
-                    async for db_session in get_db():
-                        try:
-                            full_user = await get_user_by_telegram_id(db_session, telegram_id)
-                            session_for_purchase = db_session
-                        except Exception as fetch_error:
-                            logger.warning(
-                                "Не удалось получить пользователя %s из новой сессии: %s",
-                                telegram_id,
-                                fetch_error,
-                            )
-                            full_user = None
-                        else:
-                            break
-                except Exception as fetch_error:
-                    logger.warning(
-                        "Ошибка открытия сессии для автопокупки пользователя %s: %s",
-                        telegram_id,
-                        fetch_error,
-                    )
-
-            if full_user is not None and session_for_purchase is not None:
-                try:
-                    from app.handlers.subscription.purchase import attempt_auto_purchase_after_topup
-
-                    await attempt_auto_purchase_after_topup(
-                        session_for_purchase,
-                        full_user,
-                        getattr(self, "bot", None),
-                    )
-                except Exception as auto_error:
-                    logger.error(
-                        "Ошибка автопокупки подписки после пополнения для пользователя %s: %s",
-                        telegram_id,
-                        auto_error,
-                    )
-
         try:
             keyboard = await self.build_topup_success_keyboard(user_snapshot)
 
