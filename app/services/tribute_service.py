@@ -14,6 +14,9 @@ from app.database.crud.transaction import (
 from app.database.crud.user import get_user_by_telegram_id
 from app.external.tribute import TributeService as TributeAPI
 from app.services.payment_service import PaymentService
+from app.services.subscription_auto_purchase_service import (
+    auto_purchase_saved_cart_after_topup,
+)
 from app.utils.user_utils import format_referrer_info
 
 logger = logging.getLogger(__name__)
@@ -267,17 +270,36 @@ class TributeService:
             # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
             from app.services.user_cart_service import user_cart_service
             has_saved_cart = await user_cart_service.has_user_cart(user.id)
+            auto_purchase_success = False
+            if has_saved_cart:
+                try:
+                    auto_purchase_success = await auto_purchase_saved_cart_after_topup(
+                        session,
+                        user,
+                        bot=self.bot,
+                    )
+                except Exception as auto_error:
+                    logger.error(
+                        "Ошибка автоматической покупки подписки для пользователя %s: %s",
+                        user.id,
+                        auto_error,
+                        exc_info=True,
+                    )
+
+                if auto_purchase_success:
+                    has_saved_cart = False
+
             if has_saved_cart and self.bot:
-                # Если у пользователя есть сохраненная корзина, 
+                # Если у пользователя есть сохраненная корзина,
                 # отправляем ему уведомление с кнопкой вернуться к оформлению
                 from app.localization.texts import get_texts
                 from aiogram import types
-                
+
                 texts = get_texts(user.language)
                 cart_message = texts.BALANCE_TOPUP_CART_REMINDER_DETAILED.format(
                     total_amount=settings.format_price(amount_kopeks)
                 )
-                
+
                 # Создаем клавиатуру с кнопками
                 keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
                     [types.InlineKeyboardButton(
@@ -293,13 +315,16 @@ class TributeService:
                         callback_data="back_to_menu"
                     )]
                 ])
-                
+
                 await self.bot.send_message(
                     chat_id=user_id,
                     text=f"✅ Баланс пополнен на {settings.format_price(amount_kopeks)}!\n\n{cart_message}",
                     reply_markup=keyboard
                 )
-                logger.info(f"Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю {user_id}")
+                logger.info(
+                    "Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю %s",
+                    user_id,
+                )
 
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления об успешном платеже: {e}")
