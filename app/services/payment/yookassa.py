@@ -16,8 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
-from app.services.auto_purchase_service import try_auto_purchase_after_topup
-from app.services.user_cart_service import user_cart_service
 from app.utils.user_utils import format_referrer_info
 
 logger = logging.getLogger(__name__)
@@ -464,16 +462,8 @@ class YooKassaPaymentMixin:
                     # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
                     # ВАЖНО: этот код должен выполняться даже при ошибках в уведомлениях
                     logger.info(f"Проверяем наличие сохраненной корзины для пользователя {user.id}")
+                    from app.services.user_cart_service import user_cart_service
                     try:
-                        autopurchase_result = await try_auto_purchase_after_topup(db, user, getattr(self, "bot", None))
-                        if autopurchase_result.triggered:
-                            logger.info(
-                                "Автопокупка после пополнения %s для пользователя %s",
-                                "успешна" if autopurchase_result.success else "не выполнена",
-                                user.id,
-                            )
-                            return True
-
                         has_saved_cart = await user_cart_service.has_user_cart(user.id)
                         logger.info(f"Результат проверки корзины для пользователя {user.id}: {has_saved_cart}")
                         if has_saved_cart and getattr(self, "bot", None):
