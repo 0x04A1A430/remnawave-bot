@@ -1,9 +1,9 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database.models import MulenPayPayment
@@ -56,7 +56,9 @@ async def get_mulenpay_payment_by_local_id(
     db: AsyncSession, payment_id: int
 ) -> Optional[MulenPayPayment]:
     result = await db.execute(
-        select(MulenPayPayment).where(MulenPayPayment.id == payment_id)
+        select(MulenPayPayment)
+        .options(selectinload(MulenPayPayment.user))
+        .where(MulenPayPayment.id == payment_id)
     )
     return result.scalar_one_or_none()
 
@@ -65,7 +67,9 @@ async def get_mulenpay_payment_by_uuid(
     db: AsyncSession, uuid: str
 ) -> Optional[MulenPayPayment]:
     result = await db.execute(
-        select(MulenPayPayment).where(MulenPayPayment.uuid == uuid)
+        select(MulenPayPayment)
+        .options(selectinload(MulenPayPayment.user))
+        .where(MulenPayPayment.uuid == uuid)
     )
     return result.scalar_one_or_none()
 
@@ -74,11 +78,30 @@ async def get_mulenpay_payment_by_mulen_id(
     db: AsyncSession, mulen_payment_id: int
 ) -> Optional[MulenPayPayment]:
     result = await db.execute(
-        select(MulenPayPayment).where(
-            MulenPayPayment.mulen_payment_id == mulen_payment_id
-        )
+        select(MulenPayPayment)
+        .options(selectinload(MulenPayPayment.user))
+        .where(MulenPayPayment.mulen_payment_id == mulen_payment_id)
     )
     return result.scalar_one_or_none()
+
+
+async def get_pending_mulenpay_payments(
+    db: AsyncSession,
+    *,
+    max_age_hours: int = 24,
+) -> list[MulenPayPayment]:
+    cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+
+    result = await db.execute(
+        select(MulenPayPayment)
+        .options(selectinload(MulenPayPayment.user))
+        .where(
+            MulenPayPayment.is_paid.is_(False),
+            MulenPayPayment.created_at >= cutoff,
+        )
+        .order_by(MulenPayPayment.created_at.desc())
+    )
+    return result.scalars().all()
 
 
 async def update_mulenpay_payment_status(

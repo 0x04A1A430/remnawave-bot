@@ -136,21 +136,21 @@ async def get_user_cryptobot_payments(
 
 async def get_pending_cryptobot_payments(
     db: AsyncSession,
-    older_than_hours: int = 24
+    *,
+    max_age_hours: int = 24,
 ) -> List[CryptoBotPayment]:
-    
-    from datetime import timedelta
-    cutoff_time = datetime.utcnow() - timedelta(hours=older_than_hours)
-    
+
+    cutoff_time = datetime.utcnow() - timedelta(hours=max_age_hours)
+
     result = await db.execute(
         select(CryptoBotPayment)
         .options(selectinload(CryptoBotPayment.user))
         .where(
             and_(
                 CryptoBotPayment.status == "active",
-                CryptoBotPayment.created_at < cutoff_time
+                CryptoBotPayment.created_at >= cutoff_time,
             )
         )
-        .order_by(CryptoBotPayment.created_at)
+        .order_by(CryptoBotPayment.created_at.desc())
     )
     return result.scalars().all()

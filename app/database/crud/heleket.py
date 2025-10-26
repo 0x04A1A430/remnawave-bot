@@ -1,6 +1,6 @@
 import logging
-from datetime import datetime
-from typing import Any, Dict, Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional, List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,6 +94,25 @@ async def get_heleket_payment_by_id(
         .where(HeleketPayment.id == payment_id)
     )
     return result.scalar_one_or_none()
+
+
+async def get_pending_heleket_payments(
+    db: AsyncSession,
+    *,
+    max_age_hours: int = 24,
+) -> List[HeleketPayment]:
+    cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+
+    result = await db.execute(
+        select(HeleketPayment)
+        .options(selectinload(HeleketPayment.user))
+        .where(
+            HeleketPayment.transaction_id.is_(None),
+            HeleketPayment.created_at >= cutoff,
+        )
+        .order_by(HeleketPayment.created_at.desc())
+    )
+    return result.scalars().all()
 
 
 async def update_heleket_payment(

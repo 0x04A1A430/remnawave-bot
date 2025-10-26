@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from typing import Any, Dict, Optional
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional, List
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database.models import Pal24Payment
 
@@ -62,23 +63,48 @@ async def create_pal24_payment(
 
 async def get_pal24_payment_by_id(db: AsyncSession, payment_id: int) -> Optional[Pal24Payment]:
     result = await db.execute(
-        select(Pal24Payment).where(Pal24Payment.id == payment_id)
+        select(Pal24Payment)
+        .options(selectinload(Pal24Payment.user))
+        .where(Pal24Payment.id == payment_id)
     )
     return result.scalar_one_or_none()
 
 
 async def get_pal24_payment_by_bill_id(db: AsyncSession, bill_id: str) -> Optional[Pal24Payment]:
     result = await db.execute(
-        select(Pal24Payment).where(Pal24Payment.bill_id == bill_id)
+        select(Pal24Payment)
+        .options(selectinload(Pal24Payment.user))
+        .where(Pal24Payment.bill_id == bill_id)
     )
     return result.scalar_one_or_none()
 
 
 async def get_pal24_payment_by_order_id(db: AsyncSession, order_id: str) -> Optional[Pal24Payment]:
     result = await db.execute(
-        select(Pal24Payment).where(Pal24Payment.order_id == order_id)
+        select(Pal24Payment)
+        .options(selectinload(Pal24Payment.user))
+        .where(Pal24Payment.order_id == order_id)
     )
     return result.scalar_one_or_none()
+
+
+async def get_pending_pal24_payments(
+    db: AsyncSession,
+    *,
+    max_age_hours: int = 24,
+) -> List[Pal24Payment]:
+    cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+
+    result = await db.execute(
+        select(Pal24Payment)
+        .options(selectinload(Pal24Payment.user))
+        .where(
+            Pal24Payment.is_paid.is_(False),
+            Pal24Payment.created_at >= cutoff,
+        )
+        .order_by(Pal24Payment.created_at.desc())
+    )
+    return result.scalars().all()
 
 
 async def update_pal24_payment_status(
