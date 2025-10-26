@@ -13,6 +13,11 @@ from app.database.database import init_db
 from app.services.monitoring_service import monitoring_service
 from app.services.maintenance_service import maintenance_service
 from app.services.payment_service import PaymentService
+from app.services.payment_verification_service import (
+    PENDING_MAX_AGE,
+    SUPPORTED_MANUAL_CHECK_METHODS,
+)
+from app.database.models import PaymentMethod
 from app.services.version_service import version_service
 from app.external.webhook_server import WebhookServer
 from app.external.heleket_webhook import start_heleket_webhook_server
@@ -214,6 +219,42 @@ async def main():
                 logger.error(f"❌ Ошибка запуска автосинхронизации RemnaWave: {e}")
 
         payment_service = PaymentService(bot)
+
+        verification_providers: list[str] = []
+        async with timeline.stage(
+            "Сервис проверки пополнений",
+            "💳",
+            success_message="Ручная проверка активна",
+        ) as stage:
+            for method in SUPPORTED_MANUAL_CHECK_METHODS:
+                if method == PaymentMethod.YOOKASSA and settings.is_yookassa_enabled():
+                    verification_providers.append("YooKassa")
+                elif method == PaymentMethod.MULENPAY and settings.is_mulenpay_enabled():
+                    verification_providers.append(settings.get_mulenpay_display_name())
+                elif method == PaymentMethod.PAL24 and settings.is_pal24_enabled():
+                    verification_providers.append("PayPalych")
+                elif method == PaymentMethod.WATA and settings.is_wata_enabled():
+                    verification_providers.append("WATA")
+                elif method == PaymentMethod.HELEKET and settings.is_heleket_enabled():
+                    verification_providers.append("Heleket")
+                elif method == PaymentMethod.CRYPTOBOT and settings.is_cryptobot_enabled():
+                    verification_providers.append("CryptoBot")
+
+            if verification_providers:
+                hours = int(PENDING_MAX_AGE.total_seconds() // 3600)
+                stage.log(
+                    "Ожидающие пополнения автоматически отбираются не старше "
+                    f"{hours}ч"
+                )
+                stage.log(
+                    "Доступна ручная проверка для: "
+                    + ", ".join(sorted(verification_providers))
+                )
+                stage.success(
+                    f"Активно провайдеров: {len(verification_providers)}"
+                )
+            else:
+                stage.skip("Нет активных провайдеров для ручной проверки")
 
         async with timeline.stage(
             "Внешняя админка",
@@ -423,6 +464,10 @@ async def main():
             f"Проверка версий: {'Включен' if version_check_task else 'Отключен'}",
             f"Отчеты: {'Включен' if reporting_service.is_running() else 'Отключен'}",
         ]
+        services_lines.append(
+            "Проверка пополнений: "
+            + ("Включена" if verification_providers else "Отключена")
+        )
         timeline.log_section("Активные фоновые сервисы", services_lines, icon="📄")
 
         timeline.log_summary()
