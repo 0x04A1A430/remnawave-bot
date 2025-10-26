@@ -35,12 +35,6 @@ def get_admin_main_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text=_t(texts, "ADMIN_MAIN_TRANSACTIONS", "💳 Пополнения"),
-                callback_data="admin_transactions",
-            ),
-        ],
-        [
-            InlineKeyboardButton(
                 text=_t(texts, "ADMIN_MAIN_SUPPORT", "🛟 Поддержка"),
                 callback_data="admin_submenu_support",
             ),
