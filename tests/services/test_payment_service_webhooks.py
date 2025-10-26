@@ -762,6 +762,40 @@ async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -
     )
     monkeypatch.setitem(sys.modules, "app.services.user_cart_service", user_cart_stub)
 
+    autopurchase_mock = AsyncMock(
+        return_value=SimpleNamespace(triggered=False, success=False)
+    )
+    monkeypatch.setattr(
+        "app.services.payment.pal24.try_auto_purchase_after_topup",
+        autopurchase_mock,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.payment.wata.try_auto_purchase_after_topup",
+        autopurchase_mock,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.payment.yookassa.try_auto_purchase_after_topup",
+        autopurchase_mock,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.payment.cryptobot.try_auto_purchase_after_topup",
+        autopurchase_mock,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.payment.mulenpay.try_auto_purchase_after_topup",
+        autopurchase_mock,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.payment.stars.try_auto_purchase_after_topup",
+        autopurchase_mock,
+        raising=False,
+    )
+
     class DummyTypes:
         class InlineKeyboardMarkup:
             def __init__(self, inline_keyboard=None, **kwargs):
@@ -927,6 +961,40 @@ async def test_get_pal24_payment_status_auto_finalize(monkeypatch: pytest.Monkey
         user_cart_service=SimpleNamespace(has_user_cart=AsyncMock(return_value=False))
     )
     monkeypatch.setitem(sys.modules, "app.services.user_cart_service", user_cart_stub)
+
+    autopurchase_mock = AsyncMock(
+        return_value=SimpleNamespace(triggered=False, success=False)
+    )
+    monkeypatch.setattr(
+        "app.services.payment.pal24.try_auto_purchase_after_topup",
+        autopurchase_mock,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.payment.wata.try_auto_purchase_after_topup",
+        autopurchase_mock,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.payment.yookassa.try_auto_purchase_after_topup",
+        autopurchase_mock,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.payment.cryptobot.try_auto_purchase_after_topup",
+        autopurchase_mock,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.payment.mulenpay.try_auto_purchase_after_topup",
+        autopurchase_mock,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.payment.stars.try_auto_purchase_after_topup",
+        autopurchase_mock,
+        raising=False,
+    )
 
     class DummyTypes:
         class InlineKeyboardMarkup:

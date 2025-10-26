@@ -643,6 +643,8 @@ def get_insufficient_balance_keyboard(
     resume_callback: str | None = None,
     amount_kopeks: int | None = None,
     has_saved_cart: bool = False,  # Новый параметр для указания наличия сохраненной корзины
+    *,
+    auto_purchase_enabled: bool | None = None,
 ) -> InlineKeyboardMarkup:
 
     texts = get_texts(language)
@@ -663,25 +665,44 @@ def get_insufficient_balance_keyboard(
             )
             back_row_index = len(keyboard.inline_keyboard) - 1
 
+    insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
+    rows_to_insert: list[list[InlineKeyboardButton]] = []
+
+    if auto_purchase_enabled is not None:
+        toggle_row = [
+            InlineKeyboardButton(
+                text=(
+                    texts.AUTO_PURCHASE_AFTER_TOPUP_DISABLE_BUTTON
+                    if auto_purchase_enabled
+                    else texts.AUTO_PURCHASE_AFTER_TOPUP_ENABLE_BUTTON
+                ),
+                callback_data=(
+                    "auto_purchase_topup_toggle_off"
+                    if auto_purchase_enabled
+                    else "auto_purchase_topup_toggle_on"
+                ),
+            )
+        ]
+        rows_to_insert.append(toggle_row)
+
     # Если есть сохраненная корзина, добавляем кнопку возврата к оформлению
     if has_saved_cart:
-        return_row = [
+        rows_to_insert.append([
             InlineKeyboardButton(
                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
                 callback_data="subscription_resume_checkout",
             )
-        ]
-        insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
-        keyboard.inline_keyboard.insert(insert_index, return_row)
+        ])
     elif resume_callback:
-        return_row = [
+        rows_to_insert.append([
             InlineKeyboardButton(
                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
                 callback_data=resume_callback,
             )
-        ]
-        insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
-        keyboard.inline_keyboard.insert(insert_index, return_row)
+        ])
+
+    for offset, row in enumerate(rows_to_insert):
+        keyboard.inline_keyboard.insert(insert_index + offset, row)
 
     return keyboard
 
@@ -784,10 +805,34 @@ def get_subscription_keyboard(
 def get_payment_methods_keyboard_with_cart(
     language: str = "ru",
     amount_kopeks: int = 0,
+    *,
+    auto_purchase_enabled: bool | None = None,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = get_payment_methods_keyboard(amount_kopeks, language)
     
+    toggle_row_insert_index = 0
+
+    if auto_purchase_enabled is not None:
+        keyboard.inline_keyboard.insert(
+            toggle_row_insert_index,
+            [
+                InlineKeyboardButton(
+                    text=(
+                        texts.AUTO_PURCHASE_AFTER_TOPUP_DISABLE_BUTTON
+                        if auto_purchase_enabled
+                        else texts.AUTO_PURCHASE_AFTER_TOPUP_ENABLE_BUTTON
+                    ),
+                    callback_data=(
+                        "auto_purchase_topup_toggle_off"
+                        if auto_purchase_enabled
+                        else "auto_purchase_topup_toggle_on"
+                    ),
+                )
+            ],
+        )
+        toggle_row_insert_index += 1
+
     # Добавляем кнопку "Очистить корзину"
     keyboard.inline_keyboard.append([
         InlineKeyboardButton(
