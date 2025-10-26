@@ -1,12 +1,11 @@
 """CRUD helpers for WATA payment records."""
 
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, List
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.database.models import WataPayment
 
@@ -68,9 +67,7 @@ async def get_wata_payment_by_id(
     payment_id: int,
 ) -> Optional[WataPayment]:
     result = await db.execute(
-        select(WataPayment)
-        .options(selectinload(WataPayment.user))
-        .where(WataPayment.id == payment_id)
+        select(WataPayment).where(WataPayment.id == payment_id)
     )
     return result.scalar_one_or_none()
 
@@ -80,9 +77,7 @@ async def get_wata_payment_by_link_id(
     payment_link_id: str,
 ) -> Optional[WataPayment]:
     result = await db.execute(
-        select(WataPayment)
-        .options(selectinload(WataPayment.user))
-        .where(WataPayment.payment_link_id == payment_link_id)
+        select(WataPayment).where(WataPayment.payment_link_id == payment_link_id)
     )
     return result.scalar_one_or_none()
 
@@ -92,30 +87,9 @@ async def get_wata_payment_by_order_id(
     order_id: str,
 ) -> Optional[WataPayment]:
     result = await db.execute(
-        select(WataPayment)
-        .options(selectinload(WataPayment.user))
-        .where(WataPayment.order_id == order_id)
+        select(WataPayment).where(WataPayment.order_id == order_id)
     )
     return result.scalar_one_or_none()
-
-
-async def get_pending_wata_payments(
-    db: AsyncSession,
-    *,
-    max_age_hours: int = 24,
-) -> List[WataPayment]:
-    cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
-
-    result = await db.execute(
-        select(WataPayment)
-        .options(selectinload(WataPayment.user))
-        .where(
-            WataPayment.is_paid.is_(False),
-            WataPayment.created_at >= cutoff,
-        )
-        .order_by(WataPayment.created_at.desc())
-    )
-    return result.scalars().all()
 
 
 async def update_wata_payment_status(
