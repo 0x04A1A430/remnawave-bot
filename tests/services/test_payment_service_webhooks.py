@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace, ModuleType
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 import sys
 
 import pytest
@@ -827,21 +827,6 @@ async def test_get_pal24_payment_status_auto_finalize(monkeypatch: pytest.Monkey
                         }
                     ],
                 },
-            }
-
-        async def get_payment_status(self, payment_id: str) -> Optional[Dict[str, Any]]:
-            return None
-
-        async def get_bill_payments(self, bill_id: str) -> Optional[Dict[str, Any]]:
-            return {
-                "data": [
-                    {
-                        "id": "trs-auto-1",
-                        "bill_id": bill_id,
-                        "status": "SUCCESS",
-                        "payment_method": "SBP",
-                    }
-                ]
             }
 
     service.pal24_service = DummyPal24Service()
