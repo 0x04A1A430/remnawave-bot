@@ -56,6 +56,7 @@ from app.services.subscription_checkout_service import (
     should_offer_checkout_resume,
 )
 from app.services.subscription_service import SubscriptionService
+from app.services.user_cart_service import user_cart_service
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.services.promo_offer_service import promo_offer_service
 from app.states import SubscriptionStates
@@ -258,6 +259,9 @@ async def handle_subscription_cancel(
 
     await state.clear()
     await clear_subscription_checkout_draft(db_user.id)
+
+    # Удаляем сохраненную корзину, чтобы не показывать кнопку возврата
+    await user_cart_service.delete_user_cart(db_user.id)
 
     from app.handlers.menu import show_main_menu
     await show_main_menu(callback, db_user, db)
