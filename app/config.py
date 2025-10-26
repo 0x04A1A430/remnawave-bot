@@ -187,6 +187,8 @@ class Settings(BaseSettings):
     DISABLE_TOPUP_BUTTONS: bool = False
     PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED: bool = False
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
+
+    AUTOBUY_AFTER_TOPUP_ENABLED: bool = False
     
     # Настройки простой покупки
     SIMPLE_SUBSCRIPTION_ENABLED: bool = False
@@ -786,9 +788,12 @@ class Settings(BaseSettings):
     
     def is_traffic_fixed(self) -> bool:
         return self.TRAFFIC_SELECTION_MODE.lower() == "fixed"
-    
+
     def get_fixed_traffic_limit(self) -> int:
         return self.FIXED_TRAFFIC_LIMIT_GB
+
+    def is_autobuy_after_topup_enabled(self) -> bool:
+        return bool(self.AUTOBUY_AFTER_TOPUP_ENABLED)
     
     def is_yookassa_enabled(self) -> bool:
         return (self.YOOKASSA_ENABLED and 

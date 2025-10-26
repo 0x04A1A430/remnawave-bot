@@ -198,6 +198,7 @@ class BotConfigurationService:
         "BASE_SUBSCRIPTION_PRICE": "SUBSCRIPTIONS_CORE",
         "DEFAULT_TRAFFIC_RESET_STRATEGY": "TRAFFIC",
         "RESET_TRAFFIC_ON_PAYMENT": "TRAFFIC",
+        "AUTOBUY_AFTER_TOPUP_ENABLED": "PAYMENT",
         "TRAFFIC_SELECTION_MODE": "TRAFFIC",
         "FIXED_TRAFFIC_LIMIT_GB": "TRAFFIC",
         "AVAILABLE_SUBSCRIPTION_PERIODS": "PERIODS",
@@ -473,6 +474,15 @@ class BotConfigurationService:
             "example": "10",
             "warning": "Слишком малый интервал может привести к частым обращениям к платёжным API.",
             "dependencies": "PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED",
+        },
+        "AUTOBUY_AFTER_TOPUP_ENABLED": {
+            "description": (
+                "Включает автоматическое завершение сохранённой покупки подписки после пополнения"
+                " баланса, если средств стало достаточно."
+            ),
+            "format": "Булево значение.",
+            "example": "true",
+            "warning": "Перед включением убедитесь, что расчёт корзины корректен и пользователи понимают поведение.",
         },
         "SUPPORT_TICKET_SLA_MINUTES": {
             "description": "Лимит времени для ответа модераторов на тикет в минутах.",
