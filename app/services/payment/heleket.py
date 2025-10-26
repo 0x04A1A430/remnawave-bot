@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from importlib import import_module
 from typing import Any, Dict, Optional
 
@@ -417,27 +417,40 @@ class HeleketPaymentMixin:
             logger.error("Heleket платеж с id=%s не найден", local_payment_id)
             return None
 
+        payload: Optional[Dict[str, Any]] = None
         try:
             response = await self.heleket_service.get_payment_info(  # type: ignore[union-attr]
                 uuid=payment.uuid,
                 order_id=payment.order_id,
             )
         except Exception as error:  # pragma: no cover - defensive
-            logger.exception("Ошибка получения статуса Heleket платежа %s: %s", payment.uuid, error)
-            return payment
-
-        if not response:
-            logger.warning(
-                "Heleket API вернул пустой ответ при проверке платежа %s", payment.uuid
+            logger.exception(
+                "Ошибка получения статуса Heleket платежа %s: %s",
+                payment.uuid,
+                error,
             )
-            return payment
+        else:
+            if response:
+                result = response.get("result") if isinstance(response, dict) else None
+                if isinstance(result, dict):
+                    payload = dict(result)
+                else:
+                    logger.error(
+                        "Некорректный ответ Heleket API при проверке платежа %s: %s",
+                        payment.uuid,
+                        response,
+                    )
 
-        result = response.get("result") if isinstance(response, dict) else None
-        if not isinstance(result, dict):
-            logger.error("Некорректный ответ Heleket API при проверке платежа %s: %s", payment.uuid, response)
-            return payment
+        if payload is None:
+            fallback = await self._lookup_heleket_payment_history(payment)
+            if not fallback:
+                logger.warning(
+                    "Heleket API не вернул информацию по платежу %s",
+                    payment.uuid,
+                )
+                return payment
+            payload = dict(fallback)
 
-        payload: Dict[str, Any] = dict(result)
         payload.setdefault("uuid", payment.uuid)
         payload.setdefault("order_id", payment.order_id)
 
@@ -448,3 +461,58 @@ class HeleketPaymentMixin:
         )
 
         return updated_payment or payment
+
+    async def _lookup_heleket_payment_history(
+        self,
+        payment: "HeleketPayment",
+    ) -> Optional[Dict[str, Any]]:
+        service = getattr(self, "heleket_service", None)
+        if not service:
+            return None
+
+        created_at = getattr(payment, "created_at", None)
+        date_from_str: Optional[str] = None
+        date_to_str: Optional[str] = None
+        if isinstance(created_at, datetime):
+            start = created_at - timedelta(days=2)
+            end = created_at + timedelta(days=2)
+            date_from_str = start.strftime("%Y-%m-%d %H:%M:%S")
+            date_to_str = end.strftime("%Y-%m-%d %H:%M:%S")
+
+        cursor: Optional[str] = None
+        for _ in range(10):
+            response = await service.list_payments(
+                date_from=date_from_str,
+                date_to=date_to_str,
+                cursor=cursor,
+            )
+            if not response or not isinstance(response, dict):
+                return None
+
+            result = response.get("result")
+            if not isinstance(result, dict):
+                return None
+
+            items = result.get("items")
+            if isinstance(items, list):
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    uuid = str(item.get("uuid") or "").strip()
+                    order_id = str(item.get("order_id") or "").strip()
+                    if uuid and uuid == str(payment.uuid):
+                        return item
+                    if order_id and order_id == str(payment.order_id):
+                        return item
+
+            paginate = result.get("paginate")
+            cursor = None
+            if isinstance(paginate, dict):
+                next_cursor = paginate.get("nextCursor")
+                if isinstance(next_cursor, str) and next_cursor:
+                    cursor = next_cursor
+
+            if not cursor:
+                break
+
+        return None
