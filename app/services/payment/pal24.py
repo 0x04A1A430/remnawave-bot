@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from importlib import import_module
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -507,53 +507,135 @@ class Pal24PaymentMixin:
                 return None
 
             remote_status: Optional[str] = None
-            remote_data: Optional[Dict[str, Any]] = None
+            remote_payloads: Dict[str, Any] = {}
+            payment_info_candidates: List[Dict[str, Optional[str]]] = []
 
             service = getattr(self, "pal24_service", None)
             if service and payment.bill_id:
+                bill_id_str = str(payment.bill_id)
                 try:
-                    response = await service.get_bill_status(payment.bill_id)
-                    remote_data = response
-                    remote_status = response.get("status") or response.get("bill", {}).get("status")
-
-                    payment_info = self._extract_remote_payment_info(response)
-
-                    if remote_status:
-                        normalized_remote = str(remote_status).upper()
-                        update_kwargs: Dict[str, Any] = {
-                            "status": normalized_remote,
-                            "payment_status": payment_info.get("status") or remote_status,
-                        }
-
-                        if payment_info.get("id"):
-                            update_kwargs["payment_id"] = payment_info["id"]
-                        if payment_info.get("method"):
-                            update_kwargs["payment_method"] = payment_info["method"]
-                        if payment_info.get("balance_amount"):
-                            update_kwargs["balance_amount"] = payment_info["balance_amount"]
-                        if payment_info.get("balance_currency"):
-                            update_kwargs["balance_currency"] = payment_info["balance_currency"]
-                        if payment_info.get("account"):
-                            update_kwargs["payer_account"] = payment_info["account"]
-
-                        if normalized_remote in getattr(service, "BILL_SUCCESS_STATES", {"SUCCESS"}):
-                            update_kwargs["is_paid"] = True
-                            if not payment.paid_at:
-                                update_kwargs["paid_at"] = datetime.utcnow()
-                        elif normalized_remote in getattr(service, "BILL_FAILED_STATES", {"FAIL"}):
-                            update_kwargs["is_paid"] = False
-                        elif normalized_remote in getattr(service, "BILL_PENDING_STATES", {"NEW", "PROCESS"}):
-                            update_kwargs.setdefault("is_paid", False)
-
-                        payment = await payment_module.update_pal24_payment_status(
-                            db,
-                            payment,
-                            **update_kwargs,
-                        )
+                    response = await service.get_bill_status(bill_id_str)
                 except Pal24APIError as error:
-                    logger.error(
-                        "Ошибка Pal24 API при получении статуса: %s", error
-                    )
+                    logger.error("Ошибка Pal24 API при получении статуса счёта: %s", error)
+                else:
+                    if response:
+                        remote_payloads["bill_status"] = response
+                        status_value = response.get("status") or (response.get("bill") or {}).get("status")
+                        if status_value:
+                            remote_status = str(status_value).upper()
+                        extracted = self._extract_remote_payment_info(response)
+                        if extracted:
+                            payment_info_candidates.append(extracted)
+
+                if payment.payment_id:
+                    payment_id_str = str(payment.payment_id)
+                    try:
+                        payment_response = await service.get_payment_status(payment_id_str)
+                    except Pal24APIError as error:
+                        logger.error("Ошибка Pal24 API при получении статуса платежа: %s", error)
+                    else:
+                        if payment_response:
+                            remote_payloads["payment_status"] = payment_response
+                            extracted = self._extract_remote_payment_info(payment_response)
+                            if extracted:
+                                payment_info_candidates.append(extracted)
+
+                try:
+                    payments_response = await service.get_bill_payments(bill_id_str)
+                except Pal24APIError as error:
+                    logger.error("Ошибка Pal24 API при получении списка платежей: %s", error)
+                else:
+                    if payments_response:
+                        remote_payloads["bill_payments"] = payments_response
+                        for candidate in self._collect_payment_candidates(payments_response):
+                            extracted = self._extract_remote_payment_info(candidate)
+                            if extracted:
+                                payment_info_candidates.append(extracted)
+
+            payment_info = self._select_best_payment_info(payment, payment_info_candidates)
+            if payment_info:
+                remote_payloads.setdefault("selected_payment", payment_info)
+
+            bill_success = getattr(service, "BILL_SUCCESS_STATES", {"SUCCESS"}) if service else {"SUCCESS"}
+            bill_failed = getattr(service, "BILL_FAILED_STATES", {"FAIL"}) if service else {"FAIL"}
+            bill_pending = getattr(service, "BILL_PENDING_STATES", {"NEW", "PROCESS"}) if service else {"NEW", "PROCESS"}
+
+            update_status = payment.status or "NEW"
+            update_kwargs: Dict[str, Any] = {}
+            is_paid_update: Optional[bool] = None
+
+            if remote_status:
+                update_status = remote_status
+                if remote_status in bill_success:
+                    is_paid_update = True
+                elif remote_status in bill_failed:
+                    is_paid_update = False
+                elif remote_status in bill_pending and is_paid_update is None:
+                    is_paid_update = False
+
+            payment_status_code: Optional[str] = None
+            if payment_info:
+                payment_status_code = (payment_info.get("status") or "").upper() or None
+                if payment_status_code:
+                    existing_status = (getattr(payment, "payment_status", "") or "").upper()
+                    if payment_status_code != existing_status:
+                        update_kwargs["payment_status"] = payment_status_code
+
+                payment_id_value = payment_info.get("id")
+                if payment_id_value and payment_id_value != (payment.payment_id or ""):
+                    update_kwargs["payment_id"] = payment_id_value
+
+                method_value = payment_info.get("method")
+                if method_value:
+                    normalized_method = self._normalize_payment_method(method_value)
+                    if normalized_method != (payment.payment_method or ""):
+                        update_kwargs["payment_method"] = normalized_method
+
+                balance_amount = payment_info.get("balance_amount")
+                if balance_amount and balance_amount != (payment.balance_amount or ""):
+                    update_kwargs["balance_amount"] = balance_amount
+
+                balance_currency = payment_info.get("balance_currency")
+                if balance_currency and balance_currency != (payment.balance_currency or ""):
+                    update_kwargs["balance_currency"] = balance_currency
+
+                payer_account = payment_info.get("account")
+                if payer_account and payer_account != (payment.payer_account or ""):
+                    update_kwargs["payer_account"] = payer_account
+
+                if payment_status_code:
+                    success_states = {"SUCCESS", "OVERPAID"}
+                    failed_states = {"FAIL"}
+                    pending_states = {"NEW", "PROCESS", "UNDERPAID"}
+                    if payment_status_code in success_states:
+                        is_paid_update = True
+                    elif payment_status_code in failed_states and is_paid_update is not True:
+                        is_paid_update = False
+                    elif payment_status_code in pending_states and is_paid_update is None:
+                        is_paid_update = False
+
+            if not remote_status and payment_status_code:
+                update_status = payment_status_code
+
+            if is_paid_update is not None and is_paid_update != bool(payment.is_paid):
+                update_kwargs["is_paid"] = is_paid_update
+                if is_paid_update and not payment.paid_at:
+                    update_kwargs.setdefault("paid_at", datetime.utcnow())
+
+            current_status = payment.status or ""
+            effective_status = update_status or current_status or "NEW"
+            needs_update = bool(update_kwargs) or effective_status != current_status
+
+            if needs_update:
+                payment = await payment_module.update_pal24_payment_status(
+                    db,
+                    payment,
+                    status=effective_status,
+                    **update_kwargs,
+                )
+
+            remote_status_for_return = remote_status or payment_status_code
+            remote_data = remote_payloads or None
 
             if payment.is_paid and not payment.transaction_id:
                 try:
@@ -576,7 +658,7 @@ class Pal24PaymentMixin:
                 "payment": payment,
                 "status": payment.status,
                 "is_paid": payment.is_paid,
-                "remote_status": remote_status,
+                "remote_status": remote_status_for_return,
                 "remote_data": remote_data,
             }
 
@@ -621,10 +703,25 @@ class Pal24PaymentMixin:
                     or candidate.get("payer_account")
                     or candidate.get("AccountNumber")
                 ),
+                "bill_id": _stringify(
+                    candidate.get("bill_id")
+                    or candidate.get("BillId")
+                    or candidate.get("billId")
+                ),
             }
 
         if not isinstance(remote_data, dict):
             return {}
+
+        lower_keys = {str(key).lower() for key in remote_data.keys()}
+        has_status = any(key in lower_keys for key in ("status", "payment_status"))
+        has_identifier = any(
+            key in lower_keys
+            for key in ("payment_id", "from_card", "account_amount", "id")
+        ) or "bill_id" in lower_keys
+
+        if has_status and has_identifier and "bill" not in lower_keys:
+            return _normalize(remote_data)
 
         search_spaces = [remote_data]
         bill_section = remote_data.get("bill") or remote_data.get("Bill")
@@ -641,7 +738,58 @@ class Pal24PaymentMixin:
                 if candidate:
                     return _normalize(candidate)
 
+        data_section = remote_data.get("data") or remote_data.get("Data")
+        candidate = _pick_candidate(data_section)
+        if candidate:
+            return _normalize(candidate)
+
         return {}
+
+    @staticmethod
+    def _collect_payment_candidates(remote_data: Any) -> List[Dict[str, Any]]:
+        candidates: List[Dict[str, Any]] = []
+
+        def _visit(value: Any) -> None:
+            if isinstance(value, dict):
+                lower_keys = {str(key).lower() for key in value.keys()}
+                has_status = any(key in lower_keys for key in ("status", "payment_status"))
+                has_identifier = any(
+                    key in lower_keys
+                    for key in ("id", "payment_id", "bill_id", "from_card", "account_amount")
+                )
+                if has_status and has_identifier and value not in candidates:
+                    candidates.append(value)
+                for nested in value.values():
+                    _visit(nested)
+            elif isinstance(value, list):
+                for item in value:
+                    _visit(item)
+
+        _visit(remote_data)
+        return candidates
+
+    @staticmethod
+    def _select_best_payment_info(
+        payment: Any,
+        candidates: List[Dict[str, Optional[str]]],
+    ) -> Dict[str, Optional[str]]:
+        if not candidates:
+            return {}
+
+        payment_id = str(getattr(payment, "payment_id", "") or "")
+        bill_id = str(getattr(payment, "bill_id", "") or "")
+
+        for candidate in candidates:
+            candidate_id = str(candidate.get("id") or "")
+            if payment_id and candidate_id == payment_id:
+                return candidate
+
+        for candidate in candidates:
+            candidate_bill = str(candidate.get("bill_id") or "")
+            if bill_id and candidate_bill == bill_id:
+                return candidate
+
+        return candidates[0]
 
     @staticmethod
     def _normalize_payment_method(payment_method: Optional[str]) -> str:
