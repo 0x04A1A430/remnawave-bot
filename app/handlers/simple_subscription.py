@@ -677,6 +677,7 @@ async def handle_simple_subscription_payment_method(
 
     try:
         payment_service = PaymentService(callback.bot)
+        purchase_service = SubscriptionPurchaseService()
 
         resolved_squad_uuid = await _ensure_simple_subscription_squad_uuid(
             db,
@@ -696,8 +697,23 @@ async def handle_simple_subscription_payment_method(
 
         if payment_method == "stars":
             # Оплата через Telegram Stars
+            order = await purchase_service.create_subscription_order(
+                db=db,
+                user_id=db_user.id,
+                period_days=subscription_params["period_days"],
+                device_limit=subscription_params["device_limit"],
+                traffic_limit_gb=subscription_params["traffic_limit_gb"],
+                squad_uuid=resolved_squad_uuid,
+                payment_method="telegram_stars",
+                total_price_kopeks=price_kopeks,
+            )
+
+            if not order:
+                await callback.answer("❌ Не удалось подготовить заказ. Попробуйте позже.", show_alert=True)
+                return
+
             stars_count = settings.rubles_to_stars(settings.kopeks_to_rubles(price_kopeks))
-            
+
             await callback.bot.send_invoice(
                 chat_id=callback.from_user.id,
                 title=f"Подписка на {subscription_params['period_days']} дней",
@@ -707,7 +723,9 @@ async def handle_simple_subscription_payment_method(
                     f"Устройства: {subscription_params['device_limit']}\n"
                     f"Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}"
                 ),
-                payload=f"simple_sub_{db_user.id}_{subscription_params['period_days']}",
+                payload=(
+                    f"simple_sub_{db_user.id}_{order.id}_{subscription_params['period_days']}"
+                ),
                 provider_token="",  # Пустой токен для Telegram Stars
                 currency="XTR",  # Telegram Stars
                 prices=[types.LabeledPrice(label="Подписка", amount=stars_count)]
@@ -727,8 +745,6 @@ async def handle_simple_subscription_payment_method(
                 return
             
             # Создаем заказ на подписку
-            purchase_service = SubscriptionPurchaseService()
-
             order = await purchase_service.create_subscription_order(
                 db=db,
                 user_id=db_user.id,
