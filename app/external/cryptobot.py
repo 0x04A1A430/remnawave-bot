@@ -95,20 +95,24 @@ class CryptoBotService:
         asset: Optional[str] = None,
         status: Optional[str] = None,
         offset: int = 0,
-        count: int = 100
+        count: int = 100,
+        invoice_ids: Optional[list] = None,
     ) -> Optional[list]:
-        
+
         data = {
             'offset': offset,
             'count': count
         }
-        
+
         if asset:
             data['asset'] = asset
-        
+
         if status:
             data['status'] = status
-        
+
+        if invoice_ids:
+            data['invoice_ids'] = invoice_ids
+
         return await self._make_request('GET', 'getInvoices', data)
     
     async def get_balance(self) -> Optional[list]:
