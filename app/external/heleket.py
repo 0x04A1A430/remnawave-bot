@@ -41,7 +41,13 @@ class HeleketService:
         raw = f"{encoded}{api_key}"
         return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
-    async def _request(self, endpoint: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def _request(
+        self,
+        endpoint: str,
+        payload: Dict[str, Any],
+        *,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
         if not self.is_configured:
             logger.error("Heleket сервис не настроен: merchant или api_key отсутствуют")
             return None
@@ -59,7 +65,12 @@ class HeleketService:
         try:
             timeout = aiohttp.ClientTimeout(total=30)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(url, data=body.encode("utf-8"), headers=headers) as response:
+                async with session.post(
+                    url,
+                    data=body.encode("utf-8"),
+                    headers=headers,
+                    params=params,
+                ) as response:
                     text = await response.text()
                     if response.content_type != "application/json":
                         logger.error("Ответ Heleket не JSON (%s): %s", response.content_type, text)
@@ -103,6 +114,22 @@ class HeleketService:
             payload["order_id"] = order_id
 
         return await self._request("payment/info", payload)
+
+    async def list_payments(
+        self,
+        *,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        cursor: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        payload: Dict[str, Any] = {}
+        if date_from:
+            payload["date_from"] = date_from
+        if date_to:
+            payload["date_to"] = date_to
+
+        params = {"cursor": cursor} if cursor else None
+        return await self._request("payment/list", payload, params=params)
 
     def verify_webhook_signature(self, payload: Dict[str, Any]) -> bool:
         if not self.is_configured:
