@@ -497,6 +497,166 @@ async def test_process_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.anyio("asyncio")
+async def test_process_yookassa_webhook_restores_missing_payment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bot = DummyBot()
+    service = _make_service(bot)
+    fake_session = FakeSession()
+
+    restored_payment = SimpleNamespace(
+        yookassa_payment_id="yk_456",
+        user_id=21,
+        amount_kopeks=0,
+        status="pending",
+        is_paid=False,
+        transaction_id=None,
+        description="",
+        payment_method_type=None,
+        confirmation_url=None,
+        metadata_json=None,
+        test_mode=False,
+        refundable=False,
+    )
+
+    get_calls = {"count": 0}
+
+    async def fake_get_payment(db, payment_id):
+        get_calls["count"] += 1
+        if get_calls["count"] == 1:
+            return None
+        return restored_payment
+
+    async def fake_create_payment(**kwargs: Any):
+        restored_payment.user_id = kwargs["user_id"]
+        restored_payment.amount_kopeks = kwargs["amount_kopeks"]
+        restored_payment.status = kwargs["status"]
+        restored_payment.description = kwargs["description"]
+        restored_payment.payment_method_type = kwargs["payment_method_type"]
+        restored_payment.confirmation_url = kwargs["confirmation_url"]
+        restored_payment.metadata_json = kwargs["metadata_json"]
+        restored_payment.test_mode = kwargs["test_mode"]
+        restored_payment.yookassa_payment_id = kwargs["yookassa_payment_id"]
+        restored_payment.yookassa_created_at = kwargs["yookassa_created_at"]
+        return restored_payment
+
+    async def fake_update_status(
+        db,
+        yookassa_payment_id,
+        status,
+        is_paid,
+        is_captured,
+        captured_at,
+        payment_method_type,
+    ):
+        restored_payment.status = status
+        restored_payment.is_paid = is_paid
+        restored_payment.is_captured = is_captured
+        restored_payment.captured_at = captured_at
+        restored_payment.payment_method_type = payment_method_type
+        return restored_payment
+
+    async def fake_link(db, yookassa_payment_id, transaction_id):
+        restored_payment.transaction_id = transaction_id
+
+    monkeypatch.setattr(payment_service_module, "get_yookassa_payment_by_id", fake_get_payment)
+    monkeypatch.setattr(payment_service_module, "create_yookassa_payment", fake_create_payment)
+    monkeypatch.setattr(payment_service_module, "update_yookassa_payment_status", fake_update_status)
+    monkeypatch.setattr(payment_service_module, "link_yookassa_payment_to_transaction", fake_link)
+
+    transactions: list[Dict[str, Any]] = []
+
+    async def fake_create_transaction(db, **kwargs):
+        transactions.append(kwargs)
+        return SimpleNamespace(id=555, **kwargs)
+
+    monkeypatch.setattr(payment_service_module, "create_transaction", fake_create_transaction)
+
+    user = SimpleNamespace(
+        id=21,
+        telegram_id=2100,
+        balance_kopeks=0,
+        has_made_first_topup=False,
+        promo_group=None,
+        subscription=None,
+        referred_by_id=None,
+        referrer=None,
+    )
+
+    async def fake_get_user(db, user_id):
+        return user
+
+    monkeypatch.setattr(payment_service_module, "get_user_by_id", fake_get_user)
+    monkeypatch.setattr(type(settings), "format_price", lambda self, amount: f"{amount / 100:.2f}₽", raising=False)
+
+    referral_mock = SimpleNamespace(process_referral_topup=AsyncMock())
+    monkeypatch.setitem(sys.modules, "app.services.referral_service", referral_mock)
+
+    admin_calls: list[Any] = []
+
+    class DummyAdminService:
+        def __init__(self, bot):
+            self.bot = bot
+
+        async def send_balance_topup_notification(self, *args, **kwargs):
+            admin_calls.append((args, kwargs))
+
+    monkeypatch.setitem(sys.modules, "app.services.admin_notification_service", SimpleNamespace(AdminNotificationService=lambda bot: DummyAdminService(bot)))
+    service.build_topup_success_keyboard = AsyncMock(return_value=None)
+
+    payload = {
+        "object": {
+            "id": "yk_456",
+            "status": "succeeded",
+            "paid": True,
+            "amount": {"value": "150.00", "currency": "RUB"},
+            "metadata": {"user_id": "21", "payment_purpose": "balance_topup"},
+            "description": "Пополнение",
+            "payment_method": {"type": "bank_card"},
+            "created_at": "2024-01-02T12:00:00Z",
+            "captured_at": "2024-01-02T12:05:00Z",
+            "confirmation": {"confirmation_url": "https://pay.example"},
+        }
+    }
+
+    result = await service.process_yookassa_webhook(fake_session, payload)
+
+    assert result is True
+    assert get_calls["count"] >= 2  # повторный запрос после восстановления
+    assert restored_payment.amount_kopeks == 15000
+    assert restored_payment.is_paid is True
+    assert transactions and transactions[0]["amount_kopeks"] == 15000
+    assert restored_payment.transaction_id == 555
+    assert user.balance_kopeks == 15000
+    assert bot.sent_messages
+    assert admin_calls
+
+
+@pytest.mark.anyio("asyncio")
+async def test_process_yookassa_webhook_missing_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = _make_service(DummyBot())
+    db = FakeSession()
+
+    async def fake_get_payment(db_session, payment_id):
+        return None
+
+    create_mock = AsyncMock()
+    update_mock = AsyncMock()
+
+    monkeypatch.setattr(payment_service_module, "get_yookassa_payment_by_id", fake_get_payment)
+    monkeypatch.setattr(payment_service_module, "create_yookassa_payment", create_mock)
+    monkeypatch.setattr(payment_service_module, "update_yookassa_payment_status", update_mock)
+
+    payload = {"object": {"id": "yk_missing", "status": "succeeded", "paid": True}}
+
+    result = await service.process_yookassa_webhook(db, payload)
+
+    assert result is False
+    create_mock.assert_not_awaited()
+    update_mock.assert_not_awaited()
+
+
+@pytest.mark.anyio("asyncio")
 async def test_process_yookassa_webhook_missing_id(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)
