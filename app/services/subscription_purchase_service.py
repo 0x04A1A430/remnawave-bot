@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import PERIOD_PRICES, settings
@@ -1060,7 +1061,24 @@ class MiniAppSubscriptionPurchaseService:
 
         await db.refresh(user)
 
-        subscription = getattr(user, "subscription", None)
+        subscription = context.subscription
+        if subscription is not None and getattr(subscription, "id", None):
+            try:
+                await db.refresh(subscription)
+            except Exception as refresh_error:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to refresh existing subscription %s: %s",
+                    getattr(subscription, "id", None),
+                    refresh_error,
+                )
+        else:
+            result = await db.execute(
+                select(Subscription).where(Subscription.user_id == user.id)
+            )
+            subscription = result.scalar_one_or_none()
+            if subscription is not None:
+                context.subscription = subscription
+
         was_trial_conversion = False
         now = datetime.utcnow()
 
