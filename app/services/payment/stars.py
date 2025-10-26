@@ -19,6 +19,9 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import get_user_by_id
 from app.database.models import PaymentMethod, TransactionType
 from app.external.telegram_stars import TelegramStarsService
+from app.services.subscription_auto_purchase_service import (
+    auto_purchase_saved_cart_after_topup,
+)
 from app.utils.user_utils import format_referrer_info
 
 logger = logging.getLogger(__name__)
@@ -242,8 +245,27 @@ class TelegramStarsMixin:
                 from app.services.user_cart_service import user_cart_service
                 from aiogram import types
                 has_saved_cart = await user_cart_service.has_user_cart(user.id)
+                auto_purchase_success = False
+                if has_saved_cart:
+                    try:
+                        auto_purchase_success = await auto_purchase_saved_cart_after_topup(
+                            db,
+                            user,
+                            bot=getattr(self, "bot", None),
+                        )
+                    except Exception as auto_error:
+                        logger.error(
+                            "Ошибка автоматической покупки подписки для пользователя %s: %s",
+                            user.id,
+                            auto_error,
+                            exc_info=True,
+                        )
+
+                    if auto_purchase_success:
+                        has_saved_cart = False
+
                 if has_saved_cart and getattr(self, "bot", None):
-                    # Если у пользователя есть сохраненная корзина, 
+                    # Если у пользователя есть сохраненная корзина,
                     # отправляем ему уведомление с кнопкой вернуться к оформлению
                     from app.localization.texts import get_texts
                     
