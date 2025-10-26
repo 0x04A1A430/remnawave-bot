@@ -187,9 +187,7 @@ class Settings(BaseSettings):
     DISABLE_TOPUP_BUTTONS: bool = False
     PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED: bool = False
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
-
-    AUTO_PURCHASE_AFTER_TOPUP_ENABLED: bool = False
-
+    
     # Настройки простой покупки
     SIMPLE_SUBSCRIPTION_ENABLED: bool = False
     SIMPLE_SUBSCRIPTION_PERIOD_DAYS: int = 30
@@ -622,15 +620,6 @@ class Settings(BaseSettings):
 
     def is_autopay_enabled_by_default(self) -> bool:
         value = getattr(self, "DEFAULT_AUTOPAY_ENABLED", True)
-
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            return normalized in {"1", "true", "yes", "on"}
-
-        return bool(value)
-
-    def is_auto_purchase_after_topup_enabled(self) -> bool:
-        value = getattr(self, "AUTO_PURCHASE_AFTER_TOPUP_ENABLED", False)
 
         if isinstance(value, str):
             normalized = value.strip().lower()
