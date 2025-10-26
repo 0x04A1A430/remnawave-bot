@@ -696,6 +696,78 @@ class YooKassaPaymentMixin:
 
         return await payment_module.get_yookassa_payment_by_id(db, yookassa_payment_id)
 
+    async def sync_yookassa_payment_status(
+        self,
+        db: AsyncSession,
+        *,
+        local_payment_id: Optional[int] = None,
+        yookassa_payment_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Принудительно обновляет состояние платежа в YooKassa и синхронизирует локальную запись."""
+
+        payment_module = import_module("app.services.payment_service")
+
+        payment = None
+        if local_payment_id is not None:
+            payment = await payment_module.get_yookassa_payment_by_local_id(db, local_payment_id)
+        if not payment and yookassa_payment_id:
+            payment = await payment_module.get_yookassa_payment_by_id(db, yookassa_payment_id)
+
+        if not payment:
+            return None
+
+        if not getattr(self, "yookassa_service", None):
+            return {
+                "payment": payment,
+                "status": payment.status,
+                "is_paid": payment.is_paid,
+                "error": "service_disabled",
+            }
+
+        remote = await self.yookassa_service.get_payment_info(payment.yookassa_payment_id)  # type: ignore[union-attr]
+        if not remote:
+            return {
+                "payment": payment,
+                "status": payment.status,
+                "is_paid": payment.is_paid,
+                "error": "not_found",
+            }
+
+        status = remote.get("status") or payment.status
+        is_paid = bool(remote.get("paid") or status == "succeeded")
+        payment_method_type = remote.get("payment_method_type")
+
+        captured_at_raw = remote.get("captured_at")
+        captured_at = None
+        if captured_at_raw:
+            try:
+                captured_at = datetime.fromisoformat(captured_at_raw.replace("Z", "+00:00")).replace(tzinfo=None)
+            except Exception:
+                captured_at = None
+
+        updated_payment = await payment_module.update_yookassa_payment_status(
+            db,
+            payment.yookassa_payment_id,
+            status=status,
+            is_paid=is_paid,
+            is_captured=is_paid,
+            captured_at=captured_at,
+            payment_method_type=payment_method_type,
+        )
+
+        payment = updated_payment or payment
+
+        if payment.status == "succeeded" and payment.is_paid and not payment.transaction_id:
+            await self._process_successful_yookassa_payment(db, payment)
+            payment = await payment_module.get_yookassa_payment_by_id(db, payment.yookassa_payment_id)
+
+        return {
+            "payment": payment,
+            "status": payment.status,
+            "is_paid": payment.is_paid,
+            "remote_data": remote,
+        }
+
     @staticmethod
     def _normalise_yookassa_metadata(metadata: Any) -> Dict[str, Any]:
         if isinstance(metadata, dict):
