@@ -16,9 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
-from app.services.subscription_auto_purchase_service import (
-    auto_purchase_saved_cart_after_topup,
-)
 from app.utils.user_utils import format_referrer_info
 
 logger = logging.getLogger(__name__)
@@ -468,31 +465,7 @@ class YooKassaPaymentMixin:
                     from app.services.user_cart_service import user_cart_service
                     try:
                         has_saved_cart = await user_cart_service.has_user_cart(user.id)
-                        logger.info(
-                            "Результат проверки корзины для пользователя %s: %s",
-                            user.id,
-                            has_saved_cart,
-                        )
-
-                        auto_purchase_success = False
-                        if has_saved_cart:
-                            try:
-                                auto_purchase_success = await auto_purchase_saved_cart_after_topup(
-                                    db,
-                                    user,
-                                    bot=getattr(self, "bot", None),
-                                )
-                            except Exception as auto_error:
-                                logger.error(
-                                    "Ошибка автоматической покупки подписки для пользователя %s: %s",
-                                    user.id,
-                                    auto_error,
-                                    exc_info=True,
-                                )
-
-                            if auto_purchase_success:
-                                has_saved_cart = False
-
+                        logger.info(f"Результат проверки корзины для пользователя {user.id}: {has_saved_cart}")
                         if has_saved_cart and getattr(self, "bot", None):
                             # Если у пользователя есть сохраненная корзина,
                             # отправляем ему уведомление с кнопкой вернуться к оформлению
@@ -537,10 +510,7 @@ class YooKassaPaymentMixin:
                                 f"Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю {user.id}"
                             )
                         else:
-                            logger.info(
-                                "У пользователя %s нет сохраненной корзины, бот недоступен или покупка уже выполнена",
-                                user.id,
-                            )
+                            logger.info(f"У пользователя {user.id} нет сохраненной корзины или бот недоступен")
                     except Exception as e:
                         logger.error(
                             f"Критическая ошибка при работе с сохраненной корзиной для пользователя {user.id}: {e}",

@@ -236,7 +236,6 @@ class BotConfigurationService:
         "PAYMENT_SUBSCRIPTION_DESCRIPTION": "PAYMENT",
         "PAYMENT_BALANCE_TEMPLATE": "PAYMENT",
         "PAYMENT_SUBSCRIPTION_TEMPLATE": "PAYMENT",
-        "AUTO_PURCHASE_AFTER_TOPUP_ENABLED": "PAYMENT",
         "SIMPLE_SUBSCRIPTION_ENABLED": "SIMPLE_SUBSCRIPTION",
         "SIMPLE_SUBSCRIPTION_PERIOD_DAYS": "SIMPLE_SUBSCRIPTION",
         "SIMPLE_SUBSCRIPTION_DEVICE_LIMIT": "SIMPLE_SUBSCRIPTION",
@@ -474,16 +473,6 @@ class BotConfigurationService:
             "example": "10",
             "warning": "Слишком малый интервал может привести к частым обращениям к платёжным API.",
             "dependencies": "PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED",
-        },
-        "AUTO_PURCHASE_AFTER_TOPUP_ENABLED": {
-            "description": (
-                "При достаточном балансе автоматически оформляет сохранённую подписку сразу после пополнения."
-            ),
-            "format": "Булево значение.",
-            "example": "true",
-            "warning": (
-                "Используйте с осторожностью: средства будут списаны мгновенно, если корзина найдена."
-            ),
         },
         "SUPPORT_TICKET_SLA_MINUTES": {
             "description": "Лимит времени для ответа модераторов на тикет в минутах.",
