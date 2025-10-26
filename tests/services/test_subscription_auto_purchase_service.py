@@ -130,6 +130,7 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
                 details=base_pricing.details,
             )
 
+    class DummyPurchaseService:
         async def submit_purchase(self, db, prepared_context, pricing):
             return {
                 "subscription": MagicMock(),
@@ -141,6 +142,10 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
     monkeypatch.setattr(
         "app.services.subscription_auto_purchase_service.MiniAppSubscriptionPurchaseService",
         lambda: DummyMiniAppService(),
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.SubscriptionPurchaseService",
+        lambda: DummyPurchaseService(),
     )
     monkeypatch.setattr(
         "app.services.subscription_auto_purchase_service.user_cart_service.get_user_cart",
