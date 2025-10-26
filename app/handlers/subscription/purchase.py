@@ -21,7 +21,7 @@ from app.database.crud.subscription import (
     update_subscription_autopay
 )
 from app.database.crud.transaction import create_transaction
-from app.database.crud.user import subtract_user_balance, update_user
+from app.database.crud.user import subtract_user_balance
 from app.database.models import (
     User, TransactionType, SubscriptionStatus,
     Subscription
@@ -650,22 +650,6 @@ async def _edit_message_text_or_caption(
 
         raise
 
-
-def _get_auto_purchase_status_lines(texts, enabled: bool) -> tuple[str, str]:
-    status_text = texts.AUTO_PURCHASE_AFTER_TOPUP_STATUS.format(
-        status=(
-            texts.AUTO_PURCHASE_AFTER_TOPUP_STATUS_ENABLED
-            if enabled
-            else texts.AUTO_PURCHASE_AFTER_TOPUP_STATUS_DISABLED
-        )
-    )
-    status_hint = (
-        texts.AUTO_PURCHASE_AFTER_TOPUP_TOGGLED_ON
-        if enabled
-        else texts.AUTO_PURCHASE_AFTER_TOPUP_TOGGLED_OFF
-    )
-    return status_text, status_hint
-
 async def save_cart_and_redirect_to_topup(
         callback: types.CallbackQuery,
         state: FSMContext,
@@ -686,155 +670,18 @@ async def save_cart_and_redirect_to_topup(
     
     await user_cart_service.save_user_cart(db_user.id, cart_data)
 
-    auto_purchase_enabled = getattr(db_user, "auto_purchase_after_topup_enabled", False)
-    status_text, status_hint = _get_auto_purchase_status_lines(texts, auto_purchase_enabled)
-
     await callback.message.edit_text(
         f"💰 Недостаточно средств для оформления подписки\n\n"
         f"Требуется: {texts.format_price(missing_amount)}\n"
         f"У вас: {texts.format_price(db_user.balance_kopeks)}\n\n"
         f"🛒 Ваша корзина сохранена!\n"
-        f"{status_text}\n"
-        f"{status_hint}\n\n"
         f"После пополнения баланса вы сможете вернуться к оформлению подписки.\n\n"
         f"Выберите способ пополнения:",
         reply_markup=get_payment_methods_keyboard_with_cart(
             db_user.language,
             missing_amount,
-            auto_purchase_enabled=auto_purchase_enabled,
         ),
         parse_mode="HTML"
-    )
-
-
-def _rebuild_topup_prompt_text(
-        texts,
-        missing_amount: int,
-        balance: int,
-        *,
-        status_text: str,
-        status_hint: str,
-) -> str:
-    return (
-        f"💰 Недостаточно средств для оформления подписки\n\n"
-        f"Требуется: {texts.format_price(missing_amount)}\n"
-        f"У вас: {texts.format_price(balance)}\n\n"
-        f"🛒 Ваша корзина сохранена!\n"
-        f"{status_text}\n"
-        f"{status_hint}\n\n"
-        f"После пополнения баланса вы сможете вернуться к оформлению подписки.\n\n"
-        f"Выберите способ пополнения:"
-    )
-
-
-def _rebuild_insufficient_text(
-        texts,
-        total_price: int,
-        balance: int,
-        missing_amount: int,
-        *,
-        status_text: str,
-        status_hint: str,
-) -> str:
-    return (
-        f"❌ Все еще недостаточно средств\n\n"
-        f"Требуется: {texts.format_price(total_price)}\n"
-        f"У вас: {texts.format_price(balance)}\n"
-        f"Не хватает: {texts.format_price(missing_amount)}\n\n"
-        f"{status_text}\n{status_hint}"
-    )
-
-
-async def toggle_auto_purchase_after_topup(
-        callback: types.CallbackQuery,
-        db_user: User,
-        db: AsyncSession,
-):
-    enable = callback.data == "auto_purchase_topup_toggle_on"
-
-    try:
-        if enable != getattr(db_user, "auto_purchase_after_topup_enabled", False):
-            db_user = await update_user(
-                db,
-                db_user,
-                auto_purchase_after_topup_enabled=enable,
-            )
-    except Exception as error:
-        logger.error("Не удалось обновить настройку автопокупки: %s", error)
-        await callback.answer("⚠️ Не удалось обновить настройку", show_alert=True)
-        return
-
-    texts = get_texts(db_user.language)
-    notice = (
-        texts.AUTO_PURCHASE_AFTER_TOPUP_TOGGLED_ON
-        if enable
-        else texts.AUTO_PURCHASE_AFTER_TOPUP_TOGGLED_OFF
-    )
-    await callback.answer(notice, show_alert=False)
-
-    cart_data = await user_cart_service.get_user_cart(db_user.id)
-    if not cart_data:
-        # Обновляем только клавиатуру, если корзина не найдена
-        try:
-            await callback.message.edit_reply_markup(
-                reply_markup=get_payment_methods_keyboard_with_cart(
-                    db_user.language,
-                    0,
-                    auto_purchase_enabled=enable,
-                )
-            )
-        except Exception:
-            pass
-        return
-
-    total_price = cart_data.get('total_price', 0)
-    missing_amount = cart_data.get('missing_amount', 0)
-
-    if total_price:
-        recalculated_missing = max(0, total_price - db_user.balance_kopeks)
-        missing_amount = recalculated_missing
-        cart_data['missing_amount'] = missing_amount
-        await user_cart_service.save_user_cart(db_user.id, cart_data)
-
-    status_text, status_hint = _get_auto_purchase_status_lines(texts, enable)
-
-    message_text = callback.message.text or callback.message.caption or ""
-    reply_markup: InlineKeyboardMarkup
-
-    if "Ваша корзина сохранена" in message_text:
-        new_text = _rebuild_topup_prompt_text(
-            texts,
-            missing_amount,
-            db_user.balance_kopeks,
-            status_text=status_text,
-            status_hint=status_hint,
-        )
-        reply_markup = get_payment_methods_keyboard_with_cart(
-            db_user.language,
-            missing_amount,
-            auto_purchase_enabled=enable,
-        )
-    else:
-        total_value = total_price or (db_user.balance_kopeks + missing_amount)
-        new_text = _rebuild_insufficient_text(
-            texts,
-            total_value,
-            db_user.balance_kopeks,
-            missing_amount,
-            status_text=status_text,
-            status_hint=status_hint,
-        )
-        reply_markup = get_insufficient_balance_keyboard_with_cart(
-            db_user.language,
-            missing_amount,
-            auto_purchase_enabled=enable,
-        )
-
-    await _edit_message_text_or_caption(
-        callback.message,
-        new_text,
-        reply_markup=reply_markup,
-        parse_mode="HTML",
     )
 
 async def return_to_saved_cart(
@@ -855,18 +702,14 @@ async def return_to_saved_cart(
 
     if db_user.balance_kopeks < total_price:
         missing_amount = total_price - db_user.balance_kopeks
-        auto_purchase_enabled = getattr(db_user, "auto_purchase_after_topup_enabled", False)
-        status_text, status_hint = _get_auto_purchase_status_lines(texts, auto_purchase_enabled)
         await callback.message.edit_text(
             f"❌ Все еще недостаточно средств\n\n"
             f"Требуется: {texts.format_price(total_price)}\n"
             f"У вас: {texts.format_price(db_user.balance_kopeks)}\n"
-            f"Не хватает: {texts.format_price(missing_amount)}\n\n"
-            f"{status_text}\n{status_hint}",
+            f"Не хватает: {texts.format_price(missing_amount)}",
             reply_markup=get_insufficient_balance_keyboard_with_cart(
                 db_user.language,
                 missing_amount,
-                auto_purchase_enabled=auto_purchase_enabled,
             )
         )
         return
@@ -1754,11 +1597,6 @@ async def confirm_purchase(
             missing=texts.format_price(missing_kopeks),
         )
 
-        auto_purchase_enabled = getattr(db_user, "auto_purchase_after_topup_enabled", False)
-        status_text, status_hint = _get_auto_purchase_status_lines(texts, auto_purchase_enabled)
-
-        message_text = f"{message_text}\n\n{status_text}\n{status_hint}"
-
         # Сохраняем данные корзины в Redis перед переходом к пополнению
         cart_data = {
             **data,
@@ -1776,8 +1614,7 @@ async def confirm_purchase(
                 db_user.language,
                 resume_callback=resume_callback,
                 amount_kopeks=missing_kopeks,
-                has_saved_cart=True,  # Указываем, что есть сохраненная корзина
-                auto_purchase_enabled=auto_purchase_enabled,
+                has_saved_cart=True  # Указываем, что есть сохраненная корзина
             ),
             parse_mode="HTML",
         )
@@ -1812,18 +1649,12 @@ async def confirm_purchase(
                 missing=texts.format_price(missing_kopeks),
             )
 
-            auto_purchase_enabled = getattr(db_user, "auto_purchase_after_topup_enabled", False)
-            status_text, status_hint = _get_auto_purchase_status_lines(texts, auto_purchase_enabled)
-
-            message_text = f"{message_text}\n\n{status_text}\n{status_hint}"
-
             await callback.message.edit_text(
                 message_text,
                 reply_markup=get_insufficient_balance_keyboard(
                     db_user.language,
                     resume_callback=resume_callback,
                     amount_kopeks=missing_kopeks,
-                    auto_purchase_enabled=auto_purchase_enabled,
                 ),
                 parse_mode="HTML",
             )
@@ -2379,11 +2210,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(
         clear_saved_cart,
         F.data == "clear_saved_cart",
-    )
-
-    dp.callback_query.register(
-        toggle_auto_purchase_after_topup,
-        F.data.in_(["auto_purchase_topup_toggle_on", "auto_purchase_topup_toggle_off"]),
     )
 
     dp.callback_query.register(

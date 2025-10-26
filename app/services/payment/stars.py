@@ -19,8 +19,6 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import get_user_by_id
 from app.database.models import PaymentMethod, TransactionType
 from app.external.telegram_stars import TelegramStarsService
-from app.services.auto_purchase_service import try_auto_purchase_after_topup
-from app.services.user_cart_service import user_cart_service
 from app.utils.user_utils import format_referrer_info
 
 logger = logging.getLogger(__name__)
@@ -241,15 +239,7 @@ class TelegramStarsMixin:
 
             # Проверяем наличие сохраненной корзины для возврата к оформлению подписки
             try:
-                autopurchase_result = await try_auto_purchase_after_topup(db, user, getattr(self, "bot", None))
-                if autopurchase_result.triggered:
-                    logger.info(
-                        "Автопокупка после пополнения %s для пользователя %s",
-                        "успешна" if autopurchase_result.success else "не выполнена",
-                        user.id,
-                    )
-                    return True
-
+                from app.services.user_cart_service import user_cart_service
                 from aiogram import types
                 has_saved_cart = await user_cart_service.has_user_cart(user.id)
                 if has_saved_cart and getattr(self, "bot", None):

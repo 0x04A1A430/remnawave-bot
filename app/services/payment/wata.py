@@ -12,8 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
-from app.services.auto_purchase_service import try_auto_purchase_after_topup
-from app.services.user_cart_service import user_cart_service
 from app.services.wata_service import WataAPIError, WataService
 from app.utils.user_utils import format_referrer_info
 
@@ -522,15 +520,7 @@ class WataPaymentMixin:
                 logger.error("Ошибка отправки уведомления пользователю WATA: %s", error)
 
         try:
-            autopurchase_result = await try_auto_purchase_after_topup(db, user, getattr(self, "bot", None))
-            if autopurchase_result.triggered:
-                logger.info(
-                    "Автопокупка после пополнения %s для пользователя %s",
-                    "успешна" if autopurchase_result.success else "не выполнена",
-                    user.id,
-                )
-                return payment
-
+            from app.services.user_cart_service import user_cart_service
             from aiogram import types
 
             has_saved_cart = await user_cart_service.has_user_cart(user.id)
