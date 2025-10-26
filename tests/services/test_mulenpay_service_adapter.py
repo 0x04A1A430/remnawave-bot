@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 import sys
 
 import pytest
@@ -14,6 +16,57 @@ if str(ROOT_DIR) not in sys.path:
 
 from app.config import settings  # noqa: E402
 from app.services.mulenpay_service import MulenPayService  # noqa: E402
+
+
+class _DummyResponse:
+    def __init__(
+        self,
+        *,
+        status: int,
+        body: str = "{}",
+        headers: Optional[Dict[str, str]] = None,
+        url: str = "https://mulenpay.test/endpoint",
+    ) -> None:
+        self.status = status
+        self._body = body
+        self.headers = headers or {"Content-Type": "application/json"}
+        self.url = url
+
+    async def __aenter__(self) -> "_DummyResponse":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:  # pragma: no cover - interface
+        return False
+
+    async def text(self) -> str:
+        return self._body
+
+
+class _DummySession:
+    def __init__(self, result: Any) -> None:
+        self._result = result
+
+    async def __aenter__(self) -> "_DummySession":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:  # pragma: no cover - interface
+        return False
+
+    def request(self, *args: Any, **kwargs: Any) -> Any:
+        if isinstance(self._result, BaseException):
+            raise self._result
+        return self._result
+
+
+def _session_factory(responses: Sequence[Any]) -> Any:
+    call_state = {"index": 0}
+
+    def _factory(*_args: Any, **_kwargs: Any) -> _DummySession:
+        index = min(call_state["index"], len(responses) - 1)
+        call_state["index"] += 1
+        return _DummySession(responses[index])
+
+    return _factory
 
 
 @pytest.fixture
@@ -105,3 +158,88 @@ async def test_get_payment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(service, "_request", fake_request, raising=False)
     result = await service.get_payment(123)
     assert result == {"id": 123, "status": "paid"}
+
+
+@pytest.mark.anyio("asyncio")
+async def test_request_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_service(monkeypatch)
+    service = MulenPayService()
+
+    response_payload = {"ok": True}
+    monkeypatch.setattr(
+        "app.services.mulenpay_service.aiohttp.ClientSession",
+        _session_factory([
+            _DummyResponse(status=200, body=json.dumps(response_payload)),
+        ]),
+    )
+
+    result = await service._request("GET", "/ping")
+    assert result == response_payload
+
+
+@pytest.mark.anyio("asyncio")
+async def test_request_retries_on_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_service(monkeypatch)
+    service = MulenPayService()
+    service._max_retries = 2
+
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleep_calls.append(delay)
+
+    monkeypatch.setattr(
+        "app.services.mulenpay_service.asyncio.sleep",
+        fake_sleep,
+    )
+
+    monkeypatch.setattr(
+        "app.services.mulenpay_service.aiohttp.ClientSession",
+        _session_factory(
+            [
+                _DummyResponse(status=502, body="{\"error\": \"bad gateway\"}"),
+                _DummyResponse(status=200, body="{\"ok\": true}"),
+            ]
+        ),
+    )
+
+    result = await service._request("GET", "/retry")
+    assert result == {"ok": True}
+    assert sleep_calls == [service._retry_delay]
+
+
+@pytest.mark.anyio("asyncio")
+async def test_request_returns_none_after_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_service(monkeypatch)
+    service = MulenPayService()
+    service._max_retries = 2
+
+    async def fake_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "app.services.mulenpay_service.asyncio.sleep",
+        fake_sleep,
+    )
+
+    monkeypatch.setattr(
+        "app.services.mulenpay_service.aiohttp.ClientSession",
+        _session_factory([asyncio.TimeoutError()]),
+    )
+
+    result = await service._request("GET", "/timeout")
+    assert result is None
+
+
+@pytest.mark.anyio("asyncio")
+async def test_request_reraises_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_service(monkeypatch)
+    service = MulenPayService()
+
+    monkeypatch.setattr(
+        "app.services.mulenpay_service.aiohttp.ClientSession",
+        _session_factory([asyncio.CancelledError()]),
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await service._request("GET", "/cancel")

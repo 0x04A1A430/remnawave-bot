@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from importlib import import_module
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
@@ -545,13 +546,39 @@ class YooKassaPaymentMixin:
             logger.warning(
                 "Локальный платеж для YooKassa id %s не найден", yookassa_payment_id
             )
-            return False
+            payment = await self._restore_missing_yookassa_payment(db, event_object)
+
+            if not payment:
+                logger.error(
+                    "Не удалось восстановить локальную запись платежа YooKassa %s",
+                    yookassa_payment_id,
+                )
+                return False
 
         payment.status = event_object.get("status", payment.status)
-        payment.confirmation_url = event_object.get("confirmation_url")
+        payment.confirmation_url = self._extract_confirmation_url(event_object)
+
+        payment.payment_method_type = (
+            (event_object.get("payment_method") or {}).get("type")
+            or payment.payment_method_type
+        )
+        payment.refundable = event_object.get("refundable", getattr(payment, "refundable", False))
 
         current_paid = bool(getattr(payment, "is_paid", getattr(payment, "paid", False)))
         payment.is_paid = bool(event_object.get("paid", current_paid))
+
+        captured_at_raw = event_object.get("captured_at")
+        if captured_at_raw:
+            try:
+                payment.captured_at = datetime.fromisoformat(
+                    captured_at_raw.replace("Z", "+00:00")
+                ).replace(tzinfo=None)
+            except Exception as error:
+                logger.debug(
+                    "Не удалось распарсить captured_at=%s: %s",
+                    captured_at_raw,
+                    error,
+                )
 
         await db.commit()
         await db.refresh(payment)
@@ -565,3 +592,152 @@ class YooKassaPaymentMixin:
             payment.status,
         )
         return True
+
+    async def _restore_missing_yookassa_payment(
+        self,
+        db: AsyncSession,
+        event_object: Dict[str, Any],
+    ) -> Optional["YooKassaPayment"]:
+        """Создает локальную запись платежа на основе данных webhook, если она отсутствует."""
+
+        yookassa_payment_id = event_object.get("id")
+        if not yookassa_payment_id:
+            return None
+
+        metadata = self._normalise_yookassa_metadata(event_object.get("metadata"))
+        user_id_raw = metadata.get("user_id") or metadata.get("userId")
+
+        if user_id_raw is None:
+            logger.error(
+                "Webhook YooKassa %s не содержит user_id в metadata. Невозможно восстановить платеж.",
+                yookassa_payment_id,
+            )
+            return None
+
+        try:
+            user_id = int(user_id_raw)
+        except (TypeError, ValueError):
+            logger.error(
+                "Webhook YooKassa %s содержит некорректный user_id=%s",
+                yookassa_payment_id,
+                user_id_raw,
+            )
+            return None
+
+        amount_info = event_object.get("amount") or {}
+        amount_value = amount_info.get("value")
+        currency = (amount_info.get("currency") or "RUB").upper()
+
+        if amount_value is None:
+            logger.error(
+                "Webhook YooKassa %s не содержит сумму платежа",
+                yookassa_payment_id,
+            )
+            return None
+
+        try:
+            amount_kopeks = int((Decimal(str(amount_value)) * 100).quantize(Decimal("1")))
+        except (InvalidOperation, ValueError) as error:
+            logger.error(
+                "Некорректная сумма в webhook YooKassa %s: %s (%s)",
+                yookassa_payment_id,
+                amount_value,
+                error,
+            )
+            return None
+
+        description = event_object.get("description") or metadata.get("description") or "YooKassa платеж"
+        payment_method_type = (event_object.get("payment_method") or {}).get("type")
+
+        yookassa_created_at = None
+        created_at_raw = event_object.get("created_at")
+        if created_at_raw:
+            try:
+                yookassa_created_at = datetime.fromisoformat(
+                    created_at_raw.replace("Z", "+00:00")
+                ).replace(tzinfo=None)
+            except Exception as error:  # pragma: no cover - диагностический лог
+                logger.debug(
+                    "Не удалось распарсить created_at=%s для YooKassa %s: %s",
+                    created_at_raw,
+                    yookassa_payment_id,
+                    error,
+                )
+
+        payment_module = import_module("app.services.payment_service")
+
+        local_payment = await payment_module.create_yookassa_payment(
+            db=db,
+            user_id=user_id,
+            yookassa_payment_id=yookassa_payment_id,
+            amount_kopeks=amount_kopeks,
+            currency=currency,
+            description=description,
+            status=event_object.get("status", "pending"),
+            confirmation_url=self._extract_confirmation_url(event_object),
+            metadata_json=metadata,
+            payment_method_type=payment_method_type,
+            yookassa_created_at=yookassa_created_at,
+            test_mode=bool(event_object.get("test") or event_object.get("test_mode")),
+        )
+
+        if not local_payment:
+            return None
+
+        await payment_module.update_yookassa_payment_status(
+            db=db,
+            yookassa_payment_id=yookassa_payment_id,
+            status=event_object.get("status", local_payment.status),
+            is_paid=bool(event_object.get("paid")),
+            is_captured=event_object.get("status") == "succeeded",
+            captured_at=self._parse_datetime(event_object.get("captured_at")),
+            payment_method_type=payment_method_type,
+        )
+
+        return await payment_module.get_yookassa_payment_by_id(db, yookassa_payment_id)
+
+    @staticmethod
+    def _normalise_yookassa_metadata(metadata: Any) -> Dict[str, Any]:
+        if isinstance(metadata, dict):
+            return metadata
+
+        if isinstance(metadata, list):
+            normalised: Dict[str, Any] = {}
+            for item in metadata:
+                key = item.get("key") if isinstance(item, dict) else None
+                if key:
+                    normalised[key] = item.get("value")
+            return normalised
+
+        if isinstance(metadata, str):
+            try:
+                import json
+
+                parsed = json.loads(metadata)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                logger.debug("Не удалось распарсить metadata webhook YooKassa: %s", metadata)
+
+        return {}
+
+    @staticmethod
+    def _extract_confirmation_url(event_object: Dict[str, Any]) -> Optional[str]:
+        if "confirmation_url" in event_object:
+            return event_object.get("confirmation_url")
+
+        confirmation = event_object.get("confirmation")
+        if isinstance(confirmation, dict):
+            return confirmation.get("confirmation_url") or confirmation.get("return_url")
+
+        return None
+
+    @staticmethod
+    def _parse_datetime(raw_value: Optional[str]) -> Optional[datetime]:
+        if not raw_value:
+            return None
+
+        try:
+            return datetime.fromisoformat(raw_value.replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            return None
