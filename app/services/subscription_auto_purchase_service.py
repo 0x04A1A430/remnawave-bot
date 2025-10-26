@@ -16,13 +16,12 @@ from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.subscription_checkout_service import clear_subscription_checkout_draft
 from app.services.subscription_purchase_service import (
-    MiniAppSubscriptionPurchaseService,
     PurchaseOptionsContext,
     PurchasePricingResult,
     PurchaseSelection,
     PurchaseValidationError,
     PurchaseBalanceError,
-    SubscriptionPurchaseService,
+    MiniAppSubscriptionPurchaseService,
 )
 from app.services.user_cart_service import user_cart_service
 from app.utils.pricing_utils import format_period_description
@@ -37,6 +36,7 @@ class AutoPurchaseContext:
     context: PurchaseOptionsContext
     pricing: PurchasePricingResult
     selection: PurchaseSelection
+    service: MiniAppSubscriptionPurchaseService
 
 
 async def _prepare_auto_purchase(
@@ -89,7 +89,12 @@ async def _prepare_auto_purchase(
     )
 
     pricing = await miniapp_service.calculate_pricing(db, context, selection)
-    return AutoPurchaseContext(context=context, pricing=pricing, selection=selection)
+    return AutoPurchaseContext(
+        context=context,
+        pricing=pricing,
+        selection=selection,
+        service=miniapp_service,
+    )
 
 
 async def auto_purchase_saved_cart_after_topup(
@@ -155,7 +160,7 @@ async def auto_purchase_saved_cart_after_topup(
         )
         return False
 
-    purchase_service = SubscriptionPurchaseService()
+    purchase_service = prepared.service
 
     try:
         purchase_result = await purchase_service.submit_purchase(
