@@ -319,6 +319,7 @@ class YooKassaPaymentMixin:
     ) -> bool:
         """Переносит успешный платёж YooKassa в транзакции и начисляет баланс пользователю."""
         try:
+            from sqlalchemy import select
             payment_module = import_module("app.services.payment_service")
 
             payment_description = getattr(payment, "description", "YooKassa платеж")
@@ -387,9 +388,24 @@ class YooKassaPaymentMixin:
                     user.balance_kopeks += payment.amount_kopeks
                     user.updated_at = datetime.utcnow()
 
-                    promo_group = getattr(user, "promo_group", None)
-                    subscription = getattr(user, "subscription", None)
-                    referrer_info = format_referrer_info(user)
+                    # Обновляем пользователя с нужными связями, чтобы избежать проблем с ленивой загрузкой
+                    from app.database.crud.user import get_user_by_id
+                    from sqlalchemy.orm import selectinload
+                    from app.database.models import User, Subscription as SubscriptionModel
+                    
+                    # Загружаем пользователя с подпиской и промо-группой
+                    full_user_result = await db.execute(
+                        select(User)
+                        .options(selectinload(User.subscription))
+                        .options(selectinload(User.promo_group))
+                        .where(User.id == user.id)
+                    )
+                    full_user = full_user_result.scalar_one_or_none()
+                    
+                    # Используем обновленные данные или исходные, если не удалось обновить
+                    subscription = full_user.subscription if full_user else getattr(user, "subscription", None)
+                    promo_group = full_user.promo_group if full_user else getattr(user, "promo_group", None)
+                    referrer_info = format_referrer_info(full_user if full_user else user)
                     topup_status = (
                         "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
                     )
@@ -425,8 +441,13 @@ class YooKassaPaymentMixin:
                             )
 
                             notification_service = AdminNotificationService(self.bot)
+                            
+                            # Обновляем пользователя, чтобы избежать проблем с ленивой загрузкой
+                            from app.database.crud.user import get_user_by_id
+                            refreshed_user = await get_user_by_id(db, user.id)
+                            
                             await notification_service.send_balance_topup_notification(
-                                user,
+                                refreshed_user or user,
                                 transaction,
                                 old_balance,
                                 topup_status=topup_status,
@@ -619,10 +640,32 @@ class YooKassaPaymentMixin:
                                     )
 
                                     notification_service = AdminNotificationService(self.bot)
+                                    
+                                    # Обновляем пользователя с нужными связями, чтобы избежать проблем с ленивой загрузкой
+                                    from sqlalchemy import select
+                                    from sqlalchemy.orm import selectinload
+                                    from app.database.models import User, Subscription as SubscriptionModel
+                                    
+                                    # Загружаем пользователя с подпиской и промо-группой
+                                    full_user_result = await db.execute(
+                                        select(User)
+                                        .options(selectinload(User.subscription))
+                                        .options(selectinload(User.promo_group))
+                                        .where(User.id == user.id)
+                                    )
+                                    full_user = full_user_result.scalar_one_or_none()
+                                    
+                                    # Загружаем подписку отдельно, если нужно
+                                    subscription_result = await db.execute(
+                                        select(SubscriptionModel)
+                                        .where(SubscriptionModel.user_id == user.id)
+                                    )
+                                    subscription_db = subscription_result.scalar_one_or_none()
+                                    
                                     await notification_service.send_subscription_purchase_notification(
                                         db,
-                                        user,
-                                        subscription,
+                                        full_user or user,
+                                        subscription_db or subscription,
                                         transaction,
                                         subscription_period,
                                         was_trial_conversion=False,
