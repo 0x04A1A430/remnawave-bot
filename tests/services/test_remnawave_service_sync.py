@@ -1,6 +1,10 @@
 from datetime import datetime
 from pathlib import Path
 import sys
+from unittest.mock import AsyncMock
+
+import pytest
+from sqlalchemy.exc import IntegrityError
 from zoneinfo import ZoneInfo
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -59,3 +63,59 @@ def test_deduplicate_ignores_records_without_expire_date():
     deduplicated = service._deduplicate_panel_users_by_telegram_id([missing_expire, valid])
 
     assert deduplicated[telegram_id] is valid
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_user_handles_unique_violation(monkeypatch):
+    service = _create_service()
+    db = AsyncMock()
+
+    panel_user = {"telegramId": 555, "username": "existing"}
+    existing_user = object()
+
+    create_user_mock = AsyncMock(
+        side_effect=IntegrityError("stmt", "params", Exception("unique"))
+    )
+    get_user_mock = AsyncMock(return_value=existing_user)
+    rollback_mock = AsyncMock()
+
+    db.rollback = rollback_mock
+
+    monkeypatch.setattr("app.services.remnawave_service.create_user", create_user_mock)
+    monkeypatch.setattr(
+        "app.services.remnawave_service.get_user_by_telegram_id",
+        get_user_mock,
+    )
+
+    user, created = await service._get_or_create_bot_user_from_panel(db, panel_user)
+
+    assert user is existing_user
+    assert created is False
+    create_user_mock.assert_awaited_once()
+    get_user_mock.assert_awaited_once_with(db, 555)
+    rollback_mock.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_user_creates_new(monkeypatch):
+    service = _create_service()
+    db = AsyncMock()
+
+    panel_user = {"telegramId": 777, "username": "new_user"}
+    new_user = object()
+
+    create_user_mock = AsyncMock(return_value=new_user)
+
+    monkeypatch.setattr("app.services.remnawave_service.create_user", create_user_mock)
+
+    user, created = await service._get_or_create_bot_user_from_panel(db, panel_user)
+
+    assert user is new_user
+    assert created is True
+    create_user_mock.assert_awaited_once_with(
+        db=db,
+        telegram_id=777,
+        username="new_user",
+        first_name="Panel User 777",
+        language="ru",
+    )

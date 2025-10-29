@@ -3,7 +3,7 @@ import os
 import re
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from zoneinfo import ZoneInfo
 
@@ -13,9 +13,15 @@ from app.external.remnawave_api import (
     RemnaWaveNode, UserStatus, TrafficLimitStrategy, RemnaWaveAPIError
 )
 from sqlalchemy import and_, cast, delete, func, select, update, String
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.database.crud.user import get_users_list, get_user_by_telegram_id, update_user
+from app.database.crud.user import (
+    create_user,
+    get_users_list,
+    get_user_by_telegram_id,
+    update_user,
+)
 from app.database.crud.subscription import (
     get_subscription_by_user_id,
     update_subscription_usage,
@@ -193,6 +199,55 @@ class RemnaWaveService:
                 unique_users[telegram_id] = panel_user
 
         return unique_users
+
+    async def _get_or_create_bot_user_from_panel(
+        self,
+        db: AsyncSession,
+        panel_user: Dict[str, Any],
+    ) -> Tuple[Optional[User], bool]:
+        """Возвращает пользователя бота, создавая его при необходимости.
+
+        При конфликте уникальности telegram_id повторно загружает пользователя
+        из базы данных и сообщает, что запись не была создана заново.
+        """
+
+        telegram_id = panel_user.get("telegramId")
+        if telegram_id is None:
+            return None, False
+
+        username = panel_user.get("username") or f"user_{telegram_id}"
+
+        try:
+            db_user = await create_user(
+                db=db,
+                telegram_id=telegram_id,
+                username=username,
+                first_name=f"Panel User {telegram_id}",
+                language="ru",
+            )
+            return db_user, True
+        except IntegrityError as create_error:
+            logger.info(
+                "♻️ Пользователь с telegram_id %s уже существует. Используем существующую запись.",
+                telegram_id,
+            )
+
+            try:
+                await db.rollback()
+            except Exception:
+                # create_user уже выполняет rollback при необходимости
+                pass
+
+            existing_user = await get_user_by_telegram_id(db, telegram_id)
+            if existing_user is None:
+                raise create_error
+
+            logger.debug(
+                "Используется существующий пользователь %s после конфликта уникальности: %s",
+                telegram_id,
+                create_error,
+            )
+            return existing_user, False
     
     async def get_system_statistics(self) -> Dict[str, Any]:
             try:
@@ -866,23 +921,35 @@ class RemnaWaveService:
                     if not db_user:
                         if sync_type in ["new_only", "all"]:
                             logger.info(f"🆕 Создание пользователя для telegram_id {telegram_id}")
-                            
-                            from app.database.crud.user import create_user
-                            
-                            db_user = await create_user(
-                                db=db,
-                                telegram_id=telegram_id,
-                                username=panel_user.get('username') or f"user_{telegram_id}",
-                                first_name=f"Panel User {telegram_id}",
-                                language="ru"
-                            )
-                            
-                            await update_user(db, db_user, remnawave_uuid=panel_user.get('uuid'))
-                            
-                            await self._create_subscription_from_panel_data(db, db_user, panel_user)
-                            
-                            stats["created"] += 1
-                            logger.info(f"✅ Создан пользователь {telegram_id} с подпиской")
+
+                            db_user, is_created = await self._get_or_create_bot_user_from_panel(db, panel_user)
+
+                            if not db_user:
+                                logger.error(
+                                    "❌ Не удалось создать или получить пользователя для telegram_id %s",
+                                    telegram_id,
+                                )
+                                stats["errors"] += 1
+                                continue
+
+                            bot_users_by_telegram_id[telegram_id] = db_user
+
+                            if not db_user.remnawave_uuid:
+                                await update_user(db, db_user, remnawave_uuid=panel_user.get('uuid'))
+
+                            if is_created or not getattr(db_user, "subscription", None):
+                                await self._create_subscription_from_panel_data(db, db_user, panel_user)
+                            else:
+                                await self._update_subscription_from_panel_data(db, db_user, panel_user)
+
+                            if is_created:
+                                stats["created"] += 1
+                                logger.info(f"✅ Создан пользователь {telegram_id} с подпиской")
+                            else:
+                                stats["updated"] += 1
+                                logger.info(
+                                    f"♻️ Обновлена подписка существующего пользователя {telegram_id}"
+                                )
                     
                     else:
                         if sync_type in ["update_only", "all"]:
