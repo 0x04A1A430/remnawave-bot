@@ -773,15 +773,75 @@ class RemnaWaveService:
             logger.info(f"📊 Пользователей в боте: {len(bot_users)}")
             
             panel_users_with_tg = [
-                user for user in panel_users 
+                user for user in panel_users
                 if user.get('telegramId') is not None
             ]
-            
+
             logger.info(f"📊 Пользователей в панели с Telegram ID: {len(panel_users_with_tg)}")
-            
+
+            def _parse_expire_at(user_data: Dict[str, Any]) -> Optional[datetime]:
+                expire_at_str = user_data.get('expireAt')
+                if not expire_at_str:
+                    return None
+
+                try:
+                    return self._parse_remnawave_date(expire_at_str)
+                except Exception:
+                    logger.debug(
+                        "⚠️ Не удалось разобрать дату expireAt для пользователя %s: %s",
+                        user_data.get('telegramId'),
+                        expire_at_str,
+                    )
+                    return None
+
+            latest_panel_users_by_telegram_id: Dict[int, Dict[str, Any]] = {}
+            duplicates_skipped = 0
+
+            for panel_user in panel_users_with_tg:
+                telegram_id = panel_user.get('telegramId')
+                if not telegram_id:
+                    continue
+
+                existing = latest_panel_users_by_telegram_id.get(telegram_id)
+                if not existing:
+                    latest_panel_users_by_telegram_id[telegram_id] = panel_user
+                    continue
+
+                existing_expire = _parse_expire_at(existing)
+                candidate_expire = _parse_expire_at(panel_user)
+
+                replace_candidate = False
+
+                if candidate_expire and existing_expire:
+                    replace_candidate = candidate_expire > existing_expire
+                elif candidate_expire and not existing_expire:
+                    replace_candidate = True
+                elif not candidate_expire and not existing_expire:
+                    existing_status = (existing.get('status') or '').upper()
+                    candidate_status = (panel_user.get('status') or '').upper()
+                    replace_candidate = candidate_status == 'ACTIVE' and existing_status != 'ACTIVE'
+
+                if replace_candidate:
+                    latest_panel_users_by_telegram_id[telegram_id] = panel_user
+                else:
+                    duplicates_skipped += 1
+
+            unique_panel_users = list(latest_panel_users_by_telegram_id.values())
+
+            if duplicates_skipped:
+                logger.info(
+                    "📉 Обнаружено и пропущено дубликатов пользователей: %s",
+                    duplicates_skipped,
+                )
+
+            logger.info(
+                "📊 Пользователей после фильтрации дубликатов: %s",
+                len(unique_panel_users),
+            )
+
             panel_telegram_ids = set()
-            
-            for i, panel_user in enumerate(panel_users_with_tg):
+
+            for i, panel_user in enumerate(unique_panel_users):
                 try:
                     telegram_id = panel_user.get('telegramId')
                     if not telegram_id:
@@ -789,8 +849,10 @@ class RemnaWaveService:
                     
                     panel_telegram_ids.add(telegram_id)
                     
-                    if (i + 1) % 10 == 0: 
-                        logger.info(f"🔄 Обрабатываем пользователя {i+1}/{len(panel_users_with_tg)}: {telegram_id}")
+                    if (i + 1) % 10 == 0:
+                        logger.info(
+                            f"🔄 Обрабатываем пользователя {i+1}/{len(unique_panel_users)}: {telegram_id}"
+                        )
                     
                     db_user = bot_users_by_telegram_id.get(telegram_id)
                     
