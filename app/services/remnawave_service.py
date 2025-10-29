@@ -3,7 +3,7 @@ import os
 import re
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from zoneinfo import ZoneInfo
 
@@ -13,9 +13,15 @@ from app.external.remnawave_api import (
     RemnaWaveNode, UserStatus, TrafficLimitStrategy, RemnaWaveAPIError
 )
 from sqlalchemy import and_, cast, delete, func, select, update, String
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.database.crud.user import get_users_list, get_user_by_telegram_id, update_user
+from app.database.crud.user import (
+    create_user,
+    get_users_list,
+    get_user_by_telegram_id,
+    update_user,
+)
 from app.database.crud.subscription import (
     get_subscription_by_user_id,
     update_subscription_usage,
@@ -132,6 +138,116 @@ class RemnaWaveService:
         except Exception as e:
             logger.warning(f"⚠️ Не удалось распарсить дату '{date_str}': {e}. Используем дефолтную дату.")
             return self._now_in_panel_timezone() + timedelta(days=30)
+
+    def _safe_panel_expire_date(self, panel_user: Dict[str, Any]) -> datetime:
+        """Парсит дату окончания подписки пользователя панели для сравнения."""
+
+        expire_at_value = panel_user.get('expireAt')
+
+        if expire_at_value is None:
+            return datetime.min.replace(tzinfo=None)
+
+        expire_at_str = str(expire_at_value).strip()
+        if not expire_at_str:
+            return datetime.min.replace(tzinfo=None)
+
+        return self._parse_remnawave_date(expire_at_str)
+
+    def _is_preferred_panel_user(
+        self,
+        *,
+        candidate: Dict[str, Any],
+        current: Dict[str, Any],
+    ) -> bool:
+        """Определяет, является ли новая запись предпочтительной для Telegram ID."""
+
+        candidate_expire = self._safe_panel_expire_date(candidate)
+        current_expire = self._safe_panel_expire_date(current)
+
+        if candidate_expire > current_expire:
+            return True
+        if candidate_expire < current_expire:
+            return False
+
+        candidate_status = (candidate.get('status') or '').upper()
+        current_status = (current.get('status') or '').upper()
+
+        active_statuses = {'ACTIVE', 'TRIAL'}
+        if candidate_status in active_statuses and current_status not in active_statuses:
+            return True
+
+        return False
+
+    def _deduplicate_panel_users_by_telegram_id(
+        self,
+        panel_users: List[Dict[str, Any]],
+    ) -> Dict[Any, Dict[str, Any]]:
+        """Возвращает уникальных пользователей панели по Telegram ID."""
+
+        unique_users: Dict[Any, Dict[str, Any]] = {}
+
+        for panel_user in panel_users:
+            telegram_id = panel_user.get('telegramId')
+            if telegram_id is None:
+                continue
+
+            existing_user = unique_users.get(telegram_id)
+            if existing_user is None or self._is_preferred_panel_user(
+                candidate=panel_user,
+                current=existing_user,
+            ):
+                unique_users[telegram_id] = panel_user
+
+        return unique_users
+
+    async def _get_or_create_bot_user_from_panel(
+        self,
+        db: AsyncSession,
+        panel_user: Dict[str, Any],
+    ) -> Tuple[Optional[User], bool]:
+        """Возвращает пользователя бота, создавая его при необходимости.
+
+        При конфликте уникальности telegram_id повторно загружает пользователя
+        из базы данных и сообщает, что запись не была создана заново.
+        """
+
+        telegram_id = panel_user.get("telegramId")
+        if telegram_id is None:
+            return None, False
+
+        username = panel_user.get("username") or f"user_{telegram_id}"
+
+        try:
+            db_user = await create_user(
+                db=db,
+                telegram_id=telegram_id,
+                username=username,
+                first_name=f"Panel User {telegram_id}",
+                language="ru",
+            )
+            return db_user, True
+        except IntegrityError as create_error:
+            logger.info(
+                "♻️ Пользователь с telegram_id %s уже существует. Используем существующую запись.",
+                telegram_id,
+            )
+
+            try:
+                await db.rollback()
+            except Exception:
+                # create_user уже выполняет rollback при необходимости
+                pass
+
+            existing_user = await get_user_by_telegram_id(db, telegram_id)
+            if existing_user is None:
+                raise create_error
+
+            logger.debug(
+                "Используется существующий пользователь %s после конфликта уникальности: %s",
+                telegram_id,
+                create_error,
+            )
+            return existing_user, False
     
     async def get_system_statistics(self) -> Dict[str, Any]:
             try:
@@ -773,47 +889,67 @@ class RemnaWaveService:
             logger.info(f"📊 Пользователей в боте: {len(bot_users)}")
             
             panel_users_with_tg = [
-                user for user in panel_users 
+                user for user in panel_users
                 if user.get('telegramId') is not None
             ]
-            
+
             logger.info(f"📊 Пользователей в панели с Telegram ID: {len(panel_users_with_tg)}")
-            
-            panel_telegram_ids = set()
-            
-            for i, panel_user in enumerate(panel_users_with_tg):
+
+            unique_panel_users_map = self._deduplicate_panel_users_by_telegram_id(panel_users_with_tg)
+            unique_panel_users = list(unique_panel_users_map.values())
+            duplicates_count = len(panel_users_with_tg) - len(unique_panel_users)
+
+            if duplicates_count:
+                logger.info(
+                    "♻️ Обнаружено %s дубликатов пользователей по Telegram ID. Используем самые свежие записи.",
+                    duplicates_count,
+                )
+
+            panel_telegram_ids = set(unique_panel_users_map.keys())
+
+            for i, panel_user in enumerate(unique_panel_users):
                 try:
                     telegram_id = panel_user.get('telegramId')
                     if not telegram_id:
                         continue
-                    
-                    panel_telegram_ids.add(telegram_id)
-                    
-                    if (i + 1) % 10 == 0: 
-                        logger.info(f"🔄 Обрабатываем пользователя {i+1}/{len(panel_users_with_tg)}: {telegram_id}")
+
+                    if (i + 1) % 10 == 0:
+                        logger.info(f"🔄 Обрабатываем пользователя {i+1}/{len(unique_panel_users)}: {telegram_id}")
                     
                     db_user = bot_users_by_telegram_id.get(telegram_id)
                     
                     if not db_user:
                         if sync_type in ["new_only", "all"]:
                             logger.info(f"🆕 Создание пользователя для telegram_id {telegram_id}")
-                            
-                            from app.database.crud.user import create_user
-                            
-                            db_user = await create_user(
-                                db=db,
-                                telegram_id=telegram_id,
-                                username=panel_user.get('username') or f"user_{telegram_id}",
-                                first_name=f"Panel User {telegram_id}",
-                                language="ru"
-                            )
-                            
-                            await update_user(db, db_user, remnawave_uuid=panel_user.get('uuid'))
-                            
-                            await self._create_subscription_from_panel_data(db, db_user, panel_user)
-                            
-                            stats["created"] += 1
-                            logger.info(f"✅ Создан пользователь {telegram_id} с подпиской")
+
+                            db_user, is_created = await self._get_or_create_bot_user_from_panel(db, panel_user)
+
+                            if not db_user:
+                                logger.error(
+                                    "❌ Не удалось создать или получить пользователя для telegram_id %s",
+                                    telegram_id,
+                                )
+                                stats["errors"] += 1
+                                continue
+
+                            bot_users_by_telegram_id[telegram_id] = db_user
+
+                            if not db_user.remnawave_uuid:
+                                await update_user(db, db_user, remnawave_uuid=panel_user.get('uuid'))
+
+                            if is_created or not getattr(db_user, "subscription", None):
+                                await self._create_subscription_from_panel_data(db, db_user, panel_user)
+                            else:
+                                await self._update_subscription_from_panel_data(db, db_user, panel_user)
+
+                            if is_created:
+                                stats["created"] += 1
+                                logger.info(f"✅ Создан пользователь {telegram_id} с подпиской")
+                            else:
+                                stats["updated"] += 1
+                                logger.info(
+                                    f"♻️ Обновлена подписка существующего пользователя {telegram_id}"
+                                )
                     
                     else:
                         if sync_type in ["update_only", "all"]:
