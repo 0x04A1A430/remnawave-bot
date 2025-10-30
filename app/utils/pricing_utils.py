@@ -313,6 +313,21 @@ def format_period_description(days: int, language: str = "ru") -> str:
         return f"{days} days ({months} {month_word})"
 
 
+def format_period_option_label(label: str, price: int) -> str:
+    """Return a period option label with price when it's greater than zero.
+
+    When the price is zero or negative, the price suffix is omitted so that the
+    option does not misleadingly show "0" as the cost of the period. This keeps
+    the UI consistent when pricing is calculated dynamically based on other
+    parameters such as servers or devices.
+    """
+
+    if price and price > 0:
+        return f"{label} - {settings.format_price(price)}"
+
+    return label
+
+
 def validate_pricing_calculation(
     base_price: int,
     monthly_additions: int,
