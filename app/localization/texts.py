@@ -5,6 +5,7 @@ import logging
 from typing import Any, Dict
 
 from app.config import settings
+from app.utils.pricing_utils import format_period_option_label
 from app.localization.loader import (
     DEFAULT_LANGUAGE,
     clear_locale_cache,
@@ -30,12 +31,12 @@ def _build_dynamic_values(language: str) -> Dict[str, Any]:
 
     if language_code == "ru":
         return {
-            "PERIOD_14_DAYS": f"📅 14 дней - {settings.format_price(settings.PRICE_14_DAYS)}",
-            "PERIOD_30_DAYS": f"📅 30 дней - {settings.format_price(settings.PRICE_30_DAYS)}",
-            "PERIOD_60_DAYS": f"📅 60 дней - {settings.format_price(settings.PRICE_60_DAYS)}",
-            "PERIOD_90_DAYS": f"📅 90 дней - {settings.format_price(settings.PRICE_90_DAYS)}",
-            "PERIOD_180_DAYS": f"📅 180 дней - {settings.format_price(settings.PRICE_180_DAYS)}",
-            "PERIOD_360_DAYS": f"📅 360 дней - {settings.format_price(settings.PRICE_360_DAYS)}",
+            "PERIOD_14_DAYS": format_period_option_label("📅 14 дней", settings.PRICE_14_DAYS),
+            "PERIOD_30_DAYS": format_period_option_label("📅 30 дней", settings.PRICE_30_DAYS),
+            "PERIOD_60_DAYS": format_period_option_label("📅 60 дней", settings.PRICE_60_DAYS),
+            "PERIOD_90_DAYS": format_period_option_label("📅 90 дней", settings.PRICE_90_DAYS),
+            "PERIOD_180_DAYS": format_period_option_label("📅 180 дней", settings.PRICE_180_DAYS),
+            "PERIOD_360_DAYS": format_period_option_label("📅 360 дней", settings.PRICE_360_DAYS),
             "TRAFFIC_5GB": f"📊 5 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_5GB)}",
             "TRAFFIC_10GB": f"📊 10 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_10GB)}",
             "TRAFFIC_25GB": f"📊 25 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_25GB)}",
@@ -55,12 +56,12 @@ def _build_dynamic_values(language: str) -> Dict[str, Any]:
 
     if language_code == "en":
         return {
-            "PERIOD_14_DAYS": f"📅 14 days - {settings.format_price(settings.PRICE_14_DAYS)}",
-            "PERIOD_30_DAYS": f"📅 30 days - {settings.format_price(settings.PRICE_30_DAYS)}",
-            "PERIOD_60_DAYS": f"📅 60 days - {settings.format_price(settings.PRICE_60_DAYS)}",
-            "PERIOD_90_DAYS": f"📅 90 days - {settings.format_price(settings.PRICE_90_DAYS)}",
-            "PERIOD_180_DAYS": f"📅 180 days - {settings.format_price(settings.PRICE_180_DAYS)}",
-            "PERIOD_360_DAYS": f"📅 360 days - {settings.format_price(settings.PRICE_360_DAYS)}",
+            "PERIOD_14_DAYS": format_period_option_label("📅 14 days", settings.PRICE_14_DAYS),
+            "PERIOD_30_DAYS": format_period_option_label("📅 30 days", settings.PRICE_30_DAYS),
+            "PERIOD_60_DAYS": format_period_option_label("📅 60 days", settings.PRICE_60_DAYS),
+            "PERIOD_90_DAYS": format_period_option_label("📅 90 days", settings.PRICE_90_DAYS),
+            "PERIOD_180_DAYS": format_period_option_label("📅 180 days", settings.PRICE_180_DAYS),
+            "PERIOD_360_DAYS": format_period_option_label("📅 360 days", settings.PRICE_360_DAYS),
             "TRAFFIC_5GB": f"📊 5 GB - {settings.format_price(settings.PRICE_TRAFFIC_5GB)}",
             "TRAFFIC_10GB": f"📊 10 GB - {settings.format_price(settings.PRICE_TRAFFIC_10GB)}",
             "TRAFFIC_25GB": f"📊 25 GB - {settings.format_price(settings.PRICE_TRAFFIC_25GB)}",
