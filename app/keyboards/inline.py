@@ -9,7 +9,10 @@ from app.config import settings, PERIOD_PRICES, TRAFFIC_PRICES
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
-from app.utils.pricing_utils import format_period_description, apply_percentage_discount
+from app.utils.pricing_utils import (
+    format_period_description,
+    apply_percentage_discount,
+)
 from app.utils.subscription_utils import (
     get_display_subscription_link,
     get_happ_cryptolink_redirect_link,
@@ -1407,10 +1410,10 @@ def get_extend_subscription_keyboard(language: str = DEFAULT_LANGUAGE) -> Inline
     keyboard = []
     
     periods = [
-        (14, f"📅 14 дней - {settings.format_price(settings.PRICE_14_DAYS)}"),
-        (30, f"📅 30 дней - {settings.format_price(settings.PRICE_30_DAYS)}"),
-        (60, f"📅 60 дней - {settings.format_price(settings.PRICE_60_DAYS)}"),
-        (90, f"📅 90 дней - {settings.format_price(settings.PRICE_90_DAYS)}")
+        (14, texts.PERIOD_14_DAYS),
+        (30, texts.PERIOD_30_DAYS),
+        (60, texts.PERIOD_60_DAYS),
+        (90, texts.PERIOD_90_DAYS)
     ]
     
     for days, text in periods:
