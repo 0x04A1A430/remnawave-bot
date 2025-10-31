@@ -79,7 +79,6 @@ from app.utils.promo_offer import (
 )
 
 from .common import _get_addon_discount_percent_for_user, _get_period_hint_from_subscription, logger
-from .workflow import present_subscription_summary
 
 async def handle_add_countries(
         callback: types.CallbackQuery,
@@ -589,21 +588,15 @@ async def countries_continue(
         await callback.answer("⚠️ Выберите хотя бы одну страну!", show_alert=True)
         return
 
-    if settings.is_devices_selection_enabled():
-        selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+    selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
 
-        await callback.message.edit_text(
-            texts.SELECT_DEVICES,
-            reply_markup=get_devices_keyboard(selected_devices, db_user.language)
-        )
+    await callback.message.edit_text(
+        texts.SELECT_DEVICES,
+        reply_markup=get_devices_keyboard(selected_devices, db_user.language)
+    )
 
-        await state.set_state(SubscriptionStates.selecting_devices)
-        await callback.answer()
-        return
-
-    success = await present_subscription_summary(callback, state, db_user, texts)
-    if success:
-        await callback.answer()
+    await state.set_state(SubscriptionStates.selecting_devices)
+    await callback.answer()
 
 async def _get_available_countries(promo_group_id: Optional[int] = None):
     from app.utils.cache import cache, cache_key

@@ -4133,21 +4133,20 @@ async def _build_subscription_settings(
     )
 
     devices_options: List[MiniAppSubscriptionDeviceOption] = []
-    if settings.is_devices_selection_enabled():
-        for value in range(1, max_devices + 1):
-            chargeable = max(0, value - default_device_limit)
-            discounted_per_month, _ = apply_percentage_discount(
-                chargeable * settings.PRICE_PER_DEVICE,
-                devices_discount,
+    for value in range(1, max_devices + 1):
+        chargeable = max(0, value - default_device_limit)
+        discounted_per_month, _ = apply_percentage_discount(
+            chargeable * settings.PRICE_PER_DEVICE,
+            devices_discount,
+        )
+        devices_options.append(
+            MiniAppSubscriptionDeviceOption(
+                value=value,
+                label=None,
+                price_kopeks=discounted_per_month,
+                price_label=None,
             )
-            devices_options.append(
-                MiniAppSubscriptionDeviceOption(
-                    value=value,
-                    label=None,
-                    price_kopeks=discounted_per_month,
-                    price_label=None,
-                )
-            )
+        )
 
     settings_payload = MiniAppSubscriptionSettings(
         subscription_id=subscription.id,
@@ -4172,7 +4171,7 @@ async def _build_subscription_settings(
         ),
         devices=MiniAppSubscriptionDevicesSettings(
             options=devices_options,
-            can_update=settings.is_devices_selection_enabled(),
+            can_update=True,
             min=1,
             max=max_devices_setting or 0,
             step=1,
@@ -5011,15 +5010,6 @@ async def update_subscription_devices_endpoint(
     user = await _authorize_miniapp_user(payload.init_data, db)
     subscription = _ensure_paid_subscription(user)
     _validate_subscription_id(payload.subscription_id, subscription)
-
-    if not settings.is_devices_selection_enabled():
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "devices_selection_disabled",
-                "message": "Изменение количества устройств отключено",
-            },
-        )
 
     raw_value = payload.devices if payload.devices is not None else payload.device_limit
     if raw_value is None:
