@@ -262,6 +262,7 @@ class BotConfigurationService:
         "MAINTENANCE_MESSAGE": "MAINTENANCE",
         "MAINTENANCE_CHECK_INTERVAL": "MAINTENANCE",
         "MAINTENANCE_AUTO_ENABLE": "MAINTENANCE",
+        "MAINTENANCE_RETRY_ATTEMPTS": "MAINTENANCE",
         "WEBHOOK_URL": "WEBHOOK",
         "WEBHOOK_SECRET": "WEBHOOK",
         "VERSION_CHECK_ENABLED": "VERSION",
@@ -524,6 +525,17 @@ class BotConfigurationService:
             "example": "false",
             "warning": (
                 "При отключении мониторинг можно запустить вручную из панели администратора."
+            ),
+            "dependencies": "MAINTENANCE_CHECK_INTERVAL",
+        },
+        "MAINTENANCE_RETRY_ATTEMPTS": {
+            "description": (
+                "Сколько раз повторять проверку панели Remnawave перед фиксацией недоступности."
+            ),
+            "format": "Целое число не меньше 1.",
+            "example": "3",
+            "warning": (
+                "Большие значения увеличивают время реакции на реальные сбои, но помогают избежать ложных срабатываний."
             ),
             "dependencies": "MAINTENANCE_CHECK_INTERVAL",
         },

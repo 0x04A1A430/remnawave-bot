@@ -234,7 +234,11 @@ async def check_panel_status(
             f"👥 Пользователей онлайн: {status_data.get('users_online', 0)}",
             f"🖥️ Нод онлайн: {status_data.get('nodes_online', 0)}/{status_data.get('total_nodes', 0)}"
         ]
-        
+
+        attempts_used = status_data.get("attempts_used")
+        if attempts_used:
+            message_parts.append(f"🔁 Попыток проверки: {attempts_used}")
+
         if status_data.get("api_error"):
             message_parts.append(f"❌ Ошибка: {status_data['api_error'][:100]}")
         

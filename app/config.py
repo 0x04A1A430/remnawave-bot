@@ -159,6 +159,7 @@ class Settings(BaseSettings):
     MAINTENANCE_CHECK_INTERVAL: int = 30
     MAINTENANCE_AUTO_ENABLE: bool = True
     MAINTENANCE_MONITORING_ENABLED: bool = True
+    MAINTENANCE_RETRY_ATTEMPTS: int = 1
     MAINTENANCE_MESSAGE: str = "🔧 Ведутся технические работы. Сервис временно недоступен. Попробуйте позже."
     
     TELEGRAM_STARS_ENABLED: bool = True
@@ -1010,6 +1011,13 @@ class Settings(BaseSettings):
     
     def get_maintenance_check_interval(self) -> int:
         return self.MAINTENANCE_CHECK_INTERVAL
+
+    def get_maintenance_retry_attempts(self) -> int:
+        try:
+            attempts = int(self.MAINTENANCE_RETRY_ATTEMPTS)
+        except (TypeError, ValueError):
+            attempts = 1
+        return max(1, attempts)
 
     def is_base_promo_group_period_discount_enabled(self) -> bool:
         return self.BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED
