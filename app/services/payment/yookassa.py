@@ -405,7 +405,10 @@ class YooKassaPaymentMixin:
                     # Используем обновленные данные или исходные, если не удалось обновить
                     subscription = full_user.subscription if full_user else getattr(user, "subscription", None)
                     promo_group = full_user.promo_group if full_user else getattr(user, "promo_group", None)
-                    referrer_info = format_referrer_info(full_user if full_user else user)
+                    
+                    # Используем full_user для форматирования реферальной информации, чтобы избежать проблем с ленивой загрузкой
+                    user_for_referrer = full_user if full_user else user
+                    referrer_info = format_referrer_info(user_for_referrer)
                     topup_status = (
                         "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
                     )
