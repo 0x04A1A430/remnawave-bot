@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     REMNAWAVE_PASSWORD: Optional[str] = None
     REMNAWAVE_AUTH_TYPE: str = "api_key"
     REMNAWAVE_USER_DESCRIPTION_TEMPLATE: str = "Bot user: {full_name} {username}"
+    REMNAWAVE_USER_USERNAME_TEMPLATE: str = "user_{telegram_id}"
     REMNAWAVE_USER_DELETE_MODE: str = "delete"  # "delete" или "disable"
     REMNAWAVE_AUTO_SYNC_ENABLED: bool = False
     REMNAWAVE_AUTO_SYNC_TIMES: str = "03:00"
@@ -550,6 +551,34 @@ class Settings(BaseSettings):
 
         description = re.sub(r'\s+', ' ', description).strip()
         return description
+
+    def format_remnawave_username(
+        self,
+        *,
+        full_name: str,
+        username: Optional[str],
+        telegram_id: int
+    ) -> str:
+        template = self.REMNAWAVE_USER_USERNAME_TEMPLATE or "user_{telegram_id}"
+
+        username_clean = (username or "").lstrip("@")
+        full_name_value = full_name or ""
+
+        values = defaultdict(str, {
+            "full_name": full_name_value,
+            "username": username_clean,
+            "username_clean": username_clean,
+            "telegram_id": str(telegram_id),
+        })
+
+        raw_username = template.format_map(values).strip()
+        sanitized_username = re.sub(r"[^0-9A-Za-z._-]+", "_", raw_username)
+        sanitized_username = re.sub(r"_+", "_", sanitized_username).strip("._-")
+
+        if not sanitized_username:
+            sanitized_username = f"user_{telegram_id}"
+
+        return sanitized_username[:64]
 
     @staticmethod
     def parse_daily_time_list(raw_value: Optional[str]) -> List[time]:

@@ -269,6 +269,7 @@ class BotConfigurationService:
         "VERSION_CHECK_INTERVAL_HOURS": "VERSION",
         "TELEGRAM_STARS_RATE_RUB": "TELEGRAM",
         "REMNAWAVE_USER_DESCRIPTION_TEMPLATE": "REMNAWAVE",
+        "REMNAWAVE_USER_USERNAME_TEMPLATE": "REMNAWAVE",
         "REMNAWAVE_AUTO_SYNC_ENABLED": "REMNAWAVE",
         "REMNAWAVE_AUTO_SYNC_TIMES": "REMNAWAVE",
     }
@@ -551,6 +552,31 @@ class BotConfigurationService:
                 "синхронизации нагружают панель."
             ),
             "dependencies": "REMNAWAVE_AUTO_SYNC_ENABLED",
+        },
+        "REMNAWAVE_USER_DESCRIPTION_TEMPLATE": {
+            "description": (
+                "Шаблон текста, который бот передает в поле Description при создании "
+                "или обновлении пользователя в панели RemnaWave."
+            ),
+            "format": (
+                "Доступные плейсхолдеры: {full_name}, {username}, {username_clean}, {telegram_id}."
+            ),
+            "example": "Bot user: {full_name} {username}",
+            "warning": "Плейсхолдер {username} автоматически очищается, если у пользователя нет @username.",
+        },
+        "REMNAWAVE_USER_USERNAME_TEMPLATE": {
+            "description": (
+                "Шаблон имени пользователя, которое создаётся в панели RemnaWave для "
+                "телеграм-пользователя."
+            ),
+            "format": (
+                "Доступные плейсхолдеры: {full_name}, {username}, {username_clean}, {telegram_id}."
+            ),
+            "example": "vpn_{username_clean}_{telegram_id}",
+            "warning": (
+                "Недопустимые символы автоматически заменяются на подчёркивания. "
+                "Если результат пустой, используется user_{telegram_id}."
+            ),
         },
         "EXTERNAL_ADMIN_TOKEN": {
             "description": "Приватный токен, который использует внешняя админка для проверки запросов.",

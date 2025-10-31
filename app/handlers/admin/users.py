@@ -3878,7 +3878,11 @@ async def admin_buy_subscription_execute(
 
                         remnawave_user = await api.update_user(**update_kwargs)
                 else:
-                    username = f"user_{target_user.telegram_id}"
+                    username = settings.format_remnawave_username(
+                        full_name=target_user.full_name,
+                        username=target_user.username,
+                        telegram_id=target_user.telegram_id,
+                    )
                     async with remnawave_service.get_api_client() as api:
                         create_kwargs = dict(
                             username=username,

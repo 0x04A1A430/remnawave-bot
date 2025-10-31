@@ -1245,7 +1245,11 @@ class RemnaWaveService:
                             await api.update_user(**update_kwargs)
                             stats["updated"] += 1
                         else:
-                            username = f"user_{user.telegram_id}"
+                            username = settings.format_remnawave_username(
+                                full_name=user.full_name,
+                                username=user.username,
+                                telegram_id=user.telegram_id,
+                            )
 
                             create_kwargs = dict(
                                 username=username,

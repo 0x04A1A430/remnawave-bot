@@ -538,6 +538,8 @@ REMNAWAVE_AUTO_SYNC_TIMES=03:00,15:00
 
 # Шаблон описания пользователя
 REMNAWAVE_USER_DESCRIPTION_TEMPLATE="Bot user: {full_name} {username}"
+# Шаблон имени пользователя в панели
+REMNAWAVE_USER_USERNAME_TEMPLATE="user_{telegram_id}"
 REMNAWAVE_USER_DELETE_MODE=delete
 
 # ===== ПОДПИСКИ =====
