@@ -140,6 +140,7 @@ from .traffic import (
     handle_switch_traffic,
     select_traffic,
 )
+from .summary import present_subscription_summary
 
 async def show_subscription_info(
         callback: types.CallbackQuery,
@@ -237,26 +238,32 @@ async def show_subscription_info(
     devices_list = []
     devices_count = 0
 
-    try:
-        if db_user.remnawave_uuid:
-            from app.services.remnawave_service import RemnaWaveService
-            service = RemnaWaveService()
+    show_devices = settings.is_devices_selection_enabled()
+    devices_used_str = ""
+    devices_list: List[Dict[str, Any]] = []
 
-            async with service.get_api_client() as api:
-                response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
+    if show_devices:
+        try:
+            if db_user.remnawave_uuid:
+                from app.services.remnawave_service import RemnaWaveService
+                service = RemnaWaveService()
 
-                if response and 'response' in response:
-                    devices_info = response['response']
-                    devices_count = devices_info.get('total', 0)
-                    devices_list = devices_info.get('devices', [])
-                    devices_used_str = str(devices_count)
-                    logger.info(f"Найдено {devices_count} устройств для пользователя {db_user.telegram_id}")
-                else:
-                    logger.warning(f"Не удалось получить информацию об устройствах для {db_user.telegram_id}")
+                async with service.get_api_client() as api:
+                    response = await api._make_request('GET', f'/api/hwid/devices/{db_user.remnawave_uuid}')
 
-    except Exception as e:
-        logger.error(f"Ошибка получения устройств для отображения: {e}")
-        devices_used_str = await get_current_devices_count(db_user)
+                    if response and 'response' in response:
+                        devices_info = response['response']
+                        devices_count = devices_info.get('total', 0)
+                        devices_list = devices_info.get('devices', [])
+                        devices_used_str = str(devices_count)
+                        logger.info(f"Найдено {devices_count} устройств для пользователя {db_user.telegram_id}")
+                    else:
+                        logger.warning(f"Не удалось получить информацию об устройствах для {db_user.telegram_id}")
+
+        except Exception as e:
+            logger.error(f"Ошибка получения устройств для отображения: {e}")
+            devices_used = await get_current_devices_count(db_user)
+            devices_used_str = str(devices_used)
 
     servers_names = await get_servers_display_names(subscription.connected_squads)
     servers_display = (
@@ -265,7 +272,7 @@ async def show_subscription_info(
         else texts.t("SUBSCRIPTION_NO_SERVERS", "Нет серверов")
     )
 
-    message = texts.t(
+    message_template = texts.t(
         "SUBSCRIPTION_OVERVIEW_TEMPLATE",
         """👤 {full_name}
 💰 Баланс: {balance}
@@ -278,7 +285,15 @@ async def show_subscription_info(
 📈 Трафик: {traffic}
 🌍 Серверы: {servers}
 📱 Устройства: {devices_used} / {device_limit}""",
-    ).format(
+    )
+
+    if not show_devices:
+        message_template = message_template.replace(
+            "\n📱 Устройства: {devices_used} / {device_limit}",
+            "",
+        )
+
+    message = message_template.format(
         full_name=db_user.full_name,
         balance=settings.format_price(db_user.balance_kopeks),
         status_emoji=status_emoji,
@@ -293,7 +308,7 @@ async def show_subscription_info(
         device_limit=subscription.device_limit,
     )
 
-    if devices_list and len(devices_list) > 0:
+    if show_devices and devices_list:
         message += "\n\n" + texts.t(
             "SUBSCRIPTION_CONNECTED_DEVICES_TITLE",
             "<blockquote>📱 <b>Подключенные устройства:</b>\n",
@@ -415,7 +430,15 @@ async def activate_trial(
         return
 
     try:
-        subscription = await create_trial_subscription(db, db_user.id)
+        forced_devices = None
+        if not settings.is_devices_selection_enabled():
+            forced_devices = settings.get_devices_selection_disabled_amount()
+
+        subscription = await create_trial_subscription(
+            db,
+            db_user.id,
+            device_limit=forced_devices,
+        )
 
         await db.refresh(db_user)
 
@@ -589,10 +612,13 @@ async def start_subscription_purchase(
     )
 
     subscription = getattr(db_user, 'subscription', None)
-    initial_devices = settings.DEFAULT_DEVICE_LIMIT
 
-    if subscription and getattr(subscription, 'device_limit', None):
-        initial_devices = max(settings.DEFAULT_DEVICE_LIMIT, subscription.device_limit)
+    if settings.is_devices_selection_enabled():
+        initial_devices = settings.DEFAULT_DEVICE_LIMIT
+        if subscription and getattr(subscription, 'device_limit', None) is not None:
+            initial_devices = max(settings.DEFAULT_DEVICE_LIMIT, subscription.device_limit)
+    else:
+        initial_devices = settings.get_devices_selection_disabled_amount()
 
     initial_data = {
         'period_days': None,
@@ -698,7 +724,60 @@ async def return_to_saved_cart(
         return
 
     texts = get_texts(db_user.language)
-    total_price = cart_data.get('total_price', 0)
+
+    preserved_metadata_keys = {
+        'saved_cart',
+        'missing_amount',
+        'return_to_cart',
+        'user_id',
+    }
+    preserved_metadata = {
+        key: cart_data[key]
+        for key in preserved_metadata_keys
+        if key in cart_data
+    }
+
+    prepared_cart_data = dict(cart_data)
+
+    if not settings.is_devices_selection_enabled():
+        try:
+            from .pricing import _prepare_subscription_summary
+
+            _, recalculated_data = await _prepare_subscription_summary(
+                db_user,
+                prepared_cart_data,
+                texts,
+            )
+        except ValueError as recalculation_error:
+            logger.error(
+                "Не удалось пересчитать сохраненную корзину пользователя %s: %s",
+                db_user.telegram_id,
+                recalculation_error,
+            )
+            prepared_cart_data['devices'] = settings.get_devices_selection_disabled_amount()
+            removed_devices_total = prepared_cart_data.pop('total_devices_price', 0) or 0
+            if removed_devices_total:
+                prepared_cart_data['total_price'] = max(
+                    0,
+                    prepared_cart_data.get('total_price', 0) - removed_devices_total,
+                )
+            prepared_cart_data.pop('devices_discount_percent', None)
+            prepared_cart_data.pop('devices_discount_total', None)
+            prepared_cart_data.pop('devices_discounted_price_per_month', None)
+            prepared_cart_data.pop('devices_price_per_month', None)
+        else:
+            normalized_cart_data = dict(prepared_cart_data)
+            normalized_cart_data.update(recalculated_data)
+
+            for key, value in preserved_metadata.items():
+                normalized_cart_data[key] = value
+
+            prepared_cart_data = normalized_cart_data
+
+        if prepared_cart_data != cart_data:
+            await user_cart_service.save_user_cart(db_user.id, prepared_cart_data)
+
+    total_price = prepared_cart_data.get('total_price', 0)
 
     if db_user.balance_kopeks < total_price:
         missing_amount = total_price - db_user.balance_kopeks
@@ -717,30 +796,45 @@ async def return_to_saved_cart(
     countries = await _get_available_countries(db_user.promo_group_id)
     selected_countries_names = []
 
-    months_in_period = calculate_months_from_days(cart_data['period_days'])
-    period_display = format_period_description(cart_data['period_days'], db_user.language)
+    period_display = format_period_description(prepared_cart_data['period_days'], db_user.language)
 
     for country in countries:
-        if country['uuid'] in cart_data['countries']:
+        if country['uuid'] in prepared_cart_data['countries']:
             selected_countries_names.append(country['name'])
 
     if settings.is_traffic_fixed():
-        traffic_display = "Безлимитный" if cart_data['traffic_gb'] == 0 else f"{cart_data['traffic_gb']} ГБ"
+        traffic_value = prepared_cart_data.get('traffic_gb')
+        if traffic_value is None:
+            traffic_value = settings.get_fixed_traffic_limit()
+        traffic_display = "Безлимитный" if traffic_value == 0 else f"{traffic_value} ГБ"
     else:
-        traffic_display = "Безлимитный" if cart_data['traffic_gb'] == 0 else f"{cart_data['traffic_gb']} ГБ"
+        traffic_value = prepared_cart_data.get('traffic_gb', 0) or 0
+        traffic_display = "Безлимитный" if traffic_value == 0 else f"{traffic_value} ГБ"
 
-    summary_text = (
-        "🛒 Восстановленная корзина\n\n"
-        f"📅 Период: {period_display}\n"
-        f"📊 Трафик: {traffic_display}\n"
-        f"🌍 Страны: {', '.join(selected_countries_names)}\n"
-        f"📱 Устройства: {cart_data['devices']}\n\n"
-        f"💎 Общая стоимость: {texts.format_price(total_price)}\n\n"
-        "Подтверждаете покупку?"
-    )
+    summary_lines = [
+        "🛒 Восстановленная корзина",
+        "",
+        f"📅 Период: {period_display}",
+        f"📊 Трафик: {traffic_display}",
+        f"🌍 Страны: {', '.join(selected_countries_names)}",
+    ]
+
+    if settings.is_devices_selection_enabled():
+        devices_value = prepared_cart_data.get('devices')
+        if devices_value is not None:
+            summary_lines.append(f"📱 Устройства: {devices_value}")
+
+    summary_lines.extend([
+        "",
+        f"💎 Общая стоимость: {texts.format_price(total_price)}",
+        "",
+        "Подтверждаете покупку?",
+    ])
+
+    summary_text = "\n".join(summary_lines)
 
     # Устанавливаем данные в FSM для продолжения процесса
-    await state.set_data(cart_data)
+    await state.set_data(prepared_cart_data)
     await state.set_state(SubscriptionStates.confirming_purchase)
 
     await callback.message.edit_text(
@@ -793,7 +887,14 @@ async def handle_extend_subscription(
             servers_discount_per_month = servers_price_per_month * servers_discount_percent // 100
             total_servers_price = (servers_price_per_month - servers_discount_per_month) * months_in_period
 
-            additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
+            device_limit = subscription.device_limit
+            if device_limit is None:
+                if settings.is_devices_selection_enabled():
+                    device_limit = settings.DEFAULT_DEVICE_LIMIT
+                else:
+                    device_limit = settings.get_devices_selection_disabled_amount()
+
+            additional_devices = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT)
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
             devices_discount_percent = db_user.get_promo_discount(
                 "devices",
@@ -872,16 +973,27 @@ async def handle_extend_subscription(
         texts=texts,
     )
 
-    message_text = (
-        "⏰ Продление подписки\n\n"
-        f"Осталось дней: {subscription.days_left}\n\n"
-        f"<b>Ваша текущая конфигурация:</b>\n"
-        f"🌍 Серверов: {len(subscription.connected_squads)}\n"
-        f"📊 Трафик: {texts.format_traffic(subscription.traffic_limit_gb)}\n"
-        f"📱 Устройств: {subscription.device_limit}\n\n"
-        f"<b>Выберите период продления:</b>\n"
-        f"{prices_text.rstrip()}\n\n"
-    )
+    renewal_lines = [
+        "⏰ Продление подписки",
+        "",
+        f"Осталось дней: {subscription.days_left}",
+        "",
+        "<b>Ваша текущая конфигурация:</b>",
+        f"🌍 Серверов: {len(subscription.connected_squads)}",
+        f"📊 Трафик: {texts.format_traffic(subscription.traffic_limit_gb)}",
+    ]
+
+    if settings.is_devices_selection_enabled():
+        renewal_lines.append(f"📱 Устройств: {subscription.device_limit}")
+
+    renewal_lines.extend([
+        "",
+        "<b>Выберите период продления:</b>",
+        prices_text.rstrip(),
+        "",
+    ])
+
+    message_text = "\n".join(renewal_lines)
 
     if promo_discounts_text:
         message_text += f"{promo_discounts_text}\n\n"
@@ -958,7 +1070,14 @@ async def confirm_extend_subscription(
                 servers_price_per_month * servers_discount_percent // 100
         )
 
-        additional_devices = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT)
+        device_limit = subscription.device_limit
+        if device_limit is None:
+            if settings.is_devices_selection_enabled():
+                device_limit = settings.DEFAULT_DEVICE_LIMIT
+            else:
+                device_limit = settings.get_devices_selection_disabled_amount()
+
+        additional_devices = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT)
         devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
         devices_discount_percent = db_user.get_promo_discount(
             "devices",
@@ -1248,43 +1367,60 @@ async def select_period(
             reply_markup=get_traffic_packages_keyboard(db_user.language)
         )
         await state.set_state(SubscriptionStates.selecting_traffic)
-    else:
-        if await _should_show_countries_management(db_user):
-            countries = await _get_available_countries(db_user.promo_group_id)
-            await callback.message.edit_text(
-                texts.SELECT_COUNTRIES,
-                reply_markup=get_countries_keyboard(countries, [], db_user.language)
-            )
-            await state.set_state(SubscriptionStates.selecting_countries)
-        else:
-            countries = await _get_available_countries(db_user.promo_group_id)
-            available_countries = [c for c in countries if c.get('is_available', True)]
-            data['countries'] = [available_countries[0]['uuid']] if available_countries else []
-            await state.set_data(data)
+        await callback.answer()
+        return
 
-            selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+    if await _should_show_countries_management(db_user):
+        countries = await _get_available_countries(db_user.promo_group_id)
+        await callback.message.edit_text(
+            texts.SELECT_COUNTRIES,
+            reply_markup=get_countries_keyboard(countries, [], db_user.language)
+        )
+        await state.set_state(SubscriptionStates.selecting_countries)
+        await callback.answer()
+        return
 
-            await callback.message.edit_text(
-                texts.SELECT_DEVICES,
-                reply_markup=get_devices_keyboard(selected_devices, db_user.language)
-            )
-            await state.set_state(SubscriptionStates.selecting_devices)
+    countries = await _get_available_countries(db_user.promo_group_id)
+    available_countries = [c for c in countries if c.get('is_available', True)]
+    data['countries'] = [available_countries[0]['uuid']] if available_countries else []
+    await state.set_data(data)
 
-    await callback.answer()
+    if settings.is_devices_selection_enabled():
+        selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+
+        await callback.message.edit_text(
+            texts.SELECT_DEVICES,
+            reply_markup=get_devices_keyboard(selected_devices, db_user.language)
+        )
+        await state.set_state(SubscriptionStates.selecting_devices)
+        await callback.answer()
+        return
+
+    if await present_subscription_summary(callback, state, db_user, texts):
+        await callback.answer()
 
 async def select_devices(
         callback: types.CallbackQuery,
         state: FSMContext,
         db_user: User
 ):
+    texts = get_texts(db_user.language)
+
+    if not settings.is_devices_selection_enabled():
+        await callback.answer(
+            texts.t("DEVICES_SELECTION_DISABLED", "⚠️ Выбор количества устройств недоступен"),
+            show_alert=True,
+        )
+        return
+
     if not callback.data.startswith("devices_") or callback.data == "devices_continue":
-        await callback.answer("❌ Некорректный запрос", show_alert=True)
+        await callback.answer(texts.t("DEVICES_INVALID_REQUEST", "❌ Некорректный запрос"), show_alert=True)
         return
 
     try:
         devices = int(callback.data.split('_')[1])
     except (ValueError, IndexError):
-        await callback.answer("❌ Некорректное количество устройств", show_alert=True)
+        await callback.answer(texts.t("DEVICES_INVALID_COUNT", "❌ Некорректное количество устройств"), show_alert=True)
         return
 
     data = await state.get_data()
@@ -1321,27 +1457,8 @@ async def devices_continue(
         await callback.answer("⚠️ Некорректный запрос", show_alert=True)
         return
 
-    data = await state.get_data()
-    texts = get_texts(db_user.language)
-
-    try:
-        summary_text, prepared_data = await _prepare_subscription_summary(db_user, data, texts)
-    except ValueError:
-        logger.error(f"Ошибка в расчете цены подписки для пользователя {db_user.telegram_id}")
-        await callback.answer("Ошибка расчета цены. Обратитесь в поддержку.", show_alert=True)
-        return
-
-    await state.set_data(prepared_data)
-    await save_subscription_checkout_draft(db_user.id, prepared_data)
-
-    await callback.message.edit_text(
-        summary_text,
-        reply_markup=get_subscription_confirm_keyboard(db_user.language),
-        parse_mode="HTML",
-    )
-
-    await state.set_state(SubscriptionStates.confirming_purchase)
-    await callback.answer()
+    if await present_subscription_summary(callback, state, db_user):
+        await callback.answer()
 
 async def confirm_purchase(
         callback: types.CallbackQuery,
@@ -1436,30 +1553,43 @@ async def confirm_purchase(
         total_servers_discount = data.get('servers_discount_total', 0)
         servers_discount_percent = data.get('servers_discount_percent', 0)
 
-    additional_devices = max(0, data['devices'] - settings.DEFAULT_DEVICE_LIMIT)
+    devices_selection_enabled = settings.is_devices_selection_enabled()
+    if devices_selection_enabled:
+        devices_selected = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+    else:
+        devices_selected = settings.get_devices_selection_disabled_amount()
+
+    additional_devices = max(0, devices_selected - settings.DEFAULT_DEVICE_LIMIT)
     devices_price_per_month = data.get(
         'devices_price_per_month', additional_devices * settings.PRICE_PER_DEVICE
     )
-    if 'devices_discount_percent' in data:
-        devices_discount_percent = data.get('devices_discount_percent', 0)
-        discounted_devices_price_per_month = data.get(
-            'devices_discounted_price_per_month', devices_price_per_month
-        )
-        devices_discount_total = data.get('devices_discount_total', 0)
-        total_devices_price = data.get(
-            'total_devices_price', discounted_devices_price_per_month * months_in_period
-        )
-    else:
-        devices_discount_percent = db_user.get_promo_discount(
-            "devices",
-            data['period_days'],
-        )
-        discounted_devices_price_per_month, discount_per_month = apply_percentage_discount(
-            devices_price_per_month,
-            devices_discount_percent,
-        )
-        devices_discount_total = discount_per_month * months_in_period
-        total_devices_price = discounted_devices_price_per_month * months_in_period
+
+    devices_discount_percent = 0
+    discounted_devices_price_per_month = 0
+    devices_discount_total = 0
+    total_devices_price = 0
+
+    if devices_selection_enabled and additional_devices > 0:
+        if 'devices_discount_percent' in data:
+            devices_discount_percent = data.get('devices_discount_percent', 0)
+            discounted_devices_price_per_month = data.get(
+                'devices_discounted_price_per_month', devices_price_per_month
+            )
+            devices_discount_total = data.get('devices_discount_total', 0)
+            total_devices_price = data.get(
+                'total_devices_price', discounted_devices_price_per_month * months_in_period
+            )
+        else:
+            devices_discount_percent = db_user.get_promo_discount(
+                "devices",
+                data['period_days'],
+            )
+            discounted_devices_price_per_month, discount_per_month = apply_percentage_discount(
+                devices_price_per_month,
+                devices_discount_percent,
+            )
+            devices_discount_total = discount_per_month * months_in_period
+            total_devices_price = discounted_devices_price_per_month * months_in_period
 
     if settings.is_traffic_fixed():
         final_traffic_gb = settings.get_fixed_traffic_limit()
@@ -1666,6 +1796,13 @@ async def confirm_purchase(
             return
 
         existing_subscription = db_user.subscription
+        if settings.is_devices_selection_enabled():
+            selected_devices = devices_selected
+        else:
+            selected_devices = settings.get_devices_selection_disabled_amount()
+
+        should_update_devices = selected_devices is not None
+
         was_trial_conversion = False
         current_time = datetime.utcnow()
 
@@ -1708,7 +1845,8 @@ async def confirm_purchase(
             existing_subscription.is_trial = False
             existing_subscription.status = SubscriptionStatus.ACTIVE.value
             existing_subscription.traffic_limit_gb = final_traffic_gb
-            existing_subscription.device_limit = data['devices']
+            if should_update_devices:
+                existing_subscription.device_limit = selected_devices
             existing_subscription.connected_squads = data['countries']
 
             existing_subscription.start_date = current_time
@@ -1723,11 +1861,23 @@ async def confirm_purchase(
 
         else:
             logger.info(f"Создаем новую подписку для пользователя {db_user.telegram_id}")
+            default_device_limit = getattr(settings, "DEFAULT_DEVICE_LIMIT", 1)
+            resolved_device_limit = selected_devices
+
+            if resolved_device_limit is None:
+                if settings.is_devices_selection_enabled():
+                    resolved_device_limit = default_device_limit
+                else:
+                    resolved_device_limit = settings.get_devices_selection_disabled_amount()
+
+            if resolved_device_limit is None and settings.is_devices_selection_enabled():
+                resolved_device_limit = default_device_limit
+
             subscription = await create_paid_subscription_with_traffic_mode(
                 db=db,
                 user_id=db_user.id,
                 duration_days=data['period_days'],
-                device_limit=data['devices'],
+                device_limit=resolved_device_limit,
                 connected_squads=data['countries'],
                 traffic_gb=final_traffic_gb
             )
@@ -1745,11 +1895,11 @@ async def confirm_purchase(
             await add_user_to_servers(db, server_ids)
 
             logger.info(f"Сохранены цены серверов за весь период: {server_prices}")
-
+    
         await db.refresh(db_user)
-
+    
         subscription_service = SubscriptionService()
-
+    
         if db_user.remnawave_uuid:
             remnawave_user = await subscription_service.update_remnawave_user(
                 db,
@@ -1764,7 +1914,7 @@ async def confirm_purchase(
                 reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
                 reset_reason="покупка подписки",
             )
-
+    
         if not remnawave_user:
             logger.error(f"Не удалось создать/обновить RemnaWave пользователя для {db_user.telegram_id}")
             remnawave_user = await subscription_service.create_remnawave_user(
@@ -1773,7 +1923,7 @@ async def confirm_purchase(
                 reset_traffic=settings.RESET_TRAFFIC_ON_PAYMENT,
                 reset_reason="покупка подписки (повторная попытка)",
             )
-
+    
         transaction = await create_transaction(
             db=db,
             user_id=db_user.id,
@@ -1781,7 +1931,7 @@ async def confirm_purchase(
             amount_kopeks=final_price,
             description=f"Подписка на {data['period_days']} дней ({months_in_period} мес)"
         )
-
+    
         try:
             notification_service = AdminNotificationService(callback.bot)
             await notification_service.send_subscription_purchase_notification(
@@ -1988,7 +2138,7 @@ async def create_paid_subscription_with_traffic_mode(
         db: AsyncSession,
         user_id: int,
         duration_days: int,
-        device_limit: int,
+        device_limit: Optional[int],
         connected_squads: List[str],
         traffic_gb: Optional[int] = None
 ):
@@ -2002,15 +2152,19 @@ async def create_paid_subscription_with_traffic_mode(
     else:
         traffic_limit_gb = traffic_gb
 
-    subscription = await create_paid_subscription(
+    create_kwargs = dict(
         db=db,
         user_id=user_id,
         duration_days=duration_days,
         traffic_limit_gb=traffic_limit_gb,
-        device_limit=device_limit,
         connected_squads=connected_squads,
         update_server_counters=False,
     )
+
+    if device_limit is not None:
+        create_kwargs['device_limit'] = device_limit
+
+    subscription = await create_paid_subscription(**create_kwargs)
 
     logger.info(f"📋 Создана подписка с трафиком: {traffic_limit_gb} ГБ (режим: {settings.TRAFFIC_SELECTION_MODE})")
 
@@ -2034,9 +2188,14 @@ async def handle_subscription_settings(
         )
         return
 
-    devices_used = await get_current_devices_count(db_user)
+    show_devices = settings.is_devices_selection_enabled()
 
-    settings_text = texts.t(
+    if show_devices:
+        devices_used = await get_current_devices_count(db_user)
+    else:
+        devices_used = 0
+
+    settings_template = texts.t(
         "SUBSCRIPTION_SETTINGS_OVERVIEW",
         (
             "⚙️ <b>Настройки подписки</b>\n\n"
@@ -2046,7 +2205,15 @@ async def handle_subscription_settings(
             "📱 Устройства: {devices_used} / {devices_limit}\n\n"
             "Выберите что хотите изменить:"
         ),
-    ).format(
+    )
+
+    if not show_devices:
+        settings_template = settings_template.replace(
+            "\n📱 Устройства: {devices_used} / {devices_limit}",
+            "",
+        )
+
+    settings_text = settings_template.format(
         countries_count=len(subscription.connected_squads),
         traffic_used=texts.format_traffic(subscription.traffic_used_gb),
         traffic_limit=texts.format_traffic(subscription.traffic_limit_gb),
@@ -2441,16 +2608,26 @@ async def handle_simple_subscription_purchase(
     
     if user_balance_kopeks >= price_kopeks:
         # Если баланс достаточный, предлагаем оплатить с баланса
-        message_text = (
-            f"⚡ <b>Простая покупка подписки</b>\n\n"
-            f"📅 Период: {subscription_params['period_days']} дней\n"
-            f"📱 Устройства: {subscription_params['device_limit']}\n"
-            f"📊 Трафик: {traffic_text}\n"
-            f"🌍 Сервер: {'Любой доступный' if not subscription_params['squad_uuid'] else 'Выбранный'}\n\n"
-            f"💰 Стоимость: {settings.format_price(price_kopeks)}\n"
-            f"💳 Ваш баланс: {settings.format_price(user_balance_kopeks)}\n\n"
-            f"Вы можете оплатить подписку с баланса или выбрать другой способ оплаты."
-        )
+        simple_lines = [
+            "⚡ <b>Простая покупка подписки</b>",
+            "",
+            f"📅 Период: {subscription_params['period_days']} дней",
+        ]
+
+        if settings.is_devices_selection_enabled():
+            simple_lines.append(f"📱 Устройства: {subscription_params['device_limit']}")
+
+        simple_lines.extend([
+            f"📊 Трафик: {traffic_text}",
+            f"🌍 Сервер: {'Любой доступный' if not subscription_params['squad_uuid'] else 'Выбранный'}",
+            "",
+            f"💰 Стоимость: {settings.format_price(price_kopeks)}",
+            f"💳 Ваш баланс: {settings.format_price(user_balance_kopeks)}",
+            "",
+            "Вы можете оплатить подписку с баланса или выбрать другой способ оплаты.",
+        ])
+
+        message_text = "\n".join(simple_lines)
         
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="✅ Оплатить с баланса", callback_data="simple_subscription_pay_with_balance")],
@@ -2459,16 +2636,26 @@ async def handle_simple_subscription_purchase(
         ])
     else:
         # Если баланс недостаточный, предлагаем внешние способы оплаты
-        message_text = (
-            f"⚡ <b>Простая покупка подписки</b>\n\n"
-            f"📅 Период: {subscription_params['period_days']} дней\n"
-            f"📱 Устройства: {subscription_params['device_limit']}\n"
-            f"📊 Трафик: {traffic_text}\n"
-            f"🌍 Сервер: {'Любой доступный' if not subscription_params['squad_uuid'] else 'Выбранный'}\n\n"
-            f"💰 Стоимость: {settings.format_price(price_kopeks)}\n"
-            f"💳 Ваш баланс: {settings.format_price(user_balance_kopeks)}\n\n"
-            f"Выберите способ оплаты:"
-        )
+        simple_lines = [
+            "⚡ <b>Простая покупка подписки</b>",
+            "",
+            f"📅 Период: {subscription_params['period_days']} дней",
+        ]
+
+        if settings.is_devices_selection_enabled():
+            simple_lines.append(f"📱 Устройства: {subscription_params['device_limit']}")
+
+        simple_lines.extend([
+            f"📊 Трафик: {traffic_text}",
+            f"🌍 Сервер: {'Любой доступный' if not subscription_params['squad_uuid'] else 'Выбранный'}",
+            "",
+            f"💰 Стоимость: {settings.format_price(price_kopeks)}",
+            f"💳 Ваш баланс: {settings.format_price(user_balance_kopeks)}",
+            "",
+            "Выберите способ оплаты:",
+        ])
+
+        message_text = "\n".join(simple_lines)
         
         keyboard = _get_simple_subscription_payment_keyboard(db_user.language)
     
