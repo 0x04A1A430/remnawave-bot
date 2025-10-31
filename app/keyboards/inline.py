@@ -2085,33 +2085,38 @@ def get_updated_subscription_settings_keyboard(language: str = DEFAULT_LANGUAGE,
     
     texts = get_texts(language)
     keyboard = []
-    
+
     if show_countries_management:
         keyboard.append([
             InlineKeyboardButton(text=texts.t("ADD_COUNTRIES_BUTTON", "🌐 Добавить страны"), callback_data="subscription_add_countries")
         ])
 
-    keyboard.extend([
-        [
-            InlineKeyboardButton(text=texts.t("CHANGE_DEVICES_BUTTON", "📱 Изменить устройства"), callback_data="subscription_change_devices") 
-        ],
-        [
-            InlineKeyboardButton(text=texts.t("MANAGE_DEVICES_BUTTON", "🔧 Управление устройствами"), callback_data="subscription_manage_devices")
-        ]
-    ])
-
     if settings.is_traffic_selectable():
-        keyboard.insert(-2, [
-            InlineKeyboardButton(text=texts.t("SWITCH_TRAFFIC_BUTTON", "🔄 Переключить трафик"), callback_data="subscription_switch_traffic")
-        ])
-        keyboard.insert(-2, [
+        keyboard.append([
             InlineKeyboardButton(text=texts.t("RESET_TRAFFIC_BUTTON", "🔄 Сбросить трафик"), callback_data="subscription_reset_traffic")
         ])
-    
+        keyboard.append([
+            InlineKeyboardButton(text=texts.t("SWITCH_TRAFFIC_BUTTON", "🔄 Переключить трафик"), callback_data="subscription_switch_traffic")
+        ])
+
+    if settings.is_devices_selection_enabled():
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("CHANGE_DEVICES_BUTTON", "📱 Изменить устройства"),
+                callback_data="subscription_change_devices"
+            )
+        ])
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("MANAGE_DEVICES_BUTTON", "🔧 Управление устройствами"),
+                callback_data="subscription_manage_devices"
+            )
+        ])
+
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
     ])
-    
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
