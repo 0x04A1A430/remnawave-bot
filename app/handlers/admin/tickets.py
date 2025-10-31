@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, and_
 from datetime import datetime, timedelta
 import time
+import html
 
 from app.database.models import User, Ticket, TicketStatus
 from app.database.crud.ticket import TicketCRUD, TicketMessageCRUD
@@ -174,12 +175,24 @@ async def view_admin_ticket(
     
     user_name = ticket.user.full_name if ticket.user else "Unknown"
     telegram_id_display = ticket.user.telegram_id if ticket.user else "—"
-    username_display = (ticket.user.username or "отсутствует") if ticket.user else "отсутствует"
+    username_value = ticket.user.username if ticket.user else None
 
     ticket_text = f"🎫 Тикет #{ticket.id}\n\n"
     ticket_text += f"👤 Пользователь: {user_name}\n"
     ticket_text += f"🆔 Telegram ID: <code>{telegram_id_display}</code>\n"
-    ticket_text += f"📱 Username: @{username_display}\n"
+    if username_value:
+        safe_username = html.escape(username_value)
+        ticket_text += f"📱 Username: @{safe_username}\n"
+        ticket_text += (
+            f"🔗 ЛС: <a href=\"tg://resolve?domain={safe_username}\">"
+            f"tg://resolve?domain={safe_username}</a>\n"
+        )
+    else:
+        ticket_text += "📱 Username: отсутствует\n"
+        if ticket.user and ticket.user.telegram_id:
+            chat_link = f"tg://user?id={int(ticket.user.telegram_id)}"
+            ticket_text += f"🔗 Чат по ID: <a href=\"{chat_link}\">{chat_link}</a>\n"
+    ticket_text += "\n"
     ticket_text += f"📝 Заголовок: {ticket.title}\n"
     ticket_text += f"📊 Статус: {ticket.status_emoji} {status_text}\n"
     ticket_text += f"📅 Создан: {ticket.created_at.strftime('%d.%m.%Y %H:%M')}\n"
@@ -221,15 +234,11 @@ async def view_admin_ticket(
         pass
     # Кнопки ЛС и профиль
     try:
-        if ticket.user and ticket.user.telegram_id:
+        if ticket.user and ticket.user.telegram_id and ticket.user.username:
+            safe_username = html.escape(ticket.user.username)
             buttons_row = []
-            # DM: при наличии username используем tg://resolve, иначе fallback по ID
-            if ticket.user.username:
-                pm_url = f"tg://resolve?domain={ticket.user.username}"
-            else:
-                pm_url = f"tg://user?id={ticket.user.telegram_id}"
+            pm_url = f"tg://resolve?domain={safe_username}"
             buttons_row.append(types.InlineKeyboardButton(text="✉ Написать в ЛС", url=pm_url))
-            # Профиль: по ID
             profile_url = f"tg://user?id={ticket.user.telegram_id}"
             buttons_row.append(types.InlineKeyboardButton(text="👤 Профиль", url=profile_url))
             if buttons_row:
@@ -750,7 +759,21 @@ async def handle_admin_block_duration_input(
             ticket_text += f"📝 Заголовок: {updated.title}\n"
             ticket_text += f"📊 Статус: {updated.status_emoji} {status_text}\n"
             ticket_text += f"📅 Создан: {updated.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-            ticket_text += f"🔄 Обновлен: {updated.updated_at.strftime('%d.%m.%Y %H:%M')}\n\n"
+            ticket_text += f"🔄 Обновлен: {updated.updated_at.strftime('%d.%m.%Y %H:%M')}\n"
+            if updated.user and updated.user.telegram_id:
+                ticket_text += f"🆔 Telegram ID: <code>{updated.user.telegram_id}</code>\n"
+                if updated.user.username:
+                    safe_username = html.escape(updated.user.username)
+                    ticket_text += f"📱 Username: @{safe_username}\n"
+                    ticket_text += (
+                        f"🔗 ЛС: <a href=\"tg://resolve?domain={safe_username}\">"
+                        f"tg://resolve?domain={safe_username}</a>\n"
+                    )
+                else:
+                    ticket_text += "📱 Username: отсутствует\n"
+                    chat_link = f"tg://user?id={int(updated.user.telegram_id)}"
+                    ticket_text += f"🔗 Чат по ID: <a href=\"{chat_link}\">{chat_link}</a>\n"
+            ticket_text += "\n"
             if updated.is_user_reply_blocked:
                 if updated.user_reply_block_permanent:
                     ticket_text += "🚫 Пользователь заблокирован навсегда для ответов в этом тикете\n"
@@ -778,12 +801,10 @@ async def handle_admin_block_duration_input(
                 pass
             # Кнопки ЛС и профиль при обновлении карточки
             try:
-                if updated.user and updated.user.telegram_id:
+                if updated.user and updated.user.telegram_id and updated.user.username:
+                    safe_username = html.escape(updated.user.username)
                     buttons_row = []
-                    if updated.user.username:
-                        pm_url = f"tg://resolve?domain={updated.user.username}"
-                    else:
-                        pm_url = f"tg://user?id={updated.user.telegram_id}"
+                    pm_url = f"tg://resolve?domain={safe_username}"
                     buttons_row.append(types.InlineKeyboardButton(text="✉ Написать в ЛС", url=pm_url))
                     profile_url = f"tg://user?id={updated.user.telegram_id}"
                     buttons_row.append(types.InlineKeyboardButton(text="👤 Профиль", url=profile_url))
