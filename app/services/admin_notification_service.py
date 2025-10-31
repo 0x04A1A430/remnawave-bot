@@ -196,9 +196,9 @@ class AdminNotificationService:
 
             message = f"""🎯 <b>АКТИВАЦИЯ ТРИАЛА</b>
 
-👤 <b>Пользователь:</b> {user.full_name}
+👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
-📱 <b>Username:</b> @{user.username or 'отсутствует'}
+📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}
 👥 <b>Статус:</b> {user_status}
 
 {promo_block}
@@ -254,9 +254,9 @@ class AdminNotificationService:
 
             message = f"""💎 <b>{event_type}</b>
 
-👤 <b>Пользователь:</b> {user.full_name}
+👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
-📱 <b>Username:</b> @{user.username or 'отсутствует'}
+📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}
 👥 <b>Статус:</b> {user_status}
 
 {promo_block}
@@ -375,9 +375,9 @@ class AdminNotificationService:
 
         return f"""💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>
 
-👤 <b>Пользователь:</b> {user.full_name}
+👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
-📱 <b>Username:</b> @{user.username or 'отсутствует'}
+📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}
 💳 <b>Статус:</b> {topup_status}
 
 {promo_block}
@@ -554,9 +554,9 @@ class AdminNotificationService:
 
             message = f"""⏰ <b>ПРОДЛЕНИЕ ПОДПИСКИ</b>
 
-👤 <b>Пользователь:</b> {user.full_name}
+👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
-📱 <b>Username:</b> @{user.username or 'отсутствует'}
+📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}
 
 {promo_block}
 
@@ -604,9 +604,9 @@ class AdminNotificationService:
             message_lines = [
                 "🎫 <b>АКТИВАЦИЯ ПРОМОКОДА</b>",
                 "",
-                f"👤 <b>Пользователь:</b> {user.full_name}",
+                f"👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}",
                 f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>",
-                f"📱 <b>Username:</b> @{user.username or 'отсутствует'}",
+                f"📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}",
                 "",
                 promo_block,
                 "",
@@ -731,9 +731,9 @@ class AdminNotificationService:
             message_lines = [
                 f"{title}",
                 "",
-                f"👤 <b>Пользователь:</b> {user.full_name}",
+                f"👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}",
                 f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>",
-                f"📱 <b>Username:</b> @{user.username or 'отсутствует'}",
+                f"📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}",
                 "",
                 self._format_promo_group_block(new_group, title="Новая промогруппа", icon="🏆"),
             ]
@@ -1115,9 +1115,9 @@ class AdminNotificationService:
             message_lines = [
                 f"{title}",
                 "",
-                f"👤 <b>Пользователь:</b> {user.full_name}",
+                f"👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}",
                 f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>",
-                f"📱 <b>Username:</b> @{user.username or 'отсутствует'}",
+                f"📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}",
                 "",
                 promo_block,
                 "",
