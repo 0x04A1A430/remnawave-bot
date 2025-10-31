@@ -195,7 +195,6 @@ class BotConfigurationService:
         "DEFAULT_TRAFFIC_LIMIT_GB": "SUBSCRIPTIONS_CORE",
         "MAX_DEVICES_LIMIT": "SUBSCRIPTIONS_CORE",
         "PRICE_PER_DEVICE": "SUBSCRIPTIONS_CORE",
-        "DEVICES_SELECTION_ENABLED": "SUBSCRIPTIONS_CORE",
         "BASE_SUBSCRIPTION_PRICE": "SUBSCRIPTIONS_CORE",
         "DEFAULT_TRAFFIC_RESET_STRATEGY": "TRAFFIC",
         "RESET_TRAFFIC_ON_PAYMENT": "TRAFFIC",
@@ -450,12 +449,6 @@ class BotConfigurationService:
             "format": "Выберите сквад из списка или очистите значение.",
             "example": "d4aa2b8c-9a36-4f31-93a2-6f07dad05fba",
             "warning": "Убедитесь, что выбранный сквад активен и доступен для подписки.",
-        },
-        "DEVICES_SELECTION_ENABLED": {
-            "description": "Разрешает пользователям выбирать количество устройств при покупке и продлении подписки.",
-            "format": "Булево значение.",
-            "example": "false",
-            "warning": "При отключении пользователи не смогут докупать устройства из интерфейса бота.",
         },
         "CRYPTOBOT_ENABLED": {
             "description": "Разрешает принимать криптоплатежи через CryptoBot.",
