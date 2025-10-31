@@ -80,6 +80,7 @@ from app.utils.promo_offer import (
 
 from .common import _apply_addon_discount, _get_addon_discount_percent_for_user, _get_period_hint_from_subscription, get_confirm_switch_traffic_keyboard, get_traffic_switch_keyboard, logger
 from .countries import _get_available_countries, _should_show_countries_management
+from .workflow import present_subscription_summary
 
 async def handle_add_traffic(
         callback: types.CallbackQuery,
@@ -352,19 +353,29 @@ async def select_traffic(
             reply_markup=get_countries_keyboard(countries, [], db_user.language)
         )
         await state.set_state(SubscriptionStates.selecting_countries)
+        await callback.answer()
+        return
     else:
         countries = await _get_available_countries(db_user.promo_group_id)
         available_countries = [c for c in countries if c.get('is_available', True)]
         data['countries'] = [available_countries[0]['uuid']] if available_countries else []
         await state.set_data(data)
 
-        selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+        if settings.is_devices_selection_enabled():
+            selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
 
-        await callback.message.edit_text(
-            texts.SELECT_DEVICES,
-            reply_markup=get_devices_keyboard(selected_devices, db_user.language)
-        )
-        await state.set_state(SubscriptionStates.selecting_devices)
+            await callback.message.edit_text(
+                texts.SELECT_DEVICES,
+                reply_markup=get_devices_keyboard(selected_devices, db_user.language)
+            )
+            await state.set_state(SubscriptionStates.selecting_devices)
+            await callback.answer()
+            return
+
+        success = await present_subscription_summary(callback, state, db_user, texts)
+        if success:
+            await callback.answer()
+        return
 
     await callback.answer()
 
