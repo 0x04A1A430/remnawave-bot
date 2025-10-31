@@ -569,6 +569,9 @@ BASE_PROMO_GROUP_PERIOD_DISCOUNTS=60:10,90:20,180:40,360:70
 
 TRAFFIC_PACKAGES_CONFIG="5:2000:false,10:3500:false,25:7000:false,50:11000:true,100:15000:true,0:20000:true"
 PRICE_PER_DEVICE=5000
+DEVICES_SELECTION_ENABLED=true
+# Единое количество устройств для режима без выбора (0 — не назначать устройства)
+DEVICES_SELECTION_DISABLED_AMOUNT=0
 
 # ===== РЕФЕРАЛЬНАЯ СИСТЕМА =====
 REFERRAL_PROGRAM_ENABLED=true

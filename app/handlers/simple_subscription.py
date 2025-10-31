@@ -16,7 +16,10 @@ from app.services.payment_service import PaymentService
 from app.services.subscription_purchase_service import SubscriptionPurchaseService
 from app.utils.decorators import error_handler
 from app.states import SubscriptionStates
-from app.utils.subscription_utils import get_display_subscription_link
+from app.utils.subscription_utils import (
+    get_display_subscription_link,
+    resolve_simple_subscription_device_limit,
+)
 from app.utils.pricing_utils import compute_simple_subscription_price
 
 logger = logging.getLogger(__name__)
@@ -35,15 +38,17 @@ async def start_simple_subscription_purchase(
     if not settings.SIMPLE_SUBSCRIPTION_ENABLED:
         await callback.answer("❌ Простая покупка подписки временно недоступна", show_alert=True)
         return
-    
+
     # Проверяем, есть ли у пользователя подписка (информируем, но не блокируем покупку)
     from app.database.crud.subscription import get_subscription_by_user_id
     current_subscription = await get_subscription_by_user_id(db, db_user.id)
-    
+
+    device_limit = resolve_simple_subscription_device_limit()
+
     # Подготовим параметры простой подписки
     subscription_params = {
         "period_days": settings.SIMPLE_SUBSCRIPTION_PERIOD_DAYS,
-        "device_limit": settings.SIMPLE_SUBSCRIPTION_DEVICE_LIMIT,
+        "device_limit": device_limit,
         "traffic_limit_gb": settings.SIMPLE_SUBSCRIPTION_TRAFFIC_GB,
         "squad_uuid": settings.SIMPLE_SUBSCRIPTION_SQUAD_UUID
     }
@@ -111,20 +116,32 @@ async def start_simple_subscription_purchase(
         subscription_params,
         resolved_squad_uuid,
     )
-    message_text = (
-        f"⚡ <b>Простая покупка подписки</b>\n\n"
-        f"📅 Период: {subscription_params['period_days']} дней\n"
-        f"📱 Устройства: {subscription_params['device_limit']}\n"
-        f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}\n"
-        f"🌍 Сервер: {server_label}\n\n"
-        f"💰 Стоимость: {settings.format_price(price_kopeks)}\n"
-        f"💳 Ваш баланс: {settings.format_price(user_balance_kopeks)}\n\n"
-        + (
+    show_devices = settings.is_devices_selection_enabled()
+
+    message_lines = [
+        "⚡ <b>Простая покупка подписки</b>",
+        "",
+        f"📅 Период: {subscription_params['period_days']} дней",
+    ]
+
+    if show_devices:
+        message_lines.append(f"📱 Устройства: {subscription_params['device_limit']}")
+
+    message_lines.extend([
+        f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}",
+        f"🌍 Сервер: {server_label}",
+        "",
+        f"💰 Стоимость: {settings.format_price(price_kopeks)}",
+        f"💳 Ваш баланс: {settings.format_price(user_balance_kopeks)}",
+        "",
+        (
             "Вы можете оплатить подписку с баланса или выбрать другой способ оплаты."
             if can_pay_from_balance
             else "Баланс пока недостаточный для мгновенной оплаты. Выберите подходящий способ оплаты:"
-        )
-    )
+        ),
+    ])
+
+    message_text = "\n".join(message_lines)
 
     if trial_notice:
         message_text = f"{trial_notice}\n\n{message_text}"
@@ -433,16 +450,28 @@ async def handle_simple_subscription_pay_with_balance(
             subscription_params,
             resolved_squad_uuid,
         )
-        success_message = (
-            f"✅ <b>Подписка успешно активирована!</b>\n\n"
-            f"📅 Период: {subscription_params['period_days']} дней\n"
-            f"📱 Устройства: {subscription_params['device_limit']}\n"
-            f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}\n"
-            f"🌍 Сервер: {server_label}\n\n"
-            f"💰 Списано с баланса: {settings.format_price(price_kopeks)}\n"
-            f"💳 Ваш баланс: {settings.format_price(db_user.balance_kopeks)}\n\n"
-            f"🔗 Для подключения перейдите в раздел 'Подключиться'"
-        )
+        show_devices = settings.is_devices_selection_enabled()
+
+        success_lines = [
+            "✅ <b>Подписка успешно активирована!</b>",
+            "",
+            f"📅 Период: {subscription_params['period_days']} дней",
+        ]
+
+        if show_devices:
+            success_lines.append(f"📱 Устройства: {subscription_params['device_limit']}")
+
+        success_lines.extend([
+            f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}",
+            f"🌍 Сервер: {server_label}",
+            "",
+            f"💰 Списано с баланса: {settings.format_price(price_kopeks)}",
+            f"💳 Ваш баланс: {settings.format_price(db_user.balance_kopeks)}",
+            "",
+            "🔗 Для подключения перейдите в раздел 'Подключиться'",
+        ])
+
+        success_message = "\n".join(success_lines)
         
         connect_mode = settings.CONNECT_BUTTON_MODE
         subscription_link = get_display_subscription_link(subscription)
@@ -619,19 +648,31 @@ async def handle_simple_subscription_other_payment_methods(
         subscription_params,
         resolved_squad_uuid,
     )
-    message_text = (
-        f"💳 <b>Оплата подписки</b>\n\n"
-        f"📅 Период: {subscription_params['period_days']} дней\n"
-        f"📱 Устройства: {subscription_params['device_limit']}\n"
-        f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}\n"
-        f"🌍 Сервер: {server_label}\n\n"
-        f"💰 Стоимость: {settings.format_price(price_kopeks)}\n\n"
-        + (
+    show_devices = settings.is_devices_selection_enabled()
+
+    message_lines = [
+        "💳 <b>Оплата подписки</b>",
+        "",
+        f"📅 Период: {subscription_params['period_days']} дней",
+    ]
+
+    if show_devices:
+        message_lines.append(f"📱 Устройства: {subscription_params['device_limit']}")
+
+    message_lines.extend([
+        f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}",
+        f"🌍 Сервер: {server_label}",
+        "",
+        f"💰 Стоимость: {settings.format_price(price_kopeks)}",
+        "",
+        (
             "Вы можете оплатить подписку с баланса или выбрать другой способ оплаты:"
             if can_pay_from_balance
             else "Выберите подходящий способ оплаты:"
-        )
-    )
+        ),
+    ])
+
+    message_text = "\n".join(message_lines)
     
     base_keyboard = _get_simple_subscription_payment_keyboard(db_user.language)
     keyboard_rows = []
@@ -854,14 +895,25 @@ async def handle_simple_subscription_payment_method(
             keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
             
             # Подготавливаем текст сообщения
-            message_text = (
-                f"💳 <b>Оплата подписки через YooKassa</b>\n\n"
-                f"📅 Период: {subscription_params['period_days']} дней\n"
-                f"📱 Устройства: {subscription_params['device_limit']}\n"
-                f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}\n"
-                f"💰 Сумма: {settings.format_price(price_kopeks)}\n"
-                f"🆔 ID платежа: {payment_result['yookassa_payment_id'][:8]}...\n\n"
-            )
+            show_devices = settings.is_devices_selection_enabled()
+
+            message_lines = [
+                "💳 <b>Оплата подписки через YooKassa</b>",
+                "",
+                f"📅 Период: {subscription_params['period_days']} дней",
+            ]
+
+            if show_devices:
+                message_lines.append(f"📱 Устройства: {subscription_params['device_limit']}")
+
+            message_lines.extend([
+                f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}",
+                f"💰 Сумма: {settings.format_price(price_kopeks)}",
+                f"🆔 ID платежа: {payment_result['yookassa_payment_id'][:8]}...",
+                "",
+            ])
+
+            message_text = "\n".join(message_lines)
             
             # Добавляем инструкции в зависимости от доступных способов оплаты
             if not confirmation_url:

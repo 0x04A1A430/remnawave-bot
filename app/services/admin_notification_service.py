@@ -186,6 +186,14 @@ class AdminNotificationService:
             promo_group = await self._get_user_promo_group(db, user)
             promo_block = self._format_promo_group_block(promo_group)
 
+            trial_device_limit = subscription.device_limit
+            if trial_device_limit is None:
+                fallback_forced_limit = settings.get_disabled_mode_device_limit()
+                if fallback_forced_limit is not None:
+                    trial_device_limit = fallback_forced_limit
+                else:
+                    trial_device_limit = settings.TRIAL_DEVICE_LIMIT
+
             message = f"""🎯 <b>АКТИВАЦИЯ ТРИАЛА</b>
 
 👤 <b>Пользователь:</b> {user.full_name}
@@ -198,7 +206,7 @@ class AdminNotificationService:
 ⏰ <b>Параметры триала:</b>
 📅 Период: {settings.TRIAL_DURATION_DAYS} дней
 📊 Трафик: {settings.TRIAL_TRAFFIC_LIMIT_GB} ГБ
-📱 Устройства: {settings.TRIAL_DEVICE_LIMIT}
+📱 Устройства: {trial_device_limit}
 🌐 Сервер: {subscription.connected_squads[0] if subscription.connected_squads else 'По умолчанию'}
 
 📆 <b>Действует до:</b> {subscription.end_date.strftime('%d.%m.%Y %H:%M')}
