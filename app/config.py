@@ -164,6 +164,7 @@ class Settings(BaseSettings):
     
     TELEGRAM_STARS_ENABLED: bool = True
     TELEGRAM_STARS_RATE_RUB: float = 1.3
+    TELEGRAM_STARS_CUSTOM_RATE_ENABLED: bool = False
     
     TRIBUTE_ENABLED: bool = False
     TRIBUTE_API_KEY: Optional[str] = None
@@ -1121,6 +1122,23 @@ class Settings(BaseSettings):
         )
 
     def get_stars_rate(self) -> float:
+        """Возвращает актуальный курс Telegram Stars в рублях."""
+
+        if self.TELEGRAM_STARS_CUSTOM_RATE_ENABLED:
+            return self.TELEGRAM_STARS_RATE_RUB
+
+        try:
+            from app.services.telegram_stars_rate_service import (  # pylint: disable=import-outside-toplevel
+                telegram_stars_rate_service,
+            )
+
+            telegram_stars_rate_service.ensure_refresh()
+            cached_rate = telegram_stars_rate_service.get_cached_rate()
+            if cached_rate:
+                return cached_rate
+        except Exception as error:  # pragma: no cover - защитный блок от циклических импортов
+            logger.debug("Не удалось получить актуальный курс Stars: %s", error)
+
         return self.TELEGRAM_STARS_RATE_RUB
     
     def stars_to_rubles(self, stars: int) -> float:
