@@ -77,6 +77,20 @@ class AdminNotificationService:
             )
             return None
 
+    def _get_user_display(self, user: User) -> str:
+        first_name = getattr(user, "first_name", "") or ""
+        if first_name:
+            return first_name
+
+        username = getattr(user, "username", "") or ""
+        if username:
+            return username
+
+        telegram_id = getattr(user, "telegram_id", None)
+        if telegram_id is None:
+            return "IDUnknown"
+        return f"ID{telegram_id}"
+
     def _format_promo_group_discounts(self, promo_group: PromoGroup) -> List[str]:
         discount_lines: List[str] = []
 
@@ -185,6 +199,7 @@ class AdminNotificationService:
             referrer_info = await self._get_referrer_info(db, user.referred_by_id)
             promo_group = await self._get_user_promo_group(db, user)
             promo_block = self._format_promo_group_block(promo_group)
+            user_display = self._get_user_display(user)
 
             trial_device_limit = subscription.device_limit
             if trial_device_limit is None:
@@ -196,7 +211,7 @@ class AdminNotificationService:
 
             message = f"""🎯 <b>АКТИВАЦИЯ ТРИАЛА</b>
 
-👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}
+👤 <b>Пользователь:</b> {user_display}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
 📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}
 👥 <b>Статус:</b> {user_status}
@@ -235,26 +250,27 @@ class AdminNotificationService:
         
         try:
             event_type = "🔄 КОНВЕРСИЯ ИЗ ТРИАЛА" if was_trial_conversion else "💎 ПОКУПКА ПОДПИСКИ"
-            
+
             if was_trial_conversion:
                 user_status = "🎯 Конверсия из триала"
             elif user.has_had_paid_subscription:
                 user_status = "🔄 Продление/Обновление"
             else:
                 user_status = "🆕 Первая покупка"
-            
+
             servers_info = await self._get_servers_info(subscription.connected_squads)
             payment_method = self._get_payment_method_display(transaction.payment_method) if transaction else "Баланс"
             referrer_info = await self._get_referrer_info(db, user.referred_by_id)
             promo_group = await self._get_user_promo_group(db, user)
             promo_block = self._format_promo_group_block(promo_group)
+            user_display = self._get_user_display(user)
 
             total_amount = amount_kopeks if amount_kopeks is not None else (transaction.amount_kopeks if transaction else 0)
             transaction_id = transaction.id if transaction else "—"
 
             message = f"""💎 <b>{event_type}</b>
 
-👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}
+👤 <b>Пользователь:</b> {user_display}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
 📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}
 👥 <b>Статус:</b> {user_status}
@@ -372,10 +388,11 @@ class AdminNotificationService:
         subscription_status = self._get_subscription_status(subscription)
         promo_block = self._format_promo_group_block(promo_group)
         timestamp = datetime.now().strftime('%d.%m.%Y %H:%M:%S')
+        user_display = self._get_user_display(user)
 
         return f"""💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>
 
-👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}
+👤 <b>Пользователь:</b> {user_display}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
 📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}
 💳 <b>Статус:</b> {topup_status}
@@ -548,13 +565,14 @@ class AdminNotificationService:
             servers_info = await self._get_servers_info(subscription.connected_squads)
             promo_group = await self._get_user_promo_group(db, user)
             promo_block = self._format_promo_group_block(promo_group)
+            user_display = self._get_user_display(user)
 
             current_end_date = new_end_date or subscription.end_date
             current_balance = balance_after if balance_after is not None else user.balance_kopeks
 
             message = f"""⏰ <b>ПРОДЛЕНИЕ ПОДПИСКИ</b>
 
-👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}
+👤 <b>Пользователь:</b> {user_display}
 🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>
 📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}
 
@@ -600,11 +618,12 @@ class AdminNotificationService:
             promo_block = self._format_promo_group_block(promo_group)
             type_display = self._get_promocode_type_display(promocode_data.get("type"))
             usage_info = f"{promocode_data.get('current_uses', 0)}/{promocode_data.get('max_uses', 0)}"
+            user_display = self._get_user_display(user)
 
             message_lines = [
                 "🎫 <b>АКТИВАЦИЯ ПРОМОКОДА</b>",
                 "",
-                f"👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}",
+                f"👤 <b>Пользователь:</b> {user_display}",
                 f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>",
                 f"📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}",
                 "",
@@ -727,11 +746,12 @@ class AdminNotificationService:
                 )
             elif automatic:
                 initiator_line = "🤖 Автоматическое назначение"
+            user_display = self._get_user_display(user)
 
             message_lines = [
                 f"{title}",
                 "",
-                f"👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}",
+                f"👤 <b>Пользователь:</b> {user_display}",
                 f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>",
                 f"📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}",
                 "",
@@ -1103,6 +1123,7 @@ class AdminNotificationService:
             referrer_info = await self._get_referrer_info(db, user.referred_by_id)
             promo_group = await self._get_user_promo_group(db, user)
             promo_block = self._format_promo_group_block(promo_group)
+            user_display = self._get_user_display(user)
 
             update_types = {
                 "traffic": ("📊 ИЗМЕНЕНИЕ ТРАФИКА", "трафик"),
@@ -1115,7 +1136,7 @@ class AdminNotificationService:
             message_lines = [
                 f"{title}",
                 "",
-                f"👤 <b>Пользователь:</b> {getattr(user, 'first_name', '') or getattr(user, 'username', '') or f"ID{getattr(user, 'telegram_id', 'Unknown')}"}",
+                f"👤 <b>Пользователь:</b> {user_display}",
                 f"🆔 <b>Telegram ID:</b> <code>{user.telegram_id}</code>",
                 f"📱 <b>Username:</b> @{getattr(user, 'username', None) or 'отсутствует'}",
                 "",

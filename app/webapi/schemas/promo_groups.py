@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Dict, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, validator
 
 
 def _normalize_period_discounts(value: Optional[Dict[object, object]]) -> Optional[Dict[int, int]]:
@@ -23,6 +23,8 @@ def _normalize_period_discounts(value: Optional[Dict[object, object]]) -> Option
 
 
 class PromoGroupResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     server_discount_percent: int
@@ -33,8 +35,8 @@ class PromoGroupResponse(BaseModel):
     apply_discounts_to_addons: bool
     is_default: bool
     members_count: int = 0
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class _PromoGroupBase(BaseModel):
