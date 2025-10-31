@@ -30,11 +30,81 @@ class DummyBot:
         self.sent_messages.append({"args": args, "kwargs": kwargs})
 
 
+class FakeScalarResult:
+    def __init__(self, items: list[Any]) -> None:
+        self._items = list(items)
+
+    def all(self) -> list[Any]:  # pragma: no cover - утилитарный метод
+        return list(self._items)
+
+    def first(self) -> Any:  # pragma: no cover - утилитарный метод
+        return self._items[0] if self._items else None
+
+    def one(self) -> Any:  # pragma: no cover - утилитарный метод
+        if len(self._items) != 1:
+            raise ValueError("Expected exactly one result")
+        return self._items[0]
+
+    def one_or_none(self) -> Any:  # pragma: no cover - утилитарный метод
+        if not self._items:
+            return None
+        if len(self._items) > 1:
+            raise ValueError("Expected zero or one result")
+        return self._items[0]
+
+    def __iter__(self):  # pragma: no cover - утилитарный метод
+        return iter(self._items)
+
+
+class FakeResult:
+    def __init__(self, value: Any = None) -> None:
+        self._value = value
+
+    def _as_iterable(self) -> list[Any]:
+        if isinstance(self._value, list):
+            return self._value
+        if self._value is None:
+            return []
+        return [self._value]
+
+    def scalar(self) -> Any:
+        items = self._as_iterable()
+        return items[0] if items else None
+
+    def scalar_one_or_none(self) -> Any:
+        items = self._as_iterable()
+        if not items:
+            return None
+        if len(items) > 1:
+            raise ValueError("Expected zero or one result")
+        return items[0]
+
+    def first(self) -> Any:  # pragma: no cover - утилитарный метод
+        items = self._as_iterable()
+        return items[0] if items else None
+
+    def all(self) -> list[Any]:  # pragma: no cover - утилитарный метод
+        return list(self._as_iterable())
+
+    def one_or_none(self) -> Any:  # pragma: no cover - утилитарный метод
+        items = self._as_iterable()
+        if not items:
+            return None
+        if len(items) > 1:
+            raise ValueError("Expected zero or one result")
+        return items[0]
+
+    def scalars(self) -> FakeScalarResult:  # pragma: no cover - утилитарный метод
+        return FakeScalarResult(self._as_iterable())
+
+
 class FakeSession:
     def __init__(self) -> None:
         self.commits = 0
         self.refreshed: list[Any] = []
         self.added: list[Any] = []
+        self.execute_statements: list[Any] = []
+        self.execute_results: list[Any] = []
 
     async def commit(self) -> None:
         self.commits += 1
@@ -47,6 +117,20 @@ class FakeSession:
 
     def add(self, obj: Any) -> None:  # pragma: no cover - используется при создании транзакций
         self.added.append(obj)
+
+    async def execute(self, statement: Any, *args: Any, **kwargs: Any) -> FakeResult:
+        self.execute_statements.append(statement)
+        if self.execute_results:
+            result = self.execute_results.pop(0)
+            if callable(result):  # pragma: no cover - гибкость для будущих тестов
+                result = result(statement, *args, **kwargs)
+        else:
+            result = None
+
+        if isinstance(result, FakeResult):
+            return result
+
+        return FakeResult(result)
 
 
 def _make_service(bot: DummyBot) -> PaymentService:
