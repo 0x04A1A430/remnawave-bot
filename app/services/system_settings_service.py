@@ -516,6 +516,17 @@ class BotConfigurationService:
             "warning": "Не забудьте отключить после завершения работ, иначе бот останется недоступен.",
             "dependencies": "MAINTENANCE_MESSAGE, MAINTENANCE_CHECK_INTERVAL",
         },
+        "MAINTENANCE_MONITORING_ENABLED": {
+            "description": (
+                "Управляет автоматическим запуском мониторинга панели Remnawave при старте бота."
+            ),
+            "format": "Булево значение.",
+            "example": "false",
+            "warning": (
+                "При отключении мониторинг можно запустить вручную из панели администратора."
+            ),
+            "dependencies": "MAINTENANCE_CHECK_INTERVAL",
+        },
         "DISPLAY_NAME_BANNED_KEYWORDS": {
             "description": (
                 "Список слов и фрагментов, при наличии которых в отображаемом имени "
