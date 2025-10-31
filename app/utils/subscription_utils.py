@@ -174,29 +174,3 @@ def convert_subscription_link_to_happ_scheme(subscription_link: Optional[str]) -
         return subscription_link
 
     return urlunparse(parsed_link._replace(scheme="happ"))
-
-
-def resolve_hwid_device_limit(subscription: Optional[Subscription]) -> Optional[int]:
-    """Return a device limit value for RemnaWave payloads when selection is enabled."""
-
-    if subscription is None:
-        return None
-
-    if not settings.is_devices_selection_enabled():
-        forced_limit = settings.get_disabled_mode_device_limit()
-        return forced_limit
-
-    limit = getattr(subscription, "device_limit", None)
-    if limit is None or limit <= 0:
-        return None
-
-    return limit
-
-
-def resolve_simple_subscription_device_limit() -> int:
-    """Return the effective device limit for simple subscription flows."""
-
-    if settings.is_devices_selection_enabled():
-        return int(getattr(settings, "SIMPLE_SUBSCRIPTION_DEVICE_LIMIT", 0) or 0)
-
-    return settings.get_devices_selection_disabled_amount()
