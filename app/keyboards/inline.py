@@ -2091,14 +2091,24 @@ def get_updated_subscription_settings_keyboard(language: str = DEFAULT_LANGUAGE,
             InlineKeyboardButton(text=texts.t("ADD_COUNTRIES_BUTTON", "🌐 Добавить страны"), callback_data="subscription_add_countries")
         ])
 
-    keyboard.extend([
-        [
-            InlineKeyboardButton(text=texts.t("CHANGE_DEVICES_BUTTON", "📱 Изменить устройства"), callback_data="subscription_change_devices") 
-        ],
-        [
-            InlineKeyboardButton(text=texts.t("MANAGE_DEVICES_BUTTON", "🔧 Управление устройствами"), callback_data="subscription_manage_devices")
-        ]
+    settings_buttons = []
+
+    if settings.is_devices_selection_enabled():
+        settings_buttons.append([
+            InlineKeyboardButton(
+                text=texts.t("CHANGE_DEVICES_BUTTON", "📱 Изменить устройства"),
+                callback_data="subscription_change_devices",
+            )
+        ])
+
+    settings_buttons.append([
+        InlineKeyboardButton(
+            text=texts.t("MANAGE_DEVICES_BUTTON", "🔧 Управление устройствами"),
+            callback_data="subscription_manage_devices",
+        )
     ])
+
+    keyboard.extend(settings_buttons)
 
     if settings.is_traffic_selectable():
         keyboard.insert(-2, [

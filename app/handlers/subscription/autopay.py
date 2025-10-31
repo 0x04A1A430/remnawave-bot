@@ -208,6 +208,33 @@ async def handle_subscription_config_back(
             await state.set_state(SubscriptionStates.selecting_period)
 
     elif current_state == SubscriptionStates.selecting_devices.state:
+        if not settings.is_devices_selection_enabled():
+            if await _should_show_countries_management(db_user):
+                countries = await _get_available_countries(db_user.promo_group_id)
+                data = await state.get_data()
+                selected_countries = data.get('countries', [])
+
+                await callback.message.edit_text(
+                    texts.SELECT_COUNTRIES,
+                    reply_markup=get_countries_keyboard(countries, selected_countries, db_user.language)
+                )
+                await state.set_state(SubscriptionStates.selecting_countries)
+            elif settings.is_traffic_selectable():
+                await callback.message.edit_text(
+                    texts.SELECT_TRAFFIC,
+                    reply_markup=get_traffic_packages_keyboard(db_user.language)
+                )
+                await state.set_state(SubscriptionStates.selecting_traffic)
+            else:
+                await callback.message.edit_text(
+                    await _build_subscription_period_prompt(db_user, texts, db),
+                    reply_markup=get_subscription_period_keyboard(db_user.language),
+                    parse_mode="HTML",
+                )
+                await state.set_state(SubscriptionStates.selecting_period)
+            await callback.answer()
+            return
+
         if await _should_show_countries_management(db_user):
             countries = await _get_available_countries(db_user.promo_group_id)
             data = await state.get_data()
@@ -234,13 +261,36 @@ async def handle_subscription_config_back(
 
     elif current_state == SubscriptionStates.confirming_purchase.state:
         data = await state.get_data()
-        selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+        if settings.is_devices_selection_enabled():
+            selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
 
-        await callback.message.edit_text(
-            texts.SELECT_DEVICES,
-            reply_markup=get_devices_keyboard(selected_devices, db_user.language)
-        )
-        await state.set_state(SubscriptionStates.selecting_devices)
+            await callback.message.edit_text(
+                texts.SELECT_DEVICES,
+                reply_markup=get_devices_keyboard(selected_devices, db_user.language)
+            )
+            await state.set_state(SubscriptionStates.selecting_devices)
+        elif await _should_show_countries_management(db_user):
+            countries = await _get_available_countries(db_user.promo_group_id)
+            selected_countries = data.get('countries', [])
+
+            await callback.message.edit_text(
+                texts.SELECT_COUNTRIES,
+                reply_markup=get_countries_keyboard(countries, selected_countries, db_user.language)
+            )
+            await state.set_state(SubscriptionStates.selecting_countries)
+        elif settings.is_traffic_selectable():
+            await callback.message.edit_text(
+                texts.SELECT_TRAFFIC,
+                reply_markup=get_traffic_packages_keyboard(db_user.language)
+            )
+            await state.set_state(SubscriptionStates.selecting_traffic)
+        else:
+            await callback.message.edit_text(
+                await _build_subscription_period_prompt(db_user, texts, db),
+                reply_markup=get_subscription_period_keyboard(db_user.language),
+                parse_mode="HTML",
+            )
+            await state.set_state(SubscriptionStates.selecting_period)
 
     else:
         from app.handlers.menu import show_main_menu
