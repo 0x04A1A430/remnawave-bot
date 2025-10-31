@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     REMNAWAVE_PASSWORD: Optional[str] = None
     REMNAWAVE_AUTH_TYPE: str = "api_key"
     REMNAWAVE_USER_DESCRIPTION_TEMPLATE: str = "Bot user: {full_name} {username}"
+    REMNAWAVE_USER_USERNAME_TEMPLATE: str = "user_{telegram_id}"
     REMNAWAVE_USER_DELETE_MODE: str = "delete"  # "delete" или "disable"
     REMNAWAVE_AUTO_SYNC_ENABLED: bool = False
     REMNAWAVE_AUTO_SYNC_TIMES: str = "03:00"
@@ -144,7 +145,6 @@ class Settings(BaseSettings):
     REFERRAL_PROGRAM_ENABLED: bool = True
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
-    REFERRED_USER_REWARD: int = 0 
     
     AUTOPAY_WARNING_DAYS: str = "3,1"
 
@@ -156,8 +156,10 @@ class Settings(BaseSettings):
     INACTIVE_USER_DELETE_MONTHS: int = 3
 
     MAINTENANCE_MODE: bool = False
-    MAINTENANCE_CHECK_INTERVAL: int = 30 
-    MAINTENANCE_AUTO_ENABLE: bool = True 
+    MAINTENANCE_CHECK_INTERVAL: int = 30
+    MAINTENANCE_AUTO_ENABLE: bool = True
+    MAINTENANCE_MONITORING_ENABLED: bool = True
+    MAINTENANCE_RETRY_ATTEMPTS: int = 1
     MAINTENANCE_MESSAGE: str = "🔧 Ведутся технические работы. Сервис временно недоступен. Попробуйте позже."
     
     TELEGRAM_STARS_ENABLED: bool = True
@@ -551,6 +553,34 @@ class Settings(BaseSettings):
 
         description = re.sub(r'\s+', ' ', description).strip()
         return description
+
+    def format_remnawave_username(
+        self,
+        *,
+        full_name: str,
+        username: Optional[str],
+        telegram_id: int
+    ) -> str:
+        template = self.REMNAWAVE_USER_USERNAME_TEMPLATE or "user_{telegram_id}"
+
+        username_clean = (username or "").lstrip("@")
+        full_name_value = full_name or ""
+
+        values = defaultdict(str, {
+            "full_name": full_name_value,
+            "username": username_clean,
+            "username_clean": username_clean,
+            "telegram_id": str(telegram_id),
+        })
+
+        raw_username = template.format_map(values).strip()
+        sanitized_username = re.sub(r"[^0-9A-Za-z._-]+", "_", raw_username)
+        sanitized_username = re.sub(r"_+", "_", sanitized_username).strip("._-")
+
+        if not sanitized_username:
+            sanitized_username = f"user_{telegram_id}"
+
+        return sanitized_username[:64]
 
     @staticmethod
     def parse_daily_time_list(raw_value: Optional[str]) -> List[time]:
@@ -982,6 +1012,13 @@ class Settings(BaseSettings):
     def get_maintenance_check_interval(self) -> int:
         return self.MAINTENANCE_CHECK_INTERVAL
 
+    def get_maintenance_retry_attempts(self) -> int:
+        try:
+            attempts = int(self.MAINTENANCE_RETRY_ATTEMPTS)
+        except (TypeError, ValueError):
+            attempts = 1
+        return max(1, attempts)
+
     def is_base_promo_group_period_discount_enabled(self) -> bool:
         return self.BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED
 
@@ -1023,6 +1060,9 @@ class Settings(BaseSettings):
 
     def is_maintenance_auto_enable(self) -> bool:
         return self.MAINTENANCE_AUTO_ENABLE
+
+    def is_maintenance_monitoring_enabled(self) -> bool:
+        return self.MAINTENANCE_MONITORING_ENABLED
 
     def get_available_subscription_periods(self) -> List[int]:
         try:
@@ -1115,34 +1155,7 @@ class Settings(BaseSettings):
         return (self.BACKUP_SEND_ENABLED and
                 self.get_backup_send_chat_id() is not None)
 
-    def get_referred_user_reward_kopeks(self) -> int:
-        """Return the referred user reward normalized to kopeks.
-
-        Historically the value was stored in kopeks, however some
-        installations provide it in rubles. To keep backward compatibility we
-        treat any value greater than or equal to one thousand as already being
-        in kopeks (≥ 10 ₽). Smaller positive values are assumed to be provided
-        in rubles and therefore converted to kopeks.
-        """
-
-        raw_value = getattr(self, "REFERRED_USER_REWARD", 0)
-
-        try:
-            value = int(raw_value)
-        except (TypeError, ValueError):
-            return 0
-
-        if value <= 0:
-            return 0
-
-        if value >= 1000:
-            return value
-
-        return value * 100
-
     def get_referral_settings(self) -> Dict:
-        referred_reward_kopeks = self.get_referred_user_reward_kopeks()
-
         return {
             "program_enabled": self.is_referral_program_enabled(),
             "minimum_topup_kopeks": self.REFERRAL_MINIMUM_TOPUP_KOPEKS,
@@ -1150,8 +1163,6 @@ class Settings(BaseSettings):
             "inviter_bonus_kopeks": self.REFERRAL_INVITER_BONUS_KOPEKS,
             "commission_percent": self.REFERRAL_COMMISSION_PERCENT,
             "notifications_enabled": self.REFERRAL_NOTIFICATIONS_ENABLED,
-            "referred_user_reward": referred_reward_kopeks,
-            "referred_user_reward_kopeks": referred_reward_kopeks,
         }
     
     def is_referral_program_enabled(self) -> bool:

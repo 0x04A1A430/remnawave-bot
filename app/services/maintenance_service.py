@@ -223,13 +223,18 @@ class MaintenanceService:
             await self._load_status_from_cache()
             
             self._check_task = asyncio.create_task(self._monitoring_loop())
-            logger.info(f"🔄 Запущен мониторинг API Remnawave (интервал: {settings.get_maintenance_check_interval()}с)")
-            
+            logger.info(
+                "🔄 Запущен мониторинг API Remnawave (интервал: %sс, попыток: %s)",
+                settings.get_maintenance_check_interval(),
+                settings.get_maintenance_retry_attempts(),
+            )
+
             await self._notify_admins(f"""Мониторинг технических работ запущен
 
 🔄 <b>Интервал проверки:</b> {settings.get_maintenance_check_interval()} секунд
 🤖 <b>Автовключение:</b> {'Включено' if settings.is_maintenance_auto_enable() else 'Отключено'}
 🎯 <b>Порог ошибок:</b> {self._max_consecutive_failures}
+🔁 <b>Повторных попыток:</b> {settings.get_maintenance_retry_attempts()}
 
 Система будет следить за доступностью API.""", "info")
             
@@ -260,10 +265,10 @@ class MaintenanceService:
         try:
             if self._is_checking:
                 return self._status.api_status
-            
+
             self._is_checking = True
             self._status.last_check = datetime.utcnow()
-            
+
             auth_params = settings.get_remnawave_auth_params()
             api = RemnaWaveAPI(
                 base_url=auth_params["base_url"],
@@ -272,53 +277,74 @@ class MaintenanceService:
                 username=auth_params["username"],
                 password=auth_params["password"]
             )
-            
+
+            attempts = settings.get_maintenance_retry_attempts()
+
             async with api:
-                is_connected = await test_api_connection(api)
-                
-                if is_connected:
-                    if not self._status.api_status:
-                        await self._notify_admins(f"""API Remnawave восстановлено!
+                for attempt in range(1, attempts + 1):
+                    is_connected = await test_api_connection(api)
+
+                    if is_connected:
+                        if attempt > 1:
+                            logger.info(
+                                "API Remnawave ответило с %s попытки", attempt
+                            )
+
+                        if not self._status.api_status:
+                            await self._notify_admins(f"""API Remnawave восстановлено!
 
 ✅ <b>Статус:</b> Доступно
 🕐 <b>Время восстановления:</b> {self._status.last_check.strftime('%H:%M:%S')}
 🔄 <b>Неудачных попыток было:</b> {self._status.consecutive_failures}
 
 API снова отвечает на запросы.""", "success")
-                    
-                    self._status.api_status = True
-                    self._status.consecutive_failures = 0
-                    
-                    if self._status.is_active and self._status.auto_enabled:
-                        await self.disable_maintenance()
-                        logger.info("✅ API восстановился, режим техработ автоматически отключен")
-                    
-                    return True
-                else:
-                    was_available = self._status.api_status
-                    self._status.api_status = False
-                    self._status.consecutive_failures += 1
-                    
-                    if was_available:
-                        await self._notify_admins(f"""API Remnawave недоступно!
+
+                        self._status.api_status = True
+                        self._status.consecutive_failures = 0
+
+                        if self._status.is_active and self._status.auto_enabled:
+                            await self.disable_maintenance()
+                            logger.info("✅ API восстановился, режим техработ автоматически отключен")
+
+                        return True
+
+                    if attempt < attempts:
+                        logger.warning(
+                            "API Remnawave недоступно (попытка %s/%s)",
+                            attempt,
+                            attempts,
+                        )
+                        await asyncio.sleep(1)
+
+                was_available = self._status.api_status
+                self._status.api_status = False
+                self._status.consecutive_failures += 1
+
+                if was_available:
+                    await self._notify_admins(f"""API Remnawave недоступно!
 
 ❌ <b>Статус:</b> Недоступно
 🕐 <b>Время обнаружения:</b> {self._status.last_check.strftime('%H:%M:%S')}
 🔄 <b>Попытка:</b> {self._status.consecutive_failures}
 
 Началась серия неудачных проверок API.""", "error")
-                    
-                    if (self._status.consecutive_failures >= self._max_consecutive_failures and
-                        not self._status.is_active and
-                        settings.is_maintenance_auto_enable()):
-                        
-                        await self.enable_maintenance(
-                            reason=f"Автоматическое включение после {self._status.consecutive_failures} неудачных проверок API",
-                            auto=True
-                        )
-                    
-                    return False
-                    
+
+                if (
+                    self._status.consecutive_failures >= self._max_consecutive_failures
+                    and not self._status.is_active
+                    and settings.is_maintenance_auto_enable()
+                ):
+
+                    await self.enable_maintenance(
+                        reason=(
+                            f"Автоматическое включение после {self._status.consecutive_failures} "
+                            "неудачных проверок API"
+                        ),
+                        auto=True
+                    )
+
+                return False
+
         except Exception as e:
             logger.error(f"Ошибка проверки API: {e}")
             
@@ -398,6 +424,7 @@ API снова отвечает на запросы.""", "success")
             "api_status": self._status.api_status,
             "consecutive_failures": self._status.consecutive_failures,
             "monitoring_active": self._check_task is not None and not self._check_task.done(),
+            "monitoring_configured": settings.is_maintenance_monitoring_enabled(),
             "auto_enable_configured": settings.is_maintenance_auto_enable(),
             "check_interval": settings.get_maintenance_check_interval(),
             "bot_connected": self._bot is not None

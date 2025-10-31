@@ -403,9 +403,15 @@ async def main():
             "🛡️",
             success_message="Служба техработ запущена",
         ) as stage:
-            if not maintenance_service._check_task or maintenance_service._check_task.done():
+            if not settings.is_maintenance_monitoring_enabled():
+                maintenance_task = None
+                stage.skip("Мониторинг техработ отключен настройками")
+            elif not maintenance_service._check_task or maintenance_service._check_task.done():
                 maintenance_task = asyncio.create_task(maintenance_service.start_monitoring())
                 stage.log(f"Интервал проверки: {settings.MAINTENANCE_CHECK_INTERVAL}с")
+                stage.log(
+                    f"Повторных попыток проверки: {settings.get_maintenance_retry_attempts()}"
+                )
             else:
                 maintenance_task = None
                 stage.skip("Служба техработ уже активна")

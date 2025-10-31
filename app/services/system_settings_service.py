@@ -213,7 +213,6 @@ class BotConfigurationService:
         "TRAFFIC_PACKAGES_CONFIG": "TRAFFIC_PACKAGES",
         "BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED": "SUBSCRIPTIONS_CORE",
         "BASE_PROMO_GROUP_PERIOD_DISCOUNTS": "SUBSCRIPTIONS_CORE",
-        "REFERRED_USER_REWARD": "REFERRAL",
         "DEFAULT_AUTOPAY_ENABLED": "AUTOPAY",
         "DEFAULT_AUTOPAY_DAYS_BEFORE": "AUTOPAY",
         "MIN_BALANCE_FOR_AUTOPAY_KOPEKS": "AUTOPAY",
@@ -263,6 +262,7 @@ class BotConfigurationService:
         "MAINTENANCE_MESSAGE": "MAINTENANCE",
         "MAINTENANCE_CHECK_INTERVAL": "MAINTENANCE",
         "MAINTENANCE_AUTO_ENABLE": "MAINTENANCE",
+        "MAINTENANCE_RETRY_ATTEMPTS": "MAINTENANCE",
         "WEBHOOK_URL": "WEBHOOK",
         "WEBHOOK_SECRET": "WEBHOOK",
         "VERSION_CHECK_ENABLED": "VERSION",
@@ -270,6 +270,7 @@ class BotConfigurationService:
         "VERSION_CHECK_INTERVAL_HOURS": "VERSION",
         "TELEGRAM_STARS_RATE_RUB": "TELEGRAM",
         "REMNAWAVE_USER_DESCRIPTION_TEMPLATE": "REMNAWAVE",
+        "REMNAWAVE_USER_USERNAME_TEMPLATE": "REMNAWAVE",
         "REMNAWAVE_AUTO_SYNC_ENABLED": "REMNAWAVE",
         "REMNAWAVE_AUTO_SYNC_TIMES": "REMNAWAVE",
     }
@@ -516,6 +517,28 @@ class BotConfigurationService:
             "warning": "Не забудьте отключить после завершения работ, иначе бот останется недоступен.",
             "dependencies": "MAINTENANCE_MESSAGE, MAINTENANCE_CHECK_INTERVAL",
         },
+        "MAINTENANCE_MONITORING_ENABLED": {
+            "description": (
+                "Управляет автоматическим запуском мониторинга панели Remnawave при старте бота."
+            ),
+            "format": "Булево значение.",
+            "example": "false",
+            "warning": (
+                "При отключении мониторинг можно запустить вручную из панели администратора."
+            ),
+            "dependencies": "MAINTENANCE_CHECK_INTERVAL",
+        },
+        "MAINTENANCE_RETRY_ATTEMPTS": {
+            "description": (
+                "Сколько раз повторять проверку панели Remnawave перед фиксацией недоступности."
+            ),
+            "format": "Целое число не меньше 1.",
+            "example": "3",
+            "warning": (
+                "Большие значения увеличивают время реакции на реальные сбои, но помогают избежать ложных срабатываний."
+            ),
+            "dependencies": "MAINTENANCE_CHECK_INTERVAL",
+        },
         "DISPLAY_NAME_BANNED_KEYWORDS": {
             "description": (
                 "Список слов и фрагментов, при наличии которых в отображаемом имени "
@@ -552,6 +575,31 @@ class BotConfigurationService:
                 "синхронизации нагружают панель."
             ),
             "dependencies": "REMNAWAVE_AUTO_SYNC_ENABLED",
+        },
+        "REMNAWAVE_USER_DESCRIPTION_TEMPLATE": {
+            "description": (
+                "Шаблон текста, который бот передает в поле Description при создании "
+                "или обновлении пользователя в панели RemnaWave."
+            ),
+            "format": (
+                "Доступные плейсхолдеры: {full_name}, {username}, {username_clean}, {telegram_id}."
+            ),
+            "example": "Bot user: {full_name} {username}",
+            "warning": "Плейсхолдер {username} автоматически очищается, если у пользователя нет @username.",
+        },
+        "REMNAWAVE_USER_USERNAME_TEMPLATE": {
+            "description": (
+                "Шаблон имени пользователя, которое создаётся в панели RemnaWave для "
+                "телеграм-пользователя."
+            ),
+            "format": (
+                "Доступные плейсхолдеры: {full_name}, {username}, {username_clean}, {telegram_id}."
+            ),
+            "example": "vpn_{username_clean}_{telegram_id}",
+            "warning": (
+                "Недопустимые символы автоматически заменяются на подчёркивания. "
+                "Если результат пустой, используется user_{telegram_id}."
+            ),
         },
         "EXTERNAL_ADMIN_TOKEN": {
             "description": "Приватный токен, который использует внешняя админка для проверки запросов.",

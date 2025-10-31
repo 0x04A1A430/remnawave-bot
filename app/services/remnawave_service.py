@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -1245,7 +1246,11 @@ class RemnaWaveService:
                             await api.update_user(**update_kwargs)
                             stats["updated"] += 1
                         else:
-                            username = f"user_{user.telegram_id}"
+                            username = settings.format_remnawave_username(
+                                full_name=user.full_name,
+                                username=user.username,
+                                telegram_id=user.telegram_id,
+                            )
 
                             create_kwargs = dict(
                                 username=username,
@@ -1994,67 +1999,110 @@ class RemnaWaveService:
             }
         
     async def check_panel_health(self) -> Dict[str, Any]:
-        try:
-            start_time = datetime.utcnow()
-                
-            async with self.get_api_client() as api:
-                try:
-                    system_stats = await api.get_system_stats()
-                    api_available = True
-                    api_error = None
-                except Exception as e:
-                    api_available = False
-                    api_error = str(e)
-                    system_stats = {}
-                    
-                try:
-                    nodes = await api.get_all_nodes()
-                    nodes_online = sum(1 for node in nodes if node.is_connected and node.is_node_online)
-                    total_nodes = len(nodes)
-                    nodes_health = "healthy" if nodes_online > 0 else "unhealthy"
-                except Exception:
-                    nodes_online = 0
-                    total_nodes = 0
-                    nodes_health = "unknown"
-                    
-                end_time = datetime.utcnow()
-                response_time = (end_time - start_time).total_seconds()
-                    
-                if not api_available:
-                    status = "offline"
-                elif response_time > 10: 
-                    status = "degraded"
-                elif nodes_health == "unhealthy":
-                    status = "degraded"
-                else:
-                    status = "online"
-                    
-                return {
-                    "status": status,
-                    "api_available": api_available,
-                    "api_error": api_error,
-                    "response_time": round(response_time, 2),
-                    "nodes_online": nodes_online,
-                    "total_nodes": total_nodes,
-                    "nodes_health": nodes_health,
-                    "users_online": system_stats.get('onlineStats', {}).get('onlineNow', 0),
-                    "total_users": system_stats.get('users', {}).get('totalUsers', 0),
-                    "last_check": end_time,
-                    "api_url": settings.REMNAWAVE_API_URL
-                }
-                
-        except Exception as e:
-            logger.error(f"Ошибка проверки здоровья панели: {e}")
-            return {
-                "status": "offline",
-                "api_available": False,
-                "api_error": str(e),
-                "response_time": 0,
-                "nodes_online": 0,
-                "total_nodes": 0,
-                "nodes_health": "unknown",
-                "last_check": datetime.utcnow(),
-                "api_url": settings.REMNAWAVE_API_URL
-            }
+        attempts = settings.get_maintenance_retry_attempts()
+        attempts = max(1, attempts)
+
+        last_result: Optional[Dict[str, Any]] = None
+        last_error: Optional[Exception] = None
+
+        for attempt in range(1, attempts + 1):
+            try:
+                start_time = datetime.utcnow()
+
+                async with self.get_api_client() as api:
+                    try:
+                        system_stats = await api.get_system_stats()
+                        api_available = True
+                        api_error = None
+                    except Exception as e:
+                        api_available = False
+                        api_error = str(e)
+                        system_stats = {}
+
+                    try:
+                        nodes = await api.get_all_nodes()
+                        nodes_online = sum(
+                            1 for node in nodes if node.is_connected and node.is_node_online
+                        )
+                        total_nodes = len(nodes)
+                        nodes_health = "healthy" if nodes_online > 0 else "unhealthy"
+                    except Exception:
+                        nodes_online = 0
+                        total_nodes = 0
+                        nodes_health = "unknown"
+
+                    end_time = datetime.utcnow()
+                    response_time = (end_time - start_time).total_seconds()
+
+                    if not api_available:
+                        status = "offline"
+                    elif response_time > 10:
+                        status = "degraded"
+                    elif nodes_health == "unhealthy":
+                        status = "degraded"
+                    else:
+                        status = "online"
+
+                    result = {
+                        "status": status,
+                        "api_available": api_available,
+                        "api_error": api_error,
+                        "response_time": round(response_time, 2),
+                        "nodes_online": nodes_online,
+                        "total_nodes": total_nodes,
+                        "nodes_health": nodes_health,
+                        "users_online": system_stats.get('onlineStats', {}).get('onlineNow', 0),
+                        "total_users": system_stats.get('users', {}).get('totalUsers', 0),
+                        "last_check": end_time,
+                        "api_url": settings.REMNAWAVE_API_URL,
+                        "attempts_used": attempt,
+                    }
+
+                if result["api_available"]:
+                    if attempt > 1:
+                        logger.info("Панель Remnawave ответила с %s попытки", attempt)
+                    return result
+
+                last_result = result
+
+                if attempt < attempts:
+                    logger.warning(
+                        "Панель Remnawave недоступна (попытка %s/%s): %s",
+                        attempt,
+                        attempts,
+                        result.get("api_error") or "неизвестная ошибка",
+                    )
+                    await asyncio.sleep(1)
+
+            except Exception as error:
+                last_error = error
+                if attempt < attempts:
+                    logger.warning(
+                        "Ошибка проверки здоровья панели (попытка %s/%s): %s",
+                        attempt,
+                        attempts,
+                        error,
+                    )
+                    await asyncio.sleep(1)
+                    continue
+
+                logger.error(f"Ошибка проверки здоровья панели: {error}")
+
+        if last_result is not None:
+            return last_result
+
+        error_message = str(last_error) if last_error else "Неизвестная ошибка"
+        return {
+            "status": "offline",
+            "api_available": False,
+            "api_error": error_message,
+            "response_time": 0,
+            "nodes_online": 0,
+            "total_nodes": 0,
+            "nodes_health": "unknown",
+            "last_check": datetime.utcnow(),
+            "api_url": settings.REMNAWAVE_API_URL,
+            "attempts_used": attempts,
+        }
         
 
