@@ -3121,16 +3121,8 @@ async def activate_subscription_trial_endpoint(
             },
         )
 
-    forced_devices = None
-    if not settings.is_devices_selection_enabled():
-        forced_devices = settings.get_disabled_mode_device_limit()
-
     try:
-        subscription = await create_trial_subscription(
-            db,
-            user.id,
-            device_limit=forced_devices,
-        )
+        subscription = await create_trial_subscription(db, user.id)
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             "Failed to activate trial subscription for user %s: %s",
@@ -3646,9 +3638,7 @@ async def _calculate_subscription_renewal_pricing(
     if traffic_limit is None:
         traffic_limit = settings.DEFAULT_TRAFFIC_LIMIT_GB
 
-    devices_limit = subscription.device_limit
-    if devices_limit is None:
-        devices_limit = settings.DEFAULT_DEVICE_LIMIT
+    devices_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
 
     total_cost, details = await calculate_subscription_total_cost(
         db,
@@ -5054,12 +5044,7 @@ async def update_subscription_devices_endpoint(
             },
         )
 
-    current_devices_value = subscription.device_limit
-    if current_devices_value is None:
-        fallback_value = settings.DEFAULT_DEVICE_LIMIT or 1
-        current_devices_value = fallback_value
-
-    current_devices = int(current_devices_value)
+    current_devices = int(subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT or 1)
     old_devices = current_devices
 
     if new_devices == current_devices:

@@ -79,7 +79,6 @@ from app.utils.promo_offer import (
 )
 
 from .common import _get_addon_discount_percent_for_user, _get_period_hint_from_subscription, logger
-from .summary import present_subscription_summary
 
 async def handle_add_countries(
         callback: types.CallbackQuery,
@@ -587,11 +586,6 @@ async def countries_continue(
 
     if not data.get('countries'):
         await callback.answer("⚠️ Выберите хотя бы одну страну!", show_alert=True)
-        return
-
-    if not settings.is_devices_selection_enabled():
-        if await present_subscription_summary(callback, state, db_user, texts):
-            await callback.answer()
         return
 
     selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
