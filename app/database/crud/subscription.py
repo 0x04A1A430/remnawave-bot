@@ -41,14 +41,13 @@ async def create_trial_subscription(
     user_id: int,
     duration_days: int = None,
     traffic_limit_gb: int = None,
-    device_limit: Optional[int] = None,
+    device_limit: int = None,
     squad_uuid: str = None
 ) -> Subscription:
     
     duration_days = duration_days or settings.TRIAL_DURATION_DAYS
     traffic_limit_gb = traffic_limit_gb or settings.TRIAL_TRAFFIC_LIMIT_GB
-    if device_limit is None:
-        device_limit = settings.TRIAL_DEVICE_LIMIT
+    device_limit = device_limit or settings.TRIAL_DEVICE_LIMIT
     if not squad_uuid:
         try:
             from app.database.crud.server_squad import get_random_trial_squad_uuid
@@ -127,16 +126,13 @@ async def create_paid_subscription(
     user_id: int,
     duration_days: int,
     traffic_limit_gb: int = 0,
-    device_limit: Optional[int] = None,
+    device_limit: int = 1,
     connected_squads: List[str] = None,
     update_server_counters: bool = False,
 ) -> Subscription:
     
     end_date = datetime.utcnow() + timedelta(days=duration_days)
     
-    if device_limit is None:
-        device_limit = settings.DEFAULT_DEVICE_LIMIT
-
     subscription = Subscription(
         user_id=user_id,
         status=SubscriptionStatus.ACTIVE.value,

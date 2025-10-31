@@ -120,9 +120,9 @@ class AdvertisingCampaignService:
             return CampaignBonusResult(success=False)
 
         traffic_limit = campaign.subscription_traffic_gb
-        device_limit = campaign.subscription_device_limit
-        if device_limit is None:
-            device_limit = settings.DEFAULT_DEVICE_LIMIT
+        device_limit = (
+            campaign.subscription_device_limit or settings.DEFAULT_DEVICE_LIMIT
+        )
         squads = list(campaign.subscription_squads or [])
 
         if not squads:
