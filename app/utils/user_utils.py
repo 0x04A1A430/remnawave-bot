@@ -20,15 +20,26 @@ def format_referrer_info(user: User) -> str:
     if not referred_by_id:
         return "Нет"
 
-    referrer = getattr(user, "referrer", None)
-
-    if not referrer:
-        return f"ID {referred_by_id} (не найден)"
-
-    if referrer.username:
-        return f"@{referrer.username} (ID: {referred_by_id})"
-
-    return f"ID {referrer.telegram_id}"
+    try:
+        # Проверяем, является ли referrer обычным объектом или InstrumentedList
+        referrer = getattr(user, "referrer", None)
+        
+        # Если referrer это InstrumentedList или None, то возвращаем информацию по ID
+        if referrer is None:
+            return f"ID {referred_by_id} (не найден)"
+        
+        # Пытаемся получить атрибуты referrer, если они доступны
+        referrer_username = getattr(referrer, "username", None)
+        referrer_telegram_id = getattr(referrer, "telegram_id", None)
+        
+        if referrer_username:
+            return f"@{referrer_username} (ID: {referred_by_id})"
+        
+        return f"ID {referrer_telegram_id or referred_by_id}"
+    
+    except (AttributeError, TypeError):
+        # Если возникла ошибка при обращении к атрибутам, просто возвращаем ID
+        return f"ID {referred_by_id} (ошибка загрузки)"
 
 
 async def generate_unique_referral_code(db: AsyncSession, telegram_id: int) -> str:

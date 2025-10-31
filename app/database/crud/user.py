@@ -515,6 +515,7 @@ async def get_users_list(
         
         if search.isdigit():
             conditions.append(User.telegram_id == int(search))
+            conditions.append(User.id == int(search))  # Add support for searching by internal user ID
         
         query = query.where(or_(*conditions))
 
@@ -612,6 +613,7 @@ async def get_users_count(
         
         if search.isdigit():
             conditions.append(User.telegram_id == int(search))
+            conditions.append(User.id == int(search))  # Add support for searching by internal user ID
         
         query = query.where(or_(*conditions))
     
