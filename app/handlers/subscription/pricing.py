@@ -158,7 +158,18 @@ async def _prepare_subscription_summary(
         total_servers_discount += total_discount_for_server
         selected_server_prices.append(total_price_for_server)
 
-    devices_selected = summary_data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+    devices_selection_enabled = settings.is_devices_selection_enabled()
+    forced_disabled_limit: Optional[int] = None
+    if devices_selection_enabled:
+        devices_selected = summary_data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
+    else:
+        forced_disabled_limit = settings.get_disabled_mode_device_limit()
+        if forced_disabled_limit is None:
+            devices_selected = settings.DEFAULT_DEVICE_LIMIT
+        else:
+            devices_selected = forced_disabled_limit
+
+    summary_data['devices'] = devices_selected
     additional_devices = max(0, devices_selected - settings.DEFAULT_DEVICE_LIMIT)
     devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
     devices_discount_percent = db_user.get_promo_discount(
@@ -275,7 +286,7 @@ async def _prepare_subscription_summary(
                 f" -{texts.format_price(total_servers_discount)})"
             )
         details_lines.append(servers_line)
-    if total_devices_price > 0:
+    if devices_selection_enabled and total_devices_price > 0:
         devices_line = (
             f"- Доп. устройства: {texts.format_price(devices_price_per_month)}/мес × {months_in_period}"
             f" = {texts.format_price(total_devices_price)}"
@@ -300,17 +311,28 @@ async def _prepare_subscription_summary(
 
     details_text = "\n".join(details_lines)
 
-    summary_text = (
-        "📋 <b>Сводка заказа</b>\n\n"
-        f"📅 <b>Период:</b> {period_display}\n"
-        f"📊 <b>Трафик:</b> {traffic_display}\n"
-        f"🌍 <b>Страны:</b> {', '.join(selected_countries_names)}\n"
-        f"📱 <b>Устройства:</b> {devices_selected}\n\n"
-        "💰 <b>Детализация стоимости:</b>\n"
-        f"{details_text}\n\n"
-        f"💎 <b>Общая стоимость:</b> {texts.format_price(total_price)}\n\n"
-        "Подтверждаете покупку?"
-    )
+    summary_lines = [
+        "📋 <b>Сводка заказа</b>",
+        "",
+        f"📅 <b>Период:</b> {period_display}",
+        f"📊 <b>Трафик:</b> {traffic_display}",
+        f"🌍 <b>Страны:</b> {', '.join(selected_countries_names)}",
+    ]
+
+    if devices_selection_enabled:
+        summary_lines.append(f"📱 <b>Устройства:</b> {devices_selected}")
+
+    summary_lines.extend([
+        "",
+        "💰 <b>Детализация стоимости:</b>",
+        details_text,
+        "",
+        f"💎 <b>Общая стоимость:</b> {texts.format_price(total_price)}",
+        "",
+        "Подтверждаете покупку?",
+    ])
+
+    summary_text = "\n".join(summary_lines)
 
     return summary_text, summary_data
 
@@ -382,7 +404,18 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
             )
 
         traffic_cost = settings.get_traffic_price(subscription.traffic_limit_gb)
-        devices_cost = max(0, subscription.device_limit - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
+        device_limit = subscription.device_limit
+        if device_limit is None:
+            if settings.is_devices_selection_enabled():
+                device_limit = settings.DEFAULT_DEVICE_LIMIT
+            else:
+                forced_limit = settings.get_disabled_mode_device_limit()
+                if forced_limit is None:
+                    device_limit = settings.DEFAULT_DEVICE_LIMIT
+                else:
+                    device_limit = forced_limit
+
+        devices_cost = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
 
         total_cost = base_cost + servers_cost + traffic_cost + devices_cost
 
@@ -410,7 +443,12 @@ async def get_subscription_cost(subscription, db: AsyncSession) -> int:
         return 0
 
 async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSession):
-    devices_used = await get_current_devices_count(db_user)
+    devices_selection_enabled = settings.is_devices_selection_enabled()
+
+    if devices_selection_enabled:
+        devices_used = await get_current_devices_count(db_user)
+    else:
+        devices_used = 0
     countries_info = await _get_countries_info(subscription.connected_squads)
     countries_text = ", ".join([c['name'] for c in countries_info]) if countries_info else "Нет"
 
@@ -439,7 +477,18 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
 
     subscription_cost = await get_subscription_cost(subscription, db)
 
-    info_text = texts.SUBSCRIPTION_INFO.format(
+    info_template = texts.SUBSCRIPTION_INFO
+
+    if not devices_selection_enabled:
+        info_template = info_template.replace(
+            "\n📱 <b>Устройства:</b> {devices_used} / {devices_limit}",
+            "",
+        ).replace(
+            "\n📱 <b>Devices:</b> {devices_used} / {devices_limit}",
+            "",
+        )
+
+    info_text = info_template.format(
         status=status_text,
         type=type_text,
         end_date=subscription.end_date.strftime("%d.%m.%Y %H:%M"),
