@@ -183,16 +183,6 @@ async def handle_change_devices(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
 
-    if not settings.is_devices_selection_enabled():
-        await callback.answer(
-            texts.t(
-                "DEVICES_SELECTION_DISABLED",
-                "⚠️ Изменение количества устройств недоступно",
-            ),
-            show_alert=True,
-        )
-        return
-
     if not subscription or subscription.is_trial:
         await callback.answer(
             texts.t("PAID_FEATURE_ONLY", "⚠️ Эта функция доступна только для платных подписок"),
@@ -242,16 +232,6 @@ async def confirm_change_devices(
     new_devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
-
-    if not settings.is_devices_selection_enabled():
-        await callback.answer(
-            texts.t(
-                "DEVICES_SELECTION_DISABLED",
-                "⚠️ Изменение количества устройств недоступно",
-            ),
-            show_alert=True,
-        )
-        return
 
     current_devices = subscription.device_limit
 
@@ -398,16 +378,6 @@ async def execute_change_devices(
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
     current_devices = subscription.device_limit
-
-    if not settings.is_devices_selection_enabled():
-        await callback.answer(
-            texts.t(
-                "DEVICES_SELECTION_DISABLED",
-                "⚠️ Изменение количества устройств недоступно",
-            ),
-            show_alert=True,
-        )
-        return
 
     try:
         if price > 0:
@@ -892,16 +862,6 @@ async def confirm_add_devices(
     devices_count = int(callback.data.split('_')[2])
     texts = get_texts(db_user.language)
     subscription = db_user.subscription
-
-    if not settings.is_devices_selection_enabled():
-        await callback.answer(
-            texts.t(
-                "DEVICES_SELECTION_DISABLED",
-                "⚠️ Изменение количества устройств недоступно",
-            ),
-            show_alert=True,
-        )
-        return
 
     resume_callback = None
 

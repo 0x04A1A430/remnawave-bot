@@ -140,7 +140,6 @@ from .traffic import (
     handle_switch_traffic,
     select_traffic,
 )
-from .workflow import present_subscription_summary
 
 async def show_subscription_info(
         callback: types.CallbackQuery,
@@ -1257,15 +1256,12 @@ async def select_period(
                 reply_markup=get_countries_keyboard(countries, [], db_user.language)
             )
             await state.set_state(SubscriptionStates.selecting_countries)
-            await callback.answer()
-            return
+        else:
+            countries = await _get_available_countries(db_user.promo_group_id)
+            available_countries = [c for c in countries if c.get('is_available', True)]
+            data['countries'] = [available_countries[0]['uuid']] if available_countries else []
+            await state.set_data(data)
 
-        countries = await _get_available_countries(db_user.promo_group_id)
-        available_countries = [c for c in countries if c.get('is_available', True)]
-        data['countries'] = [available_countries[0]['uuid']] if available_countries else []
-        await state.set_data(data)
-
-        if settings.is_devices_selection_enabled():
             selected_devices = data.get('devices', settings.DEFAULT_DEVICE_LIMIT)
 
             await callback.message.edit_text(
@@ -1273,13 +1269,6 @@ async def select_period(
                 reply_markup=get_devices_keyboard(selected_devices, db_user.language)
             )
             await state.set_state(SubscriptionStates.selecting_devices)
-            await callback.answer()
-            return
-
-        success = await present_subscription_summary(callback, state, db_user, texts)
-        if success:
-            await callback.answer()
-        return
 
     await callback.answer()
 
@@ -1290,17 +1279,6 @@ async def select_devices(
 ):
     if not callback.data.startswith("devices_") or callback.data == "devices_continue":
         await callback.answer("❌ Некорректный запрос", show_alert=True)
-        return
-
-    if not settings.is_devices_selection_enabled():
-        texts = get_texts(db_user.language)
-        await callback.answer(
-            texts.t(
-                "DEVICES_SELECTION_DISABLED",
-                "⚠️ Изменение количества устройств недоступно",
-            ),
-            show_alert=True,
-        )
         return
 
     try:
@@ -1346,9 +1324,24 @@ async def devices_continue(
     data = await state.get_data()
     texts = get_texts(db_user.language)
 
-    success = await present_subscription_summary(callback, state, db_user, texts)
-    if success:
-        await callback.answer()
+    try:
+        summary_text, prepared_data = await _prepare_subscription_summary(db_user, data, texts)
+    except ValueError:
+        logger.error(f"Ошибка в расчете цены подписки для пользователя {db_user.telegram_id}")
+        await callback.answer("Ошибка расчета цены. Обратитесь в поддержку.", show_alert=True)
+        return
+
+    await state.set_data(prepared_data)
+    await save_subscription_checkout_draft(db_user.id, prepared_data)
+
+    await callback.message.edit_text(
+        summary_text,
+        reply_markup=get_subscription_confirm_keyboard(db_user.language),
+        parse_mode="HTML",
+    )
+
+    await state.set_state(SubscriptionStates.confirming_purchase)
+    await callback.answer()
 
 async def confirm_purchase(
         callback: types.CallbackQuery,

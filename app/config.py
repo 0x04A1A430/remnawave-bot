@@ -83,7 +83,6 @@ class Settings(BaseSettings):
     TRIAL_ADD_REMAINING_DAYS_TO_PAID: bool = False
     DEFAULT_TRAFFIC_LIMIT_GB: int = 100
     DEFAULT_DEVICE_LIMIT: int = 1
-    DEVICES_SELECTION_ENABLED: bool = True
     TRIAL_SQUAD_UUID: Optional[str] = None
     DEFAULT_TRAFFIC_RESET_STRATEGY: str = "MONTH"
     RESET_TRAFFIC_ON_PAYMENT: bool = False
@@ -798,12 +797,9 @@ class Settings(BaseSettings):
     
     def is_traffic_fixed(self) -> bool:
         return self.TRAFFIC_SELECTION_MODE.lower() == "fixed"
-
+    
     def get_fixed_traffic_limit(self) -> int:
         return self.FIXED_TRAFFIC_LIMIT_GB
-
-    def is_devices_selection_enabled(self) -> bool:
-        return bool(self.DEVICES_SELECTION_ENABLED)
     
     def is_yookassa_enabled(self) -> bool:
         return (self.YOOKASSA_ENABLED and 
