@@ -9,7 +9,13 @@ from app.database.universal_migration import ensure_default_web_api_token
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings, settings, refresh_period_prices, refresh_traffic_prices
+from app.config import (
+    Settings,
+    settings,
+    refresh_period_prices,
+    refresh_traffic_prices,
+    ENV_OVERRIDE_KEYS,
+)
 from app.database.crud.system_setting import (
     delete_system_setting,
     upsert_system_setting,
@@ -632,6 +638,10 @@ class BotConfigurationService:
         return key in cls.READ_ONLY_KEYS
 
     @classmethod
+    def _is_env_override(cls, key: str) -> bool:
+        return key in cls._env_override_keys
+
+    @classmethod
     def _format_numeric_with_unit(cls, key: str, value: Union[int, float]) -> Optional[str]:
         if isinstance(value, bool):
             return None
@@ -744,6 +754,7 @@ class BotConfigurationService:
     _definitions: Dict[str, SettingDefinition] = {}
     _original_values: Dict[str, Any] = settings.model_dump()
     _overrides_raw: Dict[str, Optional[str]] = {}
+    _env_override_keys: set[str] = set(ENV_OVERRIDE_KEYS)
     _callback_tokens: Dict[str, str] = {}
     _token_to_key: Dict[str, str] = {}
     _choice_tokens: Dict[str, Dict[Any, str]] = {}
@@ -867,6 +878,8 @@ class BotConfigurationService:
 
     @classmethod
     def has_override(cls, key: str) -> bool:
+        if cls._is_env_override(key):
+            return False
         return key in cls._overrides_raw
 
     @classmethod
@@ -1162,6 +1175,12 @@ class BotConfigurationService:
                 overrides[row.key] = row.value
 
         for key, raw_value in overrides.items():
+            if cls._is_env_override(key):
+                logger.debug(
+                    "Пропускаем настройку %s из БД: используется значение из окружения",
+                    key,
+                )
+                continue
             try:
                 parsed_value = cls.deserialize_value(key, raw_value)
             except Exception as error:
@@ -1281,8 +1300,15 @@ class BotConfigurationService:
 
         raw_value = cls.serialize_value(key, value)
         await upsert_system_setting(db, key, raw_value)
-        cls._overrides_raw[key] = raw_value
-        cls._apply_to_settings(key, value)
+        if cls._is_env_override(key):
+            logger.info(
+                "Настройка %s сохранена в БД, но не применена: значение задаётся через окружение",
+                key,
+            )
+            cls._overrides_raw.pop(key, None)
+        else:
+            cls._overrides_raw[key] = raw_value
+            cls._apply_to_settings(key, value)
 
         if key in {"WEB_API_DEFAULT_TOKEN", "WEB_API_DEFAULT_TOKEN_NAME"}:
             await cls._sync_default_web_api_token()
@@ -1300,14 +1326,26 @@ class BotConfigurationService:
 
         await delete_system_setting(db, key)
         cls._overrides_raw.pop(key, None)
-        original = cls.get_original_value(key)
-        cls._apply_to_settings(key, original)
+        if cls._is_env_override(key):
+            logger.info(
+                "Настройка %s сброшена в БД, используется значение из окружения",
+                key,
+            )
+        else:
+            original = cls.get_original_value(key)
+            cls._apply_to_settings(key, original)
 
         if key in {"WEB_API_DEFAULT_TOKEN", "WEB_API_DEFAULT_TOKEN_NAME"}:
             await cls._sync_default_web_api_token()
 
     @classmethod
     def _apply_to_settings(cls, key: str, value: Any) -> None:
+        if cls._is_env_override(key):
+            logger.debug(
+                "Пропуск применения настройки %s: значение задано через окружение",
+                key,
+            )
+            return
         try:
             setattr(settings, key, value)
             if key in {
