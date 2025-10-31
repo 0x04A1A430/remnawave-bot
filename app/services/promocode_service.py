@@ -131,20 +131,12 @@ class PromoCodeService:
                     if getattr(settings, 'TRIAL_SQUAD_UUID', None):
                         trial_squads = [settings.TRIAL_SQUAD_UUID]
                 
-                forced_devices = None
-                if not settings.is_devices_selection_enabled():
-                    forced_devices = settings.get_devices_selection_disabled_amount()
-
-                device_limit = settings.DEFAULT_DEVICE_LIMIT
-                if forced_devices is not None:
-                    device_limit = forced_devices
-
                 new_subscription = await create_paid_subscription(
                     db=db,
                     user_id=user.id,
                     duration_days=promocode.subscription_days,
                     traffic_limit_gb=0,
-                    device_limit=device_limit,
+                    device_limit=1,
                     connected_squads=trial_squads,
                     update_server_counters=True,
                 )
@@ -163,15 +155,10 @@ class PromoCodeService:
             if not subscription:
                 trial_days = promocode.subscription_days if promocode.subscription_days > 0 else settings.TRIAL_DURATION_DAYS
                 
-                forced_devices = None
-                if not settings.is_devices_selection_enabled():
-                    forced_devices = settings.get_devices_selection_disabled_amount()
-
                 trial_subscription = await create_trial_subscription(
                     db,
                     user.id,
-                    duration_days=trial_days,
-                    device_limit=forced_devices,
+                    duration_days=trial_days
                 )
                 
                 await self.subscription_service.create_remnawave_user(db, trial_subscription)
