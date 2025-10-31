@@ -46,6 +46,9 @@ def _format_campaign_summary(campaign, texts) -> str:
         bonus_info = f"💰 Бонус на баланс: <b>{bonus_text}</b>"
     else:
         traffic_text = texts.format_traffic(campaign.subscription_traffic_gb or 0)
+        device_limit = campaign.subscription_device_limit
+        if device_limit is None:
+            device_limit = settings.DEFAULT_DEVICE_LIMIT
         bonus_info = (
             "📱 Подписка: <b>{days} д.</b>\n"
             "🌐 Трафик: <b>{traffic}</b>\n"
@@ -53,7 +56,7 @@ def _format_campaign_summary(campaign, texts) -> str:
         ).format(
             days=campaign.subscription_duration_days or 0,
             traffic=traffic_text,
-            devices=campaign.subscription_device_limit or settings.DEFAULT_DEVICE_LIMIT,
+            devices=device_limit,
         )
 
     return (
@@ -935,7 +938,9 @@ async def start_edit_campaign_subscription_devices(
         campaign_edit_message_is_caption=is_caption,
     )
 
-    current_devices = campaign.subscription_device_limit or settings.DEFAULT_DEVICE_LIMIT
+    current_devices = campaign.subscription_device_limit
+    if current_devices is None:
+        current_devices = settings.DEFAULT_DEVICE_LIMIT
 
     await callback.message.edit_text(
         (
