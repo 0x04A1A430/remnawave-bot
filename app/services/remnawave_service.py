@@ -38,9 +38,6 @@ from app.database.models import (
     SubscriptionStatus,
     ServerSquad,
 )
-from app.utils.subscription_utils import (
-    resolve_hwid_device_limit_for_payload,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -1219,53 +1216,44 @@ class RemnaWaveService:
                 for user in users:
                     if not user.subscription:
                         continue
-
+                    
                     try:
                         subscription = user.subscription
-                        hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
-
+                        
                         if user.remnawave_uuid:
-                            update_kwargs = dict(
+                            await api.update_user(
                                 uuid=user.remnawave_uuid,
                                 status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
                                 expire_at=subscription.end_date,
                                 traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
                                 traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                                hwid_device_limit=subscription.device_limit,
                                 description=settings.format_remnawave_user_description(
                                     full_name=user.full_name,
                                     username=user.username,
                                     telegram_id=user.telegram_id
                                 ),
-                                active_internal_squads=subscription.connected_squads,
+                                active_internal_squads=subscription.connected_squads
                             )
-
-                            if hwid_limit is not None:
-                                update_kwargs['hwid_device_limit'] = hwid_limit
-
-                            await api.update_user(**update_kwargs)
                             stats["updated"] += 1
                         else:
                             username = f"user_{user.telegram_id}"
-
-                            create_kwargs = dict(
+                            
+                            new_user = await api.create_user(
                                 username=username,
                                 expire_at=subscription.end_date,
                                 status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
                                 traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
                                 traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                                 telegram_id=user.telegram_id,
+                                hwid_device_limit=subscription.device_limit,
                                 description=settings.format_remnawave_user_description(
                                     full_name=user.full_name,
                                     username=user.username,
                                     telegram_id=user.telegram_id
                                 ),
-                                active_internal_squads=subscription.connected_squads,
+                                active_internal_squads=subscription.connected_squads
                             )
-
-                            if hwid_limit is not None:
-                                create_kwargs['hwid_device_limit'] = hwid_limit
-
-                            new_user = await api.create_user(**create_kwargs)
                             
                             await update_user(db, user, remnawave_uuid=new_user.uuid)
                             subscription.remnawave_short_uuid = new_user.short_uuid
