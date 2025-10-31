@@ -144,7 +144,6 @@ class Settings(BaseSettings):
     REFERRAL_PROGRAM_ENABLED: bool = True
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
-    REFERRED_USER_REWARD: int = 0 
     
     AUTOPAY_WARNING_DAYS: str = "3,1"
 
@@ -1115,34 +1114,7 @@ class Settings(BaseSettings):
         return (self.BACKUP_SEND_ENABLED and
                 self.get_backup_send_chat_id() is not None)
 
-    def get_referred_user_reward_kopeks(self) -> int:
-        """Return the referred user reward normalized to kopeks.
-
-        Historically the value was stored in kopeks, however some
-        installations provide it in rubles. To keep backward compatibility we
-        treat any value greater than or equal to one thousand as already being
-        in kopeks (≥ 10 ₽). Smaller positive values are assumed to be provided
-        in rubles and therefore converted to kopeks.
-        """
-
-        raw_value = getattr(self, "REFERRED_USER_REWARD", 0)
-
-        try:
-            value = int(raw_value)
-        except (TypeError, ValueError):
-            return 0
-
-        if value <= 0:
-            return 0
-
-        if value >= 1000:
-            return value
-
-        return value * 100
-
     def get_referral_settings(self) -> Dict:
-        referred_reward_kopeks = self.get_referred_user_reward_kopeks()
-
         return {
             "program_enabled": self.is_referral_program_enabled(),
             "minimum_topup_kopeks": self.REFERRAL_MINIMUM_TOPUP_KOPEKS,
@@ -1150,8 +1122,6 @@ class Settings(BaseSettings):
             "inviter_bonus_kopeks": self.REFERRAL_INVITER_BONUS_KOPEKS,
             "commission_percent": self.REFERRAL_COMMISSION_PERCENT,
             "notifications_enabled": self.REFERRAL_NOTIFICATIONS_ENABLED,
-            "referred_user_reward": referred_reward_kopeks,
-            "referred_user_reward_kopeks": referred_reward_kopeks,
         }
     
     def is_referral_program_enabled(self) -> bool:
