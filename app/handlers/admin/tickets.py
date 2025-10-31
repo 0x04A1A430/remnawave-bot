@@ -22,7 +22,6 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.support_settings_service import SupportSettingsService
 from app.config import settings
 from app.utils.cache import RateLimitCache
-from app.utils.telegram_links import build_user_dm_url, build_user_profile_url
 
 logger = logging.getLogger(__name__)
 
@@ -222,14 +221,17 @@ async def view_admin_ticket(
         pass
     # Кнопки ЛС и профиль
     try:
-        if ticket.user:
+        if ticket.user and ticket.user.telegram_id:
             buttons_row = []
-            dm_url = build_user_dm_url(ticket.user.username, ticket.user.telegram_id)
-            profile_url = build_user_profile_url(ticket.user.username, ticket.user.telegram_id)
-            if dm_url:
-                buttons_row.append(types.InlineKeyboardButton(text="✉ Написать в ЛС", url=dm_url))
-            if profile_url:
-                buttons_row.append(types.InlineKeyboardButton(text="👤 Профиль", url=profile_url))
+            # DM: при наличии username используем tg://resolve, иначе fallback по ID
+            if ticket.user.username:
+                pm_url = f"tg://resolve?domain={ticket.user.username}"
+            else:
+                pm_url = f"tg://user?id={ticket.user.telegram_id}"
+            buttons_row.append(types.InlineKeyboardButton(text="✉ Написать в ЛС", url=pm_url))
+            # Профиль: по ID
+            profile_url = f"tg://user?id={ticket.user.telegram_id}"
+            buttons_row.append(types.InlineKeyboardButton(text="👤 Профиль", url=profile_url))
             if buttons_row:
                 keyboard.inline_keyboard.insert(0, buttons_row)
     except Exception:
@@ -776,14 +778,15 @@ async def handle_admin_block_duration_input(
                 pass
             # Кнопки ЛС и профиль при обновлении карточки
             try:
-                if updated.user:
+                if updated.user and updated.user.telegram_id:
                     buttons_row = []
-                    dm_url = build_user_dm_url(updated.user.username, updated.user.telegram_id)
-                    profile_url = build_user_profile_url(updated.user.username, updated.user.telegram_id)
-                    if dm_url:
-                        buttons_row.append(types.InlineKeyboardButton(text="✉ Написать в ЛС", url=dm_url))
-                    if profile_url:
-                        buttons_row.append(types.InlineKeyboardButton(text="👤 Профиль", url=profile_url))
+                    if updated.user.username:
+                        pm_url = f"tg://resolve?domain={updated.user.username}"
+                    else:
+                        pm_url = f"tg://user?id={updated.user.telegram_id}"
+                    buttons_row.append(types.InlineKeyboardButton(text="✉ Написать в ЛС", url=pm_url))
+                    profile_url = f"tg://user?id={updated.user.telegram_id}"
+                    buttons_row.append(types.InlineKeyboardButton(text="👤 Профиль", url=profile_url))
                     if buttons_row:
                         kb.inline_keyboard.insert(0, buttons_row)
             except Exception:
