@@ -235,7 +235,11 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     logger.info(f"🚀 START: Обработка /start от {message.from_user.id}")
 
     data = await state.get_data() or {}
+    had_pending_payload = "pending_start_payload" in data
     pending_start_payload = data.pop("pending_start_payload", None)
+    had_campaign_notification_flag = "campaign_notification_sent" in data
+    campaign_notification_sent = data.pop("campaign_notification_sent", False)
+    state_needs_update = had_pending_payload or had_campaign_notification_flag
 
     referral_code = None
     campaign = None
@@ -251,7 +255,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             pending_start_payload,
         )
 
-    if pending_start_payload is not None:
+    if state_needs_update:
         await state.set_data(data)
 
     if start_parameter:
@@ -277,7 +281,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     
     user = db_user if db_user else await get_user_by_telegram_id(db, message.from_user.id)
 
-    if campaign:
+    if campaign and not campaign_notification_sent:
         try:
             notification_service = AdminNotificationService(message.bot)
             await notification_service.send_campaign_link_visit_notification(
