@@ -9,7 +9,7 @@ from app.database.crud.user import (
     get_user_by_id, get_user_by_telegram_id, get_users_list,
     get_users_count, get_users_statistics, get_inactive_users,
     add_user_balance, subtract_user_balance, update_user, delete_user,
-    get_users_spending_stats
+    get_users_spending_stats, get_referrals
 )
 from app.database.crud.promo_group import get_promo_group_by_id
 from app.database.crud.transaction import get_user_transactions_count
@@ -410,6 +410,72 @@ class UserService:
             await db.rollback()
             logger.error(f"Ошибка обновления промогруппы пользователя {user_id}: {e}")
             return False, None, None, None
+
+    async def update_user_referrals(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        referral_user_ids: List[int],
+        admin_id: int,
+    ) -> Tuple[bool, Dict[str, int]]:
+        try:
+            user = await get_user_by_id(db, user_id)
+            if not user:
+                return False, {"error": "user_not_found"}
+
+            unique_ids: List[int] = []
+            for referral_id in referral_user_ids:
+                if referral_id == user_id:
+                    continue
+                if referral_id not in unique_ids:
+                    unique_ids.append(referral_id)
+
+            current_referrals = await get_referrals(db, user_id)
+            current_ids = {ref.id for ref in current_referrals}
+
+            to_assign = unique_ids
+            to_remove = [rid for rid in current_ids if rid not in unique_ids]
+            to_add = [rid for rid in unique_ids if rid not in current_ids]
+
+            if to_assign:
+                await db.execute(
+                    update(User)
+                    .where(User.id.in_(to_assign))
+                    .values(referred_by_id=user_id)
+                )
+
+            if to_remove:
+                await db.execute(
+                    update(User)
+                    .where(User.id.in_(to_remove))
+                    .values(referred_by_id=None)
+                )
+
+            await db.commit()
+
+            logger.info(
+                "Админ %s обновил рефералов пользователя %s: добавлено %s, удалено %s, всего %s",
+                admin_id,
+                user_id,
+                len(to_add),
+                len(to_remove),
+                len(unique_ids),
+            )
+
+            return True, {
+                "added": len(to_add),
+                "removed": len(to_remove),
+                "total": len(unique_ids),
+            }
+
+        except Exception as e:
+            await db.rollback()
+            logger.error(
+                "Ошибка обновления рефералов пользователя %s: %s",
+                user_id,
+                e,
+            )
+            return False, {"error": "update_failed"}
 
     async def block_user(
         self,
