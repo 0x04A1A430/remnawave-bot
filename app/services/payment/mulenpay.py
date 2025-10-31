@@ -247,6 +247,7 @@ class MulenPayPaymentMixin:
                     user,
                     payment.amount_kopeks,
                     f"Пополнение {display_name}: {payment.amount_kopeks // 100}₽",
+                    create_transaction=False,
                 )
 
                 try:
