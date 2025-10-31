@@ -398,6 +398,7 @@ API снова отвечает на запросы.""", "success")
             "api_status": self._status.api_status,
             "consecutive_failures": self._status.consecutive_failures,
             "monitoring_active": self._check_task is not None and not self._check_task.done(),
+            "monitoring_configured": settings.is_maintenance_monitoring_enabled(),
             "auto_enable_configured": settings.is_maintenance_auto_enable(),
             "check_interval": settings.get_maintenance_check_interval(),
             "bot_connected": self._bot is not None

@@ -74,6 +74,7 @@ async def show_maintenance_panel(
 {status_emoji} <b>Режим техработ:</b> {status_text}
 {api_emoji} <b>API Remnawave:</b> {api_text}
 {monitoring_emoji} <b>Мониторинг:</b> {monitoring_text}
+🛠️ <b>Автозапуск мониторинга:</b> {'Включен' if status_info['monitoring_configured'] else 'Отключен'}
 ⏱️ <b>Интервал проверки:</b> {status_info['check_interval']}с
 🤖 <b>Автовключение:</b> {'Включено' if status_info['auto_enable_configured'] else 'Отключено'}
 {panel_info}

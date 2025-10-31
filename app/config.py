@@ -156,8 +156,9 @@ class Settings(BaseSettings):
     INACTIVE_USER_DELETE_MONTHS: int = 3
 
     MAINTENANCE_MODE: bool = False
-    MAINTENANCE_CHECK_INTERVAL: int = 30 
-    MAINTENANCE_AUTO_ENABLE: bool = True 
+    MAINTENANCE_CHECK_INTERVAL: int = 30
+    MAINTENANCE_AUTO_ENABLE: bool = True
+    MAINTENANCE_MONITORING_ENABLED: bool = True
     MAINTENANCE_MESSAGE: str = "🔧 Ведутся технические работы. Сервис временно недоступен. Попробуйте позже."
     
     TELEGRAM_STARS_ENABLED: bool = True
@@ -1051,6 +1052,9 @@ class Settings(BaseSettings):
 
     def is_maintenance_auto_enable(self) -> bool:
         return self.MAINTENANCE_AUTO_ENABLE
+
+    def is_maintenance_monitoring_enabled(self) -> bool:
+        return self.MAINTENANCE_MONITORING_ENABLED
 
     def get_available_subscription_periods(self) -> List[int]:
         try:
