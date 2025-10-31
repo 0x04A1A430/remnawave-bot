@@ -44,6 +44,17 @@ from app.database.crud.subscription import decrement_subscription_server_counts
 logger = logging.getLogger(__name__)
 
 
+def _calculate_subscription_flags(subscription):
+    if not subscription:
+        return False, False
+
+    actual_status = getattr(subscription, "actual_status", None)
+    has_active_subscription = actual_status in {"active", "trial"}
+    subscription_is_active = bool(getattr(subscription, "is_active", False))
+
+    return has_active_subscription, subscription_is_active
+
+
 async def _apply_campaign_bonus_if_needed(
     db: AsyncSession,
     user,
@@ -338,11 +349,9 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
                     f"Ошибка отправки уведомления о рекламной кампании: {e}"
                 )
         
-        has_active_subscription = user.subscription is not None
-        subscription_is_active = False
-        
-        if user.subscription:
-            subscription_is_active = user.subscription.is_active
+        has_active_subscription, subscription_is_active = _calculate_subscription_flags(
+            user.subscription
+        )
         
         menu_text = await get_main_menu_text(user, texts, db)
 
@@ -761,11 +770,9 @@ async def complete_registration_from_callback(
         
         await db.refresh(existing_user, ['subscription'])
         
-        has_active_subscription = existing_user.subscription is not None
-        subscription_is_active = False
-        
-        if existing_user.subscription:
-            subscription_is_active = existing_user.subscription.is_active
+        has_active_subscription, subscription_is_active = _calculate_subscription_flags(
+            existing_user.subscription
+        )
         
         menu_text = await get_main_menu_text(existing_user, texts, db)
 
@@ -943,11 +950,9 @@ async def complete_registration_from_callback(
     else:
         logger.info(f"ℹ️ Приветственные сообщения отключены, показываем главное меню для пользователя {user.telegram_id}")
         
-        has_active_subscription = bool(getattr(user, "subscription", None))
-        subscription_is_active = False
-
-        if getattr(user, "subscription", None):
-            subscription_is_active = user.subscription.is_active
+        has_active_subscription, subscription_is_active = _calculate_subscription_flags(
+            getattr(user, "subscription", None)
+        )
         
         menu_text = await get_main_menu_text(user, texts, db)
 
@@ -1019,11 +1024,9 @@ async def complete_registration(
         
         await db.refresh(existing_user, ['subscription'])
         
-        has_active_subscription = existing_user.subscription is not None
-        subscription_is_active = False
-        
-        if existing_user.subscription:
-            subscription_is_active = existing_user.subscription.is_active
+        has_active_subscription, subscription_is_active = _calculate_subscription_flags(
+            existing_user.subscription
+        )
         
         menu_text = await get_main_menu_text(existing_user, texts, db)
 
@@ -1201,11 +1204,9 @@ async def complete_registration(
     else:
         logger.info(f"ℹ️ Приветственные сообщения отключены, показываем главное меню для пользователя {user.telegram_id}")
         
-        has_active_subscription = bool(getattr(user, "subscription", None))
-        subscription_is_active = False
-
-        if getattr(user, "subscription", None):
-            subscription_is_active = user.subscription.is_active
+        has_active_subscription, subscription_is_active = _calculate_subscription_flags(
+            getattr(user, "subscription", None)
+        )
         
         menu_text = await get_main_menu_text(user, texts, db)
 
@@ -1258,23 +1259,35 @@ def _get_subscription_status(user, texts):
         return texts.t("SUBSCRIPTION_NONE", "Нет активной подписки")
 
     subscription = user.subscription
+    actual_status = getattr(subscription, "actual_status", None)
 
     from datetime import datetime
 
     end_date = getattr(subscription, "end_date", None)
     current_time = datetime.utcnow()
 
-    if end_date and end_date <= current_time:
-        return texts.t(
-            "SUB_STATUS_EXPIRED",
-            "🔴 Истекла\n📅 {end_date}",
-        ).format(end_date=end_date.strftime('%d.%m.%Y'))
+    if actual_status == "disabled":
+        return texts.t("SUB_STATUS_DISABLED", "⚫ Отключена")
+
+    if actual_status == "pending":
+        return texts.t("SUB_STATUS_PENDING", "⏳ Ожидает активации")
+
+    if actual_status == "expired" or (end_date and end_date <= current_time):
+        if end_date:
+            return texts.t(
+                "SUB_STATUS_EXPIRED",
+                "🔴 Истекла\n📅 {end_date}",
+            ).format(end_date=end_date.strftime('%d.%m.%Y'))
+        return texts.t("SUBSCRIPTION_STATUS_EXPIRED", "🔴 Истекла")
 
     if not end_date:
         return texts.t("SUBSCRIPTION_ACTIVE", "✅ Активна")
 
     days_left = (end_date - current_time).days
-    is_trial = getattr(subscription, "is_trial", False)
+    is_trial = actual_status == "trial" or getattr(subscription, "is_trial", False)
+
+    if actual_status not in {"active", "trial", None} and not is_trial:
+        return texts.t("SUBSCRIPTION_STATUS_UNKNOWN", "❓ Статус неизвестен")
 
     if is_trial:
         if days_left > 1:
@@ -1521,8 +1534,9 @@ async def required_sub_channel_check(
             logger.warning(f"Не удалось удалить сообщение: {e}")
 
         if user and user.status != UserStatus.DELETED.value:
-            has_active_subscription = bool(user.subscription)
-            subscription_is_active = bool(user.subscription and user.subscription.is_active)
+            has_active_subscription, subscription_is_active = _calculate_subscription_flags(
+                user.subscription
+            )
 
             menu_text = await get_main_menu_text(user, texts, db)
 
