@@ -112,38 +112,24 @@ async def create_subscription(
     if existing:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "User already has a subscription")
 
-    forced_devices = None
-    if not settings.is_devices_selection_enabled():
-        forced_devices = settings.get_disabled_mode_device_limit()
-
     if payload.is_trial:
-        trial_device_limit = payload.device_limit
-        if trial_device_limit is None:
-            trial_device_limit = forced_devices
-
         subscription = await create_trial_subscription(
             db,
             user_id=payload.user_id,
             duration_days=payload.duration_days,
             traffic_limit_gb=payload.traffic_limit_gb,
-            device_limit=trial_device_limit,
+            device_limit=payload.device_limit,
             squad_uuid=payload.squad_uuid,
         )
     else:
         if payload.duration_days is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "duration_days is required for paid subscriptions")
-        device_limit = payload.device_limit
-        if device_limit is None:
-            if forced_devices is not None:
-                device_limit = forced_devices
-            else:
-                device_limit = settings.DEFAULT_DEVICE_LIMIT
         subscription = await create_paid_subscription(
             db,
             user_id=payload.user_id,
             duration_days=payload.duration_days,
             traffic_limit_gb=payload.traffic_limit_gb or settings.DEFAULT_TRAFFIC_LIMIT_GB,
-            device_limit=device_limit,
+            device_limit=payload.device_limit or settings.DEFAULT_DEVICE_LIMIT,
             connected_squads=payload.connected_squads or [],
             update_server_counters=True,
         )
