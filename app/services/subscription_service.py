@@ -17,7 +17,6 @@ from app.utils.pricing_utils import (
     calculate_prorated_price,
     validate_pricing_calculation
 )
-from app.utils.subscription_utils import resolve_hwid_device_limit
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +172,6 @@ class SubscriptionService:
                 return None
             
             async with self.get_api_client() as api:
-                hwid_limit = resolve_hwid_device_limit(subscription)
                 existing_users = await api.get_user_by_telegram_id(user.telegram_id)
                 if existing_users:
                     logger.info(f"🔄 Найден существующий пользователь в панели для {user.telegram_id}")
@@ -185,24 +183,20 @@ class SubscriptionService:
                     except Exception as hwid_error:
                         logger.warning(f"⚠️ Не удалось сбросить HWID: {hwid_error}")
                     
-                    update_kwargs = dict(
+                    updated_user = await api.update_user(
                         uuid=remnawave_user.uuid,
                         status=UserStatus.ACTIVE,
                         expire_at=subscription.end_date,
                         traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                         traffic_limit_strategy=get_traffic_reset_strategy(),
+                        hwid_device_limit=subscription.device_limit,
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
                             username=user.username,
                             telegram_id=user.telegram_id
                         ),
-                        active_internal_squads=subscription.connected_squads,
+                        active_internal_squads=subscription.connected_squads
                     )
-
-                    if hwid_limit is not None:
-                        update_kwargs['hwid_device_limit'] = hwid_limit
-
-                    updated_user = await api.update_user(**update_kwargs)
                     
                     if reset_traffic:
                         await self._reset_user_traffic(
@@ -215,25 +209,21 @@ class SubscriptionService:
                 else:
                     logger.info(f"🆕 Создаем нового пользователя в панели для {user.telegram_id}")
                     username = f"user_{user.telegram_id}"
-                    create_kwargs = dict(
+                    updated_user = await api.create_user(
                         username=username,
                         expire_at=subscription.end_date,
                         status=UserStatus.ACTIVE,
                         traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                         traffic_limit_strategy=get_traffic_reset_strategy(),
                         telegram_id=user.telegram_id,
+                        hwid_device_limit=subscription.device_limit,
                         description=settings.format_remnawave_user_description(
                             full_name=user.full_name,
                             username=user.username,
                             telegram_id=user.telegram_id
                         ),
-                        active_internal_squads=subscription.connected_squads,
+                        active_internal_squads=subscription.connected_squads
                     )
-
-                    if hwid_limit is not None:
-                        create_kwargs['hwid_device_limit'] = hwid_limit
-
-                    updated_user = await api.create_user(**create_kwargs)
 
                     if reset_traffic:
                         await self._reset_user_traffic(
@@ -292,26 +282,20 @@ class SubscriptionService:
                 logger.info(f"🔔 Статус подписки {subscription.id} автоматически изменен на 'expired'")
             
             async with self.get_api_client() as api:
-                hwid_limit = resolve_hwid_device_limit(subscription)
-
-                update_kwargs = dict(
+                updated_user = await api.update_user(
                     uuid=user.remnawave_uuid,
                     status=UserStatus.ACTIVE if is_actually_active else UserStatus.EXPIRED,
                     expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=get_traffic_reset_strategy(),
+                    hwid_device_limit=subscription.device_limit,
                     description=settings.format_remnawave_user_description(
                         full_name=user.full_name,
                         username=user.username,
                         telegram_id=user.telegram_id
                     ),
-                    active_internal_squads=subscription.connected_squads,
+                    active_internal_squads=subscription.connected_squads
                 )
-
-                if hwid_limit is not None:
-                    update_kwargs['hwid_device_limit'] = hwid_limit
-
-                updated_user = await api.update_user(**update_kwargs)
                 
                 if reset_traffic:
                     await self._reset_user_traffic(

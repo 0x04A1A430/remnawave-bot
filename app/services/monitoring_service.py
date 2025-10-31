@@ -38,7 +38,6 @@ from app.database.crud.user import (
     subtract_user_balance,
     cleanup_expired_promo_offer_discounts,
 )
-from app.utils.subscription_utils import resolve_hwid_device_limit
 from app.database.models import MonitoringLog, SubscriptionStatus, Subscription, User, Ticket, TicketStatus
 from app.localization.texts import get_texts
 from app.services.notification_settings_service import NotificationSettingsService
@@ -284,26 +283,20 @@ class MonitoringService:
                 logger.info(f"📝 Статус подписки {subscription.id} обновлен на 'expired'")
             
             async with self.api as api:
-                hwid_limit = resolve_hwid_device_limit(subscription)
-
-                update_kwargs = dict(
+                updated_user = await api.update_user(
                     uuid=user.remnawave_uuid,
                     status=UserStatus.ACTIVE if is_active else UserStatus.EXPIRED,
                     expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                    hwid_device_limit=subscription.device_limit,
                     description=settings.format_remnawave_user_description(
                         full_name=user.full_name,
                         username=user.username,
                         telegram_id=user.telegram_id
                     ),
-                    active_internal_squads=subscription.connected_squads,
+                    active_internal_squads=subscription.connected_squads
                 )
-
-                if hwid_limit is not None:
-                    update_kwargs['hwid_device_limit'] = hwid_limit
-
-                updated_user = await api.update_user(**update_kwargs)
                 
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
