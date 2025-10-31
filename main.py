@@ -35,7 +35,6 @@ from app.localization.loader import ensure_locale_templates
 from app.services.system_settings_service import bot_configuration_service
 from app.services.external_admin_service import ensure_external_admin_token
 from app.services.broadcast_service import broadcast_service
-from app.services.telegram_stars_rate_service import telegram_stars_rate_service
 from app.utils.startup_timeline import StartupTimeline
 
 
@@ -141,28 +140,6 @@ async def main():
             except Exception as error:
                 stage.warning(f"Не удалось загрузить конфигурацию: {error}")
                 logger.error(f"❌ Не удалось загрузить конфигурацию: {error}")
-
-        async with timeline.stage(
-            "Актуализация курса Telegram Stars",
-            "⭐",
-            success_message="Курс Stars актуален",
-        ) as stage:
-            try:
-                rate = await telegram_stars_rate_service.refresh_rate(force=True)
-                if settings.TELEGRAM_STARS_CUSTOM_RATE_ENABLED:
-                    stage.log(
-                        "Используется пользовательский курс Stars: "
-                        f"{settings.TELEGRAM_STARS_RATE_RUB:.2f} ₽/⭐"
-                    )
-                elif rate:
-                    stage.log(f"Текущий курс Stars: {rate:.2f} ₽/⭐")
-                else:
-                    stage.warning(
-                        "Не удалось получить курс из Telegram, используется значение из настроек"
-                    )
-            except Exception as error:
-                stage.warning(f"Ошибка обновления курса Stars: {error}")
-                logger.warning("Ошибка обновления курса Telegram Stars: %s", error)
 
         bot = None
         dp = None

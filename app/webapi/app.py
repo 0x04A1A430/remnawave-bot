@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -30,9 +28,6 @@ from .routes import (
     users,
     logs,
 )
-
-
-logger = logging.getLogger(__name__)
 
 
 OPENAPI_TAGS = [
@@ -157,19 +152,5 @@ def create_web_api_app() -> FastAPI:
     app.include_router(miniapp.router, prefix="/miniapp", tags=["miniapp"])
     app.include_router(polls.router, prefix="/polls", tags=["polls"])
     app.include_router(logs.router, prefix="/logs", tags=["logs"])
-
-    @app.on_event("startup")
-    async def refresh_stars_rate() -> None:  # pragma: no cover - инфраструктурный хук
-        if settings.TELEGRAM_STARS_CUSTOM_RATE_ENABLED:
-            return
-
-        try:
-            from app.services.telegram_stars_rate_service import (  # pylint: disable=import-outside-toplevel
-                telegram_stars_rate_service,
-            )
-
-            await telegram_stars_rate_service.refresh_rate()
-        except Exception as error:
-            logger.debug("Не удалось обновить курс Stars при старте web api: %s", error)
 
     return app
