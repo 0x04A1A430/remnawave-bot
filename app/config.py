@@ -123,12 +123,10 @@ class Settings(BaseSettings):
     PRICE_TRAFFIC_500GB: int = 19000
     PRICE_TRAFFIC_1000GB: int = 19500
     PRICE_TRAFFIC_UNLIMITED: int = 20000
-
+    
     TRAFFIC_PACKAGES_CONFIG: str = ""
 
     PRICE_PER_DEVICE: int = 5000
-    DEVICES_SELECTION_ENABLED: bool = True
-    DEVICES_SELECTION_DISABLED_AMOUNT: Optional[int] = None
 
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED: bool = False
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS: str = ""
@@ -799,35 +797,9 @@ class Settings(BaseSettings):
     
     def is_traffic_fixed(self) -> bool:
         return self.TRAFFIC_SELECTION_MODE.lower() == "fixed"
-
+    
     def get_fixed_traffic_limit(self) -> int:
         return self.FIXED_TRAFFIC_LIMIT_GB
-
-    def is_devices_selection_enabled(self) -> bool:
-        return self.DEVICES_SELECTION_ENABLED
-
-    def get_devices_selection_disabled_amount(self) -> Optional[int]:
-        raw_value = self.DEVICES_SELECTION_DISABLED_AMOUNT
-
-        if raw_value in (None, ""):
-            return None
-
-        try:
-            value = int(raw_value)
-        except (TypeError, ValueError):
-            logger.warning(
-                "Некорректное значение DEVICES_SELECTION_DISABLED_AMOUNT: %s",
-                raw_value,
-            )
-            return None
-
-        if value < 0:
-            return 0
-
-        return value
-
-    def get_disabled_mode_device_limit(self) -> Optional[int]:
-        return self.get_devices_selection_disabled_amount()
     
     def is_yookassa_enabled(self) -> bool:
         return (self.YOOKASSA_ENABLED and 
