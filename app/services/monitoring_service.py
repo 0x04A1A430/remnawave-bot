@@ -564,7 +564,11 @@ class MonitoringService:
                     )
                     continue
 
-                if subscription.status == SubscriptionStatus.ACTIVE.value and not is_member:
+                if (
+                    subscription.status == SubscriptionStatus.ACTIVE.value
+                    and subscription.is_trial
+                    and not is_member
+                ):
                     subscription = await deactivate_subscription(db, subscription)
                     disabled_count += 1
                     logger.info(
@@ -598,7 +602,11 @@ class MonitoringService:
                                     subscription.id,
                                     "trial_channel_unsubscribed",
                                 )
-                elif subscription.status == SubscriptionStatus.DISABLED.value and is_member:
+                elif (
+                    subscription.status == SubscriptionStatus.DISABLED.value
+                    and subscription.is_trial
+                    and is_member
+                ):
                     subscription.status = SubscriptionStatus.ACTIVE.value
                     subscription.updated_at = datetime.utcnow()
                     await db.commit()
