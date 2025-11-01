@@ -38,6 +38,7 @@ from app.utils.promo_offer import (
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
 from app.services.faq_service import FaqService
+from app.utils.timezone import format_local_datetime
 from app.utils.pricing_utils import format_period_description
 
 logger = logging.getLogger(__name__)
@@ -952,7 +953,8 @@ def _get_subscription_status(user: User, texts) -> str:
 
     current_time = datetime.utcnow()
     actual_status = (subscription.actual_status or "").lower()
-    end_date_text = subscription.end_date.strftime("%d.%m.%Y")
+    end_date = getattr(subscription, "end_date", None)
+    end_date_text = format_local_datetime(end_date, "%d.%m.%Y") if end_date else None
     days_left = 0
 
     if subscription.end_date > current_time:
@@ -968,10 +970,10 @@ def _get_subscription_status(user: User, texts) -> str:
         return texts.t(
             "SUB_STATUS_EXPIRED",
             "🔴 Истекла\n📅 {end_date}",
-        ).format(end_date=end_date_text)
+        ).format(end_date=end_date_text or "—")
 
     if actual_status == "trial":
-        if days_left > 1:
+        if days_left > 1 and end_date_text:
             return texts.t(
                 "SUB_STATUS_TRIAL_ACTIVE",
                 "🎁 Тестовая подписка\n📅 до {end_date} ({days} дн.)",
@@ -990,7 +992,7 @@ def _get_subscription_status(user: User, texts) -> str:
         )
 
     if actual_status == "active":
-        if days_left > 7:
+        if days_left > 7 and end_date_text:
             return texts.t(
                 "SUB_STATUS_ACTIVE_LONG",
                 "💎 Активна\n📅 до {end_date} ({days} дн.)",

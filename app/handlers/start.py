@@ -37,6 +37,7 @@ from app.utils.promo_offer import (
     build_promo_offer_hint,
     build_test_access_hint,
 )
+from app.utils.timezone import format_local_datetime
 from app.database.crud.user_message import get_random_active_message
 from app.database.crud.subscription import decrement_subscription_server_counts
 
@@ -1268,6 +1269,7 @@ def _get_subscription_status(user, texts):
     from datetime import datetime
 
     end_date = getattr(subscription, "end_date", None)
+    end_date_display = format_local_datetime(end_date, "%d.%m.%Y") if end_date else None
     current_time = datetime.utcnow()
 
     if actual_status == "disabled":
@@ -1277,11 +1279,11 @@ def _get_subscription_status(user, texts):
         return texts.t("SUB_STATUS_PENDING", "⏳ Ожидает активации")
 
     if actual_status == "expired" or (end_date and end_date <= current_time):
-        if end_date:
+        if end_date_display:
             return texts.t(
                 "SUB_STATUS_EXPIRED",
                 "🔴 Истекла\n📅 {end_date}",
-            ).format(end_date=end_date.strftime('%d.%m.%Y'))
+            ).format(end_date=end_date_display)
         return texts.t("SUBSCRIPTION_STATUS_EXPIRED", "🔴 Истекла")
 
     if not end_date:
@@ -1294,11 +1296,11 @@ def _get_subscription_status(user, texts):
         return texts.t("SUBSCRIPTION_STATUS_UNKNOWN", "❓ Статус неизвестен")
 
     if is_trial:
-        if days_left > 1:
+        if days_left > 1 and end_date_display:
             return texts.t(
                 "SUB_STATUS_TRIAL_ACTIVE",
                 "🎁 Тестовая подписка\n📅 до {end_date} ({days} дн.)",
-            ).format(end_date=end_date.strftime('%d.%m.%Y'), days=days_left)
+            ).format(end_date=end_date_display, days=days_left)
         if days_left == 1:
             return texts.t(
                 "SUB_STATUS_TRIAL_TOMORROW",
@@ -1309,11 +1311,11 @@ def _get_subscription_status(user, texts):
             "🎁 Тестовая подписка\n⚠️ истекает сегодня!",
         )
 
-    if days_left > 7:
+    if days_left > 7 and end_date_display:
         return texts.t(
             "SUB_STATUS_ACTIVE_LONG",
             "💎 Активна\n📅 до {end_date} ({days} дн.)",
-        ).format(end_date=end_date.strftime('%d.%m.%Y'), days=days_left)
+        ).format(end_date=end_date_display, days=days_left)
     if days_left > 1:
         return texts.t(
             "SUB_STATUS_ACTIVE_FEW_DAYS",

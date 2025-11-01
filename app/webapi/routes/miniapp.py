@@ -58,6 +58,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.faq_service import FaqService
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
+from app.utils.timezone import format_local_datetime
 from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
@@ -4428,7 +4429,7 @@ async def submit_subscription_renewal_endpoint(
     language_code = _normalize_language_code(user)
     amount_label = settings.format_price(final_total)
     date_label = (
-        subscription.end_date.strftime("%d.%m.%Y %H:%M")
+        format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M")
         if subscription.end_date
         else ""
     )
