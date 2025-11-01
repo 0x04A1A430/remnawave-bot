@@ -7,7 +7,6 @@ import html
 from collections import defaultdict
 from datetime import time
 from typing import List, Optional, Union, Dict
-from zoneinfo import ZoneInfo
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, Field
 from pathlib import Path
@@ -61,8 +60,6 @@ class Settings(BaseSettings):
     
     SQLITE_PATH: str = "./data/bot.db"
     LOCALES_PATH: str = "./locales"
-
-    TIMEZONE: str = Field(default_factory=lambda: os.getenv("TZ", "UTC"))
     
     DATABASE_MODE: str = "auto"
     
@@ -1427,19 +1424,8 @@ class Settings(BaseSettings):
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
-        "extra": "ignore"
+        "extra": "ignore"  
     }
-
-    @field_validator("TIMEZONE")
-    @classmethod
-    def validate_timezone(cls, value: str) -> str:
-        try:
-            ZoneInfo(value)
-        except Exception as exc:  # pragma: no cover - defensive validation
-            raise ValueError(
-                f"Некорректный идентификатор часового пояса: {value}"
-            ) from exc
-        return value
 
 
 settings = Settings()
