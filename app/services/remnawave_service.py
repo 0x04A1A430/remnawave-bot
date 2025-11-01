@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 import re
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta
@@ -42,6 +41,7 @@ from app.database.models import (
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
+from app.utils.timezone import get_local_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -59,15 +59,7 @@ class RemnaWaveService:
 
         self._config_error: Optional[str] = None
 
-        tz_name = os.getenv("TZ", "UTC")
-        try:
-            self._panel_timezone = ZoneInfo(tz_name)
-        except Exception:
-            logger.warning(
-                "⚠️ Не удалось загрузить временную зону '%s'. Используется UTC.",
-                tz_name,
-            )
-            self._panel_timezone = ZoneInfo("UTC")
+        self._panel_timezone = get_local_timezone()
 
         if not base_url:
             self._config_error = "REMNAWAVE_API_URL не настроен"
