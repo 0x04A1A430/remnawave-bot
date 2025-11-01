@@ -36,7 +36,6 @@ from app.services.system_settings_service import bot_configuration_service
 from app.services.external_admin_service import ensure_external_admin_token
 from app.services.broadcast_service import broadcast_service
 from app.utils.startup_timeline import StartupTimeline
-from app.utils.timezone import TimezoneAwareFormatter
 
 
 class GracefulExit:
@@ -50,20 +49,13 @@ class GracefulExit:
 
 
 async def main():
-    formatter = TimezoneAwareFormatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        timezone_name=settings.TIMEZONE,
-    )
-
-    file_handler = logging.FileHandler(settings.LOG_FILE, encoding='utf-8')
-    file_handler.setFormatter(formatter)
-
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(formatter)
-
     logging.basicConfig(
         level=getattr(logging, settings.LOG_LEVEL),
-        handlers=[file_handler, stream_handler],
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(settings.LOG_FILE, encoding='utf-8'),
+            logging.StreamHandler(sys.stdout)
+        ]
     )
     
     logger = logging.getLogger(__name__)

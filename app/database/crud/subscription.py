@@ -15,7 +15,6 @@ from app.database.models import (
 from app.database.crud.notification import clear_notifications
 from app.utils.pricing_utils import calculate_months_from_days, get_remaining_months
 from app.config import settings
-from app.utils.timezone import format_local_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -1132,13 +1131,7 @@ async def check_and_update_subscription_status(
     
     current_time = datetime.utcnow()
     
-    logger.info(
-        "🔍 Проверка статуса подписки %s, текущий статус: %s, дата окончания: %s, текущее время: %s",
-        subscription.id,
-        subscription.status,
-        format_local_datetime(subscription.end_date),
-        format_local_datetime(current_time),
-    )
+    logger.info(f"🔍 Проверка статуса подписки {subscription.id}, текущий статус: {subscription.status}, дата окончания: {subscription.end_date}, текущее время: {current_time}")
     
     if (subscription.status == SubscriptionStatus.ACTIVE.value and 
         subscription.end_date <= current_time):
