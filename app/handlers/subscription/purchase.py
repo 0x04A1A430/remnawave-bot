@@ -77,6 +77,7 @@ from app.utils.subscription_utils import (
     get_happ_cryptolink_redirect_link,
     resolve_simple_subscription_device_limit,
 )
+from app.utils.timezone import format_local_datetime
 from app.utils.promo_offer import (
     build_promo_offer_hint,
     get_user_active_promo_discount_percent,
@@ -301,7 +302,7 @@ async def show_subscription_info(
         status_display=status_display,
         warning=warning_text,
         subscription_type=subscription_type,
-        end_date=subscription.end_date.strftime("%d.%m.%Y %H:%M"),
+        end_date=format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M"),
         time_left=time_left_text,
         traffic=traffic_used_display,
         servers=servers_display,
@@ -1333,7 +1334,7 @@ async def confirm_extend_subscription(
         success_message = (
             "✅ Подписка успешно продлена!\n\n"
             f"⏰ Добавлено: {days} дней\n"
-            f"Действует до: {refreshed_end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"Действует до: {format_local_datetime(refreshed_end_date, '%d.%m.%Y %H:%M')}\n\n"
             f"💰 Списано: {texts.format_price(price)}"
         )
 
@@ -2983,7 +2984,7 @@ async def _extend_existing_subscription(
     success_message = (
         "✅ Подписка успешно продлена!\n\n"
         f"⏰ Добавлено: {period_days} дней\n"
-        f"Действует до: {new_end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+        f"Действует до: {format_local_datetime(new_end_date, '%d.%m.%Y %H:%M')}\n\n"
         f"💰 Списано: {texts.format_price(price_kopeks)}"
     )
     

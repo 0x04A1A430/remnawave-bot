@@ -38,6 +38,7 @@ from app.database.crud.user import (
     subtract_user_balance,
     cleanup_expired_promo_offer_discounts,
 )
+from app.utils.timezone import format_local_datetime
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
@@ -1035,7 +1036,7 @@ class MonitoringService:
             message = f"""
 ⚠️ <b>Подписка истекает через {days_text}!</b>
 
-Ваша платная подписка истекает {subscription.end_date.strftime("%d.%m.%Y %H:%M")}.
+Ваша платная подписка истекает {format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M")}.
 
 💳 <b>Автоплатеж:</b> {autopay_status}
 
@@ -1151,7 +1152,7 @@ class MonitoringService:
 
             message = template.format(
                 price=settings.format_price(settings.PRICE_30_DAYS),
-                end_date=subscription.end_date.strftime("%d.%m.%Y %H:%M"),
+                end_date=format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M"),
             )
 
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -1267,7 +1268,7 @@ class MonitoringService:
                 ),
             )
             message = template.format(
-                end_date=subscription.end_date.strftime("%d.%m.%Y %H:%M"),
+                end_date=format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M"),
                 price=settings.format_price(settings.PRICE_30_DAYS),
             )
 
@@ -1344,7 +1345,7 @@ class MonitoringService:
 
             message = template.format(
                 percent=percent,
-                expires_at=expires_at.strftime("%d.%m.%Y %H:%M"),
+                expires_at=format_local_datetime(expires_at, "%d.%m.%Y %H:%M"),
                 trigger_days=trigger_days or "",
             )
 

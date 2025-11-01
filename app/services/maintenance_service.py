@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from app.config import settings
 from app.external.remnawave_api import RemnaWaveAPI, test_api_connection
 from app.utils.cache import cache
+from app.utils.timezone import format_local_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,9 @@ class MaintenanceService:
     
     def get_maintenance_message(self) -> str:
         if self._status.auto_enabled:
+            last_check_display = format_local_datetime(
+                self._status.last_check, "%H:%M:%S", "неизвестно"
+            )
             return f"""
 🔧 Технические работы!
 
@@ -52,7 +56,7 @@ class MaintenanceService:
 
 ⏰ Мы работаем над восстановлением. Попробуйте через несколько минут.
 
-🔄 Последняя проверка: {self._status.last_check.strftime('%H:%M:%S') if self._status.last_check else 'неизвестно'}
+🔄 Последняя проверка: {last_check_display}
 """
         else:
             return settings.get_maintenance_message()
@@ -79,7 +83,12 @@ class MaintenanceService:
             }
             emoji = emoji_map.get(alert_type, "ℹ️")
             
-            formatted_message = f"{emoji} <b>ТЕХНИЧЕСКИЕ РАБОТЫ</b>\n\n{message}\n\n⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"
+            timestamp = format_local_datetime(
+                datetime.utcnow(), "%d.%m.%Y %H:%M:%S %Z"
+            )
+            formatted_message = (
+                f"{emoji} <b>ТЕХНИЧЕСКИЕ РАБОТЫ</b>\n\n{message}\n\n⏰ <i>{timestamp}</i>"
+            )
             
             return await notification_service._send_message(formatted_message)
             
@@ -152,11 +161,14 @@ class MaintenanceService:
             
             await self._save_status_to_cache()
             
+            enabled_time = format_local_datetime(
+                self._status.enabled_at, "%d.%m.%Y %H:%M:%S %Z"
+            )
             notification_msg = f"""Режим технических работ ВКЛЮЧЕН
 
 📋 <b>Причина:</b> {self._status.reason}
 🤖 <b>Автоматически:</b> {'Да' if auto else 'Нет'}
-🕐 <b>Время:</b> {self._status.enabled_at.strftime('%d.%m.%Y %H:%M:%S')}
+🕐 <b>Время:</b> {enabled_time}
 
 Обычные пользователи временно не смогут использовать бота."""
             
@@ -197,10 +209,13 @@ class MaintenanceService:
                 else:
                     duration_str = f"\n⏱️ <b>Длительность:</b> {minutes}мин"
             
+            notification_time = format_local_datetime(
+                datetime.utcnow(), "%d.%m.%Y %H:%M:%S %Z"
+            )
             notification_msg = f"""Режим технических работ ВЫКЛЮЧЕН
 
 🤖 <b>Автоматически:</b> {'Да' if was_auto else 'Нет'}
-🕐 <b>Время:</b> {datetime.utcnow().strftime('%d.%m.%Y %H:%M:%S')}
+🕐 <b>Время:</b> {notification_time}
 {duration_str}
 
 Сервис снова доступен для пользователей."""
@@ -229,14 +244,17 @@ class MaintenanceService:
                 settings.get_maintenance_retry_attempts(),
             )
 
-            await self._notify_admins(f"""Мониторинг технических работ запущен
+            await self._notify_admins(
+                f"""Мониторинг технических работ запущен
 
 🔄 <b>Интервал проверки:</b> {settings.get_maintenance_check_interval()} секунд
 🤖 <b>Автовключение:</b> {'Включено' if settings.is_maintenance_auto_enable() else 'Отключено'}
 🎯 <b>Порог ошибок:</b> {self._max_consecutive_failures}
 🔁 <b>Повторных попыток:</b> {settings.get_maintenance_retry_attempts()}
 
-Система будет следить за доступностью API.""", "info")
+Система будет следить за доступностью API.""",
+                "info",
+            )
             
             return True
             
@@ -291,13 +309,19 @@ class MaintenanceService:
                             )
 
                         if not self._status.api_status:
-                            await self._notify_admins(f"""API Remnawave восстановлено!
+                            recovery_time = format_local_datetime(
+                                self._status.last_check, "%H:%M:%S %Z"
+                            )
+                            await self._notify_admins(
+                                f"""API Remnawave восстановлено!
 
 ✅ <b>Статус:</b> Доступно
-🕐 <b>Время восстановления:</b> {self._status.last_check.strftime('%H:%M:%S')}
+🕐 <b>Время восстановления:</b> {recovery_time}
 🔄 <b>Неудачных попыток было:</b> {self._status.consecutive_failures}
 
-API снова отвечает на запросы.""", "success")
+API снова отвечает на запросы.""",
+                                "success",
+                            )
 
                         self._status.api_status = True
                         self._status.consecutive_failures = 0
@@ -321,13 +345,19 @@ API снова отвечает на запросы.""", "success")
                 self._status.consecutive_failures += 1
 
                 if was_available:
-                    await self._notify_admins(f"""API Remnawave недоступно!
+                    detection_time = format_local_datetime(
+                        self._status.last_check, "%H:%M:%S %Z"
+                    )
+                    await self._notify_admins(
+                        f"""API Remnawave недоступно!
 
 ❌ <b>Статус:</b> Недоступно
-🕐 <b>Время обнаружения:</b> {self._status.last_check.strftime('%H:%M:%S')}
+🕐 <b>Время обнаружения:</b> {detection_time}
 🔄 <b>Попытка:</b> {self._status.consecutive_failures}
 
-Началась серия неудачных проверок API.""", "error")
+Началась серия неудачных проверок API.""",
+                        "error",
+                    )
 
                 if (
                     self._status.consecutive_failures >= self._max_consecutive_failures
@@ -349,12 +379,16 @@ API снова отвечает на запросы.""", "success")
             logger.error(f"Ошибка проверки API: {e}")
             
             if self._status.api_status:
-                await self._notify_admins(f"""Ошибка при проверке API Remnawave
+                error_time = format_local_datetime(datetime.utcnow(), "%H:%M:%S %Z")
+                await self._notify_admins(
+                    f"""Ошибка при проверке API Remnawave
 
 ❌ <b>Ошибка:</b> {str(e)}
-🕐 <b>Время:</b> {datetime.utcnow().strftime('%H:%M:%S')}
+🕐 <b>Время:</b> {error_time}
 
-Не удалось выполнить проверку доступности API.""", "error")
+Не удалось выполнить проверку доступности API.""",
+                    "error",
+                )
             
             self._status.api_status = False
             self._status.consecutive_failures += 1

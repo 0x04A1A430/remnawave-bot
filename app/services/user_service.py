@@ -21,7 +21,7 @@ from app.database.models import (
     User, UserStatus, Subscription, Transaction, PromoCode, PromoCodeUse,
     ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory,
     CryptoBotPayment, SubscriptionConversion, UserMessage, WelcomeText,
-    SentNotification, PromoGroup, MulenPayPayment, Pal24Payment,
+    SentNotification, PromoGroup, MulenPayPayment, Pal24Payment, HeleketPayment,
     AdvertisingCampaign, AdvertisingCampaignRegistration, PaymentMethod,
     TransactionType
 )
@@ -778,6 +778,29 @@ class UserService:
                     await db.flush()
             except Exception as e:
                 logger.error(f"❌ Ошибка удаления Pal24 платежей: {e}")
+
+            try:
+                heleket_result = await db.execute(
+                    select(HeleketPayment).where(HeleketPayment.user_id == user_id)
+                )
+                heleket_payments = heleket_result.scalars().all()
+
+                if heleket_payments:
+                    logger.info(
+                        f"🔄 Удаляем {len(heleket_payments)} Heleket платежей"
+                    )
+                    await db.execute(
+                        update(HeleketPayment)
+                        .where(HeleketPayment.user_id == user_id)
+                        .values(transaction_id=None)
+                    )
+                    await db.flush()
+                    await db.execute(
+                        delete(HeleketPayment).where(HeleketPayment.user_id == user_id)
+                    )
+                    await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления Heleket платежей: {e}")
 
             try:
                 transactions_result = await db.execute(

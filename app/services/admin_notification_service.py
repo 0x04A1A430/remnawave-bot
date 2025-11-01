@@ -19,6 +19,7 @@ from app.database.models import (
     TransactionType,
     User,
 )
+from app.utils.timezone import format_local_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -224,10 +225,10 @@ class AdminNotificationService:
 📱 Устройства: {trial_device_limit}
 🌐 Сервер: {subscription.connected_squads[0] if subscription.connected_squads else 'По умолчанию'}
 
-📆 <b>Действует до:</b> {subscription.end_date.strftime('%d.%m.%Y %H:%M')}
+📆 <b>Действует до:</b> {format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')}
 🔗 <b>Реферер:</b> {referrer_info}
 
-⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
+⏰ <i>{format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>"""
             
             return await self._send_message(message)
             
@@ -288,11 +289,11 @@ class AdminNotificationService:
 📱 Устройства: {subscription.device_limit}
 🌐 Серверы: {servers_info}
 
-📆 <b>Действует до:</b> {subscription.end_date.strftime('%d.%m.%Y %H:%M')}
+📆 <b>Действует до:</b> {format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')}
 💰 <b>Баланс после покупки:</b> {settings.format_price(user.balance_kopeks)}
 🔗 <b>Реферер:</b> {referrer_info}
 
-⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
+⏰ <i>{format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>"""
             
             return await self._send_message(message)
             
@@ -339,7 +340,7 @@ class AdminNotificationService:
     
     ℹ️ Для обновления перезапустите контейнер с новым тегом или обновите код из репозитория.
     
-    ⚙️ <i>Автоматическая проверка обновлений • {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
+    ⚙️ <i>Автоматическая проверка обновлений • {format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>"""
             
             return await self._send_message(message)
             
@@ -364,7 +365,7 @@ class AdminNotificationService:
     🔄 Следующая попытка через час.
     ⚙️ Проверьте доступность GitHub API и настройки сети.
     
-    ⚙️ <i>Система автоматических обновлений • {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
+    ⚙️ <i>Система автоматических обновлений • {format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>"""
             
             return await self._send_message(message)
             
@@ -387,7 +388,7 @@ class AdminNotificationService:
         balance_change = user.balance_kopeks - old_balance
         subscription_status = self._get_subscription_status(subscription)
         promo_block = self._format_promo_group_block(promo_group)
-        timestamp = datetime.now().strftime('%d.%m.%Y %H:%M:%S')
+        timestamp = format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')
         user_display = self._get_user_display(user)
 
         return f"""💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>
@@ -585,8 +586,8 @@ class AdminNotificationService:
 
 📅 <b>Продление:</b>
 ➕ Добавлено дней: {extended_days}
-📆 Было до: {old_end_date.strftime('%d.%m.%Y %H:%M')}
-📆 Стало до: {current_end_date.strftime('%d.%m.%Y %H:%M')}
+📆 Было до: {format_local_datetime(old_end_date, '%d.%m.%Y %H:%M')}
+📆 Стало до: {format_local_datetime(current_end_date, '%d.%m.%Y %H:%M')}
 
 📱 <b>Текущие параметры:</b>
 📊 Трафик: {self._format_traffic(subscription.traffic_limit_gb)}
@@ -595,7 +596,7 @@ class AdminNotificationService:
 
 💰 <b>Баланс после операции:</b> {settings.format_price(current_balance)}
 
-⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>"""
+⏰ <i>{format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>"""
 
             return await self._send_message(message)
 
@@ -648,7 +649,7 @@ class AdminNotificationService:
             valid_until = promocode_data.get("valid_until")
             if valid_until:
                 message_lines.append(
-                    f"⏳ Действует до: {valid_until.strftime('%d.%m.%Y %H:%M')}"
+                    f"⏳ Действует до: {format_local_datetime(valid_until, '%d.%m.%Y %H:%M')}"
                     if isinstance(valid_until, datetime)
                     else f"⏳ Действует до: {valid_until}"
                 )
@@ -659,7 +660,7 @@ class AdminNotificationService:
                     "📝 <b>Эффект:</b>",
                     effect_description.strip() or "✅ Промокод активирован",
                     "",
-                    f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>",
+                    f"⏰ <i>{format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>",
                 ]
             )
 
@@ -713,7 +714,7 @@ class AdminNotificationService:
             message_lines.extend(
                 [
                     "",
-                    f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>",
+                    f"⏰ <i>{format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>",
                 ]
             )
 
@@ -778,7 +779,7 @@ class AdminNotificationService:
                 [
                     "",
                     f"💰 Баланс пользователя: {settings.format_price(user.balance_kopeks)}",
-                    f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>",
+                    f"⏰ <i>{format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>",
                 ]
             )
 
@@ -856,9 +857,9 @@ class AdminNotificationService:
             return "❌ Нет подписки"
 
         if subscription.is_trial:
-            return f"🎯 Триал (до {subscription.end_date.strftime('%d.%m')})"
+            return f"🎯 Триал (до {format_local_datetime(subscription.end_date, '%d.%m')})"
         elif subscription.is_active:
-            return f"✅ Активна (до {subscription.end_date.strftime('%d.%m')})"
+            return f"✅ Активна (до {format_local_datetime(subscription.end_date, '%d.%m')})"
         else:
             return "❌ Неактивна"
     
@@ -929,7 +930,9 @@ class AdminNotificationService:
                     if isinstance(enabled_at, str):
                         from datetime import datetime
                         enabled_at = datetime.fromisoformat(enabled_at)
-                    message_parts.append(f"🕐 <b>Время включения:</b> {enabled_at.strftime('%d.%m.%Y %H:%M:%S')}")
+                    message_parts.append(
+                        f"🕐 <b>Время включения:</b> {format_local_datetime(enabled_at, '%d.%m.%Y %H:%M:%S')}"
+                    )
                 
                 message_parts.append(f"🤖 <b>Автоматически:</b> {'Да' if details.get('auto_enabled', False) else 'Нет'}")
                 message_parts.append("")
@@ -941,7 +944,9 @@ class AdminNotificationService:
                     if isinstance(disabled_at, str):
                         from datetime import datetime
                         disabled_at = datetime.fromisoformat(disabled_at)
-                    message_parts.append(f"🕐 <b>Время отключения:</b> {disabled_at.strftime('%d.%m.%Y %H:%M:%S')}")
+                    message_parts.append(
+                        f"🕐 <b>Время отключения:</b> {format_local_datetime(disabled_at, '%d.%m.%Y %H:%M:%S')}"
+                    )
                 
                 if details.get("duration"):
                     duration = details["duration"]
@@ -1000,9 +1005,10 @@ class AdminNotificationService:
                 else:  
                     message_parts.append("Автоматический мониторинг API остановлен.")
             
-            from datetime import datetime
             message_parts.append("")
-            message_parts.append(f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>")
+            message_parts.append(
+                f"⏰ <i>{format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>"
+            )
             
             message = "\n".join(message_parts)
             
@@ -1048,7 +1054,9 @@ class AdminNotificationService:
                 if isinstance(last_check, str):
                     from datetime import datetime
                     last_check = datetime.fromisoformat(last_check)
-                message_parts.append(f"🕐 <b>Последняя проверка:</b> {last_check.strftime('%H:%M:%S')}")
+                message_parts.append(
+                    f"🕐 <b>Последняя проверка:</b> {format_local_datetime(last_check, '%H:%M:%S')}"
+                )
                 
             if status == "online":
                 if details.get("uptime"):
@@ -1094,9 +1102,10 @@ class AdminNotificationService:
                 message_parts.append("")
                 message_parts.append("Панель временно недоступна для обслуживания.")
             
-            from datetime import datetime
             message_parts.append("")
-            message_parts.append(f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>")
+            message_parts.append(
+                f"⏰ <i>{format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>"
+            )
             
             message = "\n".join(message_parts)
             
@@ -1171,11 +1180,11 @@ class AdminNotificationService:
             message_lines.extend(
                 [
                     "",
-                    f"📅 <b>Подписка действует до:</b> {subscription.end_date.strftime('%d.%m.%Y %H:%M')}",
+                    f"📅 <b>Подписка действует до:</b> {format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')}",
                     f"💰 <b>Баланс после операции:</b> {settings.format_price(user.balance_kopeks)}",
                     f"🔗 <b>Рефер:</b> {referrer_info}",
                     "",
-                    f"⏰ <i>{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</i>",
+                    f"⏰ <i>{format_local_datetime(datetime.utcnow(), '%d.%m.%Y %H:%M:%S')}</i>",
                 ]
             )
 
