@@ -42,7 +42,15 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
         "title": "🤖 Основные",
         "description": "Базовые настройки бота, обязательные каналы и ключевые сервисы.",
         "icon": "🤖",
-        "categories": ("CORE", "CHANNEL"),
+        "categories": (
+            "CORE",
+            "CHANNEL",
+            "DATABASE",
+            "POSTGRES",
+            "SQLITE",
+            "REDIS",
+            "REMNAWAVE",
+        ),
     },
     "support": {
         "title": "💬 Поддержка",
@@ -114,18 +122,6 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
             "ADDITIONAL",
         ),
     },
-    "database": {
-        "title": "💾 База данных",
-        "description": "Режим базы, параметры PostgreSQL, SQLite и Redis.",
-        "icon": "💾",
-        "categories": ("DATABASE", "POSTGRES", "SQLITE", "REDIS"),
-    },
-    "remnawave": {
-        "title": "🌐 RemnaWave API",
-        "description": "Интеграция с RemnaWave: URL, ключи и способы авторизации.",
-        "icon": "🌐",
-        "categories": ("REMNAWAVE",),
-    },
     "server": {
         "title": "📊 Статус серверов",
         "description": "Мониторинг серверов, SLA и внешние метрики.",
@@ -142,13 +138,14 @@ CATEGORY_GROUP_METADATA: Dict[str, Dict[str, object]] = {
         "title": "⚡ Расширенные",
         "description": "Web API, webhook, логирование, модерация и режим отладки.",
         "icon": "⚡",
-        "categories": ("WEB_API", "WEBHOOK", "LOG", "MODERATION", "DEBUG"),
-    },
-    "external_admin": {
-        "title": "🛡️ Внешняя админка",
-        "description": "Токен, по которому внешняя админка проверяет запросы.",
-        "icon": "🛡️",
-        "categories": ("EXTERNAL_ADMIN",),
+        "categories": (
+            "WEB_API",
+            "WEBHOOK",
+            "LOG",
+            "MODERATION",
+            "DEBUG",
+            "EXTERNAL_ADMIN",
+        ),
     },
 }
 
@@ -161,12 +158,9 @@ CATEGORY_GROUP_ORDER: Tuple[str, ...] = (
     "referral",
     "notifications",
     "interface",
-    "database",
-    "remnawave",
     "server",
     "maintenance",
     "advanced",
-    "external_admin",
 )
 
 CATEGORY_GROUP_DEFINITIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = tuple(
