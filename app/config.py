@@ -7,6 +7,7 @@ import html
 from collections import defaultdict
 from datetime import time
 from typing import List, Optional, Union, Dict
+from zoneinfo import ZoneInfo
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, Field
 from pathlib import Path
@@ -60,6 +61,8 @@ class Settings(BaseSettings):
     
     SQLITE_PATH: str = "./data/bot.db"
     LOCALES_PATH: str = "./locales"
+
+    TIMEZONE: str = Field(default_factory=lambda: os.getenv("TZ", "UTC"))
     
     DATABASE_MODE: str = "auto"
     
@@ -73,6 +76,7 @@ class Settings(BaseSettings):
     REMNAWAVE_PASSWORD: Optional[str] = None
     REMNAWAVE_AUTH_TYPE: str = "api_key"
     REMNAWAVE_USER_DESCRIPTION_TEMPLATE: str = "Bot user: {full_name} {username}"
+    REMNAWAVE_USER_USERNAME_TEMPLATE: str = "user_{telegram_id}"
     REMNAWAVE_USER_DELETE_MODE: str = "delete"  # "delete" или "disable"
     REMNAWAVE_AUTO_SYNC_ENABLED: bool = False
     REMNAWAVE_AUTO_SYNC_TIMES: str = "03:00"
@@ -123,10 +127,12 @@ class Settings(BaseSettings):
     PRICE_TRAFFIC_500GB: int = 19000
     PRICE_TRAFFIC_1000GB: int = 19500
     PRICE_TRAFFIC_UNLIMITED: int = 20000
-    
+
     TRAFFIC_PACKAGES_CONFIG: str = ""
 
     PRICE_PER_DEVICE: int = 5000
+    DEVICES_SELECTION_ENABLED: bool = True
+    DEVICES_SELECTION_DISABLED_AMOUNT: Optional[int] = None
 
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED: bool = False
     BASE_PROMO_GROUP_PERIOD_DISCOUNTS: str = ""
@@ -142,7 +148,6 @@ class Settings(BaseSettings):
     REFERRAL_PROGRAM_ENABLED: bool = True
     REFERRAL_NOTIFICATIONS_ENABLED: bool = True
     REFERRAL_NOTIFICATION_RETRY_ATTEMPTS: int = 3
-    REFERRED_USER_REWARD: int = 0 
     
     AUTOPAY_WARNING_DAYS: str = "3,1"
 
@@ -154,8 +159,10 @@ class Settings(BaseSettings):
     INACTIVE_USER_DELETE_MONTHS: int = 3
 
     MAINTENANCE_MODE: bool = False
-    MAINTENANCE_CHECK_INTERVAL: int = 30 
-    MAINTENANCE_AUTO_ENABLE: bool = True 
+    MAINTENANCE_CHECK_INTERVAL: int = 30
+    MAINTENANCE_AUTO_ENABLE: bool = True
+    MAINTENANCE_MONITORING_ENABLED: bool = True
+    MAINTENANCE_RETRY_ATTEMPTS: int = 1
     MAINTENANCE_MESSAGE: str = "🔧 Ведутся технические работы. Сервис временно недоступен. Попробуйте позже."
     
     TELEGRAM_STARS_ENABLED: bool = True
@@ -550,6 +557,34 @@ class Settings(BaseSettings):
         description = re.sub(r'\s+', ' ', description).strip()
         return description
 
+    def format_remnawave_username(
+        self,
+        *,
+        full_name: str,
+        username: Optional[str],
+        telegram_id: int
+    ) -> str:
+        template = self.REMNAWAVE_USER_USERNAME_TEMPLATE or "user_{telegram_id}"
+
+        username_clean = (username or "").lstrip("@")
+        full_name_value = full_name or ""
+
+        values = defaultdict(str, {
+            "full_name": full_name_value,
+            "username": username_clean,
+            "username_clean": username_clean,
+            "telegram_id": str(telegram_id),
+        })
+
+        raw_username = template.format_map(values).strip()
+        sanitized_username = re.sub(r"[^0-9A-Za-z._-]+", "_", raw_username)
+        sanitized_username = re.sub(r"_+", "_", sanitized_username).strip("._-")
+
+        if not sanitized_username:
+            sanitized_username = f"user_{telegram_id}"
+
+        return sanitized_username[:64]
+
     @staticmethod
     def parse_daily_time_list(raw_value: Optional[str]) -> List[time]:
         if not raw_value:
@@ -797,9 +832,35 @@ class Settings(BaseSettings):
     
     def is_traffic_fixed(self) -> bool:
         return self.TRAFFIC_SELECTION_MODE.lower() == "fixed"
-    
+
     def get_fixed_traffic_limit(self) -> int:
         return self.FIXED_TRAFFIC_LIMIT_GB
+
+    def is_devices_selection_enabled(self) -> bool:
+        return self.DEVICES_SELECTION_ENABLED
+
+    def get_devices_selection_disabled_amount(self) -> Optional[int]:
+        raw_value = self.DEVICES_SELECTION_DISABLED_AMOUNT
+
+        if raw_value in (None, ""):
+            return None
+
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Некорректное значение DEVICES_SELECTION_DISABLED_AMOUNT: %s",
+                raw_value,
+            )
+            return None
+
+        if value < 0:
+            return 0
+
+        return value
+
+    def get_disabled_mode_device_limit(self) -> Optional[int]:
+        return self.get_devices_selection_disabled_amount()
     
     def is_yookassa_enabled(self) -> bool:
         return (self.YOOKASSA_ENABLED and 
@@ -954,6 +1015,13 @@ class Settings(BaseSettings):
     def get_maintenance_check_interval(self) -> int:
         return self.MAINTENANCE_CHECK_INTERVAL
 
+    def get_maintenance_retry_attempts(self) -> int:
+        try:
+            attempts = int(self.MAINTENANCE_RETRY_ATTEMPTS)
+        except (TypeError, ValueError):
+            attempts = 1
+        return max(1, attempts)
+
     def is_base_promo_group_period_discount_enabled(self) -> bool:
         return self.BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED
 
@@ -995,6 +1063,9 @@ class Settings(BaseSettings):
 
     def is_maintenance_auto_enable(self) -> bool:
         return self.MAINTENANCE_AUTO_ENABLE
+
+    def is_maintenance_monitoring_enabled(self) -> bool:
+        return self.MAINTENANCE_MONITORING_ENABLED
 
     def get_available_subscription_periods(self) -> List[int]:
         try:
@@ -1087,34 +1158,7 @@ class Settings(BaseSettings):
         return (self.BACKUP_SEND_ENABLED and
                 self.get_backup_send_chat_id() is not None)
 
-    def get_referred_user_reward_kopeks(self) -> int:
-        """Return the referred user reward normalized to kopeks.
-
-        Historically the value was stored in kopeks, however some
-        installations provide it in rubles. To keep backward compatibility we
-        treat any value greater than or equal to one thousand as already being
-        in kopeks (≥ 10 ₽). Smaller positive values are assumed to be provided
-        in rubles and therefore converted to kopeks.
-        """
-
-        raw_value = getattr(self, "REFERRED_USER_REWARD", 0)
-
-        try:
-            value = int(raw_value)
-        except (TypeError, ValueError):
-            return 0
-
-        if value <= 0:
-            return 0
-
-        if value >= 1000:
-            return value
-
-        return value * 100
-
     def get_referral_settings(self) -> Dict:
-        referred_reward_kopeks = self.get_referred_user_reward_kopeks()
-
         return {
             "program_enabled": self.is_referral_program_enabled(),
             "minimum_topup_kopeks": self.REFERRAL_MINIMUM_TOPUP_KOPEKS,
@@ -1122,8 +1166,6 @@ class Settings(BaseSettings):
             "inviter_bonus_kopeks": self.REFERRAL_INVITER_BONUS_KOPEKS,
             "commission_percent": self.REFERRAL_COMMISSION_PERCENT,
             "notifications_enabled": self.REFERRAL_NOTIFICATIONS_ENABLED,
-            "referred_user_reward": referred_reward_kopeks,
-            "referred_user_reward_kopeks": referred_reward_kopeks,
         }
     
     def is_referral_program_enabled(self) -> bool:
@@ -1385,11 +1427,23 @@ class Settings(BaseSettings):
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
-        "extra": "ignore"  
+        "extra": "ignore"
     }
+
+    @field_validator("TIMEZONE")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except Exception as exc:  # pragma: no cover - defensive validation
+            raise ValueError(
+                f"Некорректный идентификатор часового пояса: {value}"
+            ) from exc
+        return value
 
 
 settings = Settings()
+ENV_OVERRIDE_KEYS = set(settings.model_fields_set)
 
 _PERIOD_PRICE_FIELDS: Dict[int, str] = {
     14: "PRICE_14_DAYS",

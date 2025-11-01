@@ -89,16 +89,64 @@ async def process_referral_topup(
             logger.info(f"Пользователь {user_id} не является рефералом")
             return True
         
-        if topup_amount_kopeks < settings.REFERRAL_MINIMUM_TOPUP_KOPEKS:
-            logger.info(f"Пополнение {user_id} на {topup_amount_kopeks/100}₽ меньше минимума")
-            return True
-        
         referrer = await get_user_by_id(db, user.referred_by_id)
         if not referrer:
             logger.error(f"Реферер {user.referred_by_id} не найден")
             return False
-        
+
+        qualifies_for_first_bonus = (
+            topup_amount_kopeks >= settings.REFERRAL_MINIMUM_TOPUP_KOPEKS
+        )
+        commission_amount = 0
+        if settings.REFERRAL_COMMISSION_PERCENT > 0:
+            commission_amount = int(
+                topup_amount_kopeks * settings.REFERRAL_COMMISSION_PERCENT / 100
+            )
+
         if not user.has_made_first_topup:
+            if not qualifies_for_first_bonus:
+                logger.info(
+                    "Пополнение %s на %s₽ меньше минимума для первого бонуса, но комиссия будет начислена",
+                    user_id,
+                    topup_amount_kopeks / 100,
+                )
+
+                if commission_amount > 0:
+                    await add_user_balance(
+                        db,
+                        referrer,
+                        commission_amount,
+                        f"Комиссия {settings.REFERRAL_COMMISSION_PERCENT}% с пополнения {user.full_name}",
+                        bot=bot,
+                    )
+
+                    await create_referral_earning(
+                        db=db,
+                        user_id=referrer.id,
+                        referral_id=user.id,
+                        amount_kopeks=commission_amount,
+                        reason="referral_commission_topup",
+                    )
+
+                    logger.info(
+                        "💰 Комиссия с пополнения: %s получил %s₽ (до первого бонуса)",
+                        referrer.telegram_id,
+                        commission_amount / 100,
+                    )
+
+                    if bot:
+                        commission_notification = (
+                            f"💰 <b>Реферальная комиссия!</b>\n\n"
+                            f"Ваш реферал <b>{user.full_name}</b> пополнил баланс на "
+                            f"{settings.format_price(topup_amount_kopeks)}\n\n"
+                            f"🎁 Ваша комиссия ({settings.REFERRAL_COMMISSION_PERCENT}%): "
+                            f"{settings.format_price(commission_amount)}\n\n"
+                            f"💎 Средства зачислены на ваш баланс."
+                        )
+                        await send_referral_notification(bot, referrer.telegram_id, commission_notification)
+
+                return True
+
             user.has_made_first_topup = True
             await db.commit()
             
@@ -161,36 +209,33 @@ async def process_referral_topup(
                     await send_referral_notification(bot, referrer.telegram_id, inviter_bonus_notification)
         
         else:
-            if settings.REFERRAL_COMMISSION_PERCENT > 0:
-                commission_amount = int(topup_amount_kopeks * settings.REFERRAL_COMMISSION_PERCENT / 100)
-                
-                if commission_amount > 0:
-                    await add_user_balance(
-                        db, referrer, commission_amount,
-                        f"Комиссия {settings.REFERRAL_COMMISSION_PERCENT}% с пополнения {user.full_name}",
-                        bot=bot
+            if commission_amount > 0:
+                await add_user_balance(
+                    db, referrer, commission_amount,
+                    f"Комиссия {settings.REFERRAL_COMMISSION_PERCENT}% с пополнения {user.full_name}",
+                    bot=bot
+                )
+
+                await create_referral_earning(
+                    db=db,
+                    user_id=referrer.id,
+                    referral_id=user.id,
+                    amount_kopeks=commission_amount,
+                    reason="referral_commission_topup"
+                )
+
+                logger.info(f"💰 Комиссия с пополнения: {referrer.telegram_id} получил {commission_amount/100}₽")
+
+                if bot:
+                    commission_notification = (
+                        f"💰 <b>Реферальная комиссия!</b>\n\n"
+                        f"Ваш реферал <b>{user.full_name}</b> пополнил баланс на "
+                        f"{settings.format_price(topup_amount_kopeks)}\n\n"
+                        f"🎁 Ваша комиссия ({settings.REFERRAL_COMMISSION_PERCENT}%): "
+                        f"{settings.format_price(commission_amount)}\n\n"
+                        f"💎 Средства зачислены на ваш баланс."
                     )
-                    
-                    await create_referral_earning(
-                        db=db,
-                        user_id=referrer.id,
-                        referral_id=user.id,
-                        amount_kopeks=commission_amount,
-                        reason="referral_commission_topup"
-                    )
-                    
-                    logger.info(f"💰 Комиссия с пополнения: {referrer.telegram_id} получил {commission_amount/100}₽")
-                    
-                    if bot:
-                        commission_notification = (
-                            f"💰 <b>Реферальная комиссия!</b>\n\n"
-                            f"Ваш реферал <b>{user.full_name}</b> пополнил баланс на "
-                            f"{settings.format_price(topup_amount_kopeks)}\n\n"
-                            f"🎁 Ваша комиссия ({settings.REFERRAL_COMMISSION_PERCENT}%): "
-                            f"{settings.format_price(commission_amount)}\n\n"
-                            f"💎 Средства зачислены на ваш баланс."
-                        )
-                        await send_referral_notification(bot, referrer.telegram_id, commission_notification)
+                    await send_referral_notification(bot, referrer.telegram_id, commission_notification)
         
         return True
         

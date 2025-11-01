@@ -58,6 +58,7 @@ from app.services.admin_notification_service import AdminNotificationService
 from app.services.faq_service import FaqService
 from app.services.privacy_policy_service import PrivacyPolicyService
 from app.services.public_offer_service import PublicOfferService
+from app.utils.timezone import format_local_datetime
 from app.services.remnawave_service import (
     RemnaWaveConfigurationError,
     RemnaWaveService,
@@ -2408,23 +2409,6 @@ async def _build_referral_info(
     inviter_bonus_kopeks = int(referral_settings.get("inviter_bonus_kopeks") or 0)
     commission_percent = float(referral_settings.get("commission_percent") or 0)
 
-    referred_user_reward_kopeks = settings.get_referred_user_reward_kopeks()
-    for key in ("referred_user_reward_kopeks", "referred_user_reward"):
-        candidate = referral_settings.get(key)
-        if candidate is None:
-            continue
-        try:
-            value = int(candidate)
-        except (TypeError, ValueError):
-            continue
-        if value <= 0:
-            referred_user_reward_kopeks = 0
-            break
-        if key == "referred_user_reward" and value < 1000:
-            value *= 100
-        referred_user_reward_kopeks = value
-        break
-
     terms = MiniAppReferralTerms(
         minimum_topup_kopeks=minimum_topup_kopeks,
         minimum_topup_label=settings.format_price(minimum_topup_kopeks),
@@ -2433,8 +2417,6 @@ async def _build_referral_info(
         inviter_bonus_kopeks=inviter_bonus_kopeks,
         inviter_bonus_label=settings.format_price(inviter_bonus_kopeks),
         commission_percent=commission_percent,
-        referred_user_reward_kopeks=referred_user_reward_kopeks,
-        referred_user_reward_label=settings.format_price(referred_user_reward_kopeks),
     )
 
     summary = await get_user_referral_summary(db, user.id)
@@ -3121,8 +3103,16 @@ async def activate_subscription_trial_endpoint(
             },
         )
 
+    forced_devices = None
+    if not settings.is_devices_selection_enabled():
+        forced_devices = settings.get_disabled_mode_device_limit()
+
     try:
-        subscription = await create_trial_subscription(db, user.id)
+        subscription = await create_trial_subscription(
+            db,
+            user.id,
+            device_limit=forced_devices,
+        )
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             "Failed to activate trial subscription for user %s: %s",
@@ -3638,7 +3628,9 @@ async def _calculate_subscription_renewal_pricing(
     if traffic_limit is None:
         traffic_limit = settings.DEFAULT_TRAFFIC_LIMIT_GB
 
-    devices_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
+    devices_limit = subscription.device_limit
+    if devices_limit is None:
+        devices_limit = settings.DEFAULT_DEVICE_LIMIT
 
     total_cost, details = await calculate_subscription_total_cost(
         db,
@@ -4437,7 +4429,7 @@ async def submit_subscription_renewal_endpoint(
     language_code = _normalize_language_code(user)
     amount_label = settings.format_price(final_total)
     date_label = (
-        subscription.end_date.strftime("%d.%m.%Y %H:%M")
+        format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M")
         if subscription.end_date
         else ""
     )
@@ -5044,7 +5036,12 @@ async def update_subscription_devices_endpoint(
             },
         )
 
-    current_devices = int(subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT or 1)
+    current_devices_value = subscription.device_limit
+    if current_devices_value is None:
+        fallback_value = settings.DEFAULT_DEVICE_LIMIT or 1
+        current_devices_value = fallback_value
+
+    current_devices = int(current_devices_value)
     old_devices = current_devices
 
     if new_devices == current_devices:

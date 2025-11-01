@@ -83,6 +83,12 @@ class Pal24Service:
         logger.debug("Запрашиваем статус Pal24 платежа %s", payment_id)
         return await self.client.get_payment_status(payment_id)
 
+    async def get_bill_payments(self, bill_id: str) -> Dict[str, Any]:
+        """Возвращает список платежей, связанных со счетом."""
+
+        logger.debug("Запрашиваем платежи Pal24 счёта %s", bill_id)
+        return await self.client.get_bill_payments(bill_id)
+
     @staticmethod
     def parse_postback(payload: Dict[str, Any]) -> Dict[str, Any]:
         required_fields = ["InvId", "OutSum", "Status", "SignatureValue"]

@@ -15,6 +15,7 @@ from app.database.models import (
 from app.database.crud.notification import clear_notifications
 from app.utils.pricing_utils import calculate_months_from_days, get_remaining_months
 from app.config import settings
+from app.utils.timezone import format_local_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +42,14 @@ async def create_trial_subscription(
     user_id: int,
     duration_days: int = None,
     traffic_limit_gb: int = None,
-    device_limit: int = None,
+    device_limit: Optional[int] = None,
     squad_uuid: str = None
 ) -> Subscription:
     
     duration_days = duration_days or settings.TRIAL_DURATION_DAYS
     traffic_limit_gb = traffic_limit_gb or settings.TRIAL_TRAFFIC_LIMIT_GB
-    device_limit = device_limit or settings.TRIAL_DEVICE_LIMIT
+    if device_limit is None:
+        device_limit = settings.TRIAL_DEVICE_LIMIT
     if not squad_uuid:
         try:
             from app.database.crud.server_squad import get_random_trial_squad_uuid
@@ -126,13 +128,16 @@ async def create_paid_subscription(
     user_id: int,
     duration_days: int,
     traffic_limit_gb: int = 0,
-    device_limit: int = 1,
+    device_limit: Optional[int] = None,
     connected_squads: List[str] = None,
     update_server_counters: bool = False,
 ) -> Subscription:
     
     end_date = datetime.utcnow() + timedelta(days=duration_days)
     
+    if device_limit is None:
+        device_limit = settings.DEFAULT_DEVICE_LIMIT
+
     subscription = Subscription(
         user_id=user_id,
         status=SubscriptionStatus.ACTIVE.value,
@@ -1127,7 +1132,13 @@ async def check_and_update_subscription_status(
     
     current_time = datetime.utcnow()
     
-    logger.info(f"🔍 Проверка статуса подписки {subscription.id}, текущий статус: {subscription.status}, дата окончания: {subscription.end_date}, текущее время: {current_time}")
+    logger.info(
+        "🔍 Проверка статуса подписки %s, текущий статус: %s, дата окончания: %s, текущее время: %s",
+        subscription.id,
+        subscription.status,
+        format_local_datetime(subscription.end_date),
+        format_local_datetime(current_time),
+    )
     
     if (subscription.status == SubscriptionStatus.ACTIVE.value and 
         subscription.end_date <= current_time):

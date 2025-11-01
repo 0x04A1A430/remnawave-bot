@@ -1,6 +1,6 @@
 import logging
 from typing import Callable, Dict, Any, Awaitable, Optional
-from aiogram import BaseMiddleware, Bot
+from aiogram import BaseMiddleware, Bot, types
 from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import TelegramObject, Update, Message, CallbackQuery
@@ -8,6 +8,7 @@ from aiogram.enums import ChatMemberStatus
 
 from app.config import settings
 from app.database.database import get_db
+from app.database.crud.campaign import get_campaign_by_start_parameter
 from app.database.crud.subscription import deactivate_subscription
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.models import SubscriptionStatus
@@ -16,6 +17,7 @@ from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.utils.check_reg_process import is_registration_process
 from app.services.subscription_service import SubscriptionService
+from app.services.admin_notification_service import AdminNotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +106,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 if telegram_id:
                     await self._deactivate_trial_subscription(telegram_id)
 
-                await self._capture_start_payload(state, event)
+                await self._capture_start_payload(state, event, bot)
 
                 if isinstance(event, CallbackQuery) and event.data == "sub_channel_check":
                     await event.answer("❌ Вы еще не подписались на канал! Подпишитесь и попробуйте снова.", show_alert=True)
@@ -113,12 +115,12 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 return await self._deny_message(event, bot, channel_link)
             else:
                 logger.warning(f"⚠️ Неожиданный статус пользователя {telegram_id}: {member.status}")
-                await self._capture_start_payload(state, event)
+                await self._capture_start_payload(state, event, bot)
                 return await self._deny_message(event, bot, channel_link)
 
         except TelegramForbiddenError as e:
             logger.error(f"❌ Бот заблокирован в канале {channel_id}: {e}")
-            await self._capture_start_payload(state, event)
+            await self._capture_start_payload(state, event, bot)
             return await self._deny_message(event, bot, channel_link)
         except TelegramBadRequest as e:
             if "chat not found" in str(e).lower():
@@ -127,13 +129,18 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 logger.error(f"❌ Пользователь {telegram_id} не найден: {e}")
             else:
                 logger.error(f"❌ Ошибка запроса к каналу {channel_id}: {e}")
-            await self._capture_start_payload(state, event)
+            await self._capture_start_payload(state, event, bot)
             return await self._deny_message(event, bot, channel_link)
         except Exception as e:
             logger.error(f"❌ Неожиданная ошибка при проверке подписки: {e}")
             return await handler(event, data)
 
-    async def _capture_start_payload(self, state: Optional[FSMContext], event: TelegramObject) -> None:
+    async def _capture_start_payload(
+        self,
+        state: Optional[FSMContext],
+        event: TelegramObject,
+        bot: Optional[Bot] = None,
+    ) -> None:
         if not state:
             return
 
@@ -159,12 +166,69 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         payload = parts[1]
 
         data = await state.get_data() or {}
-        if data.get("pending_start_payload") == payload:
+        if data.get("pending_start_payload") != payload:
+            data["pending_start_payload"] = payload
+            await state.set_data(data)
+            logger.debug("💾 Сохранен start payload %s для последующей обработки", payload)
+
+        if bot and message.from_user:
+            await self._try_send_campaign_visit_notification(
+                bot,
+                message.from_user,
+                state,
+                payload,
+            )
+
+    async def _try_send_campaign_visit_notification(
+        self,
+        bot: Bot,
+        telegram_user: types.User,
+        state: FSMContext,
+        payload: str,
+    ) -> None:
+        try:
+            data = await state.get_data() or {}
+        except Exception as error:
+            logger.error(
+                "❌ Не удалось получить данные состояния для уведомления по кампании %s: %s",
+                payload,
+                error,
+            )
             return
 
-        data["pending_start_payload"] = payload
-        await state.set_data(data)
-        logger.debug("💾 Сохранен start payload %s для последующей обработки", payload)
+        if data.get("campaign_notification_sent"):
+            return
+
+        async for db in get_db():
+            try:
+                campaign = await get_campaign_by_start_parameter(
+                    db,
+                    payload,
+                    only_active=True,
+                )
+                if not campaign:
+                    break
+
+                user = await get_user_by_telegram_id(db, telegram_user.id)
+
+                notification_service = AdminNotificationService(bot)
+                sent = await notification_service.send_campaign_link_visit_notification(
+                    db,
+                    telegram_user,
+                    campaign,
+                    user,
+                )
+                if sent:
+                    await state.update_data(campaign_notification_sent=True)
+                break
+            except Exception as error:
+                logger.error(
+                    "❌ Ошибка отправки уведомления о переходе по кампании %s: %s",
+                    payload,
+                    error,
+                )
+            finally:
+                break
 
     async def _deactivate_trial_subscription(self, telegram_id: int) -> None:
         async for db in get_db():

@@ -62,10 +62,34 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optiona
         .where(User.telegram_id == telegram_id)
     )
     user = result.scalar_one_or_none()
-    
+
     if user and user.subscription:
         _ = user.subscription.is_active
-    
+
+    return user
+
+
+async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User]:
+    if not username:
+        return None
+
+    normalized = username.lower()
+
+    result = await db.execute(
+        select(User)
+        .options(
+            selectinload(User.subscription),
+            selectinload(User.promo_group),
+            selectinload(User.referrer),
+        )
+        .where(func.lower(User.username) == normalized)
+    )
+
+    user = result.scalar_one_or_none()
+
+    if user and user.subscription:
+        _ = user.subscription.is_active
+
     return user
 
 
@@ -515,6 +539,7 @@ async def get_users_list(
         
         if search.isdigit():
             conditions.append(User.telegram_id == int(search))
+            conditions.append(User.id == int(search))  # Add support for searching by internal user ID
         
         query = query.where(or_(*conditions))
 
@@ -612,6 +637,7 @@ async def get_users_count(
         
         if search.isdigit():
             conditions.append(User.telegram_id == int(search))
+            conditions.append(User.id == int(search))  # Add support for searching by internal user ID
         
         query = query.where(or_(*conditions))
     

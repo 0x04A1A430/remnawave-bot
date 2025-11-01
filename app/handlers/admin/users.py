@@ -1,6 +1,7 @@
 import logging
+import re
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List, Tuple
 from aiogram import Dispatcher, types, F
 from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -10,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.states import AdminStates
 from app.database.models import User, UserStatus, Subscription, SubscriptionStatus, TransactionType 
-from app.database.crud.user import get_user_by_id
+from app.database.crud.user import (
+    get_user_by_id,
+    get_user_by_telegram_id,
+    get_user_by_username,
+    get_referrals,
+)
 from app.database.crud.campaign import (
     get_campaign_registration_by_user,
     get_campaign_statistics,
@@ -35,6 +41,9 @@ from app.database.crud.server_squad import (
     get_server_ids_by_uuids,
 )
 from app.services.subscription_service import SubscriptionService
+from app.utils.subscription_utils import (
+    resolve_hwid_device_limit_for_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1485,6 +1494,395 @@ async def show_user_management(
     )
     await callback.answer()
 
+
+async def _build_user_referrals_view(
+    db: AsyncSession,
+    language: str,
+    user_id: int,
+    limit: int = 30,
+) -> Optional[Tuple[str, InlineKeyboardMarkup]]:
+    texts = get_texts(language)
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        return None
+
+    referrals = await get_referrals(db, user_id)
+
+    header = texts.t(
+        "ADMIN_USER_REFERRALS_TITLE",
+        "🤝 <b>Рефералы пользователя</b>",
+    )
+    summary = texts.t(
+        "ADMIN_USER_REFERRALS_SUMMARY",
+        "👤 {name} (ID: <code>{telegram_id}</code>)\n👥 Всего рефералов: {count}",
+    ).format(
+        name=user.full_name,
+        telegram_id=user.telegram_id,
+        count=len(referrals),
+    )
+
+    lines: List[str] = [header, summary]
+
+    if referrals:
+        lines.append(
+            texts.t(
+                "ADMIN_USER_REFERRALS_LIST_HEADER",
+                "<b>Список рефералов:</b>",
+            )
+        )
+        items = []
+        for referral in referrals[:limit]:
+            username_part = (
+                f", @{referral.username}"
+                if referral.username
+                else ""
+            )
+            items.append(
+                texts.t(
+                    "ADMIN_USER_REFERRALS_LIST_ITEM",
+                    "• {name} (ID: <code>{telegram_id}</code>{username_part})",
+                ).format(
+                    name=referral.full_name,
+                    telegram_id=referral.telegram_id,
+                    username_part=username_part,
+                )
+            )
+
+        lines.append("\n".join(items))
+
+        if len(referrals) > limit:
+            remaining = len(referrals) - limit
+            lines.append(
+                texts.t(
+                    "ADMIN_USER_REFERRALS_LIST_TRUNCATED",
+                    "• … и ещё {count} рефералов",
+                ).format(count=remaining)
+            )
+    else:
+        lines.append(
+            texts.t(
+                "ADMIN_USER_REFERRALS_EMPTY",
+                "Рефералов пока нет.",
+            )
+        )
+
+    lines.append(
+        texts.t(
+            "ADMIN_USER_REFERRALS_EDIT_HINT",
+            "✏️ Чтобы изменить список, нажмите «✏️ Редактировать» ниже.",
+        )
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t(
+                        "ADMIN_USER_REFERRALS_EDIT_BUTTON",
+                        "✏️ Редактировать",
+                    ),
+                    callback_data=f"admin_user_referrals_edit_{user_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.BACK,
+                    callback_data=f"admin_user_manage_{user_id}",
+                )
+            ],
+        ]
+    )
+
+    return "\n\n".join(lines), keyboard
+
+
+@admin_required
+@error_handler
+async def show_user_referrals(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    user_id = int(callback.data.split('_')[-1])
+
+    current_state = await state.get_state()
+    if current_state == AdminStates.editing_user_referrals:
+        data = await state.get_data()
+        preserved_data = {
+            key: value
+            for key, value in data.items()
+            if key not in {"editing_referrals_user_id", "referrals_message_id"}
+        }
+        await state.clear()
+        if preserved_data:
+            await state.update_data(**preserved_data)
+
+    view = await _build_user_referrals_view(db, db_user.language, user_id)
+    if not view:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    text, keyboard = view
+
+    await callback.message.edit_text(
+        text,
+        reply_markup=keyboard,
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def start_edit_user_referrals(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    user_id = int(callback.data.split('_')[-1])
+
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        await callback.answer("❌ Пользователь не найден", show_alert=True)
+        return
+
+    texts = get_texts(db_user.language)
+
+    prompt = texts.t(
+        "ADMIN_USER_REFERRALS_EDIT_PROMPT",
+        (
+            "✏️ <b>Редактирование рефералов</b>\n\n"
+            "Отправьте список рефералов для пользователя <b>{name}</b> (ID: <code>{telegram_id}</code>):\n"
+            "• Используйте TG ID или @username\n"
+            "• Значения можно указывать через запятую, пробел или с новой строки\n"
+            "• Чтобы очистить список, отправьте 0 или слово 'нет'\n\n"
+            "Или нажмите кнопку ниже, чтобы отменить."
+        ),
+    ).format(
+        name=user.full_name,
+        telegram_id=user.telegram_id,
+    )
+
+    await state.update_data(
+        editing_referrals_user_id=user_id,
+        referrals_message_id=callback.message.message_id,
+    )
+
+    await callback.message.edit_text(
+        prompt,
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=texts.BACK,
+                        callback_data=f"admin_user_referrals_{user_id}",
+                    )
+                ]
+            ]
+        ),
+    )
+
+    await state.set_state(AdminStates.editing_user_referrals)
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def process_edit_user_referrals(
+    message: types.Message,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    texts = get_texts(db_user.language)
+    data = await state.get_data()
+
+    user_id = data.get("editing_referrals_user_id")
+    if not user_id:
+        await message.answer(
+            texts.t(
+                "ADMIN_USER_REFERRALS_STATE_LOST",
+                "❌ Не удалось определить пользователя. Попробуйте начать сначала.",
+            )
+        )
+        await state.clear()
+        return
+
+    raw_text = message.text.strip()
+    lower_text = raw_text.lower()
+    clear_keywords = {"0", "нет", "none", "пусто", "clear"}
+    clear_requested = lower_text in clear_keywords
+
+    tokens: List[str] = []
+    if not clear_requested:
+        parts = re.split(r"[,\n]+", raw_text)
+        for part in parts:
+            for token in part.split():
+                cleaned = token.strip()
+                if cleaned and cleaned not in tokens:
+                    tokens.append(cleaned)
+
+    found_users: List[User] = []
+    not_found: List[str] = []
+    skipped_self: List[str] = []
+    duplicate_tokens: List[str] = []
+
+    seen_ids = set()
+
+    for token in tokens:
+        normalized = token.strip()
+        if not normalized:
+            continue
+
+        if normalized.startswith("@"):
+            normalized = normalized[1:]
+
+        user = None
+        if normalized.isdigit():
+            try:
+                user = await get_user_by_telegram_id(db, int(normalized))
+            except ValueError:
+                user = None
+        else:
+            user = await get_user_by_username(db, normalized)
+
+        if not user:
+            not_found.append(token)
+            continue
+
+        if user.id == user_id:
+            skipped_self.append(token)
+            continue
+
+        if user.id in seen_ids:
+            duplicate_tokens.append(token)
+            continue
+
+        seen_ids.add(user.id)
+        found_users.append(user)
+
+    if not found_users and not clear_requested:
+        error_lines = [
+            texts.t(
+                "ADMIN_USER_REFERRALS_NO_VALID",
+                "❌ Не удалось найти ни одного пользователя по введённым данным.",
+            )
+        ]
+        if not_found:
+            error_lines.append(
+                texts.t(
+                    "ADMIN_USER_REFERRALS_INVALID_ENTRIES",
+                    "Не найдены: {values}",
+                ).format(values=", ".join(not_found))
+            )
+        if skipped_self:
+            error_lines.append(
+                texts.t(
+                    "ADMIN_USER_REFERRALS_SELF_SKIPPED",
+                    "Пропущены значения пользователя: {values}",
+                ).format(values=", ".join(skipped_self))
+            )
+        await message.answer("\n".join(error_lines))
+        return
+
+    user_service = UserService()
+
+    new_referral_ids = [user.id for user in found_users] if not clear_requested else []
+
+    success, details = await user_service.update_user_referrals(
+        db,
+        user_id,
+        new_referral_ids,
+        db_user.id,
+    )
+
+    if not success:
+        await message.answer(
+            texts.t(
+                "ADMIN_USER_REFERRALS_UPDATE_ERROR",
+                "❌ Не удалось обновить рефералов. Попробуйте позже.",
+            )
+        )
+        return
+
+    response_lines = [
+        texts.t(
+            "ADMIN_USER_REFERRALS_UPDATED",
+            "✅ Список рефералов обновлён.",
+        )
+    ]
+
+    total_referrals = details.get("total", len(new_referral_ids))
+    added = details.get("added", 0)
+    removed = details.get("removed", 0)
+
+    response_lines.append(
+        texts.t(
+            "ADMIN_USER_REFERRALS_UPDATED_TOTAL",
+            "• Текущий список: {total}",
+        ).format(total=total_referrals)
+    )
+
+    if added > 0:
+        response_lines.append(
+            texts.t(
+                "ADMIN_USER_REFERRALS_UPDATED_ADDED",
+                "• Добавлено: {count}",
+            ).format(count=added)
+        )
+
+    if removed > 0:
+        response_lines.append(
+            texts.t(
+                "ADMIN_USER_REFERRALS_UPDATED_REMOVED",
+                "• Удалено: {count}",
+            ).format(count=removed)
+        )
+
+    if not_found:
+        response_lines.append(
+            texts.t(
+                "ADMIN_USER_REFERRALS_INVALID_ENTRIES",
+                "Не найдены: {values}",
+            ).format(values=", ".join(not_found))
+        )
+
+    if skipped_self:
+        response_lines.append(
+            texts.t(
+                "ADMIN_USER_REFERRALS_SELF_SKIPPED",
+                "Пропущены значения пользователя: {values}",
+            ).format(values=", ".join(skipped_self))
+        )
+
+    if duplicate_tokens:
+        response_lines.append(
+            texts.t(
+                "ADMIN_USER_REFERRALS_DUPLICATES",
+                "Игнорированы дубли: {values}",
+            ).format(values=", ".join(duplicate_tokens))
+        )
+
+    view = await _build_user_referrals_view(db, db_user.language, user_id)
+    message_id = data.get("referrals_message_id")
+
+    if view and message_id:
+        try:
+            await message.bot.edit_message_text(
+                view[0],
+                chat_id=message.chat.id,
+                message_id=message_id,
+                reply_markup=view[1],
+            )
+        except TelegramBadRequest:
+            await message.answer(view[0], reply_markup=view[1])
+    elif view:
+        await message.answer(view[0], reply_markup=view[1])
+
+    await message.answer("\n".join(response_lines))
+    await state.clear()
 
 async def _render_user_promo_group(
     message: types.Message,
@@ -3338,7 +3736,15 @@ async def _grant_trial_subscription(db: AsyncSession, user_id: int, admin_id: in
             logger.error(f"У пользователя {user_id} уже есть подписка")
             return False
         
-        subscription = await create_trial_subscription(db, user_id)
+        forced_devices = None
+        if not settings.is_devices_selection_enabled():
+            forced_devices = settings.get_disabled_mode_device_limit()
+
+        subscription = await create_trial_subscription(
+            db,
+            user_id,
+            device_limit=forced_devices,
+        )
         
         subscription_service = SubscriptionService()
         await subscription_service.create_remnawave_user(db, subscription)
@@ -3382,12 +3788,20 @@ async def _grant_paid_subscription(db: AsyncSession, user_id: int, days: int, ad
             if getattr(settings, "TRIAL_SQUAD_UUID", None):
                 trial_squads = [settings.TRIAL_SQUAD_UUID]
 
+        forced_devices = None
+        if not settings.is_devices_selection_enabled():
+            forced_devices = settings.get_disabled_mode_device_limit()
+
+        device_limit = settings.DEFAULT_DEVICE_LIMIT
+        if forced_devices is not None:
+            device_limit = forced_devices
+
         subscription = await create_paid_subscription(
             db=db,
             user_id=user_id,
             duration_days=days,
             traffic_limit_gb=settings.DEFAULT_TRAFFIC_LIMIT_GB,
-            device_limit=settings.DEFAULT_DEVICE_LIMIT,
+            device_limit=device_limit,
             connected_squads=trial_squads,
             update_server_counters=True,
         )
@@ -3594,7 +4008,9 @@ async def admin_buy_subscription(
     text += f"👤 {target_user.full_name} (ID: {target_user.telegram_id})\n"
     text += f"💰 Баланс пользователя: {settings.format_price(target_user.balance_kopeks)}\n\n"
     traffic_text = "Безлимит" if (subscription.traffic_limit_gb or 0) <= 0 else f"{subscription.traffic_limit_gb} ГБ"
-    devices_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
+    devices_limit = subscription.device_limit
+    if devices_limit is None:
+        devices_limit = settings.DEFAULT_DEVICE_LIMIT
     servers_count = len(subscription.connected_squads or [])
     text += f"📶 Трафик: {traffic_text}\n"
     text += f"📱 Устройства: {devices_limit}\n"
@@ -3685,7 +4101,9 @@ async def admin_buy_subscription_confirm(
     text += f"💰 Стоимость: {settings.format_price(price_kopeks)}\n"
     text += f"💰 Баланс пользователя: {settings.format_price(target_user.balance_kopeks)}\n\n"
     traffic_text = "Безлимит" if (subscription.traffic_limit_gb or 0) <= 0 else f"{subscription.traffic_limit_gb} ГБ"
-    devices_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
+    devices_limit = subscription.device_limit
+    if devices_limit is None:
+        devices_limit = settings.DEFAULT_DEVICE_LIMIT
     servers_count = len(subscription.connected_squads or [])
     text += f"📶 Трафик: {traffic_text}\n"
     text += f"📱 Устройства: {devices_limit}\n"
@@ -3832,40 +4250,54 @@ async def admin_buy_subscription_execute(
                 from app.external.remnawave_api import UserStatus, TrafficLimitStrategy
                 remnawave_service = RemnaWaveService()
                 
+                hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
+
                 if target_user.remnawave_uuid:
                     async with remnawave_service.get_api_client() as api:
-                        remnawave_user = await api.update_user(
+                        update_kwargs = dict(
                             uuid=target_user.remnawave_uuid,
                             status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
                             expire_at=subscription.end_date,
                             traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
                             traffic_limit_strategy=TrafficLimitStrategy.MONTH,
-                            hwid_device_limit=subscription.device_limit,
                             description=settings.format_remnawave_user_description(
                                 full_name=target_user.full_name,
                                 username=target_user.username,
                                 telegram_id=target_user.telegram_id
                             ),
-                            active_internal_squads=subscription.connected_squads
+                            active_internal_squads=subscription.connected_squads,
                         )
+
+                        if hwid_limit is not None:
+                            update_kwargs['hwid_device_limit'] = hwid_limit
+
+                        remnawave_user = await api.update_user(**update_kwargs)
                 else:
-                    username = f"user_{target_user.telegram_id}"
+                    username = settings.format_remnawave_username(
+                        full_name=target_user.full_name,
+                        username=target_user.username,
+                        telegram_id=target_user.telegram_id,
+                    )
                     async with remnawave_service.get_api_client() as api:
-                        remnawave_user = await api.create_user(
+                        create_kwargs = dict(
                             username=username,
                             expire_at=subscription.end_date,
                             status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
                             traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
                             traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                             telegram_id=target_user.telegram_id,
-                            hwid_device_limit=subscription.device_limit,
                             description=settings.format_remnawave_user_description(
                                 full_name=target_user.full_name,
                                 username=target_user.username,
                                 telegram_id=target_user.telegram_id
                             ),
-                            active_internal_squads=subscription.connected_squads
+                            active_internal_squads=subscription.connected_squads,
                         )
+
+                        if hwid_limit is not None:
+                            create_kwargs['hwid_device_limit'] = hwid_limit
+
+                        remnawave_user = await api.create_user(**create_kwargs)
                     
                     if remnawave_user and hasattr(remnawave_user, 'uuid'):
                         target_user.remnawave_uuid = remnawave_user.uuid
@@ -4120,6 +4552,21 @@ def register_handlers(dp: Dispatcher):
     dp.message.register(
         process_balance_edit,
         AdminStates.editing_user_balance
+    )
+
+    dp.callback_query.register(
+        show_user_referrals,
+        F.data.startswith("admin_user_referrals_") & ~F.data.contains("_edit")
+    )
+
+    dp.callback_query.register(
+        start_edit_user_referrals,
+        F.data.startswith("admin_user_referrals_edit_")
+    )
+
+    dp.message.register(
+        process_edit_user_referrals,
+        AdminStates.editing_user_referrals
     )
 
     dp.callback_query.register(

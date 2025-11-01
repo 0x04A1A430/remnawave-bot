@@ -1,5 +1,5 @@
+import asyncio
 import logging
-import os
 import re
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timedelta
@@ -38,6 +38,10 @@ from app.database.models import (
     SubscriptionStatus,
     ServerSquad,
 )
+from app.utils.subscription_utils import (
+    resolve_hwid_device_limit_for_payload,
+)
+from app.utils.timezone import get_local_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -55,15 +59,7 @@ class RemnaWaveService:
 
         self._config_error: Optional[str] = None
 
-        tz_name = os.getenv("TZ", "UTC")
-        try:
-            self._panel_timezone = ZoneInfo(tz_name)
-        except Exception:
-            logger.warning(
-                "⚠️ Не удалось загрузить временную зону '%s'. Используется UTC.",
-                tz_name,
-            )
-            self._panel_timezone = ZoneInfo("UTC")
+        self._panel_timezone = get_local_timezone()
 
         if not base_url:
             self._config_error = "REMNAWAVE_API_URL не настроен"
@@ -1216,44 +1212,57 @@ class RemnaWaveService:
                 for user in users:
                     if not user.subscription:
                         continue
-                    
+
                     try:
                         subscription = user.subscription
-                        
+                        hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
+
                         if user.remnawave_uuid:
-                            await api.update_user(
+                            update_kwargs = dict(
                                 uuid=user.remnawave_uuid,
                                 status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
                                 expire_at=subscription.end_date,
                                 traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
                                 traffic_limit_strategy=TrafficLimitStrategy.MONTH,
-                                hwid_device_limit=subscription.device_limit,
                                 description=settings.format_remnawave_user_description(
                                     full_name=user.full_name,
                                     username=user.username,
                                     telegram_id=user.telegram_id
                                 ),
-                                active_internal_squads=subscription.connected_squads
+                                active_internal_squads=subscription.connected_squads,
                             )
+
+                            if hwid_limit is not None:
+                                update_kwargs['hwid_device_limit'] = hwid_limit
+
+                            await api.update_user(**update_kwargs)
                             stats["updated"] += 1
                         else:
-                            username = f"user_{user.telegram_id}"
-                            
-                            new_user = await api.create_user(
+                            username = settings.format_remnawave_username(
+                                full_name=user.full_name,
+                                username=user.username,
+                                telegram_id=user.telegram_id,
+                            )
+
+                            create_kwargs = dict(
                                 username=username,
                                 expire_at=subscription.end_date,
                                 status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
                                 traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
                                 traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                                 telegram_id=user.telegram_id,
-                                hwid_device_limit=subscription.device_limit,
                                 description=settings.format_remnawave_user_description(
                                     full_name=user.full_name,
                                     username=user.username,
                                     telegram_id=user.telegram_id
                                 ),
-                                active_internal_squads=subscription.connected_squads
+                                active_internal_squads=subscription.connected_squads,
                             )
+
+                            if hwid_limit is not None:
+                                create_kwargs['hwid_device_limit'] = hwid_limit
+
+                            new_user = await api.create_user(**create_kwargs)
                             
                             await update_user(db, user, remnawave_uuid=new_user.uuid)
                             subscription.remnawave_short_uuid = new_user.short_uuid
@@ -1982,67 +1991,110 @@ class RemnaWaveService:
             }
         
     async def check_panel_health(self) -> Dict[str, Any]:
-        try:
-            start_time = datetime.utcnow()
-                
-            async with self.get_api_client() as api:
-                try:
-                    system_stats = await api.get_system_stats()
-                    api_available = True
-                    api_error = None
-                except Exception as e:
-                    api_available = False
-                    api_error = str(e)
-                    system_stats = {}
-                    
-                try:
-                    nodes = await api.get_all_nodes()
-                    nodes_online = sum(1 for node in nodes if node.is_connected and node.is_node_online)
-                    total_nodes = len(nodes)
-                    nodes_health = "healthy" if nodes_online > 0 else "unhealthy"
-                except Exception:
-                    nodes_online = 0
-                    total_nodes = 0
-                    nodes_health = "unknown"
-                    
-                end_time = datetime.utcnow()
-                response_time = (end_time - start_time).total_seconds()
-                    
-                if not api_available:
-                    status = "offline"
-                elif response_time > 10: 
-                    status = "degraded"
-                elif nodes_health == "unhealthy":
-                    status = "degraded"
-                else:
-                    status = "online"
-                    
-                return {
-                    "status": status,
-                    "api_available": api_available,
-                    "api_error": api_error,
-                    "response_time": round(response_time, 2),
-                    "nodes_online": nodes_online,
-                    "total_nodes": total_nodes,
-                    "nodes_health": nodes_health,
-                    "users_online": system_stats.get('onlineStats', {}).get('onlineNow', 0),
-                    "total_users": system_stats.get('users', {}).get('totalUsers', 0),
-                    "last_check": end_time,
-                    "api_url": settings.REMNAWAVE_API_URL
-                }
-                
-        except Exception as e:
-            logger.error(f"Ошибка проверки здоровья панели: {e}")
-            return {
-                "status": "offline",
-                "api_available": False,
-                "api_error": str(e),
-                "response_time": 0,
-                "nodes_online": 0,
-                "total_nodes": 0,
-                "nodes_health": "unknown",
-                "last_check": datetime.utcnow(),
-                "api_url": settings.REMNAWAVE_API_URL
-            }
+        attempts = settings.get_maintenance_retry_attempts()
+        attempts = max(1, attempts)
+
+        last_result: Optional[Dict[str, Any]] = None
+        last_error: Optional[Exception] = None
+
+        for attempt in range(1, attempts + 1):
+            try:
+                start_time = datetime.utcnow()
+
+                async with self.get_api_client() as api:
+                    try:
+                        system_stats = await api.get_system_stats()
+                        api_available = True
+                        api_error = None
+                    except Exception as e:
+                        api_available = False
+                        api_error = str(e)
+                        system_stats = {}
+
+                    try:
+                        nodes = await api.get_all_nodes()
+                        nodes_online = sum(
+                            1 for node in nodes if node.is_connected and node.is_node_online
+                        )
+                        total_nodes = len(nodes)
+                        nodes_health = "healthy" if nodes_online > 0 else "unhealthy"
+                    except Exception:
+                        nodes_online = 0
+                        total_nodes = 0
+                        nodes_health = "unknown"
+
+                    end_time = datetime.utcnow()
+                    response_time = (end_time - start_time).total_seconds()
+
+                    if not api_available:
+                        status = "offline"
+                    elif response_time > 10:
+                        status = "degraded"
+                    elif nodes_health == "unhealthy":
+                        status = "degraded"
+                    else:
+                        status = "online"
+
+                    result = {
+                        "status": status,
+                        "api_available": api_available,
+                        "api_error": api_error,
+                        "response_time": round(response_time, 2),
+                        "nodes_online": nodes_online,
+                        "total_nodes": total_nodes,
+                        "nodes_health": nodes_health,
+                        "users_online": system_stats.get('onlineStats', {}).get('onlineNow', 0),
+                        "total_users": system_stats.get('users', {}).get('totalUsers', 0),
+                        "last_check": end_time,
+                        "api_url": settings.REMNAWAVE_API_URL,
+                        "attempts_used": attempt,
+                    }
+
+                if result["api_available"]:
+                    if attempt > 1:
+                        logger.info("Панель Remnawave ответила с %s попытки", attempt)
+                    return result
+
+                last_result = result
+
+                if attempt < attempts:
+                    logger.warning(
+                        "Панель Remnawave недоступна (попытка %s/%s): %s",
+                        attempt,
+                        attempts,
+                        result.get("api_error") or "неизвестная ошибка",
+                    )
+                    await asyncio.sleep(1)
+
+            except Exception as error:
+                last_error = error
+                if attempt < attempts:
+                    logger.warning(
+                        "Ошибка проверки здоровья панели (попытка %s/%s): %s",
+                        attempt,
+                        attempts,
+                        error,
+                    )
+                    await asyncio.sleep(1)
+                    continue
+
+                logger.error(f"Ошибка проверки здоровья панели: {error}")
+
+        if last_result is not None:
+            return last_result
+
+        error_message = str(last_error) if last_error else "Неизвестная ошибка"
+        return {
+            "status": "offline",
+            "api_available": False,
+            "api_error": error_message,
+            "response_time": 0,
+            "nodes_online": 0,
+            "total_nodes": 0,
+            "nodes_health": "unknown",
+            "last_check": datetime.utcnow(),
+            "api_url": settings.REMNAWAVE_API_URL,
+            "attempts_used": attempts,
+        }
         
 

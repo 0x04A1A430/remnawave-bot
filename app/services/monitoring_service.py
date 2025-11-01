@@ -38,6 +38,10 @@ from app.database.crud.user import (
     subtract_user_balance,
     cleanup_expired_promo_offer_discounts,
 )
+from app.utils.timezone import format_local_datetime
+from app.utils.subscription_utils import (
+    resolve_hwid_device_limit_for_payload,
+)
 from app.database.models import MonitoringLog, SubscriptionStatus, Subscription, User, Ticket, TicketStatus
 from app.localization.texts import get_texts
 from app.services.notification_settings_service import NotificationSettingsService
@@ -283,20 +287,26 @@ class MonitoringService:
                 logger.info(f"📝 Статус подписки {subscription.id} обновлен на 'expired'")
             
             async with self.api as api:
-                updated_user = await api.update_user(
+                hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
+
+                update_kwargs = dict(
                     uuid=user.remnawave_uuid,
                     status=UserStatus.ACTIVE if is_active else UserStatus.EXPIRED,
                     expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=TrafficLimitStrategy.MONTH,
-                    hwid_device_limit=subscription.device_limit,
                     description=settings.format_remnawave_user_description(
                         full_name=user.full_name,
                         username=user.username,
                         telegram_id=user.telegram_id
                     ),
-                    active_internal_squads=subscription.connected_squads
+                    active_internal_squads=subscription.connected_squads,
                 )
+
+                if hwid_limit is not None:
+                    update_kwargs['hwid_device_limit'] = hwid_limit
+
+                updated_user = await api.update_user(**update_kwargs)
                 
                 subscription.subscription_url = updated_user.subscription_url
                 subscription.subscription_crypto_link = updated_user.happ_crypto_link
@@ -1026,7 +1036,7 @@ class MonitoringService:
             message = f"""
 ⚠️ <b>Подписка истекает через {days_text}!</b>
 
-Ваша платная подписка истекает {subscription.end_date.strftime("%d.%m.%Y %H:%M")}.
+Ваша платная подписка истекает {format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M")}.
 
 💳 <b>Автоплатеж:</b> {autopay_status}
 
@@ -1142,7 +1152,7 @@ class MonitoringService:
 
             message = template.format(
                 price=settings.format_price(settings.PRICE_30_DAYS),
-                end_date=subscription.end_date.strftime("%d.%m.%Y %H:%M"),
+                end_date=format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M"),
             )
 
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -1258,7 +1268,7 @@ class MonitoringService:
                 ),
             )
             message = template.format(
-                end_date=subscription.end_date.strftime("%d.%m.%Y %H:%M"),
+                end_date=format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M"),
                 price=settings.format_price(settings.PRICE_30_DAYS),
             )
 
@@ -1335,7 +1345,7 @@ class MonitoringService:
 
             message = template.format(
                 percent=percent,
-                expires_at=expires_at.strftime("%d.%m.%Y %H:%M"),
+                expires_at=format_local_datetime(expires_at, "%d.%m.%Y %H:%M"),
                 trigger_days=trigger_days or "",
             )
 

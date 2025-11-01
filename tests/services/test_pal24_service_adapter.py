@@ -42,6 +42,9 @@ class StubPal24Client:
     async def get_payment_status(self, payment_id: str) -> Dict[str, Any]:
         return {"id": payment_id, "status": "SUCCESS"}
 
+    async def get_bill_payments(self, bill_id: str) -> Dict[str, Any]:
+        return {"id": bill_id, "payments": [{"id": "PAY-1"}]}
+
 
 def _enable_pal24(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(type(settings), "is_pal24_enabled", lambda self: True, raising=False)
@@ -94,6 +97,17 @@ async def test_create_bill_requires_configuration(monkeypatch: pytest.MonkeyPatc
             order_id="order",
             description="desc",
         )
+
+
+@pytest.mark.anyio("asyncio")
+async def test_get_bill_payments(monkeypatch: pytest.MonkeyPatch) -> None:
+    _enable_pal24(monkeypatch)
+    client = StubPal24Client()
+    service = Pal24Service(client)
+
+    result = await service.get_bill_payments("BILL42")
+
+    assert result == {"id": "BILL42", "payments": [{"id": "PAY-1"}]}
 
 
 def test_parse_postback_success(monkeypatch: pytest.MonkeyPatch) -> None:

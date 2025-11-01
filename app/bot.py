@@ -182,11 +182,14 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     logger.info("⚡ Зарегистрированы обработчики простой покупки")
     logger.info("⚡ Зарегистрированы обработчики простой подписки")
     
-    try:
-        await maintenance_service.start_monitoring()
-        logger.info("Мониторинг техработ запущен")
-    except Exception as e:
-        logger.error(f"Ошибка запуска мониторинга техработ: {e}")
+    if settings.is_maintenance_monitoring_enabled():
+        try:
+            await maintenance_service.start_monitoring()
+            logger.info("Мониторинг техработ запущен")
+        except Exception as e:
+            logger.error(f"Ошибка запуска мониторинга техработ: {e}")
+    else:
+        logger.info("Мониторинг техработ отключен настройками")
     
     logger.info("🛡️ GlobalErrorMiddleware активирован - бот защищен от устаревших callback queries")
     logger.info("Бот успешно настроен")

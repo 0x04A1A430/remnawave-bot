@@ -471,7 +471,9 @@ REMNAWAVE_AUTO_SYNC_TIMES=03:00,15:00
 # Автоматический режим тех. работ
 MAINTENANCE_MODE=false
 MAINTENANCE_AUTO_ENABLE=true
+MAINTENANCE_MONITORING_ENABLED=true
 MAINTENANCE_CHECK_INTERVAL=30
+MAINTENANCE_RETRY_ATTEMPTS=1
 
 # Интервал проверки состояния панели (секунды)
 MONITORING_INTERVAL=60
@@ -538,6 +540,8 @@ REMNAWAVE_AUTO_SYNC_TIMES=03:00,15:00
 
 # Шаблон описания пользователя
 REMNAWAVE_USER_DESCRIPTION_TEMPLATE="Bot user: {full_name} {username}"
+# Шаблон имени пользователя в панели
+REMNAWAVE_USER_USERNAME_TEMPLATE="user_{telegram_id}"
 REMNAWAVE_USER_DELETE_MODE=delete
 
 # ===== ПОДПИСКИ =====
@@ -569,6 +573,9 @@ BASE_PROMO_GROUP_PERIOD_DISCOUNTS=60:10,90:20,180:40,360:70
 
 TRAFFIC_PACKAGES_CONFIG="5:2000:false,10:3500:false,25:7000:false,50:11000:true,100:15000:true,0:20000:true"
 PRICE_PER_DEVICE=5000
+DEVICES_SELECTION_ENABLED=true
+# Единое количество устройств для режима без выбора (0 — не назначать устройства)
+DEVICES_SELECTION_DISABLED_AMOUNT=0
 
 # ===== РЕФЕРАЛЬНАЯ СИСТЕМА =====
 REFERRAL_PROGRAM_ENABLED=true
@@ -658,6 +665,8 @@ SERVER_STATUS_ITEMS_PER_PAGE=10
 MAINTENANCE_MODE=false
 MAINTENANCE_CHECK_INTERVAL=30
 MAINTENANCE_AUTO_ENABLE=true
+MAINTENANCE_MONITORING_ENABLED=true
+MAINTENANCE_RETRY_ATTEMPTS=1
 
 # ===== ЛОКАЛИЗАЦИЯ =====
 DEFAULT_LANGUAGE=ru
@@ -782,7 +791,7 @@ LOG_FILE=logs/bot.log
 - 📊 **Расширенная фильтрация** пользователей (баланс, траты, активность)
 
 👥 **Управление пользователями**
-- 🔍 Поиск, фильтры и детальные карточки
+- 🔍 Поиск по ID, имени, юзернейму, Telegram ID и фильтры
 - 💰 Ручное изменение баланса 
 - 📱 Изменение лимитов устройств, трафика, серверов
 - 🔄 Сброс HWID и перегенерация подписки

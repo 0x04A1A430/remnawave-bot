@@ -52,12 +52,12 @@ def _serialize(group: PromoGroup, members_count: int = 0) -> PromoGroupResponse:
         apply_discounts_to_addons=group.apply_discounts_to_addons,
         is_default=group.is_default,
         members_count=members_count,
-        created_at=group.created_at,
-        updated_at=group.updated_at,
+        created_at=getattr(group, "created_at", None),
+        updated_at=getattr(group, "updated_at", None),
     )
 
 
-@router.get("", response_model=PromoGroupListResponse)
+@router.get("", response_model=PromoGroupListResponse, response_model_exclude_none=True)
 async def list_promo_groups(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
@@ -79,7 +79,7 @@ async def list_promo_groups(
     )
 
 
-@router.get("/{group_id}", response_model=PromoGroupResponse)
+@router.get("/{group_id}", response_model=PromoGroupResponse, response_model_exclude_none=True)
 async def get_promo_group(
     group_id: int,
     _: Any = Security(require_api_token),
@@ -93,7 +93,12 @@ async def get_promo_group(
     return _serialize(group, members_count=members_count)
 
 
-@router.post("", response_model=PromoGroupResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=PromoGroupResponse,
+    response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_promo_group_endpoint(
     payload: PromoGroupCreateRequest,
     _: Any = Security(require_api_token),
@@ -120,7 +125,11 @@ async def create_promo_group_endpoint(
     return _serialize(group, members_count=0)
 
 
-@router.patch("/{group_id}", response_model=PromoGroupResponse)
+@router.patch(
+    "/{group_id}",
+    response_model=PromoGroupResponse,
+    response_model_exclude_none=True,
+)
 async def update_promo_group_endpoint(
     group_id: int,
     payload: PromoGroupUpdateRequest,
