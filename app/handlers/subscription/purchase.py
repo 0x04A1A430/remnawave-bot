@@ -58,6 +58,39 @@ from app.services.subscription_checkout_service import (
     should_offer_checkout_resume,
 )
 from app.services.subscription_service import SubscriptionService
+
+
+def _serialize_markup(markup: Optional[InlineKeyboardMarkup]) -> Optional[Any]:
+    if markup is None:
+        return None
+
+    model_dump = getattr(markup, "model_dump", None)
+    if callable(model_dump):
+        try:
+            return model_dump(exclude_none=True)
+        except TypeError:
+            return model_dump()
+
+    to_python = getattr(markup, "to_python", None)
+    if callable(to_python):
+        return to_python()
+
+    return markup
+
+
+def _message_needs_update(
+    message: types.Message,
+    new_text: str,
+    new_markup: Optional[InlineKeyboardMarkup],
+) -> bool:
+    current_text = getattr(message, "text", None)
+
+    if current_text != new_text:
+        return True
+
+    current_markup = getattr(message, "reply_markup", None)
+
+    return _serialize_markup(current_markup) != _serialize_markup(new_markup)
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.services.promo_offer_service import promo_offer_service
 from app.states import SubscriptionStates
@@ -800,16 +833,24 @@ async def return_to_saved_cart(
 
     if db_user.balance_kopeks < total_price:
         missing_amount = total_price - db_user.balance_kopeks
-        await callback.message.edit_text(
+        insufficient_keyboard = get_insufficient_balance_keyboard_with_cart(
+            db_user.language,
+            missing_amount,
+        )
+        insufficient_text = (
             f"❌ Все еще недостаточно средств\n\n"
             f"Требуется: {texts.format_price(total_price)}\n"
             f"У вас: {texts.format_price(db_user.balance_kopeks)}\n"
-            f"Не хватает: {texts.format_price(missing_amount)}",
-            reply_markup=get_insufficient_balance_keyboard_with_cart(
-                db_user.language,
-                missing_amount,
-            )
+            f"Не хватает: {texts.format_price(missing_amount)}"
         )
+
+        if _message_needs_update(callback.message, insufficient_text, insufficient_keyboard):
+            await callback.message.edit_text(
+                insufficient_text,
+                reply_markup=insufficient_keyboard,
+            )
+        else:
+            await callback.answer("ℹ️ Пополните баланс, чтобы завершить оформление.")
         return
 
     countries = await _get_available_countries(db_user.promo_group_id)
@@ -856,11 +897,14 @@ async def return_to_saved_cart(
     await state.set_data(prepared_cart_data)
     await state.set_state(SubscriptionStates.confirming_purchase)
 
-    await callback.message.edit_text(
-        summary_text,
-        reply_markup=get_subscription_confirm_keyboard_with_cart(db_user.language),
-        parse_mode="HTML"
-    )
+    confirm_keyboard = get_subscription_confirm_keyboard_with_cart(db_user.language)
+
+    if _message_needs_update(callback.message, summary_text, confirm_keyboard):
+        await callback.message.edit_text(
+            summary_text,
+            reply_markup=confirm_keyboard,
+            parse_mode="HTML"
+        )
 
     await callback.answer("✅ Корзина восстановлена!")
 

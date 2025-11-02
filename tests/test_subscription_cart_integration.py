@@ -1,7 +1,13 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, User as TgUser, Message
+from aiogram.types import (
+    CallbackQuery,
+    User as TgUser,
+    Message,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.handlers.subscription.purchase import save_cart_and_redirect_to_topup, return_to_saved_cart, clear_saved_cart
 from app.handlers.subscription.autopay import handle_subscription_cancel
@@ -58,12 +64,14 @@ async def test_save_cart_and_redirect_to_topup(mock_callback_query, mock_state, 
 
         # Подготовим моки
         mock_cart_service.save_user_cart = AsyncMock(return_value=True)
-        mock_keyboard = AsyncMock()
+        mock_keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="✅", callback_data="confirm")]]
+        )
         mock_keyboard_func.return_value = mock_keyboard
 
         # Подготовим тексты
         mock_texts = AsyncMock()
-        mock_texts.format_price = lambda x: f"{x/100} ₽"
+        mock_texts.format_price = lambda x: f"{x/100:.0f} ₽"
         mock_get_texts.return_value = mock_texts
 
         missing_amount = 40000  # 50000 - 10000 = 40000
@@ -119,12 +127,14 @@ async def test_return_to_saved_cart_success(mock_callback_query, mock_state, moc
         mock_cart_service.get_user_cart = AsyncMock(return_value=cart_data)
         mock_get_countries.return_value = [{'uuid': 'ru', 'name': 'Russia'}, {'uuid': 'us', 'name': 'USA'}]
         mock_format_period.return_value = "30 дней"
-        mock_keyboard = AsyncMock()
+        mock_keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="✅", callback_data="confirm")]]
+        )
         mock_keyboard_func.return_value = mock_keyboard
 
         # Подготовим тексты
         mock_texts = AsyncMock()
-        mock_texts.format_price = lambda x: f"{x/100} ₽"
+        mock_texts.format_price = lambda x: f"{x/100:.0f} ₽"
         mock_get_texts.return_value = mock_texts
 
         # Увеличиваем баланс пользователя, чтобы его хватило
@@ -141,6 +151,77 @@ async def test_return_to_saved_cart_success(mock_callback_query, mock_state, moc
 
         # В успешном сценарии вызывается callback.answer()
         mock_callback_query.answer.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_return_to_saved_cart_skips_edit_when_message_matches(
+    mock_callback_query,
+    mock_state,
+    mock_user,
+    mock_db,
+):
+    cart_data = {
+        'period_days': 60,
+        'countries': ['ru', 'us'],
+        'devices': 3,
+        'traffic_gb': 40,
+        'total_price': 44000,
+        'saved_cart': True,
+        'user_id': mock_user.id,
+    }
+
+    confirm_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="Подтвердить", callback_data="confirm")]]
+    )
+    existing_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="Подтвердить", callback_data="confirm")]]
+    )
+
+    with patch('app.handlers.subscription.purchase.user_cart_service') as mock_cart_service, \
+         patch('app.handlers.subscription.purchase._get_available_countries') as mock_get_countries, \
+         patch('app.handlers.subscription.purchase.format_period_description') as mock_format_period, \
+         patch('app.localization.texts.get_texts') as mock_get_texts, \
+         patch('app.handlers.subscription.purchase.get_subscription_confirm_keyboard_with_cart') as mock_keyboard_func, \
+         patch('app.handlers.subscription.purchase.settings') as mock_settings:
+
+        mock_cart_service.get_user_cart = AsyncMock(return_value=cart_data)
+        mock_cart_service.save_user_cart = AsyncMock()
+        mock_get_countries.return_value = [
+            {'uuid': 'ru', 'name': 'Russia'},
+            {'uuid': 'us', 'name': 'USA'},
+        ]
+        mock_format_period.return_value = "60 дней"
+        mock_keyboard_func.return_value = confirm_keyboard
+
+        mock_texts = AsyncMock()
+        mock_texts.format_price = lambda x: f"{x/100:.0f} ₽"
+        mock_get_texts.return_value = mock_texts
+
+        mock_settings.is_devices_selection_enabled.return_value = True
+        mock_settings.is_traffic_fixed.return_value = False
+
+        mock_user.balance_kopeks = 50000
+
+        summary_text = (
+            "🛒 Восстановленная корзина\n\n"
+            "📅 Период: 60 дней\n"
+            "📊 Трафик: 40 ГБ\n"
+            "🌍 Страны: Russia, USA\n"
+            "📱 Устройства: 3\n\n"
+            "💎 Общая стоимость: 440 ₽\n\n"
+            "Подтверждаете покупку?"
+        )
+
+        mock_callback_query.message.text = summary_text
+        mock_callback_query.message.reply_markup = existing_keyboard
+
+        await return_to_saved_cart(mock_callback_query, mock_state, mock_user, mock_db)
+
+        mock_callback_query.message.edit_text.assert_not_called()
+        mock_callback_query.answer.assert_called_once_with("✅ Корзина восстановлена!")
+        mock_state.set_data.assert_called_once_with(cart_data)
+        mock_state.set_state.assert_called_once()
+        mock_cart_service.save_user_cart.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -182,11 +263,13 @@ async def test_return_to_saved_cart_normalizes_devices_when_disabled(
         mock_cart_service.save_user_cart = AsyncMock()
         mock_get_countries.return_value = [{'uuid': 'ru', 'name': 'Russia'}, {'uuid': 'us', 'name': 'USA'}]
         mock_format_period.return_value = "30 дней"
-        mock_keyboard = AsyncMock()
+        mock_keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="✅", callback_data="confirm")]]
+        )
         mock_keyboard_func.return_value = mock_keyboard
 
         mock_texts = AsyncMock()
-        mock_texts.format_price = lambda x: f"{x/100} ₽"
+        mock_texts.format_price = lambda x: f"{x/100:.0f} ₽"
         mock_texts.t = lambda key, default=None: default or ""
         mock_get_texts.return_value = mock_texts
 
@@ -237,12 +320,14 @@ async def test_return_to_saved_cart_insufficient_funds(mock_callback_query, mock
 
         # Подготовим моки
         mock_cart_service.get_user_cart = AsyncMock(return_value=cart_data)
-        mock_keyboard = AsyncMock()
+        mock_keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="Пополнить", callback_data="topup")]]
+        )
         mock_keyboard_func.return_value = mock_keyboard
 
         # Подготовим тексты
         mock_texts = AsyncMock()
-        mock_texts.format_price = lambda x: f"{x/100} ₽"
+        mock_texts.format_price = lambda x: f"{x/100:.0f} ₽"
         mock_texts.t = lambda key, default: default
         mock_get_texts.return_value = mock_texts
 
