@@ -31,8 +31,6 @@ from ..schemas.users import (
 
 router = APIRouter()
 
-INT32_MAX = 2_147_483_647
-
 
 def _serialize_promo_group(group: Optional[PromoGroup]) -> Optional[PromoGroupSummary]:
     if not group:
@@ -105,10 +103,8 @@ def _apply_search_filter(query, search: str):
     ]
 
     if search.isdigit():
-        search_int = int(search)
-        conditions.append(User.telegram_id == search_int)
-        if search_int <= INT32_MAX:
-            conditions.append(User.id == search_int)
+        conditions.append(User.telegram_id == int(search))
+        conditions.append(User.id == int(search))
 
     return query.where(or_(*conditions))
 
