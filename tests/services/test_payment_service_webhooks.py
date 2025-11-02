@@ -882,7 +882,7 @@ async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -
     saved_cart_message = bot.sent_messages[-1]
     reply_markup = saved_cart_message["kwargs"].get("reply_markup")
     assert reply_markup is not None
-    assert reply_markup.inline_keyboard[0][0].kwargs["callback_data"] == "return_to_saved_cart"
+    assert reply_markup.inline_keyboard[0][0].kwargs["callback_data"] == "subscription_resume_checkout"
     assert admin_calls
 
 

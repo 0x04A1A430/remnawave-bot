@@ -23,7 +23,6 @@ from app.services.subscription_checkout_service import (
     has_subscription_checkout_draft,
     should_offer_checkout_resume,
 )
-from app.services.user_cart_service import user_cart_service
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 
 logger = logging.getLogger(__name__)
@@ -57,32 +56,14 @@ class PaymentCommonMixin:
 
         # Если для пользователя есть незавершённый checkout, предлагаем вернуться к нему.
         if user:
-            try:
-                has_saved_cart = await user_cart_service.has_user_cart(user.id)
-            except Exception as cart_error:
-                logger.warning(
-                    "Не удалось проверить наличие сохраненной корзины у пользователя %s: %s",
-                    user.id,
-                    cart_error,
-                )
-                has_saved_cart = False
-
-            if has_saved_cart:
+            draft_exists = await has_subscription_checkout_draft(user.id)
+            if should_offer_checkout_resume(user, draft_exists):
                 keyboard_rows.append([
                     build_miniapp_or_callback_button(
                         text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                        callback_data="return_to_saved_cart",
+                        callback_data="subscription_resume_checkout",
                     )
                 ])
-            else:
-                draft_exists = await has_subscription_checkout_draft(user.id)
-                if should_offer_checkout_resume(user, draft_exists):
-                    keyboard_rows.append([
-                        build_miniapp_or_callback_button(
-                            text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                            callback_data="subscription_resume_checkout",
-                        )
-                    ])
 
         # Стандартные кнопки быстрого доступа к балансу и главному меню.
         keyboard_rows.append([
