@@ -26,6 +26,8 @@ from app.utils.validators import sanitize_telegram_name
 
 logger = logging.getLogger(__name__)
 
+INT32_MAX = 2_147_483_647
+
 
 def generate_referral_code() -> str:
     alphabet = string.ascii_letters + string.digits
@@ -538,8 +540,10 @@ async def get_users_list(
         ]
         
         if search.isdigit():
-            conditions.append(User.telegram_id == int(search))
-            conditions.append(User.id == int(search))  # Add support for searching by internal user ID
+            search_int = int(search)
+            conditions.append(User.telegram_id == search_int)
+            if search_int <= INT32_MAX:
+                conditions.append(User.id == search_int)  # Add support for searching by internal user ID
         
         query = query.where(or_(*conditions))
 
@@ -636,8 +640,10 @@ async def get_users_count(
         ]
         
         if search.isdigit():
-            conditions.append(User.telegram_id == int(search))
-            conditions.append(User.id == int(search))  # Add support for searching by internal user ID
+            search_int = int(search)
+            conditions.append(User.telegram_id == search_int)
+            if search_int <= INT32_MAX:
+                conditions.append(User.id == search_int)  # Add support for searching by internal user ID
         
         query = query.where(or_(*conditions))
     
