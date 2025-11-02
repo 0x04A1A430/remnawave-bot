@@ -122,6 +122,51 @@ async def _get_or_create_default_promo_group(db: AsyncSession) -> PromoGroup:
     return default_group
 
 
+async def create_user_no_commit(
+    db: AsyncSession,
+    telegram_id: int,
+    username: str = None,
+    first_name: str = None,
+    last_name: str = None,
+    language: str = "ru",
+    referred_by_id: int = None,
+    referral_code: str = None
+) -> User:
+    """
+    Создает пользователя без немедленного коммита для пакетной обработки
+    """
+    
+    if not referral_code:
+        referral_code = await create_unique_referral_code(db)
+    
+    default_group = await _get_or_create_default_promo_group(db)
+    promo_group_id = default_group.id
+
+    safe_first = sanitize_telegram_name(first_name)
+    safe_last = sanitize_telegram_name(last_name)
+    user = User(
+        telegram_id=telegram_id,
+        username=username,
+        first_name=safe_first,
+        last_name=safe_last,
+        language=language,
+        referred_by_id=referred_by_id,
+        referral_code=referral_code,
+        balance_kopeks=0,
+        has_had_paid_subscription=False,
+        has_made_first_topup=False,
+        promo_group_id=promo_group_id,
+    )
+
+    db.add(user)
+    
+    # Не коммитим сразу, оставляем для пакетной обработки
+    logger.info(
+        f"✅ Подготовлен пользователь {telegram_id} с реферальным кодом {referral_code} (ожидает коммита)"
+    )
+    return user
+
+
 async def create_user(
     db: AsyncSession,
     telegram_id: int,
@@ -515,7 +560,6 @@ async def get_users_list(
         
         if search.isdigit():
             conditions.append(User.telegram_id == int(search))
-            conditions.append(User.id == int(search))  # Add support for searching by internal user ID
         
         query = query.where(or_(*conditions))
 
@@ -613,7 +657,6 @@ async def get_users_count(
         
         if search.isdigit():
             conditions.append(User.telegram_id == int(search))
-            conditions.append(User.id == int(search))  # Add support for searching by internal user ID
         
         query = query.where(or_(*conditions))
     

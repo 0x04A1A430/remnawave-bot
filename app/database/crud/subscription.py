@@ -1148,6 +1148,63 @@ async def check_and_update_subscription_status(
     
     return subscription
 
+async def create_subscription_no_commit(
+    db: AsyncSession,
+    user_id: int,
+    status: str = "trial",
+    is_trial: bool = True,
+    end_date: datetime = None,
+    traffic_limit_gb: int = 10,
+    traffic_used_gb: float = 0.0,
+    device_limit: int = 1,
+    connected_squads: list = None,
+    remnawave_short_uuid: str = None,
+    subscription_url: str = "",
+    subscription_crypto_link: str = "",
+    autopay_enabled: Optional[bool] = None,
+    autopay_days_before: Optional[int] = None,
+) -> Subscription:
+    """
+    Создает подписку без немедленного коммита для пакетной обработки
+    """
+    
+    if end_date is None:
+        end_date = datetime.utcnow() + timedelta(days=3)
+    
+    if connected_squads is None:
+        connected_squads = []
+    
+    subscription = Subscription(
+        user_id=user_id,
+        status=status,
+        is_trial=is_trial,
+        end_date=end_date,
+        traffic_limit_gb=traffic_limit_gb,
+        traffic_used_gb=traffic_used_gb,
+        device_limit=device_limit,
+        connected_squads=connected_squads,
+        remnawave_short_uuid=remnawave_short_uuid,
+        subscription_url=subscription_url,
+        subscription_crypto_link=subscription_crypto_link,
+        autopay_enabled=(
+            settings.is_autopay_enabled_by_default()
+            if autopay_enabled is None
+            else autopay_enabled
+        ),
+        autopay_days_before=(
+            settings.DEFAULT_AUTOPAY_DAYS_BEFORE
+            if autopay_days_before is None
+            else autopay_days_before
+        ),
+    )
+    
+    db.add(subscription)
+    # Не коммитим сразу, оставляем для пакетной обработки
+    
+    logger.info(f"✅ Подготовлена подписка для пользователя {user_id} (ожидает коммита)")
+    return subscription
+
+
 async def create_subscription(
     db: AsyncSession,
     user_id: int,

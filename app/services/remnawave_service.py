@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.crud.user import (
     create_user,
+    create_user_no_commit,
     get_users_list,
     get_user_by_telegram_id,
     update_user,
@@ -203,6 +204,87 @@ class RemnaWaveService:
 
         return unique_users
 
+    def _extract_user_data_from_description(self, description: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """
+        Извлекает имя, фамилию и username из описания пользователя в панели Remnawave.
+        
+        Args:
+            description: Описание пользователя из панели
+            
+        Returns:
+            Tuple[first_name, last_name, username] - извлеченные данные
+        """
+        logger.debug(f"📥 Парсинг описания пользователя: '{description}'")
+        
+        if not description:
+            logger.debug("❌ Пустое описание пользователя")
+            return None, None, None
+            
+        # Ищем строки в формате "Bot user: ..."
+        import re
+        
+        # Паттерн для извлечения данных из "Bot user: Name @username" или "Bot user: Name"
+        # Также поддерживаем просто "Name @username" без префикса
+        bot_user_patterns = [
+            r"Bot user:\s*(.+)",  # С префиксом
+            r"^([\w\s]+(?:@[\w_]+)?)$",  # Без префикса
+        ]
+        
+        user_info = None
+        for pattern in bot_user_patterns:
+            match = re.search(pattern, description)
+            if match:
+                user_info = match.group(1).strip()
+                logger.debug(f"🔍 Найдена информация о пользователе: '{user_info}'")
+                break
+        
+        if not user_info:
+            logger.debug("❌ Не удалось найти информацию о пользователе в описании")
+            return None, None, None
+            
+        # Паттерн для извлечения username (@username в конце)
+        username_pattern = r"\s+(@[\w_]+)$"
+        username_match = re.search(username_pattern, user_info)
+        
+        if username_match:
+            username_with_at = username_match.group(1)
+            username = username_with_at[1:] if username_with_at.startswith('@') else username_with_at  # Убираем символ @
+            # Убираем username из основной информации
+            name_part = user_info[:username_match.start()].strip()
+            logger.debug(f"📱 Найден username: '{username_with_at}' (обработанный: '{username}'), остаток: '{name_part}'")
+        else:
+            username = None
+            name_part = user_info
+            logger.debug(f"📱 Username не найден, имя: '{name_part}'")
+            
+        # Разделяем имя и фамилию
+        if name_part and not name_part.startswith("@"):
+            # Если есть имя (не начинается с @), используем его
+            name_parts = name_part.split()
+            logger.debug(f"🔤 Части имени: {name_parts}")
+            
+            if len(name_parts) >= 2:
+                # Первое слово - имя, остальные - фамилия
+                first_name = name_parts[0]
+                last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else None
+                logger.debug(f"👤 Имя: '{first_name}', Фамилия: '{last_name}'")
+            elif len(name_parts) == 1 and not name_parts[0].startswith("@"):
+                # Только имя
+                first_name = name_parts[0]
+                last_name = None
+                logger.debug(f"👤 Только имя: '{first_name}'")
+            else:
+                first_name = None
+                last_name = None
+                logger.debug("👤 Имя не определено")
+        else:
+            first_name = None
+            last_name = None
+            logger.debug("👤 Имя не определено (начинается с @)")
+            
+        logger.debug(f"✅ Результат парсинга: first_name='{first_name}', last_name='{last_name}', username='{username}'")
+        return first_name, last_name, username
+
     async def _get_or_create_bot_user_from_panel(
         self,
         db: AsyncSession,
@@ -218,14 +300,30 @@ class RemnaWaveService:
         if telegram_id is None:
             return None, False
 
-        username = panel_user.get("username") or f"user_{telegram_id}"
+        # Извлекаем настоящее имя пользователя из описания
+        description = panel_user.get("description") or ""
+        first_name_from_desc, last_name_from_desc, username_from_desc = self._extract_user_data_from_description(description)
+        
+        # Используем извлеченное имя или дефолтное значение
+        if first_name_from_desc and last_name_from_desc:
+            full_first_name = first_name_from_desc
+            full_last_name = last_name_from_desc
+        elif first_name_from_desc:
+            full_first_name = first_name_from_desc
+            full_last_name = last_name_from_desc
+        else:
+            full_first_name = f"User {telegram_id}"
+            full_last_name = None
+        
+        username = panel_user.get("username") or username_from_desc or f"user_{telegram_id}"
 
         try:
-            db_user = await create_user(
+            db_user = await create_user_no_commit(
                 db=db,
                 telegram_id=telegram_id,
                 username=username,
-                first_name=f"Panel User {telegram_id}",
+                first_name=full_first_name,
+                last_name=full_last_name,
                 language="ru",
             )
             return db_user, True
@@ -241,16 +339,28 @@ class RemnaWaveService:
                 # create_user уже выполняет rollback при необходимости
                 pass
 
-            existing_user = await get_user_by_telegram_id(db, telegram_id)
-            if existing_user is None:
-                raise create_error
+            try:
+                existing_user = await get_user_by_telegram_id(db, telegram_id)
+                if existing_user is None:
+                    logger.error("❌ Не удалось найти существующего пользователя с telegram_id %s", telegram_id)
+                    return None, False
 
-            logger.debug(
-                "Используется существующий пользователь %s после конфликта уникальности: %s",
-                telegram_id,
-                create_error,
-            )
-            return existing_user, False
+                logger.debug(
+                    "Используется существующий пользователь %s после конфликта уникальности: %s",
+                    telegram_id,
+                    create_error,
+                )
+                return existing_user, False
+            except Exception as load_error:
+                logger.error("❌ Ошибка загрузки существующего пользователя %s: %s", telegram_id, load_error)
+                return None, False
+        except Exception as general_error:
+            logger.error("❌ Общая ошибка создания/загрузки пользователя %s: %s", telegram_id, general_error)
+            try:
+                await db.rollback()
+            except:
+                pass
+            return None, False
     
     async def get_system_statistics(self) -> Dict[str, Any]:
             try:
@@ -886,7 +996,17 @@ class RemnaWaveService:
                 
                 logger.info(f"✅ Всего загружено пользователей из панели: {len(panel_users)}")
             
-            bot_users = await get_users_list(db, offset=0, limit=10000)
+            # Загрузка пользователей с их подписками за один запрос (bulk loading)
+            from sqlalchemy.orm import selectinload
+            from app.database.models import User, Subscription
+            from sqlalchemy import select
+            
+            # Получаем всех пользователей с их подписками за один запрос
+            bot_users_result = await db.execute(
+                select(User)
+                .options(selectinload(User.subscription))
+            )
+            bot_users = bot_users_result.scalars().all()
             bot_users_by_telegram_id = {user.telegram_id: user for user in bot_users}
             
             logger.info(f"📊 Пользователей в боте: {len(bot_users)}")
@@ -910,6 +1030,21 @@ class RemnaWaveService:
 
             panel_telegram_ids = set(unique_panel_users_map.keys())
 
+            # Для ускорения - подготовим данные о подписках
+            # Соберем все существующие подписки за один запрос
+            existing_subscriptions_result = await db.execute(
+                select(Subscription)
+                .join(User)
+                .options(selectinload(Subscription.user))
+            )
+            existing_subscriptions = existing_subscriptions_result.scalars().all()
+            
+            # Создадим словарь для быстрого доступа к подпискам
+            subscriptions_by_user_id = {sub.user_id: sub for sub in existing_subscriptions}
+
+            # Для оптимизации коммитим изменения каждые N пользователей
+            batch_size = 50
+            
             for i, panel_user in enumerate(unique_panel_users):
                 try:
                     telegram_id = panel_user.get('telegramId')
@@ -937,18 +1072,56 @@ class RemnaWaveService:
 
                             bot_users_by_telegram_id[telegram_id] = db_user
 
+                            # Обновляем имя пользователя из описания панели
+                            description = panel_user.get("description") or ""
+                            first_name_from_desc, last_name_from_desc, username_from_desc = self._extract_user_data_from_description(description)
+                            
+                            # Используем извлеченное имя или текущее
+                            if first_name_from_desc:
+                                full_first_name = first_name_from_desc
+                            else:
+                                full_first_name = db_user.first_name or f"User {telegram_id}"
+                            
+                            if last_name_from_desc:
+                                full_last_name = last_name_from_desc
+                            else:
+                                full_last_name = db_user.last_name
+                            
+                            extracted_username = username_from_desc or panel_user.get("username")
+                            if extracted_username:
+                                username = extracted_username
+                            else:
+                                username = db_user.username or f"user_{telegram_id}"
+                            
+                            updated_fields = []
+                            if db_user.first_name != full_first_name:
+                                db_user.first_name = full_first_name
+                                updated_fields.append("first_name")
+                            
+                            if db_user.last_name != full_last_name:
+                                db_user.last_name = full_last_name
+                                updated_fields.append("last_name")
+                            
+                            if db_user.username != username:
+                                db_user.username = username
+                                updated_fields.append("username")
+                            
+                            # Если пользователь был обновлен, сохраняем изменения
+                            if updated_fields:
+                                logger.info(f"🔄 Обновлены поля {updated_fields} для пользователя {telegram_id}")
+                                await db.flush()  # Сохраняем изменения без коммита
+
                             if not db_user.remnawave_uuid:
                                 await update_user(db, db_user, remnawave_uuid=panel_user.get('uuid'))
 
-                            if is_created or not getattr(db_user, "subscription", None):
-                                await self._create_subscription_from_panel_data(db, db_user, panel_user)
-                            else:
-                                await self._update_subscription_from_panel_data(db, db_user, panel_user)
-
                             if is_created:
+                                await self._create_subscription_from_panel_data(db, db_user, panel_user)
                                 stats["created"] += 1
                                 logger.info(f"✅ Создан пользователь {telegram_id} с подпиской")
                             else:
+                                # Обновляем данные существующего пользователя
+                                # Но теперь мы уже загрузили подписку с пользователем, нет необходимости перезагружать
+                                await self._update_subscription_from_panel_data(db, db_user, panel_user)
                                 stats["updated"] += 1
                                 logger.info(
                                     f"♻️ Обновлена подписка существующего пользователя {telegram_id}"
@@ -958,24 +1131,93 @@ class RemnaWaveService:
                         if sync_type in ["update_only", "all"]:
                             logger.debug(f"🔄 Обновление пользователя {telegram_id}")
                             
+                            # Обновляем имя пользователя из описания панели
+                            description = panel_user.get("description") or ""
+                            first_name_from_desc, last_name_from_desc, username_from_desc = self._extract_user_data_from_description(description)
+                            
+                            # Используем извлеченное имя или текущее
+                            if first_name_from_desc:
+                                full_first_name = first_name_from_desc
+                            else:
+                                full_first_name = db_user.first_name or f"User {telegram_id}"
+                            
+                            if last_name_from_desc:
+                                full_last_name = last_name_from_desc
+                            else:
+                                full_last_name = db_user.last_name
+                            
+                            extracted_username = username_from_desc or panel_user.get("username")
+                            if extracted_username:
+                                username = extracted_username
+                            else:
+                                username = db_user.username or f"user_{telegram_id}"
+                            
+                            updated_fields = []
+                            if db_user.first_name != full_first_name:
+                                db_user.first_name = full_first_name
+                                updated_fields.append("first_name")
+                            
+                            if db_user.last_name != full_last_name:
+                                db_user.last_name = full_last_name
+                                updated_fields.append("last_name")
+                            
+                            if db_user.username != username:
+                                db_user.username = username
+                                updated_fields.append("username")
+                            
+                            # Если пользователь был обновлен, сохраняем изменения
+                            if updated_fields:
+                                logger.info(f"🔄 Обновлены поля {updated_fields} для пользователя {telegram_id}")
+                                await db.flush()  # Сохраняем изменения без коммита
+                            
+                            # Проверяем, есть ли у пользователя подписка, загруженная с пользователем
+                            if hasattr(db_user, 'subscription') and db_user.subscription:
+                                # Используем уже загруженную подписку
+                                await self._update_subscription_from_panel_data(db, db_user, panel_user)
+                            else:
+                                # Если подписки нет, создаем новую
+                                await self._create_subscription_from_panel_data(db, db_user, panel_user)
+                            
                             if not db_user.remnawave_uuid:
                                 await update_user(db, db_user, remnawave_uuid=panel_user.get('uuid'))
                             
-                            await self._update_subscription_from_panel_data(db, db_user, panel_user)
-                            
                             stats["updated"] += 1
                             logger.debug(f"✅ Обновлён пользователь {telegram_id}")
-                            
+                
                 except Exception as user_error:
                     logger.error(f"❌ Ошибка обработки пользователя {telegram_id}: {user_error}")
                     stats["errors"] += 1
+                    try:
+                        await db.rollback()  # Выполняем rollback при ошибке
+                    except:
+                        pass
                     continue
+
+                # Коммитим изменения каждые N пользователей для ускорения
+                if (i + 1) % batch_size == 0:
+                    try:
+                        await db.commit()
+                        logger.debug(f"📦 Коммит изменений после обработки {i+1} пользователей")
+                    except Exception as commit_error:
+                        logger.error(f"❌ Ошибка коммита после обработки {i+1} пользователей: {commit_error}")
+                        await db.rollback()
+                        stats["errors"] += batch_size  # Учитываем ошибки за всю группу
+                        
+            # Коммитим оставшиеся изменения
+            try:
+                await db.commit()
+            except Exception as final_commit_error:
+                logger.error(f"❌ Ошибка финального коммита: {final_commit_error}")
+                await db.rollback()
             
             if sync_type == "all":
                 logger.info("🗑️ Деактивация подписок пользователей, отсутствующих в панели...")
                 
+                batch_size = 50
+                processed_count = 0
+                
                 for telegram_id, db_user in bot_users_by_telegram_id.items():
-                    if telegram_id not in panel_telegram_ids and db_user.subscription:
+                    if telegram_id not in panel_telegram_ids and hasattr(db_user, 'subscription') and db_user.subscription:
                         try:
                             logger.info(f"🗑️ Деактивация подписки пользователя {telegram_id} (нет в панели)")
                             
@@ -1021,15 +1263,39 @@ class RemnaWaveService:
                             
                             db_user.remnawave_uuid = None
                             
-                            await db.commit()
-                            
                             stats["deleted"] += 1
                             logger.info(f"✅ Деактивирована подписка пользователя {telegram_id} (сохранен баланс)")
                             
+                            processed_count += 1
+                            
+                            # Коммитим изменения каждые N пользователей
+                            if processed_count % batch_size == 0:
+                                try:
+                                    await db.commit()
+                                    logger.debug(f"📦 Коммит изменений после деактивации {processed_count} подписок")
+                                except Exception as commit_error:
+                                    logger.error(f"❌ Ошибка коммита после деактивации {processed_count} подписок: {commit_error}")
+                                    await db.rollback()
+                                    stats["errors"] += batch_size
+                                    break  # Прерываем цикл при ошибке коммита
+                        
                         except Exception as delete_error:
                             logger.error(f"❌ Ошибка деактивации подписки {telegram_id}: {delete_error}")
                             stats["errors"] += 1
-                            await db.rollback()
+                            try:
+                                await db.rollback()
+                            except:
+                                pass
+                    else:
+                        # Увеличиваем счетчик для отслеживания прогресса
+                        processed_count += 1
+                
+                # Коммитим оставшиеся изменения
+                try:
+                    await db.commit()
+                except Exception as final_commit_error:
+                    logger.error(f"❌ Ошибка финального коммита при деактивации: {final_commit_error}")
+                    await db.rollback()
             
             logger.info(f"🎯 Синхронизация завершена: создано {stats['created']}, обновлено {stats['updated']}, деактивировано {stats['deleted']}, ошибок {stats['errors']}")
             return stats
@@ -1040,7 +1306,7 @@ class RemnaWaveService:
 
     async def _create_subscription_from_panel_data(self, db: AsyncSession, user, panel_user):
         try:
-            from app.database.crud.subscription import create_subscription
+            from app.database.crud.subscription import create_subscription_no_commit
             from app.database.models import SubscriptionStatus
         
             expire_at_str = panel_user.get('expireAt', '')
@@ -1088,16 +1354,16 @@ class RemnaWaveService:
                 )
             }
         
-            subscription = await create_subscription(db, **subscription_data)
-            logger.info(f"✅ Создана подписка для пользователя {user.telegram_id} до {expire_at}")
+            subscription = await create_subscription_no_commit(db, **subscription_data)
+            logger.info(f"✅ Подготовлена подписка для пользователя {user.telegram_id} до {expire_at}")
         
         except Exception as e:
             logger.error(f"❌ Ошибка создания подписки для пользователя {user.telegram_id}: {e}")
             try:
-                from app.database.crud.subscription import create_subscription
+                from app.database.crud.subscription import create_subscription_no_commit
                 from app.database.models import SubscriptionStatus
             
-                basic_subscription = await create_subscription(
+                basic_subscription = await create_subscription_no_commit(
                     db=db,
                     user_id=user.id,
                     status=SubscriptionStatus.ACTIVE.value,
@@ -1114,7 +1380,7 @@ class RemnaWaveService:
                         or (panel_user.get('happ') or {}).get('cryptoLink', '')
                     )
                 )
-                logger.info(f"✅ Создана базовая подписка для пользователя {user.telegram_id}")
+                logger.info(f"✅ Подготовлена базовая подписка для пользователя {user.telegram_id}")
             except Exception as basic_error:
                 logger.error(f"❌ Ошибка создания базовой подписки: {basic_error}")
 
@@ -1122,8 +1388,19 @@ class RemnaWaveService:
         try:
             from app.database.crud.subscription import get_subscription_by_user_id
             from app.database.models import SubscriptionStatus
-        
-            subscription = await get_subscription_by_user_id(db, user.id)
+            
+            # Сначала пытаемся использовать уже загруженную подписку, если она есть
+            subscription = None
+            try:
+                # Проверяем, что подписка уже загружена (была загружена через selectinload)
+                if hasattr(user, 'subscription') and user.subscription:
+                    subscription = user.subscription
+                else:
+                    # В противном случае, получаем подписку через CRUD метод
+                    subscription = await get_subscription_by_user_id(db, user.id)
+            except:
+                # Если не удалось получить подписку через ленивую загрузку
+                subscription = await get_subscription_by_user_id(db, user.id)
             
             if not subscription:
                 await self._create_subscription_from_panel_data(db, user, panel_user)
@@ -1202,12 +1479,14 @@ class RemnaWaveService:
                 subscription.connected_squads = squad_uuids
                 logger.debug(f"Обновлены подключенные сквады: {squad_uuids}")
         
-            await db.commit()
+            # Коммитим изменения позже, в основном цикле, чтобы уменьшить количество транзакций
             logger.debug(f"✅ Обновлена подписка для пользователя {user.telegram_id}")
         
         except Exception as e:
             logger.error(f"❌ Ошибка обновления подписки для пользователя {user.telegram_id}: {e}")
-            await db.rollback()
+            # Не делаем rollback, так как это может повлиять на другие операции
+            # Ошибку прокидываем выше для корректной обработки в основном цикле
+            raise
     
     async def sync_users_to_panel(self, db: AsyncSession) -> Dict[str, int]:
         try:
@@ -1269,7 +1548,8 @@ class RemnaWaveService:
                             
                             await update_user(db, user, remnawave_uuid=new_user.uuid)
                             subscription.remnawave_short_uuid = new_user.short_uuid
-                            await db.commit()
+                            # Убираем немедленный коммит для пакетной обработки
+                            # await db.commit()
                             
                             stats["created"] += 1
                             
