@@ -315,7 +315,7 @@ class RemnaWaveService:
             full_first_name = f"User {telegram_id}"
             full_last_name = None
         
-        username = panel_user.get("username") or username_from_desc or f"user_{telegram_id}"
+        username = username_from_desc or panel_user.get("username")
 
         try:
             db_user = await create_user_no_commit(
@@ -1072,41 +1072,10 @@ class RemnaWaveService:
 
                             bot_users_by_telegram_id[telegram_id] = db_user
 
-                            # Обновляем имя пользователя из описания панели
-                            description = panel_user.get("description") or ""
-                            first_name_from_desc, last_name_from_desc, username_from_desc = self._extract_user_data_from_description(description)
-                            
-                            # Используем извлеченное имя или текущее
-                            if first_name_from_desc:
-                                full_first_name = first_name_from_desc
-                            else:
-                                full_first_name = db_user.first_name or f"User {telegram_id}"
-                            
-                            if last_name_from_desc:
-                                full_last_name = last_name_from_desc
-                            else:
-                                full_last_name = db_user.last_name
-                            
-                            extracted_username = username_from_desc or panel_user.get("username")
-                            if extracted_username:
-                                username = extracted_username
-                            else:
-                                username = db_user.username or f"user_{telegram_id}"
-                            
+                            # При синхронизации не обновляем имя и username пользователя
+                            # только сохраняем изменения, если были обновлены другие поля (подписка и т.д.)
                             updated_fields = []
-                            if db_user.first_name != full_first_name:
-                                db_user.first_name = full_first_name
-                                updated_fields.append("first_name")
-                            
-                            if db_user.last_name != full_last_name:
-                                db_user.last_name = full_last_name
-                                updated_fields.append("last_name")
-                            
-                            if db_user.username != username:
-                                db_user.username = username
-                                updated_fields.append("username")
-                            
-                            # Если пользователь был обновлен, сохраняем изменения
+                            # Если были обновлены другие поля (подписка, статус и т.д.), сохраняем изменения
                             if updated_fields:
                                 logger.info(f"🔄 Обновлены поля {updated_fields} для пользователя {telegram_id}")
                                 await db.flush()  # Сохраняем изменения без коммита
@@ -1131,41 +1100,10 @@ class RemnaWaveService:
                         if sync_type in ["update_only", "all"]:
                             logger.debug(f"🔄 Обновление пользователя {telegram_id}")
                             
-                            # Обновляем имя пользователя из описания панели
-                            description = panel_user.get("description") or ""
-                            first_name_from_desc, last_name_from_desc, username_from_desc = self._extract_user_data_from_description(description)
-                            
-                            # Используем извлеченное имя или текущее
-                            if first_name_from_desc:
-                                full_first_name = first_name_from_desc
-                            else:
-                                full_first_name = db_user.first_name or f"User {telegram_id}"
-                            
-                            if last_name_from_desc:
-                                full_last_name = last_name_from_desc
-                            else:
-                                full_last_name = db_user.last_name
-                            
-                            extracted_username = username_from_desc or panel_user.get("username")
-                            if extracted_username:
-                                username = extracted_username
-                            else:
-                                username = db_user.username or f"user_{telegram_id}"
-                            
+                            # При синхронизации не обновляем имя и username пользователя
+                            # только сохраняем изменения, если были обновлены другие поля (подписка и т.д.)
                             updated_fields = []
-                            if db_user.first_name != full_first_name:
-                                db_user.first_name = full_first_name
-                                updated_fields.append("first_name")
-                            
-                            if db_user.last_name != full_last_name:
-                                db_user.last_name = full_last_name
-                                updated_fields.append("last_name")
-                            
-                            if db_user.username != username:
-                                db_user.username = username
-                                updated_fields.append("username")
-                            
-                            # Если пользователь был обновлен, сохраняем изменения
+                            # Если были обновлены другие поля (подписка, статус и т.д.), сохраняем изменения
                             if updated_fields:
                                 logger.info(f"🔄 Обновлены поля {updated_fields} для пользователя {telegram_id}")
                                 await db.flush()  # Сохраняем изменения без коммита
