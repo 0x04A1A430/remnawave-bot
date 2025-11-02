@@ -853,42 +853,14 @@ async def return_to_saved_cart(
     summary_text = "\n".join(summary_lines)
 
     # Устанавливаем данные в FSM для продолжения процесса
-    confirm_keyboard = get_subscription_confirm_keyboard_with_cart(db_user.language)
-
-    current_message_text = getattr(callback.message, "text", None)
-    if not current_message_text:
-        current_message_text = getattr(callback.message, "caption", "") or ""
-
-    try:
-        current_keyboard = callback.message.reply_markup
-    except AttributeError:
-        current_keyboard = None
-
-    markups_are_equal = False
-
-    if current_keyboard is None:
-        markups_are_equal = confirm_keyboard is None
-    else:
-        try:
-            markups_are_equal = current_keyboard == confirm_keyboard
-        except Exception:  # pragma: no cover - защитная ветка на случай несовместимых объектов
-            try:
-                current_dump = current_keyboard.model_dump()
-                confirm_dump = confirm_keyboard.model_dump()
-            except Exception:  # pragma: no cover - дополнительная защита от несовместимых объектов
-                markups_are_equal = False
-            else:
-                markups_are_equal = current_dump == confirm_dump
-
     await state.set_data(prepared_cart_data)
     await state.set_state(SubscriptionStates.confirming_purchase)
 
-    if summary_text != current_message_text or not markups_are_equal:
-        await callback.message.edit_text(
-            summary_text,
-            reply_markup=confirm_keyboard,
-            parse_mode="HTML"
-        )
+    await callback.message.edit_text(
+        summary_text,
+        reply_markup=get_subscription_confirm_keyboard_with_cart(db_user.language),
+        parse_mode="HTML"
+    )
 
     await callback.answer("✅ Корзина восстановлена!")
 
