@@ -9,7 +9,13 @@ from app.database.universal_migration import ensure_default_web_api_token
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import Settings, settings, refresh_period_prices, refresh_traffic_prices
+from app.config import (
+    Settings,
+    settings,
+    refresh_period_prices,
+    refresh_traffic_prices,
+    ENV_OVERRIDE_KEYS,
+)
 from app.database.crud.system_setting import (
     delete_system_setting,
     upsert_system_setting,
@@ -71,6 +77,7 @@ class BotConfigurationService:
         "SUPPORT": "💬 Поддержка и тикеты",
         "LOCALIZATION": "🌍 Языки интерфейса",
         "CHANNEL": "📣 Обязательная подписка",
+        "TIMEZONE": "🗂 Timezone",
         "PAYMENT": "💳 Общие платежные настройки",
         "PAYMENT_VERIFICATION": "🕵️ Проверка платежей",
         "TELEGRAM": "⭐ Telegram Stars",
@@ -124,6 +131,7 @@ class BotConfigurationService:
         "SUPPORT": "Контакты поддержки, SLA и режимы обработки обращений.",
         "LOCALIZATION": "Доступные языки, локализация интерфейса и выбор языка.",
         "CHANNEL": "Настройки обязательной подписки на канал или группу.",
+        "TIMEZONE": "Часовой пояс панели и отображение времени.",
         "PAYMENT": "Общие тексты платежей, описания чеков и шаблоны.",
         "PAYMENT_VERIFICATION": "Автоматическая проверка пополнений и интервал выполнения.",
         "YOOKASSA": "Интеграция с YooKassa: идентификаторы магазина и вебхуки.",
@@ -213,7 +221,6 @@ class BotConfigurationService:
         "TRAFFIC_PACKAGES_CONFIG": "TRAFFIC_PACKAGES",
         "BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED": "SUBSCRIPTIONS_CORE",
         "BASE_PROMO_GROUP_PERIOD_DISCOUNTS": "SUBSCRIPTIONS_CORE",
-        "REFERRED_USER_REWARD": "REFERRAL",
         "DEFAULT_AUTOPAY_ENABLED": "AUTOPAY",
         "DEFAULT_AUTOPAY_DAYS_BEFORE": "AUTOPAY",
         "MIN_BALANCE_FOR_AUTOPAY_KOPEKS": "AUTOPAY",
@@ -263,6 +270,7 @@ class BotConfigurationService:
         "MAINTENANCE_MESSAGE": "MAINTENANCE",
         "MAINTENANCE_CHECK_INTERVAL": "MAINTENANCE",
         "MAINTENANCE_AUTO_ENABLE": "MAINTENANCE",
+        "MAINTENANCE_RETRY_ATTEMPTS": "MAINTENANCE",
         "WEBHOOK_URL": "WEBHOOK",
         "WEBHOOK_SECRET": "WEBHOOK",
         "VERSION_CHECK_ENABLED": "VERSION",
@@ -270,6 +278,7 @@ class BotConfigurationService:
         "VERSION_CHECK_INTERVAL_HOURS": "VERSION",
         "TELEGRAM_STARS_RATE_RUB": "TELEGRAM",
         "REMNAWAVE_USER_DESCRIPTION_TEMPLATE": "REMNAWAVE",
+        "REMNAWAVE_USER_USERNAME_TEMPLATE": "REMNAWAVE",
         "REMNAWAVE_AUTO_SYNC_ENABLED": "REMNAWAVE",
         "REMNAWAVE_AUTO_SYNC_TIMES": "REMNAWAVE",
     }
@@ -516,6 +525,28 @@ class BotConfigurationService:
             "warning": "Не забудьте отключить после завершения работ, иначе бот останется недоступен.",
             "dependencies": "MAINTENANCE_MESSAGE, MAINTENANCE_CHECK_INTERVAL",
         },
+        "MAINTENANCE_MONITORING_ENABLED": {
+            "description": (
+                "Управляет автоматическим запуском мониторинга панели Remnawave при старте бота."
+            ),
+            "format": "Булево значение.",
+            "example": "false",
+            "warning": (
+                "При отключении мониторинг можно запустить вручную из панели администратора."
+            ),
+            "dependencies": "MAINTENANCE_CHECK_INTERVAL",
+        },
+        "MAINTENANCE_RETRY_ATTEMPTS": {
+            "description": (
+                "Сколько раз повторять проверку панели Remnawave перед фиксацией недоступности."
+            ),
+            "format": "Целое число не меньше 1.",
+            "example": "3",
+            "warning": (
+                "Большие значения увеличивают время реакции на реальные сбои, но помогают избежать ложных срабатываний."
+            ),
+            "dependencies": "MAINTENANCE_CHECK_INTERVAL",
+        },
         "DISPLAY_NAME_BANNED_KEYWORDS": {
             "description": (
                 "Список слов и фрагментов, при наличии которых в отображаемом имени "
@@ -553,6 +584,31 @@ class BotConfigurationService:
             ),
             "dependencies": "REMNAWAVE_AUTO_SYNC_ENABLED",
         },
+        "REMNAWAVE_USER_DESCRIPTION_TEMPLATE": {
+            "description": (
+                "Шаблон текста, который бот передает в поле Description при создании "
+                "или обновлении пользователя в панели RemnaWave."
+            ),
+            "format": (
+                "Доступные плейсхолдеры: {full_name}, {username}, {username_clean}, {telegram_id}."
+            ),
+            "example": "Bot user: {full_name} {username}",
+            "warning": "Плейсхолдер {username} автоматически очищается, если у пользователя нет @username.",
+        },
+        "REMNAWAVE_USER_USERNAME_TEMPLATE": {
+            "description": (
+                "Шаблон имени пользователя, которое создаётся в панели RemnaWave для "
+                "телеграм-пользователя."
+            ),
+            "format": (
+                "Доступные плейсхолдеры: {full_name}, {username}, {username_clean}, {telegram_id}."
+            ),
+            "example": "vpn_{username_clean}_{telegram_id}",
+            "warning": (
+                "Недопустимые символы автоматически заменяются на подчёркивания. "
+                "Если результат пустой, используется user_{telegram_id}."
+            ),
+        },
         "EXTERNAL_ADMIN_TOKEN": {
             "description": "Приватный токен, который использует внешняя админка для проверки запросов.",
             "format": "Значение генерируется автоматически из username бота и его токена и доступно только для чтения.",
@@ -582,6 +638,10 @@ class BotConfigurationService:
     @classmethod
     def is_read_only(cls, key: str) -> bool:
         return key in cls.READ_ONLY_KEYS
+
+    @classmethod
+    def _is_env_override(cls, key: str) -> bool:
+        return key in cls._env_override_keys
 
     @classmethod
     def _format_numeric_with_unit(cls, key: str, value: Union[int, float]) -> Optional[str]:
@@ -696,6 +756,7 @@ class BotConfigurationService:
     _definitions: Dict[str, SettingDefinition] = {}
     _original_values: Dict[str, Any] = settings.model_dump()
     _overrides_raw: Dict[str, Optional[str]] = {}
+    _env_override_keys: set[str] = set(ENV_OVERRIDE_KEYS)
     _callback_tokens: Dict[str, str] = {}
     _token_to_key: Dict[str, str] = {}
     _choice_tokens: Dict[str, Dict[Any, str]] = {}
@@ -819,6 +880,8 @@ class BotConfigurationService:
 
     @classmethod
     def has_override(cls, key: str) -> bool:
+        if cls._is_env_override(key):
+            return False
         return key in cls._overrides_raw
 
     @classmethod
@@ -1114,6 +1177,12 @@ class BotConfigurationService:
                 overrides[row.key] = row.value
 
         for key, raw_value in overrides.items():
+            if cls._is_env_override(key):
+                logger.debug(
+                    "Пропускаем настройку %s из БД: используется значение из окружения",
+                    key,
+                )
+                continue
             try:
                 parsed_value = cls.deserialize_value(key, raw_value)
             except Exception as error:
@@ -1233,8 +1302,15 @@ class BotConfigurationService:
 
         raw_value = cls.serialize_value(key, value)
         await upsert_system_setting(db, key, raw_value)
-        cls._overrides_raw[key] = raw_value
-        cls._apply_to_settings(key, value)
+        if cls._is_env_override(key):
+            logger.info(
+                "Настройка %s сохранена в БД, но не применена: значение задаётся через окружение",
+                key,
+            )
+            cls._overrides_raw.pop(key, None)
+        else:
+            cls._overrides_raw[key] = raw_value
+            cls._apply_to_settings(key, value)
 
         if key in {"WEB_API_DEFAULT_TOKEN", "WEB_API_DEFAULT_TOKEN_NAME"}:
             await cls._sync_default_web_api_token()
@@ -1252,14 +1328,26 @@ class BotConfigurationService:
 
         await delete_system_setting(db, key)
         cls._overrides_raw.pop(key, None)
-        original = cls.get_original_value(key)
-        cls._apply_to_settings(key, original)
+        if cls._is_env_override(key):
+            logger.info(
+                "Настройка %s сброшена в БД, используется значение из окружения",
+                key,
+            )
+        else:
+            original = cls.get_original_value(key)
+            cls._apply_to_settings(key, original)
 
         if key in {"WEB_API_DEFAULT_TOKEN", "WEB_API_DEFAULT_TOKEN_NAME"}:
             await cls._sync_default_web_api_token()
 
     @classmethod
     def _apply_to_settings(cls, key: str, value: Any) -> None:
+        if cls._is_env_override(key):
+            logger.debug(
+                "Пропуск применения настройки %s: значение задано через окружение",
+                key,
+            )
+            return
         try:
             setattr(settings, key, value)
             if key in {

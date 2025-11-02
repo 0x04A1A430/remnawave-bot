@@ -296,8 +296,6 @@ class MiniAppReferralTerms(BaseModel):
     inviter_bonus_kopeks: int = 0
     inviter_bonus_label: Optional[str] = None
     commission_percent: float = 0.0
-    referred_user_reward_kopeks: int = 0
-    referred_user_reward_label: Optional[str] = None
 
 
 class MiniAppReferralStats(BaseModel):

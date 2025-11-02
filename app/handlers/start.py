@@ -37,6 +37,7 @@ from app.utils.promo_offer import (
     build_promo_offer_hint,
     build_test_access_hint,
 )
+from app.utils.timezone import format_local_datetime
 from app.database.crud.user_message import get_random_active_message
 from app.database.crud.subscription import decrement_subscription_server_counts
 
@@ -235,7 +236,11 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     logger.info(f"🚀 START: Обработка /start от {message.from_user.id}")
 
     data = await state.get_data() or {}
+    had_pending_payload = "pending_start_payload" in data
     pending_start_payload = data.pop("pending_start_payload", None)
+    had_campaign_notification_flag = "campaign_notification_sent" in data
+    campaign_notification_sent = data.pop("campaign_notification_sent", False)
+    state_needs_update = had_pending_payload or had_campaign_notification_flag
 
     referral_code = None
     campaign = None
@@ -251,7 +256,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
             pending_start_payload,
         )
 
-    if pending_start_payload is not None:
+    if state_needs_update:
         await state.set_data(data)
 
     if start_parameter:
@@ -277,7 +282,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
     
     user = db_user if db_user else await get_user_by_telegram_id(db, message.from_user.id)
 
-    if campaign:
+    if campaign and not campaign_notification_sent:
         try:
             notification_service = AdminNotificationService(message.bot)
             await notification_service.send_campaign_link_visit_notification(
@@ -1264,6 +1269,7 @@ def _get_subscription_status(user, texts):
     from datetime import datetime
 
     end_date = getattr(subscription, "end_date", None)
+    end_date_display = format_local_datetime(end_date, "%d.%m.%Y") if end_date else None
     current_time = datetime.utcnow()
 
     if actual_status == "disabled":
@@ -1273,11 +1279,11 @@ def _get_subscription_status(user, texts):
         return texts.t("SUB_STATUS_PENDING", "⏳ Ожидает активации")
 
     if actual_status == "expired" or (end_date and end_date <= current_time):
-        if end_date:
+        if end_date_display:
             return texts.t(
                 "SUB_STATUS_EXPIRED",
                 "🔴 Истекла\n📅 {end_date}",
-            ).format(end_date=end_date.strftime('%d.%m.%Y'))
+            ).format(end_date=end_date_display)
         return texts.t("SUBSCRIPTION_STATUS_EXPIRED", "🔴 Истекла")
 
     if not end_date:
@@ -1290,11 +1296,11 @@ def _get_subscription_status(user, texts):
         return texts.t("SUBSCRIPTION_STATUS_UNKNOWN", "❓ Статус неизвестен")
 
     if is_trial:
-        if days_left > 1:
+        if days_left > 1 and end_date_display:
             return texts.t(
                 "SUB_STATUS_TRIAL_ACTIVE",
                 "🎁 Тестовая подписка\n📅 до {end_date} ({days} дн.)",
-            ).format(end_date=end_date.strftime('%d.%m.%Y'), days=days_left)
+            ).format(end_date=end_date_display, days=days_left)
         if days_left == 1:
             return texts.t(
                 "SUB_STATUS_TRIAL_TOMORROW",
@@ -1305,11 +1311,11 @@ def _get_subscription_status(user, texts):
             "🎁 Тестовая подписка\n⚠️ истекает сегодня!",
         )
 
-    if days_left > 7:
+    if days_left > 7 and end_date_display:
         return texts.t(
             "SUB_STATUS_ACTIVE_LONG",
             "💎 Активна\n📅 до {end_date} ({days} дн.)",
-        ).format(end_date=end_date.strftime('%d.%m.%Y'), days=days_left)
+        ).format(end_date=end_date_display, days=days_left)
     if days_left > 1:
         return texts.t(
             "SUB_STATUS_ACTIVE_FEW_DAYS",

@@ -216,7 +216,11 @@ class SubscriptionService:
 
                 else:
                     logger.info(f"🆕 Создаем нового пользователя в панели для {user.telegram_id}")
-                    username = f"user_{user.telegram_id}"
+                    username = settings.format_remnawave_username(
+                        full_name=user.full_name,
+                        username=user.username,
+                        telegram_id=user.telegram_id,
+                    )
                     create_kwargs = dict(
                         username=username,
                         expire_at=subscription.end_date,

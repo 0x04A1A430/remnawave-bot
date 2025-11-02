@@ -17,6 +17,7 @@ from app.services.remnawave_service import RemnaWaveService
 def _create_service() -> RemnaWaveService:
     service = RemnaWaveService.__new__(RemnaWaveService)
     service._panel_timezone = ZoneInfo("UTC")
+    service._utc_timezone = ZoneInfo("UTC")
     return service
 
 
