@@ -332,7 +332,7 @@ class CryptoBotPaymentMixin:
                         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
                             [types.InlineKeyboardButton(
                                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                                callback_data="return_to_saved_cart"
+                                callback_data="subscription_resume_checkout"
                             )],
                             [types.InlineKeyboardButton(
                                 text="💰 Мой баланс",
