@@ -77,6 +77,7 @@ from app.utils.promo_offer import (
     build_promo_offer_hint,
     get_user_active_promo_discount_percent,
 )
+from app.utils.timezone import format_local_datetime
 
 from .common import _apply_discount_to_monthly_component, _apply_promo_offer_discount, logger
 from .countries import _get_available_countries, _get_countries_info, get_countries_price_by_uuids_fallback
@@ -491,7 +492,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
     info_text = info_template.format(
         status=status_text,
         type=type_text,
-        end_date=subscription.end_date.strftime("%d.%m.%Y %H:%M"),
+        end_date=format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M"),
         days_left=max(0, subscription.days_left),
         traffic_used=texts.format_traffic(subscription.traffic_used_gb),
         traffic_limit=traffic_text,

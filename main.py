@@ -36,6 +36,7 @@ from app.services.system_settings_service import bot_configuration_service
 from app.services.external_admin_service import ensure_external_admin_token
 from app.services.broadcast_service import broadcast_service
 from app.utils.startup_timeline import StartupTimeline
+from app.utils.timezone import TimezoneAwareFormatter
 
 
 class GracefulExit:
@@ -49,13 +50,20 @@ class GracefulExit:
 
 
 async def main():
+    formatter = TimezoneAwareFormatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        timezone_name=settings.TIMEZONE,
+    )
+
+    file_handler = logging.FileHandler(settings.LOG_FILE, encoding='utf-8')
+    file_handler.setFormatter(formatter)
+
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+
     logging.basicConfig(
         level=getattr(logging, settings.LOG_LEVEL),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(settings.LOG_FILE, encoding='utf-8'),
-            logging.StreamHandler(sys.stdout)
-        ]
+        handlers=[file_handler, stream_handler],
     )
     
     logger = logging.getLogger(__name__)
@@ -403,9 +411,15 @@ async def main():
             "🛡️",
             success_message="Служба техработ запущена",
         ) as stage:
-            if not maintenance_service._check_task or maintenance_service._check_task.done():
+            if not settings.is_maintenance_monitoring_enabled():
+                maintenance_task = None
+                stage.skip("Мониторинг техработ отключен настройками")
+            elif not maintenance_service._check_task or maintenance_service._check_task.done():
                 maintenance_task = asyncio.create_task(maintenance_service.start_monitoring())
                 stage.log(f"Интервал проверки: {settings.MAINTENANCE_CHECK_INTERVAL}с")
+                stage.log(
+                    f"Повторных попыток проверки: {settings.get_maintenance_retry_attempts()}"
+                )
             else:
                 maintenance_task = None
                 stage.skip("Служба техработ уже активна")

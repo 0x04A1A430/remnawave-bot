@@ -29,6 +29,7 @@ from app.services.subscription_purchase_service import (
 from app.services.subscription_service import SubscriptionService
 from app.services.user_cart_service import user_cart_service
 from app.utils.pricing_utils import format_period_description
+from app.utils.timezone import format_local_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -333,7 +334,7 @@ async def _auto_extend_subscription(
         getattr(user, "language", "ru"),
     )
     new_end_date = updated_subscription.end_date
-    end_date_label = new_end_date.strftime("%d.%m.%Y %H:%M")
+    end_date_label = format_local_datetime(new_end_date, "%d.%m.%Y %H:%M")
 
     if bot:
         try:

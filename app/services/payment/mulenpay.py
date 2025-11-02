@@ -247,6 +247,7 @@ class MulenPayPaymentMixin:
                     user,
                     payment.amount_kopeks,
                     f"Пополнение {display_name}: {payment.amount_kopeks // 100}₽",
+                    create_transaction=False,
                 )
 
                 try:
@@ -365,7 +366,7 @@ class MulenPayPaymentMixin:
                         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
                             [types.InlineKeyboardButton(
                                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                                callback_data="subscription_resume_checkout"
+                                callback_data="return_to_saved_cart"
                             )],
                             [types.InlineKeyboardButton(
                                 text="💰 Мой баланс",
