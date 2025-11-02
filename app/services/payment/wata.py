@@ -561,7 +561,7 @@ class WataPaymentMixin:
                         [
                             types.InlineKeyboardButton(
                                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                                callback_data="subscription_resume_checkout",
+                                callback_data="return_to_saved_cart",
                             )
                         ],
                         [

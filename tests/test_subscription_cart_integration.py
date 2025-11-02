@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, User as TgUser, Message
+from aiogram.types import CallbackQuery, User as TgUser, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.handlers.subscription.purchase import save_cart_and_redirect_to_topup, return_to_saved_cart, clear_saved_cart
 from app.handlers.subscription.autopay import handle_subscription_cancel
@@ -12,6 +12,9 @@ def mock_callback_query():
     callback = AsyncMock(spec=CallbackQuery)
     callback.message = AsyncMock(spec=Message)
     callback.message.edit_text = AsyncMock()
+    callback.message.text = ""
+    callback.message.caption = None
+    callback.message.reply_markup = None
     callback.answer = AsyncMock()
     callback.data = "subscription_confirm"
     return callback
@@ -141,6 +144,78 @@ async def test_return_to_saved_cart_success(mock_callback_query, mock_state, moc
 
         # В успешном сценарии вызывается callback.answer()
         mock_callback_query.answer.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_return_to_saved_cart_skips_redundant_message_update(
+    mock_callback_query,
+    mock_state,
+    mock_user,
+    mock_db,
+):
+    cart_data = {
+        'period_days': 30,
+        'countries': ['ru'],
+        'devices': 3,
+        'traffic_gb': 0,
+        'total_price': 30000,
+        'saved_cart': True,
+        'user_id': mock_user.id,
+    }
+
+    confirm_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="ok", callback_data="subscription_confirm")],
+        [InlineKeyboardButton(text="clear", callback_data="clear_saved_cart")],
+    ])
+
+    patch_user_cart = patch('app.handlers.subscription.purchase.user_cart_service')
+    patch_countries = patch('app.handlers.subscription.purchase._get_available_countries')
+    patch_period = patch('app.handlers.subscription.purchase.format_period_description')
+    patch_texts = patch('app.localization.texts.get_texts')
+    patch_keyboard = patch(
+        'app.handlers.subscription.purchase.get_subscription_confirm_keyboard_with_cart',
+        return_value=confirm_keyboard,
+    )
+    patch_settings = patch('app.handlers.subscription.purchase.settings')
+
+    with patch_user_cart as mock_cart_service, patch_countries as mock_get_countries, \
+         patch_period as mock_format_period, patch_texts as mock_get_texts, \
+         patch_keyboard as _, patch_settings as mock_settings:
+
+        mock_cart_service.get_user_cart = AsyncMock(return_value=cart_data)
+        mock_get_countries.return_value = [{'uuid': 'ru', 'name': 'Russia'}]
+        mock_format_period.return_value = "30 дней"
+
+        mock_texts = AsyncMock()
+        mock_texts.format_price = lambda x: f"{x // 100} ₽"
+        mock_get_texts.return_value = mock_texts
+
+        mock_settings.is_devices_selection_enabled.return_value = True
+        mock_settings.is_traffic_fixed.return_value = False
+
+        mock_user.balance_kopeks = 50000
+
+        expected_summary = "\n".join([
+            "🛒 Восстановленная корзина",
+            "",
+            "📅 Период: 30 дней",
+            "📊 Трафик: Безлимитный",
+            "🌍 Страны: Russia",
+            "📱 Устройства: 3",
+            "",
+            "💎 Общая стоимость: 300 ₽",
+            "",
+            "Подтверждаете покупку?",
+        ])
+
+        mock_callback_query.message.text = expected_summary
+        mock_callback_query.message.reply_markup = confirm_keyboard
+
+        await return_to_saved_cart(mock_callback_query, mock_state, mock_user, mock_db)
+
+        mock_state.set_data.assert_called_once_with(cart_data)
+        mock_callback_query.message.edit_text.assert_not_called()
+        mock_callback_query.answer.assert_called_once_with("✅ Корзина восстановлена!")
 
 
 @pytest.mark.asyncio
