@@ -60,6 +60,7 @@ class RemnaWaveService:
         self._config_error: Optional[str] = None
 
         self._panel_timezone = get_local_timezone()
+        self._utc_timezone = ZoneInfo("UTC")
 
         if not base_url:
             self._config_error = "REMNAWAVE_API_URL не настроен"
@@ -99,13 +100,13 @@ class RemnaWaveService:
         async with self.api as api:
             yield api
 
-    def _now_in_panel_timezone(self) -> datetime:
-        """Возвращает текущее время без часового пояса в зоне панели."""
-        return datetime.now(self._panel_timezone).replace(tzinfo=None)
+    def _now_utc(self) -> datetime:
+        """Возвращает текущее время в UTC без привязки к часовому поясу."""
+        return datetime.now(self._utc_timezone).replace(tzinfo=None)
 
     def _parse_remnawave_date(self, date_str: str) -> datetime:
         if not date_str:
-            return self._now_in_panel_timezone() + timedelta(days=30)
+            return self._now_utc() + timedelta(days=30)
 
         try:
 
@@ -126,14 +127,18 @@ class RemnaWaveService:
             else:
                 localized = parsed_date.replace(tzinfo=self._panel_timezone)
 
-            localized_naive = localized.replace(tzinfo=None)
+            utc_normalized = localized.astimezone(self._utc_timezone).replace(tzinfo=None)
 
-            logger.debug(f"Успешно распарсена дата: {date_str} -> {localized_naive}")
-            return localized_naive
+            logger.debug(
+                f"Успешно распарсена дата: {date_str} -> {utc_normalized} (нормализовано в UTC)"
+            )
+            return utc_normalized
 
         except Exception as e:
-            logger.warning(f"⚠️ Не удалось распарсить дату '{date_str}': {e}. Используем дефолтную дату.")
-            return self._now_in_panel_timezone() + timedelta(days=30)
+            logger.warning(
+                f"⚠️ Не удалось распарсить дату '{date_str}': {e}. Используем дефолтную дату."
+            )
+            return self._now_utc() + timedelta(days=30)
 
     def _safe_panel_expire_date(self, panel_user: Dict[str, Any]) -> datetime:
         """Парсит дату окончания подписки пользователя панели для сравнения."""
@@ -1040,7 +1045,7 @@ class RemnaWaveService:
             expire_at = self._parse_remnawave_date(expire_at_str)
         
             panel_status = panel_user.get('status', 'ACTIVE')
-            current_time = self._now_in_panel_timezone()
+            current_time = self._now_utc()
         
             if panel_status == 'ACTIVE' and expire_at > current_time:
                 status = SubscriptionStatus.ACTIVE
@@ -1095,7 +1100,7 @@ class RemnaWaveService:
                     user_id=user.id,
                     status=SubscriptionStatus.ACTIVE.value,
                     is_trial=False,
-                    end_date=self._now_in_panel_timezone() + timedelta(days=30),
+                    end_date=self._now_utc() + timedelta(days=30),
                     traffic_limit_gb=0,
                     traffic_used_gb=0.0,
                     device_limit=1,
@@ -1132,7 +1137,7 @@ class RemnaWaveService:
                     subscription.end_date = expire_at
                     logger.debug(f"Обновлена дата окончания подписки до {expire_at}")
             
-            current_time = self._now_in_panel_timezone()
+            current_time = self._now_utc()
             if panel_status == 'ACTIVE' and subscription.end_date > current_time:
                 new_status = SubscriptionStatus.ACTIVE.value
             elif subscription.end_date <= current_time:
@@ -1553,12 +1558,12 @@ class RemnaWaveService:
                 user.remnawave_uuid = None
                 user.has_had_paid_subscription = False
                 user.used_promocodes = 0
-                user.updated_at = self._now_in_panel_timezone()
+                user.updated_at = self._now_utc()
                 
                 if user.subscription:
                     user.subscription.status = SubscriptionStatus.DISABLED.value
                     user.subscription.is_trial = True
-                    user.subscription.end_date = self._now_in_panel_timezone()
+                    user.subscription.end_date = self._now_utc()
                     user.subscription.traffic_limit_gb = 0
                     user.subscription.traffic_used_gb = 0.0
                     user.subscription.device_limit = 1
@@ -1568,7 +1573,7 @@ class RemnaWaveService:
                     user.subscription.remnawave_short_uuid = None
                     user.subscription.subscription_url = ""
                     user.subscription.subscription_crypto_link = ""
-                    user.subscription.updated_at = self._now_in_panel_timezone()
+                    user.subscription.updated_at = self._now_utc()
                 
                 await db.commit()
                 
@@ -1737,7 +1742,7 @@ class RemnaWaveService:
                         user = subscription.user
                         issues_fixed = 0
                     
-                        current_time = self._now_in_panel_timezone()
+                        current_time = self._now_utc()
                         if subscription.end_date <= current_time and subscription.status == SubscriptionStatus.ACTIVE.value:
                             logger.info(f"🔧 Исправляем статус просроченной подписки {user.telegram_id}")
                             subscription.status = SubscriptionStatus.EXPIRED.value
