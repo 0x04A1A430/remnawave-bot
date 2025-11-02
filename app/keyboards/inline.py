@@ -356,13 +356,10 @@ def get_main_menu_keyboard(
         paired_buttons.append(simple_purchase_button)
 
     if show_resume_checkout or has_saved_cart:
-        resume_callback = (
-            "return_to_saved_cart" if has_saved_cart else "subscription_resume_checkout"
-        )
         paired_buttons.append(
             InlineKeyboardButton(
                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                callback_data=resume_callback,
+                callback_data="subscription_resume_checkout",
             )
         )
 
@@ -674,7 +671,7 @@ def get_insufficient_balance_keyboard(
         return_row = [
             InlineKeyboardButton(
                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-                callback_data="return_to_saved_cart",
+                callback_data="subscription_resume_checkout",
             )
         ]
         insert_index = back_row_index if back_row_index is not None else len(keyboard.inline_keyboard)
@@ -806,7 +803,7 @@ def get_payment_methods_keyboard_with_cart(
     keyboard.inline_keyboard.insert(-1, [  # Вставляем перед кнопкой "назад"
         InlineKeyboardButton(
             text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
-            callback_data="return_to_saved_cart"
+            callback_data="subscription_resume_checkout"
         )
     ])
     
