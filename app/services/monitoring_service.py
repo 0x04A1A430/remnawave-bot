@@ -245,9 +245,6 @@ class MonitoringService:
                 await expire_subscription(db, subscription)
                 
                 user = await get_user_by_id(db, subscription.user_id)
-                if user and user.remnawave_uuid:
-                    await self.subscription_service.disable_remnawave_user(user.remnawave_uuid)
-                
                 if user and self.bot:
                     await self._send_subscription_expired_notification(user)
                 

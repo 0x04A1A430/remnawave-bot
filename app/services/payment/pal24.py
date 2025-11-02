@@ -473,7 +473,7 @@ class Pal24PaymentMixin:
                                     "BALANCE_TOPUP_CART_BUTTON",
                                     "🛒 Продолжить оформление",
                                 ),
-                                callback_data="subscription_resume_checkout",
+                                callback_data="return_to_saved_cart",
                             )
                         ],
                         [
