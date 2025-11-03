@@ -47,6 +47,7 @@ async def create_server_squad(
     max_users: int = None,
     is_available: bool = True,
     is_trial_eligible: bool = False,
+    sort_order: int = 0,
     promo_group_ids: Optional[Iterable[int]] = None,
 ) -> ServerSquad:
 
@@ -80,6 +81,7 @@ async def create_server_squad(
         max_users=max_users,
         is_available=is_available,
         is_trial_eligible=is_trial_eligible,
+        sort_order=sort_order,
         allowed_promo_groups=promo_groups,
     )
 
@@ -260,8 +262,15 @@ async def update_server_squad(
 ) -> Optional[ServerSquad]:
     
     valid_fields = {
-        'display_name', 'country_code', 'price_kopeks', 'description',
-        'max_users', 'is_available', 'sort_order', 'is_trial_eligible'
+        "display_name",
+        "original_name",
+        "country_code",
+        "price_kopeks",
+        "description",
+        "max_users",
+        "is_available",
+        "sort_order",
+        "is_trial_eligible",
     }
     
     filtered_updates = {k: v for k, v in updates.items() if k in valid_fields}
