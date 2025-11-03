@@ -20,7 +20,6 @@ from .routes import (
     promo_offers,
     pages,
     remnawave,
-    servers,
     stats,
     subscriptions,
     tickets,
@@ -67,13 +66,6 @@ OPENAPI_TAGS = [
     {
         "name": "promo-groups",
         "description": "Создание и управление промо-группами и их участниками.",
-    },
-    {
-        "name": "servers",
-        "description": (
-            "Управление серверами RemnaWave, их доступностью, промогруппами и "
-            "ручная синхронизация данных.",
-        ),
     },
     {
         "name": "promo-offers",
@@ -145,7 +137,6 @@ def create_web_api_app() -> FastAPI:
     app.include_router(transactions.router, prefix="/transactions", tags=["transactions"])
     app.include_router(promo_groups.router, prefix="/promo-groups", tags=["promo-groups"])
     app.include_router(promo_offers.router, prefix="/promo-offers", tags=["promo-offers"])
-    app.include_router(servers.router, prefix="/servers", tags=["servers"])
     app.include_router(
         main_menu_buttons.router,
         prefix="/main-menu/buttons",
