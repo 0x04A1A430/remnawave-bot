@@ -18,7 +18,6 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.crud.user import (
     create_user,
-    create_user_no_commit,
     get_users_list,
     get_user_by_telegram_id,
     update_user,
@@ -303,27 +302,32 @@ class RemnaWaveService:
         first_name_from_desc, last_name_from_desc, username_from_desc = self._extract_user_data_from_description(description)
         
         # Используем извлеченное имя или дефолтное значение
+        fallback_first_name = f"Panel User {telegram_id}"
+        full_first_name = fallback_first_name
+        full_last_name = None
+
         if first_name_from_desc and last_name_from_desc:
             full_first_name = first_name_from_desc
             full_last_name = last_name_from_desc
         elif first_name_from_desc:
             full_first_name = first_name_from_desc
             full_last_name = last_name_from_desc
-        else:
-            full_first_name = f"User {telegram_id}"
-            full_last_name = None
-        
+
         username = username_from_desc or panel_user.get("username")
 
         try:
-            db_user = await create_user_no_commit(
+            create_kwargs = dict(
                 db=db,
                 telegram_id=telegram_id,
                 username=username,
                 first_name=full_first_name,
-                last_name=full_last_name,
                 language="ru",
             )
+
+            if full_last_name:
+                create_kwargs["last_name"] = full_last_name
+
+            db_user = await create_user(**create_kwargs)
             return db_user, True
         except IntegrityError as create_error:
             logger.info(
