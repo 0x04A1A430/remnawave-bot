@@ -54,7 +54,6 @@ def mock_state():
     state.clear = AsyncMock()
     return state
 
-@pytest.mark.asyncio
 async def test_save_cart_and_redirect_to_topup(mock_callback_query, mock_state, mock_user, mock_db):
     """Тест сохранения корзины и перенаправления к пополнению"""
     # Мокаем все зависимости
@@ -102,7 +101,6 @@ async def test_save_cart_and_redirect_to_topup(mock_callback_query, mock_state, 
         # mock_callback_query.answer не должен быть вызван
         mock_callback_query.answer.assert_not_called()
 
-@pytest.mark.asyncio
 async def test_return_to_saved_cart_success(mock_callback_query, mock_state, mock_user, mock_db):
     """Тест возврата к сохраненной корзине с достаточным балансом"""
     # Подготовим данные корзины
@@ -153,7 +151,6 @@ async def test_return_to_saved_cart_success(mock_callback_query, mock_state, moc
         mock_callback_query.answer.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_return_to_saved_cart_skips_edit_when_message_matches(
     mock_callback_query,
     mock_state,
@@ -224,7 +221,6 @@ async def test_return_to_saved_cart_skips_edit_when_message_matches(
         mock_cart_service.save_user_cart.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_return_to_saved_cart_normalizes_devices_when_disabled(
     mock_callback_query,
     mock_state,
@@ -299,7 +295,6 @@ async def test_return_to_saved_cart_normalizes_devices_when_disabled(
 
         mock_callback_query.answer.assert_called_once()
 
-@pytest.mark.asyncio
 async def test_return_to_saved_cart_insufficient_funds(mock_callback_query, mock_state, mock_user, mock_db):
     """Тест возврата к сохраненной корзине с недостаточным балансом"""
     # Подготовим данные корзины
@@ -347,7 +342,6 @@ async def test_return_to_saved_cart_insufficient_funds(mock_callback_query, mock
         # (ответ отправляется через return до вызова callback.answer())
         mock_callback_query.answer.assert_not_called()
 
-@pytest.mark.asyncio
 async def test_clear_saved_cart(mock_callback_query, mock_state, mock_user, mock_db):
     """Тест очистки сохраненной корзины"""
     # Мокаем все зависимости
@@ -369,7 +363,6 @@ async def test_clear_saved_cart(mock_callback_query, mock_state, mock_user, mock
         # Проверяем, что вызван answer
         mock_callback_query.answer.assert_called_once()
 
-@pytest.mark.asyncio
 async def test_handle_subscription_cancel_clears_saved_cart(mock_callback_query, mock_state, mock_user, mock_db):
     """Отмена покупки должна очищать сохраненную корзину"""
     mock_clear_draft = AsyncMock()

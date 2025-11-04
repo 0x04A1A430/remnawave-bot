@@ -3459,6 +3459,219 @@ async def ensure_default_web_api_token() -> bool:
         return False
 
 
+async def add_promo_group_priority_column() -> bool:
+    """Добавляет колонку priority в таблицу promo_groups."""
+    column_exists = await check_column_exists('promo_groups', 'priority')
+    if column_exists:
+        logger.info("Колонка priority уже существует в promo_groups")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                column_def = 'INTEGER NOT NULL DEFAULT 0'
+            elif db_type == 'postgresql':
+                column_def = 'INTEGER NOT NULL DEFAULT 0'
+            else:
+                column_def = 'INT NOT NULL DEFAULT 0'
+
+            await conn.execute(
+                text(f"ALTER TABLE promo_groups ADD COLUMN priority {column_def}")
+            )
+
+            # Создаем индекс для оптимизации сортировки
+            if db_type == 'postgresql':
+                await conn.execute(
+                    text("CREATE INDEX IF NOT EXISTS idx_promo_groups_priority ON promo_groups(priority DESC)")
+                )
+            elif db_type == 'sqlite':
+                await conn.execute(
+                    text("CREATE INDEX IF NOT EXISTS idx_promo_groups_priority ON promo_groups(priority DESC)")
+                )
+            else:  # MySQL
+                await conn.execute(
+                    text("CREATE INDEX idx_promo_groups_priority ON promo_groups(priority DESC)")
+                )
+
+        logger.info("✅ Добавлена колонка priority в promo_groups с индексом")
+        return True
+
+    except Exception as error:
+        logger.error(f"Ошибка добавления колонки priority: {error}")
+        return False
+
+
+async def create_user_promo_groups_table() -> bool:
+    """Создает таблицу user_promo_groups для связи Many-to-Many между users и promo_groups."""
+    table_exists = await check_table_exists("user_promo_groups")
+    if table_exists:
+        logger.info("ℹ️ Таблица user_promo_groups уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_sql = """
+                CREATE TABLE user_promo_groups (
+                    user_id INTEGER NOT NULL,
+                    promo_group_id INTEGER NOT NULL,
+                    assigned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    assigned_by VARCHAR(50) DEFAULT 'system',
+                    PRIMARY KEY (user_id, promo_group_id),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                );
+                """
+                index_sql = "CREATE INDEX idx_user_promo_groups_user_id ON user_promo_groups(user_id);"
+            elif db_type == "postgresql":
+                create_sql = """
+                CREATE TABLE user_promo_groups (
+                    user_id INTEGER NOT NULL,
+                    promo_group_id INTEGER NOT NULL,
+                    assigned_at TIMESTAMP DEFAULT NOW(),
+                    assigned_by VARCHAR(50) DEFAULT 'system',
+                    PRIMARY KEY (user_id, promo_group_id),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                );
+                """
+                index_sql = "CREATE INDEX idx_user_promo_groups_user_id ON user_promo_groups(user_id);"
+            else:  # MySQL
+                create_sql = """
+                CREATE TABLE user_promo_groups (
+                    user_id INT NOT NULL,
+                    promo_group_id INT NOT NULL,
+                    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    assigned_by VARCHAR(50) DEFAULT 'system',
+                    PRIMARY KEY (user_id, promo_group_id),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (promo_group_id) REFERENCES promo_groups(id) ON DELETE CASCADE
+                );
+                """
+                index_sql = "CREATE INDEX idx_user_promo_groups_user_id ON user_promo_groups(user_id);"
+
+            await conn.execute(text(create_sql))
+            await conn.execute(text(index_sql))
+            logger.info("✅ Таблица user_promo_groups создана с индексом")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы user_promo_groups: {error}")
+        return False
+
+
+async def migrate_existing_user_promo_groups_data() -> bool:
+    """Переносит существующие связи users.promo_group_id в таблицу user_promo_groups."""
+    try:
+        table_exists = await check_table_exists("user_promo_groups")
+        if not table_exists:
+            logger.warning("⚠️ Таблица user_promo_groups не существует, пропускаем миграцию данных")
+            return False
+
+        column_exists = await check_column_exists('users', 'promo_group_id')
+        if not column_exists:
+            logger.warning("⚠️ Колонка users.promo_group_id не существует, пропускаем миграцию данных")
+            return True
+
+        async with engine.begin() as conn:
+            # Проверяем есть ли уже данные в user_promo_groups
+            result = await conn.execute(text("SELECT COUNT(*) FROM user_promo_groups"))
+            count = result.scalar()
+
+            if count > 0:
+                logger.info(f"ℹ️ В таблице user_promo_groups уже есть {count} записей, пропускаем миграцию")
+                return True
+
+            # Переносим данные из users.promo_group_id
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                migrate_sql = """
+                INSERT INTO user_promo_groups (user_id, promo_group_id, assigned_at, assigned_by)
+                SELECT id, promo_group_id, CURRENT_TIMESTAMP, 'system'
+                FROM users
+                WHERE promo_group_id IS NOT NULL
+                """
+            else:  # PostgreSQL and MySQL
+                migrate_sql = """
+                INSERT INTO user_promo_groups (user_id, promo_group_id, assigned_at, assigned_by)
+                SELECT id, promo_group_id, NOW(), 'system'
+                FROM users
+                WHERE promo_group_id IS NOT NULL
+                """
+
+            result = await conn.execute(text(migrate_sql))
+            migrated_count = result.rowcount if hasattr(result, 'rowcount') else 0
+
+            logger.info(f"✅ Перенесено {migrated_count} связей пользователей с промогруппами")
+            return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка миграции данных user_promo_groups: {error}")
+        return False
+
+
+async def add_promocode_promo_group_column() -> bool:
+    """Добавляет колонку promo_group_id в таблицу promocodes."""
+    column_exists = await check_column_exists('promocodes', 'promo_group_id')
+    if column_exists:
+        logger.info("Колонка promo_group_id уже существует в promocodes")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            # Add column
+            if db_type == 'sqlite':
+                await conn.execute(
+                    text("ALTER TABLE promocodes ADD COLUMN promo_group_id INTEGER")
+                )
+            elif db_type == 'postgresql':
+                await conn.execute(
+                    text("ALTER TABLE promocodes ADD COLUMN promo_group_id INTEGER")
+                )
+                # Add foreign key
+                await conn.execute(
+                    text("""
+                        ALTER TABLE promocodes
+                        ADD CONSTRAINT fk_promocodes_promo_group
+                        FOREIGN KEY (promo_group_id)
+                        REFERENCES promo_groups(id)
+                        ON DELETE SET NULL
+                    """)
+                )
+                # Add index
+                await conn.execute(
+                    text("CREATE INDEX IF NOT EXISTS idx_promocodes_promo_group_id ON promocodes(promo_group_id)")
+                )
+            elif db_type == 'mysql':
+                await conn.execute(
+                    text("""
+                        ALTER TABLE promocodes
+                        ADD COLUMN promo_group_id INT,
+                        ADD CONSTRAINT fk_promocodes_promo_group
+                        FOREIGN KEY (promo_group_id)
+                        REFERENCES promo_groups(id)
+                        ON DELETE SET NULL
+                    """)
+                )
+                await conn.execute(
+                    text("CREATE INDEX idx_promocodes_promo_group_id ON promocodes(promo_group_id)")
+                )
+
+        logger.info("✅ Добавлена колонка promo_group_id в promocodes")
+        return True
+
+    except Exception as error:
+        logger.error(f"❌ Ошибка добавления promo_group_id в promocodes: {error}")
+        return False
+
+
 async def run_universal_migration():
     logger.info("=== НАЧАЛО УНИВЕРСАЛЬНОЙ МИГРАЦИИ ===")
     
@@ -3619,6 +3832,34 @@ async def run_universal_migration():
             logger.info("✅ Таблица promo_offer_templates готова")
         else:
             logger.warning("⚠️ Проблемы с таблицей promo_offer_templates")
+
+        logger.info("=== ДОБАВЛЕНИЕ ПРИОРИТЕТА В ПРОМОГРУППЫ ===")
+        priority_column_ready = await add_promo_group_priority_column()
+        if priority_column_ready:
+            logger.info("✅ Колонка priority в promo_groups готова")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением priority в promo_groups")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ USER_PROMO_GROUPS ===")
+        user_promo_groups_ready = await create_user_promo_groups_table()
+        if user_promo_groups_ready:
+            logger.info("✅ Таблица user_promo_groups готова")
+        else:
+            logger.warning("⚠️ Проблемы с таблицей user_promo_groups")
+
+        logger.info("=== МИГРАЦИЯ ДАННЫХ В USER_PROMO_GROUPS ===")
+        data_migrated = await migrate_existing_user_promo_groups_data()
+        if data_migrated:
+            logger.info("✅ Данные перенесены в user_promo_groups")
+        else:
+            logger.warning("⚠️ Проблемы с миграцией данных в user_promo_groups")
+
+        logger.info("=== ДОБАВЛЕНИЕ PROMO_GROUP_ID В PROMOCODES ===")
+        promocode_column_ready = await add_promocode_promo_group_column()
+        if promocode_column_ready:
+            logger.info("✅ Колонка promo_group_id в promocodes готова")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением promo_group_id в promocodes")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ MAIN_MENU_BUTTONS ===")
         main_menu_buttons_created = await create_main_menu_buttons_table()

@@ -1965,15 +1965,33 @@ def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) ->
 
         if isinstance(price_info, dict):
             final_price = price_info.get("final")
+            original_price = price_info.get("original", 0)
             if final_price is None:
                 final_price = price_info.get("original", 0)
         else:
             final_price = price_info
+            original_price = price_info
 
         period_display = format_period_description(days, language)
+
+        # Show discount if there is one
+        if original_price > final_price and original_price > 0:
+            discount_percent = ((original_price - final_price) * 100) // original_price
+            button_text = (
+                f"📅 {period_display} - "
+                f"<s>{texts.format_price(original_price)}</s> "
+                f"{texts.format_price(final_price)} "
+                f"(-{discount_percent}%)"
+            )
+            # Add fire emojis for 360 days
+            if days == 360:
+                button_text = f"🔥 {button_text} 🔥"
+        else:
+            button_text = f"📅 {period_display} - {texts.format_price(final_price)}"
+
         keyboard.append([
             InlineKeyboardButton(
-                text=f"📅 {period_display} - {texts.format_price(final_price)}",
+                text=button_text,
                 callback_data=f"extend_period_{days}"
             )
         ])

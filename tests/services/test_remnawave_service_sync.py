@@ -66,7 +66,6 @@ def test_deduplicate_ignores_records_without_expire_date():
     assert deduplicated[telegram_id] is valid
 
 
-@pytest.mark.asyncio
 async def test_get_or_create_user_handles_unique_violation(monkeypatch):
     service = _create_service()
     db = AsyncMock()
@@ -97,7 +96,6 @@ async def test_get_or_create_user_handles_unique_violation(monkeypatch):
     rollback_mock.assert_awaited()
 
 
-@pytest.mark.asyncio
 async def test_get_or_create_user_creates_new(monkeypatch):
     service = _create_service()
     db = AsyncMock()

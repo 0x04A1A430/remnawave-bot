@@ -12,7 +12,6 @@ from app.config import settings
 from app.services.system_settings_service import bot_configuration_service
 
 
-@pytest.mark.asyncio
 async def test_env_override_prevents_set_value(monkeypatch):
     bot_configuration_service.initialize_definitions()
 
@@ -45,7 +44,6 @@ async def test_env_override_prevents_set_value(monkeypatch):
     assert not bot_configuration_service.has_override("SUPPORT_USERNAME")
 
 
-@pytest.mark.asyncio
 async def test_env_override_prevents_reset_value(monkeypatch):
     bot_configuration_service.initialize_definitions()
 
@@ -77,7 +75,6 @@ async def test_env_override_prevents_reset_value(monkeypatch):
     assert not bot_configuration_service.has_override("SUPPORT_USERNAME")
 
 
-@pytest.mark.asyncio
 async def test_initialize_skips_db_value_for_env_override(monkeypatch):
     bot_configuration_service.initialize_definitions()
 
@@ -130,7 +127,6 @@ async def test_initialize_skips_db_value_for_env_override(monkeypatch):
     assert not bot_configuration_service.has_override("SUPPORT_USERNAME")
 
 
-@pytest.mark.asyncio
 async def test_set_value_applies_without_env_override(monkeypatch):
     bot_configuration_service.initialize_definitions()
 

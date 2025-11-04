@@ -17,6 +17,7 @@ from app.database.crud.promocode import (
     get_promocode_statistics, get_promocode_by_code, update_promocode,
     delete_promocode
 )
+from app.database.crud.promo_group import get_promo_group_by_id, get_promo_groups_with_counts
 from app.utils.decorators import admin_required, error_handler
 from app.utils.formatters import format_datetime
 
@@ -81,16 +82,24 @@ async def show_promocodes_list(
     
     for promo in promocodes:
         status_emoji = "✅" if promo.is_active else "❌"
-        type_emoji = {"balance": "💰", "subscription_days": "📅", "trial_subscription": "🎁"}.get(promo.type, "🎫")
-        
+        type_emoji = {
+            "balance": "💰",
+            "subscription_days": "📅",
+            "trial_subscription": "🎁",
+            "promo_group": "🏷️"
+        }.get(promo.type, "🎫")
+
         text += f"{status_emoji} {type_emoji} <code>{promo.code}</code>\n"
         text += f"📊 Использований: {promo.current_uses}/{promo.max_uses}\n"
-        
+
         if promo.type == PromoCodeType.BALANCE.value:
             text += f"💰 Бонус: {settings.format_price(promo.balance_bonus_kopeks)}\n"
         elif promo.type == PromoCodeType.SUBSCRIPTION_DAYS.value:
             text += f"📅 Дней: {promo.subscription_days}\n"
-        
+        elif promo.type == PromoCodeType.PROMO_GROUP.value:
+            if promo.promo_group:
+                text += f"🏷️ Промогруппа: {promo.promo_group.name}\n"
+
         if promo.valid_until:
             text += f"⏰ До: {format_datetime(promo.valid_until)}\n"
         
@@ -136,8 +145,13 @@ async def show_promocode_management(
         return
     
     status_emoji = "✅" if promo.is_active else "❌"
-    type_emoji = {"balance": "💰", "subscription_days": "📅", "trial_subscription": "🎁"}.get(promo.type, "🎫")
-    
+    type_emoji = {
+        "balance": "💰",
+        "subscription_days": "📅",
+        "trial_subscription": "🎁",
+        "promo_group": "🏷️"
+    }.get(promo.type, "🎫")
+
     text = f"""
 🎫 <b>Управление промокодом</b>
 
@@ -145,12 +159,17 @@ async def show_promocode_management(
 {status_emoji} <b>Статус:</b> {'Активен' if promo.is_active else 'Неактивен'}
 📊 <b>Использований:</b> {promo.current_uses}/{promo.max_uses}
 """
-    
+
     if promo.type == PromoCodeType.BALANCE.value:
         text += f"💰 <b>Бонус:</b> {settings.format_price(promo.balance_bonus_kopeks)}\n"
     elif promo.type == PromoCodeType.SUBSCRIPTION_DAYS.value:
         text += f"📅 <b>Дней:</b> {promo.subscription_days}\n"
-    
+    elif promo.type == PromoCodeType.PROMO_GROUP.value:
+        if promo.promo_group:
+            text += f"🏷️ <b>Промогруппа:</b> {promo.promo_group.name} (приоритет: {promo.promo_group.priority})\n"
+        elif promo.promo_group_id:
+            text += f"🏷️ <b>Промогруппа ID:</b> {promo.promo_group_id} (не найдена)\n"
+
     if promo.valid_until:
         text += f"⏰ <b>Действует до:</b> {format_datetime(promo.valid_until)}\n"
     
@@ -445,13 +464,14 @@ async def select_promocode_type(
     state: FSMContext
 ):
     promo_type = callback.data.split('_')[-1]
-    
+
     type_names = {
         "balance": "💰 Пополнение баланса",
-        "days": "📅 Дни подписки", 
-        "trial": "🎁 Тестовая подписка"
+        "days": "📅 Дни подписки",
+        "trial": "🎁 Тестовая подписка",
+        "group": "🏷️ Промогруппа"
     }
-    
+
     await state.update_data(promocode_type=promo_type)
     
     await callback.message.edit_text(
@@ -509,6 +529,77 @@ async def process_promocode_code(
             f"Введите количество дней тестовой подписки:"
         )
         await state.set_state(AdminStates.setting_promocode_value)
+    elif promo_type == "group":
+        # Show promo group selection
+        groups_with_counts = await get_promo_groups_with_counts(db, limit=50)
+
+        if not groups_with_counts:
+            await message.answer(
+                "❌ Промогруппы не найдены. Создайте хотя бы одну промогруппу.",
+                reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_promocodes")]
+                ])
+            )
+            await state.clear()
+            return
+
+        keyboard = []
+        text = f"🏷️ <b>Промокод:</b> <code>{code}</code>\n\nВыберите промогруппу для назначения:\n\n"
+
+        for promo_group, user_count in groups_with_counts:
+            text += f"• {promo_group.name} (приоритет: {promo_group.priority}, пользователей: {user_count})\n"
+            keyboard.append([
+                types.InlineKeyboardButton(
+                    text=f"{promo_group.name} (↑{promo_group.priority})",
+                    callback_data=f"promo_select_group_{promo_group.id}"
+                )
+            ])
+
+        keyboard.append([
+            types.InlineKeyboardButton(text="❌ Отмена", callback_data="admin_promocodes")
+        ])
+
+        await message.answer(
+            text,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
+        await state.set_state(AdminStates.selecting_promo_group)
+
+
+@admin_required
+@error_handler
+async def process_promo_group_selection(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession
+):
+    """Handle promo group selection for promocode"""
+    try:
+        promo_group_id = int(callback.data.split('_')[-1])
+    except (ValueError, IndexError):
+        await callback.answer("❌ Ошибка получения ID промогруппы", show_alert=True)
+        return
+
+    promo_group = await get_promo_group_by_id(db, promo_group_id)
+    if not promo_group:
+        await callback.answer("❌ Промогруппа не найдена", show_alert=True)
+        return
+
+    await state.update_data(
+        promo_group_id=promo_group_id,
+        promo_group_name=promo_group.name
+    )
+
+    await callback.message.edit_text(
+        f"🏷️ <b>Промокод для промогруппы</b>\n\n"
+        f"Промогруппа: {promo_group.name}\n"
+        f"Приоритет: {promo_group.priority}\n\n"
+        f"📊 Введите количество использований промокода (или 0 для безлимита):"
+    )
+
+    await state.set_state(AdminStates.setting_promocode_uses)
+    await callback.answer()
 
 
 @admin_required
@@ -708,17 +799,20 @@ async def process_promocode_expiry(
         promo_type = data.get('promocode_type')
         value = data.get('promocode_value', 0)
         max_uses = data.get('promocode_max_uses', 1)
-        
+        promo_group_id = data.get('promo_group_id')
+        promo_group_name = data.get('promo_group_name')
+
         valid_until = None
         if expiry_days > 0:
             valid_until = datetime.utcnow() + timedelta(days=expiry_days)
-        
+
         type_map = {
             "balance": PromoCodeType.BALANCE,
             "days": PromoCodeType.SUBSCRIPTION_DAYS,
-            "trial": PromoCodeType.TRIAL_SUBSCRIPTION
+            "trial": PromoCodeType.TRIAL_SUBSCRIPTION,
+            "group": PromoCodeType.PROMO_GROUP
         }
-        
+
         promocode = await create_promocode(
             db=db,
             code=code,
@@ -727,27 +821,31 @@ async def process_promocode_expiry(
             subscription_days=value if promo_type in ["days", "trial"] else 0,
             max_uses=max_uses,
             valid_until=valid_until,
-            created_by=db_user.id
+            created_by=db_user.id,
+            promo_group_id=promo_group_id if promo_type == "group" else None
         )
         
         type_names = {
-            "balance": "Пополнение баланса", 
-            "days": "Дни подписки", 
-            "trial": "Тестовая подписка"
+            "balance": "Пополнение баланса",
+            "days": "Дни подписки",
+            "trial": "Тестовая подписка",
+            "group": "Промогруппа"
         }
-        
+
         summary_text = f"""
 ✅ <b>Промокод создан!</b>
 
 🎫 <b>Код:</b> <code>{promocode.code}</code>
 📝 <b>Тип:</b> {type_names.get(promo_type)}
 """
-        
+
         if promo_type == "balance":
             summary_text += f"💰 <b>Сумма:</b> {settings.format_price(promocode.balance_bonus_kopeks)}\n"
         elif promo_type in ["days", "trial"]:
             summary_text += f"📅 <b>Дней:</b> {promocode.subscription_days}\n"
-        
+        elif promo_type == "group" and promo_group_name:
+            summary_text += f"🏷️ <b>Промогруппа:</b> {promo_group_name}\n"
+
         summary_text += f"📊 <b>Использований:</b> {promocode.max_uses}\n"
         
         if promocode.valid_until:
@@ -1007,6 +1105,7 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(show_promocodes_list, F.data == "admin_promo_list")
     dp.callback_query.register(start_promocode_creation, F.data == "admin_promo_create")
     dp.callback_query.register(select_promocode_type, F.data.startswith("promo_type_"))
+    dp.callback_query.register(process_promo_group_selection, F.data.startswith("promo_select_group_"))
     
     dp.callback_query.register(show_promocode_management, F.data.startswith("promo_manage_"))
     dp.callback_query.register(toggle_promocode_status, F.data.startswith("promo_toggle_"))

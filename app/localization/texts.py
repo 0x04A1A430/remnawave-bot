@@ -29,14 +29,36 @@ def _get_cached_rules_value(language: str) -> str:
 def _build_dynamic_values(language: str) -> Dict[str, Any]:
     language_code = (language or DEFAULT_LANGUAGE).split("-")[0].lower()
 
+    # Helper function to format period with discount
+    def format_period_with_discount(label: str, period_days: int, base_price: int) -> str:
+        discount_percent = settings.get_base_promo_group_period_discount(period_days)
+        if discount_percent > 0:
+            # Calculate discounted price
+            from app.utils.pricing_utils import apply_percentage_discount
+            discounted_price, _ = apply_percentage_discount(base_price, discount_percent)
+            result = format_period_option_label(
+                label,
+                discounted_price,
+                base_price,
+                discount_percent
+            )
+        else:
+            result = format_period_option_label(label, base_price)
+
+        # Add fire emojis for 360 days period
+        if period_days == 360 and discount_percent > 0:
+            result = f"🔥 {result} 🔥"
+
+        return result
+
     if language_code == "ru":
         return {
-            "PERIOD_14_DAYS": format_period_option_label("📅 14 дней", settings.PRICE_14_DAYS),
-            "PERIOD_30_DAYS": format_period_option_label("📅 30 дней", settings.PRICE_30_DAYS),
-            "PERIOD_60_DAYS": format_period_option_label("📅 60 дней", settings.PRICE_60_DAYS),
-            "PERIOD_90_DAYS": format_period_option_label("📅 90 дней", settings.PRICE_90_DAYS),
-            "PERIOD_180_DAYS": format_period_option_label("📅 180 дней", settings.PRICE_180_DAYS),
-            "PERIOD_360_DAYS": format_period_option_label("📅 360 дней", settings.PRICE_360_DAYS),
+            "PERIOD_14_DAYS": format_period_with_discount("📅 14 дней", 14, settings.PRICE_14_DAYS),
+            "PERIOD_30_DAYS": format_period_with_discount("📅 30 дней", 30, settings.PRICE_30_DAYS),
+            "PERIOD_60_DAYS": format_period_with_discount("📅 60 дней", 60, settings.PRICE_60_DAYS),
+            "PERIOD_90_DAYS": format_period_with_discount("📅 90 дней", 90, settings.PRICE_90_DAYS),
+            "PERIOD_180_DAYS": format_period_with_discount("📅 180 дней", 180, settings.PRICE_180_DAYS),
+            "PERIOD_360_DAYS": format_period_with_discount("📅 360 дней", 360, settings.PRICE_360_DAYS),
             "TRAFFIC_5GB": f"📊 5 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_5GB)}",
             "TRAFFIC_10GB": f"📊 10 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_10GB)}",
             "TRAFFIC_25GB": f"📊 25 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_25GB)}",
@@ -56,12 +78,12 @@ def _build_dynamic_values(language: str) -> Dict[str, Any]:
 
     if language_code == "en":
         return {
-            "PERIOD_14_DAYS": format_period_option_label("📅 14 days", settings.PRICE_14_DAYS),
-            "PERIOD_30_DAYS": format_period_option_label("📅 30 days", settings.PRICE_30_DAYS),
-            "PERIOD_60_DAYS": format_period_option_label("📅 60 days", settings.PRICE_60_DAYS),
-            "PERIOD_90_DAYS": format_period_option_label("📅 90 days", settings.PRICE_90_DAYS),
-            "PERIOD_180_DAYS": format_period_option_label("📅 180 days", settings.PRICE_180_DAYS),
-            "PERIOD_360_DAYS": format_period_option_label("📅 360 days", settings.PRICE_360_DAYS),
+            "PERIOD_14_DAYS": format_period_with_discount("📅 14 days", 14, settings.PRICE_14_DAYS),
+            "PERIOD_30_DAYS": format_period_with_discount("📅 30 days", 30, settings.PRICE_30_DAYS),
+            "PERIOD_60_DAYS": format_period_with_discount("📅 60 days", 60, settings.PRICE_60_DAYS),
+            "PERIOD_90_DAYS": format_period_with_discount("📅 90 days", 90, settings.PRICE_90_DAYS),
+            "PERIOD_180_DAYS": format_period_with_discount("📅 180 days", 180, settings.PRICE_180_DAYS),
+            "PERIOD_360_DAYS": format_period_with_discount("📅 360 days", 360, settings.PRICE_360_DAYS),
             "TRAFFIC_5GB": f"📊 5 GB - {settings.format_price(settings.PRICE_TRAFFIC_5GB)}",
             "TRAFFIC_10GB": f"📊 10 GB - {settings.format_price(settings.PRICE_TRAFFIC_10GB)}",
             "TRAFFIC_25GB": f"📊 25 GB - {settings.format_price(settings.PRICE_TRAFFIC_25GB)}",

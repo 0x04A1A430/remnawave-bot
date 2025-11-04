@@ -15,6 +15,7 @@ from app.database.models import (
     SubscriptionStatus,
     Transaction,
     PromoGroup,
+    UserPromoGroup,
     PaymentMethod,
     TransactionType,
 )
@@ -38,7 +39,7 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
         select(User)
         .options(
             selectinload(User.subscription),
-            selectinload(User.promo_group),
+            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
         )
         .where(User.id == user_id)
@@ -56,7 +57,7 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optiona
         select(User)
         .options(
             selectinload(User.subscription),
-            selectinload(User.promo_group),
+            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
         )
         .where(User.telegram_id == telegram_id)
@@ -79,7 +80,7 @@ async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User
         select(User)
         .options(
             selectinload(User.subscription),
-            selectinload(User.promo_group),
+            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
         )
         .where(func.lower(User.username) == normalized)
@@ -749,7 +750,7 @@ async def get_referrals(db: AsyncSession, user_id: int) -> List[User]:
         select(User)
         .options(
             selectinload(User.subscription),
-            selectinload(User.promo_group),
+            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
         )
         .where(User.referred_by_id == user_id)
         .order_by(User.created_at.desc())
@@ -817,7 +818,7 @@ async def get_inactive_users(db: AsyncSession, months: int = 3) -> List[User]:
         select(User)
         .options(
             selectinload(User.subscription),
-            selectinload(User.promo_group),
+            selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
         )
         .where(
             and_(

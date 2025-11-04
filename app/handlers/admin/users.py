@@ -1008,7 +1008,8 @@ async def _render_user_subscription_overview(
     subscription = profile["subscription"]
 
     text = "📱 <b>Подписка и настройки пользователя</b>\n\n"
-    text += f"👤 {user.full_name} (ID: <code>{user.telegram_id}</code>)\n\n"
+    user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+    text += f"👤 {user_link} (ID: <code>{user.telegram_id}</code>)\n\n"
 
     keyboard = []
 
@@ -1168,7 +1169,8 @@ async def show_user_transactions(
     transactions = await get_user_transactions(db, user_id, limit=10)
     
     text = f"💳 <b>Транзакции пользователя</b>\n\n"
-    text += f"👤 {user.full_name} (ID: <code>{user.telegram_id}</code>)\n"
+    user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+    text += f"👤 {user_link} (ID: <code>{user.telegram_id}</code>)\n"
     text += f"💰 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n"
     
     if transactions:
@@ -1445,16 +1447,41 @@ async def show_user_management(
     else:
         sections.append(texts.ADMIN_USER_MANAGEMENT_SUBSCRIPTION_NONE)
 
-    if user.promo_group:
-        promo_group = user.promo_group
+    # Display promo groups
+    primary_group = user.get_primary_promo_group()
+    if primary_group:
+        sections.append(
+            texts.t(
+                "ADMIN_USER_PROMO_GROUPS_PRIMARY",
+                "⭐ Основная: {name} (Priority: {priority})",
+            ).format(name=primary_group.name, priority=getattr(primary_group, "priority", 0))
+        )
         sections.append(
             texts.ADMIN_USER_MANAGEMENT_PROMO_GROUP.format(
-                name=promo_group.name,
-                server_discount=promo_group.server_discount_percent,
-                traffic_discount=promo_group.traffic_discount_percent,
-                device_discount=promo_group.device_discount_percent,
+                name=primary_group.name,
+                server_discount=primary_group.server_discount_percent,
+                traffic_discount=primary_group.traffic_discount_percent,
+                device_discount=primary_group.device_discount_percent,
             )
         )
+
+        # Show additional groups if any
+        if user.user_promo_groups and len(user.user_promo_groups) > 1:
+            additional_groups = [
+                upg.promo_group for upg in user.user_promo_groups
+                if upg.promo_group and upg.promo_group.id != primary_group.id
+            ]
+            if additional_groups:
+                sections.append(
+                    texts.t(
+                        "ADMIN_USER_PROMO_GROUPS_ADDITIONAL",
+                        "Дополнительные группы:",
+                    )
+                )
+                for group in additional_groups:
+                    sections.append(
+                        f"  • {group.name} (Priority: {getattr(group, 'priority', 0)})"
+                    )
     else:
         sections.append(texts.ADMIN_USER_MANAGEMENT_PROMO_GROUP_NONE)
 
@@ -1538,12 +1565,13 @@ async def _build_user_referrals_view(
                 if referral.username
                 else ""
             )
+            referral_link = f'<a href="tg://user?id={referral.telegram_id}">{referral.full_name}</a>'
             items.append(
                 texts.t(
                     "ADMIN_USER_REFERRALS_LIST_ITEM",
                     "• {name} (ID: <code>{telegram_id}</code>{username_part})",
                 ).format(
-                    name=referral.full_name,
+                    name=referral_link,
                     telegram_id=referral.telegram_id,
                     username_part=username_part,
                 )
@@ -1892,20 +1920,43 @@ async def _render_user_promo_group(
 ) -> None:
     texts = get_texts(language)
 
-    current_group = user.promo_group
+    # Get primary and all user groups
+    primary_group = user.get_primary_promo_group()
+    user_group_ids = [upg.promo_group_id for upg in user.user_promo_groups] if user.user_promo_groups else []
 
-    if current_group:
-        current_line = texts.ADMIN_USER_PROMO_GROUP_CURRENT.format(name=current_group.name)
+    # Build current groups section
+    if primary_group:
+        current_line = texts.t(
+            "ADMIN_USER_PROMO_GROUPS_PRIMARY",
+            "⭐ Основная: {name} (Priority: {priority})",
+        ).format(name=primary_group.name, priority=getattr(primary_group, "priority", 0))
+
         discount_line = texts.ADMIN_USER_PROMO_GROUP_DISCOUNTS.format(
-            servers=current_group.server_discount_percent,
-            traffic=current_group.traffic_discount_percent,
-            devices=current_group.device_discount_percent,
+            servers=primary_group.server_discount_percent,
+            traffic=primary_group.traffic_discount_percent,
+            devices=primary_group.device_discount_percent,
         )
-        current_group_id = current_group.id
+
+        # Show additional groups if any
+        if len(user_group_ids) > 1:
+            additional_groups = [
+                upg.promo_group for upg in user.user_promo_groups
+                if upg.promo_group and upg.promo_group.id != primary_group.id
+            ]
+            if additional_groups:
+                additional_line = "\n" + texts.t(
+                    "ADMIN_USER_PROMO_GROUPS_ADDITIONAL",
+                    "Дополнительные группы:",
+                ) + "\n"
+                for group in additional_groups:
+                    additional_line += f"  • {group.name} (Priority: {getattr(group, 'priority', 0)})\n"
+                discount_line += additional_line
     else:
-        current_line = texts.ADMIN_USER_PROMO_GROUP_CURRENT_NONE
-        discount_line = texts.ADMIN_USER_PROMO_GROUP_DISCOUNTS_NONE
-        current_group_id = None
+        current_line = texts.t(
+            "ADMIN_USER_PROMO_GROUPS_NONE",
+            "У пользователя нет промогрупп",
+        )
+        discount_line = ""
 
     text = (
         f"{texts.ADMIN_USER_PROMO_GROUP_TITLE}\n\n"
@@ -1919,7 +1970,7 @@ async def _render_user_promo_group(
         reply_markup=get_user_promo_group_keyboard(
             promo_groups,
             user.id,
-            current_group_id,
+            user_group_ids,  # Pass list of all group IDs
             language
         )
     )
@@ -1957,6 +2008,13 @@ async def set_user_promo_group(
     db_user: User,
     db: AsyncSession
 ):
+    from app.database.crud.user_promo_group import (
+        has_user_promo_group,
+        add_user_to_promo_group,
+        remove_user_from_promo_group,
+        count_user_promo_groups
+    )
+    from app.database.crud.promo_group import get_promo_group_by_id
 
     parts = callback.data.split('_')
     user_id = int(parts[-2])
@@ -1969,49 +2027,52 @@ async def set_user_promo_group(
         await callback.answer("❌ Пользователь не найден", show_alert=True)
         return
 
-    if user.promo_group_id == group_id:
-        await callback.answer(texts.ADMIN_USER_PROMO_GROUP_ALREADY, show_alert=True)
-        return
+    # Check if user already has this group
+    has_group = await has_user_promo_group(db, user_id, group_id)
 
-    user_service = UserService()
-    success, updated_user, new_group, old_group = await user_service.update_user_promo_group(
-        db,
-        user_id,
-        group_id
-    )
+    if has_group:
+        # Remove group
+        # Check if it's the last group
+        groups_count = await count_user_promo_groups(db, user_id)
+        if groups_count <= 1:
+            await callback.answer(
+                texts.t(
+                    "ADMIN_USER_PROMO_GROUP_CANNOT_REMOVE_LAST",
+                    "❌ Нельзя удалить последнюю промогруппу",
+                ),
+                show_alert=True
+            )
+            return
 
-    if not success or not updated_user or not new_group:
-        await callback.answer(texts.ADMIN_USER_PROMO_GROUP_ERROR, show_alert=True)
-        return
+        group = await get_promo_group_by_id(db, group_id)
+        await remove_user_from_promo_group(db, user_id, group_id)
+        await callback.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_GROUP_REMOVED",
+                "🗑 Группа «{name}» удалена",
+            ).format(name=group.name if group else ""),
+            show_alert=True
+        )
+    else:
+        # Add group
+        group = await get_promo_group_by_id(db, group_id)
+        if not group:
+            await callback.answer(texts.ADMIN_USER_PROMO_GROUP_ERROR, show_alert=True)
+            return
 
+        await add_user_to_promo_group(db, user_id, group_id, assigned_by="admin")
+        await callback.answer(
+            texts.t(
+                "ADMIN_USER_PROMO_GROUP_ADDED",
+                "✅ Группа «{name}» добавлена",
+            ).format(name=group.name),
+            show_alert=True
+        )
+
+    # Refresh user data and show updated list
+    user = await get_user_by_id(db, user_id)
     promo_groups = await get_promo_groups_with_counts(db)
-
-    await _render_user_promo_group(callback.message, db_user.language, updated_user, promo_groups)
-    await callback.answer(
-        texts.ADMIN_USER_PROMO_GROUP_UPDATED.format(name=new_group.name),
-        show_alert=True
-    )
-
-    try:
-        notification_service = AdminNotificationService(callback.bot)
-        reason = (
-            f"Назначено администратором {db_user.full_name} (ID: {db_user.telegram_id})"
-        )
-        await notification_service.send_user_promo_group_change_notification(
-            db,
-            updated_user,
-            old_group,
-            new_group,
-            reason=reason,
-            initiator=db_user,
-            automatic=False,
-        )
-    except Exception as notify_error:
-        logger.error(
-            "Ошибка отправки уведомления о смене промогруппы пользователя %s: %s",
-            updated_user.telegram_id,
-            notify_error,
-        )
+    await _render_user_promo_group(callback.message, db_user.language, user, promo_groups)
 
 
 
@@ -2280,9 +2341,10 @@ async def show_inactive_users(
     
     text = f"🗑️ <b>Неактивные пользователи</b>\n"
     text += f"Без активности более {settings.INACTIVE_USER_DELETE_MONTHS} месяцев: {len(inactive_users)}\n\n"
-    
-    for user in inactive_users[:10]: 
-        text += f"👤 {user.full_name}\n"
+
+    for user in inactive_users[:10]:
+        user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+        text += f"👤 {user_link}\n"
         text += f"🆔 <code>{user.telegram_id}</code>\n"
         last_activity_display = (
             format_time_ago(user.last_activity, db_user.language)
@@ -2384,7 +2446,8 @@ async def show_user_statistics(
         campaign_stats = await get_campaign_statistics(db, campaign_registration.campaign_id)
     
     text = f"📊 <b>Статистика пользователя</b>\n\n"
-    text += f"👤 {user.full_name} (ID: <code>{user.telegram_id}</code>)\n\n"
+    user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
+    text += f"👤 {user_link} (ID: <code>{user.telegram_id}</code>)\n\n"
     
     text += f"<b>Основная информация:</b>\n"
     text += f"• Дней с регистрации: {profile['registration_days']}\n"
@@ -4005,7 +4068,8 @@ async def admin_buy_subscription(
     ])
 
     text = f"💳 <b>Покупка подписки для пользователя</b>\n\n"
-    text += f"👤 {target_user.full_name} (ID: {target_user.telegram_id})\n"
+    target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+    text += f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
     text += f"💰 Баланс пользователя: {settings.format_price(target_user.balance_kopeks)}\n\n"
     traffic_text = "Безлимит" if (subscription.traffic_limit_gb or 0) <= 0 else f"{subscription.traffic_limit_gb} ГБ"
     devices_limit = subscription.device_limit
@@ -4096,7 +4160,8 @@ async def admin_buy_subscription_confirm(
         return
     
     text = f"💳 <b>Подтверждение покупки подписки</b>\n\n"
-    text += f"👤 {target_user.full_name} (ID: {target_user.telegram_id})\n"
+    target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
+    text += f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
     text += f"📅 Период подписки: {period_days} дней\n"
     text += f"💰 Стоимость: {settings.format_price(price_kopeks)}\n"
     text += f"💰 Баланс пользователя: {settings.format_price(target_user.balance_kopeks)}\n\n"
@@ -4314,9 +4379,10 @@ async def admin_buy_subscription_execute(
         else:
             message = "❌ Ошибка: у пользователя нет существующей подписки"
         
+        target_user_link = f'<a href="tg://user?id={target_user.telegram_id}">{target_user.full_name}</a>'
         await callback.message.edit_text(
             f"{message}\n\n"
-            f"👤 {target_user.full_name} (ID: {target_user.telegram_id})\n"
+            f"👤 {target_user_link} (ID: {target_user.telegram_id})\n"
             f"💰 Списано: {settings.format_price(price_kopeks)}\n"
             f"📅 Подписка действительна до: {format_datetime(subscription.end_date)}",
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
@@ -4324,7 +4390,8 @@ async def admin_buy_subscription_execute(
                     text="⬅️ Назад к подписке",
                     callback_data=f"admin_user_subscription_{user_id}"
                 )]
-            ])
+            ]),
+            parse_mode="HTML"
         )
         
         try:
@@ -4541,7 +4608,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(
         set_user_promo_group,
-        F.data.startswith("admin_user_promo_group_set_")
+        F.data.startswith("admin_user_promo_group_toggle_")
     )
 
     dp.callback_query.register(
