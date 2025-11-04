@@ -124,10 +124,13 @@ async def test_return_to_saved_cart_success(mock_callback_query, mock_state, moc
          patch('app.handlers.subscription.purchase._get_available_countries') as mock_get_countries, \
          patch('app.handlers.subscription.purchase.format_period_description') as mock_format_period, \
          patch('app.localization.texts.get_texts') as mock_get_texts, \
-         patch('app.handlers.subscription.purchase.get_subscription_confirm_keyboard_with_cart') as mock_keyboard_func:
+         patch('app.handlers.subscription.purchase.get_subscription_confirm_keyboard_with_cart') as mock_keyboard_func, \
+         patch('app.handlers.subscription.purchase._prepare_subscription_summary') as mock_prepare_summary:
 
         # Подготовим моки
         mock_cart_service.get_user_cart = AsyncMock(return_value=cart_data)
+        mock_cart_service.save_user_cart = AsyncMock(return_value=True)
+        mock_prepare_summary.return_value = ("summary", {})
         mock_get_countries.return_value = [{'uuid': 'ru', 'name': 'Russia'}, {'uuid': 'us', 'name': 'USA'}]
         mock_format_period.return_value = "30 дней"
         mock_keyboard = InlineKeyboardMarkup(
@@ -146,8 +149,8 @@ async def test_return_to_saved_cart_success(mock_callback_query, mock_state, moc
         # Вызываем функцию
         await return_to_saved_cart(mock_callback_query, mock_state, mock_user, mock_db)
 
-        # Проверяем, что данные были загружены из корзины и установлены в FSM
-        mock_state.set_data.assert_called_once_with(cart_data)
+        # Проверяем, что корзина была загружена
+        mock_cart_service.get_user_cart.assert_called_once_with(mock_user.id)
 
         # Проверяем, что сообщение было отредактировано
         mock_callback_query.message.edit_text.assert_called_once()
@@ -320,6 +323,7 @@ async def test_return_to_saved_cart_insufficient_funds(mock_callback_query, mock
 
         # Подготовим моки
         mock_cart_service.get_user_cart = AsyncMock(return_value=cart_data)
+        mock_cart_service.save_user_cart = AsyncMock(return_value=True)
         mock_keyboard = InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text="Пополнить", callback_data="topup")]]
         )

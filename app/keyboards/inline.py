@@ -900,7 +900,7 @@ def get_subscription_period_keyboard(
             period_label=period_display,
             price_info=price_info,
             format_price_func=texts.format_price,
-            emphasize=(days == 360),
+            emphasize=False,
             add_exclamation=False
         )
 
@@ -1996,7 +1996,7 @@ def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) ->
             period_label=period_display,
             price_info=price_info_obj,
             format_price_func=texts.format_price,
-            emphasize=(days == 360),
+            emphasize=False,
             add_exclamation=False
         )
 

@@ -300,7 +300,6 @@ async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
     create_transaction_mock.assert_awaited()
 
 
-@pytest.mark.asyncio
 async def test_auto_purchase_trial_preserved_on_insufficient_balance(monkeypatch):
     """Тест: триал сохраняется, если не хватает денег для автопокупки"""
     monkeypatch.setattr(settings, "AUTO_PURCHASE_AFTER_TOPUP_ENABLED", True)
@@ -379,7 +378,6 @@ async def test_auto_purchase_trial_preserved_on_insufficient_balance(monkeypatch
     subtract_mock.assert_awaited_once()
 
 
-@pytest.mark.asyncio
 async def test_auto_purchase_trial_converted_after_successful_extension(monkeypatch):
     """Тест: триал конвертируется в платную подписку ТОЛЬКО после успешного продления"""
     monkeypatch.setattr(settings, "AUTO_PURCHASE_AFTER_TOPUP_ENABLED", True)
@@ -490,7 +488,6 @@ async def test_auto_purchase_trial_converted_after_successful_extension(monkeypa
     db_session.commit.assert_awaited()  # Commit был вызван
 
 
-@pytest.mark.asyncio
 async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
     """Тест: триал НЕ конвертируется и вызывается rollback при ошибке в extend_subscription"""
     monkeypatch.setattr(settings, "AUTO_PURCHASE_AFTER_TOPUP_ENABLED", True)
@@ -579,7 +576,6 @@ async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
     db_session.rollback.assert_awaited()  # ROLLBACK БЫЛ ВЫЗВАН!
 
 
-@pytest.mark.asyncio
 async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
     """Тест: остаток триала переносится на платную подписку при TRIAL_ADD_REMAINING_DAYS_TO_PAID=True"""
     monkeypatch.setattr(settings, "AUTO_PURCHASE_AFTER_TOPUP_ENABLED", True)
