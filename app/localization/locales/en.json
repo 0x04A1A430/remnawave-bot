@@ -1395,7 +1395,7 @@
   "TRIAL_ACTIVATED": "🎉 Trial subscription activated!",
   "TRIAL_ACTIVATE_BUTTON": "🎁 Activate",
   "TRIAL_ALREADY_USED": "❌ The trial subscription has already been used",
-  "TRIAL_AVAILABLE": "\n🎁 <b>Trial subscription</b>\n\nYou can get a free trial plan:\n\n⏰ <b>Duration:</b> {days} days\n📈 <b>Traffic:</b> {traffic} GB{devices_line}\n🌍 <b>Server:</b> {server_name}\n\nActivate the trial subscription?\n",
+  "TRIAL_AVAILABLE": "\n🎁 <b>Trial subscription</b>\n\nYou can get a free trial plan:\n\n⏰ <b>Duration:</b> {days} days\n📈 <b>Traffic:</b> {traffic}{devices_line}\n🌍 <b>Server:</b> {server_name}\n\nActivate the trial subscription?\n",
   "TRIAL_AVAILABLE_DEVICES_LINE": "\n📱 <b>Devices:</b> {devices} pcs",
   "TRIAL_CHANNEL_UNSUBSCRIBED": "\n🚫 <b>Access paused</b>\n\nWe couldn't find your subscription to our channel, so the trial plan has been disabled.\n\nJoin the channel and tap “{check_button}” to restore access.",
   "TRIAL_ENDING_SOON": "\n🎁 <b>The trial subscription is ending soon!</b>\n\nYour trial expires in a few hours.\n\n💎 <b>Don't want to lose VPN access?</b>\nSwitch to the full subscription!\n\n🔥 <b>Special offer:</b>\n• 30 days for {price}\n• Unlimited traffic\n• All servers available\n• Speeds up to 1 Gbit/s\n\n⚡️ Activate before the trial ends!\n",

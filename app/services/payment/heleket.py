@@ -335,7 +335,7 @@ class HeleketPaymentMixin:
             topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
             referrer_info = format_referrer_info(user)
             subscription = getattr(user, "subscription", None)
-            promo_group = getattr(user, "promo_group", None)
+            promo_group = user.get_primary_promo_group()
 
             try:
                 from app.services.admin_notification_service import AdminNotificationService

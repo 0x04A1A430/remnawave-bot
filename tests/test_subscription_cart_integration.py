@@ -31,6 +31,9 @@ def mock_user():
     user.balance_kopeks = 10000
     user.subscription = None
     user.has_had_paid_subscription = False
+    user.promo_group_id = None
+    user.get_primary_promo_group = MagicMock(return_value=None)
+    user.get_promo_discount = MagicMock(return_value=0)
     return user
 
 @pytest.fixture

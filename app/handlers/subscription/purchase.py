@@ -446,7 +446,7 @@ async def show_trial_offer(
 
     trial_text = texts.TRIAL_AVAILABLE.format(
         days=settings.TRIAL_DURATION_DAYS,
-        traffic=settings.TRIAL_TRAFFIC_LIMIT_GB,
+        traffic=texts.format_traffic(settings.TRIAL_TRAFFIC_LIMIT_GB),
         devices_line=devices_line,
         server_name=trial_server_name
     )
@@ -979,10 +979,10 @@ async def handle_extend_subscription(
             total_traffic_price = (traffic_price_per_month - traffic_discount_per_month) * months_in_period
 
             total_original_price = (
-                base_price_original
-                + servers_price_per_month * months_in_period
-                + devices_price_per_month * months_in_period
-                + traffic_price_per_month * months_in_period
+                base_price
+                + total_servers_price
+                + total_devices_price
+                + total_traffic_price
             )
 
             price = base_price + total_servers_price + total_devices_price + total_traffic_price
@@ -1034,7 +1034,7 @@ async def handle_extend_subscription(
                 f"{period_display} - {texts.format_price(final_price)}\n"
             )
 
-    promo_discounts_text = _build_promo_group_discount_text(
+    promo_discounts_text = await _build_promo_group_discount_text(
         db_user,
         available_periods,
         texts=texts,

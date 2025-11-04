@@ -50,7 +50,7 @@ def _resolve_addon_discount_percent(
     *,
     period_days: Optional[int] = None,
 ) -> int:
-    group = promo_group or (getattr(user, "promo_group", None) if user else None)
+    group = promo_group or (user.get_primary_promo_group() if user else None)
 
     if group is not None and not getattr(group, "apply_discounts_to_addons", True):
         return 0

@@ -1979,7 +1979,7 @@ def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) ->
             discount_percent = ((original_price - final_price) * 100) // original_price
             button_text = (
                 f"📅 {period_display} - "
-                f"<s>{texts.format_price(original_price)}</s> "
+                f"{texts.format_price(original_price)} ➜ "
                 f"{texts.format_price(final_price)} "
                 f"(-{discount_percent}%)"
             )

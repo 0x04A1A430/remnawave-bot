@@ -343,7 +343,7 @@ def format_period_option_label(
     if original_price > 0 and discount_percent > 0 and original_price > price:
         return (
             f"{label} - "
-            f"<s>{settings.format_price(original_price)}</s> "
+            f"{settings.format_price(original_price)} ➜ "
             f"{settings.format_price(price)} "
             f"(-{discount_percent}%)"
         )

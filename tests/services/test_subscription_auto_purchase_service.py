@@ -34,6 +34,7 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
     user.balance_kopeks = 200_000
     user.language = "ru"
     user.subscription = None
+    user.get_primary_promo_group = MagicMock(return_value=None)
 
     cart_data = {
         "period_days": 30,
@@ -202,6 +203,7 @@ async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
     user.balance_kopeks = 200_000
     user.language = "ru"
     user.subscription = subscription
+    user.get_primary_promo_group = MagicMock(return_value=None)
 
     cart_data = {
         "cart_mode": "extend",
@@ -320,6 +322,7 @@ async def test_auto_purchase_trial_preserved_on_insufficient_balance(monkeypatch
     user.balance_kopeks = 60_000
     user.language = "ru"
     user.subscription = subscription
+    user.get_primary_promo_group = MagicMock(return_value=None)
 
     cart_data = {
         "cart_mode": "extend",
@@ -376,6 +379,7 @@ async def test_auto_purchase_trial_converted_after_successful_extension(monkeypa
     user.balance_kopeks = 200_000  # Достаточно денег
     user.language = "ru"
     user.subscription = subscription
+    user.get_primary_promo_group = MagicMock(return_value=None)
 
     cart_data = {
         "cart_mode": "extend",
@@ -486,6 +490,7 @@ async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
     user.balance_kopeks = 200_000  # Достаточно денег
     user.language = "ru"
     user.subscription = subscription
+    user.get_primary_promo_group = MagicMock(return_value=None)
 
     cart_data = {
         "cart_mode": "extend",
@@ -572,6 +577,7 @@ async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
     user.balance_kopeks = 200_000
     user.language = "ru"
     user.subscription = subscription
+    user.get_primary_promo_group = MagicMock(return_value=None)
 
     cart_data = {
         "cart_mode": "extend",

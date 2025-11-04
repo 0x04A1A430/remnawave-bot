@@ -272,7 +272,7 @@ class MulenPayPaymentMixin:
 
                 await db.refresh(user)
 
-                promo_group = getattr(user, "promo_group", None)
+                promo_group = user.get_primary_promo_group()
                 subscription = getattr(user, "subscription", None)
                 referrer_info = format_referrer_info(user)
                 topup_status = (

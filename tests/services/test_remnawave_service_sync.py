@@ -81,7 +81,7 @@ async def test_get_or_create_user_handles_unique_violation(monkeypatch):
 
     db.rollback = rollback_mock
 
-    monkeypatch.setattr("app.services.remnawave_service.create_user", create_user_mock)
+    monkeypatch.setattr("app.services.remnawave_service.create_user_no_commit", create_user_mock)
     monkeypatch.setattr(
         "app.services.remnawave_service.get_user_by_telegram_id",
         get_user_mock,
@@ -105,7 +105,7 @@ async def test_get_or_create_user_creates_new(monkeypatch):
 
     create_user_mock = AsyncMock(return_value=new_user)
 
-    monkeypatch.setattr("app.services.remnawave_service.create_user", create_user_mock)
+    monkeypatch.setattr("app.services.remnawave_service.create_user_no_commit", create_user_mock)
 
     user, created = await service._get_or_create_bot_user_from_panel(db, panel_user)
 

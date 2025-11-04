@@ -565,20 +565,28 @@ class User(Base):
     def get_primary_promo_group(self):
         """Возвращает промогруппу с максимальным приоритетом."""
         if not self.user_promo_groups:
-            return None
+            return getattr(self, "promo_group", None)
 
-        # Сортируем по приоритету группы (убывание), затем по ID группы
-        sorted_groups = sorted(
-            self.user_promo_groups,
-            key=lambda upg: (upg.promo_group.priority if upg.promo_group else 0, upg.promo_group_id),
-            reverse=True
-        )
+        try:
+            # Сортируем по приоритету группы (убывание), затем по ID группы
+            # Используем getattr для защиты от ленивой загрузки
+            sorted_groups = sorted(
+                self.user_promo_groups,
+                key=lambda upg: (
+                    getattr(upg.promo_group, 'priority', 0) if upg.promo_group else 0,
+                    upg.promo_group_id
+                ),
+                reverse=True
+            )
 
-        if sorted_groups and sorted_groups[0].promo_group:
-            return sorted_groups[0].promo_group
+            if sorted_groups and sorted_groups[0].promo_group:
+                return sorted_groups[0].promo_group
+        except Exception:
+            # Если возникла ошибка (например, ленивая загрузка), fallback на старую связь
+            pass
 
-        # Fallback на старую связь если новая пустая
-        return self.promo_group
+        # Fallback на старую связь если новая пустая или возникла ошибка
+        return getattr(self, "promo_group", None)
 
     def get_promo_discount(self, category: str, period_days: Optional[int] = None) -> int:
         primary_group = self.get_primary_promo_group()
