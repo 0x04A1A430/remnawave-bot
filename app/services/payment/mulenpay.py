@@ -272,8 +272,9 @@ class MulenPayPaymentMixin:
 
                 await db.refresh(user)
 
-                promo_group = getattr(user, "promo_group", None)
-                subscription = getattr(user, "subscription", None)
+                # Используем предзагруженные значения для избежания lazy-загрузки
+                promo_group = user.promo_group if hasattr(user, 'promo_group') and user.promo_group else None
+                subscription = user.subscription if hasattr(user, 'subscription') and user.subscription else None
                 referrer_info = format_referrer_info(user)
                 topup_status = (
                     "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"

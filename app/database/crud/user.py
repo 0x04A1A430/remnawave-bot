@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 from sqlalchemy import select, and_, or_, func, case, nullslast, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.exc import IntegrityError
 
 from app.database.models import (
@@ -46,7 +46,17 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
     user = result.scalar_one_or_none()
     
     if user and user.subscription:
+        # Загружаем дополнительные зависимости для subscription
         _ = user.subscription.is_active
+    
+    if user and user.promo_group:
+        # Убедимся, что все атрибуты promo_group доступны
+        _ = user.promo_group.name
+        _ = user.promo_group.server_discount_percent
+        _ = user.promo_group.traffic_discount_percent
+        _ = user.promo_group.device_discount_percent
+        _ = user.promo_group.period_discounts
+        _ = user.promo_group.is_default
     
     return user
 
@@ -64,7 +74,17 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optiona
     user = result.scalar_one_or_none()
 
     if user and user.subscription:
+        # Загружаем дополнительные зависимости для subscription
         _ = user.subscription.is_active
+    
+    if user and user.promo_group:
+        # Убедимся, что все атрибуты promo_group доступны
+        _ = user.promo_group.name
+        _ = user.promo_group.server_discount_percent
+        _ = user.promo_group.traffic_discount_percent
+        _ = user.promo_group.device_discount_percent
+        _ = user.promo_group.period_discounts
+        _ = user.promo_group.is_default
 
     return user
 
@@ -88,7 +108,17 @@ async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User
     user = result.scalar_one_or_none()
 
     if user and user.subscription:
+        # Загружаем дополнительные зависимости для subscription
         _ = user.subscription.is_active
+    
+    if user and user.promo_group:
+        # Убедимся, что все атрибуты promo_group доступны
+        _ = user.promo_group.name
+        _ = user.promo_group.server_discount_percent
+        _ = user.promo_group.traffic_discount_percent
+        _ = user.promo_group.device_discount_percent
+        _ = user.promo_group.period_discounts
+        _ = user.promo_group.is_default
 
     return user
 
@@ -96,10 +126,29 @@ async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User
 async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> Optional[User]:
     result = await db.execute(
         select(User)
-        .options(selectinload(User.promo_group))
+        .options(
+            selectinload(User.subscription),
+            selectinload(User.promo_group),
+            selectinload(User.referrer),
+        )
         .where(User.referral_code == referral_code)
     )
-    return result.scalar_one_or_none()
+    user = result.scalar_one_or_none()
+    
+    if user and user.subscription:
+        # Загружаем дополнительные зависимости для subscription
+        _ = user.subscription.is_active
+    
+    if user and user.promo_group:
+        # Убедимся, что все атрибуты promo_group доступны
+        _ = user.promo_group.name
+        _ = user.promo_group.server_discount_percent
+        _ = user.promo_group.traffic_discount_percent
+        _ = user.promo_group.device_discount_percent
+        _ = user.promo_group.period_discounts
+        _ = user.promo_group.is_default
+    
+    return user
 
 
 async def create_unique_referral_code(db: AsyncSession) -> str:
@@ -569,7 +618,11 @@ async def get_users_list(
     order_by_purchase_count: bool = False
 ) -> List[User]:
     
-    query = select(User).options(selectinload(User.subscription))
+    query = select(User).options(
+        selectinload(User.subscription),
+        selectinload(User.promo_group),
+        selectinload(User.referrer),
+    )
     
     if status:
         query = query.where(User.status == status.value)
@@ -583,7 +636,14 @@ async def get_users_list(
         ]
         
         if search.isdigit():
-            conditions.append(User.telegram_id == int(search))
+            try:
+                search_int = int(search)
+                # Добавляем условие поиска по telegram_id, который является BigInteger
+                # и может содержать большие значения, в отличие от User.id (INTEGER)
+                conditions.append(User.telegram_id == search_int)
+            except ValueError:
+                # Если не удалось преобразовать в int, просто ищем по текстовым полям
+                pass
         
         query = query.where(or_(*conditions))
 
@@ -657,7 +717,24 @@ async def get_users_list(
     query = query.offset(offset).limit(limit)
     
     result = await db.execute(query)
-    return result.scalars().all()
+    users = result.scalars().all()
+    
+    # Загружаем дополнительные зависимости для всех пользователей
+    for user in users:
+        if user and user.subscription:
+            # Загружаем дополнительные зависимости для subscription
+            _ = user.subscription.is_active
+        
+        if user and user.promo_group:
+            # Убедимся, что все атрибуты promo_group доступны
+            _ = user.promo_group.name
+            _ = user.promo_group.server_discount_percent
+            _ = user.promo_group.traffic_discount_percent
+            _ = user.promo_group.device_discount_percent
+            _ = user.promo_group.period_discounts
+            _ = user.promo_group.is_default
+    
+    return users
 
 
 async def get_users_count(
@@ -680,7 +757,14 @@ async def get_users_count(
         ]
         
         if search.isdigit():
-            conditions.append(User.telegram_id == int(search))
+            try:
+                search_int = int(search)
+                # Добавляем условие поиска по telegram_id, который является BigInteger
+                # и может содержать большие значения, в отличие от User.id (INTEGER)
+                conditions.append(User.telegram_id == search_int)
+            except ValueError:
+                # Если не удалось преобразовать в int, просто ищем по текстовым полям
+                pass
         
         query = query.where(or_(*conditions))
     
@@ -750,11 +834,29 @@ async def get_referrals(db: AsyncSession, user_id: int) -> List[User]:
         .options(
             selectinload(User.subscription),
             selectinload(User.promo_group),
+            selectinload(User.referrer),
         )
         .where(User.referred_by_id == user_id)
         .order_by(User.created_at.desc())
     )
-    return result.scalars().all()
+    users = result.scalars().all()
+    
+    # Загружаем дополнительные зависимости для всех пользователей
+    for user in users:
+        if user and user.subscription:
+            # Загружаем дополнительные зависимости для subscription
+            _ = user.subscription.is_active
+        
+        if user and user.promo_group:
+            # Убедимся, что все атрибуты promo_group доступны
+            _ = user.promo_group.name
+            _ = user.promo_group.server_discount_percent
+            _ = user.promo_group.traffic_discount_percent
+            _ = user.promo_group.device_discount_percent
+            _ = user.promo_group.period_discounts
+            _ = user.promo_group.is_default
+    
+    return users
 
 
 async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> List[User]:
@@ -762,7 +864,11 @@ async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> List[Us
 
     base_query = (
         select(User)
-        .options(selectinload(User.subscription))
+        .options(
+            selectinload(User.subscription),
+            selectinload(User.promo_group),
+            selectinload(User.referrer),
+        )
         .where(User.status == UserStatus.ACTIVE.value)
     )
 
@@ -807,7 +913,24 @@ async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> List[Us
             return []
 
     result = await db.execute(query.order_by(User.id))
-    return result.scalars().unique().all()
+    users = result.scalars().unique().all()
+    
+    # Загружаем дополнительные зависимости для всех пользователей
+    for user in users:
+        if user and user.subscription:
+            # Загружаем дополнительные зависимости для subscription
+            _ = user.subscription.is_active
+        
+        if user and user.promo_group:
+            # Убедимся, что все атрибуты promo_group доступны
+            _ = user.promo_group.name
+            _ = user.promo_group.server_discount_percent
+            _ = user.promo_group.traffic_discount_percent
+            _ = user.promo_group.device_discount_percent
+            _ = user.promo_group.period_discounts
+            _ = user.promo_group.is_default
+    
+    return users
 
 
 async def get_inactive_users(db: AsyncSession, months: int = 3) -> List[User]:
@@ -818,6 +941,7 @@ async def get_inactive_users(db: AsyncSession, months: int = 3) -> List[User]:
         .options(
             selectinload(User.subscription),
             selectinload(User.promo_group),
+            selectinload(User.referrer),
         )
         .where(
             and_(
@@ -826,7 +950,24 @@ async def get_inactive_users(db: AsyncSession, months: int = 3) -> List[User]:
             )
         )
     )
-    return result.scalars().all()
+    users = result.scalars().all()
+    
+    # Загружаем дополнительные зависимости для всех пользователей
+    for user in users:
+        if user and user.subscription:
+            # Загружаем дополнительные зависимости для subscription
+            _ = user.subscription.is_active
+        
+        if user and user.promo_group:
+            # Убедимся, что все атрибуты promo_group доступны
+            _ = user.promo_group.name
+            _ = user.promo_group.server_discount_percent
+            _ = user.promo_group.traffic_discount_percent
+            _ = user.promo_group.device_discount_percent
+            _ = user.promo_group.period_discounts
+            _ = user.promo_group.is_default
+    
+    return users
 
 
 async def delete_user(db: AsyncSession, user: User) -> bool:
