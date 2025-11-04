@@ -348,7 +348,6 @@ networks:
 
        location /miniapp/ {
          proxy_pass http://remnawave_bot_api/miniapp/;
-         proxy_set_header X-API-Key "КЛЮЧ-WEBAPI";
        }
      }
    }
