@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.states import BalanceStates
 from app.database.crud.user import add_user_balance
+from app.utils.price_display import calculate_user_price, format_price_button
+from app.utils.pricing_utils import format_period_description
 from app.database.crud.transaction import (
     get_user_transactions, get_user_transactions_count,
     create_transaction
@@ -27,34 +29,61 @@ logger = logging.getLogger(__name__)
 TRANSACTIONS_PER_PAGE = 10
 
 
-def get_quick_amount_buttons(language: str) -> list:
+def get_quick_amount_buttons(language: str, user: User) -> list:
+    """
+    Generate quick amount buttons with user-specific pricing and discounts.
+
+    Args:
+        language: User's language for formatting
+        user: User object to calculate personalized discounts
+
+    Returns:
+        List of button rows for inline keyboard
+    """
     if not settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED or settings.DISABLE_TOPUP_BUTTONS:
         return []
-    
+
+    from app.localization.texts import get_texts
+    texts = get_texts(language)
+
     buttons = []
     periods = settings.get_available_subscription_periods()
-    
-    periods = periods[:6]
-    
+    periods = periods[:6]  # Limit to 6 periods
+
     for period in periods:
         price_attr = f"PRICE_{period}_DAYS"
         if hasattr(settings, price_attr):
-            price_kopeks = getattr(settings, price_attr)
-            price_rubles = price_kopeks // 100
-            
-            callback_data = f"quick_amount_{price_kopeks}"
-            
+            base_price_kopeks = getattr(settings, price_attr)
+
+            # Calculate price with user's promo group discount using unified system
+            price_info = calculate_user_price(user, base_price_kopeks, period, "period")
+
+            callback_data = f"quick_amount_{price_info.final_price}"
+
+            # Format button text with discount display
+            period_label = f"{period} дней"
+
+            # For balance buttons, use simpler format without emoji and period label prefix
+            if price_info.has_discount:
+                button_text = (
+                    f"{texts.format_price(price_info.base_price)} ➜ "
+                    f"{texts.format_price(price_info.final_price)} "
+                    f"(-{price_info.discount_percent}%) • {period_label}"
+                )
+            else:
+                button_text = f"{texts.format_price(price_info.final_price)} • {period_label}"
+
             buttons.append(
                 types.InlineKeyboardButton(
-                    text=f"{price_rubles} ₽ ({period} дней)",
+                    text=button_text,
                     callback_data=callback_data
                 )
             )
-    
+
     keyboard_rows = []
     for i in range(0, len(buttons), 2):
         keyboard_rows.append(buttons[i:i + 2])
-    
+
     return keyboard_rows
 
 

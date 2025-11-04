@@ -348,6 +348,26 @@ async def test_auto_purchase_trial_preserved_on_insufficient_balance(monkeypatch
         AsyncMock(return_value=cart_data),
     )
 
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.get_texts",
+        lambda lang: DummyTexts(),
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.format_period_description",
+        lambda days, lang: f"{days} дней",
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.format_local_datetime",
+        lambda dt, fmt: dt.strftime(fmt) if dt else "",
+    )
+
+    admin_service_mock = MagicMock()
+    admin_service_mock.send_subscription_extension_notification = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.AdminNotificationService",
+        lambda bot: admin_service_mock,
+    )
+
     db_session = AsyncMock(spec=AsyncSession)
     bot = AsyncMock()
 
@@ -537,6 +557,13 @@ async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
     monkeypatch.setattr(
         "app.services.subscription_auto_purchase_service.format_local_datetime",
         lambda dt, fmt: dt.strftime(fmt) if dt else "",
+    )
+
+    admin_service_mock = MagicMock()
+    admin_service_mock.send_subscription_extension_notification = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.AdminNotificationService",
+        lambda bot: admin_service_mock,
     )
 
     db_session = AsyncMock(spec=AsyncSession)

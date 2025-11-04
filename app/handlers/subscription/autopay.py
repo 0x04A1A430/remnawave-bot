@@ -187,7 +187,7 @@ async def handle_subscription_config_back(
     if current_state == SubscriptionStates.selecting_traffic.state:
         await callback.message.edit_text(
             await _build_subscription_period_prompt(db_user, texts, db),
-            reply_markup=get_subscription_period_keyboard(db_user.language),
+            reply_markup=get_subscription_period_keyboard(db_user.language, db_user),
             parse_mode="HTML",
         )
         await state.set_state(SubscriptionStates.selecting_period)
@@ -202,7 +202,7 @@ async def handle_subscription_config_back(
         else:
             await callback.message.edit_text(
                 await _build_subscription_period_prompt(db_user, texts, db),
-                reply_markup=get_subscription_period_keyboard(db_user.language),
+                reply_markup=get_subscription_period_keyboard(db_user.language, db_user),
                 parse_mode="HTML",
             )
             await state.set_state(SubscriptionStates.selecting_period)
@@ -277,7 +277,7 @@ async def _show_previous_configuration_step(
 
     await callback.message.edit_text(
         await _build_subscription_period_prompt(db_user, texts, db),
-        reply_markup=get_subscription_period_keyboard(db_user.language),
+        reply_markup=get_subscription_period_keyboard(db_user.language, db_user),
         parse_mode="HTML",
     )
     await state.set_state(SubscriptionStates.selecting_period)

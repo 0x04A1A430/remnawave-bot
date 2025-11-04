@@ -4603,7 +4603,7 @@ def register_handlers(dp: Dispatcher):
 
     dp.callback_query.register(
         show_user_promo_group,
-        F.data.startswith("admin_user_promo_group_") & ~F.data.contains("_set_")
+        F.data.startswith("admin_user_promo_group_") & ~F.data.contains("_set_") & ~F.data.contains("_toggle_")
     )
 
     dp.callback_query.register(

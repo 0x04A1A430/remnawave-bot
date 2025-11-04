@@ -115,6 +115,7 @@ async def test_get_or_create_user_creates_new(monkeypatch):
         db=db,
         telegram_id=777,
         username="new_user",
-        first_name="Panel User 777",
+        first_name="User 777",
+        last_name=None,
         language="ru",
     )

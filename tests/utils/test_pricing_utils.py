@@ -9,142 +9,10 @@ import pytest
 from unittest.mock import patch, MagicMock
 from typing import Dict, Any
 
-from app.utils.pricing_utils import format_period_option_label
 from app.localization.texts import _build_dynamic_values
 
 
-class TestFormatPeriodOptionLabel:
-    """Тесты для функции format_period_option_label."""
-
-    def test_format_with_price_only_no_discount(self) -> None:
-        """Цена без скидки должна отображаться в простом формате."""
-        result = format_period_option_label("📅 30 дней", 99000)
-        assert result == "📅 30 дней - 990 ₽"
-
-    def test_format_with_discount_shows_strikethrough(self) -> None:
-        """Цена со скидкой должна показывать зачёркнутую оригинальную цену."""
-        result = format_period_option_label(
-            "📅 30 дней",
-            price=69300,
-            original_price=99000,
-            discount_percent=30
-        )
-        assert result == "📅 30 дней - <s>990 ₽</s> 693 ₽ (-30%)"
-
-    def test_format_with_zero_price_returns_label_only(self) -> None:
-        """Нулевая цена должна возвращать только метку без цены."""
-        result = format_period_option_label("📅 30 дней", 0)
-        assert result == "📅 30 дней"
-
-    def test_format_with_negative_price_returns_label_only(self) -> None:
-        """Отрицательная цена должна возвращать только метку."""
-        result = format_period_option_label("📅 30 дней", -1000)
-        assert result == "📅 30 дней"
-
-    def test_format_with_zero_discount_percent_shows_simple_price(self) -> None:
-        """Нулевая скидка должна отображать простую цену без зачёркивания."""
-        result = format_period_option_label(
-            "📅 30 дней",
-            price=99000,
-            original_price=99000,
-            discount_percent=0
-        )
-        assert result == "📅 30 дней - 990 ₽"
-
-    def test_format_with_original_price_equal_to_final_shows_simple(self) -> None:
-        """Если оригинальная цена равна финальной, показывать простой формат."""
-        result = format_period_option_label(
-            "📅 30 дней",
-            price=99000,
-            original_price=99000,
-            discount_percent=10  # Указана скидка, но цены равны
-        )
-        assert result == "📅 30 дней - 990 ₽"
-
-    def test_format_with_original_price_less_than_final_shows_simple(self) -> None:
-        """Если оригинальная цена меньше финальной (некорректно), показывать простой формат."""
-        result = format_period_option_label(
-            "📅 30 дней",
-            price=99000,
-            original_price=50000,
-            discount_percent=10
-        )
-        assert result == "📅 30 дней - 990 ₽"
-
-    @pytest.mark.parametrize(
-        "label,price,original,discount,expected",
-        [
-            # Базовые случаи
-            ("📅 14 дней", 50000, 0, 0, "📅 14 дней - 500 ₽"),
-            ("📅 30 дней", 99000, 0, 0, "📅 30 дней - 990 ₽"),
-            ("📅 360 дней", 899000, 0, 0, "📅 360 дней - 8990 ₽"),
-
-            # Со скидками
-            ("📅 30 дней", 69300, 99000, 30, "📅 30 дней - <s>990 ₽</s> 693 ₽ (-30%)"),
-            ("📅 90 дней", 188300, 269000, 30, "📅 90 дней - <s>2690 ₽</s> 1883 ₽ (-30%)"),
-            ("📅 360 дней", 629300, 899000, 30, "📅 360 дней - <s>8990 ₽</s> 6293 ₽ (-30%)"),
-
-            # Разные проценты скидок
-            ("📅 30 дней", 89100, 99000, 10, "📅 30 дней - <s>990 ₽</s> 891 ₽ (-10%)"),
-            ("📅 30 дней", 49500, 99000, 50, "📅 30 дней - <s>990 ₽</s> 495 ₽ (-50%)"),
-
-            # Цены с копейками
-            ("📅 7 дней", 12345, 0, 0, "📅 7 дней - 123.45 ₽"),
-            ("📅 7 дней", 12350, 0, 0, "📅 7 дней - 123.5 ₽"),
-        ],
-    )
-    def test_format_various_scenarios(
-        self,
-        label: str,
-        price: int,
-        original: int,
-        discount: int,
-        expected: str
-    ) -> None:
-        """Различные сценарии форматирования должны работать корректно."""
-        result = format_period_option_label(label, price, original, discount)
-        assert result == expected
-
-    def test_format_with_100_percent_discount(self) -> None:
-        """100% скидка должна корректно отображаться."""
-        result = format_period_option_label(
-            "📅 30 дней",
-            price=0,
-            original_price=99000,
-            discount_percent=100
-        )
-        # Цена 0, поэтому возвращается только label
-        assert result == "📅 30 дней"
-
-    def test_format_preserves_label_emojis(self) -> None:
-        """Эмодзи в метке должны сохраняться."""
-        result = format_period_option_label("🔥 📅 360 дней 🔥", 899000)
-        assert result == "🔥 📅 360 дней 🔥 - 8990 ₽"
-
-    def test_format_with_large_prices(self) -> None:
-        """Большие цены должны корректно форматироваться."""
-        result = format_period_option_label(
-            "📅 720 дней",
-            price=150000000,  # 1,500,000 рублей
-            original_price=200000000,
-            discount_percent=25
-        )
-        assert result == "📅 720 дней - <s>2000000 ₽</s> 1500000 ₽ (-25%)"
-
-    def test_format_with_small_prices_kopeks(self) -> None:
-        """Маленькие цены с копейками должны корректно отображаться."""
-        result = format_period_option_label(
-            "📅 1 день",
-            price=5050,  # 50.50 рублей
-            original_price=10000,
-            discount_percent=50
-        )
-        assert result == "📅 1 день - <s>100 ₽</s> 50.5 ₽ (-50%)"
-
-    def test_format_without_optional_params_uses_defaults(self) -> None:
-        """Вызов без опциональных параметров должен использовать значения по умолчанию."""
-        result = format_period_option_label("📅 30 дней", 99000)
-        assert result == "📅 30 дней - 990 ₽"
+# DEPRECATED: format_period_option_label tests removed - function replaced with unified price_display system
 
 
 class TestBuildDynamicValues:

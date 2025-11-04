@@ -313,45 +313,6 @@ def format_period_description(days: int, language: str = "ru") -> str:
         return f"{days} days ({months} {month_word})"
 
 
-def format_period_option_label(
-    label: str,
-    price: int,
-    original_price: int = 0,
-    discount_percent: int = 0
-) -> str:
-    """Return a period option label with price when it's greater than zero.
-
-    When the price is zero or negative, the price suffix is omitted so that the
-    option does not misleadingly show "0" as the cost of the period. This keeps
-    the UI consistent when pricing is calculated dynamically based on other
-    parameters such as servers or devices.
-
-    Args:
-        label: The base label text (e.g., "📅 30 дней")
-        price: The final price after discount
-        original_price: The original price before discount (optional)
-        discount_percent: The discount percentage (optional)
-
-    Returns:
-        Formatted label with price and discount info if applicable
-    """
-
-    if not price or price <= 0:
-        return label
-
-    # If there's a discount, show crossed-out original price and discount percentage
-    if original_price > 0 and discount_percent > 0 and original_price > price:
-        return (
-            f"{label} - "
-            f"{settings.format_price(original_price)} ➜ "
-            f"{settings.format_price(price)} "
-            f"(-{discount_percent}%)"
-        )
-
-    # No discount, show price only
-    return f"{label} - {settings.format_price(price)}"
-
-
 def validate_pricing_calculation(
     base_price: int,
     monthly_additions: int,

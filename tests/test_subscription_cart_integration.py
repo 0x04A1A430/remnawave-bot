@@ -34,6 +34,8 @@ def mock_user():
     user.promo_group_id = None
     user.get_primary_promo_group = MagicMock(return_value=None)
     user.get_promo_discount = MagicMock(return_value=0)
+    user.promo_offer_discount_percent = 0
+    user.promo_offer_discount_expires_at = None
     return user
 
 @pytest.fixture

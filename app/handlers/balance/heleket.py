@@ -55,7 +55,7 @@ async def start_heleket_payment(
     if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
         from .main import get_quick_amount_buttons
 
-        quick_buttons = get_quick_amount_buttons(db_user.language)
+        quick_buttons = get_quick_amount_buttons(db_user.language, db_user)
         if quick_buttons:
             keyboard.inline_keyboard = quick_buttons + keyboard.inline_keyboard
 
