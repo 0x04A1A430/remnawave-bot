@@ -39,7 +39,7 @@ async def start_simple_subscription_purchase(
         await callback.answer("❌ Простая покупка подписки временно недоступна", show_alert=True)
         return
 
-    # Проверяем, есть ли у пользователя подписка (информируем, но не блокируем покупку)
+    # Проверяем, есть ли у пользователя подписка
     from app.database.crud.subscription import get_subscription_by_user_id
     current_subscription = await get_subscription_by_user_id(db, db_user.id)
 
@@ -99,17 +99,24 @@ async def start_simple_subscription_purchase(
         can_pay_from_balance,
     )
 
+    # Проверяем, является ли у пользователя текущая подписка активной платной подпиской
+    has_active_paid_subscription = False
     trial_notice = ""
-    if current_subscription and getattr(current_subscription, "is_trial", False):
-        try:
-            days_left = max(0, (current_subscription.end_date - datetime.utcnow()).days)
-        except Exception:
-            days_left = 0
-        key = "SIMPLE_SUBSCRIPTION_TRIAL_NOTICE_ACTIVE" if current_subscription.is_active else "SIMPLE_SUBSCRIPTION_TRIAL_NOTICE_TRIAL"
-        trial_notice = texts.t(
-            key,
-            "ℹ️ У вас уже есть триальная подписка. Она истекает через {days} дн.",
-        ).format(days=days_left)
+    if current_subscription:
+        if not getattr(current_subscription, "is_trial", False) and current_subscription.is_active:
+            # Это платная активная подписка - требуем подтверждение
+            has_active_paid_subscription = True
+        elif getattr(current_subscription, "is_trial", False):
+            # Это тестовая подписка
+            try:
+                days_left = max(0, (current_subscription.end_date - datetime.utcnow()).days)
+            except Exception:
+                days_left = 0
+            key = "SIMPLE_SUBSCRIPTION_TRIAL_NOTICE_ACTIVE" if current_subscription.is_active else "SIMPLE_SUBSCRIPTION_TRIAL_NOTICE_TRIAL"
+            trial_notice = texts.t(
+                key,
+                "ℹ️ У вас уже есть триальная подписка. Она истекает через {days} дн.",
+            ).format(days=days_left)
 
     server_label = _get_simple_subscription_server_label(
         texts,
@@ -134,40 +141,73 @@ async def start_simple_subscription_purchase(
         f"💰 Стоимость: {settings.format_price(price_kopeks)}",
         f"💳 Ваш баланс: {settings.format_price(user_balance_kopeks)}",
         "",
-        (
-            "Вы можете оплатить подписку с баланса или выбрать другой способ оплаты."
-            if can_pay_from_balance
-            else "Баланс пока недостаточный для мгновенной оплаты. Выберите подходящий способ оплаты:"
-        ),
     ])
 
-    message_text = "\n".join(message_lines)
+    # Если у пользователя уже есть активная платная подписка, требуем подтверждение
+    if has_active_paid_subscription:
+        # У пользователя уже есть активная платная подписка
+        message_lines.append(
+            "⚠️ У вас уже есть активная платная подписка. "
+            "Покупка простой подписки изменит параметры вашей текущей подписки. "
+            "Требуется подтверждение."
+        )
+        message_text = "\n".join(message_lines)
 
-    if trial_notice:
-        message_text = f"{trial_notice}\n\n{message_text}"
-
-    methods_keyboard = _get_simple_subscription_payment_keyboard(db_user.language)
-    keyboard_rows = []
-
-    if can_pay_from_balance:
-        keyboard_rows.append([
-            types.InlineKeyboardButton(
-                text="✅ Оплатить с баланса",
-                callback_data="simple_subscription_pay_with_balance",
+        # Клавиатура с подтверждением
+        keyboard_rows = [
+            [types.InlineKeyboardButton(
+                text="✅ Подтвердить покупку",
+                callback_data="simple_subscription_confirm_purchase"
+            )],
+            [types.InlineKeyboardButton(
+                text=texts.BACK,
+                callback_data="subscription_purchase"
+            )]
+        ]
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+    else:
+        # У пользователя нет активной платной подписки (или есть только пробная)
+        # Показываем стандартный выбор метода оплаты
+        if can_pay_from_balance:
+            message_lines.append(
+                "Вы можете оплатить подписку с баланса или выбрать другой способ оплаты."
             )
-        ])
+        else:
+            message_lines.append(
+                "Баланс пока недостаточный для мгновенной оплаты. Выберите подходящий способ оплаты:"
+            )
+        
+        message_text = "\n".join(message_lines)
+        
+        if trial_notice:
+            message_text = f"{trial_notice}\n\n{message_text}"
 
-    keyboard_rows.extend(methods_keyboard.inline_keyboard)
+        methods_keyboard = _get_simple_subscription_payment_keyboard(db_user.language)
+        keyboard_rows = []
 
-    keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
-    
+        if can_pay_from_balance:
+            keyboard_rows.append([
+                types.InlineKeyboardButton(
+                    text="✅ Оплатить с баланса",
+                    callback_data="simple_subscription_pay_with_balance",
+                )
+            ])
+
+        keyboard_rows.extend(methods_keyboard.inline_keyboard)
+
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
     await callback.message.edit_text(
         message_text,
         reply_markup=keyboard,
         parse_mode="HTML"
     )
     
-    await state.set_state(SubscriptionStates.waiting_for_simple_subscription_payment_method)
+    # Устанавливаем соответствующее состояние
+    if has_active_paid_subscription:
+        await state.set_state(SubscriptionStates.waiting_for_simple_subscription_confirmation)
+    else:
+        await state.set_state(SubscriptionStates.waiting_for_simple_subscription_payment_method)
     await callback.answer()
 
 
@@ -335,6 +375,15 @@ async def handle_simple_subscription_pay_with_balance(
         await callback.answer("❌ Данные подписки устарели. Пожалуйста, начните сначала.", show_alert=True)
         return
 
+    # Проверяем, имеет ли пользователь активную платную подписку
+    from app.database.crud.subscription import get_subscription_by_user_id
+    current_subscription = await get_subscription_by_user_id(db, db_user.id)
+    
+    if current_subscription and not getattr(current_subscription, "is_trial", False) and current_subscription.is_active:
+        # У пользователя есть активная платная подписка - требуем подтверждение
+        await callback.answer("⚠️ У вас уже есть активная платная подписка. Пожалуйста, подтвердите покупку.", show_alert=True)
+        return
+
     resolved_squad_uuid = await _ensure_simple_subscription_squad_uuid(
         db,
         state,
@@ -392,7 +441,10 @@ async def handle_simple_subscription_pay_with_balance(
         existing_subscription = await get_subscription_by_user_id(db, db_user.id)
         
         if existing_subscription:
-            # Если подписка уже существует, продлеваем её
+            # Если подписка уже существует (платная или тестовая), продлеваем её
+            # Сохраняем информацию о текущей подписке, особенно является ли она пробной
+            was_trial = getattr(existing_subscription, "is_trial", False)
+            
             subscription = await extend_subscription(
                 db=db,
                 subscription=existing_subscription,
@@ -401,6 +453,16 @@ async def handle_simple_subscription_pay_with_balance(
             # Обновляем параметры подписки
             subscription.traffic_limit_gb = subscription_params["traffic_limit_gb"]
             subscription.device_limit = subscription_params["device_limit"]
+            
+            # Если текущая подписка была пробной, и мы обновляем её
+            # нужно изменить статус подписки
+            if was_trial:
+                from app.database.models import SubscriptionStatus
+                # Переводим подписку из пробной в активную платную
+                subscription.status = SubscriptionStatus.ACTIVE.value
+                subscription.is_trial = False
+            
+            # Устанавливаем новый выбранный сквад
             if resolved_squad_uuid:
                 subscription.connected_squads = [resolved_squad_uuid]
             
@@ -712,6 +774,15 @@ async def handle_simple_subscription_payment_method(
     
     if not subscription_params:
         await callback.answer("❌ Данные подписки устарели. Пожалуйста, начните сначала.", show_alert=True)
+        return
+    
+    # Проверяем, имеет ли пользователь активную платную подписку
+    from app.database.crud.subscription import get_subscription_by_user_id
+    current_subscription = await get_subscription_by_user_id(db, db_user.id)
+    
+    if current_subscription and not getattr(current_subscription, "is_trial", False) and current_subscription.is_active:
+        # У пользователя есть активная платная подписка - показываем сообщение
+        await callback.answer("⚠️ У вас уже есть активная платная подписка. Пожалуйста, подтвердите покупку через главное меню.", show_alert=True)
         return
     
     payment_method = callback.data.replace("simple_subscription_", "")
@@ -1945,12 +2016,292 @@ async def check_simple_wata_payment_status(
         parse_mode="HTML",
     )
 
+
+@error_handler
+async def confirm_simple_subscription_purchase(
+    callback: types.CallbackQuery,
+    db_user: User,
+    state: FSMContext,
+    db: AsyncSession,
+):
+    """Обрабатывает подтверждение простой покупки подписки при наличии активной платной подписки."""
+    texts = get_texts(db_user.language)
+    
+    data = await state.get_data()
+    subscription_params = data.get("subscription_params", {})
+    
+    if not subscription_params:
+        await callback.answer("❌ Данные подписки устарели. Пожалуйста, начните сначала.", show_alert=True)
+        return
+
+    resolved_squad_uuid = await _ensure_simple_subscription_squad_uuid(
+        db,
+        state,
+        subscription_params,
+        user_id=db_user.id,
+        state_data=data,
+    )
+
+    # Рассчитываем цену подписки
+    price_kopeks, price_breakdown = await _calculate_simple_subscription_price(
+        db,
+        subscription_params,
+        user=db_user,
+        resolved_squad_uuid=resolved_squad_uuid,
+    )
+    total_required = price_kopeks
+    logger.warning(
+        "SIMPLE_SUBSCRIPTION_DEBUG_CONFIRM | user=%s | period=%s | base=%s | traffic=%s | devices=%s | servers=%s | discount=%s | total_required=%s | balance=%s",
+        db_user.id,
+        subscription_params["period_days"],
+        price_breakdown.get("base_price", 0),
+        price_breakdown.get("traffic_price", 0),
+        price_breakdown.get("devices_price", 0),
+        price_breakdown.get("servers_price", 0),
+        price_breakdown.get("total_discount", 0),
+        total_required,
+        getattr(db_user, "balance_kopeks", 0),
+    )
+
+    # Проверяем баланс пользователя
+    user_balance_kopeks = getattr(db_user, "balance_kopeks", 0)
+
+    if user_balance_kopeks < total_required:
+        await callback.answer("❌ Недостаточно средств на балансе для оплаты подписки", show_alert=True)
+        return
+    
+    try:
+        # Списываем средства с баланса пользователя
+        from app.database.crud.user import subtract_user_balance
+        success = await subtract_user_balance(
+            db,
+            db_user,
+            price_kopeks,
+            f"Оплата подписки на {subscription_params['period_days']} дней",
+            consume_promo_offer=False,
+        )
+        
+        if not success:
+            await callback.answer("❌ Ошибка списания средств с баланса", show_alert=True)
+            return
+        
+        # Проверяем, есть ли у пользователя уже подписка
+        from app.database.crud.subscription import get_subscription_by_user_id, extend_subscription
+        
+        existing_subscription = await get_subscription_by_user_id(db, db_user.id)
+        
+        if existing_subscription:
+            # Если подписка уже существует, продлеваем её
+            # Сохраняем информацию о текущей подписке, особенно является ли она пробной
+            was_trial = getattr(existing_subscription, "is_trial", False)
+            
+            subscription = await extend_subscription(
+                db=db,
+                subscription=existing_subscription,
+                days=subscription_params["period_days"]
+            )
+            # Обновляем параметры подписки
+            subscription.traffic_limit_gb = subscription_params["traffic_limit_gb"]
+            subscription.device_limit = subscription_params["device_limit"]
+            
+            # Если текущая подписка была пробной, и мы обновляем её
+            # нужно изменить статус подписки
+            if was_trial:
+                from app.database.models import SubscriptionStatus
+                # Переводим подписку из пробной в активную платную
+                subscription.status = SubscriptionStatus.ACTIVE.value
+                subscription.is_trial = False
+            
+            # Устанавливаем новый выбранный сквад
+            if resolved_squad_uuid:
+                subscription.connected_squads = [resolved_squad_uuid]
+            
+            await db.commit()
+            await db.refresh(subscription)
+        else:
+            # Если подписки нет, создаём новую
+            from app.database.crud.subscription import create_paid_subscription
+            subscription = await create_paid_subscription(
+                db=db,
+                user_id=db_user.id,
+                duration_days=subscription_params["period_days"],
+                traffic_limit_gb=subscription_params["traffic_limit_gb"],
+                device_limit=subscription_params["device_limit"],
+                connected_squads=[resolved_squad_uuid] if resolved_squad_uuid else [],
+                update_server_counters=True,
+            )
+        
+        if not subscription:
+            # Возвращаем средства на баланс в случае ошибки
+            from app.services.payment_service import add_user_balance
+            await add_user_balance(
+                db,
+                db_user.id,
+                price_kopeks,
+                f"Возврат средств за неудавшуюся подписку на {subscription_params['period_days']} дней",
+            )
+            await callback.answer("❌ Ошибка создания подписки. Средства возвращены на баланс.", show_alert=True)
+            return
+        
+        # Обновляем баланс пользователя
+        await db.refresh(db_user)
+
+        # Обновляем или создаём ссылку подписки в RemnaWave
+        try:
+            from app.services.subscription_service import SubscriptionService
+            subscription_service = SubscriptionService()
+            remnawave_user = await subscription_service.create_remnawave_user(db, subscription)
+            if remnawave_user:
+                await db.refresh(subscription)
+        except Exception as sync_error:
+            logger.error(f"Ошибка синхронизации подписки с RemnaWave для пользователя {db_user.id}: {sync_error}", exc_info=True)
+        
+        # Отправляем уведомление об успешной покупке
+        server_label = _get_simple_subscription_server_label(
+            texts,
+            subscription_params,
+            resolved_squad_uuid,
+        )
+        show_devices = settings.is_devices_selection_enabled()
+
+        success_lines = [
+            "✅ <b>Подписка успешно активирована!</b>",
+            "",
+            f"📅 Период: {subscription_params['period_days']} дней",
+        ]
+
+        if show_devices:
+            success_lines.append(f"📱 Устройства: {subscription_params['device_limit']}")
+
+        success_lines.extend([
+            f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}",
+            f"🌍 Сервер: {server_label}",
+            "",
+            f"💰 Списано с баланса: {settings.format_price(price_kopeks)}",
+            f"💳 Ваш баланс: {settings.format_price(db_user.balance_kopeks)}",
+            "",
+            "🔗 Для подключения перейдите в раздел 'Подключиться'",
+        ])
+
+        success_message = "\n".join(success_lines)
+        
+        connect_mode = settings.CONNECT_BUTTON_MODE
+        subscription_link = get_display_subscription_link(subscription)
+        connect_button_text = texts.t("CONNECT_BUTTON", "🔗 Подключиться")
+
+        def _fallback_connect_button() -> types.InlineKeyboardButton:
+            return types.InlineKeyboardButton(
+                text=connect_button_text,
+                callback_data="subscription_connect",
+            )
+
+        if connect_mode == "miniapp_subscription":
+            if subscription_link:
+                connect_row = [
+                    types.InlineKeyboardButton(
+                        text=connect_button_text,
+                        web_app=types.WebAppInfo(url=subscription_link),
+                    )
+                ]
+            else:
+                connect_row = [_fallback_connect_button()]
+        elif connect_mode == "miniapp_custom":
+            custom_url = settings.MINIAPP_CUSTOM_URL
+            if custom_url:
+                connect_row = [
+                    types.InlineKeyboardButton(
+                        text=connect_button_text,
+                        web_app=types.WebAppInfo(url=custom_url),
+                    )
+                ]
+            else:
+                connect_row = [_fallback_connect_button()]
+        elif connect_mode == "link":
+            if subscription_link:
+                connect_row = [
+                    types.InlineKeyboardButton(
+                        text=connect_button_text,
+                        url=subscription_link,
+                    )
+                ]
+            else:
+                connect_row = [_fallback_connect_button()]
+        elif connect_mode == "happ_cryptolink":
+            if subscription_link:
+                connect_row = [
+                    types.InlineKeyboardButton(
+                        text=connect_button_text,
+                        callback_data="open_subscription_link",
+                    )
+                ]
+            else:
+                connect_row = [_fallback_connect_button()]
+        else:
+            connect_row = [_fallback_connect_button()]
+
+        keyboard_rows = [connect_row]
+
+        happ_row = get_happ_download_button_row(texts)
+        if happ_row:
+            keyboard_rows.append(happ_row)
+
+        keyboard_rows.append(
+            [types.InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_menu")]
+        )
+
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+        await callback.message.edit_text(
+            success_message,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        
+        # Отправляем уведомление админам
+        try:
+            from app.services.admin_notification_service import AdminNotificationService
+            notification_service = AdminNotificationService(callback.bot)
+            await notification_service.send_subscription_purchase_notification(
+                db,
+                db_user,
+                subscription,
+                None,  # transaction
+                subscription_params["period_days"],
+                False,  # was_trial_conversion
+                amount_kopeks=price_kopeks,
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления админам о покупке: {e}")
+        
+        await state.clear()
+        await callback.answer()
+
+        logger.info(f"Пользователь {db_user.telegram_id} успешно купил подписку с баланса на {price_kopeks/100}₽")
+
+    except Exception as error:
+        logger.error(
+            "Ошибка подтверждения простой подписки с баланса для пользователя %s: %s",
+            db_user.id,
+            error,
+            exc_info=True,
+        )
+        await callback.answer(
+            "❌ Ошибка оплаты подписки. Попробуйте позже или обратитесь в поддержку.",
+            show_alert=True,
+        )
+        await state.clear()
+
 def register_simple_subscription_handlers(dp):
     """Регистрирует обработчики простой покупки подписки."""
     
     dp.callback_query.register(
         start_simple_subscription_purchase,
         F.data == "simple_subscription_purchase"
+    )
+    
+    dp.callback_query.register(
+        confirm_simple_subscription_purchase,
+        F.data == "simple_subscription_confirm_purchase"
     )
     
     dp.callback_query.register(
