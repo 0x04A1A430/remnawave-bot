@@ -69,6 +69,7 @@ async def send_poll_to_users(
     users: Iterable[User],
 ) -> dict:
     from app.database.database import AsyncSessionLocal
+    from sqlalchemy.dialects.postgresql import insert
     
     sent = 0
     failed = 0
@@ -85,16 +86,33 @@ async def send_poll_to_users(
         for user in users
     ]
 
+    # Получаем список пользователей, которые уже прошли опрос, за один запрос
+    user_ids = [user_snapshot.id for user_snapshot in user_snapshots]
+    existing_responses_result = await db.execute(
+        select(PollResponse.user_id).where(
+            and_(
+                PollResponse.poll_id == poll_id,
+                PollResponse.user_id.in_(user_ids)
+            )
+        )
+    )
+    existing_user_ids = set(existing_responses_result.scalars().all())
+
     # Увеличиваем семафор для большего количества одновременных отправок
-    semaphore = asyncio.Semaphore(50)
+    semaphore = asyncio.Semaphore(100)  # Увеличиваем до 100 для максимальной скорости
 
     # Создаем отдельную функцию для создания отдельной сессии для каждой отправки
     async def send_poll_invitation(user_snapshot):
         """Отправляет приглашение к опросу одному пользователю"""
         async with semaphore:
+            # Пропускаем пользователей, которые уже прошли опрос
+            if user_snapshot.id in existing_user_ids:
+                return "skipped"
+                
             # Создаем новую сессию для изоляции транзакции
             async with AsyncSessionLocal() as new_db:
                 try:
+                    # Проверяем еще раз в новой сессии на случай гонки
                     existing_response = await new_db.execute(
                         select(PollResponse.id).where(
                             and_(
