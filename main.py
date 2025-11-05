@@ -66,6 +66,15 @@ async def main():
         handlers=[file_handler, stream_handler],
     )
     
+    # Установим более высокий уровень логирования для "мусорных" логов
+    logging.getLogger("aiohttp.access").setLevel(logging.ERROR)
+    logging.getLogger("aiohttp.client").setLevel(logging.WARNING)
+    logging.getLogger("aiohttp.internal").setLevel(logging.WARNING)
+    logging.getLogger("app.external.remnawave_api").setLevel(logging.WARNING)
+    logging.getLogger("aiogram").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
+    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+    
     logger = logging.getLogger(__name__)
     timeline = StartupTimeline(logger, "Bedolaga Remnawave Bot")
     timeline.log_banner(
