@@ -296,6 +296,7 @@ async def _auto_extend_subscription(
         if was_trial and subscription.is_trial:
             subscription.is_trial = False
             subscription.status = "active"
+            user.has_had_paid_subscription = True
             await db.commit()
             logger.info(
                 "✅ Триал конвертирован в платную подписку %s для пользователя %s",
