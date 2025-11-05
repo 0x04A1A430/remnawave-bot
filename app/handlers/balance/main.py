@@ -216,7 +216,7 @@ async def show_payment_methods(
     from app.database.crud.subscription import get_subscription_by_user_id
     from app.utils.pricing_utils import calculate_months_from_days, apply_percentage_discount
     from app.config import settings
-    from app.utils.subscription_service import SubscriptionService
+    from app.services.subscription_service import SubscriptionService
 
     texts = get_texts(db_user.language)
     payment_text = get_payment_methods_text(db_user.language)
