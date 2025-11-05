@@ -75,13 +75,6 @@ async def send_poll_to_users(
     skipped = 0
 
     poll_id = poll.id
-    poll_snapshot = SimpleNamespace(
-        id=poll.id,
-        title=poll.title,
-        description=poll.description,
-        reward_enabled=poll.reward_enabled,
-        reward_amount_kopeks=poll.reward_amount_kopeks,
-    )
 
     user_snapshots = [
         SimpleNamespace(
@@ -92,8 +85,8 @@ async def send_poll_to_users(
         for user in users
     ]
 
-    # Используем семафор для ограничения одновременных отправок
-    semaphore = asyncio.Semaphore(20)
+    # Увеличиваем семафор для большего количества одновременных отправок
+    semaphore = asyncio.Semaphore(50)
 
     # Создаем отдельную функцию для создания отдельной сессии для каждой отправки
     async def send_poll_invitation(user_snapshot):
@@ -153,26 +146,20 @@ async def send_poll_to_users(
                     )
                     return "failed"
 
-    # Отправляем приглашения пакетами для повышения производительности
-    batch_size = 100
-    for i in range(0, len(user_snapshots), batch_size):
-        batch = user_snapshots[i:i + batch_size]
-        tasks = [send_poll_invitation(user_snapshot) for user_snapshot in batch]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Отправляем все приглашения одновременно без задержек для максимальной скорости
+    tasks = [send_poll_invitation(user_snapshot) for user_snapshot in user_snapshots]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for result in results:
-            if isinstance(result, str):  # Успешно выполненная задача
-                if result == "sent":
-                    sent += 1
-                elif result == "failed":
-                    failed += 1
-                elif result == "skipped":
-                    skipped += 1
-            elif isinstance(result, Exception):  # Ошибка выполнения задачи
+    for result in results:
+        if isinstance(result, str):  # Успешно выполненная задача
+            if result == "sent":
+                sent += 1
+            elif result == "failed":
                 failed += 1
-
-        # Небольшая задержка между пакетами для снижения нагрузки на API
-        await asyncio.sleep(0.1)
+            elif result == "skipped":
+                skipped += 1
+        elif isinstance(result, Exception):  # Ошибка выполнения задачи
+            failed += 1
 
     return {
         "sent": sent,
