@@ -1897,6 +1897,8 @@ async def _send_offer_to_users(
     squad_name: Optional[str],
     effect_type: str,
 ) -> Tuple[int, int]:
+    from app.database.database import AsyncSessionLocal
+    
     sent = 0
     failed = 0
 
@@ -1907,55 +1909,57 @@ async def _send_offer_to_users(
         """Отправляет одно предложение с семафором ограничения"""
         async with semaphore:
             try:
-                offer_record = await upsert_discount_offer(
-                    db,
-                    user_id=user.id,
-                    subscription_id=getattr(user, "subscription", None).id if getattr(user, "subscription", None) else None,
-                    notification_type=f"promo_template_{template.id}",
-                    discount_percent=template.discount_percent,
-                    bonus_amount_kopeks=0,
-                    valid_hours=template.valid_hours,
-                    effect_type=effect_type,
-                    extra_data={
-                        "template_id": template.id,
-                        "offer_type": template.offer_type,
-                        "test_duration_hours": template.test_duration_hours,
-                        "test_squad_uuids": template.test_squad_uuids,
-                        "active_discount_hours": template.active_discount_hours,
-                    },
-                )
-
-                user_texts = get_texts(user.language or db_user.language)
-                keyboard_rows: List[List[InlineKeyboardButton]] = [
-                    [
-                        build_miniapp_or_callback_button(
-                            text=template.button_text,
-                            callback_data=f"claim_discount_{offer_record.id}",
-                        )
-                    ]
-                ]
-
-                keyboard_rows.append([
-                    InlineKeyboardButton(
-                        text=user_texts.t("PROMO_OFFER_CLOSE", "❌ Закрыть"),
-                        callback_data="promo_offer_close",
+                # Используем отдельную сессию для изоляции транзакции
+                async with AsyncSessionLocal() as new_db:
+                    offer_record = await upsert_discount_offer(
+                        new_db,
+                        user_id=user.id,
+                        subscription_id=getattr(user, "subscription", None).id if getattr(user, "subscription", None) else None,
+                        notification_type=f"promo_template_{template.id}",
+                        discount_percent=template.discount_percent,
+                        bonus_amount_kopeks=0,
+                        valid_hours=template.valid_hours,
+                        effect_type=effect_type,
+                        extra_data={
+                            "template_id": template.id,
+                            "offer_type": template.offer_type,
+                            "test_duration_hours": template.test_duration_hours,
+                            "test_squad_uuids": template.test_squad_uuids,
+                            "active_discount_hours": template.active_discount_hours,
+                        },
                     )
-                ])
 
-                keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+                    user_texts = get_texts(user.language or db_user.language)
+                    keyboard_rows: List[List[InlineKeyboardButton]] = [
+                        [
+                            build_miniapp_or_callback_button(
+                                text=template.button_text,
+                                callback_data=f"claim_discount_{offer_record.id}",
+                            )
+                        ]
+                    ]
 
-                message_text = _render_template_text(
-                    template,
-                    user.language or db_user.language,
-                    server_name=squad_name,
-                )
-                await bot.send_message(
-                    chat_id=user.telegram_id,
-                    text=message_text,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                )
-                return True
+                    keyboard_rows.append([
+                        InlineKeyboardButton(
+                            text=user_texts.t("PROMO_OFFER_CLOSE", "❌ Закрыть"),
+                            callback_data="promo_offer_close",
+                        )
+                    ])
+
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+                    message_text = _render_template_text(
+                        template,
+                        user.language or db_user.language,
+                        server_name=squad_name,
+                    )
+                    await bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=message_text,
+                        reply_markup=keyboard,
+                        parse_mode="HTML",
+                    )
+                    return True
             except (TelegramForbiddenError, TelegramBadRequest) as exc:
                 logger.warning("Не удалось отправить предложение пользователю %s: %s", user.telegram_id, exc)
                 return False
