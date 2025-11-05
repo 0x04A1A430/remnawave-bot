@@ -1027,6 +1027,20 @@ async def process_notification_value_input(message: Message, state: FSMContext):
     language = data.get("settings_language") or message.from_user.language_code or settings.DEFAULT_LANGUAGE
     texts = get_texts(language)
 
+    # Добавляем дополнительные проверки диапазона значений
+    if (key == "expired_second_wave" and field == "percent") or (key == "expired_third_wave" and field == "percent"):
+        if value < 0 or value > 100:
+            await message.answer("❌ Процент скидки должен быть от 0 до 100.")
+            return
+    elif (key == "expired_second_wave" and field == "hours") or (key == "expired_third_wave" and field == "hours"):
+        if value < 1 or value > 168:  # Максимум 168 часов (7 дней)
+            await message.answer("❌ Количество часов должно быть от 1 до 168.")
+            return
+    elif key == "expired_third_wave" and field == "trigger":
+        if value < 2:  # Минимум 2 дня
+            await message.answer("❌ Количество дней должно быть не менее 2.")
+            return
+
     success = False
     if key == "expired_second_wave" and field == "percent":
         success = NotificationSettingsService.set_second_wave_discount_percent(value)
