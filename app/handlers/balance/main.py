@@ -242,6 +242,7 @@ async def show_payment_methods(
             )
 
             # Рассчитываем стоимость серверов
+            from app.services.subscription_service import SubscriptionService
             subscription_service = SubscriptionService()
             servers_price_per_month, per_server_monthly_prices = await subscription_service.get_countries_price_by_uuids(
                 current_connected_squads,
