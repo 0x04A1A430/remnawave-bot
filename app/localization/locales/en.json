@@ -1448,6 +1448,7 @@
   "ADMIN_POLLS_CREATION_TITLE_PROMPT": "🗳️ <b>Create poll</b>\n\nEnter poll title:",
   "ADMIN_POLLS_CREATION_CANCELLED": "❌ Poll creation cancelled.",
   "ADMIN_POLLS_CREATION_DESCRIPTION_PROMPT": "Enter poll description. HTML is allowed.\nSend /skip to omit.",
+  "ADMIN_POLLS_CREATION_DESCRIPTION_SKIPPED": "Description omitted.",
   "ADMIN_POLLS_CREATION_INVALID_HTML": "❌ HTML error: {error}",
   "ADMIN_POLLS_CREATION_REWARD_PROMPT": "Enter reward amount in RUB. Send 0 to disable reward.",
   "ADMIN_POLLS_CREATION_REWARD_INVALID": "❌ Invalid amount. Try again.",
