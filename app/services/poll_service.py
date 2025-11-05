@@ -68,6 +68,8 @@ async def send_poll_to_users(
     poll: Poll,
     users: Iterable[User],
 ) -> dict:
+    from app.database.database import AsyncSessionLocal
+    
     sent = 0
     failed = 0
     skipped = 0
@@ -93,60 +95,63 @@ async def send_poll_to_users(
     # Используем семафор для ограничения одновременных отправок
     semaphore = asyncio.Semaphore(20)
 
+    # Создаем отдельную функцию для создания отдельной сессии для каждой отправки
     async def send_poll_invitation(user_snapshot):
         """Отправляет приглашение к опросу одному пользователю"""
         async with semaphore:
-            try:
-                existing_response = await db.execute(
-                    select(PollResponse.id).where(
-                        and_(
-                            PollResponse.poll_id == poll_id,
-                            PollResponse.user_id == user_snapshot.id,
+            # Создаем новую сессию для изоляции транзакции
+            async with AsyncSessionLocal() as new_db:
+                try:
+                    existing_response = await new_db.execute(
+                        select(PollResponse.id).where(
+                            and_(
+                                PollResponse.poll_id == poll_id,
+                                PollResponse.user_id == user_snapshot.id,
+                            )
                         )
                     )
-                )
-                existing_id = existing_response.scalar_one_or_none()
-                if existing_id:
-                    return "skipped"
+                    existing_id = existing_response.scalar_one_or_none()
+                    if existing_id:
+                        return "skipped"
 
-                response = PollResponse(
-                    poll_id=poll_id,
-                    user_id=user_snapshot.id,
-                )
-                db.add(response)
+                    response = PollResponse(
+                        poll_id=poll_id,
+                        user_id=user_snapshot.id,
+                    )
+                    new_db.add(response)
 
-                await db.flush()
+                    await new_db.flush()
 
-                text = _build_poll_invitation_text(poll, user_snapshot.language)
-                keyboard = build_start_keyboard(response.id, user_snapshot.language)
+                    text = _build_poll_invitation_text(poll, user_snapshot.language)
+                    keyboard = build_start_keyboard(response.id, user_snapshot.language)
 
-                await bot.send_message(
-                    chat_id=user_snapshot.telegram_id,
-                    text=text,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                    disable_web_page_preview=True,
-                )
+                    await bot.send_message(
+                        chat_id=user_snapshot.telegram_id,
+                        text=text,
+                        reply_markup=keyboard,
+                        parse_mode="HTML",
+                        disable_web_page_preview=True,
+                    )
 
-                await db.commit()
-                return "sent"
-            except TelegramBadRequest as error:
-                error_text = str(error).lower()
-                if "chat not found" in error_text or "bot was blocked by the user" in error_text:
-                    await db.rollback()
-                    return "skipped"
-                else:  # pragma: no cover - unexpected telegram error
-                    await db.rollback()
+                    await new_db.commit()
+                    return "sent"
+                except TelegramBadRequest as error:
+                    error_text = str(error).lower()
+                    if "chat not found" in error_text or "bot was blocked by the user" in error_text:
+                        await new_db.rollback()
+                        return "skipped"
+                    else:  # pragma: no cover - unexpected telegram error
+                        await new_db.rollback()
+                        return "failed"
+                except Exception as error:  # pragma: no cover - defensive logging
+                    await new_db.rollback()
+                    logger.error(
+                        "❌ Ошибка отправки опроса %s пользователю %s: %s",
+                        poll_id,
+                        user_snapshot.telegram_id,
+                        error,
+                    )
                     return "failed"
-            except Exception as error:  # pragma: no cover - defensive logging
-                await db.rollback()
-                logger.error(
-                    "❌ Ошибка отправки опроса %s пользователю %s: %s",
-                    poll_id,
-                    user_snapshot.telegram_id,
-                    error,
-                )
-                return "failed"
 
     # Отправляем приглашения пакетами для повышения производительности
     batch_size = 100
