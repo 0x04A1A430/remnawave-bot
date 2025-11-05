@@ -66,7 +66,6 @@ def test_deduplicate_ignores_records_without_expire_date():
     assert deduplicated[telegram_id] is valid
 
 
-@pytest.mark.asyncio
 async def test_get_or_create_user_handles_unique_violation(monkeypatch):
     service = _create_service()
     db = AsyncMock()
@@ -82,7 +81,7 @@ async def test_get_or_create_user_handles_unique_violation(monkeypatch):
 
     db.rollback = rollback_mock
 
-    monkeypatch.setattr("app.services.remnawave_service.create_user", create_user_mock)
+    monkeypatch.setattr("app.services.remnawave_service.create_user_no_commit", create_user_mock)
     monkeypatch.setattr(
         "app.services.remnawave_service.get_user_by_telegram_id",
         get_user_mock,
@@ -97,7 +96,6 @@ async def test_get_or_create_user_handles_unique_violation(monkeypatch):
     rollback_mock.assert_awaited()
 
 
-@pytest.mark.asyncio
 async def test_get_or_create_user_creates_new(monkeypatch):
     service = _create_service()
     db = AsyncMock()
@@ -107,7 +105,7 @@ async def test_get_or_create_user_creates_new(monkeypatch):
 
     create_user_mock = AsyncMock(return_value=new_user)
 
-    monkeypatch.setattr("app.services.remnawave_service.create_user", create_user_mock)
+    monkeypatch.setattr("app.services.remnawave_service.create_user_no_commit", create_user_mock)
 
     user, created = await service._get_or_create_bot_user_from_panel(db, panel_user)
 
@@ -117,6 +115,7 @@ async def test_get_or_create_user_creates_new(monkeypatch):
         db=db,
         telegram_id=777,
         username="new_user",
-        first_name="Panel User 777",
+        first_name="User 777",
+        last_name=None,
         language="ru",
     )

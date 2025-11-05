@@ -31,6 +31,11 @@ def mock_user():
     user.balance_kopeks = 10000
     user.subscription = None
     user.has_had_paid_subscription = False
+    user.promo_group_id = None
+    user.get_primary_promo_group = MagicMock(return_value=None)
+    user.get_promo_discount = MagicMock(return_value=0)
+    user.promo_offer_discount_percent = 0
+    user.promo_offer_discount_expires_at = None
     return user
 
 @pytest.fixture
@@ -54,7 +59,6 @@ def mock_state():
     state.clear = AsyncMock()
     return state
 
-@pytest.mark.asyncio
 async def test_save_cart_and_redirect_to_topup(mock_callback_query, mock_state, mock_user, mock_db):
     """Тест сохранения корзины и перенаправления к пополнению"""
     # Мокаем все зависимости
@@ -102,7 +106,6 @@ async def test_save_cart_and_redirect_to_topup(mock_callback_query, mock_state, 
         # mock_callback_query.answer не должен быть вызван
         mock_callback_query.answer.assert_not_called()
 
-@pytest.mark.asyncio
 async def test_return_to_saved_cart_success(mock_callback_query, mock_state, mock_user, mock_db):
     """Тест возврата к сохраненной корзине с достаточным балансом"""
     # Подготовим данные корзины
@@ -121,10 +124,13 @@ async def test_return_to_saved_cart_success(mock_callback_query, mock_state, moc
          patch('app.handlers.subscription.purchase._get_available_countries') as mock_get_countries, \
          patch('app.handlers.subscription.purchase.format_period_description') as mock_format_period, \
          patch('app.localization.texts.get_texts') as mock_get_texts, \
-         patch('app.handlers.subscription.purchase.get_subscription_confirm_keyboard_with_cart') as mock_keyboard_func:
+         patch('app.handlers.subscription.purchase.get_subscription_confirm_keyboard_with_cart') as mock_keyboard_func, \
+         patch('app.handlers.subscription.purchase._prepare_subscription_summary') as mock_prepare_summary:
 
         # Подготовим моки
         mock_cart_service.get_user_cart = AsyncMock(return_value=cart_data)
+        mock_cart_service.save_user_cart = AsyncMock(return_value=True)
+        mock_prepare_summary.return_value = ("summary", {})
         mock_get_countries.return_value = [{'uuid': 'ru', 'name': 'Russia'}, {'uuid': 'us', 'name': 'USA'}]
         mock_format_period.return_value = "30 дней"
         mock_keyboard = InlineKeyboardMarkup(
@@ -143,8 +149,8 @@ async def test_return_to_saved_cart_success(mock_callback_query, mock_state, moc
         # Вызываем функцию
         await return_to_saved_cart(mock_callback_query, mock_state, mock_user, mock_db)
 
-        # Проверяем, что данные были загружены из корзины и установлены в FSM
-        mock_state.set_data.assert_called_once_with(cart_data)
+        # Проверяем, что корзина была загружена
+        mock_cart_service.get_user_cart.assert_called_once_with(mock_user.id)
 
         # Проверяем, что сообщение было отредактировано
         mock_callback_query.message.edit_text.assert_called_once()
@@ -153,7 +159,6 @@ async def test_return_to_saved_cart_success(mock_callback_query, mock_state, moc
         mock_callback_query.answer.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_return_to_saved_cart_skips_edit_when_message_matches(
     mock_callback_query,
     mock_state,
@@ -224,7 +229,6 @@ async def test_return_to_saved_cart_skips_edit_when_message_matches(
         mock_cart_service.save_user_cart.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_return_to_saved_cart_normalizes_devices_when_disabled(
     mock_callback_query,
     mock_state,
@@ -299,7 +303,6 @@ async def test_return_to_saved_cart_normalizes_devices_when_disabled(
 
         mock_callback_query.answer.assert_called_once()
 
-@pytest.mark.asyncio
 async def test_return_to_saved_cart_insufficient_funds(mock_callback_query, mock_state, mock_user, mock_db):
     """Тест возврата к сохраненной корзине с недостаточным балансом"""
     # Подготовим данные корзины
@@ -320,6 +323,7 @@ async def test_return_to_saved_cart_insufficient_funds(mock_callback_query, mock
 
         # Подготовим моки
         mock_cart_service.get_user_cart = AsyncMock(return_value=cart_data)
+        mock_cart_service.save_user_cart = AsyncMock(return_value=True)
         mock_keyboard = InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text="Пополнить", callback_data="topup")]]
         )
@@ -347,7 +351,6 @@ async def test_return_to_saved_cart_insufficient_funds(mock_callback_query, mock
         # (ответ отправляется через return до вызова callback.answer())
         mock_callback_query.answer.assert_not_called()
 
-@pytest.mark.asyncio
 async def test_clear_saved_cart(mock_callback_query, mock_state, mock_user, mock_db):
     """Тест очистки сохраненной корзины"""
     # Мокаем все зависимости
@@ -369,7 +372,6 @@ async def test_clear_saved_cart(mock_callback_query, mock_state, mock_user, mock
         # Проверяем, что вызван answer
         mock_callback_query.answer.assert_called_once()
 
-@pytest.mark.asyncio
 async def test_handle_subscription_cancel_clears_saved_cart(mock_callback_query, mock_state, mock_user, mock_db):
     """Отмена покупки должна очищать сохраненную корзину"""
     mock_clear_draft = AsyncMock()

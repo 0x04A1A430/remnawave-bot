@@ -6,8 +6,13 @@ import os
 import sys
 import types
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
+
+# Add project root to Python path for imports
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 # Подменяем параметры подключения к БД, чтобы SQLAlchemy не требовал aiosqlite.
 os.environ.setdefault("DATABASE_MODE", "postgresql")

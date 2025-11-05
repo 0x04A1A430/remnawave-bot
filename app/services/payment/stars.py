@@ -430,7 +430,7 @@ class TelegramStarsMixin:
         user.balance_kopeks += amount_kopeks
         user.updated_at = datetime.utcnow()
 
-        promo_group = getattr(user, "promo_group", None)
+        promo_group = user.get_primary_promo_group()
         subscription = getattr(user, "subscription", None)
         referrer_info = format_referrer_info(user)
         topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"

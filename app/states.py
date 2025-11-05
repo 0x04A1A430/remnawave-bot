@@ -48,6 +48,7 @@ class AdminStates(StatesGroup):
     setting_promocode_value = State()
     setting_promocode_uses = State()
     setting_promocode_expiry = State()
+    selecting_promo_group = State()
 
     creating_campaign_name = State()
     creating_campaign_start = State()
@@ -71,6 +72,7 @@ class AdminStates(StatesGroup):
     confirming_broadcast = State()
 
     creating_promo_group_name = State()
+    creating_promo_group_priority = State()
     creating_promo_group_traffic_discount = State()
     creating_promo_group_server_discount = State()
     creating_promo_group_device_discount = State()
@@ -79,6 +81,7 @@ class AdminStates(StatesGroup):
 
     editing_promo_group_menu = State()
     editing_promo_group_name = State()
+    editing_promo_group_priority = State()
     editing_promo_group_traffic_discount = State()
     editing_promo_group_server_discount = State()
     editing_promo_group_device_discount = State()

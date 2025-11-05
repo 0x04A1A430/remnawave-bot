@@ -50,7 +50,7 @@ def _resolve_addon_discount_percent(
     *,
     period_days: Optional[int] = None,
 ) -> int:
-    group = promo_group or (getattr(user, "promo_group", None) if user else None)
+    group = promo_group or (user.get_primary_promo_group() if user else None)
 
     if group is not None and not getattr(group, "apply_discounts_to_addons", True):
         return 0
@@ -470,7 +470,7 @@ class SubscriptionService:
         base_discount_total = base_price_original * period_discount_percent // 100
         base_price = base_price_original - base_discount_total
         
-        promo_group = promo_group or (user.promo_group if user else None)
+        promo_group = promo_group or (user.get_primary_promo_group() if user else None)
 
         traffic_price = settings.get_traffic_price(traffic_gb)
         traffic_discount_percent = _resolve_discount_percent(
@@ -570,7 +570,7 @@ class SubscriptionService:
 
             if user is None:
                 user = getattr(subscription, "user", None)
-            promo_group = promo_group or (user.promo_group if user else None)
+            promo_group = promo_group or (user.get_primary_promo_group() if user else None)
 
             servers_price, _ = await self.get_countries_price_by_uuids(
                 subscription.connected_squads,
@@ -798,7 +798,7 @@ class SubscriptionService:
         base_discount_total = base_price_original * period_discount_percent // 100
         base_price = base_price_original - base_discount_total
         
-        promo_group = promo_group or (user.promo_group if user else None)
+        promo_group = promo_group or (user.get_primary_promo_group() if user else None)
 
         traffic_price_per_month = settings.get_traffic_price(traffic_gb)
         traffic_discount_percent = _resolve_discount_percent(
@@ -910,7 +910,7 @@ class SubscriptionService:
 
             if user is None:
                 user = getattr(subscription, "user", None)
-            promo_group = promo_group or (user.promo_group if user else None)
+            promo_group = promo_group or (user.get_primary_promo_group() if user else None)
 
             servers_price_per_month, _ = await self.get_countries_price_by_uuids(
                 subscription.connected_squads,

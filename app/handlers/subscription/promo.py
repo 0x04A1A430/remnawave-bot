@@ -88,12 +88,12 @@ async def _get_promo_offer_hint(
 ) -> Optional[str]:
     return await build_promo_offer_hint(db, db_user, texts, percent)
 
-def _build_promo_group_discount_text(
+async def _build_promo_group_discount_text(
         db_user: User,
         periods: Optional[List[int]] = None,
         texts=None,
 ) -> str:
-    promo_group = getattr(db_user, "promo_group", None)
+    promo_group = db_user.get_primary_promo_group()
 
     if not promo_group:
         return ""

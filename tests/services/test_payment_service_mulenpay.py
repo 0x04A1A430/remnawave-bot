@@ -203,6 +203,10 @@ async def test_process_mulenpay_callback_avoids_duplicate_transactions(
             self.language = "ru"
             self.promo_group = None
             self.subscription = None
+            self.user_promo_groups = []
+
+        def get_primary_promo_group(self):
+            return self.promo_group
 
     dummy_user = DummyUser()
 

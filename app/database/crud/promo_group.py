@@ -38,7 +38,7 @@ async def get_promo_groups_with_counts(
         select(PromoGroup, func.count(User.id))
         .outerjoin(User, User.promo_group_id == PromoGroup.id)
         .group_by(PromoGroup.id)
-        .order_by(PromoGroup.is_default.desc(), PromoGroup.name)
+        .order_by(PromoGroup.priority.desc(), PromoGroup.name)
     )
 
     if offset:
@@ -89,6 +89,7 @@ async def create_promo_group(
     db: AsyncSession,
     name: str,
     *,
+    priority: int = 0,
     server_discount_percent: int,
     traffic_discount_percent: int,
     device_discount_percent: int,
@@ -110,6 +111,7 @@ async def create_promo_group(
 
     promo_group = PromoGroup(
         name=name.strip(),
+        priority=max(0, priority),
         server_discount_percent=max(0, min(100, server_discount_percent)),
         traffic_discount_percent=max(0, min(100, traffic_discount_percent)),
         device_discount_percent=max(0, min(100, device_discount_percent)),
@@ -152,6 +154,7 @@ async def update_promo_group(
     group: PromoGroup,
     *,
     name: Optional[str] = None,
+    priority: Optional[int] = None,
     server_discount_percent: Optional[int] = None,
     traffic_discount_percent: Optional[int] = None,
     device_discount_percent: Optional[int] = None,
@@ -162,6 +165,8 @@ async def update_promo_group(
 ) -> PromoGroup:
     if name is not None:
         group.name = name.strip()
+    if priority is not None:
+        group.priority = max(0, priority)
     if server_discount_percent is not None:
         group.server_discount_percent = max(0, min(100, server_discount_percent))
     if traffic_discount_percent is not None:

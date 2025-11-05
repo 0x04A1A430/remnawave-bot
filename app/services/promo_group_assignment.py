@@ -92,18 +92,15 @@ async def maybe_assign_promo_group_by_total_spent(
     db: AsyncSession,
     user_id: int,
 ) -> Optional[PromoGroup]:
+    from app.database.crud.user_promo_group import add_user_to_promo_group, has_user_promo_group
+
     user = await db.get(User, user_id)
     if not user:
         logger.debug("Не удалось найти пользователя %s для автовыдачи промогруппы", user_id)
         return None
 
-    old_group = None
-    if user.promo_group_id:
-        try:
-            await db.refresh(user, attribute_names=["promo_group"])
-        except Exception:
-            pass
-        old_group = getattr(user, "promo_group", None)
+    # Получаем текущую primary промогруппу
+    old_group = user.get_primary_promo_group()
 
     total_spent = await get_user_total_spent_kopeks(db, user_id)
     if total_spent <= 0:
@@ -120,7 +117,6 @@ async def maybe_assign_promo_group_by_total_spent(
         return None
 
     try:
-        previous_group_id = user.promo_group_id
         target_threshold = target_group.auto_assign_total_spent_kopeks or 0
 
         if target_threshold <= previous_threshold:
@@ -133,9 +129,12 @@ async def maybe_assign_promo_group_by_total_spent(
             )
             return None
 
-        if user.auto_promo_group_assigned and target_group.id == previous_group_id:
+        # Проверяем, есть ли уже эта группа у пользователя
+        already_has_group = await has_user_promo_group(db, user_id, target_group.id)
+
+        if user.auto_promo_group_assigned and already_has_group:
             logger.debug(
-                "Пользователь %s уже находится в актуальной промогруппе '%s', повторная выдача не требуется",
+                "Пользователь %s уже имеет промогруппу '%s', повторная выдача не требуется",
                 user.telegram_id,
                 target_group.name,
             )
@@ -150,18 +149,18 @@ async def maybe_assign_promo_group_by_total_spent(
         user.auto_promo_group_threshold_kopeks = target_threshold
         user.updated_at = datetime.utcnow()
 
-        if target_group.id != previous_group_id:
-            user.promo_group_id = target_group.id
-            user.promo_group = target_group
+        if not already_has_group:
+            # Добавляем новую промогруппу к существующим
+            await add_user_to_promo_group(db, user_id, target_group.id, assigned_by="auto")
             logger.info(
-                "🤖 Пользователь %s автоматически переведен в промогруппу '%s' за траты %s ₽",
+                "🤖 Пользователю %s добавлена промогруппа '%s' за траты %s ₽",
                 user.telegram_id,
                 target_group.name,
                 total_spent / 100,
             )
         else:
             logger.info(
-                "🤖 Пользователь %s уже находится в подходящей промогруппе '%s', отмечаем автоприсвоение",
+                "🤖 Пользователь %s уже имеет промогруппу '%s', отмечаем автоприсвоение",
                 user.telegram_id,
                 target_group.name,
             )
@@ -169,7 +168,7 @@ async def maybe_assign_promo_group_by_total_spent(
         await db.commit()
         await db.refresh(user)
 
-        if target_group.id != previous_group_id:
+        if not already_has_group:
             await _notify_admins_about_auto_assignment(
                 db,
                 user,

@@ -107,7 +107,7 @@ def _get_addon_discount_percent_for_user(
     if user is None:
         return 0
 
-    promo_group = getattr(user, "promo_group", None)
+    promo_group = user.get_primary_promo_group()
     if promo_group is None:
         return 0
 

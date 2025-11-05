@@ -104,6 +104,7 @@ from app.utils.pricing_utils import (
     format_period_description,
     apply_percentage_discount,
 )
+from app.utils.price_display import PriceInfo, format_price_text, calculate_user_price
 from app.utils.subscription_utils import (
     convert_subscription_link_to_happ_scheme,
     get_display_subscription_link,
@@ -446,7 +447,7 @@ async def show_trial_offer(
 
     trial_text = texts.TRIAL_AVAILABLE.format(
         days=settings.TRIAL_DURATION_DAYS,
-        traffic=settings.TRIAL_TRAFFIC_LIMIT_GB,
+        traffic=texts.format_traffic(settings.TRIAL_TRAFFIC_LIMIT_GB),
         devices_line=devices_line,
         server_name=trial_server_name
     )
@@ -647,7 +648,7 @@ async def start_subscription_purchase(
 ):
     texts = get_texts(db_user.language)
 
-    keyboard = get_subscription_period_keyboard(db_user.language)
+    keyboard = get_subscription_period_keyboard(db_user.language, db_user)
     prompt_text = await _build_subscription_period_prompt(db_user, texts, db)
 
     await _edit_message_text_or_caption(
@@ -931,25 +932,21 @@ async def handle_extend_subscription(
             months_in_period = calculate_months_from_days(days)
 
             from app.config import PERIOD_PRICES
-            base_price_original = PERIOD_PRICES.get(days, 0)
-            period_discount_percent = db_user.get_promo_discount("period", days)
-            base_price, _ = apply_percentage_discount(
-                base_price_original,
-                period_discount_percent,
-            )
 
+            # 1. Calculate period price with promo group discount using unified system
+            base_price_original = PERIOD_PRICES.get(days, 0)
+            period_price_info = calculate_user_price(db_user, base_price_original, days, "period")
+
+            # 2. Calculate servers price with promo group discount
             servers_price_per_month, _ = await subscription_service.get_countries_price_by_uuids(
                 subscription.connected_squads,
                 db,
                 promo_group_id=db_user.promo_group_id,
             )
-            servers_discount_percent = db_user.get_promo_discount(
-                "servers",
-                days,
-            )
-            servers_discount_per_month = servers_price_per_month * servers_discount_percent // 100
-            total_servers_price = (servers_price_per_month - servers_discount_per_month) * months_in_period
+            servers_total_base = servers_price_per_month * months_in_period
+            servers_price_info = calculate_user_price(db_user, servers_total_base, days, "servers")
 
+            # 3. Calculate devices price with promo group discount
             device_limit = subscription.device_limit
             if device_limit is None:
                 if settings.is_devices_selection_enabled():
@@ -963,31 +960,34 @@ async def handle_extend_subscription(
 
             additional_devices = max(0, (device_limit or 0) - settings.DEFAULT_DEVICE_LIMIT)
             devices_price_per_month = additional_devices * settings.PRICE_PER_DEVICE
-            devices_discount_percent = db_user.get_promo_discount(
-                "devices",
-                days,
-            )
-            devices_discount_per_month = devices_price_per_month * devices_discount_percent // 100
-            total_devices_price = (devices_price_per_month - devices_discount_per_month) * months_in_period
+            devices_total_base = devices_price_per_month * months_in_period
+            devices_price_info = calculate_user_price(db_user, devices_total_base, days, "devices")
 
+            # 4. Calculate traffic price with promo group discount
             traffic_price_per_month = settings.get_traffic_price(subscription.traffic_limit_gb)
-            traffic_discount_percent = db_user.get_promo_discount(
-                "traffic",
-                days,
-            )
-            traffic_discount_per_month = traffic_price_per_month * traffic_discount_percent // 100
-            total_traffic_price = (traffic_price_per_month - traffic_discount_per_month) * months_in_period
+            traffic_total_base = traffic_price_per_month * months_in_period
+            traffic_price_info = calculate_user_price(db_user, traffic_total_base, days, "traffic")
 
+            # 5. Calculate ORIGINAL price (before ALL discounts)
             total_original_price = (
-                base_price_original
-                + servers_price_per_month * months_in_period
-                + devices_price_per_month * months_in_period
-                + traffic_price_per_month * months_in_period
+                period_price_info.base_price +
+                servers_price_info.base_price +
+                devices_price_info.base_price +
+                traffic_price_info.base_price
             )
 
-            price = base_price + total_servers_price + total_devices_price + total_traffic_price
-            promo_component = _apply_promo_offer_discount(db_user, price)
+            # 6. Sum prices with promo group discounts applied
+            total_price = (
+                period_price_info.final_price +
+                servers_price_info.final_price +
+                devices_price_info.final_price +
+                traffic_price_info.final_price
+            )
 
+            # 7. Apply promo offer discount on top of promo group discounts
+            promo_component = _apply_promo_offer_discount(db_user, total_price)
+
+            # Store: original = price before discounts, final = price with all discounts
             renewal_prices[days] = {
                 "final": promo_component["discounted"],
                 "original": total_original_price,
@@ -1018,23 +1018,27 @@ async def handle_extend_subscription(
             final_price = price_info
             original_price = final_price
 
-        has_discount = original_price > final_price
-
         period_display = format_period_description(days, db_user.language)
 
-        if has_discount:
-            prices_text += (
-                "📅 "
-                f"{period_display} - <s>{texts.format_price(original_price)}</s> "
-                f"{texts.format_price(final_price)}\n"
-            )
-        else:
-            prices_text += (
-                "📅 "
-                f"{period_display} - {texts.format_price(final_price)}\n"
-            )
+        # Calculate discount percentage for PriceInfo
+        discount_percent = 0
+        if original_price > final_price and original_price > 0:
+            discount_percent = ((original_price - final_price) * 100) // original_price
 
-    promo_discounts_text = _build_promo_group_discount_text(
+        # Create PriceInfo and format text using unified system
+        price_info_obj = PriceInfo(
+            base_price=original_price,
+            final_price=final_price,
+            discount_percent=discount_percent
+        )
+
+        prices_text += format_price_text(
+            period_label=period_display,
+            price_info=price_info_obj,
+            format_price_func=texts.format_price
+        ) + "\n"
+
+    promo_discounts_text = await _build_promo_group_discount_text(
         db_user,
         available_periods,
         texts=texts,

@@ -67,9 +67,10 @@ class TransactionType(Enum):
 
 
 class PromoCodeType(Enum):
-    BALANCE = "balance" 
-    SUBSCRIPTION_DAYS = "subscription_days"  
-    TRIAL_SUBSCRIPTION = "trial_subscription"  
+    BALANCE = "balance"
+    SUBSCRIPTION_DAYS = "subscription_days"
+    TRIAL_SUBSCRIPTION = "trial_subscription"
+    PROMO_GROUP = "promo_group"
 
 
 class PaymentMethod(Enum):
@@ -418,6 +419,7 @@ class PromoGroup(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), unique=True, nullable=False)
+    priority = Column(Integer, nullable=False, default=0, index=True)
     server_discount_percent = Column(Integer, nullable=False, default=0)
     traffic_discount_percent = Column(Integer, nullable=False, default=0)
     device_discount_percent = Column(Integer, nullable=False, default=0)
@@ -429,6 +431,7 @@ class PromoGroup(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     users = relationship("User", back_populates="promo_group")
+    user_promo_groups = relationship("UserPromoGroup", back_populates="promo_group", cascade="all, delete-orphan")
     server_squads = relationship(
         "ServerSquad",
         secondary=server_squad_promo_groups,
@@ -492,6 +495,22 @@ class PromoGroup(Base):
         return max(0, min(100, percent))
 
 
+class UserPromoGroup(Base):
+    """Таблица связи Many-to-Many между пользователями и промогруппами."""
+    __tablename__ = "user_promo_groups"
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="CASCADE"), primary_key=True)
+    assigned_at = Column(DateTime, default=func.now())
+    assigned_by = Column(String(50), default="system")
+
+    user = relationship("User", back_populates="user_promo_groups")
+    promo_group = relationship("PromoGroup", back_populates="user_promo_groups")
+
+    def __repr__(self):
+        return f"<UserPromoGroup(user_id={self.user_id}, promo_group_id={self.promo_group_id}, assigned_by='{self.assigned_by}')>"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -529,23 +548,51 @@ class User(Base):
     vless_uuid = Column(String(255), nullable=True)
     ss_password = Column(String(255), nullable=True)
     has_made_first_topup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="RESTRICT"), nullable=False, index=True)
+    promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="RESTRICT"), nullable=True, index=True)
     promo_group = relationship("PromoGroup", back_populates="users")
+    user_promo_groups = relationship("UserPromoGroup", back_populates="user", cascade="all, delete-orphan")
     poll_responses = relationship("PollResponse", back_populates="user")
-    
+
     @property
     def balance_rubles(self) -> float:
         return self.balance_kopeks / 100
-    
+
     @property
     def full_name(self) -> str:
         parts = [self.first_name, self.last_name]
         return " ".join(filter(None, parts)) or self.username or f"ID{self.telegram_id}"
 
+    def get_primary_promo_group(self):
+        """Возвращает промогруппу с максимальным приоритетом."""
+        if not self.user_promo_groups:
+            return getattr(self, "promo_group", None)
+
+        try:
+            # Сортируем по приоритету группы (убывание), затем по ID группы
+            # Используем getattr для защиты от ленивой загрузки
+            sorted_groups = sorted(
+                self.user_promo_groups,
+                key=lambda upg: (
+                    getattr(upg.promo_group, 'priority', 0) if upg.promo_group else 0,
+                    upg.promo_group_id
+                ),
+                reverse=True
+            )
+
+            if sorted_groups and sorted_groups[0].promo_group:
+                return sorted_groups[0].promo_group
+        except Exception:
+            # Если возникла ошибка (например, ленивая загрузка), fallback на старую связь
+            pass
+
+        # Fallback на старую связь если новая пустая или возникла ошибка
+        return getattr(self, "promo_group", None)
+
     def get_promo_discount(self, category: str, period_days: Optional[int] = None) -> int:
-        if not self.promo_group:
+        primary_group = self.get_primary_promo_group()
+        if not primary_group:
             return 0
-        return self.promo_group.get_discount_percent(category, period_days)
+        return primary_group.get_discount_percent(category, period_days)
     
     def add_balance(self, kopeks: int) -> None:
         self.balance_kopeks += kopeks
@@ -793,13 +840,15 @@ class PromoCode(Base):
     valid_until = Column(DateTime, nullable=True)
     
     is_active = Column(Boolean, default=True)
-    
+
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    
+    promo_group_id = Column(Integer, ForeignKey("promo_groups.id", ondelete="SET NULL"), nullable=True, index=True)
+
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    
+
     uses = relationship("PromoCodeUse", back_populates="promocode")
+    promo_group = relationship("PromoGroup")
     
     @property
     def is_valid(self) -> bool:

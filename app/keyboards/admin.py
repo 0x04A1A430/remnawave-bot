@@ -827,20 +827,28 @@ def get_user_management_keyboard(user_id: int, user_status: str, language: str =
 def get_user_promo_group_keyboard(
     promo_groups: List[Tuple[Any, int]],
     user_id: int,
-    current_group_id: Optional[int],
+    current_group_ids,  # Can be Optional[int] or List[int]
     language: str = "ru"
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
 
+    # Ensure current_group_ids is a list
+    if current_group_ids is None:
+        current_group_ids = []
+    elif isinstance(current_group_ids, int):
+        current_group_ids = [current_group_ids]
+
     keyboard: List[List[InlineKeyboardButton]] = []
 
     for group, members_count in promo_groups:
-        prefix = "✅" if current_group_id is not None and group.id == current_group_id else "👥"
+        # Check if user has this group
+        has_group = group.id in current_group_ids
+        prefix = "✅" if has_group else "👥"
         count_text = f" ({members_count})" if members_count else ""
         keyboard.append([
             InlineKeyboardButton(
                 text=f"{prefix} {group.name}{count_text}",
-                callback_data=f"admin_user_promo_group_set_{user_id}_{group.id}"
+                callback_data=f"admin_user_promo_group_toggle_{user_id}_{group.id}"
             )
         ])
 
@@ -887,6 +895,10 @@ def get_promocode_type_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text=_t(texts, "ADMIN_PROMOCODE_TYPE_TRIAL", "🎁 Триал"),
                 callback_data="promo_type_trial"
+            ),
+            InlineKeyboardButton(
+                text=_t(texts, "ADMIN_PROMOCODE_TYPE_PROMO_GROUP", "🏷️ Промогруппа"),
+                callback_data="promo_type_group"
             )
         ],
         [

@@ -11,6 +11,7 @@ from app.database.models import (
     User,
     SubscriptionServer,
     PromoGroup,
+    UserPromoGroup,
 )
 from app.database.crud.notification import clear_notifications
 from app.utils.pricing_utils import calculate_months_from_days, get_remaining_months
@@ -195,10 +196,27 @@ async def extend_subscription(
     days: int
 ) -> Subscription:
     current_time = datetime.utcnow()
-    
+
     logger.info(f"🔄 Продление подписки {subscription.id} на {days} дней")
     logger.info(f"📊 Текущие параметры: статус={subscription.status}, окончание={subscription.end_date}")
-    
+
+    # НОВОЕ: Вычисляем бонусные дни от триала ДО изменения end_date
+    bonus_days = 0
+    if subscription.is_trial and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
+        # Вычисляем остаток триала
+        if subscription.end_date and subscription.end_date > current_time:
+            remaining = subscription.end_date - current_time
+            if remaining.total_seconds() > 0:
+                bonus_days = max(0, remaining.days)
+                logger.info(
+                    "🎁 Обнаружен остаток триала: %s дней для подписки %s",
+                    bonus_days,
+                    subscription.id,
+                )
+
+    # Применяем продление с учетом бонусных дней
+    total_days = days + bonus_days
+
     if days < 0:
         subscription.end_date = subscription.end_date + timedelta(days=days)
         logger.info(
@@ -207,27 +225,15 @@ async def extend_subscription(
             subscription.end_date,
         )
     elif subscription.end_date > current_time:
-        subscription.end_date = subscription.end_date + timedelta(days=days)
-        logger.info(f"📅 Подписка активна, добавляем {days} дней к текущей дате окончания")
+        subscription.end_date = subscription.end_date + timedelta(days=total_days)
+        logger.info(f"📅 Подписка активна, добавляем {total_days} дней ({days} + {bonus_days} бонус) к текущей дате окончания")
     else:
-        subscription.end_date = current_time + timedelta(days=days)
-        logger.info(f"📅 Подписка истекла, устанавливаем новую дату окончания")
+        subscription.end_date = current_time + timedelta(days=total_days)
+        logger.info(f"📅 Подписка истекла, устанавливаем новую дату окончания на {total_days} дней ({days} + {bonus_days} бонус)")
 
-    if subscription.is_trial:
-        start_date = subscription.start_date or current_time
-        total_duration = subscription.end_date - start_date
-        max_trial_duration = timedelta(days=settings.TRIAL_DURATION_DAYS)
-
-        if total_duration > max_trial_duration:
-            subscription.is_trial = False
-            logger.info(
-                "🎯 Подписка %s автоматически переведена из триальной в платную после продления"
-                ", итоговая длительность: %s дней",
-                subscription.id,
-                total_duration.days,
-            )
-            if subscription.user:
-                subscription.user.has_had_paid_subscription = True
+    # УДАЛЕНО: Автоматическая конвертация триала по длительности
+    # Теперь триал конвертируется ТОЛЬКО после успешного коммита продления
+    # и ТОЛЬКО вызывающей функцией (например, _auto_extend_subscription)
 
     # Логируем статус подписки перед проверкой
     logger.info(f"🔄 Продление подписки {subscription.id}, текущий статус: {subscription.status}, дни: {days}")
@@ -915,7 +921,7 @@ async def get_subscription_renewal_cost(
         result = await db.execute(
             select(Subscription)
             .options(
-                selectinload(Subscription.user).selectinload(User.promo_group),
+                selectinload(Subscription.user).selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             )
             .where(Subscription.id == subscription_id)
         )
