@@ -137,30 +137,50 @@ class BroadcastService:
 
             keyboard = self._build_keyboard(config.selected_buttons)
 
-            for index, user in enumerate(recipients, start=1):
+            # Ограничение на количество одновременных отправок
+            semaphore = asyncio.Semaphore(20)
+
+            async def send_single_message(user):
+                """Отправляет одно сообщение с семафором ограничения"""
+                async with semaphore:
+                    if cancel_event.is_set():
+                        return False
+
+                    telegram_id = getattr(user, "telegram_id", None)
+                    if telegram_id is None:
+                        return False
+
+                    try:
+                        await self._deliver_message(telegram_id, config, keyboard)
+                        return True
+                    except Exception as exc:  # noqa: BLE001
+                        logger.error(
+                            "Ошибка отправки рассылки %s пользователю %s: %s",
+                            broadcast_id,
+                            telegram_id,
+                            exc,
+                        )
+                        return False
+
+            # Отправляем сообщения пакетами для эффективности
+            batch_size = 100
+            for i in range(0, len(recipients), batch_size):
                 if cancel_event.is_set():
                     await self._mark_cancelled(broadcast_id, sent_count, failed_count)
                     return
 
-                telegram_id = getattr(user, "telegram_id", None)
-                if telegram_id is None:
-                    failed_count += 1
-                    continue
+                batch = recipients[i:i + batch_size]
+                tasks = [send_single_message(user) for user in batch]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                try:
-                    await self._deliver_message(telegram_id, config, keyboard)
-                    sent_count += 1
-                except Exception as exc:  # noqa: BLE001
-                    failed_count += 1
-                    logger.error(
-                        "Ошибка отправки рассылки %s пользователю %s: %s",
-                        broadcast_id,
-                        telegram_id,
-                        exc,
-                    )
+                for result in results:
+                    if result is True:
+                        sent_count += 1
+                    else:
+                        failed_count += 1
 
-                if index % 20 == 0:
-                    await asyncio.sleep(1)
+                # Небольшая задержка между пакетами для снижения нагрузки на API
+                await asyncio.sleep(0.1)
 
             await self._mark_finished(broadcast_id, sent_count, failed_count, cancelled=False)
 
