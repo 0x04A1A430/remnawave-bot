@@ -41,6 +41,7 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
             selectinload(User.subscription),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
+            selectinload(User.promo_group),
         )
         .where(User.id == user_id)
     )
@@ -49,15 +50,6 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
     if user and user.subscription:
         # Загружаем дополнительные зависимости для subscription
         _ = user.subscription.is_active
-    
-    if user and user.promo_group:
-        # Убедимся, что все атрибуты promo_group доступны
-        _ = user.promo_group.name
-        _ = user.promo_group.server_discount_percent
-        _ = user.promo_group.traffic_discount_percent
-        _ = user.promo_group.device_discount_percent
-        _ = user.promo_group.period_discounts
-        _ = user.promo_group.is_default
     
     return user
 
@@ -69,6 +61,7 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optiona
             selectinload(User.subscription),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
+            selectinload(User.promo_group),
         )
         .where(User.telegram_id == telegram_id)
     )
@@ -77,15 +70,6 @@ async def get_user_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optiona
     if user and user.subscription:
         # Загружаем дополнительные зависимости для subscription
         _ = user.subscription.is_active
-    
-    if user and user.promo_group:
-        # Убедимся, что все атрибуты promo_group доступны
-        _ = user.promo_group.name
-        _ = user.promo_group.server_discount_percent
-        _ = user.promo_group.traffic_discount_percent
-        _ = user.promo_group.device_discount_percent
-        _ = user.promo_group.period_discounts
-        _ = user.promo_group.is_default
 
     return user
 
@@ -102,6 +86,7 @@ async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User
             selectinload(User.subscription),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
+            selectinload(User.promo_group),
         )
         .where(func.lower(User.username) == normalized)
     )
@@ -111,15 +96,6 @@ async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User
     if user and user.subscription:
         # Загружаем дополнительные зависимости для subscription
         _ = user.subscription.is_active
-    
-    if user and user.promo_group:
-        # Убедимся, что все атрибуты promo_group доступны
-        _ = user.promo_group.name
-        _ = user.promo_group.server_discount_percent
-        _ = user.promo_group.traffic_discount_percent
-        _ = user.promo_group.device_discount_percent
-        _ = user.promo_group.period_discounts
-        _ = user.promo_group.is_default
 
     return user
 
@@ -139,15 +115,6 @@ async def get_user_by_referral_code(db: AsyncSession, referral_code: str) -> Opt
     if user and user.subscription:
         # Загружаем дополнительные зависимости для subscription
         _ = user.subscription.is_active
-    
-    if user and user.promo_group:
-        # Убедимся, что все атрибуты promo_group доступны
-        _ = user.promo_group.name
-        _ = user.promo_group.server_discount_percent
-        _ = user.promo_group.traffic_discount_percent
-        _ = user.promo_group.device_discount_percent
-        _ = user.promo_group.period_discounts
-        _ = user.promo_group.is_default
     
     return user
 
@@ -731,15 +698,6 @@ async def get_users_list(
         if user and user.subscription:
             # Загружаем дополнительные зависимости для subscription
             _ = user.subscription.is_active
-        
-        if user and user.promo_group:
-            # Убедимся, что все атрибуты promo_group доступны
-            _ = user.promo_group.name
-            _ = user.promo_group.server_discount_percent
-            _ = user.promo_group.traffic_discount_percent
-            _ = user.promo_group.device_discount_percent
-            _ = user.promo_group.period_discounts
-            _ = user.promo_group.is_default
     
     return users
 
@@ -842,6 +800,7 @@ async def get_referrals(db: AsyncSession, user_id: int) -> List[User]:
             selectinload(User.subscription),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
+            selectinload(User.promo_group),
         )
         .where(User.referred_by_id == user_id)
         .order_by(User.created_at.desc())
@@ -853,15 +812,6 @@ async def get_referrals(db: AsyncSession, user_id: int) -> List[User]:
         if user and user.subscription:
             # Загружаем дополнительные зависимости для subscription
             _ = user.subscription.is_active
-        
-        if user and user.promo_group:
-            # Убедимся, что все атрибуты promo_group доступны
-            _ = user.promo_group.name
-            _ = user.promo_group.server_discount_percent
-            _ = user.promo_group.traffic_discount_percent
-            _ = user.promo_group.device_discount_percent
-            _ = user.promo_group.period_discounts
-            _ = user.promo_group.is_default
     
     return users
 
@@ -927,15 +877,6 @@ async def get_users_for_promo_segment(db: AsyncSession, segment: str) -> List[Us
         if user and user.subscription:
             # Загружаем дополнительные зависимости для subscription
             _ = user.subscription.is_active
-        
-        if user and user.promo_group:
-            # Убедимся, что все атрибуты promo_group доступны
-            _ = user.promo_group.name
-            _ = user.promo_group.server_discount_percent
-            _ = user.promo_group.traffic_discount_percent
-            _ = user.promo_group.device_discount_percent
-            _ = user.promo_group.period_discounts
-            _ = user.promo_group.is_default
     
     return users
 
@@ -949,6 +890,7 @@ async def get_inactive_users(db: AsyncSession, months: int = 3) -> List[User]:
             selectinload(User.subscription),
             selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
             selectinload(User.referrer),
+            selectinload(User.promo_group),
         )
         .where(
             and_(
@@ -964,15 +906,6 @@ async def get_inactive_users(db: AsyncSession, months: int = 3) -> List[User]:
         if user and user.subscription:
             # Загружаем дополнительные зависимости для subscription
             _ = user.subscription.is_active
-        
-        if user and user.promo_group:
-            # Убедимся, что все атрибуты promo_group доступны
-            _ = user.promo_group.name
-            _ = user.promo_group.server_discount_percent
-            _ = user.promo_group.traffic_discount_percent
-            _ = user.promo_group.device_discount_percent
-            _ = user.promo_group.period_discounts
-            _ = user.promo_group.is_default
     
     return users
 
