@@ -69,7 +69,6 @@ async def send_poll_to_users(
     users: Iterable[User],
 ) -> dict:
     from app.database.database import AsyncSessionLocal
-    from sqlalchemy.dialects.postgresql import insert
     
     sent = 0
     failed = 0
@@ -98,8 +97,8 @@ async def send_poll_to_users(
     )
     existing_user_ids = set(existing_responses_result.scalars().all())
 
-    # Увеличиваем семафор для большего количества одновременных отправок
-    semaphore = asyncio.Semaphore(100)  # Увеличиваем до 100 для максимальной скорости
+    # Используем умеренный семафор, чтобы не превышать лимиты подключений к БД
+    semaphore = asyncio.Semaphore(30)  # Баланс между производительностью и нагрузкой на БД
 
     # Создаем отдельную функцию для создания отдельной сессии для каждой отправки
     async def send_poll_invitation(user_snapshot):
@@ -156,12 +155,22 @@ async def send_poll_to_users(
                         return "failed"
                 except Exception as error:  # pragma: no cover - defensive logging
                     await new_db.rollback()
-                    logger.error(
-                        "❌ Ошибка отправки опроса %s пользователю %s: %s",
-                        poll_id,
-                        user_snapshot.telegram_id,
-                        error,
-                    )
+                    # Проверяем, является ли ошибка связанной с лимитом подключений
+                    if "too many clients" in str(error).lower():
+                        logger.warning(
+                            "⚠️ Ограничение на количество подключений к БД: %s пользователю %s",
+                            poll_id,
+                            user_snapshot.telegram_id,
+                        )
+                        # Уменьшаем вероятность переполнения, делая небольшую задержку
+                        await asyncio.sleep(0.1)
+                    else:
+                        logger.error(
+                            "❌ Ошибка отправки опроса %s пользователю %s: %s",
+                            poll_id,
+                            user_snapshot.telegram_id,
+                            error,
+                        )
                     return "failed"
 
     # Отправляем все приглашения одновременно без задержек для максимальной скорости
