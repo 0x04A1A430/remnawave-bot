@@ -283,7 +283,14 @@ class MonitoringService:
                 is_active = False
                 logger.info(f"📝 Статус подписки {subscription.id} обновлен на 'expired'")
             
-            async with self.api as api:
+            if not self.subscription_service.is_configured:
+                logger.warning(
+                    "RemnaWave API не настроен. Пропускаем обновление пользователя %s",
+                    subscription.user_id,
+                )
+                return None
+
+            async with self.subscription_service.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
 
                 update_kwargs = dict(
@@ -1488,7 +1495,11 @@ class MonitoringService:
             if now.minute != 0:
                 return
             
-            async with self.subscription_service.api as api:
+            if not self.subscription_service.is_configured:
+                logger.warning("RemnaWave API не настроен. Пропускаем синхронизацию")
+                return
+
+            async with self.subscription_service.get_api_client() as api:
                 system_stats = await api.get_system_stats()
                 
                 await self._log_monitoring_event(
