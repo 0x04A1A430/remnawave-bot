@@ -350,7 +350,7 @@ async def _build_subscription_period_prompt(
     if promo_offer_hint:
         lines.extend(["", promo_offer_hint])
 
-    promo_text = _build_promo_group_discount_text(
+    promo_text = await _build_promo_group_discount_text(
         db_user,
         settings.get_available_subscription_periods(),
         texts=texts,

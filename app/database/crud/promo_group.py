@@ -1,11 +1,11 @@
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models import PromoGroup, User
+from app.database.models import PromoGroup, User, UserPromoGroup
 
 
 def _normalize_period_discounts(period_discounts: Optional[Dict[int, int]]) -> Dict[int, int]:
@@ -38,7 +38,7 @@ async def get_promo_groups_with_counts(
         select(PromoGroup, func.count(User.id))
         .outerjoin(User, User.promo_group_id == PromoGroup.id)
         .group_by(PromoGroup.id)
-        .order_by(PromoGroup.is_default.desc(), PromoGroup.name)
+        .order_by(PromoGroup.priority.desc(), PromoGroup.name)
     )
 
     if offset:
@@ -89,6 +89,7 @@ async def create_promo_group(
     db: AsyncSession,
     name: str,
     *,
+    priority: int = 0,
     server_discount_percent: int,
     traffic_discount_percent: int,
     device_discount_percent: int,
@@ -110,6 +111,7 @@ async def create_promo_group(
 
     promo_group = PromoGroup(
         name=name.strip(),
+        priority=max(0, priority),
         server_discount_percent=max(0, min(100, server_discount_percent)),
         traffic_discount_percent=max(0, min(100, traffic_discount_percent)),
         device_discount_percent=max(0, min(100, device_discount_percent)),
@@ -152,6 +154,7 @@ async def update_promo_group(
     group: PromoGroup,
     *,
     name: Optional[str] = None,
+    priority: Optional[int] = None,
     server_discount_percent: Optional[int] = None,
     traffic_discount_percent: Optional[int] = None,
     device_discount_percent: Optional[int] = None,
@@ -162,6 +165,8 @@ async def update_promo_group(
 ) -> PromoGroup:
     if name is not None:
         group.name = name.strip()
+    if priority is not None:
+        group.priority = max(0, priority)
     if server_discount_percent is not None:
         group.server_discount_percent = max(0, min(100, server_discount_percent))
     if traffic_discount_percent is not None:
@@ -228,11 +233,42 @@ async def delete_promo_group(db: AsyncSession, group: PromoGroup) -> bool:
         return False
 
 
+    # Получаем список пользователей, связанных с удаляемой промогруппой
+    affected_user_ids: Set[int] = set()
+
+    user_ids_result = await db.execute(
+        select(User.id).where(User.promo_group_id == group.id)
+    )
+    affected_user_ids.update(user_ids_result.scalars().all())
+
+    promo_group_links_result = await db.execute(
+        select(UserPromoGroup.user_id).where(UserPromoGroup.promo_group_id == group.id)
+    )
+    affected_user_ids.update(promo_group_links_result.scalars().all())
+
     await db.execute(
         update(User)
         .where(User.promo_group_id == group.id)
         .values(promo_group_id=default_group.id)
     )
+
+    if affected_user_ids:
+        existing_defaults_result = await db.execute(
+            select(UserPromoGroup.user_id)
+            .where(UserPromoGroup.promo_group_id == default_group.id)
+            .where(UserPromoGroup.user_id.in_(affected_user_ids))
+        )
+        existing_default_user_ids = set(existing_defaults_result.scalars().all())
+
+        for user_id in affected_user_ids - existing_default_user_ids:
+            db.add(
+                UserPromoGroup(
+                    user_id=user_id,
+                    promo_group_id=default_group.id,
+                    assigned_by="system",
+                )
+            )
+
     await db.delete(group)
     await db.commit()
 

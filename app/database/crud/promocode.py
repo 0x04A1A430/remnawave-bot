@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 async def get_promocode_by_code(db: AsyncSession, code: str) -> Optional[PromoCode]:
     result = await db.execute(
         select(PromoCode)
-        .options(selectinload(PromoCode.uses))
+        .options(
+            selectinload(PromoCode.uses),
+            selectinload(PromoCode.promo_group)
+        )
         .where(PromoCode.code == code.upper())
     )
     return result.scalar_one_or_none()
@@ -27,7 +30,8 @@ async def create_promocode(
     subscription_days: int = 0,
     max_uses: int = 1,
     valid_until: Optional[datetime] = None,
-    created_by: Optional[int] = None
+    created_by: Optional[int] = None,
+    promo_group_id: Optional[int] = None
 ) -> PromoCode:
     
     promocode = PromoCode(
@@ -37,14 +41,18 @@ async def create_promocode(
         subscription_days=subscription_days,
         max_uses=max_uses,
         valid_until=valid_until,
-        created_by=created_by
+        created_by=created_by,
+        promo_group_id=promo_group_id
     )
     
     db.add(promocode)
     await db.commit()
     await db.refresh(promocode)
-    
-    logger.info(f"✅ Создан промокод: {code}")
+
+    if promo_group_id:
+        logger.info(f"✅ Создан промокод: {code} с промогруппой ID {promo_group_id}")
+    else:
+        logger.info(f"✅ Создан промокод: {code}")
     return promocode
 
 
@@ -143,14 +151,17 @@ async def get_promocodes_list(
     limit: int = 50,
     is_active: Optional[bool] = None
 ) -> List[PromoCode]:
-    
-    query = select(PromoCode).options(selectinload(PromoCode.uses))
-    
+
+    query = select(PromoCode).options(
+        selectinload(PromoCode.uses),
+        selectinload(PromoCode.promo_group)
+    )
+
     if is_active is not None:
         query = query.where(PromoCode.is_active == is_active)
-    
+
     query = query.order_by(PromoCode.created_at.desc()).offset(offset).limit(limit)
-    
+
     result = await db.execute(query)
     return result.scalars().all()
 

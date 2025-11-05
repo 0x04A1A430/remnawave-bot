@@ -281,13 +281,8 @@ class MulenPayPaymentMixin:
                     )
                     return False
 
-                # Используем предзагруженные значения для избежания lazy-загрузки
-                promo_group = (
-                    user.promo_group if hasattr(user, "promo_group") and user.promo_group else None
-                )
-                subscription = (
-                    user.subscription if hasattr(user, "subscription") and user.subscription else None
-                )
+                promo_group = user.get_primary_promo_group()
+                subscription = getattr(user, "subscription", None)
                 referrer_info = format_referrer_info(user)
                 topup_status = (
                     "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"

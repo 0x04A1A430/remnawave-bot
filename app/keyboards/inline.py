@@ -13,6 +13,7 @@ from app.utils.pricing_utils import (
     format_period_description,
     apply_percentage_discount,
 )
+from app.utils.price_display import PriceInfo, format_price_button
 from app.utils.subscription_utils import (
     get_display_subscription_link,
     get_happ_cryptolink_redirect_link,
@@ -863,36 +864,59 @@ def get_trial_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
     ])
 
 
-def get_subscription_period_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
+def get_subscription_period_keyboard(
+    language: str = DEFAULT_LANGUAGE,
+    user: Optional[User] = None
+) -> InlineKeyboardMarkup:
+    """
+    Generate subscription period selection keyboard with personalized pricing.
+
+    Args:
+        language: User's language code
+        user: User object for personalized discounts (None = default discounts)
+
+    Returns:
+        InlineKeyboardMarkup with period buttons showing personalized prices
+    """
+    from app.utils.price_display import calculate_user_price
+
     texts = get_texts(language)
     keyboard = []
-    
+
     available_periods = settings.get_available_subscription_periods()
-    
-    period_texts = {
-        14: texts.PERIOD_14_DAYS,
-        30: texts.PERIOD_30_DAYS,
-        60: texts.PERIOD_60_DAYS,
-        90: texts.PERIOD_90_DAYS,
-        180: texts.PERIOD_180_DAYS,
-        360: texts.PERIOD_360_DAYS
-    }
-    
+
     for days in available_periods:
-        if days in period_texts:
-            keyboard.append([
-                InlineKeyboardButton(
-                    text=period_texts[days], 
-                    callback_data=f"period_{days}"
-                )
-            ])
-    
+        # Get base price for this period
+        base_price = PERIOD_PRICES.get(days, 0)
+
+        # Calculate personalized price with user's discounts
+        price_info = calculate_user_price(user, base_price, days, "period")
+
+        # Format period description
+        period_display = format_period_description(days, language)
+
+        # Format button text with discount display
+        button_text = format_price_button(
+            period_label=period_display,
+            price_info=price_info,
+            format_price_func=texts.format_price,
+            emphasize=False,
+            add_exclamation=False
+        )
+
+        keyboard.append([
+            InlineKeyboardButton(
+                text=button_text,
+                callback_data=f"period_{days}"
+            )
+        ])
+
     # Кнопка "Простая покупка" была убрана из выбора периода подписки
-    
+
     keyboard.append([
         InlineKeyboardButton(text=texts.BACK, callback_data="back_to_menu")
     ])
-    
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -1408,27 +1432,8 @@ def _get_days_word(days: int) -> str:
 
 
 
-def get_extend_subscription_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
-    texts = get_texts(language)
-    keyboard = []
-    
-    periods = [
-        (14, texts.PERIOD_14_DAYS),
-        (30, texts.PERIOD_30_DAYS),
-        (60, texts.PERIOD_60_DAYS),
-        (90, texts.PERIOD_90_DAYS)
-    ]
-    
-    for days, text in periods:
-        keyboard.append([
-            InlineKeyboardButton(text=text, callback_data=f"extend_period_{days}")
-        ])
-    
-    keyboard.append([
-        InlineKeyboardButton(text=texts.BACK, callback_data="menu_subscription")
-    ])
-    
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+# Deprecated: get_extend_subscription_keyboard() was removed.
+# Use get_extend_subscription_keyboard_with_prices() instead for personalized pricing.
 
 
 def get_add_traffic_keyboard(
@@ -1965,15 +1970,39 @@ def get_extend_subscription_keyboard_with_prices(language: str, prices: dict) ->
 
         if isinstance(price_info, dict):
             final_price = price_info.get("final")
+            original_price = price_info.get("original", 0)
             if final_price is None:
                 final_price = price_info.get("original", 0)
         else:
             final_price = price_info
+            original_price = price_info
 
         period_display = format_period_description(days, language)
+
+        # Create PriceInfo from already calculated prices
+        # Note: original_price and final_price are calculated in the handler
+        discount_percent = 0
+        if original_price > final_price and original_price > 0:
+            discount_percent = ((original_price - final_price) * 100) // original_price
+
+        price_info_obj = PriceInfo(
+            base_price=original_price,
+            final_price=final_price,
+            discount_percent=discount_percent
+        )
+
+        # Format button using unified system
+        button_text = format_price_button(
+            period_label=period_display,
+            price_info=price_info_obj,
+            format_price_func=texts.format_price,
+            emphasize=False,
+            add_exclamation=False
+        )
+
         keyboard.append([
             InlineKeyboardButton(
-                text=f"📅 {period_display} - {texts.format_price(final_price)}",
+                text=button_text,
                 callback_data=f"extend_period_{days}"
             )
         ])

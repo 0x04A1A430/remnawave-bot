@@ -196,11 +196,16 @@ async def _prepare_auto_extend_context(
 
 
 def _apply_extension_updates(context: AutoExtendContext) -> None:
+    """
+    Применяет обновления лимитов подписки (трафик, устройства, серверы).
+    НЕ изменяет is_trial - это делается позже после успешного коммита продления.
+    """
     subscription = context.subscription
 
+    # Обновляем лимиты для триальной подписки
     if subscription.is_trial:
-        subscription.is_trial = False
-        subscription.status = "active"
+        # НЕ удаляем триал здесь! Это будет сделано после успешного extend_subscription()
+        # subscription.is_trial = False  # УДАЛЕНО: преждевременное удаление триала
         if context.traffic_limit_gb is not None:
             subscription.traffic_limit_gb = context.traffic_limit_gb
         if context.device_limit is not None:
@@ -208,6 +213,7 @@ def _apply_extension_updates(context: AutoExtendContext) -> None:
         if context.squad_uuid and context.squad_uuid not in (subscription.connected_squads or []):
             subscription.connected_squads = (subscription.connected_squads or []) + [context.squad_uuid]
     else:
+        # Обновляем лимиты для платной подписки
         if context.traffic_limit_gb not in (None, 0):
             subscription.traffic_limit_gb = context.traffic_limit_gb
         if (
@@ -275,6 +281,7 @@ async def _auto_extend_subscription(
 
     subscription = prepared.subscription
     old_end_date = subscription.end_date
+    was_trial = subscription.is_trial  # Запоминаем, была ли подписка триальной
 
     _apply_extension_updates(prepared)
 
@@ -284,6 +291,19 @@ async def _auto_extend_subscription(
             subscription,
             prepared.period_days,
         )
+
+        # НОВОЕ: Конвертируем триал в платную подписку ТОЛЬКО после успешного продления
+        if was_trial and subscription.is_trial:
+            subscription.is_trial = False
+            subscription.status = "active"
+            user.has_had_paid_subscription = True
+            await db.commit()
+            logger.info(
+                "✅ Триал конвертирован в платную подписку %s для пользователя %s",
+                subscription.id,
+                user.telegram_id,
+            )
+
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             "❌ Автопокупка: не удалось продлить подписку пользователя %s: %s",
@@ -291,6 +311,8 @@ async def _auto_extend_subscription(
             error,
             exc_info=True,
         )
+        # НОВОЕ: Откатываем изменения при ошибке
+        await db.rollback()
         return False
 
     transaction = None

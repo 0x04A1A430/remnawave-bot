@@ -397,14 +397,14 @@ class YooKassaPaymentMixin:
                     full_user_result = await db.execute(
                         select(User)
                         .options(selectinload(User.subscription))
-                        .options(selectinload(User.promo_group))
+                        .options(selectinload(User.user_promo_groups))
                         .where(User.id == user.id)
                     )
                     full_user = full_user_result.scalar_one_or_none()
-                    
+
                     # Используем обновленные данные или исходные, если не удалось обновить
                     subscription = full_user.subscription if full_user else getattr(user, "subscription", None)
-                    promo_group = full_user.promo_group if full_user else getattr(user, "promo_group", None)
+                    promo_group = full_user.get_primary_promo_group() if full_user else (user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None)
                     
                     # Используем full_user для форматирования реферальной информации, чтобы избежать проблем с ленивой загрузкой
                     user_for_referrer = full_user if full_user else user
@@ -653,7 +653,7 @@ class YooKassaPaymentMixin:
                                     full_user_result = await db.execute(
                                         select(User)
                                         .options(selectinload(User.subscription))
-                                        .options(selectinload(User.promo_group))
+                                        .options(selectinload(User.user_promo_groups))
                                         .where(User.id == user.id)
                                     )
                                     full_user = full_user_result.scalar_one_or_none()

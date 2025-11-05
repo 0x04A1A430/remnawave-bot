@@ -211,6 +211,14 @@ def _format_rubles(amount_kopeks: int) -> str:
     return formatted.replace(",", " ")
 
 
+def _format_priority_line(texts, group: PromoGroup) -> str:
+    priority = getattr(group, "priority", 0)
+    return texts.t(
+        "ADMIN_PROMO_GROUP_PRIORITY_LINE",
+        "🎯 Приоритет: {priority}",
+    ).format(priority=priority)
+
+
 def _format_auto_assign_line(texts, group: PromoGroup) -> str:
     threshold = getattr(group, "auto_assign_total_spent_kopeks", 0) or 0
 
@@ -294,6 +302,7 @@ def _build_edit_menu_content(
     lines = [header]
     lines.extend(_format_discount_lines(texts, group))
     lines.append(_format_addon_discounts_line(texts, group))
+    lines.append(_format_priority_line(texts, group))
     lines.append(_format_auto_assign_line(texts, group))
 
     period_lines = _format_period_discounts_lines(texts, group, language)
@@ -316,6 +325,15 @@ def _build_edit_menu_content(
                     "✏️ Изменить название",
                 ),
                 callback_data=f"promo_group_edit_field_{group.id}_name",
+            )
+        ],
+        [
+            types.InlineKeyboardButton(
+                text=texts.t(
+                    "ADMIN_PROMO_GROUP_EDIT_FIELD_PRIORITY",
+                    "🎯 Приоритет",
+                ),
+                callback_data=f"promo_group_edit_field_{group.id}_priority",
             )
         ],
         [
@@ -640,6 +658,32 @@ async def process_create_group_name(message: types.Message, state: FSMContext):
         return
 
     await state.update_data(new_group_name=name)
+    await state.set_state(AdminStates.creating_promo_group_priority)
+    texts = get_texts((await state.get_data()).get("language", "ru"))
+    await message.answer(
+        texts.t(
+            "ADMIN_PROMO_GROUP_CREATE_PRIORITY_PROMPT",
+            "Введите приоритет группы (0 = базовая, чем больше - тем выше приоритет):",
+        )
+    )
+
+
+async def process_create_group_priority(message: types.Message, state: FSMContext):
+    texts = get_texts((await state.get_data()).get("language", "ru"))
+    try:
+        priority = int(message.text)
+        if priority < 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        await message.answer(
+            texts.t(
+                "ADMIN_PROMO_GROUP_INVALID_PRIORITY",
+                "❌ Приоритет должен быть неотрицательным целым числом",
+            )
+        )
+        return
+
+    await state.update_data(new_group_priority=priority)
     await state.set_state(AdminStates.creating_promo_group_traffic_discount)
     await _prompt_for_discount(
         message,
@@ -772,6 +816,7 @@ async def process_create_group_auto_assign(
         group = await create_promo_group(
             db,
             data["new_group_name"],
+            priority=data.get("new_group_priority", 0),
             traffic_discount_percent=data["new_group_traffic"],
             server_discount_percent=data["new_group_servers"],
             device_discount_percent=data["new_group_devices"],
@@ -862,6 +907,12 @@ async def prompt_edit_promo_group_field(
             "ADMIN_PROMO_GROUP_EDIT_NAME_PROMPT",
             "Введите новое название промогруппы (текущее: {name}):",
         ).format(name=group.name)
+    elif field == "priority":
+        await state.set_state(AdminStates.editing_promo_group_priority)
+        prompt = texts.t(
+            "ADMIN_PROMO_GROUP_EDIT_PRIORITY_PROMPT",
+            "Введите новый приоритет (текущий: {current}):",
+        ).format(current=getattr(group, "priority", 0))
     elif field == "traffic":
         await state.set_state(AdminStates.editing_promo_group_traffic_discount)
         prompt = texts.t(
@@ -924,6 +975,48 @@ async def process_edit_group_name(
         return
 
     group = await update_promo_group(db, group, name=name)
+    await state.set_state(AdminStates.editing_promo_group_menu)
+
+    await _send_edit_menu_after_update(
+        message,
+        texts,
+        group,
+        data.get("language", db_user.language),
+        texts.t("ADMIN_PROMO_GROUP_UPDATED", "Промогруппа «{name}» обновлена.").format(name=group.name),
+    )
+
+
+@admin_required
+@error_handler
+async def process_edit_group_priority(
+    message: types.Message,
+    state: FSMContext,
+    db_user,
+    db: AsyncSession,
+):
+    data = await state.get_data()
+    texts = get_texts(data.get("language", db_user.language))
+
+    try:
+        priority = int(message.text)
+        if priority < 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        await message.answer(
+            texts.t(
+                "ADMIN_PROMO_GROUP_INVALID_PRIORITY",
+                "❌ Приоритет должен быть неотрицательным целым числом",
+            )
+        )
+        return
+
+    group = await get_promo_group_by_id(db, data.get("edit_group_id"))
+    if not group:
+        await message.answer("❌ Промогруппа не найдена")
+        await state.clear()
+        return
+
+    group = await update_promo_group(db, group, priority=priority)
     await state.set_state(AdminStates.editing_promo_group_menu)
 
     await _send_edit_menu_after_update(
@@ -1158,8 +1251,9 @@ async def show_promo_group_members(
         lines = []
         for index, user in enumerate(members, start=offset + 1):
             username = f"@{user.username}" if user.username else "—"
+            user_link = f'<a href="tg://user?id={user.telegram_id}">{user.full_name}</a>'
             lines.append(
-                f"{index}. {user.full_name} (ID {user.id}, {username}, TG {user.telegram_id})"
+                f"{index}. {user_link} (ID {user.id}, {username}, TG {user.telegram_id})"
             )
         body = "\n".join(lines)
 
@@ -1181,6 +1275,7 @@ async def show_promo_group_members(
     await callback.message.edit_text(
         f"{title}\n\n{body}",
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -1324,6 +1419,10 @@ def register_handlers(dp: Dispatcher):
 
     dp.message.register(process_create_group_name, AdminStates.creating_promo_group_name)
     dp.message.register(
+        process_create_group_priority,
+        AdminStates.creating_promo_group_priority,
+    )
+    dp.message.register(
         process_create_group_traffic,
         AdminStates.creating_promo_group_traffic_discount,
     )
@@ -1345,6 +1444,10 @@ def register_handlers(dp: Dispatcher):
     )
 
     dp.message.register(process_edit_group_name, AdminStates.editing_promo_group_name)
+    dp.message.register(
+        process_edit_group_priority,
+        AdminStates.editing_promo_group_priority,
+    )
     dp.message.register(
         process_edit_group_traffic,
         AdminStates.editing_promo_group_traffic_discount,

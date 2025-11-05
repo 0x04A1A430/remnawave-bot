@@ -208,6 +208,7 @@ async def test_process_mulenpay_callback_success(
         referred_by_id=None,
         referrer=None,
     )
+    user.get_primary_promo_group = lambda: getattr(user, "promo_group", None)
 
     async def fake_get_user(db, user_id):
         return user
@@ -302,6 +303,7 @@ async def test_process_cryptobot_webhook_success(monkeypatch: pytest.MonkeyPatch
         referred_by_id=None,
         referrer=None,
     )
+    user.get_primary_promo_group = lambda: getattr(user, "promo_group", None)
 
     async def fake_get_user_crypto(db, user_id):
         return user
@@ -431,6 +433,7 @@ async def test_process_heleket_webhook_success(monkeypatch: pytest.MonkeyPatch) 
         referrer=None,
         language="ru",
     )
+    user.get_primary_promo_group = lambda: getattr(user, "promo_group", None)
 
     async def fake_get_user(db, user_id):
         return user if user_id == user.id else None
@@ -538,6 +541,7 @@ async def test_process_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch)
         referred_by_id=None,
         referrer=None,
     )
+    user.get_primary_promo_group = lambda: getattr(user, "promo_group", None)
 
     async def fake_get_user(db, user_id):
         return user
@@ -666,6 +670,7 @@ async def test_process_yookassa_webhook_restores_missing_payment(
         referred_by_id=None,
         referrer=None,
     )
+    user.get_primary_promo_group = lambda: getattr(user, "promo_group", None)
 
     async def fake_get_user(db, user_id):
         return user
@@ -816,6 +821,7 @@ async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -
         referrer=None,
         language="ru",
     )
+    user.get_primary_promo_group = lambda: getattr(user, "promo_group", None)
 
     async def fake_get_user(db, user_id):
         return user
@@ -982,6 +988,7 @@ async def test_get_pal24_payment_status_auto_finalize(monkeypatch: pytest.Monkey
         referrer=None,
         language="ru",
     )
+    user.get_primary_promo_group = lambda: getattr(user, "promo_group", None)
 
     async def fake_get_user(db, user_id):
         return user

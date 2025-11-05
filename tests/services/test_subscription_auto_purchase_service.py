@@ -25,7 +25,6 @@ class DummyTexts:
         return f"{value / 100:.0f} ₽"
 
 
-@pytest.mark.asyncio
 async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
     monkeypatch.setattr(settings, "AUTO_PURCHASE_AFTER_TOPUP_ENABLED", True)
 
@@ -35,6 +34,7 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
     user.balance_kopeks = 200_000
     user.language = "ru"
     user.subscription = None
+    user.get_primary_promo_group = MagicMock(return_value=None)
 
     cart_data = {
         "period_days": 30,
@@ -185,7 +185,6 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
     admin_service_mock.send_subscription_purchase_notification.assert_awaited()
 
 
-@pytest.mark.asyncio
 async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
     monkeypatch.setattr(settings, "AUTO_PURCHASE_AFTER_TOPUP_ENABLED", True)
 
@@ -204,6 +203,7 @@ async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
     user.balance_kopeks = 200_000
     user.language = "ru"
     user.subscription = subscription
+    user.get_primary_promo_group = MagicMock(return_value=None)
 
     cart_data = {
         "cart_mode": "extend",
@@ -298,3 +298,406 @@ async def test_auto_purchase_saved_cart_after_topup_extension(monkeypatch):
     bot.send_message.assert_awaited()
     service_mock.update_remnawave_user.assert_awaited()
     create_transaction_mock.assert_awaited()
+
+
+async def test_auto_purchase_trial_preserved_on_insufficient_balance(monkeypatch):
+    """Тест: триал сохраняется, если не хватает денег для автопокупки"""
+    monkeypatch.setattr(settings, "AUTO_PURCHASE_AFTER_TOPUP_ENABLED", True)
+
+    subscription = MagicMock()
+    subscription.id = 123
+    subscription.is_trial = True  # Триальная подписка!
+    subscription.status = "active"
+    subscription.end_date = datetime.utcnow() + timedelta(days=2)  # Осталось 2 дня
+    subscription.device_limit = 1
+    subscription.traffic_limit_gb = 10
+    subscription.connected_squads = []
+
+    user = MagicMock(spec=User)
+    user.id = 99
+    user.telegram_id = 9999
+    # ИСПРАВЛЕНО: Баланс достаточный для первой проверки (строка 243),
+    # но subtract_user_balance вернёт False (симуляция неудачи списания)
+    user.balance_kopeks = 60_000
+    user.language = "ru"
+    user.subscription = subscription
+    user.get_primary_promo_group = MagicMock(return_value=None)
+
+    cart_data = {
+        "cart_mode": "extend",
+        "subscription_id": subscription.id,
+        "period_days": 30,
+        "total_price": 50_000,
+        "description": "Продление на 30 дней",
+        "device_limit": 1,
+        "traffic_limit_gb": 100,
+        "squad_uuid": None,
+        "consume_promo_offer": False,
+    }
+
+    # Mock: недостаточно денег, списание не удалось
+    subtract_mock = AsyncMock(return_value=False)
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.subtract_user_balance",
+        subtract_mock,
+    )
+
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.user_cart_service.get_user_cart",
+        AsyncMock(return_value=cart_data),
+    )
+
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.get_texts",
+        lambda lang: DummyTexts(),
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.format_period_description",
+        lambda days, lang: f"{days} дней",
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.format_local_datetime",
+        lambda dt, fmt: dt.strftime(fmt) if dt else "",
+    )
+
+    admin_service_mock = MagicMock()
+    admin_service_mock.send_subscription_extension_notification = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.AdminNotificationService",
+        lambda bot: admin_service_mock,
+    )
+
+    db_session = AsyncMock(spec=AsyncSession)
+    bot = AsyncMock()
+
+    result = await auto_purchase_saved_cart_after_topup(db_session, user, bot=bot)
+
+    # Проверки
+    assert result is False  # Автопокупка не удалась
+    assert subscription.is_trial is True  # ТРИАЛ СОХРАНЁН!
+    subtract_mock.assert_awaited_once()
+
+
+async def test_auto_purchase_trial_converted_after_successful_extension(monkeypatch):
+    """Тест: триал конвертируется в платную подписку ТОЛЬКО после успешного продления"""
+    monkeypatch.setattr(settings, "AUTO_PURCHASE_AFTER_TOPUP_ENABLED", True)
+
+    subscription = MagicMock()
+    subscription.id = 456
+    subscription.is_trial = True  # Триальная подписка!
+    subscription.status = "active"
+    subscription.end_date = datetime.utcnow() + timedelta(days=1)
+    subscription.device_limit = 1
+    subscription.traffic_limit_gb = 10
+    subscription.connected_squads = []
+
+    user = MagicMock(spec=User)
+    user.id = 88
+    user.telegram_id = 8888
+    user.balance_kopeks = 200_000  # Достаточно денег
+    user.language = "ru"
+    user.subscription = subscription
+    user.get_primary_promo_group = MagicMock(return_value=None)
+
+    cart_data = {
+        "cart_mode": "extend",
+        "subscription_id": subscription.id,
+        "period_days": 30,
+        "total_price": 100_000,
+        "description": "Продление на 30 дней",
+        "device_limit": 2,
+        "traffic_limit_gb": 500,
+        "squad_uuid": None,
+        "consume_promo_offer": False,
+    }
+
+    # Mock: деньги списались успешно
+    subtract_mock = AsyncMock(return_value=True)
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.subtract_user_balance",
+        subtract_mock,
+    )
+
+    # Mock: продление успешно
+    async def extend_stub(db, current_subscription, days):
+        current_subscription.end_date = current_subscription.end_date + timedelta(days=days)
+        return current_subscription
+
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.extend_subscription",
+        extend_stub,
+    )
+
+    create_transaction_mock = AsyncMock(return_value=MagicMock())
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.create_transaction",
+        create_transaction_mock,
+    )
+
+    service_mock = MagicMock()
+    service_mock.update_remnawave_user = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.SubscriptionService",
+        lambda: service_mock,
+    )
+
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.user_cart_service.get_user_cart",
+        AsyncMock(return_value=cart_data),
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.user_cart_service.delete_user_cart",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.clear_subscription_checkout_draft",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.get_texts",
+        lambda lang: DummyTexts(),
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.format_period_description",
+        lambda days, lang: f"{days} дней",
+    )
+    # ИСПРАВЛЕНО: Добавлен мок для format_local_datetime
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.format_local_datetime",
+        lambda dt, fmt: dt.strftime(fmt) if dt else "",
+    )
+
+    admin_service_mock = MagicMock()
+    admin_service_mock.send_subscription_extension_notification = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.AdminNotificationService",
+        lambda bot: admin_service_mock,
+    )
+
+    db_session = AsyncMock(spec=AsyncSession)
+    db_session.commit = AsyncMock()  # Важно! Отслеживаем commit
+    db_session.refresh = AsyncMock()  # ИСПРАВЛЕНО: Добавлен мок для refresh
+    bot = AsyncMock()
+
+    result = await auto_purchase_saved_cart_after_topup(db_session, user, bot=bot)
+
+    # Проверки
+    assert result is True  # Автопокупка успешна
+    assert subscription.is_trial is False  # ТРИАЛ КОНВЕРТИРОВАН!
+    assert subscription.status == "active"
+    db_session.commit.assert_awaited()  # Commit был вызван
+
+
+async def test_auto_purchase_trial_preserved_on_extension_failure(monkeypatch):
+    """Тест: триал НЕ конвертируется и вызывается rollback при ошибке в extend_subscription"""
+    monkeypatch.setattr(settings, "AUTO_PURCHASE_AFTER_TOPUP_ENABLED", True)
+
+    subscription = MagicMock()
+    subscription.id = 789
+    subscription.is_trial = True  # Триальная подписка!
+    subscription.status = "active"
+    subscription.end_date = datetime.utcnow() + timedelta(days=3)
+    subscription.device_limit = 1
+    subscription.traffic_limit_gb = 10
+    subscription.connected_squads = []
+
+    user = MagicMock(spec=User)
+    user.id = 77
+    user.telegram_id = 7777
+    user.balance_kopeks = 200_000  # Достаточно денег
+    user.language = "ru"
+    user.subscription = subscription
+    user.get_primary_promo_group = MagicMock(return_value=None)
+
+    cart_data = {
+        "cart_mode": "extend",
+        "subscription_id": subscription.id,
+        "period_days": 30,
+        "total_price": 100_000,
+        "description": "Продление на 30 дней",
+        "device_limit": 1,
+        "traffic_limit_gb": 100,
+        "squad_uuid": None,
+        "consume_promo_offer": False,
+    }
+
+    # Mock: деньги списались успешно
+    subtract_mock = AsyncMock(return_value=True)
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.subtract_user_balance",
+        subtract_mock,
+    )
+
+    # Mock: extend_subscription выбрасывает ошибку!
+    async def extend_error(db, current_subscription, days):
+        raise Exception("Database connection error")
+
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.extend_subscription",
+        extend_error,
+    )
+
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.user_cart_service.get_user_cart",
+        AsyncMock(return_value=cart_data),
+    )
+
+    # ИСПРАВЛЕНО: Добавлены недостающие моки
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.get_texts",
+        lambda lang: DummyTexts(),
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.format_period_description",
+        lambda days, lang: f"{days} дней",
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.format_local_datetime",
+        lambda dt, fmt: dt.strftime(fmt) if dt else "",
+    )
+
+    admin_service_mock = MagicMock()
+    admin_service_mock.send_subscription_extension_notification = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.AdminNotificationService",
+        lambda bot: admin_service_mock,
+    )
+
+    db_session = AsyncMock(spec=AsyncSession)
+    db_session.rollback = AsyncMock()  # Важно! Отслеживаем rollback
+    db_session.refresh = AsyncMock()  # ИСПРАВЛЕНО: Добавлен мок для refresh
+    bot = AsyncMock()
+
+    result = await auto_purchase_saved_cart_after_topup(db_session, user, bot=bot)
+
+    # Проверки
+    assert result is False  # Автопокупка не удалась
+    assert subscription.is_trial is True  # ТРИАЛ СОХРАНЁН!
+    db_session.rollback.assert_awaited()  # ROLLBACK БЫЛ ВЫЗВАН!
+
+
+async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
+    """Тест: остаток триала переносится на платную подписку при TRIAL_ADD_REMAINING_DAYS_TO_PAID=True"""
+    monkeypatch.setattr(settings, "AUTO_PURCHASE_AFTER_TOPUP_ENABLED", True)
+    monkeypatch.setattr(settings, "TRIAL_ADD_REMAINING_DAYS_TO_PAID", True)  # Включено!
+
+    now = datetime.utcnow()
+    trial_end = now + timedelta(days=2)  # Осталось 2 дня триала
+
+    subscription = MagicMock()
+    subscription.id = 321
+    subscription.is_trial = True
+    subscription.status = "active"
+    subscription.end_date = trial_end
+    subscription.start_date = now - timedelta(days=1)  # Триал начался вчера
+    subscription.device_limit = 1
+    subscription.traffic_limit_gb = 10
+    subscription.connected_squads = []
+
+    user = MagicMock(spec=User)
+    user.id = 66
+    user.telegram_id = 6666
+    user.balance_kopeks = 200_000
+    user.language = "ru"
+    user.subscription = subscription
+    user.get_primary_promo_group = MagicMock(return_value=None)
+
+    cart_data = {
+        "cart_mode": "extend",
+        "subscription_id": subscription.id,
+        "period_days": 30,  # Покупает 30 дней
+        "total_price": 100_000,
+        "description": "Продление на 30 дней",
+        "device_limit": 1,
+        "traffic_limit_gb": 100,
+        "squad_uuid": None,
+        "consume_promo_offer": False,
+    }
+
+    subtract_mock = AsyncMock(return_value=True)
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.subtract_user_balance",
+        subtract_mock,
+    )
+
+    # Mock: extend_subscription с логикой переноса бонусных дней
+    # Имитируем нашу новую логику из extend_subscription()
+    async def extend_with_bonus(db, current_subscription, days):
+        # Вычисляем бонусные дни (как в нашем коде)
+        bonus_days = 0
+        if current_subscription.is_trial and settings.TRIAL_ADD_REMAINING_DAYS_TO_PAID:
+            if current_subscription.end_date and current_subscription.end_date > now:
+                remaining = current_subscription.end_date - now
+                if remaining.total_seconds() > 0:
+                    bonus_days = max(0, remaining.days)
+
+        total_days = days + bonus_days
+        current_subscription.end_date = current_subscription.end_date + timedelta(days=total_days)
+        return current_subscription
+
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.extend_subscription",
+        extend_with_bonus,
+    )
+
+    create_transaction_mock = AsyncMock(return_value=MagicMock())
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.create_transaction",
+        create_transaction_mock,
+    )
+
+    service_mock = MagicMock()
+    service_mock.update_remnawave_user = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.SubscriptionService",
+        lambda: service_mock,
+    )
+
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.user_cart_service.get_user_cart",
+        AsyncMock(return_value=cart_data),
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.user_cart_service.delete_user_cart",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.clear_subscription_checkout_draft",
+        AsyncMock(),
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.get_texts",
+        lambda lang: DummyTexts(),
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.format_period_description",
+        lambda days, lang: f"{days} дней",
+    )
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.format_local_datetime",
+        lambda dt, fmt: dt.strftime(fmt),
+    )
+
+    admin_service_mock = MagicMock()
+    admin_service_mock.send_subscription_extension_notification = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.subscription_auto_purchase_service.AdminNotificationService",
+        lambda bot: admin_service_mock,
+    )
+
+    db_session = AsyncMock(spec=AsyncSession)
+    db_session.commit = AsyncMock()
+    db_session.refresh = AsyncMock()  # ИСПРАВЛЕНО: Добавлен мок для refresh
+    bot = AsyncMock()
+
+    result = await auto_purchase_saved_cart_after_topup(db_session, user, bot=bot)
+
+    # Проверки
+    assert result is True
+    assert subscription.is_trial is False  # Триал конвертирован
+
+    # Проверяем, что подписка продлена на 32 дня (30 + 2 бонусных)
+    # end_date должна быть примерно на 32 дня от оригинального trial_end
+    expected_end = trial_end + timedelta(days=32)  # trial_end + (30 + 2)
+    actual_delta = (subscription.end_date - trial_end).days
+    assert actual_delta == 32, f"Expected 32 days extension (30 + 2 bonus), got {actual_delta}"

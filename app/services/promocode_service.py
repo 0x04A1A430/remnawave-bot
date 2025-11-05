@@ -9,6 +9,10 @@ from app.database.crud.promocode import (
 )
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.crud.subscription import extend_subscription, get_subscription_by_user_id
+from app.database.crud.user_promo_group import (
+    has_user_promo_group, add_user_to_promo_group
+)
+from app.database.crud.promo_group import get_promo_group_by_id
 from app.database.models import PromoCodeType, SubscriptionStatus, User, PromoCode
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
@@ -56,6 +60,47 @@ class PromoCodeService:
 
                 logger.info(f"🎯 Пользователь {user.telegram_id} получил платную подписку через промокод {code}")
 
+            # Assign promo group if promocode has one
+            if promocode.promo_group_id:
+                try:
+                    # Check if user already has this promo group
+                    has_group = await has_user_promo_group(db, user_id, promocode.promo_group_id)
+
+                    if not has_group:
+                        # Get promo group details
+                        promo_group = await get_promo_group_by_id(db, promocode.promo_group_id)
+
+                        if promo_group:
+                            # Add promo group to user
+                            await add_user_to_promo_group(
+                                db,
+                                user_id,
+                                promocode.promo_group_id,
+                                assigned_by="promocode"
+                            )
+
+                            logger.info(
+                                f"🎯 Пользователю {user.telegram_id} назначена промогруппа '{promo_group.name}' "
+                                f"(приоритет: {promo_group.priority}) через промокод {code}"
+                            )
+
+                            # Add to result description
+                            result_description += f"\n🎁 Назначена промогруппа: {promo_group.name}"
+                        else:
+                            logger.warning(
+                                f"⚠️ Промогруппа ID {promocode.promo_group_id} не найдена для промокода {code}"
+                            )
+                    else:
+                        logger.info(
+                            f"ℹ️ Пользователь {user.telegram_id} уже имеет промогруппу ID {promocode.promo_group_id}"
+                        )
+                except Exception as pg_error:
+                    logger.error(
+                        f"❌ Ошибка назначения промогруппы для пользователя {user.telegram_id} "
+                        f"при активации промокода {code}: {pg_error}"
+                    )
+                    # Don't fail the whole promocode activation if promo group assignment fails
+
             await create_promocode_use(db, promocode.id, user_id)
 
             promocode.current_uses += 1
@@ -71,6 +116,7 @@ class PromoCodeService:
                 "max_uses": promocode.max_uses,
                 "current_uses": promocode.current_uses,
                 "valid_until": promocode.valid_until,
+                "promo_group_id": promocode.promo_group_id,
             }
 
             return {

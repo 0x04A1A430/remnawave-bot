@@ -12,7 +12,6 @@ if str(ROOT_DIR) not in sys.path:
 from app.services import referral_service  # noqa: E402
 
 
-@pytest.mark.asyncio
 async def test_commission_accrues_before_minimum_first_topup(monkeypatch):
     user = SimpleNamespace(
         id=1,

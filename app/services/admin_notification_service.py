@@ -221,7 +221,7 @@ class AdminNotificationService:
 
 ⏰ <b>Параметры триала:</b>
 📅 Период: {settings.TRIAL_DURATION_DAYS} дней
-📊 Трафик: {settings.TRIAL_TRAFFIC_LIMIT_GB} ГБ
+📊 Трафик: {self._format_traffic(settings.TRIAL_TRAFFIC_LIMIT_GB)}
 📱 Устройства: {trial_device_limit}
 🌐 Сервер: {subscription.connected_squads[0] if subscription.connected_squads else 'По умолчанию'}
 
