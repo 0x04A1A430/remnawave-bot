@@ -92,7 +92,11 @@ async def maybe_assign_promo_group_by_total_spent(
     db: AsyncSession,
     user_id: int,
 ) -> Optional[PromoGroup]:
-    from app.database.crud.user_promo_group import add_user_to_promo_group, has_user_promo_group
+    from app.database.crud.user_promo_group import (
+        add_user_to_promo_group,
+        has_user_promo_group,
+        sync_user_primary_promo_group,
+    )
 
     user = await db.get(User, user_id)
     if not user:
@@ -138,6 +142,7 @@ async def maybe_assign_promo_group_by_total_spent(
                 user.telegram_id,
                 target_group.name,
             )
+            await sync_user_primary_promo_group(db, user_id)
             if target_threshold > previous_threshold:
                 user.auto_promo_group_threshold_kopeks = target_threshold
                 user.updated_at = datetime.utcnow()
