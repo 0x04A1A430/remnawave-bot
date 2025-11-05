@@ -114,13 +114,13 @@ OPENAPI_TAGS = [
 def create_web_api_app() -> FastAPI:
     docs_config = settings.get_web_api_docs_config()
 
+    # Убираем openapi_tags для предотвращения ошибок при генерации openapi.json
     app = FastAPI(
         title=settings.WEB_API_TITLE,
         version=settings.WEB_API_VERSION,
         docs_url=docs_config.get("docs_url"),
         redoc_url=docs_config.get("redoc_url"),
         openapi_url=docs_config.get("openapi_url"),
-        openapi_tags=OPENAPI_TAGS,
         swagger_ui_parameters={"persistAuthorization": True},
     )
 
