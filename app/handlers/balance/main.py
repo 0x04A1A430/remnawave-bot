@@ -228,7 +228,7 @@ async def show_payment_methods(
         # Рассчитываем приблизительную стоимость продления на 30 дней
         duration_days = 30  # Берем для примера 30 дней
         current_traffic = subscription.traffic_limit_gb
-        current_connected_squads = subscription.connected_squads
+        current_connected_squads = subscription.connected_squads or []
         current_device_limit = subscription.device_limit or settings.DEFAULT_DEVICE_LIMIT
 
         try:
