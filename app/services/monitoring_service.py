@@ -42,7 +42,15 @@ from app.utils.timezone import format_local_datetime
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
-from app.database.models import MonitoringLog, SubscriptionStatus, Subscription, User, Ticket, TicketStatus
+from app.database.models import (
+    MonitoringLog,
+    SubscriptionStatus,
+    Subscription,
+    User,
+    Ticket,
+    TicketStatus,
+    UserPromoGroup,
+)
 from app.localization.texts import get_texts
 from app.services.notification_settings_service import NotificationSettingsService
 from app.services.payment_service import PaymentService
@@ -386,7 +394,12 @@ class MonitoringService:
 
             result = await db.execute(
                 select(Subscription)
-                .options(selectinload(Subscription.user))
+                .options(
+                    selectinload(Subscription.user).selectinload(User.promo_group),
+                    selectinload(Subscription.user)
+                    .selectinload(User.user_promo_groups)
+                    .selectinload(UserPromoGroup.promo_group),
+                )
                 .where(
                     and_(
                         Subscription.status == SubscriptionStatus.ACTIVE.value,
