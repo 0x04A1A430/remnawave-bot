@@ -1019,45 +1019,6 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 ---
 
-## 🔄 Быстрые команды
-
-### 📦 Установка и запуск
-```bash
-# Автоустановка (рекомендуется)
-git clone https://github.com/Fr1ngg/remnawave-bedolaga-telegram-bot.git
-cd remnawave-bedolaga-telegram-bot
-
-# Ручной запуск
-docker compose up -d
-docker compose logs -f
-```
-
-### 🔄 Обновление
-```bash
-# Ручное обновление
-git pull
-docker compose down
-docker compose pull
-docker compose up -d --build
-```
-
-### 📊 Мониторинг
-```bash
-# Статус сервисов
-docker compose ps
-
-# Логи бота
-docker compose logs -f bot
-
-# Проверка здоровья
-curl http://localhost:8080/health/unified  # или /health, если административное API отключено
-
-# Использование ресурсов
-docker stats
-```
-
----
-
 ## 📈 Статистика проекта
 
 <div align="center">
