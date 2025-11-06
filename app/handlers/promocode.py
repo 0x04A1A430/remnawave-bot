@@ -1,9 +1,8 @@
 import logging
-from aiogram import Dispatcher, types, F
+from aiogram import Dispatcher, types, F, Bot
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.states import PromoCodeStates
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
@@ -32,6 +31,45 @@ async def show_promocode_menu(
     await callback.answer()
 
 
+async def activate_promocode_for_registration(
+    db: AsyncSession,
+    user_id: int,
+    code: str,
+    bot: Bot = None
+) -> dict:
+    """
+    Активирует промокод для пользователя во время регистрации.
+    Возвращает результат активации без отправки сообщений.
+    """
+    promocode_service = PromoCodeService()
+    result = await promocode_service.activate_promocode(db, user_id, code)
+
+    if result["success"]:
+        logger.info(f"✅ Пользователь {user_id} активировал промокод {code} при регистрации")
+
+        # Отправляем уведомление админу, если бот доступен
+        if bot:
+            try:
+                from app.database.crud.user import get_user_by_id
+                user = await get_user_by_id(db, user_id)
+                if user:
+                    notification_service = AdminNotificationService(bot)
+                    await notification_service.send_promocode_activation_notification(
+                        db,
+                        user,
+                        result.get("promocode", {"code": code}),
+                        result["description"],
+                    )
+            except Exception as notify_error:
+                logger.error(
+                    "Ошибка отправки админ уведомления об активации промокода %s: %s",
+                    code,
+                    notify_error,
+                )
+
+    return result
+
+
 @error_handler
 async def process_promocode(
     message: types.Message,
@@ -40,9 +78,9 @@ async def process_promocode(
     db: AsyncSession
 ):
     texts = get_texts(db_user.language)
-    
+
     code = message.text.strip()
-    
+
     if not code:
         await message.answer(
             texts.t(
@@ -52,31 +90,14 @@ async def process_promocode(
             reply_markup=get_back_keyboard(db_user.language)
         )
         return
-    
-    promocode_service = PromoCodeService()
-    result = await promocode_service.activate_promocode(db, db_user.id, code)
-    
+
+    result = await activate_promocode_for_registration(db, db_user.id, code, message.bot)
+
     if result["success"]:
         await message.answer(
             texts.PROMOCODE_SUCCESS.format(description=result["description"]),
             reply_markup=get_back_keyboard(db_user.language)
         )
-        logger.info(f"✅ Пользователь {db_user.telegram_id} активировал промокод {code}")
-
-        try:
-            notification_service = AdminNotificationService(message.bot)
-            await notification_service.send_promocode_activation_notification(
-                db,
-                db_user,
-                result.get("promocode", {"code": code}),
-                result["description"],
-            )
-        except Exception as notify_error:
-            logger.error(
-                "Ошибка отправки админ уведомления об активации промокода %s: %s",
-                code,
-                notify_error,
-            )
     else:
         error_messages = {
             "not_found": texts.PROMOCODE_INVALID,
@@ -85,13 +106,13 @@ async def process_promocode(
             "already_used_by_user": texts.PROMOCODE_USED,
             "server_error": texts.ERROR
         }
-        
+
         error_text = error_messages.get(result["error"], texts.PROMOCODE_INVALID)
         await message.answer(
             error_text,
             reply_markup=get_back_keyboard(db_user.language)
         )
-    
+
     await state.clear()
 
 

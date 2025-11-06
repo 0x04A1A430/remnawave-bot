@@ -15,7 +15,7 @@ from app.localization.texts import get_texts
 from app.database.crud.promocode import (
     get_promocodes_list, get_promocodes_count, create_promocode,
     get_promocode_statistics, get_promocode_by_code, update_promocode,
-    delete_promocode
+    delete_promocode, get_promocode_by_id
 )
 from app.database.crud.promo_group import get_promo_group_by_id, get_promo_groups_with_counts
 from app.utils.decorators import admin_required, error_handler
@@ -138,8 +138,8 @@ async def show_promocode_management(
     db: AsyncSession
 ):
     promo_id = int(callback.data.split('_')[-1])
-    
-    promo = await db.get(PromoCode, promo_id)
+
+    promo = await get_promocode_by_id(db, promo_id)
     if not promo:
         await callback.answer("❌ Промокод не найден", show_alert=True)
         return
@@ -219,8 +219,8 @@ async def show_promocode_edit_menu(
     except (ValueError, IndexError):
         await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
         return
-    
-    promo = await db.get(PromoCode, promo_id)
+
+    promo = await get_promocode_by_id(db, promo_id)
     if not promo:
         await callback.answer("❌ Промокод не найден", show_alert=True)
         return
@@ -648,8 +648,8 @@ async def handle_edit_value(
     data = await state.get_data()
     promo_id = data.get('editing_promo_id')
     edit_action = data.get('edit_action')
-    
-    promo = await db.get(PromoCode, promo_id)
+
+    promo = await get_promocode_by_id(db, promo_id)
     if not promo:
         await message.answer("❌ Промокод не найден")
         await state.clear()
@@ -734,8 +734,8 @@ async def handle_edit_uses(
 ):
     data = await state.get_data()
     promo_id = data.get('editing_promo_id')
-    
-    promo = await db.get(PromoCode, promo_id)
+
+    promo = await get_promocode_by_id(db, promo_id)
     if not promo:
         await message.answer("❌ Промокод не найден")
         await state.clear()
@@ -873,8 +873,8 @@ async def handle_edit_expiry(
 ):
     data = await state.get_data()
     promo_id = data.get('editing_promo_id')
-    
-    promo = await db.get(PromoCode, promo_id)
+
+    promo = await get_promocode_by_id(db, promo_id)
     if not promo:
         await message.answer("❌ Промокод не найден")
         await state.clear()
@@ -920,8 +920,8 @@ async def toggle_promocode_status(
     db: AsyncSession
 ):
     promo_id = int(callback.data.split('_')[-1])
-    
-    promo = await db.get(PromoCode, promo_id)
+
+    promo = await get_promocode_by_id(db, promo_id)
     if not promo:
         await callback.answer("❌ Промокод не найден", show_alert=True)
         return
@@ -947,8 +947,8 @@ async def confirm_delete_promocode(
     except (ValueError, IndexError):
         await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
         return
-    
-    promo = await db.get(PromoCode, promo_id)
+
+    promo = await get_promocode_by_id(db, promo_id)
     if not promo:
         await callback.answer("❌ Промокод не найден", show_alert=True)
         return
@@ -995,8 +995,8 @@ async def delete_promocode_confirmed(
     except (ValueError, IndexError):
         await callback.answer("❌ Ошибка получения ID промокода", show_alert=True)
         return
-    
-    promo = await db.get(PromoCode, promo_id)
+
+    promo = await get_promocode_by_id(db, promo_id)
     if not promo:
         await callback.answer("❌ Промокод не найден", show_alert=True)
         return
@@ -1019,8 +1019,8 @@ async def show_promocode_stats(
     db: AsyncSession
 ):
     promo_id = int(callback.data.split('_')[-1])
-    
-    promo = await db.get(PromoCode, promo_id)
+
+    promo = await get_promocode_by_id(db, promo_id)
     if not promo:
         await callback.answer("❌ Промокод не найден", show_alert=True)
         return
