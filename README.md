@@ -1041,8 +1041,6 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 ## 🎯 Ключевые особенности в цифрах
 
-<div align="center">
-
 | Метрика | Значение |
 |---------|----------|
 | 💳 **Платёжных систем** | 8 (Stars, YooKassa, Tribute, CryptoBot, Heleket, MulenPay, Pal24, WATA) |
@@ -1053,8 +1051,6 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 | 📱 **Режимов работы** | 2 (классический бот + MiniApp focus) |
 | 🛡️ **Методов авторизации** | 4 (API Key, Bearer, Basic Auth, eGames) |
 | 🗄️ **Способов хранения** | 2 (PostgreSQL, SQLite) с автовыбором |
-
-</div>
 
 ---
 
