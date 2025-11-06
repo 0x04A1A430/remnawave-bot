@@ -1356,6 +1356,19 @@ class RemnaWaveService:
 
                             processed_count += 1
 
+                        except Exception as delete_error:
+                            logger.error(f"❌ Ошибка деактивации подписки {telegram_id}: {delete_error}")
+                            stats["errors"] += 1
+                            if cleanup_mutation:
+                                cleanup_mutation.rollback()
+                            try:
+                                await db.rollback()
+                            except:
+                                pass
+                        else:
+                            if cleanup_mutation and cleanup_mutation.has_changes():
+                                cleanup_uuid_mutations.append(cleanup_mutation)
+
                             # Коммитим изменения каждые N пользователей
                             if processed_count % batch_size == 0:
                                 try:
@@ -1370,19 +1383,6 @@ class RemnaWaveService:
                                     cleanup_uuid_mutations.clear()
                                     stats["errors"] += batch_size
                                     break  # Прерываем цикл при ошибке коммита
-
-                        except Exception as delete_error:
-                            logger.error(f"❌ Ошибка деактивации подписки {telegram_id}: {delete_error}")
-                            stats["errors"] += 1
-                            if cleanup_mutation:
-                                cleanup_mutation.rollback()
-                            try:
-                                await db.rollback()
-                            except:
-                                pass
-                        else:
-                            if cleanup_mutation and cleanup_mutation.has_changes():
-                                cleanup_uuid_mutations.append(cleanup_mutation)
                     else:
                         # Увеличиваем счетчик для отслеживания прогресса
                         processed_count += 1
