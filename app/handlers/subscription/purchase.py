@@ -859,8 +859,10 @@ async def return_to_saved_cart(
 
     period_display = format_period_description(prepared_cart_data['period_days'], db_user.language)
 
+    # Проверяем наличие ключа 'countries' в данных корзины
+    cart_countries = prepared_cart_data.get('countries', [])
     for country in countries:
-        if country['uuid'] in prepared_cart_data['countries']:
+        if country['uuid'] in cart_countries:
             selected_countries_names.append(country['name'])
 
     if settings.is_traffic_fixed():

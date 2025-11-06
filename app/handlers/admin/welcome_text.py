@@ -1,4 +1,5 @@
 import logging
+import re
 from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,92 @@ from app.database.crud.welcome_text import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def validate_html_tags(text: str) -> tuple[bool, str]:
+    """
+    Проверяет HTML-теги в тексте на соответствие требованиям Telegram API.
+    
+    Args:
+        text: Текст для проверки
+        
+    Returns:
+        Кортеж из (валидно ли, сообщение об ошибке или None)
+    """
+    # Поддерживаемые теги в parse_mode="HTML" для Telegram API
+    allowed_tags = {
+        'b', 'strong',  # жирный
+        'i', 'em',      # курсив
+        'u', 'ins',     # подчеркнуто
+        's', 'strike', 'del',  # зачеркнуто
+        'code',         # моноширинный для коротких фрагментов
+        'pre',          # моноширинный блок кода
+        'a'             # ссылки
+    }
+    
+    # Убираем плейсхолдеры из строки перед проверкой тегов
+    # Плейсхолдеры имеют формат {ключ}, и не являются тегами
+    placeholder_pattern = r'\{[^{}]+\}'
+    clean_text = re.sub(placeholder_pattern, '', text)
+    
+    # Находим все открывающие и закрывающие теги
+    tag_pattern = r'<(/?)([a-zA-Z]+)(\s[^>]*)?>'
+    tags_with_pos = [(m.group(1), m.group(2), m.group(3), m.start(), m.end()) for m in re.finditer(tag_pattern, clean_text)]
+    
+    for closing, tag, attrs, start_pos, end_pos in tags_with_pos:
+        tag_lower = tag.lower()
+        
+        # Проверяем, является ли тег поддерживаемым
+        if tag_lower not in allowed_tags:
+            return False, f"Неподдерживаемый HTML-тег: <{tag}>. Используйте только теги: {', '.join(sorted(allowed_tags))}"
+        
+        # Проверяем атрибуты для тега <a>
+        if tag_lower == 'a':
+            if closing:
+                continue  # Для закрывающего тега не нужно проверять атрибуты
+            if not attrs:
+                return False, "Тег <a> должен содержать атрибут href, например: <a href='URL'>ссылка</a>"
+            
+            # Проверяем, что есть атрибут href
+            if 'href=' not in attrs.lower():
+                return False, "Тег <a> должен содержать атрибут href, например: <a href='URL'>ссылка</a>"
+            
+            # Проверяем формат URL
+            href_match = re.search(r'href\s*=\s*[\'"]([^\'"]+)[\'"]', attrs, re.IGNORECASE)
+            if href_match:
+                url = href_match.group(1)
+                # Проверяем, что URL начинается с поддерживаемой схемы
+                if not re.match(r'^https?://|^tg://', url, re.IGNORECASE):
+                    return False, f"URL в теге <a> должен начинаться с http://, https:// или tg://. Найдено: {url}"
+            else:
+                return False, "Не удалось извлечь URL из атрибута href тега <a>"
+    
+    # Проверяем парность тегов с использованием стека
+    stack = []
+    for closing, tag, attrs, start_pos, end_pos in tags_with_pos:
+        tag_lower = tag.lower()
+        
+        if tag_lower not in allowed_tags:
+            continue
+            
+        if closing:
+            # Это закрывающий тег
+            if not stack:
+                return False, f"Лишний закрывающий тег: </{tag}>"
+                
+            last_opening_tag = stack.pop()
+            if last_opening_tag.lower() != tag_lower:
+                return False, f"Тег </{tag}> не соответствует открывающему тегу <{last_opening_tag}>"
+        else:
+            # Это открывающий тег
+            stack.append(tag)
+    
+    # Если остались незакрытые теги
+    if stack:
+        unclosed_tags = ", ".join([f"<{tag}>" for tag in stack])
+        return False, f"Незакрытые теги: {unclosed_tags}"
+    
+    return True, None
 
 def get_telegram_formatting_info() -> str:
     return """
@@ -200,6 +287,12 @@ async def process_welcome_text_edit(
     
     if len(new_text) > 4000:
         await message.answer("❌ Текст слишком длинный! Максимум 4000 символов.")
+        return
+    
+    # Проверяем HTML-теги на валидность
+    is_valid, error_msg = validate_html_tags(new_text)
+    if not is_valid:
+        await message.answer(f"❌ Ошибка в HTML-разметке:\n\n{error_msg}")
         return
     
     success = await set_welcome_text(db, new_text, db_user.id)

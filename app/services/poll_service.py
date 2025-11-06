@@ -68,17 +68,13 @@ async def send_poll_to_users(
     poll: Poll,
     users: Iterable[User],
 ) -> dict:
+    from app.database.database import AsyncSessionLocal
+    
     sent = 0
     failed = 0
     skipped = 0
 
     poll_id = poll.id
-    poll_snapshot = SimpleNamespace(
-        title=poll.title,
-        description=poll.description,
-        reward_enabled=poll.reward_enabled,
-        reward_amount_kopeks=poll.reward_amount_kopeks,
-    )
 
     user_snapshots = [
         SimpleNamespace(
@@ -89,72 +85,108 @@ async def send_poll_to_users(
         for user in users
     ]
 
-    for index, user in enumerate(user_snapshots, start=1):
-        existing_response = await db.execute(
-            select(PollResponse.id).where(
-                and_(
-                    PollResponse.poll_id == poll_id,
-                    PollResponse.user_id == user.id,
-                )
+    # Получаем список пользователей, которые уже прошли опрос, за один запрос
+    user_ids = [user_snapshot.id for user_snapshot in user_snapshots]
+    existing_responses_result = await db.execute(
+        select(PollResponse.user_id).where(
+            and_(
+                PollResponse.poll_id == poll_id,
+                PollResponse.user_id.in_(user_ids)
             )
         )
-        if existing_response.scalar_one_or_none():
-            skipped += 1
-            continue
+    )
+    existing_user_ids = set(existing_responses_result.scalars().all())
 
-        response = PollResponse(
-            poll_id=poll_id,
-            user_id=user.id,
-        )
-        db.add(response)
+    # Используем умеренный семафор, чтобы не превышать лимиты подключений к БД
+    semaphore = asyncio.Semaphore(30)  # Баланс между производительностью и нагрузкой на БД
 
-        try:
-            await db.flush()
+    # Создаем отдельную функцию для создания отдельной сессии для каждой отправки
+    async def send_poll_invitation(user_snapshot):
+        """Отправляет приглашение к опросу одному пользователю"""
+        async with semaphore:
+            # Пропускаем пользователей, которые уже прошли опрос
+            if user_snapshot.id in existing_user_ids:
+                return "skipped"
+                
+            # Создаем новую сессию для изоляции транзакции
+            async with AsyncSessionLocal() as new_db:
+                try:
+                    # Проверяем еще раз в новой сессии на случай гонки
+                    existing_response = await new_db.execute(
+                        select(PollResponse.id).where(
+                            and_(
+                                PollResponse.poll_id == poll_id,
+                                PollResponse.user_id == user_snapshot.id,
+                            )
+                        )
+                    )
+                    existing_id = existing_response.scalar_one_or_none()
+                    if existing_id:
+                        return "skipped"
 
-            text = _build_poll_invitation_text(poll_snapshot, user.language)
-            keyboard = build_start_keyboard(response.id, user.language)
+                    response = PollResponse(
+                        poll_id=poll_id,
+                        user_id=user_snapshot.id,
+                    )
+                    new_db.add(response)
 
-            await bot.send_message(
-                chat_id=user.telegram_id,
-                text=text,
-                reply_markup=keyboard,
-                parse_mode="HTML",
-                disable_web_page_preview=True,
-            )
+                    await new_db.flush()
 
-            await db.commit()
-            sent += 1
+                    text = _build_poll_invitation_text(poll, user_snapshot.language)
+                    keyboard = build_start_keyboard(response.id, user_snapshot.language)
 
-            if index % 20 == 0:
-                await asyncio.sleep(1)
-        except TelegramBadRequest as error:
-            error_text = str(error).lower()
-            if "chat not found" in error_text or "bot was blocked by the user" in error_text:
-                skipped += 1
-                logger.info(
-                    "ℹ️ Пропуск пользователя %s при отправке опроса %s: %s",
-                    user.telegram_id,
-                    poll_id,
-                    error,
-                )
-            else:  # pragma: no cover - unexpected telegram error
+                    await bot.send_message(
+                        chat_id=user_snapshot.telegram_id,
+                        text=text,
+                        reply_markup=keyboard,
+                        parse_mode="HTML",
+                        disable_web_page_preview=True,
+                    )
+
+                    await new_db.commit()
+                    return "sent"
+                except TelegramBadRequest as error:
+                    error_text = str(error).lower()
+                    if "chat not found" in error_text or "bot was blocked by the user" in error_text:
+                        await new_db.rollback()
+                        return "skipped"
+                    else:  # pragma: no cover - unexpected telegram error
+                        await new_db.rollback()
+                        return "failed"
+                except Exception as error:  # pragma: no cover - defensive logging
+                    await new_db.rollback()
+                    # Проверяем, является ли ошибка связанной с лимитом подключений
+                    if "too many clients" in str(error).lower():
+                        logger.warning(
+                            "⚠️ Ограничение на количество подключений к БД: %s пользователю %s",
+                            poll_id,
+                            user_snapshot.telegram_id,
+                        )
+                        # Уменьшаем вероятность переполнения, делая небольшую задержку
+                        await asyncio.sleep(0.1)
+                    else:
+                        logger.error(
+                            "❌ Ошибка отправки опроса %s пользователю %s: %s",
+                            poll_id,
+                            user_snapshot.telegram_id,
+                            error,
+                        )
+                    return "failed"
+
+    # Отправляем все приглашения одновременно без задержек для максимальной скорости
+    tasks = [send_poll_invitation(user_snapshot) for user_snapshot in user_snapshots]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for result in results:
+        if isinstance(result, str):  # Успешно выполненная задача
+            if result == "sent":
+                sent += 1
+            elif result == "failed":
                 failed += 1
-                logger.error(
-                    "❌ Ошибка отправки опроса %s пользователю %s: %s",
-                    poll_id,
-                    user.telegram_id,
-                    error,
-                )
-            await db.rollback()
-        except Exception as error:  # pragma: no cover - defensive logging
+            elif result == "skipped":
+                skipped += 1
+        elif isinstance(result, Exception):  # Ошибка выполнения задачи
             failed += 1
-            logger.error(
-                "❌ Ошибка отправки опроса %s пользователю %s: %s",
-                poll_id,
-                user.telegram_id,
-                error,
-            )
-            await db.rollback()
 
     return {
         "sent": sent,

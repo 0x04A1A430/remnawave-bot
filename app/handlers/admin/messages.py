@@ -764,48 +764,69 @@ async def confirm_broadcast(
     
     broadcast_keyboard = create_broadcast_keyboard(selected_buttons, db_user.language)
     
-    for user in users:
-        try:
-            if has_media and media_file_id:
-                if media_type == "photo":
-                    await callback.bot.send_photo(
+    # Ограничение на количество одновременных отправок
+    semaphore = asyncio.Semaphore(20)
+
+    async def send_single_broadcast(user):
+        """Отправляет одно сообщение рассылки с семафором ограничения"""
+        async with semaphore:
+            try:
+                if has_media and media_file_id:
+                    if media_type == "photo":
+                        await callback.bot.send_photo(
+                            chat_id=user.telegram_id,
+                            photo=media_file_id,
+                            caption=message_text,
+                            parse_mode="HTML",
+                            reply_markup=broadcast_keyboard
+                        )
+                    elif media_type == "video":
+                        await callback.bot.send_video(
+                            chat_id=user.telegram_id,
+                            video=media_file_id,
+                            caption=message_text,
+                            parse_mode="HTML",
+                            reply_markup=broadcast_keyboard
+                        )
+                    elif media_type == "document":
+                        await callback.bot.send_document(
+                            chat_id=user.telegram_id,
+                            document=media_file_id,
+                            caption=message_text,
+                            parse_mode="HTML",
+                            reply_markup=broadcast_keyboard
+                        )
+                else:
+                    await callback.bot.send_message(
                         chat_id=user.telegram_id,
-                        photo=media_file_id,
-                        caption=message_text,
+                        text=message_text,
                         parse_mode="HTML",
                         reply_markup=broadcast_keyboard
                     )
-                elif media_type == "video":
-                    await callback.bot.send_video(
-                        chat_id=user.telegram_id,
-                        video=media_file_id,
-                        caption=message_text,
-                        parse_mode="HTML",
-                        reply_markup=broadcast_keyboard
-                    )
-                elif media_type == "document":
-                    await callback.bot.send_document(
-                        chat_id=user.telegram_id,
-                        document=media_file_id,
-                        caption=message_text,
-                        parse_mode="HTML",
-                        reply_markup=broadcast_keyboard
-                    )
-            else:
-                await callback.bot.send_message(
-                    chat_id=user.telegram_id,
-                    text=message_text,
-                    parse_mode="HTML",
-                    reply_markup=broadcast_keyboard
-                )
-            sent_count += 1
-            
-            if sent_count % 20 == 0:
-                await asyncio.sleep(1)
-                
-        except Exception as e:
-            failed_count += 1
-            logger.error(f"Ошибка отправки рассылки пользователю {user.telegram_id}: {e}")
+                return True, user.telegram_id
+            except Exception as e:
+                logger.error(f"Ошибка отправки рассылки пользователю {user.telegram_id}: {e}")
+                return False, user.telegram_id
+
+    # Отправляем сообщения пакетами для эффективности
+    batch_size = 100
+    for i in range(0, len(users), batch_size):
+        batch = users[i:i + batch_size]
+        tasks = [send_single_broadcast(user) for user in batch]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for result in results:
+            if isinstance(result, tuple):  # (success, telegram_id)
+                success, _ = result
+                if success:
+                    sent_count += 1
+                else:
+                    failed_count += 1
+            elif isinstance(result, Exception):
+                failed_count += 1
+
+        # Небольшая задержка между пакетами для снижения нагрузки на API
+        await asyncio.sleep(0.1)
     
     broadcast_history.sent_count = sent_count
     broadcast_history.failed_count = failed_count
