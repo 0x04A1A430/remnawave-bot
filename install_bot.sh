@@ -625,18 +625,23 @@ configure_webhook_proxy() {
   echo -e "${CYAN}ℹ Используем домен: ${YELLOW}$webhook_domain${NC}" >&2
   cat <<EOF
 $webhook_domain {
-    encode gzip zstd
-
-    @config path /app-config.json
-    header @config Access-Control-Allow-Origin "*"
-
-    reverse_proxy localhost:8080 {
-        header_up Host {host}
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-        transport http {
-            read_buffer 0
-        }
+    handle /tribute-webhook* {
+        reverse_proxy localhost:8081
+    }
+    handle /cryptobot-webhook* {
+        reverse_proxy localhost:8081
+    }
+    handle /mulenpay-webhook* {
+        reverse_proxy localhost:8081
+    }
+    handle /pal24-webhook* {
+        reverse_proxy localhost:8084
+    }
+    handle /yookassa-webhook* {
+        reverse_proxy localhost:8082
+    }
+    handle /health {
+        reverse_proxy localhost:8081/health
     }
 }
 EOF
@@ -660,17 +665,15 @@ configure_miniapp_proxy() {
   cat <<EOF
 $miniapp_domain {
     encode gzip zstd
-
+    root * /var/www/remnawave-miniapp
+    file_server
     @config path /app-config.json
     header @config Access-Control-Allow-Origin "*"
-
-    reverse_proxy localhost:8080 {
+    @redirect path /miniapp/redirect/index.html
+    redir @redirect /miniapp/redirect/index.html permanent
+    reverse_proxy /miniapp/* 127.0.0.1:8080 {
         header_up Host {host}
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-        transport http {
-            read_buffer 0
-        }
     }
 }
 EOF
