@@ -93,6 +93,49 @@ class RemnaWaveService:
                 self._config_error or "RemnaWave API не настроен"
             )
 
+    def _ensure_user_remnawave_uuid(
+        self,
+        user: "User",
+        panel_uuid: Optional[str],
+        uuid_map: Dict[str, "User"],
+    ) -> bool:
+        """Обновляет UUID пользователя, если он изменился в панели."""
+
+        if not panel_uuid:
+            return False
+
+        current_uuid = getattr(user, "remnawave_uuid", None)
+        if current_uuid == panel_uuid:
+            return False
+
+        conflicting_user = uuid_map.get(panel_uuid)
+        if conflicting_user and conflicting_user is not user:
+            logger.warning(
+                "♻️ Обнаружен конфликт UUID %s между пользователями %s и %s. Сбрасываем у старой записи.",
+                panel_uuid,
+                getattr(conflicting_user, "telegram_id", "?"),
+                getattr(user, "telegram_id", "?"),
+            )
+            conflicting_user.remnawave_uuid = None
+            conflicting_user.updated_at = datetime.utcnow()
+            uuid_map.pop(panel_uuid, None)
+
+        if current_uuid:
+            uuid_map.pop(current_uuid, None)
+
+        user.remnawave_uuid = panel_uuid
+        user.updated_at = datetime.utcnow()
+        uuid_map[panel_uuid] = user
+
+        logger.info(
+            "🔁 Обновлен RemnaWave UUID пользователя %s: %s → %s",
+            getattr(user, "telegram_id", "?"),
+            current_uuid,
+            panel_uuid,
+        )
+
+        return True
+
     @asynccontextmanager
     async def get_api_client(self):
         self._ensure_configured()
@@ -1008,7 +1051,12 @@ class RemnaWaveService:
             )
             bot_users = bot_users_result.scalars().all()
             bot_users_by_telegram_id = {user.telegram_id: user for user in bot_users}
-            
+            bot_users_by_uuid = {
+                user.remnawave_uuid: user
+                for user in bot_users
+                if getattr(user, "remnawave_uuid", None)
+            }
+
             logger.info(f"📊 Пользователей в боте: {len(bot_users)}")
             
             panel_users_with_tg = [
@@ -1080,8 +1128,11 @@ class RemnaWaveService:
                                 logger.info(f"🔄 Обновлены поля {updated_fields} для пользователя {telegram_id}")
                                 await db.flush()  # Сохраняем изменения без коммита
 
-                            if not db_user.remnawave_uuid:
-                                await update_user(db, db_user, remnawave_uuid=panel_user.get('uuid'))
+                            self._ensure_user_remnawave_uuid(
+                                db_user,
+                                panel_user.get('uuid'),
+                                bot_users_by_uuid,
+                            )
 
                             if is_created:
                                 await self._create_subscription_from_panel_data(db, db_user, panel_user)
@@ -1115,10 +1166,13 @@ class RemnaWaveService:
                             else:
                                 # Если подписки нет, создаем новую
                                 await self._create_subscription_from_panel_data(db, db_user, panel_user)
-                            
-                            if not db_user.remnawave_uuid:
-                                await update_user(db, db_user, remnawave_uuid=panel_user.get('uuid'))
-                            
+
+                            self._ensure_user_remnawave_uuid(
+                                db_user,
+                                panel_user.get('uuid'),
+                                bot_users_by_uuid,
+                            )
+
                             stats["updated"] += 1
                             logger.debug(f"✅ Обновлён пользователь {telegram_id}")
                 
@@ -1198,9 +1252,13 @@ class RemnaWaveService:
                             subscription.remnawave_short_uuid = None
                             subscription.subscription_url = ""
                             subscription.subscription_crypto_link = ""
-                            
+
+                            old_uuid = getattr(db_user, "remnawave_uuid", None)
+                            if old_uuid:
+                                bot_users_by_uuid.pop(old_uuid, None)
                             db_user.remnawave_uuid = None
-                            
+                            db_user.updated_at = datetime.utcnow()
+
                             stats["deleted"] += 1
                             logger.info(f"✅ Деактивирована подписка пользователя {telegram_id} (сохранен баланс)")
                             
@@ -1387,8 +1445,16 @@ class RemnaWaveService:
                 subscription.device_limit = device_limit
                 logger.debug(f"Обновлен лимит устройств: {device_limit}")
         
-            if not subscription.remnawave_short_uuid:
-                subscription.remnawave_short_uuid = panel_user.get('shortUuid')
+            new_short_uuid = panel_user.get('shortUuid')
+            if new_short_uuid and subscription.remnawave_short_uuid != new_short_uuid:
+                old_short_uuid = subscription.remnawave_short_uuid
+                subscription.remnawave_short_uuid = new_short_uuid
+                logger.debug(
+                    "Обновлен short UUID подписки пользователя %s: %s → %s",
+                    getattr(user, "telegram_id", "?"),
+                    old_short_uuid,
+                    new_short_uuid,
+                )
         
             panel_url = panel_user.get('subscriptionUrl', '')
             if not subscription.subscription_url or subscription.subscription_url != panel_url:
