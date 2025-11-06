@@ -1256,6 +1256,10 @@ class RemnaWaveService:
                     stats["errors"] += 1
                     if uuid_mutation:
                         uuid_mutation.rollback()
+                    if pending_uuid_mutations:
+                        for mutation in reversed(pending_uuid_mutations):
+                            mutation.rollback()
+                        pending_uuid_mutations.clear()
                     try:
                         await db.rollback()  # Выполняем rollback при ошибке
                     except:
@@ -1361,6 +1365,10 @@ class RemnaWaveService:
                             stats["errors"] += 1
                             if cleanup_mutation:
                                 cleanup_mutation.rollback()
+                            if cleanup_uuid_mutations:
+                                for mutation in reversed(cleanup_uuid_mutations):
+                                    mutation.rollback()
+                                cleanup_uuid_mutations.clear()
                             try:
                                 await db.rollback()
                             except:
