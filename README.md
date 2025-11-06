@@ -974,8 +974,6 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 ---
 
-<div align="center">
-
 ## 📄 Лицензия
 
 Проект распространяется под лицензией **MIT**
@@ -1020,8 +1018,6 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 ---
 
 ## 📈 Статистика проекта
-
-<div align="center">
 
 ![GitHub stars](https://img.shields.io/github/stars/Fr1ngg/remnawave-bedolaga-telegram-bot?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/Fr1ngg/remnawave-bedolaga-telegram-bot?style=social)
