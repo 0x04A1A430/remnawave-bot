@@ -304,35 +304,56 @@ networks:
 events {}
 
 http {
-  include /etc/nginx/mime.types;
-  sendfile on;
-
-  upstream remnawave_bot_unified {
-    server remnawave_bot:8080;
-  }
-
-  server {
-    listen 80;
-    listen 443 ssl http2;
-    server_name bot.example.com;
-
-    ssl_certificate /etc/ssl/private/bot.fullchain.pem;
-    ssl_certificate_key /etc/ssl/private/bot.privkey.pem;
-
-    client_max_body_size 32m;
-
-    location / {
-      proxy_pass http://remnawave_bot_unified;
-      proxy_set_header Host $host;
-      proxy_set_header X-Real-IP $remote_addr;
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $scheme;
-      proxy_read_timeout 120s;
-      proxy_send_timeout 120s;
-      proxy_buffering off;
-      proxy_request_buffering off;
+    include /etc/nginx/mime.types;
+    sendfile on;
+    
+    upstream remnawave_bot_unified {
+        server remnawave_bot:8080;
     }
-  }
+    
+    server {
+        listen 80;
+        listen 443 ssl http2;
+        server_name bot.example.com;
+        
+        ssl_certificate /etc/ssl/private/bot.fullchain.pem;
+        ssl_certificate_key /etc/ssl/private/bot.privkey.pem;
+        
+        client_max_body_size 32m;
+        
+        # Статические файлы miniapp
+        location /miniapp {
+            alias /var/www/remnawave-miniapp;
+            try_files $uri $uri/ /index.html;
+            
+            # Кэширование статики
+            expires 1h;
+            add_header Cache-Control "public, immutable";
+        }
+        
+        # app-config.json с CORS
+        location = /app-config.json {
+            proxy_pass http://remnawave_bot_unified;
+            add_header Access-Control-Allow-Origin "*";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        
+        # Все остальное в приложение (включая API)
+        location / {
+            proxy_pass http://remnawave_bot_unified;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_buffering off;
+            proxy_request_buffering off;
+        }
+    }
 }
 ```
 
