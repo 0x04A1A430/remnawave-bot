@@ -22,6 +22,25 @@ async def get_promocode_by_code(db: AsyncSession, code: str) -> Optional[PromoCo
     return result.scalar_one_or_none()
 
 
+async def check_promocode_validity(db: AsyncSession, code: str) -> dict:
+    """
+    Проверяет существование и валидность промокода без активации.
+    Возвращает словарь с информацией о промокоде.
+    """
+    promocode = await get_promocode_by_code(db, code)
+
+    if not promocode:
+        return {"valid": False, "error": "not_found", "promocode": None}
+
+    if not promocode.is_valid:
+        if promocode.current_uses >= promocode.max_uses:
+            return {"valid": False, "error": "used", "promocode": None}
+        else:
+            return {"valid": False, "error": "expired", "promocode": None}
+
+    return {"valid": True, "error": None, "promocode": promocode}
+
+
 async def create_promocode(
     db: AsyncSession,
     code: str,
