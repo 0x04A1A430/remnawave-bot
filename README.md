@@ -242,16 +242,29 @@ networks:
 `Caddyfile`:
 
 ```caddy
-bot.example.com {
+zaebalsya.bot.com {
     encode gzip zstd
-
+    
+    # Статика только если файл существует
+    @static {
+        path /miniapp/*
+        file {
+            root /var/www/remnawave-miniapp
+        }
+    }
+    handle @static {
+        root * /var/www/remnawave-miniapp
+        file_server
+    }
+    
+    # app-config.json
     @config path /app-config.json
     header @config Access-Control-Allow-Origin "*"
-
-    reverse_proxy remnawave_bot:8080 {
+    
+    # Все остальное (включая API) в приложение
+    reverse_proxy localhost:8080 {
         header_up Host {host}
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-Proto {scheme}
         transport http {
             read_buffer 0
         }
