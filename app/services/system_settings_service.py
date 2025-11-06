@@ -641,17 +641,8 @@ class BotConfigurationService:
 
     @classmethod
     def _is_env_override(cls, key: str) -> bool:
-        # Исключаем из env-приоритета настройки, которые влияют на формат сообщений
-        critical_keys = {
-            'ENABLE_LOGO_MODE',
-            'CONNECT_BUTTON_MODE',
-            'MAIN_MENU_MODE',
-            'LOGO_FILE',
-            'HIDE_SUBSCRIPTION_LINK',
-        }
-        if key in critical_keys:
-            return False  # для критичных настроек БД всегда имеет приоритет
-        return key in cls._env_override_keys
+        # Все настройки теперь имеют приоритет из БД, а не из .env
+        return False
 
     @classmethod
     def _format_numeric_with_unit(cls, key: str, value: Union[int, float]) -> Optional[str]:
@@ -1187,29 +1178,15 @@ class BotConfigurationService:
                 overrides[row.key] = row.value
 
         for key, raw_value in overrides.items():
-            # Для критичных настроек всегда применяем из БД
-            critical_keys = {
-                'ENABLE_LOGO_MODE',
-                'CONNECT_BUTTON_MODE', 
-                'MAIN_MENU_MODE',
-                'LOGO_FILE',
-                'HIDE_SUBSCRIPTION_LINK',
-            }
-            
-            if key in critical_keys or not cls._is_env_override(key):
-                try:
-                    parsed_value = cls.deserialize_value(key, raw_value)
-                except Exception as error:
-                    logger.error("Не удалось применить настройку %s: %s", key, error)
-                    continue
+            # Теперь все настройки из БД имеют приоритет над .env
+            try:
+                parsed_value = cls.deserialize_value(key, raw_value)
+            except Exception as error:
+                logger.error("Не удалось применить настройку %s: %s", key, error)
+                continue
 
-                cls._overrides_raw[key] = raw_value
-                cls._apply_to_settings(key, parsed_value)
-            else:
-                logger.debug(
-                    "Пропускаем настройку %s из БД: используется значение из окружения",
-                    key,
-                )
+            cls._overrides_raw[key] = raw_value
+            cls._apply_to_settings(key, parsed_value)
 
         await cls._sync_default_web_api_token()
 
@@ -1322,24 +1299,9 @@ class BotConfigurationService:
         raw_value = cls.serialize_value(key, value)
         await upsert_system_setting(db, key, raw_value)
         
-        # Для критичных настроек всегда применяем из БД
-        critical_keys = {
-            'ENABLE_LOGO_MODE',
-            'CONNECT_BUTTON_MODE', 
-            'MAIN_MENU_MODE',
-            'LOGO_FILE',
-            'HIDE_SUBSCRIPTION_LINK',
-        }
-        
-        if key in critical_keys or not cls._is_env_override(key):
-            cls._overrides_raw[key] = raw_value
-            cls._apply_to_settings(key, value)
-        else:
-            logger.info(
-                "Настройка %s сохранена в БД, но не применена: значение задаётся через окружение",
-                key,
-            )
-            cls._overrides_raw.pop(key, None)
+        # Теперь все настройки из БД имеют приоритет над .env
+        cls._overrides_raw[key] = raw_value
+        cls._apply_to_settings(key, value)
 
         if key in {"WEB_API_DEFAULT_TOKEN", "WEB_API_DEFAULT_TOKEN_NAME"}:
             await cls._sync_default_web_api_token()
@@ -1358,44 +1320,16 @@ class BotConfigurationService:
         await delete_system_setting(db, key)
         cls._overrides_raw.pop(key, None)
         
-        # Для критичных настроек всегда сбрасываем к оригинальному значению
-        critical_keys = {
-            'ENABLE_LOGO_MODE',
-            'CONNECT_BUTTON_MODE', 
-            'MAIN_MENU_MODE',
-            'LOGO_FILE',
-            'HIDE_SUBSCRIPTION_LINK',
-        }
-        
-        if key in critical_keys or not cls._is_env_override(key):
-            original = cls.get_original_value(key)
-            cls._apply_to_settings(key, original)
-        else:
-            logger.info(
-                "Настройка %s сброшена в БД, используется значение из окружения",
-                key,
-            )
+        # Теперь все настройки из БД имеют приоритет над .env
+        original = cls.get_original_value(key)
+        cls._apply_to_settings(key, original)
 
         if key in {"WEB_API_DEFAULT_TOKEN", "WEB_API_DEFAULT_TOKEN_NAME"}:
             await cls._sync_default_web_api_token()
 
     @classmethod
     def _apply_to_settings(cls, key: str, value: Any) -> None:
-        # Для критичных настроек всегда применяем значения из БД
-        critical_keys = {
-            'ENABLE_LOGO_MODE',
-            'CONNECT_BUTTON_MODE',
-            'MAIN_MENU_MODE',
-            'LOGO_FILE',
-            'HIDE_SUBSCRIPTION_LINK',
-        }
-        
-        if key not in critical_keys and cls._is_env_override(key):
-            logger.debug(
-                "Пропуск применения настройки %s: значение задано через окружение",
-                key,
-            )
-            return
+        # Теперь все настройки из БД имеют приоритет над .env
         try:
             setattr(settings, key, value)
             if key in {
