@@ -10,6 +10,7 @@ from app.database.crud.promocode import (
     create_promocode,
     delete_promocode,
     get_promocode_by_code,
+    get_promocode_by_id,
     get_promocode_statistics,
     get_promocodes_count,
     get_promocodes_list,
@@ -163,7 +164,7 @@ async def get_promocode(
     _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> PromoCodeDetailResponse:
-    promocode = await db.get(PromoCode, promocode_id)
+    promocode = await get_promocode_by_id(db, promocode_id)
     if not promocode:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo code not found")
 
@@ -236,7 +237,7 @@ async def update_promocode_endpoint(
     _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> PromoCodeResponse:
-    promocode = await db.get(PromoCode, promocode_id)
+    promocode = await get_promocode_by_id(db, promocode_id)
     if not promocode:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo code not found")
 
@@ -290,7 +291,7 @@ async def delete_promocode_endpoint(
     _: Any = Depends(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> Response:
-    promocode = await db.get(PromoCode, promocode_id)
+    promocode = await get_promocode_by_id(db, promocode_id)
     if not promocode:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo code not found")
 

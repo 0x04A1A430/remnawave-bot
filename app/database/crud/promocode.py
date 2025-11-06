@@ -22,6 +22,41 @@ async def get_promocode_by_code(db: AsyncSession, code: str) -> Optional[PromoCo
     return result.scalar_one_or_none()
 
 
+async def get_promocode_by_id(db: AsyncSession, promo_id: int) -> Optional[PromoCode]:
+    """
+    Получает промокод по ID с eager loading всех связанных данных.
+    Используется для избежания lazy loading в async контексте.
+    """
+    result = await db.execute(
+        select(PromoCode)
+        .options(
+            selectinload(PromoCode.uses),
+            selectinload(PromoCode.promo_group)
+        )
+        .where(PromoCode.id == promo_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def check_promocode_validity(db: AsyncSession, code: str) -> dict:
+    """
+    Проверяет существование и валидность промокода без активации.
+    Возвращает словарь с информацией о промокоде.
+    """
+    promocode = await get_promocode_by_code(db, code)
+
+    if not promocode:
+        return {"valid": False, "error": "not_found", "promocode": None}
+
+    if not promocode.is_valid:
+        if promocode.current_uses >= promocode.max_uses:
+            return {"valid": False, "error": "used", "promocode": None}
+        else:
+            return {"valid": False, "error": "expired", "promocode": None}
+
+    return {"valid": True, "error": None, "promocode": promocode}
+
+
 async def create_promocode(
     db: AsyncSession,
     code: str,
@@ -61,9 +96,9 @@ async def use_promocode(
     promocode_id: int,
     user_id: int
 ) -> bool:
-    
+
     try:
-        promocode = await db.get(PromoCode, promocode_id)
+        promocode = await get_promocode_by_id(db, promocode_id)
         if not promocode:
             return False
         
