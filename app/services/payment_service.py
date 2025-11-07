@@ -15,11 +15,13 @@ from app.external.heleket import HeleketService
 from app.external.telegram_stars import TelegramStarsService
 from app.services.mulenpay_service import MulenPayService
 from app.services.pal24_service import Pal24Service
+from app.services.platega_service import PlategaService
 from app.services.payment import (
     CryptoBotPaymentMixin,
     HeleketPaymentMixin,
     MulenPayPaymentMixin,
     Pal24PaymentMixin,
+    PlategaPaymentMixin,
     PaymentCommonMixin,
     TelegramStarsMixin,
     TributePaymentMixin,
@@ -63,6 +65,11 @@ async def get_yookassa_payment_by_local_id(*args, **kwargs):
 async def create_transaction(*args, **kwargs):
     transaction_crud = import_module("app.database.crud.transaction")
     return await transaction_crud.create_transaction(*args, **kwargs)
+
+
+async def get_transaction_by_external_id(*args, **kwargs):
+    transaction_crud = import_module("app.database.crud.transaction")
+    return await transaction_crud.get_transaction_by_external_id(*args, **kwargs)
 
 
 async def add_user_balance(*args, **kwargs):
@@ -170,6 +177,41 @@ async def link_wata_payment_to_transaction(*args, **kwargs):
     return await wata_crud.link_wata_payment_to_transaction(*args, **kwargs)
 
 
+async def create_platega_payment(*args, **kwargs):
+    platega_crud = import_module("app.database.crud.platega")
+    return await platega_crud.create_platega_payment(*args, **kwargs)
+
+
+async def get_platega_payment_by_id(*args, **kwargs):
+    platega_crud = import_module("app.database.crud.platega")
+    return await platega_crud.get_platega_payment_by_id(*args, **kwargs)
+
+
+async def get_platega_payment_by_id_for_update(*args, **kwargs):
+    platega_crud = import_module("app.database.crud.platega")
+    return await platega_crud.get_platega_payment_by_id_for_update(*args, **kwargs)
+
+
+async def get_platega_payment_by_transaction_id(*args, **kwargs):
+    platega_crud = import_module("app.database.crud.platega")
+    return await platega_crud.get_platega_payment_by_transaction_id(*args, **kwargs)
+
+
+async def get_platega_payment_by_correlation_id(*args, **kwargs):
+    platega_crud = import_module("app.database.crud.platega")
+    return await platega_crud.get_platega_payment_by_correlation_id(*args, **kwargs)
+
+
+async def update_platega_payment(*args, **kwargs):
+    platega_crud = import_module("app.database.crud.platega")
+    return await platega_crud.update_platega_payment(*args, **kwargs)
+
+
+async def link_platega_payment_to_transaction(*args, **kwargs):
+    platega_crud = import_module("app.database.crud.platega")
+    return await platega_crud.link_platega_payment_to_transaction(*args, **kwargs)
+
+
 async def create_cryptobot_payment(*args, **kwargs):
     crypto_crud = import_module("app.database.crud.cryptobot")
     return await crypto_crud.create_cryptobot_payment(*args, **kwargs)
@@ -224,6 +266,7 @@ class PaymentService(
     HeleketPaymentMixin,
     MulenPayPaymentMixin,
     Pal24PaymentMixin,
+    PlategaPaymentMixin,
     WataPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
@@ -248,11 +291,14 @@ class PaymentService(
         self.pal24_service = (
             Pal24Service() if settings.is_pal24_enabled() else None
         )
+        self.platega_service = (
+            PlategaService() if settings.is_platega_enabled() else None
+        )
         self.wata_service = WataService() if settings.is_wata_enabled() else None
 
         mulenpay_name = settings.get_mulenpay_display_name()
         logger.debug(
-            "PaymentService инициализирован (YooKassa=%s, Stars=%s, CryptoBot=%s, Heleket=%s, %s=%s, Pal24=%s, Wata=%s)",
+            "PaymentService инициализирован (YooKassa=%s, Stars=%s, CryptoBot=%s, Heleket=%s, %s=%s, Pal24=%s, Platega=%s, Wata=%s)",
             bool(self.yookassa_service),
             bool(self.stars_service),
             bool(self.cryptobot_service),
@@ -260,5 +306,6 @@ class PaymentService(
             mulenpay_name,
             bool(self.mulenpay_service),
             bool(self.pal24_service),
+            bool(self.platega_service),
             bool(self.wata_service),
         )

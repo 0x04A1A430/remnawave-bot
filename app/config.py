@@ -270,6 +270,20 @@ class Settings(BaseSettings):
     PAL24_SBP_BUTTON_VISIBLE: bool = True
     PAL24_CARD_BUTTON_VISIBLE: bool = True
 
+    PLATEGA_ENABLED: bool = False
+    PLATEGA_MERCHANT_ID: Optional[str] = None
+    PLATEGA_SECRET: Optional[str] = None
+    PLATEGA_BASE_URL: str = "https://app.platega.io"
+    PLATEGA_RETURN_URL: Optional[str] = None
+    PLATEGA_FAILED_URL: Optional[str] = None
+    PLATEGA_CURRENCY: str = "RUB"
+    PLATEGA_ACTIVE_METHODS: str = "2,10,11,12,13"
+    PLATEGA_MIN_AMOUNT_KOPEKS: int = 10000
+    PLATEGA_MAX_AMOUNT_KOPEKS: int = 100000000
+    PLATEGA_WEBHOOK_PATH: str = "/platega-webhook"
+    PLATEGA_WEBHOOK_HOST: str = "0.0.0.0"
+    PLATEGA_WEBHOOK_PORT: int = 8086
+
     WATA_ENABLED: bool = False
     WATA_BASE_URL: str = "https://api.wata.pro/api/h2h"
     WATA_ACCESS_TOKEN: Optional[str] = None
@@ -916,6 +930,74 @@ class Settings(BaseSettings):
             and self.PAL24_API_TOKEN is not None
             and self.PAL24_SHOP_ID is not None
         )
+
+    def is_platega_enabled(self) -> bool:
+        return (
+            self.PLATEGA_ENABLED
+            and self.PLATEGA_MERCHANT_ID is not None
+            and self.PLATEGA_SECRET is not None
+        )
+
+    def get_platega_return_url(self) -> Optional[str]:
+        if self.PLATEGA_RETURN_URL:
+            return self.PLATEGA_RETURN_URL
+        if self.WEBHOOK_URL:
+            return f"{self.WEBHOOK_URL}/payment-success"
+        return None
+
+    def get_platega_failed_url(self) -> Optional[str]:
+        if self.PLATEGA_FAILED_URL:
+            return self.PLATEGA_FAILED_URL
+        if self.WEBHOOK_URL:
+            return f"{self.WEBHOOK_URL}/payment-failed"
+        return None
+
+    def get_platega_active_methods(self) -> List[int]:
+        raw_value = str(self.PLATEGA_ACTIVE_METHODS or "")
+        normalized = raw_value.replace(";", ",")
+        methods: list[int] = []
+        seen: set[int] = set()
+        for part in normalized.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                method_code = int(part)
+            except ValueError:
+                logger.warning("Некорректный код метода Platega: %s", part)
+                continue
+            if method_code in {2, 10, 11, 12, 13} and method_code not in seen:
+                methods.append(method_code)
+                seen.add(method_code)
+
+        if not methods:
+            return [2]
+
+        return methods
+
+    @staticmethod
+    def get_platega_method_definitions() -> Dict[int, Dict[str, str]]:
+        return {
+            2: {"name": "СБП (QR)", "title": "🏦 СБП (QR)"},
+            10: {"name": "Банковские карты (RUB)", "title": "💳 Карты (RUB)"},
+            11: {"name": "Банковские карты", "title": "💳 Банковские карты"},
+            12: {"name": "Международные карты", "title": "🌍 Международные карты"},
+            13: {"name": "Криптовалюта", "title": "🪙 Криптовалюта"},
+        }
+
+    def get_platega_method_display_name(self, method_code: int) -> str:
+        definitions = self.get_platega_method_definitions()
+        info = definitions.get(method_code)
+        if info and info.get("name"):
+            return info["name"]
+        return f"Метод {method_code}"
+
+    def get_platega_method_display_title(self, method_code: int) -> str:
+        definitions = self.get_platega_method_definitions()
+        info = definitions.get(method_code)
+        if not info:
+            return f"Platega {method_code}"
+        return info.get("title") or info.get("name") or f"Platega {method_code}"
 
     def is_wata_enabled(self) -> bool:
         return (

@@ -12,6 +12,7 @@ from .cryptobot import CryptoBotPaymentMixin
 from .heleket import HeleketPaymentMixin
 from .mulenpay import MulenPayPaymentMixin
 from .pal24 import Pal24PaymentMixin
+from .platega import PlategaPaymentMixin
 from .wata import WataPaymentMixin
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "HeleketPaymentMixin",
     "MulenPayPaymentMixin",
     "Pal24PaymentMixin",
+    "PlategaPaymentMixin",
     "WataPaymentMixin",
 ]

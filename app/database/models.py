@@ -82,6 +82,7 @@ class PaymentMethod(Enum):
     MULENPAY = "mulenpay"
     PAL24 = "pal24"
     WATA = "wata"
+    PLATEGA = "platega"
     MANUAL = "manual"
 
 
@@ -410,6 +411,56 @@ class WataPayment(Base):
                 self.payment_link_id,
                 self.amount_rubles,
                 self.status,
+            )
+        )
+
+
+class PlategaPayment(Base):
+    __tablename__ = "platega_payments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    platega_transaction_id = Column(String(255), unique=True, nullable=True, index=True)
+    correlation_id = Column(String(64), unique=True, nullable=False, index=True)
+    amount_kopeks = Column(Integer, nullable=False)
+    currency = Column(String(10), nullable=False, default="RUB")
+    description = Column(Text, nullable=True)
+
+    payment_method_code = Column(Integer, nullable=False)
+    status = Column(String(50), nullable=False, default="PENDING")
+    is_paid = Column(Boolean, default=False)
+    paid_at = Column(DateTime, nullable=True)
+
+    redirect_url = Column(Text, nullable=True)
+    return_url = Column(Text, nullable=True)
+    failed_url = Column(Text, nullable=True)
+    payload = Column(String(255), nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    callback_payload = Column(JSON, nullable=True)
+
+    expires_at = Column(DateTime, nullable=True)
+
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    user = relationship("User", backref="platega_payments")
+    transaction = relationship("Transaction", backref="platega_payment")
+
+    @property
+    def amount_rubles(self) -> float:
+        return self.amount_kopeks / 100
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return (
+            "<PlategaPayment(id={0}, transaction_id={1}, amount={2}₽, status={3}, method={4})>".format(
+                self.id,
+                self.platega_transaction_id,
+                self.amount_rubles,
+                self.status,
+                self.payment_method_code,
             )
         )
 
