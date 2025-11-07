@@ -770,6 +770,13 @@ async def handle_topup_amount_callback(
                 await process_heleket_payment_amount(
                     callback.message, db_user, db, amount_kopeks, state
                 )
+        elif method == "wata":
+            from app.database.database import AsyncSessionLocal
+            from .wata import process_wata_payment_amount
+            async with AsyncSessionLocal() as db:
+                await process_wata_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
         elif method == "stars":
             from .stars import process_stars_payment_amount
             await process_stars_payment_amount(
