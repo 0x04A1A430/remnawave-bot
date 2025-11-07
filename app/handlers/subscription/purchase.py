@@ -435,6 +435,12 @@ async def show_trial_offer(
     except Exception as e:
         logger.error(f"Ошибка получения триального сервера: {e}")
 
+    trial_device_limit = settings.TRIAL_DEVICE_LIMIT
+    if not settings.is_devices_selection_enabled():
+        forced_limit = settings.get_disabled_mode_device_limit()
+        if forced_limit is not None:
+            trial_device_limit = forced_limit
+
     devices_line = ""
     if settings.is_devices_selection_enabled():
         devices_line_template = texts.t(
@@ -442,12 +448,13 @@ async def show_trial_offer(
             "\n📱 <b>Устройства:</b> {devices} шт.",
         )
         devices_line = devices_line_template.format(
-            devices=settings.TRIAL_DEVICE_LIMIT,
+            devices=trial_device_limit,
         )
 
     trial_text = texts.TRIAL_AVAILABLE.format(
         days=settings.TRIAL_DURATION_DAYS,
         traffic=texts.format_traffic(settings.TRIAL_TRAFFIC_LIMIT_GB),
+        devices=trial_device_limit if trial_device_limit is not None else "",
         devices_line=devices_line,
         server_name=trial_server_name
     )
