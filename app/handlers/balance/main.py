@@ -284,7 +284,16 @@ async def show_payment_methods(
                 devices_discounted_per_month * months_in_period
             )
             
-            current_tariff_desc = f"📱 Подписка: {len(current_connected_squads)} серверов, {current_traffic} ГБ, {current_device_limit} устр."
+            traffic_value = current_traffic or 0
+            if traffic_value <= 0:
+                traffic_display = texts.t("TRAFFIC_UNLIMITED_SHORT", "Безлимит")
+            else:
+                traffic_display = texts.format_traffic(traffic_value)
+
+            current_tariff_desc = (
+                f"📱 Подписка: {len(current_connected_squads)} серверов, "
+                f"{traffic_display}, {current_device_limit} устр."
+            )
             estimated_price_info = f"💰 Стоимость продления (примерно): {texts.format_price(total_price)} за {duration_days} дней"
             
             tariff_info = f"\n\n📋 <b>Ваш текущий тариф:</b>\n{current_tariff_desc}\n{estimated_price_info}"
