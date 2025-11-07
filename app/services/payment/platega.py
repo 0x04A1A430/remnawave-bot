@@ -297,6 +297,15 @@ class PlategaPaymentMixin:
             callback_payload=payload,
         )
 
+        locked_payment = await payment_module.get_platega_payment_by_id_for_update(
+            db, payment.id
+        )
+        if locked_payment:
+            payment = locked_payment
+
+        metadata = dict(getattr(payment, "metadata_json", {}) or {})
+        balance_already_credited = bool(metadata.get("balance_credited"))
+
         if payment.transaction_id:
             logger.info(
                 "Platega платеж %s уже связан с транзакцией %s",
@@ -316,6 +325,14 @@ class PlategaPaymentMixin:
             else payment.platega_transaction_id
         )
 
+        existing_transaction = None
+        if transaction_external_id:
+            existing_transaction = await payment_module.get_transaction_by_external_id(
+                db,
+                transaction_external_id,
+                PaymentMethod.PLATEGA,
+            )
+
         method_display = settings.get_platega_method_display_name(payment.payment_method_code)
         description = (
             f"Пополнение через Platega ({method_display})"
@@ -323,20 +340,34 @@ class PlategaPaymentMixin:
             else "Пополнение через Platega"
         )
 
-        transaction = await payment_module.create_transaction(
-            db,
-            user_id=payment.user_id,
-            type=TransactionType.DEPOSIT,
-            amount_kopeks=payment.amount_kopeks,
-            description=description,
-            payment_method=PaymentMethod.PLATEGA,
-            external_id=transaction_external_id or payment.correlation_id,
-            is_completed=True,
-        )
+        transaction = existing_transaction
+        created_transaction = False
+
+        if not transaction:
+            transaction = await payment_module.create_transaction(
+                db,
+                user_id=payment.user_id,
+                type=TransactionType.DEPOSIT,
+                amount_kopeks=payment.amount_kopeks,
+                description=description,
+                payment_method=PaymentMethod.PLATEGA,
+                external_id=transaction_external_id or payment.correlation_id,
+                is_completed=True,
+            )
+            created_transaction = True
 
         await payment_module.link_platega_payment_to_transaction(
             db, payment=payment, transaction_id=transaction.id
         )
+
+        should_credit_balance = created_transaction or not balance_already_credited
+
+        if not should_credit_balance:
+            logger.info(
+                "Platega платеж %s уже зачислил баланс ранее",
+                payment.correlation_id,
+            )
+            return payment
 
         old_balance = user.balance_kopeks
         was_first_topup = not user.has_made_first_topup
@@ -478,6 +509,19 @@ class PlategaPaymentMixin:
                 error,
                 exc_info=True,
             )
+
+        metadata["balance_change"] = {
+            "old_balance": old_balance,
+            "new_balance": user.balance_kopeks,
+            "credited_at": datetime.utcnow().isoformat(),
+        }
+        metadata["balance_credited"] = True
+
+        await payment_module.update_platega_payment(
+            db,
+            payment=payment,
+            metadata=metadata,
+        )
 
         logger.info(
             "✅ Обработан Platega платеж %s для пользователя %s",

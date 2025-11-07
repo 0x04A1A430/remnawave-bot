@@ -67,6 +67,11 @@ async def create_transaction(*args, **kwargs):
     return await transaction_crud.create_transaction(*args, **kwargs)
 
 
+async def get_transaction_by_external_id(*args, **kwargs):
+    transaction_crud = import_module("app.database.crud.transaction")
+    return await transaction_crud.get_transaction_by_external_id(*args, **kwargs)
+
+
 async def add_user_balance(*args, **kwargs):
     user_crud = import_module("app.database.crud.user")
     return await user_crud.add_user_balance(*args, **kwargs)
@@ -180,6 +185,11 @@ async def create_platega_payment(*args, **kwargs):
 async def get_platega_payment_by_id(*args, **kwargs):
     platega_crud = import_module("app.database.crud.platega")
     return await platega_crud.get_platega_payment_by_id(*args, **kwargs)
+
+
+async def get_platega_payment_by_id_for_update(*args, **kwargs):
+    platega_crud = import_module("app.database.crud.platega")
+    return await platega_crud.get_platega_payment_by_id_for_update(*args, **kwargs)
 
 
 async def get_platega_payment_by_transaction_id(*args, **kwargs):

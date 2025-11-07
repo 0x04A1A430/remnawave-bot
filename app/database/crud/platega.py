@@ -73,6 +73,17 @@ async def get_platega_payment_by_id(
     return result.scalar_one_or_none()
 
 
+async def get_platega_payment_by_id_for_update(
+    db: AsyncSession, payment_id: int
+) -> Optional[PlategaPayment]:
+    result = await db.execute(
+        select(PlategaPayment)
+        .where(PlategaPayment.id == payment_id)
+        .with_for_update()
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_platega_payment_by_transaction_id(
     db: AsyncSession, transaction_id: str
 ) -> Optional[PlategaPayment]:
