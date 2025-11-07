@@ -150,8 +150,8 @@ docker compose logs
 
 ```env
 BOT_RUN_MODE=webhook
-WEBHOOK_URL=https://bot.example.com
-WEBHOOK_PATH=/telegram/webhook
+WEBHOOK_URL=https://api.domain.com
+WEBHOOK_PATH=/webhook
 WEBHOOK_SECRET_TOKEN=super-secret-token
 WEBHOOK_DROP_PENDING_UPDATES=true
 WEBHOOK_MAX_QUEUE_SIZE=1024
