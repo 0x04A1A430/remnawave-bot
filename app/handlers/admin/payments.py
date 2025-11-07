@@ -37,6 +37,8 @@ def _method_display(method: PaymentMethod) -> str:
         return "Heleket"
     if method == PaymentMethod.YOOKASSA:
         return "YooKassa"
+    if method == PaymentMethod.PLATEGA:
+        return "Platega"
     if method == PaymentMethod.CRYPTOBOT:
         return "CryptoBot"
     if method == PaymentMethod.TELEGRAM_STARS:
@@ -90,6 +92,18 @@ def _status_info(
         }
         return mapping.get(status, ("❓", texts.t("ADMIN_PAYMENT_STATUS_UNKNOWN", "❓ Unknown")))
 
+    if record.method == PaymentMethod.PLATEGA:
+        mapping = {
+            "pending": ("⏳", texts.t("ADMIN_PAYMENT_STATUS_PENDING", "⏳ Pending")),
+            "inprogress": ("⌛", texts.t("ADMIN_PAYMENT_STATUS_PROCESSING", "⌛ Processing")),
+            "confirmed": ("✅", texts.t("ADMIN_PAYMENT_STATUS_PAID", "✅ Paid")),
+            "failed": ("❌", texts.t("ADMIN_PAYMENT_STATUS_FAILED", "❌ Failed")),
+            "canceled": ("❌", texts.t("ADMIN_PAYMENT_STATUS_CANCELED", "❌ Cancelled")),
+            "cancelled": ("❌", texts.t("ADMIN_PAYMENT_STATUS_CANCELED", "❌ Cancelled")),
+            "expired": ("⌛", texts.t("ADMIN_PAYMENT_STATUS_EXPIRED", "⌛ Expired")),
+        }
+        return mapping.get(status, ("❓", texts.t("ADMIN_PAYMENT_STATUS_UNKNOWN", "❓ Unknown")))
+
     if record.method == PaymentMethod.HELEKET:
         if status in {"pending", "created", "waiting", "check", "processing"}:
             return "⏳", texts.t("ADMIN_PAYMENT_STATUS_PENDING", "⏳ Pending")
@@ -136,6 +150,8 @@ def _is_checkable(record: PendingPayment) -> bool:
         return status in {"created", "processing", "hold"}
     if record.method == PaymentMethod.WATA:
         return status in {"opened", "pending", "processing", "inprogress", "in_progress"}
+    if record.method == PaymentMethod.PLATEGA:
+        return status in {"pending", "inprogress", "in_progress"}
     if record.method == PaymentMethod.HELEKET:
         return status not in {"paid", "paid_over", "cancel", "canceled", "fail", "failed", "expired"}
     if record.method == PaymentMethod.YOOKASSA:
