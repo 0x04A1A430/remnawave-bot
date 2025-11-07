@@ -577,6 +577,54 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    if settings.is_platega_enabled():
+
+        @router.get(settings.PLATEGA_WEBHOOK_PATH)
+        async def platega_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    "status": "ok",
+                    "service": "platega_webhook",
+                    "enabled": settings.is_platega_enabled(),
+                }
+            )
+
+        @router.post(settings.PLATEGA_WEBHOOK_PATH)
+        async def platega_webhook(request: Request) -> JSONResponse:
+            merchant_id = request.headers.get("X-MerchantId", "")
+            secret = request.headers.get("X-Secret", "")
+            if (
+                merchant_id != (settings.PLATEGA_MERCHANT_ID or "")
+                or secret != (settings.PLATEGA_SECRET or "")
+            ):
+                return JSONResponse(
+                    {"status": "error", "reason": "unauthorized"},
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            try:
+                payload = await request.json()
+            except json.JSONDecodeError:
+                return JSONResponse(
+                    {"status": "error", "reason": "invalid_json"},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+
+            success = await _process_payment_service_callback(
+                payment_service,
+                payload,
+                "process_platega_webhook",
+            )
+            if success:
+                return JSONResponse({"status": "ok"})
+
+            return JSONResponse(
+                {"status": "error", "reason": "not_processed"},
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        routes_registered = True
+
     if routes_registered:
         @router.get("/health/payment-webhooks")
         async def payment_webhooks_health() -> JSONResponse:
@@ -590,6 +638,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     "wata_enabled": settings.is_wata_enabled(),
                     "heleket_enabled": settings.is_heleket_enabled(),
                     "pal24_enabled": settings.is_pal24_enabled(),
+                    "platega_enabled": settings.is_platega_enabled(),
                 }
             )
 

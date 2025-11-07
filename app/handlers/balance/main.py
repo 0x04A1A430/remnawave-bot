@@ -519,6 +519,14 @@ async def process_topup_amount(
             from .mulenpay import process_mulenpay_payment_amount
             async with AsyncSessionLocal() as db:
                 await process_mulenpay_payment_amount(message, db_user, db, amount_kopeks, state)
+        elif payment_method == "platega":
+            from app.database.database import AsyncSessionLocal
+            from .platega import process_platega_payment_amount
+
+            async with AsyncSessionLocal() as db:
+                await process_platega_payment_amount(
+                    message, db_user, db, amount_kopeks, state
+                )
         elif payment_method == "wata":
             from app.database.database import AsyncSessionLocal
             from .wata import process_wata_payment_amount
@@ -630,6 +638,14 @@ async def handle_quick_amount_selection(
                 await process_mulenpay_payment_amount(
                     callback.message, db_user, db, amount_kopeks, state
                 )
+        elif payment_method == "platega":
+            from app.database.database import AsyncSessionLocal
+            from .platega import process_platega_payment_amount
+
+            async with AsyncSessionLocal() as db:
+                await process_platega_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
         elif payment_method == "wata":
             from app.database.database import AsyncSessionLocal
             from .wata import process_wata_payment_amount
@@ -715,6 +731,13 @@ async def handle_topup_amount_callback(
             from .mulenpay import process_mulenpay_payment_amount
             async with AsyncSessionLocal() as db:
                 await process_mulenpay_payment_amount(
+                    callback.message, db_user, db, amount_kopeks, state
+                )
+        elif method == "platega":
+            from app.database.database import AsyncSessionLocal
+            from .platega import process_platega_payment_amount
+            async with AsyncSessionLocal() as db:
+                await process_platega_payment_amount(
                     callback.message, db_user, db, amount_kopeks, state
                 )
         elif method == "pal24":
@@ -821,6 +844,16 @@ def register_balance_handlers(dp: Dispatcher):
         F.data.startswith("pal24_method_"),
     )
 
+    from .platega import start_platega_payment, handle_platega_method_selection
+    dp.callback_query.register(
+        start_platega_payment,
+        F.data == "topup_platega"
+    )
+    dp.callback_query.register(
+        handle_platega_method_selection,
+        F.data.startswith("platega_method_"),
+    )
+
     from .yookassa import check_yookassa_payment_status
     dp.callback_query.register(
         check_yookassa_payment_status,
@@ -887,6 +920,12 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(
         check_pal24_payment_status,
         F.data.startswith("check_pal24_")
+    )
+
+    from .platega import check_platega_payment_status
+    dp.callback_query.register(
+        check_platega_payment_status,
+        F.data.startswith("check_platega_")
     )
 
     dp.callback_query.register(

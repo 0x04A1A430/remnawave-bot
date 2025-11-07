@@ -1159,6 +1159,14 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
             )
         ])
 
+    if settings.is_platega_enabled() and settings.get_platega_active_methods():
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("PAYMENT_PLATEGA", "💳 Platega"),
+                callback_data=_build_callback("platega"),
+            )
+        ])
+
     if settings.is_cryptobot_enabled():
         keyboard.append([
             InlineKeyboardButton(
