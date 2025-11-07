@@ -1429,6 +1429,7 @@
   "TRAFFIC_NO_CHANGE": "ℹ️ Лимит трафика не изменился",
   "TRAFFIC_PACKAGES_NOT_CONFIGURED": "⚠️ Пакеты трафика не настроены",
   "TRAFFIC_UNLIMITED": "📊 Безлимит - {settings.format_price(settings.PRICE_TRAFFIC_UNLIMITED)}",
+  "TRAFFIC_UNLIMITED_SHORT": "Безлимит",
   "TRIAL_ACTIVATED": "🎉 Тестовая подписка активирована!",
   "TRIAL_ACTIVATE_BUTTON": "🎁 Активировать",
   "TRIAL_ALREADY_USED": "❌ Тестовая подписка уже была использована",

@@ -1409,6 +1409,7 @@
   "TRAFFIC_NO_CHANGE": "ℹ️ Traffic limit was not changed",
   "TRAFFIC_PACKAGES_NOT_CONFIGURED": "⚠️ Traffic packages are not configured",
   "TRAFFIC_UNLIMITED": "📊 Unlimited - {settings.format_price(settings.PRICE_TRAFFIC_UNLIMITED)}",
+  "TRAFFIC_UNLIMITED_SHORT": "Unlimited",
   "TRIAL_ACTIVATED": "🎉 Trial subscription activated!",
   "TRIAL_ACTIVATE_BUTTON": "🎁 Activate",
   "TRIAL_ALREADY_USED": "❌ The trial subscription has already been used",
