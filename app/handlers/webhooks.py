@@ -114,7 +114,9 @@ async def handle_successful_payment(message: types.Message):
                         )
                         
                         await message.answer(
-                            f"✅ Баланс успешно пополнен на {settings.format_price(amount_kopeks)}!"
+                            f"✅ Баланс успешно пополнен на {settings.format_price(amount_kopeks)}!\n\n"
+                            "⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. "
+                            "Обязательно активируйте подписку отдельно!"
                         )
                         
                         logger.info(f"✅ Обработан Stars платеж: {payment.telegram_payment_charge_id}")

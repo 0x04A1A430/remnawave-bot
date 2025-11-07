@@ -158,6 +158,12 @@ async def get_user(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
+    # First check if the provided ID is a telegram_id
+    user = await get_user_by_telegram_id(db, user_id)
+    if user:
+        return _serialize_user(user)
+    
+    # If not found as telegram_id, check as internal user ID
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
@@ -202,8 +208,15 @@ async def update_user_endpoint(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
-    user = await get_user_by_id(db, user_id)
-    if not user:
+    # First check if the provided ID is a telegram_id
+    user = await get_user_by_telegram_id(db, user_id)
+    if user:
+        found_user = user
+    else:
+        # If not found as telegram_id, check as internal user ID
+        found_user = await get_user_by_id(db, user_id)
+    
+    if not found_user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
     updates: dict[str, Any] = {}
@@ -234,18 +247,23 @@ async def update_user_endpoint(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Promo group not found")
         updates["promo_group_id"] = promo_group.id
 
-    if payload.referral_code is not None and payload.referral_code != user.referral_code:
+    if payload.referral_code is not None and payload.referral_code != found_user.referral_code:
         existing_code_owner = await get_user_by_referral_code(db, payload.referral_code)
-        if existing_code_owner and existing_code_owner.id != user.id:
+        if existing_code_owner and existing_code_owner.id != found_user.id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Referral code already in use")
         updates["referral_code"] = payload.referral_code
 
     if not updates:
-        return _serialize_user(user)
+        return _serialize_user(found_user)
 
-    user = await update_user(db, user, **updates)
-    user = await get_user_by_id(db, user.id)
-    return _serialize_user(user)
+    found_user = await update_user(db, found_user, **updates)
+    # Reload the user to ensure we have the latest data
+    if found_user.telegram_id == user_id:
+        found_user = await get_user_by_telegram_id(db, user_id)
+    else:
+        found_user = await get_user_by_id(db, found_user.id)
+        
+    return _serialize_user(found_user)
 
 
 @router.post("/{user_id}/balance", response_model=UserResponse)
@@ -258,13 +276,20 @@ async def update_balance(
     if payload.amount_kopeks == 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Amount must be non-zero")
 
-    user = await get_user_by_id(db, user_id)
-    if not user:
+    # First check if the provided ID is a telegram_id
+    user = await get_user_by_telegram_id(db, user_id)
+    if user:
+        found_user = user
+    else:
+        # If not found as telegram_id, check as internal user ID
+        found_user = await get_user_by_id(db, user_id)
+    
+    if not found_user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
     success = await add_user_balance(
         db,
-        user,
+        found_user,
         amount_kopeks=payload.amount_kopeks,
         description=payload.description or "Корректировка через веб-API",
         create_transaction=payload.create_transaction,
@@ -273,5 +298,10 @@ async def update_balance(
     if not success:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to update balance")
 
-    user = await get_user_by_id(db, user_id)
-    return _serialize_user(user)
+    # Reload the user to ensure we have the latest data
+    if found_user.telegram_id == user_id:
+        found_user = await get_user_by_telegram_id(db, user_id)
+    else:
+        found_user = await get_user_by_id(db, found_user.id)
+        
+    return _serialize_user(found_user)

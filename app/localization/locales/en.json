@@ -1242,7 +1242,7 @@
   "SKIP_BUTTON": "Skip ➡️",
   "STARS_PAYMENT_ENROLLMENT_ERROR": "❌ Failed to credit funds. Please contact support; the payment will be verified manually.",
   "STARS_PAYMENT_PROCESSING_ERROR": "❌ Technical error processing the payment. Please contact support for assistance.",
-  "STARS_PAYMENT_SUCCESS": "🎉 <b>Payment processed successfully!</b>\n\n⭐ Stars spent: {stars_spent}\n💰 Added to balance: {amount} ₽\n🆔 Transaction ID: {transaction_id}...\n\nThank you for topping up! 🚀",
+  "STARS_PAYMENT_SUCCESS": "🎉 <b>Payment processed successfully!</b>\n\n⭐ Stars spent: {stars_spent}\n💰 Added to balance: {amount} ₽\n🆔 Transaction ID: {transaction_id}...\n\n⚠️ <b>Important:</b> Balance top-up does not automatically activate your subscription. Please activate your subscription separately!\n\nThank you for topping up! 🚀",
   "STARS_PAYMENT_USER_NOT_FOUND": "❌ Error: user not found. Please contact support.",
   "STARS_PRECHECK_INVALID_PAYLOAD": "Payment validation error. Please try again.",
   "STARS_PRECHECK_TECHNICAL_ERROR": "Technical error. Please try again later.",

@@ -498,6 +498,8 @@ class PlategaPaymentMixin:
                     chat_id=user.telegram_id,
                     text=(
                         f"✅ Баланс пополнен на {settings.format_price(payment.amount_kopeks)}!\n\n"
+                        f"⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. "
+                        f"Обязательно активируйте подписку отдельно!\n\n"
                         f"{cart_message}"
                     ),
                     reply_markup=keyboard,

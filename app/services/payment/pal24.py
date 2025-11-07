@@ -489,7 +489,9 @@ class Pal24PaymentMixin:
                     chat_id=user.telegram_id,
                     text=(
                         "✅ Баланс пополнен на "
-                        f"{settings.format_price(payment.amount_kopeks)}!\n\n{cart_message}"
+                        f"{settings.format_price(payment.amount_kopeks)}!\n\n"
+                        f"⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. "
+                        f"Обязательно активируйте подписку отдельно!\n\n{cart_message}"
                     ),
                     reply_markup=keyboard,
                 )

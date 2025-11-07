@@ -346,7 +346,9 @@ class CryptoBotPaymentMixin:
                         
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
-                            text=f"✅ Баланс пополнен на {settings.format_price(payment.amount_kopeks)}!\n\n{cart_message}",
+                            text=f"✅ Баланс пополнен на {settings.format_price(payment.amount_kopeks)}!\n\n"
+                                 f"⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. "
+                                 f"Обязательно активируйте подписку отдельно!\n\n{cart_message}",
                             reply_markup=keyboard
                         )
                         logger.info(
