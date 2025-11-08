@@ -129,10 +129,7 @@ class AdvertisingCampaignService:
             try:
                 from app.database.crud.server_squad import get_random_trial_squad_uuid
 
-                trial_uuid = await get_random_trial_squad_uuid(
-                    db,
-                    getattr(settings, "TRIAL_SQUAD_UUID", None),
-                )
+                trial_uuid = await get_random_trial_squad_uuid(db)
                 if trial_uuid:
                     squads = [trial_uuid]
             except Exception as error:
@@ -141,8 +138,6 @@ class AdvertisingCampaignService:
                     campaign.id,
                     error,
                 )
-                if getattr(settings, "TRIAL_SQUAD_UUID", None):
-                    squads = [settings.TRIAL_SQUAD_UUID]
 
         new_subscription = await create_paid_subscription(
             db=db,

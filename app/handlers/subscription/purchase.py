@@ -58,6 +58,13 @@ from app.services.subscription_checkout_service import (
     should_offer_checkout_resume,
 )
 from app.services.subscription_service import SubscriptionService
+from app.services.trial_activation_service import (
+    TrialPaymentChargeFailed,
+    TrialPaymentInsufficientFunds,
+    charge_trial_activation_if_required,
+    rollback_trial_subscription_activation,
+    preview_trial_activation_charge,
+)
 
 
 def _serialize_markup(markup: Optional[InlineKeyboardMarkup]) -> Optional[Any]:
@@ -405,10 +412,7 @@ async def show_trial_offer(
 
     trial_server_name = texts.t("TRIAL_SERVER_DEFAULT_NAME", "🎯 Тестовый сервер")
     try:
-        from app.database.crud.server_squad import (
-            get_server_squad_by_uuid,
-            get_trial_eligible_server_squads,
-        )
+        from app.database.crud.server_squad import get_trial_eligible_server_squads
 
         trial_squads = await get_trial_eligible_server_squads(db, include_unavailable=True)
 
@@ -420,15 +424,6 @@ async def show_trial_offer(
                     "TRIAL_SERVER_RANDOM_POOL",
                     "🎲 Случайный из {count} серверов",
                 ).format(count=len(trial_squads))
-        elif settings.TRIAL_SQUAD_UUID:
-            trial_server = await get_server_squad_by_uuid(db, settings.TRIAL_SQUAD_UUID)
-            if trial_server:
-                trial_server_name = trial_server.display_name
-            else:
-                logger.warning(
-                    "Триальный сервер с UUID %s не найден в БД",
-                    settings.TRIAL_SQUAD_UUID,
-                )
         else:
             logger.warning("Не настроены сквады для выдачи триалов")
 
@@ -451,12 +446,22 @@ async def show_trial_offer(
             devices=trial_device_limit,
         )
 
+    price_line = ""
+    if settings.is_trial_paid_activation_enabled():
+        trial_price = settings.get_trial_activation_price()
+        if trial_price > 0:
+            price_line = texts.t(
+                "TRIAL_PAYMENT_PRICE_LINE",
+                "\n💳 <b>Стоимость активации:</b> {price}",
+            ).format(price=settings.format_price(trial_price))
+
     trial_text = texts.TRIAL_AVAILABLE.format(
         days=settings.TRIAL_DURATION_DAYS,
         traffic=texts.format_traffic(settings.TRIAL_TRAFFIC_LIMIT_GB),
         devices=trial_device_limit if trial_device_limit is not None else "",
         devices_line=devices_line,
-        server_name=trial_server_name
+        server_name=trial_server_name,
+        price_line=price_line,
     )
 
     await callback.message.edit_text(
@@ -483,6 +488,28 @@ async def activate_trial(
         return
 
     try:
+        preview_trial_activation_charge(db_user)
+    except TrialPaymentInsufficientFunds as error:
+        required_label = settings.format_price(error.required_amount)
+        balance_label = settings.format_price(error.balance_amount)
+        missing_label = settings.format_price(error.missing_amount)
+        message = texts.t(
+            "TRIAL_PAYMENT_INSUFFICIENT_FUNDS",
+            "⚠️ Недостаточно средств для активации триала.\n"
+            "Необходимо: {required}\nНа балансе: {balance}\n"
+            "Не хватает: {missing}\n\nПополните баланс и попробуйте снова.",
+        ).format(required=required_label, balance=balance_label, missing=missing_label)
+
+        await callback.message.edit_text(
+            message,
+            reply_markup=get_insufficient_balance_keyboard(db_user.language),
+        )
+        await callback.answer()
+        return
+
+    charged_amount = 0
+
+    try:
         forced_devices = None
         if not settings.is_devices_selection_enabled():
             forced_devices = settings.get_disabled_mode_device_limit()
@@ -495,6 +522,72 @@ async def activate_trial(
 
         await db.refresh(db_user)
 
+        try:
+            charged_amount = await charge_trial_activation_if_required(
+                db,
+                db_user,
+                description="Активация триала через бота",
+            )
+        except TrialPaymentInsufficientFunds as error:
+            rollback_success = await rollback_trial_subscription_activation(db, subscription)
+            await db.refresh(db_user)
+            if not rollback_success:
+                await callback.answer(
+                    texts.t(
+                        "TRIAL_ROLLBACK_FAILED",
+                        "Не удалось отменить активацию триала. Попробуйте позже.",
+                    ),
+                    show_alert=True,
+                )
+                return
+
+            logger.error(
+                "Insufficient funds detected after trial creation for user %s: %s",
+                db_user.id,
+                error,
+            )
+            required_label = settings.format_price(error.required_amount)
+            balance_label = settings.format_price(error.balance_amount)
+            missing_label = settings.format_price(error.missing_amount)
+            message = texts.t(
+                "TRIAL_PAYMENT_INSUFFICIENT_FUNDS",
+                "⚠️ Недостаточно средств для активации триала.\n"
+                "Необходимо: {required}\nНа балансе: {balance}\n"
+                "Не хватает: {missing}\n\nПополните баланс и попробуйте снова.",
+            ).format(
+                required=required_label,
+                balance=balance_label,
+                missing=missing_label,
+            )
+
+            await callback.message.edit_text(
+                message,
+                reply_markup=get_insufficient_balance_keyboard(db_user.language),
+            )
+            await callback.answer()
+            return
+        except TrialPaymentChargeFailed:
+            rollback_success = await rollback_trial_subscription_activation(db, subscription)
+            await db.refresh(db_user)
+            if not rollback_success:
+                await callback.answer(
+                    texts.t(
+                        "TRIAL_ROLLBACK_FAILED",
+                        "Не удалось отменить активацию триала. Попробуйте позже.",
+                    ),
+                    show_alert=True,
+                )
+                return
+
+            await callback.answer(
+                texts.t(
+                    "TRIAL_PAYMENT_FAILED",
+                    "Не удалось списать средства для активации триала. Попробуйте позже.",
+                ),
+                show_alert=True,
+            )
+            return
+
         subscription_service = SubscriptionService()
         remnawave_user = await subscription_service.create_remnawave_user(
             db, subscription
@@ -504,39 +597,51 @@ async def activate_trial(
 
         try:
             notification_service = AdminNotificationService(callback.bot)
-            await notification_service.send_trial_activation_notification(db, db_user, subscription)
+            await notification_service.send_trial_activation_notification(
+                db,
+                db_user,
+                subscription,
+                charged_amount_kopeks=charged_amount,
+            )
         except Exception as e:
             logger.error(f"Ошибка отправки уведомления о триале: {e}")
 
         subscription_link = get_display_subscription_link(subscription)
         hide_subscription_link = settings.should_hide_subscription_link()
 
+        payment_note = ""
+        if charged_amount > 0:
+            payment_note = "\n\n" + texts.t(
+                "TRIAL_PAYMENT_CHARGED_NOTE",
+                "💳 С вашего баланса списано {amount}.",
+            ).format(amount=settings.format_price(charged_amount))
+
         if remnawave_user and subscription_link:
             if settings.is_happ_cryptolink_mode():
                 trial_success_text = (
-                        f"{texts.TRIAL_ACTIVATED}\n\n"
-                        + texts.t(
-                    "SUBSCRIPTION_HAPP_LINK_PROMPT",
-                    "🔒 Ссылка на подписку создана. Нажмите кнопку \"Подключиться\" ниже, чтобы открыть её в Happ.",
-                )
-                        + "\n\n"
-                        + texts.t(
-                    "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
-                    "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
-                )
+                    f"{texts.TRIAL_ACTIVATED}\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_HAPP_LINK_PROMPT",
+                        "🔒 Ссылка на подписку создана. Нажмите кнопку \"Подключиться\" ниже, чтобы открыть её в Happ.",
+                    )
+                    + "\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
+                        "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
+                    )
                 )
             elif hide_subscription_link:
                 trial_success_text = (
-                        f"{texts.TRIAL_ACTIVATED}\n\n"
-                        + texts.t(
-                    "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
-                    "ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе \"Моя подписка\".",
-                )
-                        + "\n\n"
-                        + texts.t(
-                    "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
-                    "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
-                )
+                    f"{texts.TRIAL_ACTIVATED}\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_LINK_HIDDEN_NOTICE",
+                        "ℹ️ Ссылка подписки доступна по кнопкам ниже или в разделе \"Моя подписка\".",
+                    )
+                    + "\n\n"
+                    + texts.t(
+                        "SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT",
+                        "📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве",
+                    )
                 )
             else:
                 subscription_import_link = texts.t(
@@ -550,6 +655,8 @@ async def activate_trial(
                     f"{texts.t('SUBSCRIPTION_IMPORT_INSTRUCTION_PROMPT', '📱 Нажмите кнопку ниже, чтобы получить инструкцию по настройке VPN на вашем устройстве')}"
                 )
 
+            trial_success_text += payment_note
+
             connect_mode = settings.CONNECT_BUTTON_MODE
 
             if connect_mode == "miniapp_subscription":
@@ -560,8 +667,12 @@ async def activate_trial(
                             web_app=types.WebAppInfo(url=subscription_link),
                         )
                     ],
-                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
-                                          callback_data="back_to_menu")],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                            callback_data="back_to_menu",
+                        )
+                    ],
                 ])
             elif connect_mode == "miniapp_custom":
                 if not settings.MINIAPP_CUSTOM_URL:
@@ -581,22 +692,33 @@ async def activate_trial(
                             web_app=types.WebAppInfo(url=settings.MINIAPP_CUSTOM_URL),
                         )
                     ],
-                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
-                                          callback_data="back_to_menu")],
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                            callback_data="back_to_menu",
+                        )
+                    ],
                 ])
             elif connect_mode == "link":
                 rows = [
-                    [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"), url=subscription_link)]
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                            url=subscription_link,
+                        )
+                    ]
                 ]
                 happ_row = get_happ_download_button_row(texts)
                 if happ_row:
                     rows.append(happ_row)
-                rows.append([
-                    InlineKeyboardButton(
-                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
-                        callback_data="back_to_menu"
-                    )
-                ])
+                rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                            callback_data="back_to_menu",
+                        )
+                    ]
+                )
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
             elif connect_mode == "happ_cryptolink":
                 rows = [
@@ -610,33 +732,51 @@ async def activate_trial(
                 happ_row = get_happ_download_button_row(texts)
                 if happ_row:
                     rows.append(happ_row)
-                rows.append([
-                    InlineKeyboardButton(
-                        text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
-                        callback_data="back_to_menu"
-                    )
-                ])
+                rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                            callback_data="back_to_menu",
+                        )
+                    ]
+                )
                 connect_keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
             else:
-                connect_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
-                                          callback_data="subscription_connect")],
-                    [InlineKeyboardButton(text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
-                                          callback_data="back_to_menu")],
-                ])
+                connect_keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t("CONNECT_BUTTON", "🔗 Подключиться"),
+                                callback_data="subscription_connect",
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text=texts.t("BACK_TO_MAIN_MENU_BUTTON", "⬅️ В главное меню"),
+                                callback_data="back_to_menu",
+                            )
+                        ],
+                    ]
+                )
 
             await callback.message.edit_text(
                 trial_success_text,
                 reply_markup=connect_keyboard,
-                parse_mode="HTML"
+                parse_mode="HTML",
             )
         else:
+            trial_success_text = (
+                f"{texts.TRIAL_ACTIVATED}\n\n⚠️ Ссылка генерируется, попробуйте перейти в раздел 'Моя подписка' через несколько секунд."
+            )
+            trial_success_text += payment_note
             await callback.message.edit_text(
-                f"{texts.TRIAL_ACTIVATED}\n\n⚠️ Ссылка генерируется, попробуйте перейти в раздел 'Моя подписка' через несколько секунд.",
-                reply_markup=get_back_keyboard(db_user.language)
+                trial_success_text,
+                reply_markup=get_back_keyboard(db_user.language),
             )
 
-        logger.info(f"✅ Активирована тестовая подписка для пользователя {db_user.telegram_id}")
+        logger.info(
+            f"✅ Активирована тестовая подписка для пользователя {db_user.telegram_id}"
+        )
 
     except Exception as e:
         logger.error(f"Ошибка активации триала: {e}")

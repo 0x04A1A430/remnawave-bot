@@ -515,7 +515,6 @@ async def choose_random_trial_server_squad(
 
 async def get_random_trial_squad_uuid(
     db: AsyncSession,
-    fallback_uuid: Optional[str] = None,
 ) -> Optional[str]:
 
     squad = await choose_random_trial_server_squad(db)
@@ -523,7 +522,7 @@ async def get_random_trial_squad_uuid(
     if squad:
         return squad.squad_uuid
 
-    return fallback_uuid
+    return None
 
 
 def _generate_display_name(original_name: str) -> str:
