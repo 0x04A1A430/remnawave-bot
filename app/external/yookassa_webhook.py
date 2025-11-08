@@ -40,34 +40,6 @@ YOOKASSA_ALLOWED_EVENTS: tuple[str, ...] = (
 )
 
 
-_DEFAULT_TRUSTED_PROXY_NETWORKS: tuple[IPNetwork, ...] = (
-    # Cloudflare IPv4 ranges
-    ip_network("173.245.48.0/20"),
-    ip_network("103.21.244.0/22"),
-    ip_network("103.22.200.0/22"),
-    ip_network("103.31.4.0/22"),
-    ip_network("141.101.64.0/18"),
-    ip_network("108.162.192.0/18"),
-    ip_network("190.93.240.0/20"),
-    ip_network("188.114.96.0/20"),
-    ip_network("197.234.240.0/22"),
-    ip_network("198.41.128.0/17"),
-    ip_network("162.158.0.0/15"),
-    ip_network("172.64.0.0/13"),
-    ip_network("131.0.72.0/22"),
-    ip_network("104.16.0.0/13"),
-    ip_network("104.24.0.0/14"),
-    # Cloudflare IPv6 ranges
-    ip_network("2400:cb00::/32"),
-    ip_network("2606:4700::/32"),
-    ip_network("2803:f800::/32"),
-    ip_network("2405:b500::/32"),
-    ip_network("2405:8100::/32"),
-    ip_network("2a06:98c0::/29"),
-    ip_network("2c0f:f248::/32"),
-)
-
-
 def collect_yookassa_ip_candidates(*values: Optional[str]) -> List[str]:
     candidates: List[str] = []
     for value in values:
@@ -115,7 +87,7 @@ def _should_trust_forwarded_headers(remote_ip: Optional[IPAddress]) -> bool:
     )
 
 
-_TRUSTED_PROXY_NETWORKS_CACHE: Tuple[str, Tuple[IPNetwork, ...]] = ("", _DEFAULT_TRUSTED_PROXY_NETWORKS)
+_TRUSTED_PROXY_NETWORKS_CACHE: Tuple[str, Tuple[IPNetwork, ...]] = ("", ())
 
 
 def _get_trusted_proxy_networks() -> Tuple[IPNetwork, ...]:
@@ -124,10 +96,10 @@ def _get_trusted_proxy_networks() -> Tuple[IPNetwork, ...]:
     raw_value = getattr(settings, "YOOKASSA_TRUSTED_PROXY_NETWORKS", "") or ""
     cached_raw, cached_networks = _TRUSTED_PROXY_NETWORKS_CACHE
 
-    if raw_value == cached_raw and cached_networks:
+    if raw_value == cached_raw:
         return cached_networks
 
-    networks: List[IPNetwork] = list(_DEFAULT_TRUSTED_PROXY_NETWORKS)
+    networks: List[IPNetwork] = []
     for part in raw_value.split(","):
         candidate = part.strip()
         if not candidate:
@@ -206,8 +178,6 @@ class YooKassaWebhookHandler:
             logger.info(f"📋 Headers: {dict(request.headers)}")
 
             header_ip_candidates = collect_yookassa_ip_candidates(
-                request.headers.get("CF-Connecting-IP"),
-                request.headers.get("True-Client-IP"),
                 request.headers.get("X-Forwarded-For"),
                 request.headers.get("X-Real-IP"),
             )
