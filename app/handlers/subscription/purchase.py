@@ -50,7 +50,7 @@ from app.keyboards.inline import (
 from app.services.user_cart_service import user_cart_service
 from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
-from app.services.remnawave_service import RemnaWaveService
+from app.services.remnawave_service import RemnaWaveConfigurationError, RemnaWaveService
 from app.services.subscription_checkout_service import (
     clear_subscription_checkout_draft,
     get_subscription_checkout_draft,
@@ -62,8 +62,9 @@ from app.services.trial_activation_service import (
     TrialPaymentChargeFailed,
     TrialPaymentInsufficientFunds,
     charge_trial_activation_if_required,
-    rollback_trial_subscription_activation,
     preview_trial_activation_charge,
+    revert_trial_activation,
+    rollback_trial_subscription_activation,
 )
 
 
@@ -508,6 +509,8 @@ async def activate_trial(
         return
 
     charged_amount = 0
+    subscription: Optional[Subscription] = None
+    remnawave_user = None
 
     try:
         forced_devices = None
@@ -589,9 +592,77 @@ async def activate_trial(
             return
 
         subscription_service = SubscriptionService()
-        remnawave_user = await subscription_service.create_remnawave_user(
-            db, subscription
-        )
+        try:
+            remnawave_user = await subscription_service.create_remnawave_user(
+                db,
+                subscription,
+            )
+        except RemnaWaveConfigurationError as error:
+            logger.error("RemnaWave update skipped due to configuration error: %s", error)
+            revert_result = await revert_trial_activation(
+                db,
+                db_user,
+                subscription,
+                charged_amount,
+                refund_description="Возврат оплаты за активацию триала через бота",
+            )
+            if not revert_result.subscription_rolled_back:
+                failure_text = texts.t(
+                    "TRIAL_ROLLBACK_FAILED",
+                    "Не удалось отменить активацию триала после ошибки списания. Свяжитесь с поддержкой и попробуйте позже.",
+                )
+            elif charged_amount > 0 and not revert_result.refunded:
+                failure_text = texts.t(
+                    "TRIAL_REFUND_FAILED",
+                    "Не удалось вернуть оплату за активацию триала. Немедленно свяжитесь с поддержкой.",
+                )
+            else:
+                failure_text = texts.t(
+                    "TRIAL_PROVISIONING_FAILED",
+                    "Не удалось завершить активацию триала. Средства возвращены на баланс. Попробуйте позже.",
+                )
+
+            await callback.message.edit_text(
+                failure_text,
+                reply_markup=get_back_keyboard(db_user.language),
+            )
+            await callback.answer()
+            return
+        except Exception as error:
+            logger.error(
+                "Failed to create RemnaWave user for trial subscription %s: %s",
+                getattr(subscription, "id", "<unknown>"),
+                error,
+            )
+            revert_result = await revert_trial_activation(
+                db,
+                db_user,
+                subscription,
+                charged_amount,
+                refund_description="Возврат оплаты за активацию триала через бота",
+            )
+            if not revert_result.subscription_rolled_back:
+                failure_text = texts.t(
+                    "TRIAL_ROLLBACK_FAILED",
+                    "Не удалось отменить активацию триала после ошибки списания. Свяжитесь с поддержкой и попробуйте позже.",
+                )
+            elif charged_amount > 0 and not revert_result.refunded:
+                failure_text = texts.t(
+                    "TRIAL_REFUND_FAILED",
+                    "Не удалось вернуть оплату за активацию триала. Немедленно свяжитесь с поддержкой.",
+                )
+            else:
+                failure_text = texts.t(
+                    "TRIAL_PROVISIONING_FAILED",
+                    "Не удалось завершить активацию триала. Средства возвращены на баланс. Попробуйте позже.",
+                )
+
+            await callback.message.edit_text(
+                failure_text,
+                reply_markup=get_back_keyboard(db_user.language),
+            )
+            await callback.answer()
+            return
 
         await db.refresh(db_user)
 
@@ -780,10 +851,38 @@ async def activate_trial(
 
     except Exception as e:
         logger.error(f"Ошибка активации триала: {e}")
+        failure_text = texts.ERROR
+
+        if subscription and remnawave_user is None:
+            revert_result = await revert_trial_activation(
+                db,
+                db_user,
+                subscription,
+                charged_amount,
+                refund_description="Возврат оплаты за активацию триала через бота",
+            )
+            if not revert_result.subscription_rolled_back:
+                failure_text = texts.t(
+                    "TRIAL_ROLLBACK_FAILED",
+                    "Не удалось отменить активацию триала после ошибки списания. Свяжитесь с поддержкой и попробуйте позже.",
+                )
+            elif charged_amount > 0 and not revert_result.refunded:
+                failure_text = texts.t(
+                    "TRIAL_REFUND_FAILED",
+                    "Не удалось вернуть оплату за активацию триала. Немедленно свяжитесь с поддержкой.",
+                )
+            else:
+                failure_text = texts.t(
+                    "TRIAL_PROVISIONING_FAILED",
+                    "Не удалось завершить активацию триала. Средства возвращены на баланс. Попробуйте позже.",
+                )
+
         await callback.message.edit_text(
-            texts.ERROR,
+            failure_text,
             reply_markup=get_back_keyboard(db_user.language)
         )
+        await callback.answer()
+        return
 
     await callback.answer()
 

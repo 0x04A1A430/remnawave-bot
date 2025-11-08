@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.crud.subscription import decrement_subscription_server_counts
-from app.database.crud.user import subtract_user_balance
-from app.database.models import Subscription, User
+from app.database.crud.user import add_user_balance, subtract_user_balance
+from app.database.models import Subscription, TransactionType, User
 
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,12 @@ class TrialPaymentInsufficientFunds(TrialPaymentError):
 
 class TrialPaymentChargeFailed(TrialPaymentError):
     """Raised when balance charge could not be completed."""
+
+
+@dataclass(slots=True)
+class TrialActivationReversionResult:
+    refunded: bool = True
+    subscription_rolled_back: bool = True
 
 
 def get_trial_activation_charge_amount() -> int:
@@ -92,6 +98,38 @@ async def charge_trial_activation_if_required(
     return int(price_kopeks)
 
 
+async def refund_trial_activation_charge(
+    db: AsyncSession,
+    user: User,
+    amount_kopeks: int,
+    *,
+    description: Optional[str] = None,
+) -> bool:
+    """Refunds a previously charged trial activation amount back to the user."""
+
+    if amount_kopeks <= 0:
+        return True
+
+    refund_description = description or "Возврат оплаты за активацию триальной подписки"
+
+    success = await add_user_balance(
+        db,
+        user,
+        amount_kopeks,
+        refund_description,
+        transaction_type=TransactionType.REFUND,
+    )
+
+    if not success:
+        logger.error(
+            "Failed to refund %s kopeks for user %s during trial activation rollback",
+            amount_kopeks,
+            getattr(user, "id", "<unknown>"),
+        )
+
+    return success
+
+
 async def rollback_trial_subscription_activation(
     db: AsyncSession,
     subscription: Optional[Subscription],
@@ -128,3 +166,36 @@ async def rollback_trial_subscription_activation(
         return False
 
     return True
+
+
+async def revert_trial_activation(
+    db: AsyncSession,
+    user: User,
+    subscription: Optional[Subscription],
+    charged_amount: int,
+    *,
+    refund_description: Optional[str] = None,
+) -> TrialActivationReversionResult:
+    """Rolls back a trial subscription and refunds any charged amount."""
+
+    rollback_success = await rollback_trial_subscription_activation(db, subscription)
+    refund_success = await refund_trial_activation_charge(
+        db,
+        user,
+        charged_amount,
+        description=refund_description,
+    )
+
+    try:
+        await db.refresh(user)
+    except Exception as error:  # pragma: no cover - defensive logging
+        logger.warning(
+            "Failed to refresh user %s after reverting trial activation: %s",
+            getattr(user, "id", "<unknown>"),
+            error,
+        )
+
+    return TrialActivationReversionResult(
+        refunded=refund_success,
+        subscription_rolled_back=rollback_success,
+    )

@@ -71,8 +71,9 @@ from app.services.trial_activation_service import (
     TrialPaymentChargeFailed,
     TrialPaymentInsufficientFunds,
     charge_trial_activation_if_required,
-    rollback_trial_subscription_activation,
     preview_trial_activation_charge,
+    revert_trial_activation,
+    rollback_trial_subscription_activation,
 )
 from app.services.subscription_purchase_service import (
     purchase_service,
@@ -3220,13 +3221,75 @@ async def activate_subscription_trial_endpoint(
     try:
         await subscription_service.create_remnawave_user(db, subscription)
     except RemnaWaveConfigurationError as error:  # pragma: no cover - configuration issues
-        logger.warning("RemnaWave update skipped: %s", error)
+        logger.error("RemnaWave update skipped due to configuration error: %s", error)
+        revert_result = await revert_trial_activation(
+            db,
+            user,
+            subscription,
+            charged_amount,
+            refund_description="Возврат оплаты за активацию триала в мини-приложении",
+        )
+        if not revert_result.subscription_rolled_back:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "code": "trial_rollback_failed",
+                    "message": "Failed to revert trial activation after RemnaWave error",
+                },
+            ) from error
+        if charged_amount > 0 and not revert_result.refunded:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "code": "trial_refund_failed",
+                    "message": "Failed to refund trial activation charge after RemnaWave error",
+                },
+            ) from error
+
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "remnawave_configuration_error",
+                "message": "Trial activation failed due to RemnaWave configuration. Charge refunded.",
+            },
+        ) from error
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error(
             "Failed to create RemnaWave user for trial subscription %s: %s",
             subscription.id,
             error,
         )
+        revert_result = await revert_trial_activation(
+            db,
+            user,
+            subscription,
+            charged_amount,
+            refund_description="Возврат оплаты за активацию триала в мини-приложении",
+        )
+        if not revert_result.subscription_rolled_back:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "code": "trial_rollback_failed",
+                    "message": "Failed to revert trial activation after RemnaWave error",
+                },
+            ) from error
+        if charged_amount > 0 and not revert_result.refunded:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "code": "trial_refund_failed",
+                    "message": "Failed to refund trial activation charge after RemnaWave error",
+                },
+            ) from error
+
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "remnawave_provisioning_failed",
+                "message": "Trial activation failed due to RemnaWave provisioning. Charge refunded.",
+            },
+        ) from error
 
     await db.refresh(subscription)
 
