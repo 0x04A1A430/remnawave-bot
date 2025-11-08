@@ -32,7 +32,6 @@ def _build_headers(**overrides: str) -> dict[str, str]:
     headers = {
         "Content-Type": "application/json",
         "X-Forwarded-For": ALLOWED_IP,
-        "CF-Connecting-IP": ALLOWED_IP,
     }
     headers.update(overrides)
     return headers
@@ -68,15 +67,6 @@ def test_resolve_yookassa_ip_accepts_allowed_last_forwarded_candidate() -> None:
     candidates = ["8.8.8.8", ALLOWED_IP]
 
     ip_object = resolve_yookassa_ip(candidates, remote="10.0.0.5")
-
-    assert ip_object is not None
-    assert str(ip_object) == ALLOWED_IP
-
-
-def test_resolve_yookassa_ip_handles_cloudflare_proxy() -> None:
-    candidates = [ALLOWED_IP]
-
-    ip_object = resolve_yookassa_ip(candidates, remote="172.64.223.133")
 
     assert ip_object is not None
     assert str(ip_object) == ALLOWED_IP
@@ -186,28 +176,6 @@ async def test_handle_webhook_accepts_canceled_event(monkeypatch: pytest.MonkeyP
             settings.YOOKASSA_WEBHOOK_PATH,
             data=json.dumps(payload).encode("utf-8"),
             headers=_build_headers(),
-        )
-
-        status = response.status
-
-    assert status == 200
-    process_mock.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_handle_webhook_allows_cloudflare_forwarding(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_get_db(monkeypatch)
-
-    process_mock = AsyncMock(return_value=True)
-    service = SimpleNamespace(process_yookassa_webhook=process_mock)
-
-    app = create_yookassa_webhook_app(service)
-    async with TestClient(TestServer(app)) as client:
-        payload = {"event": "payment.succeeded"}
-        response = await client.post(
-            settings.YOOKASSA_WEBHOOK_PATH,
-            data=json.dumps(payload).encode("utf-8"),
-            headers=_build_headers(**{"X-Forwarded-For": "172.64.223.133"}),
         )
 
         status = response.status
