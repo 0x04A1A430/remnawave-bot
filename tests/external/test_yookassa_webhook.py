@@ -27,11 +27,14 @@ def _build_headers(**overrides: str) -> dict[str, str]:
     return headers
 
 
+def _json_bytes(payload: dict) -> bytes:
+    return json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+
 async def _post_webhook(client: TestClient, payload: dict, **headers: str) -> web.Response:
-    body = json.dumps(payload, ensure_ascii=False)
     return await client.post(
         settings.YOOKASSA_WEBHOOK_PATH,
-        data=body.encode("utf-8"),
+        data=_json_bytes(payload),
         headers=_build_headers(**headers),
     )
 
@@ -103,7 +106,7 @@ async def test_handle_webhook_accepts_canceled_event(monkeypatch: pytest.MonkeyP
         payload = {"event": "payment.canceled", "object": {"id": "yk_1"}}
         response = await client.post(
             settings.YOOKASSA_WEBHOOK_PATH,
-            data=json.dumps(payload).encode("utf-8"),
+            data=_json_bytes(payload),
             headers=_build_headers(),
         )
 
@@ -162,7 +165,7 @@ async def test_handle_webhook_requires_event(monkeypatch: pytest.MonkeyPatch) ->
     async with TestClient(TestServer(app)) as client:
         response = await client.post(
             settings.YOOKASSA_WEBHOOK_PATH,
-            data=json.dumps({}).encode("utf-8"),
+            data=_json_bytes({}),
             headers=_build_headers(),
         )
 
@@ -181,7 +184,7 @@ async def test_handle_webhook_ignores_unhandled_event(monkeypatch: pytest.Monkey
     async with TestClient(TestServer(app)) as client:
         response = await client.post(
             settings.YOOKASSA_WEBHOOK_PATH,
-            data=json.dumps({"event": "unknown.event"}).encode("utf-8"),
+            data=_json_bytes({"event": "unknown.event"}),
             headers=_build_headers(),
         )
         status = response.status
