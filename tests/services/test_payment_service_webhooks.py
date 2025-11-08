@@ -564,17 +564,6 @@ async def test_process_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setitem(sys.modules, "app.services.admin_notification_service", SimpleNamespace(AdminNotificationService=lambda bot: DummyAdminService(bot)))
     service.build_topup_success_keyboard = AsyncMock(return_value=None)
 
-    remote_payload = {
-        "id": "yk_123",
-        "status": "succeeded",
-        "paid": True,
-        "payment_method": {"type": "bank_card"},
-    }
-
-    service.yookassa_service = SimpleNamespace(
-        get_payment_info=AsyncMock(return_value=remote_payload)
-    )
-
     payload = {
         "object": {
             "id": "yk_123",
@@ -587,7 +576,6 @@ async def test_process_yookassa_webhook_success(monkeypatch: pytest.MonkeyPatch)
     result = await service.process_yookassa_webhook(fake_session, payload)
 
     assert result is True
-    service.yookassa_service.get_payment_info.assert_awaited_once_with("yk_123")
     assert transactions and transactions[0]["amount_kopeks"] == 10000
     assert payment.transaction_id == 999
     assert payment.is_paid is True
@@ -762,24 +750,6 @@ async def test_process_yookassa_webhook_handles_cancellation(monkeypatch: pytest
 
 
 @pytest.mark.anyio("asyncio")
-async def test_process_yookassa_webhook_api_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    service = _make_service(DummyBot())
-    db = FakeSession()
-
-    service.yookassa_service = SimpleNamespace(
-        get_payment_info=AsyncMock(return_value=None)
-    )
-
-    result = await service.process_yookassa_webhook(
-        db,
-        {"object": {"id": "yk_fail", "status": "succeeded", "paid": True}},
-    )
-
-    assert result is False
-    service.yookassa_service.get_payment_info.assert_awaited_once_with("yk_fail")
-
-
-@pytest.mark.anyio("asyncio")
 async def test_process_yookassa_webhook_restores_missing_payment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -888,24 +858,6 @@ async def test_process_yookassa_webhook_restores_missing_payment(
     monkeypatch.setitem(sys.modules, "app.services.admin_notification_service", SimpleNamespace(AdminNotificationService=lambda bot: DummyAdminService(bot)))
     service.build_topup_success_keyboard = AsyncMock(return_value=None)
 
-    remote_payload = {
-        "id": "yk_456",
-        "status": "succeeded",
-        "paid": True,
-        "amount": {"value": "150.00", "currency": "RUB"},
-        "metadata": {"user_id": "21", "payment_purpose": "balance_topup"},
-        "description": "Пополнение",
-        "payment_method": {"type": "bank_card"},
-        "created_at": "2024-01-02T12:00:00Z",
-        "captured_at": "2024-01-02T12:05:00Z",
-        "confirmation": {"confirmation_url": "https://pay.example"},
-        "refundable": False,
-    }
-
-    service.yookassa_service = SimpleNamespace(
-        get_payment_info=AsyncMock(return_value=remote_payload)
-    )
-
     payload = {
         "object": {
             "id": "yk_456",
@@ -932,7 +884,6 @@ async def test_process_yookassa_webhook_restores_missing_payment(
     assert user.balance_kopeks == 15000
     assert bot.sent_messages
     assert admin_calls
-    service.yookassa_service.get_payment_info.assert_awaited_once_with("yk_456")
 
 
 @pytest.mark.anyio("asyncio")
@@ -950,22 +901,11 @@ async def test_process_yookassa_webhook_missing_metadata(monkeypatch: pytest.Mon
     monkeypatch.setattr(payment_service_module, "create_yookassa_payment", create_mock)
     monkeypatch.setattr(payment_service_module, "update_yookassa_payment_status", update_mock)
 
-    service.yookassa_service = SimpleNamespace(
-        get_payment_info=AsyncMock(
-            return_value={
-                "id": "yk_missing",
-                "status": "succeeded",
-                "paid": True,
-            }
-        )
-    )
-
     payload = {"object": {"id": "yk_missing", "status": "succeeded", "paid": True}}
 
     result = await service.process_yookassa_webhook(db, payload)
 
     assert result is False
-    service.yookassa_service.get_payment_info.assert_awaited_once_with("yk_missing")
     create_mock.assert_not_awaited()
     update_mock.assert_not_awaited()
 

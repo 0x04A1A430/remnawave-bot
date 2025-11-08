@@ -786,52 +786,31 @@ class YooKassaPaymentMixin:
             logger.warning("Webhook без payment id: %s", event)
             return False
 
-        if not getattr(self, "yookassa_service", None):
-            logger.error(
-                "Не настроена служба YooKassa для верификации платежей, webhook %s отклонён",
-                yookassa_payment_id,
-            )
-            return False
+        remote_data: Optional[Dict[str, Any]] = None
+        if getattr(self, "yookassa_service", None):
+            try:
+                remote_data = await self.yookassa_service.get_payment_info(  # type: ignore[union-attr]
+                    yookassa_payment_id
+                )
+            except Exception as error:  # pragma: no cover - диагностический лог
+                logger.warning(
+                    "Не удалось запросить актуальный статус платежа YooKassa %s: %s",
+                    yookassa_payment_id,
+                    error,
+                    exc_info=True,
+                )
 
-        try:
-            remote_data = await self.yookassa_service.get_payment_info(  # type: ignore[union-attr]
-                yookassa_payment_id
-            )
-        except Exception as error:  # pragma: no cover - диагностический лог
-            logger.warning(
-                "Не удалось запросить актуальный статус платежа YooKassa %s: %s",
-                yookassa_payment_id,
-                error,
-                exc_info=True,
-            )
-            return False
-
-        if not remote_data:
-            logger.error(
-                "YooKassa API вернул пустой ответ при проверке платежа %s",
-                yookassa_payment_id,
-            )
-            return False
-
-        remote_payment_id = remote_data.get("id")
-        if remote_payment_id and remote_payment_id != yookassa_payment_id:
-            logger.error(
-                "Несовпадение идентификаторов платежа при проверке YooKassa: webhook=%s, api=%s",
-                yookassa_payment_id,
-                remote_payment_id,
-            )
-            return False
-
-        previous_status = event_object.get("status")
-        event_object = self._merge_remote_yookassa_payload(event_object, remote_data)
-        if previous_status and event_object.get("status") != previous_status:
-            logger.info(
-                "Статус платежа YooKassa %s скорректирован по данным API: %s → %s",
-                yookassa_payment_id,
-                previous_status,
-                event_object.get("status"),
-            )
-        event["object"] = event_object
+        if remote_data:
+            previous_status = event_object.get("status")
+            event_object = self._merge_remote_yookassa_payload(event_object, remote_data)
+            if previous_status and event_object.get("status") != previous_status:
+                logger.info(
+                    "Статус платежа YooKassa %s скорректирован по данным API: %s → %s",
+                    yookassa_payment_id,
+                    previous_status,
+                    event_object.get("status"),
+                )
+            event["object"] = event_object
 
         payment_module = import_module("app.services.payment_service")
 
