@@ -1,36 +1,15 @@
 import asyncio
-import logging
 import json
-from ipaddress import (
-    IPv4Address,
-    IPv4Network,
-    IPv6Address,
-    IPv6Network,
-    ip_address,
-    ip_network,
-)
-from typing import Iterable, Optional, Dict, Any, List, Union, Tuple
+import logging
+from typing import Any, Dict
+
 from aiohttp import web
 
 from app.config import settings
-from app.services.payment_service import PaymentService
 from app.database.database import get_db
+from app.services.payment_service import PaymentService
 
 logger = logging.getLogger(__name__)
-
-
-IPAddress = Union[IPv4Address, IPv6Address]
-IPNetwork = Union[IPv4Network, IPv6Network]
-
-YOOKASSA_ALLOWED_IP_NETWORKS: tuple[IPNetwork, ...] = (
-    ip_network("185.71.76.0/27"),
-    ip_network("185.71.77.0/27"),
-    ip_network("77.75.153.0/25"),
-    ip_network("77.75.154.128/25"),
-    ip_network("77.75.156.11/32"),
-    ip_network("77.75.156.35/32"),
-    ip_network("2a02:5180::/32"),
-)
 
 
 YOOKASSA_ALLOWED_EVENTS: tuple[str, ...] = (
@@ -38,132 +17,6 @@ YOOKASSA_ALLOWED_EVENTS: tuple[str, ...] = (
     "payment.waiting_for_capture",
     "payment.canceled",
 )
-
-
-def collect_yookassa_ip_candidates(*values: Optional[str]) -> List[str]:
-    candidates: List[str] = []
-    for value in values:
-        if not value:
-            continue
-        for part in value.split(","):
-            normalized = part.strip()
-            if normalized:
-                candidates.append(normalized)
-    return candidates
-
-
-def _parse_candidate_ip(candidate: str) -> Optional[IPAddress]:
-    value = candidate.strip()
-    if not value:
-        return None
-
-    if value.startswith("[") and "]" in value:
-        value = value[1:value.index("]")]
-
-    if "%" in value:
-        value = value.split("%", 1)[0]
-
-    if value.count(":") == 1 and "." in value:
-        host, _, port = value.rpartition(":")
-        if port.isdigit():
-            value = host
-
-    try:
-        return ip_address(value)
-    except ValueError:
-        return None
-
-
-def _should_trust_forwarded_headers(remote_ip: Optional[IPAddress]) -> bool:
-    if remote_ip is None:
-        return True
-
-    if _is_trusted_proxy_ip(remote_ip):
-        return True
-
-    return any(
-        getattr(remote_ip, attribute)
-        for attribute in ("is_private", "is_loopback", "is_link_local", "is_reserved")
-    )
-
-
-_TRUSTED_PROXY_NETWORKS_CACHE: Tuple[str, Tuple[IPNetwork, ...]] = ("", ())
-
-
-def _get_trusted_proxy_networks() -> Tuple[IPNetwork, ...]:
-    global _TRUSTED_PROXY_NETWORKS_CACHE
-
-    raw_value = getattr(settings, "YOOKASSA_TRUSTED_PROXY_NETWORKS", "") or ""
-    cached_raw, cached_networks = _TRUSTED_PROXY_NETWORKS_CACHE
-
-    if raw_value == cached_raw:
-        return cached_networks
-
-    networks: List[IPNetwork] = []
-    for part in raw_value.split(","):
-        candidate = part.strip()
-        if not candidate:
-            continue
-
-        try:
-            networks.append(ip_network(candidate, strict=False))
-        except ValueError:
-            logger.warning("Неверная сеть доверенного прокси YooKassa: %s", candidate)
-
-    cached_networks = tuple(networks)
-    _TRUSTED_PROXY_NETWORKS_CACHE = (raw_value, cached_networks)
-    return cached_networks
-
-
-def _is_trusted_proxy_ip(ip_object: IPAddress) -> bool:
-    if any(
-        getattr(ip_object, attribute)
-        for attribute in ("is_private", "is_loopback", "is_link_local", "is_reserved")
-    ):
-        return True
-
-    return any(ip_object in network for network in _get_trusted_proxy_networks())
-
-
-def resolve_yookassa_ip(
-    candidates: Iterable[str],
-    *,
-    remote: Optional[str] = None,
-) -> Optional[IPAddress]:
-    remote_ip = _parse_candidate_ip(remote) if remote else None
-
-    if (
-        remote_ip is not None
-        and remote_ip.is_global
-        and not _is_trusted_proxy_ip(remote_ip)
-    ):
-        return remote_ip
-
-    candidate_list = list(candidates)
-
-    if _should_trust_forwarded_headers(remote_ip):
-        last_hop = remote_ip
-        for candidate in reversed(candidate_list):
-            ip_object = _parse_candidate_ip(candidate)
-            if ip_object is not None:
-                if last_hop is None or _is_trusted_proxy_ip(last_hop):
-                    if _is_trusted_proxy_ip(ip_object):
-                        last_hop = ip_object
-                        continue
-                    return ip_object
-                break
-
-        if last_hop is not None and not _is_trusted_proxy_ip(last_hop):
-            return last_hop
-
-    return remote_ip if remote_ip is not None else next(
-        (ip for ip in (_parse_candidate_ip(value) for value in candidate_list) if ip is not None),
-        None,
-    )
-
-
-def is_yookassa_ip_allowed(ip_object: IPAddress) -> bool:
-    return any(ip_object in network for network in YOOKASSA_ALLOWED_IP_NETWORKS)
 
 
 class YooKassaWebhookHandler:
@@ -176,32 +29,6 @@ class YooKassaWebhookHandler:
         try:
             logger.info(f"📥 Получен YooKassa webhook: {request.method} {request.path}")
             logger.info(f"📋 Headers: {dict(request.headers)}")
-
-            header_ip_candidates = collect_yookassa_ip_candidates(
-                request.headers.get("X-Forwarded-For"),
-                request.headers.get("X-Real-IP"),
-            )
-            client_ip = resolve_yookassa_ip(
-                header_ip_candidates,
-                remote=request.remote,
-            )
-
-            if client_ip is None:
-                logger.warning(
-                    "🚫 Не удалось определить IP-адрес отправителя YooKassa webhook. Кандидаты: %s",
-                    header_ip_candidates + ([request.remote] if request.remote else []),
-                )
-                return web.Response(status=403, text="Forbidden")
-
-            if not is_yookassa_ip_allowed(client_ip):
-                logger.warning(
-                    "🚫 YooKassa webhook отклонён: IP %s не входит в доверенные диапазоны (%s)",
-                    client_ip,
-                    ", ".join(str(network) for network in YOOKASSA_ALLOWED_IP_NETWORKS),
-                )
-                return web.Response(status=403, text="Forbidden")
-
-            logger.info("🌐 IP-адрес YooKassa подтверждён: %s", client_ip)
 
             body = await request.text()
 
