@@ -346,6 +346,36 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         @router.post(settings.YOOKASSA_WEBHOOK_PATH)
         async def yookassa_webhook(request: Request) -> JSONResponse:
+            header_ip_candidates = yookassa_webhook_module.collect_yookassa_ip_candidates(
+                request.headers.get("X-Forwarded-For"),
+                request.headers.get("X-Real-IP"),
+            )
+            remote_ip = request.client.host if request.client else None
+            client_ip = yookassa_webhook_module.resolve_yookassa_ip(
+                header_ip_candidates,
+                remote=remote_ip,
+            )
+
+            if client_ip is None:
+                return JSONResponse(
+                    {
+                        "status": "error",
+                        "reason": "unknown_ip",
+                        "candidates": header_ip_candidates + ([remote_ip] if remote_ip else []),
+                    },
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
+            if not yookassa_webhook_module.is_yookassa_ip_allowed(client_ip):
+                return JSONResponse(
+                    {
+                        "status": "error",
+                        "reason": "forbidden_ip",
+                        "ip": str(client_ip),
+                    },
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
             body_bytes = await request.body()
             if not body_bytes:
                 return JSONResponse({"status": "error", "reason": "empty_body"}, status_code=status.HTTP_400_BAD_REQUEST)
