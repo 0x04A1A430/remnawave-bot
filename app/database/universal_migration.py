@@ -2107,6 +2107,9 @@ async def ensure_promo_groups_setup():
             addon_discount_column_exists = await check_column_exists(
                 "promo_groups", "apply_discounts_to_addons"
             )
+            priority_column_exists = await check_column_exists(
+                "promo_groups", "priority"
+            )
 
             if not addon_discount_column_exists:
                 if db_type == "sqlite":
@@ -2289,7 +2292,23 @@ async def ensure_promo_groups_setup():
                         "is_default": True,
                     }
 
-                    if addon_discount_column_exists:
+                    if priority_column_exists:
+                        insert_params["priority"] = 0
+
+                    if addon_discount_column_exists and priority_column_exists:
+                        insert_sql = """
+                            INSERT INTO promo_groups (
+                                name,
+                                priority,
+                                server_discount_percent,
+                                traffic_discount_percent,
+                                device_discount_percent,
+                                apply_discounts_to_addons,
+                                is_default
+                            ) VALUES (:name, :priority, 0, 0, 0, :apply_discounts_to_addons, :is_default)
+                        """
+                        insert_params["apply_discounts_to_addons"] = True
+                    elif addon_discount_column_exists:
                         insert_sql = """
                             INSERT INTO promo_groups (
                                 name,
@@ -2301,6 +2320,17 @@ async def ensure_promo_groups_setup():
                             ) VALUES (:name, 0, 0, 0, :apply_discounts_to_addons, :is_default)
                         """
                         insert_params["apply_discounts_to_addons"] = True
+                    elif priority_column_exists:
+                        insert_sql = """
+                            INSERT INTO promo_groups (
+                                name,
+                                priority,
+                                server_discount_percent,
+                                traffic_discount_percent,
+                                device_discount_percent,
+                                is_default
+                            ) VALUES (:name, :priority, 0, 0, 0, :is_default)
+                        """
                     else:
                         insert_sql = """
                             INSERT INTO promo_groups (
