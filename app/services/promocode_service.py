@@ -162,10 +162,7 @@ class PromoCodeService:
                 try:
                     from app.database.crud.server_squad import get_random_trial_squad_uuid
 
-                    trial_uuid = await get_random_trial_squad_uuid(
-                        db,
-                        settings.TRIAL_SQUAD_UUID,
-                    )
+                    trial_uuid = await get_random_trial_squad_uuid(db)
                     if trial_uuid:
                         trial_squads = [trial_uuid]
                 except Exception as error:
@@ -174,8 +171,6 @@ class PromoCodeService:
                         promocode.code,
                         error,
                     )
-                    if getattr(settings, 'TRIAL_SQUAD_UUID', None):
-                        trial_squads = [settings.TRIAL_SQUAD_UUID]
                 
                 forced_devices = None
                 if not settings.is_devices_selection_enabled():

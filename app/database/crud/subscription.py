@@ -55,10 +55,7 @@ async def create_trial_subscription(
         try:
             from app.database.crud.server_squad import get_random_trial_squad_uuid
 
-            squad_uuid = await get_random_trial_squad_uuid(
-                db,
-                settings.TRIAL_SQUAD_UUID,
-            )
+            squad_uuid = await get_random_trial_squad_uuid(db)
 
             if squad_uuid:
                 logger.debug(
@@ -72,7 +69,6 @@ async def create_trial_subscription(
                 user_id,
                 error,
             )
-            squad_uuid = settings.TRIAL_SQUAD_UUID
 
     end_date = datetime.utcnow() + timedelta(days=duration_days)
 
