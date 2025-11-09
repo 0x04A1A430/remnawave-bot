@@ -38,7 +38,6 @@ from app.database.models import (
     SubscriptionStatus,
     ServerSquad,
 )
-from app.utils.cache import cache, cache_key
 from app.utils.subscription_utils import (
     resolve_hwid_device_limit_for_payload,
 )
@@ -537,8 +536,8 @@ class RemnaWaveService:
                                 'bytes': daily_bytes
                             })
                     
-                    nodes_weekly_data = list(nodes_by_name.values())
-                    nodes_weekly_data.sort(key=lambda x: x['total_bytes'], reverse=True)
+                        nodes_weekly_data = list(nodes_by_name.values())
+                        nodes_weekly_data.sort(key=lambda x: x['total_bytes'], reverse=True)
                 
                     result = {
                         "system": {
@@ -620,7 +619,7 @@ class RemnaWaveService:
                     
                     logger.info(f"Статистика сформирована: пользователи={result['system']['total_users']}, общий трафик={total_user_traffic}")
                     return result
-
+                
             except RemnaWaveAPIError as e:
                 logger.error(f"Ошибка Remnawave API при получении статистики: {e}")
                 return {"error": str(e)}
@@ -628,83 +627,7 @@ class RemnaWaveService:
                 logger.error(f"Общая ошибка получения системной статистики: {e}")
                 return {"error": f"Внутренняя ошибка сервера: {str(e)}"}
 
-
-    async def get_internal_squad_usage_map(
-        self,
-        *,
-        force_refresh: bool = False,
-        cache_ttl: int = 60,
-    ) -> Dict[str, Dict[str, int]]:
-        cache_name = cache_key("remnawave", "internal_squad_usage")
-
-        if not force_refresh:
-            cached = await cache.get(cache_name)
-            if isinstance(cached, dict):
-                return cached
-
-        usage_map: Dict[str, Dict[str, int]] = {}
-
-        internal_squads: List[RemnaWaveInternalSquad] = []
-        realtime_usage: List[Dict[str, Any]] = []
-
-        try:
-            async with self.get_api_client() as api:
-                try:
-                    internal_squads = await api.get_internal_squads()
-                except Exception as error:
-                    logger.warning("Не удалось получить список сквадов RemnaWave: %s", error)
-
-                try:
-                    realtime_usage = await api.get_nodes_realtime_usage()
-                except Exception as error:
-                    logger.warning("Не удалось получить статистику нагрузки сквадов: %s", error)
-        except RemnaWaveConfigurationError as error:
-            logger.debug("RemnaWave API не настроен: %s", error)
-            return {}
-
-        for squad in internal_squads:
-            usage_map[squad.uuid] = {
-                "members_count": int(squad.members_count or 0),
-                "inbounds_count": int(squad.inbounds_count or 0),
-                "download_bytes": 0,
-                "upload_bytes": 0,
-                "bandwidth_bytes": 0,
-            }
-
-        for node in realtime_usage:
-            squad_uuid = (
-                node.get("internalSquadUuid")
-                or node.get("squadUuid")
-                or node.get("squadUUID")
-                or node.get("internal_squad_uuid")
-                or node.get("internalSquadUUID")
-            )
-            if not squad_uuid:
-                continue
-
-            stats = usage_map.setdefault(
-                squad_uuid,
-                {
-                    "members_count": 0,
-                    "inbounds_count": 0,
-                    "download_bytes": 0,
-                    "upload_bytes": 0,
-                    "bandwidth_bytes": 0,
-                },
-            )
-
-            download = int(node.get("downloadBytes", 0) or 0)
-            upload = int(node.get("uploadBytes", 0) or 0)
-            stats["download_bytes"] += download
-            stats["upload_bytes"] += upload
-            stats["bandwidth_bytes"] = stats["download_bytes"] + stats["upload_bytes"]
-
-        if usage_map:
-            await cache.set(cache_name, usage_map, expire=cache_ttl)
-
-        return usage_map
-
-
+    
     def _parse_bandwidth_string(self, bandwidth_str: str) -> int:
             try:
                 if not bandwidth_str or bandwidth_str == '0 B' or bandwidth_str == '0':

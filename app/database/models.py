@@ -1315,12 +1315,6 @@ class ServerSquad(Base):
         back_populates="server_squads",
         lazy="selectin",
     )
-
-    groups = relationship(
-        "ServerGroupServer",
-        back_populates="server",
-        cascade="all, delete-orphan",
-    )
     
     @property
     def price_rubles(self) -> float:
@@ -1340,50 +1334,6 @@ class ServerSquad(Base):
             return "Переполнен"
         else:
             return "Доступен"
-
-
-class ServerGroup(Base):
-    __tablename__ = "server_groups"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False, unique=True)
-    is_active = Column(Boolean, default=True, nullable=False)
-    sort_order = Column(Integer, default=0, nullable=False)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-
-    servers = relationship(
-        "ServerGroupServer",
-        back_populates="group",
-        cascade="all, delete-orphan",
-        order_by="ServerGroupServer.id",
-    )
-
-    def __repr__(self) -> str:
-        return f"<ServerGroup(id={self.id}, name='{self.name}')>"
-
-
-class ServerGroupServer(Base):
-    __tablename__ = "server_group_servers"
-    __table_args__ = (
-        UniqueConstraint("group_id", "server_squad_id", name="uq_group_server"),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    group_id = Column(Integer, ForeignKey("server_groups.id", ondelete="CASCADE"), nullable=False, index=True)
-    server_squad_id = Column(Integer, ForeignKey("server_squads.id", ondelete="CASCADE"), nullable=False, index=True)
-    is_enabled = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-
-    group = relationship("ServerGroup", back_populates="servers")
-    server = relationship("ServerSquad", back_populates="groups")
-
-    def __repr__(self) -> str:
-        return (
-            f"<ServerGroupServer(group_id={self.group_id}, server_squad_id={self.server_squad_id}, "
-            f"is_enabled={self.is_enabled})>"
-        )
 
 
 class SubscriptionServer(Base):
