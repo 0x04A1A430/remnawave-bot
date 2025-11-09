@@ -1537,6 +1537,8 @@ async def _resolve_pal24_payment_status(
         if remote_status:
             message = f"Status: {remote_status}"
 
+    links_info = status_info.get("links") if status_info else {}
+
     return MiniAppPaymentStatusResult(
         method="pal24",
         status=status,
@@ -1556,6 +1558,14 @@ async def _resolve_pal24_payment_status(
             "payment_method": getattr(payment, "payment_method", None),
             "payload": query.payload,
             "started_at": query.started_at,
+            "links": links_info or None,
+            "sbp_url": status_info.get("sbp_url") if status_info else None,
+            "card_url": status_info.get("card_url") if status_info else None,
+            "link_url": status_info.get("link_url") if status_info else None,
+            "link_page_url": status_info.get("link_page_url") if status_info else None,
+            "primary_url": status_info.get("primary_url") if status_info else None,
+            "secondary_url": status_info.get("secondary_url") if status_info else None,
+            "selected_method": status_info.get("selected_method") if status_info else None,
         },
     )
 
