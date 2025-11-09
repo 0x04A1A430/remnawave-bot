@@ -1281,22 +1281,6 @@ class PollAnswer(Base):
     )
 
 
-class ServerCategory(Base):
-    __tablename__ = "server_categories"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False, unique=True)
-    sort_order = Column(Integer, default=0)
-    is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-
-    servers = relationship("ServerSquad", back_populates="category")
-
-    def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f"<ServerCategory(id={self.id}, name={self.name!r})>"
-
-
 class ServerSquad(Base):
     __tablename__ = "server_squads"
 
@@ -1318,10 +1302,8 @@ class ServerSquad(Base):
     description = Column(Text, nullable=True)
     
     sort_order = Column(Integer, default=0)
-
-    category_id = Column(Integer, ForeignKey("server_categories.id", ondelete="SET NULL"), nullable=True)
-
-    max_users = Column(Integer, nullable=True)
+    
+    max_users = Column(Integer, nullable=True) 
     current_users = Column(Integer, default=0)
 
     created_at = Column(DateTime, default=func.now())
@@ -1333,8 +1315,6 @@ class ServerSquad(Base):
         back_populates="server_squads",
         lazy="selectin",
     )
-
-    category = relationship("ServerCategory", back_populates="servers")
     
     @property
     def price_rubles(self) -> float:

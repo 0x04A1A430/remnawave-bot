@@ -113,7 +113,6 @@ class AdminStates(StatesGroup):
     editing_server_limit = State()
     editing_server_description = State()
     editing_server_promo_groups = State()
-    creating_server_category = State()
 
     creating_server_uuid = State()
     creating_server_name = State()
