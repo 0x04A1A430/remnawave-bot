@@ -21,7 +21,7 @@ from app.database.models import (
     User, Subscription, Transaction, PromoCode, PromoCodeUse,
     ReferralEarning, Squad, ServiceRule, SystemSetting, MonitoringLog,
     SubscriptionConversion, SentNotification, BroadcastHistory,
-    ServerCategory, ServerSquad, SubscriptionServer, UserMessage, YooKassaPayment,
+    ServerSquad, SubscriptionServer, UserMessage, YooKassaPayment,
     CryptoBotPayment, WelcomeText, Base, PromoGroup, AdvertisingCampaign,
     AdvertisingCampaignRegistration, SupportAuditLog, Ticket, TicketMessage,
     MulenPayPayment, Pal24Payment, DiscountOffer, WebApiToken,
@@ -68,7 +68,6 @@ class BackupService:
             SystemSetting,
             ServiceRule,
             Squad,
-            ServerCategory,
             ServerSquad,
             PromoGroup,
             User,
@@ -727,7 +726,7 @@ class BackupService:
             "mulenpay_payments", "pal24_payments",
             "transactions", "welcome_texts", "subscriptions",
             "promocodes", "users", "promo_groups",
-            "server_squads", "server_categories", "squads", "service_rules",
+            "server_squads", "squads", "service_rules",
             "system_settings", "web_api_tokens", "monitoring_logs"
         ]
         
