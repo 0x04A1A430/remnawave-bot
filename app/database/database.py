@@ -214,24 +214,26 @@ async def init_db():
     
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    
+    logger.info("✅ База данных успешно инициализирована")
+    
+    if not settings.get_database_url().startswith("sqlite"):
+        logger.info("📊 Создание индексов для оптимизации...")
         
-        if not settings.get_database_url().startswith("sqlite"):
-            logger.info("📊 Создание индексов для оптимизации...")
-            
-            indexes = [
-                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)",
-                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)",
-                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_subscriptions_status ON subscriptions(status) WHERE status = 'active'",
-                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC)",
-            ]
-            
+        indexes = [
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_subscriptions_status ON subscriptions(status) WHERE status = 'active'",
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC)",
+        ]
+        
+        async with engine.connect() as conn:
             for index_sql in indexes:
                 try:
                     await conn.execute(text(index_sql))
+                    await conn.commit()
                 except Exception as e:
-                    logger.debug(f"Index creation skipped: {e}")
-    
-    logger.info("✅ База данных успешно инициализирована")
+                    logger.debug(f"Index creation skipped or failed: {e}")
     
     health = await db_manager.health_check()
     logger.info(f"📊 Database health: {health}")
