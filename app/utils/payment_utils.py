@@ -90,7 +90,16 @@ def get_available_payment_methods() -> List[Dict[str, str]]:
             "description": "через Heleket",
             "callback": "topup_heleket"
         })
-    
+
+    if settings.is_platega_enabled() and settings.get_platega_active_methods():
+        methods.append({
+            "id": "platega",
+            "name": "Банковская карта",
+            "icon": "💳",
+            "description": "через Platega (карты + СБП)",
+            "callback": "topup_platega",
+        })
+
     # Поддержка всегда доступна
     methods.append({
         "id": "support",
@@ -174,6 +183,8 @@ def is_payment_method_available(method_id: str) -> bool:
         return settings.is_cryptobot_enabled()
     elif method_id == "heleket":
         return settings.is_heleket_enabled()
+    elif method_id == "platega":
+        return settings.is_platega_enabled() and bool(settings.get_platega_active_methods())
     elif method_id == "support":
         return True  # Поддержка всегда доступна
     else:
@@ -192,6 +203,7 @@ def get_payment_method_status() -> Dict[str, bool]:
         "pal24": settings.is_pal24_enabled(),
         "cryptobot": settings.is_cryptobot_enabled(),
         "heleket": settings.is_heleket_enabled(),
+        "platega": settings.is_platega_enabled() and bool(settings.get_platega_active_methods()),
         "support": True
     }
 
@@ -215,5 +227,7 @@ def get_enabled_payment_methods_count() -> int:
     if settings.is_cryptobot_enabled():
         count += 1
     if settings.is_heleket_enabled():
+        count += 1
+    if settings.is_platega_enabled() and settings.get_platega_active_methods():
         count += 1
     return count
