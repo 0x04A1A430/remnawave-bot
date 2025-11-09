@@ -1,11 +1,14 @@
 import pytest
 from datetime import datetime, timedelta
+from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock
 
 from app.config import settings
 from app.database.models import User
+from app.database.crud import server_squad as server_squad_crud
 from app.services.subscription_auto_purchase_service import auto_purchase_saved_cart_after_topup
 from app.services.subscription_purchase_service import (
+    MiniAppSubscriptionPurchaseService,
     PurchaseDevicesConfig,
     PurchaseOptionsContext,
     PurchasePeriodConfig,
@@ -92,6 +95,7 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
         default_period=period_config,
         period_map={"days:30": period_config},
         server_uuid_to_id={"ru": 1},
+        category_mapping={},
         payload={},
     )
 
@@ -701,3 +705,110 @@ async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
     expected_end = trial_end + timedelta(days=32)  # trial_end + (30 + 2)
     actual_delta = (subscription.end_date - trial_end).days
     assert actual_delta == 32, f"Expected 32 days extension (30 + 2 bonus), got {actual_delta}"
+
+
+def test_build_servers_config_category_price_ignores_full_squads():
+    service = MiniAppSubscriptionPurchaseService()
+
+    user = MagicMock(spec=User)
+    user.get_promo_discount = MagicMock(return_value=0)
+
+    texts = DummyTexts()
+
+    category = MagicMock()
+    category.id = 7
+    category.name = "Category"
+    category.sort_order = 1
+
+    full_server = MagicMock()
+    full_server.squad_uuid = "srv-cheap"
+    full_server.category_id = category.id
+    full_server.category = category
+    full_server.price_kopeks = 10_000
+    full_server.is_available = True
+    full_server.is_full = True
+
+    available_server = MagicMock()
+    available_server.squad_uuid = "srv-available"
+    available_server.category_id = category.id
+    available_server.category = category
+    available_server.price_kopeks = 20_000
+    available_server.is_available = True
+    available_server.is_full = False
+
+    available_servers = [full_server, available_server]
+    server_catalog = {srv.squad_uuid: srv for srv in available_servers}
+
+    config = service._build_servers_config(
+        user,
+        texts,
+        period_days=30,
+        available_servers=available_servers,
+        server_catalog=server_catalog,
+        default_selection=[],
+    )
+
+    category_option = next(option for option in config.options if option.is_category)
+
+    assert category_option.price_per_month == available_server.price_kopeks
+    assert category_option.original_price_per_month == available_server.price_kopeks
+    assert config.category_mapping[f"category:{category.id}"] == [
+        full_server.squad_uuid,
+        available_server.squad_uuid,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_choose_least_loaded_server_in_category_prefers_lowest_load(monkeypatch):
+    capture: Dict[str, Any] = {}
+
+    async def fake_get_available(db, promo_group_id=None, category_id=None, only_with_capacity=False):
+        capture["only_with_capacity"] = only_with_capacity
+        high_load = MagicMock()
+        high_load.max_users = 100
+        high_load.current_users = 80
+        high_load.id = 10
+
+        low_load = MagicMock()
+        low_load.max_users = 200
+        low_load.current_users = 20
+        low_load.id = 5
+        return [high_load, low_load]
+
+    monkeypatch.setattr(
+        server_squad_crud,
+        "get_available_server_squads",
+        fake_get_available,
+    )
+
+    dummy_db = AsyncMock(spec=AsyncSession)
+
+    squad = await server_squad_crud.choose_least_loaded_server_in_category(
+        dummy_db,
+        category_id=1,
+        promo_group_id=2,
+    )
+
+    assert squad.current_users == 20
+    assert capture["only_with_capacity"] is True
+
+
+@pytest.mark.asyncio
+async def test_choose_least_loaded_server_in_category_returns_none_when_empty(monkeypatch):
+    async def fake_get_available(db, promo_group_id=None, category_id=None, only_with_capacity=False):
+        return []
+
+    monkeypatch.setattr(
+        server_squad_crud,
+        "get_available_server_squads",
+        fake_get_available,
+    )
+
+    dummy_db = AsyncMock(spec=AsyncSession)
+
+    squad = await server_squad_crud.choose_least_loaded_server_in_category(
+        dummy_db,
+        category_id=5,
+    )
+
+    assert squad is None
