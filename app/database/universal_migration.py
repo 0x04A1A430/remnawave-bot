@@ -3533,6 +3533,154 @@ async def add_promo_group_priority_column() -> bool:
         return False
 
 
+async def create_server_groups_table() -> bool:
+    table_exists = await check_table_exists("server_groups")
+    if table_exists:
+        logger.info("ℹ️ Таблица server_groups уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                await conn.execute(text(
+                    """
+                    CREATE TABLE server_groups (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL UNIQUE,
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    );
+                    """
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_server_groups_sort ON server_groups(sort_order, name)"
+                ))
+            elif db_type == "postgresql":
+                await conn.execute(text(
+                    """
+                    CREATE TABLE server_groups (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL UNIQUE,
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        sort_order INTEGER NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
+                        updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
+                    );
+                    """
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_server_groups_sort ON server_groups(sort_order, name)"
+                ))
+            else:  # MySQL
+                await conn.execute(text(
+                    """
+                    CREATE TABLE server_groups (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL UNIQUE,
+                        is_active TINYINT(1) NOT NULL DEFAULT 1,
+                        sort_order INT NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB;
+                    """
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX idx_server_groups_sort ON server_groups(sort_order, name)"
+                ))
+
+        logger.info("✅ Таблица server_groups создана")
+        return True
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы server_groups: {error}")
+        return False
+
+
+async def create_server_group_servers_table() -> bool:
+    table_exists = await check_table_exists("server_group_servers")
+    if table_exists:
+        logger.info("ℹ️ Таблица server_group_servers уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                await conn.execute(text(
+                    """
+                    CREATE TABLE server_group_servers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        group_id INTEGER NOT NULL,
+                        server_squad_id INTEGER NOT NULL,
+                        is_enabled INTEGER NOT NULL DEFAULT 1,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(group_id, server_squad_id),
+                        FOREIGN KEY(group_id) REFERENCES server_groups(id) ON DELETE CASCADE,
+                        FOREIGN KEY(server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE
+                    );
+                    """
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_server_group_servers_group ON server_group_servers(group_id)"
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_server_group_servers_server ON server_group_servers(server_squad_id)"
+                ))
+            elif db_type == "postgresql":
+                await conn.execute(text(
+                    """
+                    CREATE TABLE server_group_servers (
+                        id SERIAL PRIMARY KEY,
+                        group_id INTEGER NOT NULL REFERENCES server_groups(id) ON DELETE CASCADE,
+                        server_squad_id INTEGER NOT NULL REFERENCES server_squads(id) ON DELETE CASCADE,
+                        is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
+                        updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
+                        UNIQUE(group_id, server_squad_id)
+                    );
+                    """
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_server_group_servers_group ON server_group_servers(group_id)"
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_server_group_servers_server ON server_group_servers(server_squad_id)"
+                ))
+            else:  # MySQL
+                await conn.execute(text(
+                    """
+                    CREATE TABLE server_group_servers (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        group_id INT NOT NULL,
+                        server_squad_id INT NOT NULL,
+                        is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        UNIQUE KEY uq_group_server (group_id, server_squad_id),
+                        CONSTRAINT fk_group FOREIGN KEY (group_id) REFERENCES server_groups(id) ON DELETE CASCADE,
+                        CONSTRAINT fk_group_server FOREIGN KEY (server_squad_id) REFERENCES server_squads(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB;
+                    """
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX idx_server_group_servers_group ON server_group_servers(group_id)"
+                ))
+                await conn.execute(text(
+                    "CREATE INDEX idx_server_group_servers_server ON server_group_servers(server_squad_id)"
+                ))
+
+        logger.info("✅ Таблица server_group_servers создана")
+        return True
+    except Exception as error:
+        logger.error(f"❌ Ошибка создания таблицы server_group_servers: {error}")
+        return False
+
+
 async def create_user_promo_groups_table() -> bool:
     """Создает таблицу user_promo_groups для связи Many-to-Many между users и promo_groups."""
     table_exists = await check_table_exists("user_promo_groups")
@@ -3741,6 +3889,16 @@ async def run_universal_migration():
             logger.info("✅ Колонка is_trial_eligible готова")
         else:
             logger.warning("⚠️ Проблемы с колонкой is_trial_eligible")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ SERVER_GROUPS ===")
+        server_groups_ready = await create_server_groups_table()
+        if not server_groups_ready:
+            logger.warning("⚠️ Не удалось создать таблицу server_groups")
+
+        logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ SERVER_GROUP_SERVERS ===")
+        server_group_servers_ready = await create_server_group_servers_table()
+        if not server_group_servers_ready:
+            logger.warning("⚠️ Не удалось создать таблицу server_group_servers")
 
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ PRIVACY_POLICIES ===")
         privacy_policies_ready = await create_privacy_policies_table()
@@ -4134,6 +4292,8 @@ async def check_migration_status():
             "promo_offer_templates_active_discount_column": False,
             "promo_offer_logs_table": False,
             "subscription_temporary_access_table": False,
+            "server_groups_table": False,
+            "server_group_servers_table": False,
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
@@ -4156,6 +4316,8 @@ async def check_migration_status():
         status["promo_offer_templates_active_discount_column"] = await check_column_exists('promo_offer_templates', 'active_discount_hours')
         status["promo_offer_logs_table"] = await check_table_exists('promo_offer_logs')
         status["subscription_temporary_access_table"] = await check_table_exists('subscription_temporary_access')
+        status["server_groups_table"] = await check_table_exists('server_groups')
+        status["server_group_servers_table"] = await check_table_exists('server_group_servers')
 
         status["welcome_texts_is_enabled_column"] = await check_column_exists('welcome_texts', 'is_enabled')
         status["users_promo_group_column"] = await check_column_exists('users', 'promo_group_id')
@@ -4221,6 +4383,8 @@ async def check_migration_status():
             "promo_offer_templates_active_discount_column": "Колонка active_discount_hours в promo_offer_templates",
             "promo_offer_logs_table": "Таблица promo_offer_logs",
             "subscription_temporary_access_table": "Таблица subscription_temporary_access",
+            "server_groups_table": "Таблица server_groups",
+            "server_group_servers_table": "Таблица server_group_servers",
         }
         
         for check_key, check_status in status.items():
