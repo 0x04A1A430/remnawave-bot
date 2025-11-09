@@ -937,7 +937,10 @@ class MonitoringService:
                 if not user:
                     continue
                 
-                renewal_cost = settings.PRICE_30_DAYS
+                # Правильный расчет стоимости продления с учетом всех параметров подписки
+                renewal_cost = await self.subscription_service.calculate_renewal_price(
+                    subscription, 30, db, user=user
+                )
                 promo_discount_percent = self._get_user_promo_offer_discount_percent(user)
                 charge_amount = renewal_cost
                 promo_discount_value = 0
