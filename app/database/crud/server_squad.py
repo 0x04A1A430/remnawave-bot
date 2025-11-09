@@ -19,6 +19,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.models import (
     PromoGroup,
+    ServerCategory,
     ServerSquad,
     SubscriptionServer,
     Subscription,
@@ -48,6 +49,7 @@ async def create_server_squad(
     is_available: bool = True,
     is_trial_eligible: bool = False,
     sort_order: int = 0,
+    category_id: Optional[int] = None,
     promo_group_ids: Optional[Iterable[int]] = None,
 ) -> ServerSquad:
 
@@ -71,6 +73,13 @@ async def create_server_squad(
             "Не все промогруппы найдены при создании сервера %s", display_name
         )
 
+    if category_id is not None:
+        category_exists = await db.execute(
+            select(ServerCategory.id).where(ServerCategory.id == category_id)
+        )
+        if category_exists.scalar_one_or_none() is None:
+            raise ValueError("Server category not found")
+
     server_squad = ServerSquad(
         squad_uuid=squad_uuid,
         display_name=display_name,
@@ -82,6 +91,7 @@ async def create_server_squad(
         is_available=is_available,
         is_trial_eligible=is_trial_eligible,
         sort_order=sort_order,
+        category_id=category_id,
         allowed_promo_groups=promo_groups,
     )
 
@@ -100,7 +110,10 @@ async def get_server_squad_by_uuid(
     
     result = await db.execute(
         select(ServerSquad)
-        .options(selectinload(ServerSquad.allowed_promo_groups))
+        .options(
+            selectinload(ServerSquad.allowed_promo_groups),
+            selectinload(ServerSquad.category),
+        )
         .where(ServerSquad.squad_uuid == squad_uuid)
     )
     return result.scalars().unique().one_or_none()
@@ -113,7 +126,10 @@ async def get_server_squad_by_id(
     
     result = await db.execute(
         select(ServerSquad)
-        .options(selectinload(ServerSquad.allowed_promo_groups))
+        .options(
+            selectinload(ServerSquad.allowed_promo_groups),
+            selectinload(ServerSquad.category),
+        )
         .where(ServerSquad.id == server_id)
     )
     return result.scalars().unique().one_or_none()
@@ -126,8 +142,8 @@ async def get_all_server_squads(
     limit: int = 50
 ) -> Tuple[List[ServerSquad], int]:
     
-    query = select(ServerSquad)
-    
+    query = select(ServerSquad).options(selectinload(ServerSquad.category))
+
     if available_only:
         query = query.where(ServerSquad.is_available == True)
     
@@ -151,11 +167,16 @@ async def get_all_server_squads(
 async def get_available_server_squads(
     db: AsyncSession,
     promo_group_id: Optional[int] = None,
+    category_id: Optional[int] = None,
+    only_with_capacity: bool = False,
 ) -> List[ServerSquad]:
 
     query = (
         select(ServerSquad)
-        .options(selectinload(ServerSquad.allowed_promo_groups))
+        .options(
+            selectinload(ServerSquad.allowed_promo_groups),
+            selectinload(ServerSquad.category),
+        )
         .where(ServerSquad.is_available.is_(True))
         .order_by(ServerSquad.sort_order, ServerSquad.display_name)
     )
@@ -165,8 +186,21 @@ async def get_available_server_squads(
             PromoGroup.id == promo_group_id
         )
 
+    if category_id is not None:
+        query = query.where(ServerSquad.category_id == category_id)
+
     result = await db.execute(query)
-    return result.scalars().unique().all()
+    squads = result.scalars().unique().all()
+
+    if only_with_capacity:
+        filtered: List[ServerSquad] = []
+        for squad in squads:
+            if squad.is_full:
+                continue
+            filtered.append(squad)
+        return filtered
+
+    return squads
 
 
 async def get_active_server_squads(db: AsyncSession) -> List[ServerSquad]:
@@ -221,6 +255,35 @@ async def get_random_active_squad_uuid(
     return fallback_uuid
 
 
+async def choose_least_loaded_server_in_category(
+    db: AsyncSession,
+    category_id: int,
+    promo_group_id: Optional[int] = None,
+) -> Optional[ServerSquad]:
+    """Выбирает наименее загруженный сервер в категории."""
+
+    category_squads = await get_available_server_squads(
+        db,
+        promo_group_id=promo_group_id,
+        category_id=category_id,
+        only_with_capacity=True,
+    )
+
+    if not category_squads:
+        return None
+
+    def load_key(squad: ServerSquad) -> tuple:
+        max_users = squad.max_users or 0
+        current_users = squad.current_users or 0
+        if max_users:
+            ratio = current_users / max_users
+        else:
+            ratio = 0
+        return (ratio, current_users, squad.id)
+
+    return min(category_squads, key=load_key)
+
+
 async def update_server_squad_promo_groups(
     db: AsyncSession, server_id: int, promo_group_ids: Iterable[int]
 ) -> Optional[ServerSquad]:
@@ -271,10 +334,20 @@ async def update_server_squad(
         "is_available",
         "sort_order",
         "is_trial_eligible",
+        "category_id",
     }
     
     filtered_updates = {k: v for k, v in updates.items() if k in valid_fields}
-    
+
+    if "category_id" in filtered_updates:
+        category_id = filtered_updates["category_id"]
+        if category_id is not None:
+            category_exists = await db.execute(
+                select(ServerCategory.id).where(ServerCategory.id == category_id)
+            )
+            if category_exists.scalar_one_or_none() is None:
+                raise ValueError("Server category not found")
+
     if not filtered_updates:
         return None
     

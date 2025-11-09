@@ -1,9 +1,11 @@
 import pytest
 from datetime import datetime, timedelta
+from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock
 
 from app.config import settings
 from app.database.models import User
+from app.database.crud import server_squad as server_squad_crud
 from app.services.subscription_auto_purchase_service import auto_purchase_saved_cart_after_topup
 from app.services.subscription_purchase_service import (
     PurchaseDevicesConfig,
@@ -92,6 +94,7 @@ async def test_auto_purchase_saved_cart_after_topup_success(monkeypatch):
         default_period=period_config,
         period_map={"days:30": period_config},
         server_uuid_to_id={"ru": 1},
+        category_mapping={},
         payload={},
     )
 
@@ -701,3 +704,59 @@ async def test_auto_purchase_trial_remaining_days_transferred(monkeypatch):
     expected_end = trial_end + timedelta(days=32)  # trial_end + (30 + 2)
     actual_delta = (subscription.end_date - trial_end).days
     assert actual_delta == 32, f"Expected 32 days extension (30 + 2 bonus), got {actual_delta}"
+
+
+@pytest.mark.asyncio
+async def test_choose_least_loaded_server_in_category_prefers_lowest_load(monkeypatch):
+    capture: Dict[str, Any] = {}
+
+    async def fake_get_available(db, promo_group_id=None, category_id=None, only_with_capacity=False):
+        capture["only_with_capacity"] = only_with_capacity
+        high_load = MagicMock()
+        high_load.max_users = 100
+        high_load.current_users = 80
+        high_load.id = 10
+
+        low_load = MagicMock()
+        low_load.max_users = 200
+        low_load.current_users = 20
+        low_load.id = 5
+        return [high_load, low_load]
+
+    monkeypatch.setattr(
+        server_squad_crud,
+        "get_available_server_squads",
+        fake_get_available,
+    )
+
+    dummy_db = AsyncMock(spec=AsyncSession)
+
+    squad = await server_squad_crud.choose_least_loaded_server_in_category(
+        dummy_db,
+        category_id=1,
+        promo_group_id=2,
+    )
+
+    assert squad.current_users == 20
+    assert capture["only_with_capacity"] is True
+
+
+@pytest.mark.asyncio
+async def test_choose_least_loaded_server_in_category_returns_none_when_empty(monkeypatch):
+    async def fake_get_available(db, promo_group_id=None, category_id=None, only_with_capacity=False):
+        return []
+
+    monkeypatch.setattr(
+        server_squad_crud,
+        "get_available_server_squads",
+        fake_get_available,
+    )
+
+    dummy_db = AsyncMock(spec=AsyncSession)
+
+    squad = await server_squad_crud.choose_least_loaded_server_in_category(
+        dummy_db,
+        category_id=5,
+    )
+
+    assert squad is None
