@@ -264,6 +264,37 @@ async def test_yookassa_allowed_via_forwarded_header_when_proxy(monkeypatch: pyt
 
 
 @pytest.mark.anyio
+async def test_yookassa_allowed_via_cf_connecting_ip(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "YOOKASSA_ENABLED", True, raising=False)
+
+    async def fake_get_db():
+        yield SimpleNamespace()
+
+    monkeypatch.setattr("app.webserver.payments.get_db", fake_get_db)
+
+    process_mock = AsyncMock(return_value=True)
+    service = SimpleNamespace(process_yookassa_webhook=process_mock)
+
+    router = create_payment_router(DummyBot(), service)
+    assert router is not None
+
+    route = _get_route(router, settings.YOOKASSA_WEBHOOK_PATH)
+    request = _build_request(
+        settings.YOOKASSA_WEBHOOK_PATH,
+        body=json.dumps({"event": "payment.succeeded"}).encode("utf-8"),
+        headers={"Cf-Connecting-Ip": "185.71.76.10"},
+        client_ip="172.64.223.133",
+    )
+
+    response = await route.endpoint(request)
+
+    assert response.status_code == 200
+    payload = json.loads(response.body.decode("utf-8"))
+    assert payload["status"] == "ok"
+    process_mock.assert_awaited_once()
+
+
+@pytest.mark.anyio
 async def test_yookassa_allowed_via_trusted_forwarded_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "YOOKASSA_ENABLED", True, raising=False)
     monkeypatch.setattr(settings, "YOOKASSA_TRUSTED_PROXY_NETWORKS", "203.0.113.0/24", raising=False)

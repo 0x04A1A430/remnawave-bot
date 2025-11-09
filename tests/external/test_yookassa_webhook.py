@@ -32,6 +32,7 @@ def _build_headers(**overrides: str) -> dict[str, str]:
     headers = {
         "Content-Type": "application/json",
         "X-Forwarded-For": ALLOWED_IP,
+        "Cf-Connecting-Ip": ALLOWED_IP,
     }
     headers.update(overrides)
     return headers
@@ -129,6 +130,32 @@ async def test_handle_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
             settings.YOOKASSA_WEBHOOK_PATH,
             data=body.encode("utf-8"),
             headers=_build_headers(),
+        )
+        status = response.status
+        text = await response.text()
+
+    assert status == 200
+    assert text == "OK"
+    process_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_webhook_trusts_cf_connecting_ip(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_get_db(monkeypatch)
+
+    process_mock = AsyncMock(return_value=True)
+    service = SimpleNamespace(process_yookassa_webhook=process_mock)
+
+    app = create_yookassa_webhook_app(service)
+    async with TestClient(TestServer(app)) as client:
+        payload = {"event": "payment.succeeded"}
+        body = json.dumps(payload, ensure_ascii=False)
+        headers = _build_headers()
+        headers.pop("X-Forwarded-For")
+        response = await client.post(
+            settings.YOOKASSA_WEBHOOK_PATH,
+            data=body.encode("utf-8"),
+            headers=headers,
         )
         status = response.status
         text = await response.text()
