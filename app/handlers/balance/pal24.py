@@ -423,8 +423,18 @@ async def check_pal24_payment_status(
         if not isinstance(links_meta, dict):
             links_meta = {}
 
-        sbp_link = links_meta.get("sbp") or payment.link_url
-        card_link = links_meta.get("card")
+        links_info = status_info.get("links") or {}
+        sbp_link = (
+            links_info.get("sbp")
+            or links_meta.get("sbp")
+            or status_info.get("sbp_url")
+            or payment.link_url
+        )
+        card_link = (
+            links_info.get("card")
+            or links_meta.get("card")
+            or status_info.get("card_url")
+        )
 
         if not card_link and payment.link_page_url and payment.link_page_url != sbp_link:
             card_link = payment.link_page_url
@@ -459,10 +469,53 @@ async def check_pal24_payment_status(
         db_user = getattr(callback, 'db_user', None)
         texts = get_texts(db_user.language if db_user else 'ru') if db_user else get_texts('ru')
 
-        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-            [types.InlineKeyboardButton(text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"), callback_data=f"check_pal24_{local_payment_id}")],
-            [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")]
-        ])
+        pay_rows: list[list[types.InlineKeyboardButton]] = []
+
+        if not payment.is_paid and payment.status in {"NEW", "PROCESS"}:
+            default_sbp_text = texts.t(
+                "PAL24_SBP_PAY_BUTTON",
+                "🏦 Оплатить через PayPalych (СБП)",
+            )
+            sbp_button_text = settings.get_pal24_sbp_button_text(default_sbp_text)
+
+            if sbp_link and settings.is_pal24_sbp_button_visible():
+                pay_rows.append(
+                    [
+                        types.InlineKeyboardButton(
+                            text=sbp_button_text,
+                            url=sbp_link,
+                        )
+                    ]
+                )
+
+            default_card_text = texts.t(
+                "PAL24_CARD_PAY_BUTTON",
+                "💳 Оплатить банковской картой (PayPalych)",
+            )
+            card_button_text = settings.get_pal24_card_button_text(default_card_text)
+
+            if card_link and settings.is_pal24_card_button_visible():
+                if not pay_rows or pay_rows[-1][0].url != card_link:
+                    pay_rows.append(
+                        [
+                            types.InlineKeyboardButton(
+                                text=card_button_text,
+                                url=card_link,
+                            )
+                        ]
+                    )
+
+        keyboard_rows = pay_rows + [
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t("CHECK_STATUS_BUTTON", "📊 Проверить статус"),
+                    callback_data=f"check_pal24_{local_payment_id}",
+                )
+            ],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")],
+        ]
+
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
         
         await callback.answer()
         try:

@@ -685,12 +685,33 @@ class Pal24PaymentMixin:
                         exc_info=True,
                     )
 
+            links_map, selected_method = self._build_links_map(payment, remote_payloads)
+            primary_url = (
+                links_map.get(selected_method)
+                or links_map.get("sbp")
+                or links_map.get("page")
+                or links_map.get("card")
+            )
+            secondary_url = (
+                links_map.get("page")
+                or links_map.get("card")
+                or links_map.get("sbp")
+            )
+
             return {
                 "payment": payment,
                 "status": payment.status,
                 "is_paid": payment.is_paid,
                 "remote_status": remote_status_for_return,
                 "remote_data": remote_data,
+                "links": links_map or None,
+                "primary_url": primary_url,
+                "secondary_url": secondary_url,
+                "sbp_url": links_map.get("sbp"),
+                "card_url": links_map.get("card"),
+                "link_page_url": links_map.get("page") or payment.link_page_url,
+                "link_url": payment.link_url,
+                "selected_method": selected_method,
             }
 
         except Exception as error:
@@ -840,6 +861,109 @@ class Pal24PaymentMixin:
 
         normalized = payment_method.strip().lower()
         return mapping.get(normalized, "sbp")
+
+    @staticmethod
+    def _pick_first(mapping: Dict[str, Any], *keys: str) -> Optional[str]:
+        for key in keys:
+            value = mapping.get(key)
+            if value:
+                return str(value)
+        return None
+
+    @classmethod
+    def _build_links_map(
+        cls,
+        payment: Any,
+        remote_payloads: Dict[str, Any],
+    ) -> tuple[Dict[str, str], str]:
+        links: Dict[str, str] = {}
+
+        metadata = payment.metadata_json if isinstance(payment.metadata_json, dict) else {}
+        if metadata:
+            links_meta = metadata.get("links")
+            if isinstance(links_meta, dict):
+                for key, value in links_meta.items():
+                    if value:
+                        links[key] = str(value)
+
+        selected_method = cls._normalize_payment_method(
+            (metadata.get("selected_method") if isinstance(metadata, dict) else None)
+            or getattr(payment, "payment_method", None)
+        )
+
+        def _visit(value: Any) -> List[Dict[str, Any]]:
+            stack: List[Any] = [value]
+            result: List[Dict[str, Any]] = []
+            while stack:
+                current = stack.pop()
+                if isinstance(current, dict):
+                    result.append(current)
+                    stack.extend(current.values())
+                elif isinstance(current, list):
+                    stack.extend(current)
+            return result
+
+        payload_sources: List[Any] = []
+        if metadata:
+            payload_sources.append(metadata.get("raw_response"))
+        payload_sources.append(getattr(payment, "callback_payload", None))
+        payload_sources.extend(remote_payloads.values())
+
+        sbp_keys = (
+            "transfer_url",
+            "transferUrl",
+            "transfer_link",
+            "transferLink",
+            "transfer",
+            "sbp_url",
+            "sbpUrl",
+            "sbp_link",
+            "sbpLink",
+        )
+        card_keys = (
+            "link_url",
+            "linkUrl",
+            "link",
+            "card_url",
+            "cardUrl",
+            "card_link",
+            "cardLink",
+            "payment_url",
+            "paymentUrl",
+            "url",
+        )
+        page_keys = (
+            "link_page_url",
+            "linkPageUrl",
+            "page_url",
+            "pageUrl",
+        )
+
+        for source in payload_sources:
+            if not source:
+                continue
+            for candidate in _visit(source):
+                sbp_url = cls._pick_first(candidate, *sbp_keys)
+                if sbp_url and "sbp" not in links:
+                    links["sbp"] = sbp_url
+                card_url = cls._pick_first(candidate, *card_keys)
+                if card_url and "card" not in links:
+                    links["card"] = card_url
+                page_url = cls._pick_first(candidate, *page_keys)
+                if page_url and "page" not in links:
+                    links["page"] = page_url
+
+        if getattr(payment, "link_page_url", None):
+            links.setdefault("page", str(payment.link_page_url))
+
+        if getattr(payment, "link_url", None):
+            link_url_value = str(payment.link_url)
+            if selected_method == "card":
+                links.setdefault("card", link_url_value)
+            else:
+                links.setdefault("sbp", link_url_value)
+
+        return links, selected_method
 
     @staticmethod
     def _map_api_payment_method(normalized_payment_method: str) -> Optional[str]:
