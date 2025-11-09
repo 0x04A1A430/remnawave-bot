@@ -349,6 +349,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             header_ip_candidates = yookassa_webhook_module.collect_yookassa_ip_candidates(
                 request.headers.get("X-Forwarded-For"),
                 request.headers.get("X-Real-IP"),
+                request.headers.get("Cf-Connecting-Ip"),
             )
             remote_ip = request.client.host if request.client else None
             client_ip = yookassa_webhook_module.resolve_yookassa_ip(

@@ -32,11 +32,25 @@ async def _prompt_amount(
     texts = get_texts(db_user.language)
     method_name = settings.get_platega_method_display_title(method_code)
 
+    min_amount_label = settings.format_price(settings.PLATEGA_MIN_AMOUNT_KOPEKS)
+    max_amount_kopeks = settings.PLATEGA_MAX_AMOUNT_KOPEKS
+    max_amount_label = (
+        settings.format_price(max_amount_kopeks)
+        if max_amount_kopeks and max_amount_kopeks > 0
+        else ""
+    )
+
+    default_prompt_body = (
+        "Введите сумму для пополнения от {min_amount} до {max_amount}.\n"
+        if max_amount_kopeks and max_amount_kopeks > 0
+        else "Введите сумму для пополнения от {min_amount}.\n"
+    )
+
     prompt_template = texts.t(
         "PLATEGA_TOPUP_PROMPT",
         (
             "💳 <b>Оплата через Platega ({method_name})</b>\n\n"
-            "Введите сумму для пополнения от 100 до 1 000 000 ₽.\n"
+            f"{default_prompt_body}"
             "Оплата происходит через Platega."
         ),
     )
@@ -51,7 +65,11 @@ async def _prompt_amount(
             keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
 
     await message.edit_text(
-        prompt_template.format(method_name=method_name),
+        prompt_template.format(
+            method_name=method_name,
+            min_amount=min_amount_label,
+            max_amount=max_amount_label,
+        ),
         reply_markup=keyboard,
         parse_mode="HTML",
     )
