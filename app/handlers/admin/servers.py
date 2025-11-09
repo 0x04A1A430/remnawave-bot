@@ -1,7 +1,5 @@
 import html
 import logging
-from typing import List
-
 from aiogram import Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,10 +17,6 @@ from app.database.crud.server_squad import (
     get_available_server_squads,
     update_server_squad_promo_groups,
     get_server_connected_users,
-)
-from app.database.crud.server_category import (
-    get_all_server_categories,
-    create_server_category,
 )
 from app.database.crud.promo_group import get_promo_groups_with_counts
 from app.services.remnawave_service import RemnaWaveService
@@ -42,7 +36,6 @@ def _build_server_edit_view(server):
     )
 
     trial_status = "✅ Да" if server.is_trial_eligible else "⚪️ Нет"
-    category_name = getattr(getattr(server, "category", None), "name", None) or "Не указана"
 
     text = f"""
 🌐 <b>Редактирование сервера</b>
@@ -60,7 +53,6 @@ def _build_server_edit_view(server):
 • Лимит пользователей: {server.max_users or 'Без лимита'}
 • Текущих пользователей: {server.current_users}
 • Промогруппы: {promo_groups_text}
-• Категория: {category_name}
 • Выдача триала: {trial_status}
 
 <b>Описание:</b>
@@ -103,11 +95,6 @@ def _build_server_edit_view(server):
             ),
             types.InlineKeyboardButton(
                 text="📝 Описание", callback_data=f"admin_server_edit_desc_{server.id}"
-            ),
-        ],
-        [
-            types.InlineKeyboardButton(
-                text="🏷 Категория", callback_data=f"admin_server_edit_category_{server.id}"
             ),
         ],
         [
@@ -1089,225 +1076,6 @@ async def process_server_description_edit(
 
 @admin_required
 @error_handler
-async def show_server_category_menu(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    server_id = int(callback.data.split("_")[-1])
-    server = await get_server_squad_by_id(db, server_id)
-
-    if not server:
-        await callback.answer("❌ Сервер не найден!", show_alert=True)
-        return
-
-    categories = await get_all_server_categories(db)
-
-    current_category = getattr(getattr(server, "category", None), "name", None)
-    safe_current = html.escape(current_category or "Не выбрана")
-
-    text_lines = [
-        "🏷 <b>Категория сервера</b>",
-        "",
-        f"Текущая категория: <b>{safe_current}</b>",
-        "",
-        "Выберите категорию из списка или создайте новую:",
-    ]
-
-    keyboard_rows: List[List[types.InlineKeyboardButton]] = []
-
-    for category in categories:
-        emoji = "✅" if server.category_id == category.id else "⚪️"
-        keyboard_rows.append(
-            [
-                types.InlineKeyboardButton(
-                    text=f"{emoji} {category.name}",
-                    callback_data=f"admin_server_category_set_{server.id}_{category.id}",
-                )
-            ]
-        )
-
-    keyboard_rows.append(
-        [
-            types.InlineKeyboardButton(
-                text="➕ Создать категорию",
-                callback_data=f"admin_server_category_create_{server.id}",
-            )
-        ]
-    )
-
-    if server.category_id:
-        keyboard_rows.append(
-            [
-                types.InlineKeyboardButton(
-                    text="🗑 Удалить категорию",
-                    callback_data=f"admin_server_category_clear_{server.id}",
-                )
-            ]
-        )
-
-    keyboard_rows.append(
-        [
-            types.InlineKeyboardButton(
-                text="⬅️ Назад",
-                callback_data=f"admin_server_edit_{server.id}",
-            )
-        ]
-    )
-
-    await callback.message.edit_text(
-        "\n".join(text_lines),
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows),
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-
-@admin_required
-@error_handler
-async def set_server_category(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    parts = callback.data.split("_")
-    server_id = int(parts[-2])
-    category_id = int(parts[-1])
-
-    server = await update_server_squad(db, server_id, category_id=category_id)
-
-    if not server:
-        await callback.answer("❌ Не удалось обновить категорию", show_alert=True)
-        return
-
-    await cache.delete_pattern("available_countries*")
-
-    text, keyboard = _build_server_edit_view(server)
-    await callback.message.edit_text(
-        text,
-        reply_markup=keyboard,
-        parse_mode="HTML",
-    )
-    await callback.answer("✅ Категория обновлена")
-
-
-@admin_required
-@error_handler
-async def clear_server_category(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession,
-):
-    server_id = int(callback.data.split("_")[-1])
-
-    server = await update_server_squad(db, server_id, category_id=None)
-
-    if not server:
-        await callback.answer("❌ Не удалось обновить категорию", show_alert=True)
-        return
-
-    await cache.delete_pattern("available_countries*")
-
-    text, keyboard = _build_server_edit_view(server)
-    await callback.message.edit_text(
-        text,
-        reply_markup=keyboard,
-        parse_mode="HTML",
-    )
-    await callback.answer("✅ Категория удалена")
-
-
-@admin_required
-@error_handler
-async def start_server_category_creation(
-    callback: types.CallbackQuery,
-    state: FSMContext,
-    db_user: User,
-    db: AsyncSession,
-):
-    server_id = int(callback.data.split("_")[-1])
-    server = await get_server_squad_by_id(db, server_id)
-
-    if not server:
-        await callback.answer("❌ Сервер не найден!", show_alert=True)
-        return
-
-    await state.set_data({"server_id": server_id})
-    await state.set_state(AdminStates.creating_server_category)
-
-    await callback.message.edit_text(
-        "🏷 <b>Новая категория</b>\n\n"
-        "Отправьте название новой категории для сервера:",
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text="⬅️ Назад", callback_data=f"admin_server_edit_category_{server_id}"
-                    )
-                ]
-            ]
-        ),
-        parse_mode="HTML",
-    )
-    await callback.answer()
-
-
-@admin_required
-@error_handler
-async def process_server_category_creation(
-    message: types.Message,
-    state: FSMContext,
-    db_user: User,
-    db: AsyncSession,
-):
-    data = await state.get_data()
-    server_id = data.get("server_id")
-
-    if not server_id:
-        await message.answer("❌ Сервер не найден")
-        return
-
-    category_name = (message.text or "").strip()
-
-    if not (2 <= len(category_name) <= 255):
-        await message.answer("❌ Название категории должно содержать от 2 до 255 символов")
-        return
-
-    try:
-        category = await create_server_category(db, name=category_name)
-    except Exception as error:
-        logger.error("Не удалось создать категорию %s: %s", category_name, error)
-        await message.answer("❌ Не удалось создать категорию. Попробуйте другое название")
-        return
-
-    server = await update_server_squad(db, server_id, category_id=category.id)
-
-    await state.clear()
-
-    await cache.delete_pattern("available_countries*")
-
-    if not server:
-        await message.answer("❌ Категория создана, но не удалось обновить сервер")
-        return
-
-    safe_name = html.escape(category.name)
-    await message.answer(
-        f"✅ Категория <b>{safe_name}</b> создана и назначена серверу",
-        reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    types.InlineKeyboardButton(
-                        text="🔙 К серверу", callback_data=f"admin_server_edit_{server_id}"
-                    )
-                ]
-            ]
-        ),
-        parse_mode="HTML",
-    )
-
-
-@admin_required
-@error_handler
 async def start_server_edit_promo_groups(
     callback: types.CallbackQuery,
     state: FSMContext,
@@ -1526,8 +1294,7 @@ def register_handlers(dp: Dispatcher):
         & ~F.data.contains("country")
         & ~F.data.contains("limit")
         & ~F.data.contains("desc")
-        & ~F.data.contains("promo")
-        & ~F.data.contains("category"),
+        & ~F.data.contains("promo"),
     )
     dp.callback_query.register(toggle_server_availability, F.data.startswith("admin_server_toggle_"))
     dp.callback_query.register(toggle_server_trial_assignment, F.data.startswith("admin_server_trial_"))
@@ -1537,19 +1304,14 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(start_server_edit_price, F.data.startswith("admin_server_edit_price_"))
     dp.callback_query.register(start_server_edit_country, F.data.startswith("admin_server_edit_country_"))
     dp.callback_query.register(start_server_edit_promo_groups, F.data.startswith("admin_server_edit_promo_"))
-    dp.callback_query.register(start_server_edit_limit, F.data.startswith("admin_server_edit_limit_"))
-    dp.callback_query.register(start_server_edit_description, F.data.startswith("admin_server_edit_desc_"))
-    dp.callback_query.register(show_server_category_menu, F.data.startswith("admin_server_edit_category_"))
-    dp.callback_query.register(set_server_category, F.data.startswith("admin_server_category_set_"))
-    dp.callback_query.register(clear_server_category, F.data.startswith("admin_server_category_clear_"))
-    dp.callback_query.register(start_server_category_creation, F.data.startswith("admin_server_category_create_"))
-
+    dp.callback_query.register(start_server_edit_limit, F.data.startswith("admin_server_edit_limit_"))         
+    dp.callback_query.register(start_server_edit_description, F.data.startswith("admin_server_edit_desc_"))     
+    
     dp.message.register(process_server_name_edit, AdminStates.editing_server_name)
     dp.message.register(process_server_price_edit, AdminStates.editing_server_price)
-    dp.message.register(process_server_country_edit, AdminStates.editing_server_country)
-    dp.message.register(process_server_limit_edit, AdminStates.editing_server_limit)
+    dp.message.register(process_server_country_edit, AdminStates.editing_server_country)            
+    dp.message.register(process_server_limit_edit, AdminStates.editing_server_limit)                
     dp.message.register(process_server_description_edit, AdminStates.editing_server_description)
-    dp.message.register(process_server_category_creation, AdminStates.creating_server_category)
     dp.callback_query.register(toggle_server_promo_group, F.data.startswith("admin_server_promo_toggle_"))
     dp.callback_query.register(save_server_promo_groups, F.data.startswith("admin_server_promo_save_"))
     
