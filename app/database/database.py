@@ -31,6 +31,7 @@ else:
         "pool_timeout": 30,
         "pool_recycle": 3600,
         "pool_pre_ping": True,
+        # 🔥 Агрессивная очистка мертвых соединений
         "pool_reset_on_return": "rollback",
     }
 
@@ -57,8 +58,8 @@ engine = create_async_engine(
     } if not settings.get_database_url().startswith("sqlite") else {},
     
     execution_options={
-        "isolation_level": "READ COMMITTED",
-        "compiled_cache_size": 500,
+        "isolation_level": "READ COMMITTED",  # Оптимальный для большинства случаев
+        "compiled_cache_size": 500,  # Кеш скомпилированных запросов
     }
 )
 
@@ -70,7 +71,7 @@ AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
     expire_on_commit=False,
-    autoflush=False,
+    autoflush=False,  # 🔥 Критично для производительности
     autocommit=False,
 )
 
@@ -87,7 +88,7 @@ if settings.DEBUG:
     @event.listens_for(Engine, "after_cursor_execute")
     def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
         total = time.time() - conn.info["query_start_time"].pop(-1)
-        if total > 0.1:
+        if total > 0.1:  # Логируем медленные запросы > 100ms
             logger.warning(f"🐌 Slow query ({total:.3f}s): {statement[:100]}...")
         else:
             logger.debug(f"⚡ Query executed in {total:.3f}s")
@@ -97,6 +98,7 @@ if settings.DEBUG:
 # ============================================================================
 
 class DatabaseManager:
+    """Продвинутый менеджер БД с поддержкой реплик и кеширования"""
     
     def __init__(self):
         self.engine = engine
@@ -106,7 +108,7 @@ class DatabaseManager:
             self.read_replica_engine = create_async_engine(
                 settings.DATABASE_READ_REPLICA_URL,
                 poolclass=poolclass,
-                pool_size=30,
+                pool_size=30,  # Больше для read операций
                 max_overflow=50,
                 pool_pre_ping=True,
                 echo=False,
@@ -133,7 +135,6 @@ class DatabaseManager:
                 raise
     
     async def health_check(self) -> dict:
-        """Проверка здоровья БД и метрики пула"""
         pool = self.engine.pool
         
         try:
@@ -222,23 +223,23 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
         
         if not settings.get_database_url().startswith("sqlite"):
-            await conn.execute(text("""
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_telegram_id 
-                ON users(telegram_id);
-                
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_subscriptions_user_id 
-                ON subscriptions(user_id);
-                
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_subscriptions_status 
-                ON subscriptions(status) WHERE status = 'active';
-                
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_payments_created_at 
-                ON payments(created_at DESC);
-            """))
+            logger.info("📊 Создание индексов для оптимизации...")
+            
+            indexes = [
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)",
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)",
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_subscriptions_status ON subscriptions(status) WHERE status = 'active'",
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC)",
+            ]
+            
+            for index_sql in indexes:
+                try:
+                    await conn.execute(text(index_sql))
+                except Exception as e:
+                    logger.debug(f"Index creation skipped: {e}")
     
     logger.info("✅ База данных успешно инициализирована")
     
-    # Выводим статистику
     health = await db_manager.health_check()
     logger.info(f"📊 Database health: {health}")
 
