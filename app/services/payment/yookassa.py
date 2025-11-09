@@ -382,63 +382,6 @@ class YooKassaPaymentMixin:
             from sqlalchemy import select
             payment_module = import_module("app.services.payment_service")
 
-            existing_transaction_id = getattr(payment, "transaction_id", None)
-            if existing_transaction_id:
-                logger.info(
-                    "Пропускаем повторную обработку платежа YooKassa %s: уже связан с транзакцией %s",
-                    payment.yookassa_payment_id,
-                    existing_transaction_id,
-                )
-                return True
-
-            existing_transaction = None
-            try:
-                existing_transaction = await payment_module.get_transaction_by_external_id(  # type: ignore[attr-defined]
-                    db,
-                    payment.yookassa_payment_id,
-                    PaymentMethod.YOOKASSA,
-                )
-            except Exception as lookup_error:  # pragma: no cover - защитный лог
-                logger.warning(
-                    "Не удалось проверить существующую транзакцию для платежа YooKassa %s: %s",
-                    payment.yookassa_payment_id,
-                    lookup_error,
-                    exc_info=True,
-                )
-
-            if existing_transaction:
-                logger.info(
-                    "Платеж YooKassa %s уже обработан транзакцией %s. Пропускаем повторное начисление.",
-                    payment.yookassa_payment_id,
-                    existing_transaction.id,
-                )
-
-                if not getattr(payment, "transaction_id", None):
-                    try:
-                        linked_payment = await payment_module.link_yookassa_payment_to_transaction(  # type: ignore[attr-defined]
-                            db,
-                            payment.yookassa_payment_id,
-                            existing_transaction.id,
-                        )
-                        if linked_payment:
-                            payment.transaction_id = getattr(
-                                linked_payment,
-                                "transaction_id",
-                                existing_transaction.id,
-                            )
-                            if hasattr(linked_payment, "transaction"):
-                                payment.transaction = linked_payment.transaction
-                    except Exception as link_error:  # pragma: no cover - защитный лог
-                        logger.warning(
-                            "Не удалось привязать платеж YooKassa %s к существующей транзакции %s: %s",
-                            payment.yookassa_payment_id,
-                            existing_transaction.id,
-                            link_error,
-                            exc_info=True,
-                        )
-
-                return True
-
             payment_description = getattr(payment, "description", "YooKassa платеж")
 
             payment_metadata: Dict[str, Any] = {}
