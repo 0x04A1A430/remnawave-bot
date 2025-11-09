@@ -250,6 +250,10 @@ class Pal24PaymentMixin:
                 return True
 
             if status in {"PAID", "SUCCESS", "OVERPAID"}:
+                metadata = getattr(payment, "metadata_json", {}) or {}
+                if not isinstance(metadata, dict):
+                    metadata = {}
+
                 payment = await payment_module.update_pal24_payment_status(
                     db,
                     payment,
@@ -262,7 +266,7 @@ class Pal24PaymentMixin:
                     payment_method=(
                         postback.get("payment_method")
                         or postback.get("PaymentMethod")
-                        or (payment.metadata_json or {}).get("selected_method")
+                        or metadata.get("selected_method")
                         or getattr(payment, "payment_method", None)
                     ),
                     balance_amount=postback.get("BalanceAmount")
@@ -280,6 +284,10 @@ class Pal24PaymentMixin:
                     payment_id=payment_id,
                     trigger="postback",
                 )
+
+            metadata = getattr(payment, "metadata_json", {}) or {}
+            if not isinstance(metadata, dict):
+                metadata = {}
 
             await payment_module.update_pal24_payment_status(
                 db,
@@ -709,8 +717,9 @@ class Pal24PaymentMixin:
                 "secondary_url": secondary_url,
                 "sbp_url": links_map.get("sbp"),
                 "card_url": links_map.get("card"),
-                "link_page_url": links_map.get("page") or payment.link_page_url,
-                "link_url": payment.link_url,
+                "link_page_url": links_map.get("page")
+                or getattr(payment, "link_page_url", None),
+                "link_url": getattr(payment, "link_url", None),
                 "selected_method": selected_method,
             }
 
@@ -878,7 +887,10 @@ class Pal24PaymentMixin:
     ) -> tuple[Dict[str, str], str]:
         links: Dict[str, str] = {}
 
-        metadata = payment.metadata_json if isinstance(payment.metadata_json, dict) else {}
+        metadata = getattr(payment, "metadata_json", {}) or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+
         if metadata:
             links_meta = metadata.get("links")
             if isinstance(links_meta, dict):
