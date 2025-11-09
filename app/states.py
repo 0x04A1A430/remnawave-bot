@@ -183,13 +183,6 @@ class SquadMigrationStates(StatesGroup):
     confirming = State()
 
 
-class ServerGroupStates(StatesGroup):
-    waiting_for_name = State()
-    selecting_servers = State()
-    editing_name = State()
-    editing_servers = State()
-
-
 class RemnaWaveSyncStates(StatesGroup):
     waiting_for_schedule = State()
 

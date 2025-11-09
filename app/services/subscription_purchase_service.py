@@ -7,7 +7,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import PERIOD_PRICES, settings
-from app.database.crud.server_group import get_server_groups
 from app.database.crud.server_squad import (
     add_user_to_servers,
     get_available_server_squads,
@@ -25,8 +24,6 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.models import ServerSquad, Subscription, SubscriptionStatus, TransactionType, User
 from app.localization.texts import get_texts
-from app.services.remnawave_service import RemnaWaveService
-from app.services.server_group_service import choose_optimal_server
 from app.services.subscription_service import SubscriptionService
 from app.utils.pricing_utils import (
     calculate_months_from_days,
@@ -106,9 +103,6 @@ class PurchaseServerOption:
     original_price_label: Optional[str] = None
     discount_percent: int = 0
     is_available: bool = True
-    selection_key: Optional[str] = None
-    option_type: str = "server"
-    metadata: Optional[Dict[str, Any]] = None
 
     def to_payload(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
@@ -118,10 +112,6 @@ class PurchaseServerOption:
             "price_label": self.price_label,
             "is_available": self.is_available,
         }
-        payload["selection_key"] = self.selection_key or self.uuid
-        payload["type"] = self.option_type
-        if self.metadata:
-            payload["meta"] = self.metadata
         if self.original_price_per_month is not None and (
             self.original_price_label and self.original_price_per_month != self.price_per_month
         ):
@@ -265,7 +255,6 @@ class PurchaseOptionsContext:
     default_period: PurchasePeriodConfig
     period_map: Dict[str, PurchasePeriodConfig]
     server_uuid_to_id: Dict[str, int]
-    server_selection_map: Dict[str, str]
     payload: Dict[str, Any]
 
 
@@ -333,8 +322,6 @@ def _build_server_option(
         original_price_label=texts.format_price(base_per_month) if base_per_month != discounted_per_month else None,
         discount_percent=max(0, discount_percent),
         is_available=bool(getattr(server, "is_available", True) and not getattr(server, "is_full", False)),
-        selection_key=server.squad_uuid,
-        option_type="server",
     )
 
 
@@ -365,74 +352,6 @@ class MiniAppSubscriptionPurchaseService:
                 if existing:
                     server_catalog[uuid] = existing
 
-        remnawave_service = RemnaWaveService()
-        server_groups = await get_server_groups(db)
-        groups_context: List[Dict[str, Any]] = []
-        grouped_server_uuids: set[str] = set()
-        selection_map: Dict[str, str] = {}
-        preferred_selection_for_server: Dict[str, str] = {}
-
-        for group in server_groups:
-            if not group.is_active or not group.servers:
-                continue
-            try:
-                choice = await choose_optimal_server(db, remnawave_service, group)
-            except Exception as error:  # pragma: no cover - defensive logging
-                logger.warning("Failed to evaluate server group %s: %s", getattr(group, "name", group.id), error)
-                continue
-
-            if not choice:
-                continue
-
-            snapshot, best = choice
-            selection_key = f"group:{group.id}"
-            selection_map[selection_key] = best.server.squad_uuid
-
-            metadata = {
-                "groupId": group.id,
-                "groupName": group.name,
-                "totalActiveUsers": snapshot.total_active_users,
-                "totalBandwidthBytes": snapshot.total_bandwidth_bytes,
-                "isOverloaded": snapshot.is_overloaded,
-                "selectedServerUuid": best.server.squad_uuid,
-                "selectedServerName": best.server.display_name,
-                "servers": [
-                    {
-                        "uuid": member.server.squad_uuid if member.server else None,
-                        "name": member.server.display_name if member.server else None,
-                        "activeUsers": member.active_users,
-                        "membersCount": member.members_count,
-                        "bandwidthBytes": member.bandwidth_bytes,
-                        "isAvailable": member.is_available,
-                        "isEnabled": member.is_enabled,
-                        "isOverloaded": member.is_overloaded,
-                    }
-                    for member in snapshot.servers
-                    if member.server
-                ],
-            }
-
-            for member in snapshot.servers:
-                if member.server and member.server.squad_uuid:
-                    grouped_server_uuids.add(member.server.squad_uuid)
-                    preferred_selection_for_server.setdefault(member.server.squad_uuid, selection_key)
-
-            groups_context.append(
-                {
-                    "group": group,
-                    "selection_key": selection_key,
-                    "snapshot": snapshot,
-                    "choice": best,
-                    "metadata": metadata,
-                }
-            )
-
-            server_catalog.setdefault(best.server.squad_uuid, best.server)
-
-        for uuid, server in list(server_catalog.items()):
-            selection_map.setdefault(uuid, uuid)
-            preferred_selection_for_server.setdefault(uuid, uuid)
-
         server_uuid_to_id: Dict[str, int] = {}
         for server in server_catalog.values():
             try:
@@ -446,12 +365,6 @@ class MiniAppSubscriptionPurchaseService:
                 if getattr(server, "is_available", True) and not getattr(server, "is_full", False):
                     default_connected = [server.squad_uuid]
                     break
-
-        default_selection_keys: List[str] = []
-        for uuid in default_connected:
-            key = preferred_selection_for_server.get(uuid)
-            if key and key not in default_selection_keys:
-                default_selection_keys.append(key)
 
         available_periods: Sequence[int] = settings.get_available_subscription_periods()
         periods: List[PurchasePeriodConfig] = []
@@ -501,9 +414,7 @@ class MiniAppSubscriptionPurchaseService:
                 texts,
                 period_days,
                 server_catalog,
-                default_selection_keys,
-                groups_context=groups_context,
-                grouped_server_uuids=grouped_server_uuids,
+                default_connected,
             )
             devices_config = self._build_devices_config(
                 user,
@@ -537,9 +448,6 @@ class MiniAppSubscriptionPurchaseService:
 
         default_period = period_map.get(f"days:{default_period_days}") or periods[0]
 
-        default_selection_keys_payload = list(default_period.servers.default_selection)
-        default_selection_uuids_payload = [selection_map.get(key, key) for key in default_selection_keys_payload]
-
         default_selection = {
             "period_id": default_period.id,
             "periodId": default_period.id,
@@ -551,17 +459,14 @@ class MiniAppSubscriptionPurchaseService:
             "trafficValue": default_period.traffic.current_value
             if default_period.traffic.current_value is not None
             else default_period.traffic.default_value,
-            "servers": default_selection_keys_payload,
-            "countries": default_selection_keys_payload,
-            "server_uuids": default_selection_uuids_payload,
-            "serverUuids": default_selection_uuids_payload,
+            "servers": list(default_period.servers.default_selection),
+            "countries": list(default_period.servers.default_selection),
+            "server_uuids": list(default_period.servers.default_selection),
+            "serverUuids": list(default_period.servers.default_selection),
             "devices": default_period.devices.current,
             "device_limit": default_period.devices.current,
             "deviceLimit": default_period.devices.current,
         }
-
-        servers_payload = default_period.servers.to_payload()
-        servers_payload["selection_map"] = selection_map
 
         payload = {
             "currency": currency,
@@ -573,7 +478,7 @@ class MiniAppSubscriptionPurchaseService:
             "subscriptionId": getattr(subscription, "id", None),
             "periods": [period.to_payload() for period in periods],
             "traffic": default_period.traffic.to_payload(),
-            "servers": servers_payload,
+            "servers": default_period.servers.to_payload(),
             "devices": default_period.devices.to_payload(),
             "selection": default_selection,
             "summary": None,
@@ -588,7 +493,6 @@ class MiniAppSubscriptionPurchaseService:
             default_period=default_period,
             period_map=period_map,
             server_uuid_to_id=server_uuid_to_id,
-            server_selection_map=selection_map,
             payload=payload,
         )
 
@@ -664,39 +568,22 @@ class MiniAppSubscriptionPurchaseService:
         period_days: int,
         server_catalog: Dict[str, ServerSquad],
         default_selection: List[str],
-        *,
-        groups_context: List[Dict[str, Any]],
-        grouped_server_uuids: set,
     ) -> PurchaseServersConfig:
         discount_percent = user.get_promo_discount("servers", period_days)
         options: List[PurchaseServerOption] = []
 
-        for group_ctx in groups_context:
-            best_snapshot = group_ctx["choice"]
-            best_server = best_snapshot.server
-            option = _build_server_option(best_server, discount_percent, texts)
-            option.selection_key = group_ctx["selection_key"]
-            option.option_type = "group"
-            option.is_available = bool(best_snapshot.is_available and best_snapshot.is_enabled)
-            option.metadata = group_ctx["metadata"]
-            options.append(option)
-
         for uuid, server in server_catalog.items():
-            if uuid in grouped_server_uuids:
-                continue
             option = _build_server_option(server, discount_percent, texts)
             options.append(option)
 
         if not options:
             default_selection = []
-        elif not default_selection:
-            default_selection = [options[0].selection_key or options[0].uuid]
 
         return PurchaseServersConfig(
             options=options,
             min_selectable=1 if options else 0,
             max_selectable=len(options),
-            default_selection=default_selection,
+            default_selection=default_selection if default_selection else [opt.uuid for opt in options[:1]],
             hint=None,
         )
 
@@ -795,14 +682,6 @@ class MiniAppSubscriptionPurchaseService:
 
         if not servers:
             servers = list(period.servers.default_selection)
-
-        resolved_servers: List[str] = []
-        for key in servers:
-            actual_uuid = context.server_selection_map.get(key, key)
-            if actual_uuid not in resolved_servers:
-                resolved_servers.append(actual_uuid)
-
-        servers = resolved_servers
 
         if period.servers.min_selectable and len(servers) < period.servers.min_selectable:
             raise PurchaseValidationError("Select at least one server", code="invalid_servers")
