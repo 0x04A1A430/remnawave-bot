@@ -136,7 +136,7 @@ class DatabaseManager:
     
     async def health_check(self) -> dict:
         pool = self.engine.pool
-        
+
         try:
             async with AsyncSessionLocal() as session:
                 start = time.time()
@@ -147,18 +147,11 @@ class DatabaseManager:
             logger.error(f"❌ Database health check failed: {e}")
             status = "unhealthy"
             latency = None
-        
+
         return {
             "status": status,
             "latency_ms": round(latency, 2) if latency else None,
-            "pool": {
-                "size": pool.size(),
-                "checked_in": pool.checkedin(),
-                "checked_out": pool.checkedout(),
-                "overflow": pool.overflow(),
-                "total_connections": pool.size() + pool.overflow(),
-                "utilization": f"{(pool.checkedout() / (pool.size() + pool.overflow()) * 100):.1f}%"
-            }
+            "pool": _collect_health_pool_metrics(pool),
         }
 
 db_manager = DatabaseManager()
@@ -258,16 +251,83 @@ async def close_db():
 # CONNECTION POOL METRICS (для мониторинга)
 # ============================================================================
 
+def _pool_counters(pool):
+    """Return basic pool counters or ``None`` when unsupported."""
+
+    required_methods = ("size", "checkedin", "checkedout", "overflow")
+
+    for method_name in required_methods:
+        method = getattr(pool, method_name, None)
+        if method is None or not callable(method):
+            return None
+
+    size = pool.size()
+    checked_in = pool.checkedin()
+    checked_out = pool.checkedout()
+    overflow = pool.overflow()
+
+    total_connections = size + overflow
+
+    return {
+        "size": size,
+        "checked_in": checked_in,
+        "checked_out": checked_out,
+        "overflow": overflow,
+        "total_connections": total_connections,
+        "utilization_percent": (checked_out / total_connections * 100) if total_connections else 0.0,
+    }
+
+
+def _collect_health_pool_metrics(pool) -> dict:
+    counters = _pool_counters(pool)
+
+    if counters is None:
+        return {
+            "metrics_available": False,
+            "size": 0,
+            "checked_in": 0,
+            "checked_out": 0,
+            "overflow": 0,
+            "total_connections": 0,
+            "utilization": "0.0%",
+        }
+
+    return {
+        "metrics_available": True,
+        "size": counters["size"],
+        "checked_in": counters["checked_in"],
+        "checked_out": counters["checked_out"],
+        "overflow": counters["overflow"],
+        "total_connections": counters["total_connections"],
+        "utilization": f"{counters['utilization_percent']:.1f}%",
+    }
+
+
 async def get_pool_metrics() -> dict:
     """Детальные метрики пула для Prometheus/Grafana"""
     pool = engine.pool
-    
+
+    counters = _pool_counters(pool)
+
+    if counters is None:
+        return {
+            "metrics_available": False,
+            "pool_size": 0,
+            "checked_in_connections": 0,
+            "checked_out_connections": 0,
+            "overflow_connections": 0,
+            "total_connections": 0,
+            "max_possible_connections": 0,
+            "pool_utilization_percent": 0.0,
+        }
+
     return {
-        "pool_size": pool.size(),
-        "checked_in_connections": pool.checkedin(),
-        "checked_out_connections": pool.checkedout(),
-        "overflow_connections": pool.overflow(),
-        "total_connections": pool.size() + pool.overflow(),
-        "max_possible_connections": pool.size() + (pool._max_overflow if hasattr(pool, '_max_overflow') else 0),
-        "pool_utilization_percent": round((pool.checkedout() / (pool.size() + pool.overflow()) * 100), 2) if (pool.size() + pool.overflow()) > 0 else 0,
+        "metrics_available": True,
+        "pool_size": counters["size"],
+        "checked_in_connections": counters["checked_in"],
+        "checked_out_connections": counters["checked_out"],
+        "overflow_connections": counters["overflow"],
+        "total_connections": counters["total_connections"],
+        "max_possible_connections": counters["total_connections"] + (getattr(pool, "_max_overflow", 0) or 0),
+        "pool_utilization_percent": round(counters["utilization_percent"], 2),
     }
