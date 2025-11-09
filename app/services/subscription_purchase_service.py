@@ -265,8 +265,8 @@ class PurchaseOptionsContext:
     default_period: PurchasePeriodConfig
     period_map: Dict[str, PurchasePeriodConfig]
     server_uuid_to_id: Dict[str, int]
-    server_selection_map: Dict[str, str] = field(default_factory=dict)
-    payload: Dict[str, Any] = field(default_factory=dict)
+    server_selection_map: Dict[str, str]
+    payload: Dict[str, Any]
 
 
 class PurchaseValidationError(Exception):
