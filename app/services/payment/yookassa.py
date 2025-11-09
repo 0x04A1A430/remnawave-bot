@@ -382,8 +382,6 @@ class YooKassaPaymentMixin:
             from sqlalchemy import select
             payment_module = import_module("app.services.payment_service")
 
-            payment_description = getattr(payment, "description", "YooKassa платеж")
-
             payment_metadata: Dict[str, Any] = {}
             try:
                 if hasattr(payment, "metadata_json") and payment.metadata_json:
@@ -396,6 +394,124 @@ class YooKassaPaymentMixin:
                     logger.info(f"Метаданные платежа: {payment_metadata}")
             except Exception as parse_error:
                 logger.error(f"Ошибка парсинга метаданных платежа: {parse_error}")
+
+            processing_completed = bool(payment_metadata.get("processing_completed"))
+
+            transaction = None
+
+            existing_transaction_id = getattr(payment, "transaction_id", None)
+            if existing_transaction_id:
+                try:
+                    from app.database.crud.transaction import get_transaction_by_id
+
+                    transaction = await get_transaction_by_id(db, existing_transaction_id)
+                except Exception as fetch_error:  # pragma: no cover - диагностический лог
+                    logger.warning(
+                        "Не удалось получить транзакцию %s для платежа YooKassa %s: %s",
+                        existing_transaction_id,
+                        payment.yookassa_payment_id,
+                        fetch_error,
+                        exc_info=True,
+                    )
+
+                if transaction and processing_completed:
+                    logger.info(
+                        "Пропускаем повторную обработку платежа YooKassa %s: транзакция %s уже завершила начисление.",
+                        payment.yookassa_payment_id,
+                        existing_transaction_id,
+                    )
+                    return True
+
+                if transaction:
+                    logger.info(
+                        "Транзакция %s для платежа YooKassa %s найдена, но обработка ранее не была завершена — повторяем критические шаги.",
+                        existing_transaction_id,
+                        payment.yookassa_payment_id,
+                    )
+
+            if transaction is None:
+                existing_transaction = None
+                try:
+                    existing_transaction = await payment_module.get_transaction_by_external_id(  # type: ignore[attr-defined]
+                        db,
+                        payment.yookassa_payment_id,
+                        PaymentMethod.YOOKASSA,
+                    )
+                except Exception as lookup_error:  # pragma: no cover - защитный лог
+                    logger.warning(
+                        "Не удалось проверить существующую транзакцию для платежа YooKassa %s: %s",
+                        payment.yookassa_payment_id,
+                        lookup_error,
+                        exc_info=True,
+                    )
+
+                if existing_transaction:
+                    transaction = existing_transaction
+
+                    if processing_completed:
+                        logger.info(
+                            "Платеж YooKassa %s уже обработан транзакцией %s и отмечен как завершенный.",
+                            payment.yookassa_payment_id,
+                            existing_transaction.id,
+                        )
+
+                        if not getattr(payment, "transaction_id", None):
+                            try:
+                                linked_payment = await payment_module.link_yookassa_payment_to_transaction(  # type: ignore[attr-defined]
+                                    db,
+                                    payment.yookassa_payment_id,
+                                    existing_transaction.id,
+                                )
+                                if linked_payment:
+                                    payment.transaction_id = getattr(
+                                        linked_payment,
+                                        "transaction_id",
+                                        existing_transaction.id,
+                                    )
+                                    if hasattr(linked_payment, "transaction"):
+                                        payment.transaction = linked_payment.transaction
+                            except Exception as link_error:  # pragma: no cover - защитный лог
+                                logger.warning(
+                                    "Не удалось привязать платеж YooKassa %s к существующей транзакции %s: %s",
+                                    payment.yookassa_payment_id,
+                                    existing_transaction.id,
+                                    link_error,
+                                    exc_info=True,
+                                )
+
+                        return True
+
+                    logger.info(
+                        "Платеж YooKassa %s уже связан с транзакцией %s, но метаданные не подтверждают завершение — продолжим обработку.",
+                        payment.yookassa_payment_id,
+                        existing_transaction.id,
+                    )
+
+                    if not getattr(payment, "transaction_id", None):
+                        try:
+                            linked_payment = await payment_module.link_yookassa_payment_to_transaction(  # type: ignore[attr-defined]
+                                db,
+                                payment.yookassa_payment_id,
+                                existing_transaction.id,
+                            )
+                            if linked_payment:
+                                payment.transaction_id = getattr(
+                                    linked_payment,
+                                    "transaction_id",
+                                    existing_transaction.id,
+                                )
+                                if hasattr(linked_payment, "transaction"):
+                                    payment.transaction = linked_payment.transaction
+                        except Exception as link_error:  # pragma: no cover - защитный лог
+                            logger.warning(
+                                "Не удалось привязать платеж YooKassa %s к существующей транзакции %s: %s",
+                                payment.yookassa_payment_id,
+                                existing_transaction.id,
+                                link_error,
+                                exc_info=True,
+                            )
+
+            payment_description = getattr(payment, "description", "YooKassa платеж")
 
             payment_purpose = payment_metadata.get("payment_purpose", "")
             is_simple_subscription = payment_purpose == "simple_subscription_purchase"
@@ -411,27 +527,32 @@ class YooKassaPaymentMixin:
                 else f"Пополнение через YooKassa: {payment_description}"
             )
 
-            transaction = await payment_module.create_transaction(
-                db=db,
-                user_id=payment.user_id,
-                type=transaction_type,
-                amount_kopeks=payment.amount_kopeks,
-                description=transaction_description,
-                payment_method=PaymentMethod.YOOKASSA,
-                external_id=payment.yookassa_payment_id,
-                is_completed=True,
-            )
+            if transaction is None:
+                transaction = await payment_module.create_transaction(
+                    db=db,
+                    user_id=payment.user_id,
+                    type=transaction_type,
+                    amount_kopeks=payment.amount_kopeks,
+                    description=transaction_description,
+                    payment_method=PaymentMethod.YOOKASSA,
+                    external_id=payment.yookassa_payment_id,
+                    is_completed=True,
+                )
 
-            linked_payment = await payment_module.link_yookassa_payment_to_transaction(
-                db,
-                payment.yookassa_payment_id,
-                transaction.id,
-            )
+            if not getattr(payment, "transaction_id", None):
+                linked_payment = await payment_module.link_yookassa_payment_to_transaction(
+                    db,
+                    payment.yookassa_payment_id,
+                    transaction.id,
+                )
 
-            if linked_payment:
-                payment.transaction_id = getattr(linked_payment, "transaction_id", transaction.id)
-                if hasattr(linked_payment, "transaction"):
-                    payment.transaction = linked_payment.transaction
+                if linked_payment:
+                    payment.transaction_id = getattr(linked_payment, "transaction_id", transaction.id)
+                    if hasattr(linked_payment, "transaction"):
+                        payment.transaction = linked_payment.transaction
+
+            critical_flow_completed = False
+            processing_marked = False
 
             user = await payment_module.get_user_by_id(db, payment.user_id)
             if user:
@@ -472,6 +593,14 @@ class YooKassaPaymentMixin:
                     topup_status = (
                         "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
                     )
+
+                    payment_metadata = await self._mark_yookassa_payment_processing_completed(
+                        db,
+                        payment,
+                        payment_metadata,
+                        commit=False,
+                    )
+                    processing_marked = True
 
                     await db.commit()
 
@@ -748,6 +877,31 @@ class YooKassaPaymentMixin:
                     except Exception as e:
                         logger.error(f"Ошибка активации подписки для пользователя {user.id}: {e}", exc_info=True)
 
+                    if not processing_marked:
+                        payment_metadata = await self._mark_yookassa_payment_processing_completed(
+                            db,
+                            payment,
+                            payment_metadata,
+                            commit=True,
+                        )
+                        processing_marked = True
+
+                critical_flow_completed = True
+            else:
+                logger.warning(
+                    "Пользователь %s для платежа YooKassa %s не найден — начисление баланса невозможно",
+                    payment.user_id,
+                    payment.yookassa_payment_id,
+                )
+
+            if critical_flow_completed and not processing_marked:
+                payment_metadata = await self._mark_yookassa_payment_processing_completed(
+                    db,
+                    payment,
+                    payment_metadata,
+                    commit=True,
+                )
+
             if is_simple_subscription:
                 logger.info(
                     "Успешно обработан платеж YooKassa %s как покупка подписки: пользователь %s, сумма %s₽",
@@ -772,6 +926,46 @@ class YooKassaPaymentMixin:
                 error,
             )
             return False
+
+    async def _mark_yookassa_payment_processing_completed(
+        self,
+        db: AsyncSession,
+        payment: "YooKassaPayment",
+        payment_metadata: Dict[str, Any],
+        *,
+        commit: bool = False,
+    ) -> Dict[str, Any]:
+        """Отмечает платёж как полностью обработанный, чтобы избежать повторного начисления."""
+
+        if payment_metadata.get("processing_completed"):
+            return payment_metadata
+
+        updated_metadata = dict(payment_metadata)
+        updated_metadata["processing_completed"] = True
+
+        try:
+            from sqlalchemy import update
+            from app.database.models import YooKassaPayment as YooKassaPaymentModel
+
+            await db.execute(
+                update(YooKassaPaymentModel)
+                .where(YooKassaPaymentModel.id == payment.id)
+                .values(metadata_json=updated_metadata, updated_at=datetime.utcnow())
+            )
+            if commit:
+                await db.commit()
+            else:
+                await db.flush()
+            payment.metadata_json = updated_metadata
+        except Exception as mark_error:  # pragma: no cover - защитный лог
+            logger.warning(
+                "Не удалось отметить платеж YooKassa %s как завершенный: %s",
+                payment.yookassa_payment_id,
+                mark_error,
+                exc_info=True,
+            )
+
+        return updated_metadata
 
     async def process_yookassa_webhook(
         self,
