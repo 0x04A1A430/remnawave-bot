@@ -49,15 +49,11 @@ engine = create_async_engine(
         "server_settings": {
             "application_name": "remnawave_bot",
             "jit": "on",
-            "statement_timeout": "60000",
-            "idle_in_transaction_session_timeout": "300000",
+            "statement_timeout": "60000",  # 60 секунд
+            "idle_in_transaction_session_timeout": "300000",  # 5 минут
         },
         "command_timeout": 60,
         "timeout": 10,
-        "keepalives": 1,
-        "keepalives_idle": 30,
-        "keepalives_interval": 10,
-        "keepalives_count": 5,
     } if not settings.get_database_url().startswith("sqlite") else {},
     
     execution_options={
