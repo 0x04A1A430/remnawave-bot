@@ -12,6 +12,7 @@ from app.database.crud.server_squad import (
     get_available_server_squads,
     get_server_ids_by_uuids,
     get_server_squad_by_uuid,
+    choose_least_loaded_server_in_category,
 )
 from app.database.crud.subscription import (
     add_subscription_servers,
@@ -103,6 +104,8 @@ class PurchaseServerOption:
     original_price_label: Optional[str] = None
     discount_percent: int = 0
     is_available: bool = True
+    category_id: Optional[int] = None
+    is_category: bool = False
 
     def to_payload(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
@@ -119,6 +122,10 @@ class PurchaseServerOption:
             payload["original_price_label"] = self.original_price_label
         if self.discount_percent:
             payload["discount_percent"] = self.discount_percent
+        if self.category_id is not None:
+            payload["category_id"] = self.category_id
+        if self.is_category:
+            payload["is_category"] = True
         return payload
 
 
@@ -129,6 +136,8 @@ class PurchaseServersConfig:
     max_selectable: int
     default_selection: List[str]
     hint: Optional[str] = None
+    category_mapping: Dict[str, List[str]] = field(default_factory=dict)
+    is_category_based: bool = False
 
     def to_payload(self) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
@@ -140,6 +149,10 @@ class PurchaseServersConfig:
         }
         if self.hint:
             payload["hint"] = self.hint
+        if self.category_mapping:
+            payload["category_mapping"] = self.category_mapping
+        if self.is_category_based:
+            payload["is_category_based"] = True
         return payload
 
 
@@ -255,6 +268,7 @@ class PurchaseOptionsContext:
     default_period: PurchasePeriodConfig
     period_map: Dict[str, PurchasePeriodConfig]
     server_uuid_to_id: Dict[str, int]
+    category_mapping: Dict[str, List[str]]
     payload: Dict[str, Any]
 
 
@@ -413,6 +427,7 @@ class MiniAppSubscriptionPurchaseService:
                 user,
                 texts,
                 period_days,
+                available_servers,
                 server_catalog,
                 default_connected,
             )
@@ -483,6 +498,8 @@ class MiniAppSubscriptionPurchaseService:
             "selection": default_selection,
             "summary": None,
         }
+        if default_period.servers.category_mapping:
+            payload["server_category_mapping"] = default_period.servers.category_mapping
 
         return PurchaseOptionsContext(
             user=user,
@@ -493,6 +510,7 @@ class MiniAppSubscriptionPurchaseService:
             default_period=default_period,
             period_map=period_map,
             server_uuid_to_id=server_uuid_to_id,
+            category_mapping=default_period.servers.category_mapping,
             payload=payload,
         )
 
@@ -566,25 +584,123 @@ class MiniAppSubscriptionPurchaseService:
         user: User,
         texts,
         period_days: int,
+        available_servers: List[ServerSquad],
         server_catalog: Dict[str, ServerSquad],
         default_selection: List[str],
     ) -> PurchaseServersConfig:
         discount_percent = user.get_promo_discount("servers", period_days)
-        options: List[PurchaseServerOption] = []
+        default_selection_set = set(default_selection)
+        available_server_ids = {server.squad_uuid for server in available_servers}
+
+        category_data: Dict[str, Dict[str, Any]] = {}
+        uncategorized_servers: List[ServerSquad] = []
 
         for uuid, server in server_catalog.items():
+            include_server = uuid in available_server_ids or uuid in default_selection_set
+            if not include_server:
+                continue
+
+            if server.category_id and getattr(server, "category", None):
+                key = f"category:{server.category_id}"
+                data = category_data.setdefault(
+                    key,
+                    {
+                        "category": server.category,
+                        "servers": [],
+                        "min_price": None,
+                        "min_available_price": None,
+                        "has_available": False,
+                    },
+                )
+                data["servers"].append(server)
+
+                price = server.price_kopeks or 0
+                if data["min_price"] is None:
+                    data["min_price"] = price
+                else:
+                    data["min_price"] = min(data["min_price"], price)
+
+                if getattr(server, "is_available", True) and not getattr(server, "is_full", False):
+                    data["has_available"] = True
+                    if data["min_available_price"] is None:
+                        data["min_available_price"] = price
+                    else:
+                        data["min_available_price"] = min(data["min_available_price"], price)
+            else:
+                uncategorized_servers.append(server)
+
+        category_items = list(category_data.items())
+        category_items.sort(
+            key=lambda item: (
+                getattr(item[1]["category"], "sort_order", 0),
+                getattr(item[1]["category"], "name", item[0]),
+            )
+        )
+
+        options: List[PurchaseServerOption] = []
+        category_mapping: Dict[str, List[str]] = {}
+
+        for key, data in category_items:
+            category = data["category"]
+            base_price = data["min_available_price"]
+            if base_price is None:
+                base_price = data["min_price"] or 0
+            discounted_per_month, discount_value = _apply_percentage_discount(base_price, discount_percent)
+            option = PurchaseServerOption(
+                uuid=key,
+                name=getattr(category, "name", key),
+                price_per_month=discounted_per_month,
+                price_label=texts.format_price(discounted_per_month),
+                original_price_per_month=base_price,
+                original_price_label=(
+                    texts.format_price(base_price)
+                    if discount_value and base_price != discounted_per_month
+                    else None
+                ),
+                discount_percent=max(0, discount_percent),
+                is_available=data["has_available"],
+                category_id=getattr(category, "id", None),
+                is_category=True,
+            )
+            options.append(option)
+            category_mapping[key] = [srv.squad_uuid for srv in data["servers"]]
+
+        for server in uncategorized_servers:
             option = _build_server_option(server, discount_percent, texts)
             options.append(option)
 
         if not options:
-            default_selection = []
+            default_values: List[str] = []
+        else:
+            option_lookup = {option.uuid for option in options}
+            resolved_defaults: List[str] = []
+            seen: set[str] = set()
+
+            for uuid in default_selection:
+                server = server_catalog.get(uuid)
+                if server and server.category_id:
+                    key = f"category:{server.category_id}"
+                    if key in option_lookup and key not in seen:
+                        resolved_defaults.append(key)
+                        seen.add(key)
+                        continue
+                if uuid in option_lookup and uuid not in seen:
+                    resolved_defaults.append(uuid)
+                    seen.add(uuid)
+
+            if not resolved_defaults:
+                resolved_defaults = [options[0].uuid]
+
+            default_values = resolved_defaults
 
         return PurchaseServersConfig(
             options=options,
             min_selectable=1 if options else 0,
             max_selectable=len(options),
-            default_selection=default_selection if default_selection else [opt.uuid for opt in options[:1]],
+            default_selection=default_values,
             hint=None,
+            category_mapping=category_mapping,
+            is_category_based=bool(category_mapping),
         )
 
     def _build_devices_config(
@@ -622,6 +738,40 @@ class MiniAppSubscriptionPurchaseService:
             discount_percent=max(0, discount_percent),
             hint=None,
         )
+
+    async def _resolve_selected_servers(
+        self,
+        db: AsyncSession,
+        context: PurchaseOptionsContext,
+        selected_servers: List[str],
+    ) -> List[str]:
+        resolved: List[str] = []
+        promo_group_id = getattr(context.user, "promo_group_id", None)
+
+        for identifier in selected_servers:
+            if identifier.startswith("category:"):
+                if identifier not in context.category_mapping:
+                    raise PurchaseValidationError("Invalid server category selection", code="invalid_servers")
+                try:
+                    category_id = int(identifier.split(":", 1)[1])
+                except (TypeError, ValueError) as error:
+                    raise PurchaseValidationError("Invalid server category selection", code="invalid_servers") from error
+
+                squad = await choose_least_loaded_server_in_category(
+                    db,
+                    category_id=category_id,
+                    promo_group_id=promo_group_id,
+                )
+                if not squad:
+                    raise PurchaseValidationError(
+                        "No available servers in selected category",
+                        code="no_servers_in_category",
+                    )
+                resolved.append(squad.squad_uuid)
+            else:
+                resolved.append(identifier)
+
+        return resolved
 
     def parse_selection(
         self,
@@ -722,14 +872,22 @@ class MiniAppSubscriptionPurchaseService:
         texts = get_texts(getattr(context.user, "language", None))
         months = selection.period.months
 
-        server_ids = await get_server_ids_by_uuids(db, selection.servers)
-        if len(server_ids) != len(selection.servers):
+        resolved_servers = await self._resolve_selected_servers(db, context, selection.servers)
+        resolved_selection = PurchaseSelection(
+            period=selection.period,
+            traffic_value=selection.traffic_value,
+            servers=resolved_servers,
+            devices=selection.devices,
+        )
+
+        server_ids = await get_server_ids_by_uuids(db, resolved_selection.servers)
+        if len(server_ids) != len(resolved_selection.servers):
             raise PurchaseValidationError("Some selected servers are not available", code="invalid_servers")
 
         total_without_promo, details = await self._calculate_base_total(
             db,
             context.user,
-            selection,
+            resolved_selection,
             server_ids,
         )
 
@@ -768,7 +926,7 @@ class MiniAppSubscriptionPurchaseService:
             raise PurchaseValidationError("Failed to validate pricing", code="calculation_error")
 
         return PurchasePricingResult(
-            selection=selection,
+            selection=resolved_selection,
             server_ids=server_ids,
             server_prices_for_period=list(details.get("servers_individual_prices", [])),
             base_original_total=base_original_total,

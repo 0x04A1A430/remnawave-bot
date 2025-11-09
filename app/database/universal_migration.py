@@ -3053,6 +3053,63 @@ async def ensure_server_promo_groups_setup() -> bool:
         return False
 
 
+async def ensure_server_categories_table() -> bool:
+    logger.info("=== ПРОВЕРКА ТАБЛИЦЫ КАТЕГОРИЙ СЕРВЕРОВ ===")
+
+    try:
+        table_exists = await check_table_exists("server_categories")
+
+        if table_exists:
+            logger.info("ℹ️ Таблица server_categories уже существует")
+            return True
+
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == "sqlite":
+                create_sql = """
+                CREATE TABLE server_categories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(255) NOT NULL UNIQUE,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                """
+            elif db_type == "postgresql":
+                create_sql = """
+                CREATE TABLE server_categories (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL UNIQUE,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                );
+                """
+            else:
+                create_sql = """
+                CREATE TABLE server_categories (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL UNIQUE,
+                    sort_order INT NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """
+
+            await conn.execute(text(create_sql))
+            logger.info("✅ Таблица server_categories создана")
+
+        return True
+
+    except Exception as error:
+        logger.error(f"Ошибка создания таблицы server_categories: {error}")
+        return False
+
+
 async def add_server_trial_flag_column() -> bool:
     column_exists = await check_column_exists('server_squads', 'is_trial_eligible')
     if column_exists:
@@ -3084,6 +3141,53 @@ async def add_server_trial_flag_column() -> bool:
 
     except Exception as error:
         logger.error(f"Ошибка добавления колонки is_trial_eligible: {error}")
+        return False
+
+
+async def add_server_category_column() -> bool:
+    column_exists = await check_column_exists('server_squads', 'category_id')
+    if column_exists:
+        logger.info("Колонка category_id уже существует в server_squads")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            column_def = 'INTEGER'
+
+            await conn.execute(
+                text(f"ALTER TABLE server_squads ADD COLUMN category_id {column_def}")
+            )
+
+            if db_type == 'postgresql':
+                await conn.execute(
+                    text(
+                        "ALTER TABLE server_squads ADD CONSTRAINT "
+                        "fk_server_squads_category FOREIGN KEY (category_id) "
+                        "REFERENCES server_categories(id) ON DELETE SET NULL"
+                    )
+                )
+            elif db_type != 'sqlite':
+                await conn.execute(
+                    text(
+                        "ALTER TABLE server_squads ADD CONSTRAINT fk_server_squads_category "
+                        "FOREIGN KEY (category_id) REFERENCES server_categories(id) ON DELETE SET NULL"
+                    )
+                )
+
+            await conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS idx_server_squads_category_id "
+                    "ON server_squads(category_id)"
+                )
+            )
+
+        logger.info("✅ Добавлена колонка category_id в server_squads")
+        return True
+
+    except Exception as error:
+        logger.error(f"Ошибка добавления колонки category_id: {error}")
         return False
 
 
@@ -4039,6 +4143,18 @@ async def run_universal_migration():
         else:
             logger.warning("⚠️ Проблемы с настройкой доступа серверов к промогруппам")
 
+        categories_ready = await ensure_server_categories_table()
+        if categories_ready:
+            logger.info("✅ Таблица категорий серверов готова")
+        else:
+            logger.warning("⚠️ Проблемы с созданием таблицы категорий серверов")
+
+        category_column_ready = await add_server_category_column()
+        if category_column_ready:
+            logger.info("✅ Колонка категории для серверов настроена")
+        else:
+            logger.warning("⚠️ Проблемы с добавлением колонки категории для серверов")
+
         logger.info("=== ОБНОВЛЕНИЕ ВНЕШНИХ КЛЮЧЕЙ ===")
         fk_updated = await fix_foreign_keys_for_user_deletion()
         if fk_updated:
@@ -4115,6 +4231,8 @@ async def check_migration_status():
             "promo_groups_table": False,
             "server_promo_groups_table": False,
             "server_squads_trial_column": False,
+            "server_categories_table": False,
+            "server_squads_category_column": False,
             "privacy_policies_table": False,
             "public_offers_table": False,
             "users_promo_group_column": False,
@@ -4148,6 +4266,8 @@ async def check_migration_status():
         status["promo_groups_table"] = await check_table_exists('promo_groups')
         status["server_promo_groups_table"] = await check_table_exists('server_squad_promo_groups')
         status["server_squads_trial_column"] = await check_column_exists('server_squads', 'is_trial_eligible')
+        status["server_categories_table"] = await check_table_exists('server_categories')
+        status["server_squads_category_column"] = await check_column_exists('server_squads', 'category_id')
 
         status["discount_offers_table"] = await check_table_exists('discount_offers')
         status["discount_offers_effect_column"] = await check_column_exists('discount_offers', 'effect_type')
@@ -4204,6 +4324,8 @@ async def check_migration_status():
             "promo_groups_table": "Таблица промо-групп",
             "server_promo_groups_table": "Связи серверов и промогрупп",
             "server_squads_trial_column": "Колонка триального назначения у серверов",
+            "server_categories_table": "Таблица категорий серверов",
+            "server_squads_category_column": "Колонка категории у серверов",
             "users_promo_group_column": "Колонка promo_group_id у пользователей",
             "promo_groups_period_discounts_column": "Колонка period_discounts у промо-групп",
             "promo_groups_auto_assign_column": "Колонка auto_assign_total_spent_kopeks у промо-групп",
