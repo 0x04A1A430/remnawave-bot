@@ -96,14 +96,37 @@ async def _prepare_auto_purchase(
         traffic_value = int(traffic_value)
 
     devices = int(cart_data.get("devices") or period_config.devices.current or 1)
-    servers = list(cart_data.get("countries") or [])
-    if not servers:
-        servers = list(period_config.servers.default_selection)
+    raw_servers = list(cart_data.get("countries") or [])
+    if not raw_servers:
+        raw_servers = list(period_config.servers.default_selection)
+
+    resolved_servers: list[str] = []
+    seen_servers: set[str] = set()
+    selection_map = getattr(context, "server_selection_map", {}) or {}
+
+    for key in raw_servers:
+        if not key:
+            continue
+        str_key = str(key).strip()
+        if not str_key:
+            continue
+        uuid = selection_map.get(str_key, str_key)
+        if not uuid or uuid in seen_servers:
+            continue
+        seen_servers.add(uuid)
+        resolved_servers.append(uuid)
+
+    if not resolved_servers:
+        for key in period_config.servers.default_selection:
+            uuid = selection_map.get(key, key)
+            if uuid and uuid not in seen_servers:
+                seen_servers.add(uuid)
+                resolved_servers.append(uuid)
 
     selection = PurchaseSelection(
         period=period_config,
         traffic_value=traffic_value,
-        servers=servers,
+        servers=resolved_servers,
         devices=devices,
     )
 

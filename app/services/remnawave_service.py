@@ -520,7 +520,7 @@ class RemnaWaveService:
                 
                     nodes_weekly_data = []
                     if nodes_stats.get('lastSevenDays'):
-                        nodes_by_name = {}
+                        nodes_by_name: Dict[str, Dict[str, Any]] = {}
                         for day_data in nodes_stats['lastSevenDays']:
                             node_name = day_data['nodeName']
                             if node_name not in nodes_by_name:
@@ -529,16 +529,16 @@ class RemnaWaveService:
                                     'total_bytes': 0,
                                     'days_data': []
                                 }
-                        
+
                             daily_bytes = int(day_data['totalBytes'])
                             nodes_by_name[node_name]['total_bytes'] += daily_bytes
                             nodes_by_name[node_name]['days_data'].append({
                                 'date': day_data['date'],
                                 'bytes': daily_bytes
                             })
-                    
-                    nodes_weekly_data = list(nodes_by_name.values())
-                    nodes_weekly_data.sort(key=lambda x: x['total_bytes'], reverse=True)
+
+                        nodes_weekly_data = list(nodes_by_name.values())
+                        nodes_weekly_data.sort(key=lambda x: x['total_bytes'], reverse=True)
                 
                     result = {
                         "system": {
@@ -706,46 +706,46 @@ class RemnaWaveService:
 
 
     def _parse_bandwidth_string(self, bandwidth_str: str) -> int:
-            try:
-                if not bandwidth_str or bandwidth_str == '0 B' or bandwidth_str == '0':
-                    return 0
-            
-                bandwidth_str = bandwidth_str.replace(' ', '').upper()
-            
-                units = {
-                    'B': 1,
-                    'KB': 1024,
-                    'MB': 1024 ** 2,
-                    'GB': 1024 ** 3,
-                    'TB': 1024 ** 4,
-                    'KIB': 1024,          
-                    'MIB': 1024 ** 2,
-                    'GIB': 1024 ** 3,
-                    'TIB': 1024 ** 4,
-                    'KBPS': 1024,      
-                    'MBPS': 1024 ** 2,
-                    'GBPS': 1024 ** 3
-                }
-            
-                match = re.match(r'([0-9.,]+)([A-Z]+)', bandwidth_str)
-                if match:
-                    value_str = match.group(1).replace(',', '.') 
-                    value = float(value_str)
-                    unit = match.group(2)
-                
-                    if unit in units:
-                        result = int(value * units[unit])
-                        logger.debug(f"Парсинг '{bandwidth_str}': {value} {unit} = {result} байт")
-                        return result
-                    else:
-                        logger.warning(f"Неизвестная единица измерения: {unit}")
-            
-                logger.warning(f"Не удалось распарсить строку трафика: '{bandwidth_str}'")
+        try:
+            if not bandwidth_str or bandwidth_str == '0 B' or bandwidth_str == '0':
                 return 0
-            
-            except Exception as e:
-                logger.error(f"Ошибка парсинга строки трафика '{bandwidth_str}': {e}")
-                return 0
+
+            bandwidth_str = bandwidth_str.replace(' ', '').upper()
+
+            units = {
+                'B': 1,
+                'KB': 1024,
+                'MB': 1024 ** 2,
+                'GB': 1024 ** 3,
+                'TB': 1024 ** 4,
+                'KIB': 1024,
+                'MIB': 1024 ** 2,
+                'GIB': 1024 ** 3,
+                'TIB': 1024 ** 4,
+                'KBPS': 1024,
+                'MBPS': 1024 ** 2,
+                'GBPS': 1024 ** 3
+            }
+
+            match = re.match(r'([0-9.,]+)([A-Z]+)', bandwidth_str)
+            if match:
+                value_str = match.group(1).replace(',', '.')
+                value = float(value_str)
+                unit = match.group(2)
+
+                if unit in units:
+                    result = int(value * units[unit])
+                    logger.debug(f"Парсинг '{bandwidth_str}': {value} {unit} = {result} байт")
+                    return result
+                else:
+                    logger.warning(f"Неизвестная единица измерения: {unit}")
+
+            logger.warning(f"Не удалось распарсить строку трафика: '{bandwidth_str}'")
+            return 0
+
+        except Exception as e:
+            logger.error(f"Ошибка парсинга строки трафика '{bandwidth_str}': {e}")
+            return 0
     
     async def get_all_nodes(self) -> List[Dict[str, Any]]:
         
