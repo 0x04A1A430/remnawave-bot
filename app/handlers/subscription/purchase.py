@@ -503,7 +503,10 @@ async def activate_trial(
 
         await callback.message.edit_text(
             message,
-            reply_markup=get_insufficient_balance_keyboard(db_user.language),
+            reply_markup=get_insufficient_balance_keyboard(
+                db_user.language,
+                amount_kopeks=error.required_amount,
+            ),
         )
         await callback.answer()
         return
@@ -565,7 +568,10 @@ async def activate_trial(
 
             await callback.message.edit_text(
                 message,
-                reply_markup=get_insufficient_balance_keyboard(db_user.language),
+                reply_markup=get_insufficient_balance_keyboard(
+                    db_user.language,
+                    amount_kopeks=error.required_amount,
+                ),
             )
             await callback.answer()
             return
