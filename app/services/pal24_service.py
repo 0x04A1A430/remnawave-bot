@@ -90,21 +90,21 @@ class Pal24Service:
         return await self.client.get_bill_payments(bill_id)
 
     @staticmethod
-    def parse_postback(payload: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_callback(payload: Dict[str, Any]) -> Dict[str, Any]:
         required_fields = ["InvId", "OutSum", "Status", "SignatureValue"]
         missing = [field for field in required_fields if field not in payload]
         if missing:
-            raise Pal24APIError(f"Pal24 postback missing fields: {', '.join(missing)}")
+            raise Pal24APIError(f"Pal24 callback missing fields: {', '.join(missing)}")
 
         inv_id = str(payload["InvId"])
         out_sum = str(payload["OutSum"])
         signature = str(payload["SignatureValue"])
 
         if not Pal24Client.verify_signature(out_sum, inv_id, signature):
-            raise Pal24APIError("Pal24 postback signature mismatch")
+            raise Pal24APIError("Pal24 callback signature mismatch")
 
         logger.info(
-            "Получен Pal24 postback: InvId=%s, Status=%s, TrsId=%s",
+            "Получен Pal24 callback: InvId=%s, Status=%s, TrsId=%s",
             inv_id,
             payload.get("Status"),
             payload.get("TrsId"),

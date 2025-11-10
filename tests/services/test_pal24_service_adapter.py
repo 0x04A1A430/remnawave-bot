@@ -110,7 +110,7 @@ async def test_get_bill_payments(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result == {"id": "BILL42", "payments": [{"id": "PAY-1"}]}
 
 
-def test_parse_postback_success(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_parse_callback_success(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_pal24(monkeypatch)
     sig = Pal24Client.calculate_signature("100.00", "INV1", api_token="sigsecret")
     payload = {
@@ -119,14 +119,14 @@ def test_parse_postback_success(monkeypatch: pytest.MonkeyPatch) -> None:
         "Status": "SUCCESS",
         "SignatureValue": sig,
     }
-    result = Pal24Service.parse_postback(payload)
+    result = Pal24Service.parse_callback(payload)
     assert result["InvId"] == "INV1"
 
 
-def test_parse_postback_missing_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_parse_callback_missing_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     _enable_pal24(monkeypatch)
     with pytest.raises(Pal24APIError):
-        Pal24Service.parse_postback({"InvId": "1"})
+        Pal24Service.parse_callback({"InvId": "1"})
 
 
 def test_convert_to_kopeks_and_expiration() -> None:

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class Pal24PaymentMixin:
-    """Mixin с созданием счетов Pal24, обработкой postback и запросом статуса."""
+    """Mixin с созданием счетов Pal24, обработкой callback и запросом статуса."""
 
     async def create_pal24_payment(
         self,
@@ -197,12 +197,12 @@ class Pal24PaymentMixin:
             "payment_url": primary_link,
         }
 
-    async def process_pal24_postback(
+    async def process_pal24_callback(
         self,
         db: AsyncSession,
-        postback: Dict[str, Any],
+        callback: Dict[str, Any],
     ) -> bool:
-        """Обрабатывает postback от Pal24 и начисляет баланс при успехе."""
+        """Обрабатывает callback от Pal24 и начисляет баланс при успехе."""
         try:
             payment_module = import_module("app.services.payment_service")
 
@@ -213,26 +213,26 @@ class Pal24PaymentMixin:
                 return None
 
             payment_id = _first_non_empty(
-                postback.get("id"),
-                postback.get("TrsId"),
-                postback.get("TrsID"),
+                callback.get("id"),
+                callback.get("TrsId"),
+                callback.get("TrsID"),
             )
             bill_id = _first_non_empty(
-                postback.get("bill_id"),
-                postback.get("billId"),
-                postback.get("BillId"),
-                postback.get("BillID"),
+                callback.get("bill_id"),
+                callback.get("billId"),
+                callback.get("BillId"),
+                callback.get("BillID"),
             )
             order_id = _first_non_empty(
-                postback.get("order_id"),
-                postback.get("orderId"),
-                postback.get("InvId"),
-                postback.get("InvID"),
+                callback.get("order_id"),
+                callback.get("orderId"),
+                callback.get("InvId"),
+                callback.get("InvID"),
             )
-            status = (postback.get("status") or postback.get("Status") or "").upper()
+            status = (callback.get("status") or callback.get("Status") or "").upper()
 
             if not bill_id and not order_id:
-                logger.error("Pal24 postback без идентификаторов: %s", postback)
+                logger.error("Pal24 callback без идентификаторов: %s", callback)
                 return False
 
             payment = None
@@ -260,29 +260,29 @@ class Pal24PaymentMixin:
                     status=status,
                     is_paid=True,
                     paid_at=datetime.utcnow(),
-                    postback_payload=postback,
+                    callback_payload=callback,
                     payment_id=payment_id,
-                    payment_status=postback.get("Status") or status,
+                    payment_status=callback.get("Status") or status,
                     payment_method=(
-                        postback.get("payment_method")
-                        or postback.get("PaymentMethod")
+                        callback.get("payment_method")
+                        or callback.get("PaymentMethod")
                         or metadata.get("selected_method")
                         or getattr(payment, "payment_method", None)
                     ),
-                    balance_amount=postback.get("BalanceAmount")
-                    or postback.get("balance_amount"),
-                    balance_currency=postback.get("BalanceCurrency")
-                    or postback.get("balance_currency"),
-                    payer_account=postback.get("AccountNumber")
-                    or postback.get("account")
-                    or postback.get("Account"),
+                    balance_amount=callback.get("BalanceAmount")
+                    or callback.get("balance_amount"),
+                    balance_currency=callback.get("BalanceCurrency")
+                    or callback.get("balance_currency"),
+                    payer_account=callback.get("AccountNumber")
+                    or callback.get("account")
+                    or callback.get("Account"),
                 )
 
                 return await self._finalize_pal24_payment(
                     db,
                     payment,
                     payment_id=payment_id,
-                    trigger="postback",
+                    trigger="callback",
                 )
 
             metadata = getattr(payment, "metadata_json", {}) or {}
@@ -294,21 +294,21 @@ class Pal24PaymentMixin:
                 payment,
                 status=status or "UNKNOWN",
                 is_paid=False,
-                postback_payload=postback,
+                callback_payload=callback,
                 payment_id=payment_id,
-                payment_status=postback.get("Status") or status,
+                payment_status=callback.get("Status") or status,
                 payment_method=(
-                    postback.get("payment_method")
-                    or postback.get("PaymentMethod")
+                    callback.get("payment_method")
+                    or callback.get("PaymentMethod")
                     or getattr(payment, "payment_method", None)
                 ),
-                balance_amount=postback.get("BalanceAmount")
-                or postback.get("balance_amount"),
-                balance_currency=postback.get("BalanceCurrency")
-                or postback.get("balance_currency"),
-                payer_account=postback.get("AccountNumber")
-                or postback.get("account")
-                or postback.get("Account"),
+                balance_amount=callback.get("BalanceAmount")
+                or callback.get("balance_amount"),
+                balance_currency=callback.get("BalanceCurrency")
+                or callback.get("balance_currency"),
+                payer_account=callback.get("AccountNumber")
+                or callback.get("account")
+                or callback.get("Account"),
             )
             logger.info(
                 "Обновили Pal24 платеж %s до статуса %s",
@@ -318,7 +318,7 @@ class Pal24PaymentMixin:
             return True
 
         except Exception as error:
-            logger.error("Ошибка обработки Pal24 postback: %s", error, exc_info=True)
+            logger.error("Ошибка обработки Pal24 callback: %s", error, exc_info=True)
             return False
 
     async def _finalize_pal24_payment(

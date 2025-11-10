@@ -1,4 +1,4 @@
-"""Flask webhook server for PayPalych postbacks."""
+"""Flask webhook server for PayPalych callbacks."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def create_pal24_flask_app(
             return jsonify({"status": "error", "reason": "empty_payload"}), 400
 
         try:
-            parsed_payload = pal24_service.parse_postback(payload)
+            parsed_payload = pal24_service.parse_callback(payload)
         except Pal24APIError as error:
             logger.error("Ошибка валидации Pal24 webhook: %s", error)
             return jsonify({"status": "error", "reason": str(error)}), 400
@@ -73,7 +73,7 @@ def create_pal24_flask_app(
         async def process() -> bool:
             async with AsyncSessionLocal() as db:
                 try:
-                    return await payment_service.process_pal24_postback(db, parsed_payload)
+                    return await payment_service.process_pal24_callback(db, parsed_payload)
                 except Exception:
                     await db.rollback()
                     raise
@@ -112,7 +112,7 @@ def create_pal24_flask_app(
 
 
 class Pal24WebhookServer:
-    """Threaded Flask server for Pal24 postbacks."""
+    """Threaded Flask server for Pal24 callbacks."""
 
     def __init__(self, payment_service: PaymentService, loop: AbstractEventLoop) -> None:
         self.app = create_pal24_flask_app(payment_service, loop)
