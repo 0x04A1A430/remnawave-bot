@@ -579,7 +579,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                 )
 
             try:
-                parsed_payload = pal24_service.parse_postback(payload)
+                parsed_payload = pal24_service.parse_callback(payload)
             except Pal24APIError as error:
                 return JSONResponse(
                     {"status": "error", "reason": str(error)},
@@ -589,7 +589,7 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
             success = await _process_payment_service_callback(
                 payment_service,
                 parsed_payload,
-                "process_pal24_postback",
+                "process_pal24_callback",
             )
             if success:
                 return JSONResponse({"status": "ok"})

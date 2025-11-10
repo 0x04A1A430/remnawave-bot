@@ -921,7 +921,7 @@ async def test_process_yookassa_webhook_missing_id(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.anyio("asyncio")
-async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_process_pal24_callback_success(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)
     service.pal24_service = SimpleNamespace(is_configured=True)
@@ -1044,7 +1044,7 @@ async def test_process_pal24_postback_success(monkeypatch: pytest.MonkeyPatch) -
         "TrsId": "trs-1",
     }
 
-    result = await service.process_pal24_postback(fake_session, payload)
+    result = await service.process_pal24_callback(fake_session, payload)
 
     assert result is True
     assert payment.transaction_id == 654
@@ -1209,7 +1209,7 @@ async def test_get_pal24_payment_status_auto_finalize(monkeypatch: pytest.Monkey
     assert transactions and transactions[0]["user_id"] == 91
 
 @pytest.mark.anyio("asyncio")
-async def test_process_pal24_postback_payment_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_process_pal24_callback_payment_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     bot = DummyBot()
     service = _make_service(bot)
     service.pal24_service = SimpleNamespace(is_configured=True)
@@ -1236,5 +1236,5 @@ async def test_process_pal24_postback_payment_not_found(monkeypatch: pytest.Monk
         "Status": "SUCCESS",
     }
 
-    result = await service.process_pal24_postback(db, payload)
+    result = await service.process_pal24_callback(db, payload)
     assert result is False
