@@ -17,7 +17,6 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 import app.services.payment_service as payment_service_module  # noqa: E402
-import app.services.payment.cryptobot as cryptobot_module  # noqa: E402
 from app.services.payment_service import PaymentService  # noqa: E402
 from app.database.models import PaymentMethod  # noqa: E402
 from app.config import settings  # noqa: E402
@@ -284,21 +283,13 @@ async def test_process_cryptobot_webhook_success(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setitem(sys.modules, "app.database.crud.cryptobot", fake_cryptobot_module)
 
     transactions: list[Dict[str, Any]] = []
-    created_transaction: SimpleNamespace | None = None
 
     async def fake_create_transaction(db, **kwargs):
-        nonlocal created_transaction
         transactions.append(kwargs)
-        created_transaction = SimpleNamespace(id=888, **kwargs)
-        return created_transaction
+        return SimpleNamespace(id=888, **kwargs)
 
     fake_transaction_module = ModuleType("app.database.crud.transaction")
     fake_transaction_module.create_transaction = fake_create_transaction
-
-    async def fake_get_transaction_by_id(db, transaction_id):
-        return created_transaction
-
-    fake_transaction_module.get_transaction_by_id = fake_get_transaction_by_id
     monkeypatch.setitem(sys.modules, "app.database.crud.transaction", fake_transaction_module)
     monkeypatch.setattr(payment_service_module, "create_transaction", fake_create_transaction)
 
@@ -319,10 +310,6 @@ async def test_process_cryptobot_webhook_success(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(payment_service_module, "get_user_by_id", fake_get_user_crypto)
 
-    fake_user_module = ModuleType("app.database.crud.user")
-    fake_user_module.get_user_by_id = fake_get_user_crypto
-    monkeypatch.setitem(sys.modules, "app.database.crud.user", fake_user_module)
-
     referral_crypto = SimpleNamespace(process_referral_topup=AsyncMock())
     monkeypatch.setitem(sys.modules, "app.services.referral_service", referral_crypto)
 
@@ -336,18 +323,6 @@ async def test_process_cryptobot_webhook_success(monkeypatch: pytest.MonkeyPatch
             admin_calls.append((args, kwargs))
 
     monkeypatch.setitem(sys.modules, "app.services.admin_notification_service", SimpleNamespace(AdminNotificationService=lambda bot: DummyAdminService2(bot)))
-
-    class DummyAsyncSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-        async def rollback(self):  # pragma: no cover - defensive stub
-            return None
-
-    monkeypatch.setattr(cryptobot_module, "AsyncSessionLocal", lambda: DummyAsyncSession())
     monkeypatch.setattr(payment_service_module.currency_converter, "usd_to_rub", AsyncMock(return_value=140.0))
     monkeypatch.setattr(type(settings), "format_price", lambda self, amount: f"{amount / 100:.2f}₽", raising=False)
     service.build_topup_success_keyboard = AsyncMock(return_value=None)
