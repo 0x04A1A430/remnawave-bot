@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import logging
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from importlib import import_module
@@ -177,14 +178,16 @@ class CryptoBotPaymentMixin:
 
                 try:
                     amount_rubles = await currency_converter.usd_to_rub(amount_usd)
-                    amount_kopeks = int(amount_rubles * 100)
+                    amount_rubles_rounded = math.ceil(amount_rubles)
+                    amount_kopeks = int(amount_rubles_rounded * 100)
                     conversion_rate = (
                         amount_rubles / amount_usd if amount_usd > 0 else 0
                     )
                     logger.info(
-                        "Конвертация USD->RUB: $%s -> %s₽ (курс: %.2f)",
+                        "Конвертация USD->RUB: $%s -> %s₽ (округлено до %s₽, курс: %.2f)",
                         amount_usd,
                         amount_rubles,
+                        amount_rubles_rounded,
                         conversion_rate,
                     )
                 except Exception as error:
@@ -194,7 +197,8 @@ class CryptoBotPaymentMixin:
                         error,
                     )
                     amount_rubles = amount_usd
-                    amount_kopeks = int(amount_usd * 100)
+                    amount_rubles_rounded = math.ceil(amount_rubles)
+                    amount_kopeks = int(amount_rubles_rounded * 100)
                     conversion_rate = 1.0
 
                 if amount_kopeks <= 0:
@@ -213,7 +217,7 @@ class CryptoBotPaymentMixin:
                     amount_kopeks=amount_kopeks,
                     description=(
                         "Пополнение через CryptoBot "
-                        f"({updated_payment.amount} {updated_payment.asset} → {amount_rubles:.2f}₽)"
+                        f"({updated_payment.amount} {updated_payment.asset} → {amount_rubles_rounded:.2f}₽)"
                     ),
                     payment_method=PaymentMethod.CRYPTOBOT,
                     external_id=invoice_id,
@@ -296,7 +300,7 @@ class CryptoBotPaymentMixin:
                             text=message_text,
                             parse_mode="HTML",
                             reply_markup=keyboard,
-                            amount_rubles=amount_rubles,
+                            amount_rubles=amount_rubles_rounded,
                             asset=updated_payment.asset,
                         )
                     except Exception as error:
