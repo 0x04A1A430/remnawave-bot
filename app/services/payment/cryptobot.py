@@ -1,8 +1,9 @@
 """Mixin с логикой обработки платежей CryptoBot."""
 
 from __future__ import annotations
-
 import logging
+import math
+from dataclasses import dataclass
 from datetime import datetime
 from importlib import import_module
 from typing import Any, Dict, Optional
@@ -10,6 +11,7 @@ from typing import Any, Dict, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
 from app.services.subscription_auto_purchase_service import (
     auto_purchase_saved_cart_after_topup,
@@ -18,6 +20,33 @@ from app.utils.currency_converter import currency_converter
 from app.utils.user_utils import format_referrer_info
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class _AdminNotificationContext:
+    user_id: int
+    transaction_id: int
+    old_balance: int
+    topup_status: str
+    referrer_info: str
+
+
+@dataclass(slots=True)
+class _UserNotificationPayload:
+    telegram_id: int
+    text: str
+    parse_mode: Optional[str]
+    reply_markup: Any
+    amount_rubles: float
+    asset: str
+
+
+@dataclass(slots=True)
+class _SavedCartNotificationPayload:
+    telegram_id: int
+    text: str
+    reply_markup: Any
+    user_id: int
 
 
 class CryptoBotPaymentMixin:
@@ -149,14 +178,16 @@ class CryptoBotPaymentMixin:
 
                 try:
                     amount_rubles = await currency_converter.usd_to_rub(amount_usd)
-                    amount_kopeks = int(amount_rubles * 100)
+                    amount_rubles_rounded = math.ceil(amount_rubles)
+                    amount_kopeks = int(amount_rubles_rounded * 100)
                     conversion_rate = (
                         amount_rubles / amount_usd if amount_usd > 0 else 0
                     )
                     logger.info(
-                        "Конвертация USD->RUB: $%s -> %s₽ (курс: %.2f)",
+                        "Конвертация USD->RUB: $%s -> %s₽ (округлено до %s₽, курс: %.2f)",
                         amount_usd,
                         amount_rubles,
+                        amount_rubles_rounded,
                         conversion_rate,
                     )
                 except Exception as error:
@@ -166,7 +197,8 @@ class CryptoBotPaymentMixin:
                         error,
                     )
                     amount_rubles = amount_usd
-                    amount_kopeks = int(amount_usd * 100)
+                    amount_rubles_rounded = math.ceil(amount_rubles)
+                    amount_kopeks = int(amount_rubles_rounded * 100)
                     conversion_rate = 1.0
 
                 if amount_kopeks <= 0:
@@ -185,7 +217,7 @@ class CryptoBotPaymentMixin:
                     amount_kopeks=amount_kopeks,
                     description=(
                         "Пополнение через CryptoBot "
-                        f"({updated_payment.amount} {updated_payment.asset} → {amount_rubles:.2f}₽)"
+                        f"({updated_payment.amount} {updated_payment.asset} → {amount_rubles_rounded:.2f}₽)"
                     ),
                     payment_method=PaymentMethod.CRYPTOBOT,
                     external_id=invoice_id,
@@ -211,8 +243,6 @@ class CryptoBotPaymentMixin:
                 user.balance_kopeks += amount_kopeks
                 user.updated_at = datetime.utcnow()
 
-                promo_group = user.get_primary_promo_group()
-                subscription = getattr(user, "subscription", None)
                 referrer_info = format_referrer_info(user)
                 topup_status = (
                     "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
@@ -241,55 +271,41 @@ class CryptoBotPaymentMixin:
 
                 await db.refresh(user)
 
-                if getattr(self, "bot", None):
-                    try:
-                        from app.services.admin_notification_service import (
-                            AdminNotificationService,
-                        )
+                admin_notification: Optional[_AdminNotificationContext] = None
+                user_notification: Optional[_UserNotificationPayload] = None
+                saved_cart_notification: Optional[_SavedCartNotificationPayload] = None
 
-                        notification_service = AdminNotificationService(self.bot)
-                        await notification_service.send_balance_topup_notification(
-                            user,
-                            transaction,
-                            old_balance,
-                            topup_status=topup_status,
-                            referrer_info=referrer_info,
-                            subscription=subscription,
-                            promo_group=promo_group,
-                            db=db,
-                        )
-                    except Exception as error:
-                        logger.error(
-                            "Ошибка отправки уведомления о пополнении CryptoBot: %s",
-                            error,
-                        )
+                bot_instance = getattr(self, "bot", None)
+                if bot_instance:
+                    admin_notification = _AdminNotificationContext(
+                        user_id=user.id,
+                        transaction_id=transaction.id,
+                        old_balance=old_balance,
+                        topup_status=topup_status,
+                        referrer_info=referrer_info,
+                    )
 
-                if getattr(self, "bot", None):
                     try:
                         keyboard = await self.build_topup_success_keyboard(user)
-
-                        await self.bot.send_message(
-                            user.telegram_id,
-                            (
-                                "✅ <b>Пополнение успешно!</b>\n\n"
-                                f"💰 Сумма: {settings.format_price(amount_kopeks)}\n"
-                                f"🪙 Платеж: {updated_payment.amount} {updated_payment.asset}\n"
-                                f"💱 Курс: 1 USD = {conversion_rate:.2f}₽\n"
-                                f"🆔 Транзакция: {invoice_id[:8]}...\n\n"
-                                "Баланс пополнен автоматически!"
-                            ),
+                        message_text = (
+                            "✅ <b>Пополнение успешно!</b>\n\n"
+                            f"💰 Сумма: {settings.format_price(amount_kopeks)}\n"
+                            f"🪙 Платеж: {updated_payment.amount} {updated_payment.asset}\n"
+                            f"💱 Курс: 1 USD = {conversion_rate:.2f}₽\n"
+                            f"🆔 Транзакция: {invoice_id[:8]}...\n\n"
+                            "Баланс пополнен автоматически!"
+                        )
+                        user_notification = _UserNotificationPayload(
+                            telegram_id=user.telegram_id,
+                            text=message_text,
                             parse_mode="HTML",
                             reply_markup=keyboard,
-                        )
-                        logger.info(
-                            "✅ Отправлено уведомление пользователю %s о пополнении на %s₽ (%s)",
-                            user.telegram_id,
-                            f"{amount_rubles:.2f}",
-                            updated_payment.asset,
+                            amount_rubles=amount_rubles_rounded,
+                            asset=updated_payment.asset,
                         )
                     except Exception as error:
                         logger.error(
-                            "Ошибка отправки уведомления о пополнении CryptoBot: %s",
+                            "Ошибка подготовки уведомления о пополнении CryptoBot: %s",
                             error,
                         )
 
@@ -305,7 +321,7 @@ class CryptoBotPaymentMixin:
                             auto_purchase_success = await auto_purchase_saved_cart_after_topup(
                                 db,
                                 user,
-                                bot=getattr(self, "bot", None),
+                                bot=bot_instance,
                             )
                         except Exception as auto_error:
                             logger.error(
@@ -318,17 +334,14 @@ class CryptoBotPaymentMixin:
                         if auto_purchase_success:
                             has_saved_cart = False
 
-                    if has_saved_cart and getattr(self, "bot", None):
-                        # Если у пользователя есть сохраненная корзина,
-                        # отправляем ему уведомление с кнопкой вернуться к оформлению
+                    if has_saved_cart and bot_instance:
                         from app.localization.texts import get_texts
-                        
+
                         texts = get_texts(user.language)
                         cart_message = texts.BALANCE_TOPUP_CART_REMINDER_DETAILED.format(
                             total_amount=settings.format_price(payment.amount_kopeks)
                         )
-                        
-                        # Создаем клавиатуру с кнопками
+
                         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
                             [types.InlineKeyboardButton(
                                 text=texts.RETURN_TO_SUBSCRIPTION_CHECKOUT,
@@ -343,22 +356,35 @@ class CryptoBotPaymentMixin:
                                 callback_data="back_to_menu"
                             )]
                         ])
-                        
-                        await self.bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=f"✅ Баланс пополнен на {settings.format_price(payment.amount_kopeks)}!\n\n"
-                                 f"⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. "
-                                 f"Обязательно активируйте подписку отдельно!\n\n"
-                                 f"🔄 При наличии сохранённой корзины подписки и включенной автопокупке, "
-                                 f"подписка будет приобретена автоматически после пополнения баланса.\n\n{cart_message}",
-                            reply_markup=keyboard
+
+                        saved_cart_notification = _SavedCartNotificationPayload(
+                            telegram_id=user.telegram_id,
+                            text=(
+                                f"✅ Баланс пополнен на {settings.format_price(payment.amount_kopeks)}!\n\n"
+                                f"⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. "
+                                f"Обязательно активируйте подписку отдельно!\n\n"
+                                f"🔄 При наличии сохранённой корзины подписки и включенной автопокупке, "
+                                f"подписка будет приобретена автоматически после пополнения баланса.\n\n{cart_message}"
+                            ),
+                            reply_markup=keyboard,
+                            user_id=user.id,
                         )
-                        logger.info(
-                            "Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю %s",
-                            user.id,
-                        )
-                except Exception as e:
-                    logger.error(f"Ошибка при работе с сохраненной корзиной для пользователя {user.id}: {e}", exc_info=True)
+                except Exception as error:
+                    logger.error(
+                        "Ошибка при работе с сохраненной корзиной для пользователя %s: %s",
+                        user.id,
+                        error,
+                        exc_info=True,
+                    )
+
+                if admin_notification:
+                    await self._deliver_admin_topup_notification(admin_notification)
+
+                if user_notification and bot_instance:
+                    await self._deliver_user_topup_notification(user_notification)
+
+                if saved_cart_notification and bot_instance:
+                    await self._deliver_saved_cart_reminder(saved_cart_notification)
 
             return True
 
@@ -367,6 +393,116 @@ class CryptoBotPaymentMixin:
                 "Ошибка обработки CryptoBot webhook: %s", error, exc_info=True
             )
             return False
+
+    async def _deliver_admin_topup_notification(
+        self, context: _AdminNotificationContext
+    ) -> None:
+        bot_instance = getattr(self, "bot", None)
+        if not bot_instance:
+            return
+
+        try:
+            from app.services.admin_notification_service import AdminNotificationService
+            from app.database.crud.user import get_user_by_id
+            from app.database.crud.transaction import get_transaction_by_id
+        except Exception as error:
+            logger.error(
+                "Не удалось импортировать зависимости для админ-уведомления CryptoBot: %s",
+                error,
+                exc_info=True,
+            )
+            return
+
+        async with AsyncSessionLocal() as session:
+            try:
+                user = await get_user_by_id(session, context.user_id)
+                transaction = await get_transaction_by_id(session, context.transaction_id)
+            except Exception as error:
+                logger.error(
+                    "Ошибка загрузки данных для админ-уведомления CryptoBot: %s",
+                    error,
+                    exc_info=True,
+                )
+                await session.rollback()
+                return
+
+            if not user or not transaction:
+                logger.warning(
+                    "Пропущена отправка админ-уведомления CryptoBot: user=%s transaction=%s",
+                    bool(user),
+                    bool(transaction),
+                )
+                return
+
+            notification_service = AdminNotificationService(bot_instance)
+            try:
+                await notification_service.send_balance_topup_notification(
+                    user,
+                    transaction,
+                    context.old_balance,
+                    topup_status=context.topup_status,
+                    referrer_info=context.referrer_info,
+                    subscription=getattr(user, "subscription", None),
+                    promo_group=getattr(user, "promo_group", None),
+                    db=session,
+                )
+            except Exception as error:
+                logger.error(
+                    "Ошибка отправки админ-уведомления о пополнении CryptoBot: %s",
+                    error,
+                    exc_info=True,
+                )
+
+    async def _deliver_user_topup_notification(
+        self, payload: _UserNotificationPayload
+    ) -> None:
+        bot_instance = getattr(self, "bot", None)
+        if not bot_instance:
+            return
+
+        try:
+            await bot_instance.send_message(
+                payload.telegram_id,
+                payload.text,
+                parse_mode=payload.parse_mode,
+                reply_markup=payload.reply_markup,
+            )
+            logger.info(
+                "✅ Отправлено уведомление пользователю %s о пополнении на %s₽ (%s)",
+                payload.telegram_id,
+                f"{payload.amount_rubles:.2f}",
+                payload.asset,
+            )
+        except Exception as error:
+            logger.error(
+                "Ошибка отправки уведомления о пополнении CryptoBot: %s",
+                error,
+            )
+
+    async def _deliver_saved_cart_reminder(
+        self, payload: _SavedCartNotificationPayload
+    ) -> None:
+        bot_instance = getattr(self, "bot", None)
+        if not bot_instance:
+            return
+
+        try:
+            await bot_instance.send_message(
+                chat_id=payload.telegram_id,
+                text=payload.text,
+                reply_markup=payload.reply_markup,
+            )
+            logger.info(
+                "Отправлено уведомление с кнопкой возврата к оформлению подписки пользователю %s",
+                payload.user_id,
+            )
+        except Exception as error:
+            logger.error(
+                "Ошибка отправки уведомления о сохраненной корзине для пользователя %s: %s",
+                payload.user_id,
+                error,
+                exc_info=True,
+            )
 
     async def get_cryptobot_payment_status(
         self,
