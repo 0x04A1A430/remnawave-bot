@@ -1,5 +1,7 @@
 import html
 import logging
+from typing import Any, Optional
+
 from aiogram import types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -424,16 +426,75 @@ async def check_pal24_payment_status(
             links_meta = {}
 
         links_info = status_info.get("links") or {}
+
+        def _extract_link(source: Any, keys: tuple[str, ...]) -> Optional[str]:
+            stack: list[Any] = [source]
+            while stack:
+                current = stack.pop()
+                if isinstance(current, dict):
+                    for key in keys:
+                        value = current.get(key)
+                        if value:
+                            return str(value)
+                    stack.extend(current.values())
+                elif isinstance(current, list):
+                    stack.extend(current)
+            return None
+
+        raw_response = metadata.get("raw_response") if isinstance(metadata, dict) else None
+        remote_data = status_info.get("remote_data")
+        transfer_keys = (
+            "transfer_url",
+            "transferUrl",
+            "transfer_link",
+            "transferLink",
+            "transfer",
+            "sbp_url",
+            "sbpUrl",
+            "sbp_link",
+            "sbpLink",
+        )
+        card_keys = (
+            "link_url",
+            "linkUrl",
+            "link",
+            "card_url",
+            "cardUrl",
+            "card_link",
+            "cardLink",
+            "payment_url",
+            "paymentUrl",
+            "url",
+        )
+
+        extra_sbp_link = (
+            _extract_link(raw_response, transfer_keys)
+            if raw_response
+            else None
+        )
+        if not extra_sbp_link and remote_data:
+            extra_sbp_link = _extract_link(remote_data, transfer_keys)
+
+        extra_card_link = (
+            _extract_link(raw_response, card_keys)
+            if raw_response
+            else None
+        )
+        if not extra_card_link and remote_data:
+            extra_card_link = _extract_link(remote_data, card_keys)
+
         sbp_link = (
             links_info.get("sbp")
             or links_meta.get("sbp")
             or status_info.get("sbp_url")
+            or extra_sbp_link
             or payment.link_url
         )
         card_link = (
             links_info.get("card")
             or links_meta.get("card")
             or status_info.get("card_url")
+            or extra_card_link
         )
 
         if not card_link and payment.link_page_url and payment.link_page_url != sbp_link:
