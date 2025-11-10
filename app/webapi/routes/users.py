@@ -171,6 +171,22 @@ async def get_user(
     return _serialize_user(user)
 
 
+@router.get("/by-telegram-id/{telegram_id}", response_model=UserResponse)
+async def get_user_by_telegram_id_endpoint(
+    telegram_id: int,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> UserResponse:
+    """
+    Get user by Telegram ID
+    """
+    user = await get_user_by_telegram_id(db, telegram_id)
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    
+    return _serialize_user(user)
+
+
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user_endpoint(
     payload: UserCreateRequest,
