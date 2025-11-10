@@ -288,12 +288,30 @@ class MaintenanceService:
             self._status.last_check = datetime.utcnow()
 
             auth_params = settings.get_remnawave_auth_params()
+            base_url = (auth_params.get("base_url") or "").strip()
+            api_key = (auth_params.get("api_key") or "").strip()
+            secret_key = (auth_params.get("secret_key") or "").strip() or None
+            username = (auth_params.get("username") or "").strip() or None
+            password = (auth_params.get("password") or "").strip() or None
+
+            if not base_url:
+                logger.error("REMNAWAVE_API_URL не настроен, пропускаем проверку API")
+                self._status.api_status = False
+                self._status.consecutive_failures = 0
+                return False
+
+            if not api_key:
+                logger.error("REMNAWAVE_API_KEY не настроен, пропускаем проверку API")
+                self._status.api_status = False
+                self._status.consecutive_failures = 0
+                return False
+
             api = RemnaWaveAPI(
-                base_url=auth_params["base_url"],
-                api_key=auth_params["api_key"],
-                secret_key=auth_params["secret_key"],
-                username=auth_params["username"],
-                password=auth_params["password"]
+                base_url=base_url,
+                api_key=api_key,
+                secret_key=secret_key,
+                username=username,
+                password=password
             )
 
             attempts = settings.get_maintenance_retry_attempts()
