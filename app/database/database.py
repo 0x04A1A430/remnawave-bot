@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import (
     AsyncEngine
 )
 from sqlalchemy.pool import NullPool, AsyncAdaptedQueuePool
-from sqlalchemy import event, text, bindparam
+from sqlalchemy import event, text, bindparam, inspect
 from sqlalchemy.engine import Engine
 import time
 from app.config import settings
@@ -258,22 +258,42 @@ async def init_db():
     
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        
-        if not settings.get_database_url().startswith("sqlite"):
-            logger.info("📊 Создание индексов для оптимизации...")
-            
+
+    if not settings.get_database_url().startswith("sqlite"):
+        logger.info("📊 Создание индексов для оптимизации...")
+
+        async with engine.begin() as conn:
             indexes = [
-                "CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)",
-                "CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)",
-                "CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status) WHERE status = 'active'",
-                "CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC)",
+                ("users", "CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)"),
+                (
+                    "subscriptions",
+                    "CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)",
+                ),
+                (
+                    "subscriptions",
+                    "CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status) WHERE status = 'active'",
+                ),
+                (
+                    "payments",
+                    "CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC)",
+                ),
             ]
-            
-            for index_sql in indexes:
+
+            for table_name, index_sql in indexes:
+                table_exists = await conn.run_sync(lambda sync_conn: inspect(sync_conn).has_table(table_name))
+
+                if not table_exists:
+                    logger.debug(
+                        "Пропускаем создание индекса %s: таблица %s отсутствует",
+                        index_sql,
+                        table_name,
+                    )
+                    continue
+
                 try:
                     await conn.execute(text(index_sql))
                 except Exception as e:
-                    logger.debug(f"Index creation skipped: {e}")
+                    logger.debug("Index creation skipped for %s: %s", table_name, e)
     
     logger.info("✅ База данных успешно инициализирована")
     
