@@ -20,7 +20,7 @@ from app.database.crud.subscription import (
 from app.database.models import (
     User, UserStatus, Subscription, Transaction, PromoCode, PromoCodeUse,
     ReferralEarning, SubscriptionServer, YooKassaPayment, BroadcastHistory,
-    CryptoBotPayment, SubscriptionConversion, UserMessage, WelcomeText,
+    CryptoBotPayment, PlategaPayment, SubscriptionConversion, UserMessage, WelcomeText,
     SentNotification, PromoGroup, MulenPayPayment, Pal24Payment, HeleketPayment,
     AdvertisingCampaign, AdvertisingCampaignRegistration, PaymentMethod,
     TransactionType
@@ -731,6 +731,27 @@ class UserService:
                     await db.flush()
             except Exception as e:
                 logger.error(f"❌ Ошибка удаления CryptoBot платежей: {e}")
+
+            try:
+                platega_result = await db.execute(
+                    select(PlategaPayment).where(PlategaPayment.user_id == user_id)
+                )
+                platega_payments = platega_result.scalars().all()
+
+                if platega_payments:
+                    logger.info(f"🔄 Удаляем {len(platega_payments)} Platega платежей")
+                    await db.execute(
+                        update(PlategaPayment)
+                        .where(PlategaPayment.user_id == user_id)
+                        .values(transaction_id=None)
+                    )
+                    await db.flush()
+                    await db.execute(
+                        delete(PlategaPayment).where(PlategaPayment.user_id == user_id)
+                    )
+                    await db.flush()
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления Platega платежей: {e}")
 
             try:
                 mulenpay_result = await db.execute(
