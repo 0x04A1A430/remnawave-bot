@@ -28,11 +28,28 @@ class HeleketService:
     def is_configured(self) -> bool:
         return bool(self.merchant_id and self.api_key)
 
-    def _prepare_body(self, payload: Dict[str, Any]) -> str:
-        cleaned = {key: value for key, value in payload.items() if value is not None}
-        serialized = json.dumps(cleaned, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    def _prepare_body(
+        self,
+        payload: Dict[str, Any],
+        *,
+        ignore_none: bool,
+        sort_keys: bool,
+    ) -> str:
+        if ignore_none:
+            cleaned = {key: value for key, value in payload.items() if value is not None}
+        else:
+            cleaned = dict(payload)
+
+        serialized = json.dumps(
+            cleaned,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=sort_keys,
+        )
+
         if "/" in serialized:
             serialized = serialized.replace("/", "\\/")
+
         return serialized
 
     def _generate_signature(self, body: str) -> str:
@@ -52,7 +69,7 @@ class HeleketService:
             logger.error("Heleket сервис не настроен: merchant или api_key отсутствуют")
             return None
 
-        body = self._prepare_body(payload)
+        body = self._prepare_body(payload, ignore_none=True, sort_keys=True)
         signature = self._generate_signature(body)
 
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
@@ -145,8 +162,9 @@ class HeleketService:
             logger.error("Heleket webhook без подписи")
             return False
 
-        data = {key: value for key, value in payload.items() if key != "sign"}
-        body = self._prepare_body(data)
+        data = dict(payload)
+        data.pop("sign", None)
+        body = self._prepare_body(data, ignore_none=False, sort_keys=False)
         expected = self._generate_signature(body)
 
         is_valid = hmac.compare_digest(expected, str(signature))
