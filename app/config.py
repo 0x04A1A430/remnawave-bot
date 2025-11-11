@@ -328,7 +328,7 @@ class Settings(BaseSettings):
     SKIP_REFERRAL_CODE: bool = False
 
     DEFAULT_LANGUAGE: str = "ru"
-    AVAILABLE_LANGUAGES: str = "ru,en,ua,zh"
+    AVAILABLE_LANGUAGES: str = "ru,en"
     LANGUAGE_SELECTION_ENABLED: bool = True
     
     LOG_LEVEL: str = "INFO"
@@ -699,40 +699,15 @@ class Settings(BaseSettings):
         return bool(value)
     
     def get_available_languages(self) -> List[str]:
-        defaults = ["ru", "en", "ua", "zh"]
-
         try:
             langs = self.AVAILABLE_LANGUAGES
+            if isinstance(langs, str):
+                if not langs.strip():
+                    return ["ru", "en"]
+                return [x.strip() for x in langs.split(',') if x.strip()]
+            return ["ru", "en"]
         except AttributeError:
-            return defaults
-
-        candidates: List[str]
-
-        if isinstance(langs, str):
-            if not langs.strip():
-                return defaults
-            candidates = [chunk.strip() for chunk in langs.split(',')]
-        elif isinstance(langs, (list, tuple, set)):
-            candidates = [str(item).strip() for item in langs]
-        else:
-            return defaults
-
-        cleaned: List[str] = []
-        seen: set[str] = set()
-
-        for code in candidates:
-            if not code:
-                continue
-
-            normalized = code.lower()
-
-            if normalized in seen:
-                continue
-
-            seen.add(normalized)
-            cleaned.append(code)
-
-        return cleaned or defaults
+            return ["ru", "en"]
 
     def is_language_selection_enabled(self) -> bool:
         return bool(getattr(self, "LANGUAGE_SELECTION_ENABLED", True))
