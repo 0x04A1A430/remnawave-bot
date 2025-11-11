@@ -6,7 +6,8 @@ import re
 import html
 from collections import defaultdict
 from datetime import time
-from typing import List, Optional, Union, Dict
+from typing import Dict, List, Optional, Union
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from pydantic_settings import BaseSettings
 from pydantic import field_validator, Field
@@ -254,6 +255,7 @@ class Settings(BaseSettings):
     MULENPAY_PAYMENT_MODE: int = 4
     MULENPAY_MIN_AMOUNT_KOPEKS: int = 10000
     MULENPAY_MAX_AMOUNT_KOPEKS: int = 10000000
+    MULENPAY_IFRAME_EXPECTED_ORIGIN: Optional[str] = None
 
     PAL24_ENABLED: bool = False
     PAL24_API_TOKEN: Optional[str] = None
@@ -942,6 +944,20 @@ class Settings(BaseSettings):
 
     def get_mulenpay_display_name_html(self) -> str:
         return html.escape(self.get_mulenpay_display_name())
+
+    def get_mulenpay_expected_origin(self) -> Optional[str]:
+        override = (self.MULENPAY_IFRAME_EXPECTED_ORIGIN or "").strip()
+        if override:
+            return override
+
+        base_url = (self.MULENPAY_BASE_URL or "").strip()
+        if not base_url:
+            return None
+
+        parsed = urlparse(base_url)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+        return None
 
     def is_pal24_enabled(self) -> bool:
         return (

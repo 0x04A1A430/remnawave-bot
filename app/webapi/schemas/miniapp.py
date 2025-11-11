@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class MiniAppBranding(BaseModel):
@@ -357,6 +359,30 @@ class MiniAppPaymentMethodsRequest(BaseModel):
     init_data: str = Field(..., alias="initData")
 
 
+class MiniAppPaymentIntegrationType(str, Enum):
+    IFRAME = "iframe"
+    REDIRECT = "redirect"
+
+
+class MiniAppPaymentIframeConfig(BaseModel):
+    expected_origin: str
+
+    @model_validator(mode="after")
+    def _normalize_expected_origin(
+        cls, values: "MiniAppPaymentIframeConfig"
+    ) -> "MiniAppPaymentIframeConfig":
+        origin = (values.expected_origin or "").strip()
+        if not origin:
+            raise ValueError("expected_origin must not be empty")
+
+        parsed = urlparse(origin)
+        if not parsed.scheme or not parsed.netloc:
+            raise ValueError("expected_origin must include scheme and host")
+
+        values.expected_origin = f"{parsed.scheme}://{parsed.netloc}"
+        return values
+
+
 class MiniAppPaymentMethod(BaseModel):
     id: str
     name: Optional[str] = None
@@ -366,6 +392,17 @@ class MiniAppPaymentMethod(BaseModel):
     min_amount_kopeks: Optional[int] = None
     max_amount_kopeks: Optional[int] = None
     amount_step_kopeks: Optional[int] = None
+    integration_type: MiniAppPaymentIntegrationType
+    iframe_config: Optional[MiniAppPaymentIframeConfig] = None
+
+    @model_validator(mode="after")
+    def _ensure_iframe_config(cls, values: "MiniAppPaymentMethod") -> "MiniAppPaymentMethod":
+        if (
+            values.integration_type == MiniAppPaymentIntegrationType.IFRAME
+            and values.iframe_config is None
+        ):
+            raise ValueError("iframe_config is required when integration_type is 'iframe'")
+        return values
 
 
 class MiniAppPaymentMethodsResponse(BaseModel):
