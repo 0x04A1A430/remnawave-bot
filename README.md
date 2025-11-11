@@ -82,7 +82,10 @@ mkdir -p ./logs ./data ./data/backups ./data/referral_qr
 chmod -R 755 ./logs ./data
 sudo chown -R 1000:1000 ./logs ./data
 
-# 3.Установи «make» следующей командой:
+# 3.Установи «Docker» командой:
+sudo curl -fsSL https://get.docker.com | sh
+
+# 4.Установи «make» следующей командой:
 apt install make -y
 
 make up             # Поднять контейнеры
