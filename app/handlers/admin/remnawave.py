@@ -45,7 +45,7 @@ MIGRATION_PAGE_SIZE = 8
 
 def _format_duration(seconds: float) -> str:
     if seconds < 1:
-        return "<1с"
+        return "менее 1с"
 
     minutes, sec = divmod(int(seconds), 60)
     if minutes:
