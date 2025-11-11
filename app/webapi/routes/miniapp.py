@@ -10,6 +10,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
 from aiogram import Bot
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -113,6 +114,8 @@ from ..schemas.miniapp import (
     MiniAppLegalDocuments,
     MiniAppPaymentCreateRequest,
     MiniAppPaymentCreateResponse,
+    MiniAppPaymentIframeConfig,
+    MiniAppPaymentIntegrationType,
     MiniAppPaymentMethod,
     MiniAppPaymentMethodsRequest,
     MiniAppPaymentMethodsResponse,
@@ -624,6 +627,18 @@ def _normalize_amount_kopeks(
     return normalized if normalized >= 0 else None
 
 
+def _build_mulenpay_iframe_config() -> Optional[MiniAppPaymentIframeConfig]:
+    expected_origin = settings.get_mulenpay_expected_origin()
+    if not expected_origin:
+        return None
+
+    try:
+        return MiniAppPaymentIframeConfig(expected_origin=expected_origin)
+    except ValidationError as error:  # pragma: no cover - defensive logging
+        logger.error("Invalid MulenPay expected origin '%s': %s", expected_origin, error)
+        return None
+
+
 @router.post(
     "/payments/methods",
     response_model=MiniAppPaymentMethodsResponse,
@@ -646,6 +661,7 @@ async def get_payment_methods(
                 currency="RUB",
                 min_amount_kopeks=stars_min_amount,
                 amount_step_kopeks=stars_min_amount,
+                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
             )
         )
 
@@ -659,6 +675,7 @@ async def get_payment_methods(
                     currency="RUB",
                     min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
                     max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
+                    integration_type=MiniAppPaymentIntegrationType.REDIRECT,
                 )
             )
 
@@ -670,10 +687,17 @@ async def get_payment_methods(
                 currency="RUB",
                 min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
+                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
             )
         )
 
     if settings.is_mulenpay_enabled():
+        mulenpay_iframe_config = _build_mulenpay_iframe_config()
+        mulenpay_integration = (
+            MiniAppPaymentIntegrationType.IFRAME
+            if mulenpay_iframe_config
+            else MiniAppPaymentIntegrationType.REDIRECT
+        )
         methods.append(
             MiniAppPaymentMethod(
                 id="mulenpay",
@@ -683,6 +707,8 @@ async def get_payment_methods(
                 currency="RUB",
                 min_amount_kopeks=settings.MULENPAY_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.MULENPAY_MAX_AMOUNT_KOPEKS,
+                integration_type=mulenpay_integration,
+                iframe_config=mulenpay_iframe_config,
             )
         )
 
@@ -695,6 +721,7 @@ async def get_payment_methods(
                 currency="RUB",
                 min_amount_kopeks=settings.PAL24_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.PAL24_MAX_AMOUNT_KOPEKS,
+                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
             )
         )
 
@@ -707,6 +734,7 @@ async def get_payment_methods(
                 currency="RUB",
                 min_amount_kopeks=settings.WATA_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.WATA_MAX_AMOUNT_KOPEKS,
+                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
             )
         )
 
@@ -721,6 +749,7 @@ async def get_payment_methods(
                 currency="RUB",
                 min_amount_kopeks=min_amount_kopeks,
                 max_amount_kopeks=max_amount_kopeks,
+                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
             )
         )
 
@@ -733,6 +762,7 @@ async def get_payment_methods(
                 currency="RUB",
                 min_amount_kopeks=100 * 100,
                 max_amount_kopeks=100_000 * 100,
+                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
             )
         )
 
@@ -743,6 +773,7 @@ async def get_payment_methods(
                 icon="💎",
                 requires_amount=False,
                 currency="RUB",
+                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
             )
         )
 
