@@ -82,7 +82,9 @@ mkdir -p ./logs ./data ./data/backups ./data/referral_qr
 chmod -R 755 ./logs ./data
 sudo chown -R 1000:1000 ./logs ./data
 
-# 3. make up        # Поднять контейнеры
+# 3. 
+
+make up             # Поднять контейнеры
 
 make help           # Показать все команды
 make down           # Остановить контейнеры
