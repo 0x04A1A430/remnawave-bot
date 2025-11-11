@@ -6,7 +6,7 @@ import math
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_FLOOR
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
-from typing import Any, Awaitable, Callable, Collection, Dict, List, Optional, Tuple, Union
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
 from aiogram import Bot
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -4108,11 +4108,7 @@ async def _authorize_miniapp_user(
     return user
 
 
-def _ensure_paid_subscription(
-    user: User,
-    *,
-    allowed_statuses: Optional[Collection[str]] = None,
-) -> Subscription:
+def _ensure_paid_subscription(user: User) -> Subscription:
     subscription = getattr(user, "subscription", None)
     if not subscription:
         raise HTTPException(
@@ -4120,9 +4116,7 @@ def _ensure_paid_subscription(
             detail={"code": "subscription_not_found", "message": "Subscription not found"},
         )
 
-    normalized_allowed_statuses = set(allowed_statuses or {"active"})
-
-    if getattr(subscription, "is_trial", False) and "trial" not in normalized_allowed_statuses:
+    if getattr(subscription, "is_trial", False):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail={
@@ -4131,28 +4125,7 @@ def _ensure_paid_subscription(
             },
         )
 
-    actual_status = getattr(subscription, "actual_status", None) or ""
-
-    if actual_status not in normalized_allowed_statuses:
-        if actual_status == "trial":
-            detail = {
-                "code": "paid_subscription_required",
-                "message": "This action is available only for paid subscriptions",
-            }
-        elif actual_status == "disabled":
-            detail = {
-                "code": "subscription_disabled",
-                "message": "Subscription is disabled",
-            }
-        else:
-            detail = {
-                "code": "subscription_inactive",
-                "message": "Subscription must be active to manage settings",
-            }
-
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=detail)
-
-    if not getattr(subscription, "is_active", False) and "expired" not in normalized_allowed_statuses:
+    if not getattr(subscription, "is_active", False):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail={
@@ -4425,10 +4398,7 @@ async def get_subscription_renewal_options_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionRenewalOptionsResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(
-        user,
-        allowed_statuses={"active", "trial", "expired"},
-    )
+    subscription = _ensure_paid_subscription(user)
     _validate_subscription_id(payload.subscription_id, subscription)
 
     periods, pricing_map, default_period_id = await _prepare_subscription_renewal_options(
@@ -4507,10 +4477,7 @@ async def submit_subscription_renewal_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionRenewalResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(
-        user,
-        allowed_statuses={"active", "trial", "expired"},
-    )
+    subscription = _ensure_paid_subscription(user)
     _validate_subscription_id(payload.subscription_id, subscription)
 
     period_days: Optional[int] = None
