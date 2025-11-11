@@ -21,6 +21,7 @@ from app.webapi.routes import miniapp
 from app.database.models import PaymentMethod
 from app.webapi.schemas.miniapp import (
     MiniAppPaymentCreateRequest,
+    MiniAppPaymentIntegrationType,
     MiniAppPaymentMethodsRequest,
     MiniAppPaymentStatusQuery,
 )
@@ -491,6 +492,8 @@ async def test_get_payment_methods_exposes_stars_min_amount(monkeypatch):
     assert stars_method is not None
     assert stars_method.min_amount_kopeks == 99999
     assert stars_method.amount_step_kopeks == 99999
+    assert stars_method.integration_type == MiniAppPaymentIntegrationType.REDIRECT
+    assert stars_method.iframe_config is None
 
 
 @pytest.mark.anyio("asyncio")
@@ -515,6 +518,32 @@ async def test_get_payment_methods_includes_wata(monkeypatch):
     assert wata_method.min_amount_kopeks == 5000
     assert wata_method.max_amount_kopeks == 7500000
     assert wata_method.icon == '🌊'
+    assert wata_method.integration_type == MiniAppPaymentIntegrationType.REDIRECT
+    assert wata_method.iframe_config is None
+
+
+@pytest.mark.anyio("asyncio")
+async def test_get_payment_methods_marks_mulenpay_iframe(monkeypatch):
+    monkeypatch.setattr(settings, 'MULENPAY_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'MULENPAY_API_KEY', 'api-key', raising=False)
+    monkeypatch.setattr(settings, 'MULENPAY_SECRET_KEY', 'secret', raising=False)
+    monkeypatch.setattr(settings, 'MULENPAY_SHOP_ID', 99, raising=False)
+    monkeypatch.setattr(settings, 'MULENPAY_BASE_URL', 'https://checkout.example/api', raising=False)
+    monkeypatch.setattr(settings, 'MULENPAY_IFRAME_EXPECTED_ORIGIN', None, raising=False)
+
+    async def fake_resolve_user(db, init_data):
+        return types.SimpleNamespace(id=1, language='ru'), {}
+
+    monkeypatch.setattr(miniapp, '_resolve_user_from_init_data', fake_resolve_user)
+
+    payload = MiniAppPaymentMethodsRequest(initData='abc')
+    response = await miniapp.get_payment_methods(payload, db=types.SimpleNamespace())
+
+    mulenpay_method = next((method for method in response.methods if method.id == 'mulenpay'), None)
+    assert mulenpay_method is not None
+    assert mulenpay_method.integration_type == MiniAppPaymentIntegrationType.IFRAME
+    assert mulenpay_method.iframe_config is not None
+    assert str(mulenpay_method.iframe_config.expected_origin) == 'https://checkout.example'
 @pytest.mark.anyio("asyncio")
 async def test_find_recent_deposit_ignores_transactions_before_attempt():
     started_at = datetime(2024, 5, 1, 12, 0, 0)
