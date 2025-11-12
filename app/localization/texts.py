@@ -16,6 +16,79 @@ _logger = logging.getLogger(__name__)
 _cached_rules: Dict[str, str] = {}
 
 
+_LANGUAGE_ALIASES = {
+    "uk": "ua",
+}
+
+
+_DYNAMIC_LANGUAGE_CONFIGS = {
+    "ru": {
+        "traffic_pattern": "📊 {size} ГБ - {price}",
+        "unlimited_pattern": "📊 Безлимит - {price}",
+        "support_info": (
+            "\n🛟 <b>Поддержка</b>\n\n"
+            "Это центр тикетов: создавайте обращения, просматривайте ответы и историю.\n\n"
+            "• 🎫 Создать тикет — опишите проблему или вопрос\n"
+            "• 📋 Мои тикеты — статус и переписка\n"
+            "• 💬 Связаться — написать напрямую (если нужно)\n\n"
+            "Старайтесь использовать тикеты — так мы быстрее поможем и ничего не потеряется.\n"
+        ),
+    },
+    "en": {
+        "traffic_pattern": "📊 {size} GB - {price}",
+        "unlimited_pattern": "📊 Unlimited - {price}",
+        "support_info": (
+            "\n🛟 <b>RemnaWave Support</b>\n\n"
+            "This is the ticket center: create requests, view replies and history.\n\n"
+            "• 🎫 Create ticket — describe your issue or question\n"
+            "• 📋 My tickets — status and conversation\n"
+            "• 💬 Contact — message directly if needed\n\n"
+            "Prefer tickets — it helps us respond faster and keep context.\n"
+        ),
+    },
+    "ua": {
+        "traffic_pattern": "📊 {size} ГБ - {price}",
+        "unlimited_pattern": "📊 Безліміт - {price}",
+        "support_info": (
+            "\n🛠️ <b>Технічна підтримка</b>\n\n"
+            "З усіх питань звертайтеся до нашої підтримки:\n\n"
+            "👤 {support_username}\n\n"
+            "Ми допоможемо з:\n"
+            "• Налаштуванням підключення\n"
+            "• Вирішенням технічних проблем\n"
+            "• Питаннями щодо оплати\n"
+            "• Іншими питаннями\n\n"
+            "⏰ Час відповіді: зазвичай протягом 1-2 годин\n"
+        ),
+    },
+    "zh": {
+        "traffic_pattern": "📊{size}GB-{price}",
+        "unlimited_pattern": "📊无限-{price}",
+        "support_info": (
+            "\n🛠️ <b>技术支持</b>\n\n"
+            "如有任何问题，请联系我们的支持团队：\n\n"
+            "👤 {support_username}\n\n"
+            "我们将帮助您：\n"
+            "• 设置连接\n"
+            "• 解决技术问题\n"
+            "• 付款问题\n"
+            "• 其他问题\n\n"
+            "⏰ 响应时间：通常在 1-2 小时内\n"
+        ),
+    },
+}
+
+
+_TRAFFIC_TIERS = (
+    ("TRAFFIC_5GB", "5", "PRICE_TRAFFIC_5GB"),
+    ("TRAFFIC_10GB", "10", "PRICE_TRAFFIC_10GB"),
+    ("TRAFFIC_25GB", "25", "PRICE_TRAFFIC_25GB"),
+    ("TRAFFIC_50GB", "50", "PRICE_TRAFFIC_50GB"),
+    ("TRAFFIC_100GB", "100", "PRICE_TRAFFIC_100GB"),
+    ("TRAFFIC_250GB", "250", "PRICE_TRAFFIC_250GB"),
+)
+
+
 def _get_cached_rules_value(language: str) -> str:
     if language in _cached_rules:
         return _cached_rules[language]
@@ -28,45 +101,32 @@ def _get_cached_rules_value(language: str) -> str:
 def _build_dynamic_values(language: str) -> Dict[str, Any]:
     language_code = (language or DEFAULT_LANGUAGE).split("-")[0].lower()
 
-    if language_code == "ru":
-        return {
-            "TRAFFIC_5GB": f"📊 5 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_5GB)}",
-            "TRAFFIC_10GB": f"📊 10 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_10GB)}",
-            "TRAFFIC_25GB": f"📊 25 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_25GB)}",
-            "TRAFFIC_50GB": f"📊 50 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_50GB)}",
-            "TRAFFIC_100GB": f"📊 100 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_100GB)}",
-            "TRAFFIC_250GB": f"📊 250 ГБ - {settings.format_price(settings.PRICE_TRAFFIC_250GB)}",
-            "TRAFFIC_UNLIMITED": f"📊 Безлимит - {settings.format_price(settings.PRICE_TRAFFIC_UNLIMITED)}",
-            "SUPPORT_INFO": (
-                "\n🛟 <b>Поддержка</b>\n\n"
-                "Это центр тикетов: создавайте обращения, просматривайте ответы и историю.\n\n"
-                "• 🎫 Создать тикет — опишите проблему или вопрос\n"
-                "• 📋 Мои тикеты — статус и переписка\n"
-                "• 💬 Связаться — написать напрямую (если нужно)\n\n"
-                "Старайтесь использовать тикеты — так мы быстрее поможем и ничего не потеряется.\n"
-            ),
-        }
+    language_code = _LANGUAGE_ALIASES.get(language_code, language_code)
+    config = _DYNAMIC_LANGUAGE_CONFIGS.get(language_code)
 
-    if language_code == "en":
-        return {
-            "TRAFFIC_5GB": f"📊 5 GB - {settings.format_price(settings.PRICE_TRAFFIC_5GB)}",
-            "TRAFFIC_10GB": f"📊 10 GB - {settings.format_price(settings.PRICE_TRAFFIC_10GB)}",
-            "TRAFFIC_25GB": f"📊 25 GB - {settings.format_price(settings.PRICE_TRAFFIC_25GB)}",
-            "TRAFFIC_50GB": f"📊 50 GB - {settings.format_price(settings.PRICE_TRAFFIC_50GB)}",
-            "TRAFFIC_100GB": f"📊 100 GB - {settings.format_price(settings.PRICE_TRAFFIC_100GB)}",
-            "TRAFFIC_250GB": f"📊 250 GB - {settings.format_price(settings.PRICE_TRAFFIC_250GB)}",
-            "TRAFFIC_UNLIMITED": f"📊 Unlimited - {settings.format_price(settings.PRICE_TRAFFIC_UNLIMITED)}",
-            "SUPPORT_INFO": (
-                "\n🛟 <b>RemnaWave Support</b>\n\n"
-                "This is the ticket center: create requests, view replies and history.\n\n"
-                "• 🎫 Create ticket — describe your issue or question\n"
-                "• 📋 My tickets — status and conversation\n"
-                "• 💬 Contact — message directly if needed\n\n"
-                "Prefer tickets — it helps us respond faster and keep context.\n"
-            ),
-        }
+    if not config:
+        return {}
 
-    return {}
+    values: Dict[str, Any] = {}
+    traffic_pattern = config["traffic_pattern"]
+    for key, size, price_attr in _TRAFFIC_TIERS:
+        price_value = getattr(settings, price_attr)
+        values[key] = traffic_pattern.format(
+            size=size,
+            price=settings.format_price(price_value),
+        )
+
+    values["TRAFFIC_UNLIMITED"] = config["unlimited_pattern"].format(
+        price=settings.format_price(settings.PRICE_TRAFFIC_UNLIMITED)
+    )
+
+    support_template = config.get("support_info")
+    if support_template:
+        values["SUPPORT_INFO"] = support_template.format(
+            support_username=settings.SUPPORT_USERNAME
+        )
+
+    return values
 
 
 class Texts:
