@@ -19,7 +19,6 @@ from app.database.models import PaymentMethod, TransactionType
 from app.services.subscription_auto_purchase_service import (
     auto_purchase_saved_cart_after_topup,
 )
-from app.services.trial_activation_service import auto_activate_trial_after_topup
 from app.utils.user_utils import format_referrer_info
 
 logger = logging.getLogger(__name__)
@@ -384,18 +383,12 @@ class YooKassaPaymentMixin:
             payment_module = import_module("app.services.payment_service")
 
             # Проверяем, не обрабатывается ли уже этот платеж (защита от дублирования)
-            existing_transaction = None
-            try:
-                existing_transaction = await payment_module.get_transaction_by_external_id(  # type: ignore[attr-defined]
-                    db,
-                    payment.yookassa_payment_id,
-                    PaymentMethod.YOOKASSA,
-                )
-            except AttributeError:  # pragma: no cover - fallback for tests
-                logger.debug(
-                    "🔁 Пропускаем проверку дубликатов YooKassa в модуле сервиса оплаты из-за отсутствия метода get_transaction_by_external_id",
-                )
-
+            existing_transaction = await payment_module.get_transaction_by_external_id(  # type: ignore[attr-defined]
+                db,
+                payment.yookassa_payment_id,
+                PaymentMethod.YOOKASSA,
+            )
+            
             if existing_transaction:
                 # Если транзакция уже существует, просто завершаем обработку
                 logger.info(
@@ -479,18 +472,12 @@ class YooKassaPaymentMixin:
                     )
 
             if transaction is None:
-                existing_transaction = None
-                try:
-                    existing_transaction = await payment_module.get_transaction_by_external_id(  # type: ignore[attr-defined]
-                        db,
-                        payment.yookassa_payment_id,
-                        PaymentMethod.YOOKASSA,
-                    )
-                except AttributeError:  # pragma: no cover - fallback for tests
-                    logger.debug(
-                        "🔁 Пропускаем проверку дубликатов YooKassa в сервисе оплаты из-за отсутствия метода get_transaction_by_external_id",
-                    )
-
+                existing_transaction = await payment_module.get_transaction_by_external_id(  # type: ignore[attr-defined]
+                    db,
+                    payment.yookassa_payment_id,
+                    PaymentMethod.YOOKASSA,
+                )
+                
                 if existing_transaction:
                     # Если транзакция уже существует, пропускаем обработку
                     logger.info(
@@ -639,23 +626,6 @@ class YooKassaPaymentMixin:
                         await db.commit()
 
                     await db.refresh(user)
-
-                    trial_activated = False
-                    try:
-                        trial_activated = await auto_activate_trial_after_topup(
-                            db,
-                            user,
-                            bot=getattr(self, "bot", None),
-                        )
-                        if trial_activated:
-                            await db.refresh(user)
-                    except Exception as trial_error:  # pragma: no cover - defensive logging
-                        logger.error(
-                            "Ошибка автоматической активации триала после пополнения для пользователя %s: %s",
-                            user.id,
-                            trial_error,
-                            exc_info=True,
-                        )
 
                     # Отправляем уведомления админам
                     if getattr(self, "bot", None):
