@@ -379,11 +379,11 @@ async def subtract_user_balance(
     *,
     consume_promo_offer: bool = False,
 ) -> bool:
-    logger.error(f"💸 ОТЛАДКА subtract_user_balance:")
-    logger.error(f"   👤 User ID: {user.id} (TG: {user.telegram_id})")
-    logger.error(f"   💰 Баланс до списания: {user.balance_kopeks} копеек")
-    logger.error(f"   💸 Сумма к списанию: {amount_kopeks} копеек")
-    logger.error(f"   📝 Описание: {description}")
+    logger.info(f"💸 ОТЛАДКА subtract_user_balance:")
+    logger.info(f"   👤 User ID: {user.id} (TG: {user.telegram_id})")
+    logger.info(f"   💰 Баланс до списания: {user.balance_kopeks} копеек")
+    logger.info(f"   💸 Сумма к списанию: {amount_kopeks} копеек")
+    logger.info(f"   📝 Описание: {description}")
     
     log_context: Optional[Dict[str, object]] = None
     if consume_promo_offer:
