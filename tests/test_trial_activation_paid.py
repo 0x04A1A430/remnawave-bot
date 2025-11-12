@@ -57,6 +57,10 @@ async def test_activate_trial_uses_trial_price_for_topup_redirect(
             "app.handlers.subscription.purchase.get_insufficient_balance_keyboard",
             return_value=mock_keyboard,
         ) as insufficient_keyboard,
+        patch(
+            "app.handlers.subscription.purchase.mark_trial_activation_pending",
+            new_callable=AsyncMock,
+        ) as mark_pending,
     ):
         await activate_trial(trial_callback_query, trial_user, trial_db)
 
@@ -64,5 +68,6 @@ async def test_activate_trial_uses_trial_price_for_topup_redirect(
         trial_user.language,
         amount_kopeks=error.required_amount,
     )
+    mark_pending.assert_awaited_once_with(trial_db, trial_user)
     trial_callback_query.message.edit_text.assert_called_once()
     trial_callback_query.answer.assert_called_once()

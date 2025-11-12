@@ -2744,13 +2744,13 @@ async def fix_foreign_keys_for_user_deletion():
 
 async def add_referral_system_columns():
     logger.info("=== МИГРАЦИЯ РЕФЕРАЛЬНОЙ СИСТЕМЫ ===")
-    
+
     try:
         async with engine.begin() as conn:
             db_type = await get_database_type()
-            
+
             column_exists = await check_column_exists('users', 'has_made_first_topup')
-            
+
             if not column_exists:
                 logger.info("Добавление колонки has_made_first_topup в таблицу users")
                 
@@ -2790,6 +2790,36 @@ async def add_referral_system_columns():
                 
     except Exception as e:
         logger.error(f"Ошибка миграции реферальной системы: {e}")
+        return False
+
+
+async def add_trial_activation_pending_column() -> bool:
+    logger.info("=== ДОБАВЛЕНИЕ КОЛОНКИ trial_activation_pending ===")
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+            column_exists = await check_column_exists('users', 'trial_activation_pending')
+
+            if column_exists:
+                logger.info("Колонка trial_activation_pending уже существует")
+                return True
+
+            if db_type == 'sqlite':
+                column_def = 'BOOLEAN DEFAULT 0'
+            else:
+                column_def = 'BOOLEAN DEFAULT FALSE'
+
+            await conn.execute(
+                text(f"ALTER TABLE users ADD COLUMN trial_activation_pending {column_def}")
+            )
+            logger.info("Колонка trial_activation_pending успешно добавлена")
+            return True
+
+    except Exception as error:
+        logger.error(
+            f"Ошибка добавления колонки trial_activation_pending: {error}"
+        )
         return False
 
 async def create_subscription_conversions_table():
@@ -3721,6 +3751,10 @@ async def run_universal_migration():
         if not referral_migration_success:
             logger.warning("⚠️ Проблемы с миграцией реферальной системы")
 
+        trial_flag_success = await add_trial_activation_pending_column()
+        if not trial_flag_success:
+            logger.warning("⚠️ Проблемы с добавлением trial_activation_pending")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ SYSTEM_SETTINGS ===")
         system_settings_ready = await create_system_settings_table()
         if system_settings_ready:
@@ -4104,6 +4138,7 @@ async def check_migration_status():
     try:
         status = {
             "has_made_first_topup_column": False,
+            "trial_activation_pending_column": False,
             "cryptobot_table": False,
             "heleket_table": False,
             "user_messages_table": False,
@@ -4137,6 +4172,7 @@ async def check_migration_status():
         }
         
         status["has_made_first_topup_column"] = await check_column_exists('users', 'has_made_first_topup')
+        status["trial_activation_pending_column"] = await check_column_exists('users', 'trial_activation_pending')
         
         status["cryptobot_table"] = await check_table_exists('cryptobot_payments')
         status["heleket_table"] = await check_table_exists('heleket_payments')
@@ -4191,6 +4227,7 @@ async def check_migration_status():
         
         check_names = {
             "has_made_first_topup_column": "Колонка реферальной системы",
+            "trial_activation_pending_column": "Флаг отложенной активации триала",
             "cryptobot_table": "Таблица CryptoBot payments",
             "heleket_table": "Таблица Heleket payments",
             "user_messages_table": "Таблица пользовательских сообщений",
