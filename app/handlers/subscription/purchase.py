@@ -61,12 +61,10 @@ from app.services.subscription_service import SubscriptionService
 from app.services.trial_activation_service import (
     TrialPaymentChargeFailed,
     TrialPaymentInsufficientFunds,
-    clear_trial_activation_intent,
     charge_trial_activation_if_required,
     preview_trial_activation_charge,
     revert_trial_activation,
     rollback_trial_subscription_activation,
-    save_trial_activation_intent,
 )
 
 
@@ -406,7 +404,6 @@ async def show_trial_offer(
     texts = get_texts(db_user.language)
 
     if db_user.subscription or db_user.has_had_paid_subscription:
-        await clear_trial_activation_intent(db_user.id)
         await callback.message.edit_text(
             texts.TRIAL_ALREADY_USED,
             reply_markup=get_back_keyboard(db_user.language)
@@ -511,12 +508,6 @@ async def activate_trial(
                 amount_kopeks=error.required_amount,
             ),
         )
-        await save_trial_activation_intent(
-            db_user.id,
-            required_amount=error.required_amount,
-            balance_amount=error.balance_amount,
-            missing_amount=error.missing_amount,
-        )
         await callback.answer()
         return
 
@@ -547,7 +538,6 @@ async def activate_trial(
             rollback_success = await rollback_trial_subscription_activation(db, subscription)
             await db.refresh(db_user)
             if not rollback_success:
-                await clear_trial_activation_intent(db_user.id)
                 await callback.answer(
                     texts.t(
                         "TRIAL_ROLLBACK_FAILED",
@@ -583,19 +573,12 @@ async def activate_trial(
                     amount_kopeks=error.required_amount,
                 ),
             )
-            await save_trial_activation_intent(
-                db_user.id,
-                required_amount=error.required_amount,
-                balance_amount=error.balance_amount,
-                missing_amount=error.missing_amount,
-            )
             await callback.answer()
             return
         except TrialPaymentChargeFailed:
             rollback_success = await rollback_trial_subscription_activation(db, subscription)
             await db.refresh(db_user)
             if not rollback_success:
-                await clear_trial_activation_intent(db_user.id)
                 await callback.answer(
                     texts.t(
                         "TRIAL_ROLLBACK_FAILED",
@@ -612,7 +595,6 @@ async def activate_trial(
                 ),
                 show_alert=True,
             )
-            await clear_trial_activation_intent(db_user.id)
             return
 
         subscription_service = SubscriptionService()
@@ -650,7 +632,6 @@ async def activate_trial(
                 failure_text,
                 reply_markup=get_back_keyboard(db_user.language),
             )
-            await clear_trial_activation_intent(db_user.id)
             await callback.answer()
             return
         except Exception as error:
@@ -686,7 +667,6 @@ async def activate_trial(
                 failure_text,
                 reply_markup=get_back_keyboard(db_user.language),
             )
-            await clear_trial_activation_intent(db_user.id)
             await callback.answer()
             return
 
@@ -871,7 +851,6 @@ async def activate_trial(
                 reply_markup=get_back_keyboard(db_user.language),
             )
 
-        await clear_trial_activation_intent(db_user.id)
         logger.info(
             f"✅ Активирована тестовая подписка для пользователя {db_user.telegram_id}"
         )
@@ -908,7 +887,6 @@ async def activate_trial(
             failure_text,
             reply_markup=get_back_keyboard(db_user.language)
         )
-        await clear_trial_activation_intent(db_user.id)
         await callback.answer()
         return
 
