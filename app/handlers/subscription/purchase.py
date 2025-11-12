@@ -61,7 +61,9 @@ from app.services.subscription_service import SubscriptionService
 from app.services.trial_activation_service import (
     TrialPaymentChargeFailed,
     TrialPaymentInsufficientFunds,
+    clear_trial_activation_pending,
     charge_trial_activation_if_required,
+    mark_trial_activation_pending,
     preview_trial_activation_charge,
     revert_trial_activation,
     rollback_trial_subscription_activation,
@@ -491,6 +493,15 @@ async def activate_trial(
     try:
         preview_trial_activation_charge(db_user)
     except TrialPaymentInsufficientFunds as error:
+        try:
+            await mark_trial_activation_pending(db, db_user)
+        except Exception as mark_error:  # pragma: no cover - defensive logging
+            logger.warning(
+                "Failed to mark trial activation pending for user %s: %s",
+                getattr(db_user, "id", "<unknown>"),
+                mark_error,
+            )
+
         required_label = settings.format_price(error.required_amount)
         balance_label = settings.format_price(error.balance_amount)
         missing_label = settings.format_price(error.missing_amount)
@@ -537,6 +548,14 @@ async def activate_trial(
         except TrialPaymentInsufficientFunds as error:
             rollback_success = await rollback_trial_subscription_activation(db, subscription)
             await db.refresh(db_user)
+            try:
+                await mark_trial_activation_pending(db, db_user)
+            except Exception as mark_error:  # pragma: no cover - defensive logging
+                logger.warning(
+                    "Failed to mark trial activation pending after rollback for user %s: %s",
+                    getattr(db_user, "id", "<unknown>"),
+                    mark_error,
+                )
             if not rollback_success:
                 await callback.answer(
                     texts.t(
@@ -671,6 +690,15 @@ async def activate_trial(
             return
 
         await db.refresh(db_user)
+
+        try:
+            await clear_trial_activation_pending(db, db_user)
+        except Exception as clear_error:  # pragma: no cover - defensive logging
+            logger.warning(
+                "Failed to clear trial activation pending flag for user %s after manual activation: %s",
+                getattr(db_user, "id", "<unknown>"),
+                clear_error,
+            )
 
         try:
             notification_service = AdminNotificationService(callback.bot)
