@@ -332,28 +332,11 @@ async def add_user_balance(
         
         await db.commit()
         await db.refresh(user)
-
-        if (
-            transaction_type == TransactionType.DEPOSIT
-            and amount_kopeks > 0
-        ):
-            try:
-                from app.services.trial_activation_service import (
-                    maybe_activate_trial_after_topup,
-                )
-
-                await maybe_activate_trial_after_topup(db, user, bot=bot)
-            except Exception as auto_error:  # pragma: no cover - defensive logging
-                logger.error(
-                    "Failed to trigger automatic trial activation after top-up for user %s: %s",
-                    getattr(user, "id", "<unknown>"),
-                    auto_error,
-                )
-
-
+        
+        
         logger.info(f"💰 Баланс пользователя {user.telegram_id} изменен: {old_balance} → {user.balance_kopeks} (изменение: +{amount_kopeks})")
         return True
-
+        
     except Exception as e:
         logger.error(f"Ошибка изменения баланса пользователя {user.id}: {e}")
         await db.rollback()

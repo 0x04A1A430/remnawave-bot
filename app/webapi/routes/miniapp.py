@@ -78,9 +78,7 @@ from app.services.subscription_renewal_service import (
 from app.services.trial_activation_service import (
     TrialPaymentChargeFailed,
     TrialPaymentInsufficientFunds,
-    clear_trial_activation_pending,
     charge_trial_activation_if_required,
-    mark_trial_activation_pending,
     preview_trial_activation_charge,
     revert_trial_activation,
     rollback_trial_subscription_activation,
@@ -3158,14 +3156,6 @@ async def activate_subscription_trial_endpoint(
     try:
         preview_trial_activation_charge(user)
     except TrialPaymentInsufficientFunds as error:
-        try:
-            await mark_trial_activation_pending(db, user)
-        except Exception as mark_error:  # pragma: no cover - defensive logging
-            logger.warning(
-                "Failed to mark trial activation pending for user %s in miniapp: %s",
-                getattr(user, "id", "<unknown>"),
-                mark_error,
-            )
         missing = error.missing_amount
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
@@ -3207,14 +3197,6 @@ async def activate_subscription_trial_endpoint(
     except TrialPaymentInsufficientFunds as error:
         rollback_success = await rollback_trial_subscription_activation(db, subscription)
         await db.refresh(user)
-        try:
-            await mark_trial_activation_pending(db, user)
-        except Exception as mark_error:  # pragma: no cover - defensive logging
-            logger.warning(
-                "Failed to mark trial activation pending after rollback for user %s in miniapp: %s",
-                getattr(user, "id", "<unknown>"),
-                mark_error,
-            )
         if not rollback_success:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -3266,15 +3248,6 @@ async def activate_subscription_trial_endpoint(
 
     await db.refresh(user)
     await db.refresh(subscription)
-
-    try:
-        await clear_trial_activation_pending(db, user)
-    except Exception as clear_error:  # pragma: no cover - defensive logging
-        logger.warning(
-            "Failed to clear trial activation pending flag for user %s after miniapp activation: %s",
-            getattr(user, "id", "<unknown>"),
-            clear_error,
-        )
 
     subscription_service = SubscriptionService()
     try:
