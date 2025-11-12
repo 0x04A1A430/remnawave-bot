@@ -972,7 +972,13 @@ def _get_subscription_status(user: User, texts) -> str:
             "🔴 Истекла\n📅 {end_date}",
         ).format(end_date=end_date_text or "—")
 
-    if actual_status == "trial":
+    is_trial_subscription = getattr(subscription, "is_trial", False)
+
+    is_trial_like_status = actual_status == "trial" or (
+        is_trial_subscription and actual_status in {"active", "trial"}
+    )
+
+    if is_trial_like_status:
         if days_left > 1 and end_date_text:
             return texts.t(
                 "SUB_STATUS_TRIAL_ACTIVE",
