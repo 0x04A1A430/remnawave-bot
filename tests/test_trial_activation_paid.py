@@ -1,6 +1,6 @@
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ def trial_callback_query():
 @pytest.fixture
 def trial_user():
     user = MagicMock(spec=User)
+    user.id = 42
     user.subscription = None
     user.has_had_paid_subscription = False
     user.language = "ru"
@@ -57,12 +58,22 @@ async def test_activate_trial_uses_trial_price_for_topup_redirect(
             "app.handlers.subscription.purchase.get_insufficient_balance_keyboard",
             return_value=mock_keyboard,
         ) as insufficient_keyboard,
+        patch(
+            "app.handlers.subscription.purchase.save_trial_activation_intent",
+            new_callable=AsyncMock,
+        ) as save_intent,
     ):
         await activate_trial(trial_callback_query, trial_user, trial_db)
 
     insufficient_keyboard.assert_called_once_with(
         trial_user.language,
         amount_kopeks=error.required_amount,
+    )
+    save_intent.assert_awaited_once_with(
+        trial_user.id,
+        required_amount=error.required_amount,
+        balance_amount=error.balance_amount,
+        missing_amount=error.missing_amount,
     )
     trial_callback_query.message.edit_text.assert_called_once()
     trial_callback_query.answer.assert_called_once()

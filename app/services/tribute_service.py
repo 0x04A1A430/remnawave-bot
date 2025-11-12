@@ -17,6 +17,7 @@ from app.services.payment_service import PaymentService
 from app.services.subscription_auto_purchase_service import (
     auto_purchase_saved_cart_after_topup,
 )
+from app.services.trial_activation_service import auto_activate_trial_after_topup
 from app.utils.user_utils import format_referrer_info
 
 logger = logging.getLogger(__name__)
@@ -149,6 +150,23 @@ class TributeService:
                     await session.commit()
 
                 await session.refresh(user)
+
+                trial_activated = False
+                try:
+                    trial_activated = await auto_activate_trial_after_topup(
+                        session,
+                        user,
+                        bot=self.bot,
+                    )
+                    if trial_activated:
+                        await session.refresh(user)
+                except Exception as trial_error:  # pragma: no cover - defensive logging
+                    logger.error(
+                        "Ошибка автоматической активации триала после пополнения для пользователя %s: %s",
+                        user.id,
+                        trial_error,
+                        exc_info=True,
+                    )
 
                 logger.info(
                     f"✅ Баланс пользователя {user_telegram_id} обновлен: {old_balance} -> {user.balance_kopeks} коп (+{amount_kopeks})"

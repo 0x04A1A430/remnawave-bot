@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
+from app.services.trial_activation_service import auto_activate_trial_after_topup
 from app.utils.user_utils import format_referrer_info
 
 logger = logging.getLogger(__name__)
@@ -330,6 +331,23 @@ class HeleketPaymentMixin:
             user.has_made_first_topup = True
             await db.commit()
             await db.refresh(user)
+
+        trial_activated = False
+        try:
+            trial_activated = await auto_activate_trial_after_topup(
+                db,
+                user,
+                bot=getattr(self, "bot", None),
+            )
+            if trial_activated:
+                await db.refresh(user)
+        except Exception as trial_error:  # pragma: no cover - defensive logging
+            logger.error(
+                "Ошибка автоматической активации триала после пополнения для пользователя %s: %s",
+                user.id,
+                trial_error,
+                exc_info=True,
+            )
 
         if getattr(self, "bot", None):
             topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
