@@ -32,6 +32,29 @@ async def _prompt_amount(
     texts = get_texts(db_user.language)
     method_name = settings.get_platega_method_display_title(method_code)
 
+    # Всегда фиксируем выбранный метод для последующей обработки
+    await state.update_data(payment_method="platega", platega_method=method_code)
+
+    data = await state.get_data()
+    pending_amount = int(data.get("platega_pending_amount") or 0)
+
+    if pending_amount > 0:
+        # Если сумма уже известна (например, после быстрого выбора),
+        # сразу создаём платеж и сбрасываем временное значение.
+        await state.update_data(platega_pending_amount=None)
+
+        from app.database.database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            await process_platega_payment_amount(
+                message,
+                db_user,
+                db,
+                pending_amount,
+                state,
+            )
+        return
+
     min_amount_label = settings.format_price(settings.PLATEGA_MIN_AMOUNT_KOPEKS)
     max_amount_kopeks = settings.PLATEGA_MAX_AMOUNT_KOPEKS
     max_amount_label = (
@@ -75,7 +98,6 @@ async def _prompt_amount(
     )
 
     await state.set_state(BalanceStates.waiting_for_amount)
-    await state.update_data(payment_method="platega", platega_method=method_code)
 
 
 @error_handler
@@ -108,6 +130,8 @@ async def start_platega_payment(
         return
 
     await state.update_data(payment_method="platega")
+    data = await state.get_data()
+    has_pending_amount = bool(int(data.get("platega_pending_amount") or 0))
 
     if len(active_methods) == 1:
         await _prompt_amount(callback.message, db_user, state, active_methods[0])
@@ -137,7 +161,8 @@ async def start_platega_payment(
         ),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=method_buttons),
     )
-    await state.set_state(BalanceStates.waiting_for_platega_method)
+    if not has_pending_amount:
+        await state.set_state(BalanceStates.waiting_for_platega_method)
     await callback.answer()
 
 
