@@ -4862,7 +4862,10 @@ async def get_subscription_settings_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionSettingsResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(user)
+    subscription = _ensure_paid_subscription(
+        user,
+        allowed_statuses={"active", "trial"},
+    )
     _validate_subscription_id(payload.subscription_id, subscription)
 
     settings_payload = await _build_subscription_settings(db, user, subscription)
@@ -4879,7 +4882,10 @@ async def update_subscription_servers_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionUpdateResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(user)
+    subscription = _ensure_paid_subscription(
+        user,
+        allowed_statuses={"active", "trial"},
+    )
     _validate_subscription_id(payload.subscription_id, subscription)
     old_servers = list(getattr(subscription, "connected_squads", []) or [])
 
@@ -5085,7 +5091,10 @@ async def update_subscription_traffic_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionUpdateResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(user)
+    subscription = _ensure_paid_subscription(
+        user,
+        allowed_statuses={"active", "trial"},
+    )
     _validate_subscription_id(payload.subscription_id, subscription)
     old_traffic = subscription.traffic_limit_gb
 
@@ -5249,7 +5258,10 @@ async def update_subscription_devices_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppSubscriptionUpdateResponse:
     user = await _authorize_miniapp_user(payload.init_data, db)
-    subscription = _ensure_paid_subscription(user)
+    subscription = _ensure_paid_subscription(
+        user,
+        allowed_statuses={"active", "trial"},
+    )
     _validate_subscription_id(payload.subscription_id, subscription)
 
     raw_value = payload.devices if payload.devices is not None else payload.device_limit

@@ -13955,7 +13955,7 @@
         function ensureSubscriptionRenewalData(options = {}) {
             const { force = false } = options;
 
-            if (!hasPaidSubscription()) {
+            if (!hasActiveSubscription()) {
                 resetSubscriptionRenewalState(null);
                 renderSubscriptionRenewalCard();
                 return Promise.resolve(null);
@@ -14484,7 +14484,7 @@
                 return;
             }
 
-            const shouldShow = hasPaidSubscription();
+            const shouldShow = hasActiveSubscription();
             card.classList.toggle('hidden', !shouldShow);
             if (!shouldShow) {
                 return;
@@ -14601,7 +14601,7 @@
                 return;
             }
 
-            if (!hasPaidSubscription()) {
+            if (!hasActiveSubscription()) {
                 handleSubscriptionRenewalError(createError('Subscription renewal', t('subscription_renewal.error.validation')));
                 return;
             }
@@ -14784,7 +14784,7 @@
 
         function ensureSubscriptionSettingsLoaded(options = {}) {
             const { force = false } = options;
-            if (!hasPaidSubscription()) {
+            if (!hasActiveSubscription()) {
                 subscriptionSettingsData = null;
                 subscriptionSettingsPromise = null;
                 subscriptionSettingsError = null;
@@ -14912,7 +14912,7 @@
                 return;
             }
 
-            const shouldShow = hasPaidSubscription();
+            const shouldShow = hasActiveSubscription();
             card.classList.toggle('hidden', !shouldShow);
             if (!shouldShow) {
                 return;
