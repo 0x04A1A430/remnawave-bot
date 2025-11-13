@@ -4564,18 +4564,7 @@ async def submit_subscription_renewal_endpoint(
     missing_amount = calculate_missing_amount(balance_kopeks, final_total)
     description = f"Продление подписки на {period_days} дней"
 
-    if not method or missing_amount <= 0:
-        if final_total > 0 and balance_kopeks < final_total:
-            missing = final_total - balance_kopeks
-            raise HTTPException(
-                status.HTTP_402_PAYMENT_REQUIRED,
-                detail={
-                    "code": "insufficient_funds",
-                    "message": "Not enough funds to renew the subscription",
-                    "missing_amount_kopeks": missing,
-                },
-            )
-
+    if missing_amount <= 0:
         try:
             result = await renewal_service.finalize(
                 db,
@@ -4609,6 +4598,26 @@ async def submit_subscription_renewal_endpoint(
             balance_label=settings.format_price(user.balance_kopeks),
             subscription_id=updated_subscription.id,
             renewed_until=updated_subscription.end_date,
+        )
+
+    if not method:
+        if final_total > 0 and balance_kopeks < final_total:
+            missing = final_total - balance_kopeks
+            raise HTTPException(
+                status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "code": "insufficient_funds",
+                    "message": "Not enough funds to renew the subscription",
+                    "missing_amount_kopeks": missing,
+                },
+            )
+
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "payment_method_required",
+                "message": "Payment method is required when balance is insufficient",
+            },
         )
 
     supported_methods = {"cryptobot"}
