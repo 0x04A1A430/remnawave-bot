@@ -26,6 +26,7 @@ class PlategaService:
         self._max_retries = 3
         self._retry_delay = 0.5
         self._retryable_statuses = {500, 502, 503, 504}
+        self._description_max_length = 64
 
     @property
     def is_configured(self) -> bool:
@@ -51,7 +52,10 @@ class PlategaService:
         }
 
         if description:
-            body["description"] = description
+            sanitized_description = self._sanitize_description(
+                description, self._description_max_length
+            )
+            body["description"] = sanitized_description
         if return_url:
             body["return"] = return_url
         if failed_url:
@@ -175,6 +179,21 @@ class PlategaService:
                 return None, raw_text
 
         return None, raw_text
+
+    @staticmethod
+    def _sanitize_description(description: str, max_length: int) -> str:
+        """Обрезает описание до максимально допустимой длины."""
+
+        cleaned = (description or "").strip()
+        if max_length and len(cleaned) > max_length:
+            logger.debug(
+                "Platega description trimmed from %s to %s characters",
+                len(cleaned),
+                max_length,
+            )
+            return cleaned[:max_length]
+
+        return cleaned
 
     @staticmethod
     def parse_expires_at(expires_in: Optional[str]) -> Optional[datetime]:
