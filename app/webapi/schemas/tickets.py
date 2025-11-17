@@ -13,6 +13,7 @@ class TicketMessageResponse(BaseModel):
     is_from_admin: bool
     has_media: bool
     media_type: Optional[str] = None
+    media_file_id: Optional[str] = None
     media_caption: Optional[str] = None
     created_at: datetime
 
@@ -42,3 +43,27 @@ class TicketPriorityUpdateRequest(BaseModel):
 class TicketReplyBlockRequest(BaseModel):
     permanent: bool = False
     until: Optional[datetime] = None
+
+
+class TicketReplyRequest(BaseModel):
+    message_text: Optional[str] = Field(default=None, max_length=4000)
+    media_type: Optional[str] = Field(
+        default=None,
+        description="Тип медиа (photo, video, document, voice и т.д.)",
+        max_length=32,
+    )
+    media_file_id: Optional[str] = Field(default=None, max_length=255)
+    media_caption: Optional[str] = Field(default=None, max_length=4000)
+
+
+class TicketReplyResponse(BaseModel):
+    ticket: TicketResponse
+    message: TicketMessageResponse
+
+
+class TicketMediaResponse(BaseModel):
+    id: int
+    ticket_id: int
+    media_type: str
+    media_file_id: str
+    media_caption: Optional[str] = None
