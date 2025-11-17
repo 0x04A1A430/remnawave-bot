@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from fastapi import (
     APIRouter,
     Depends,
@@ -23,6 +26,8 @@ from app.database.crud.poll import (
     get_poll_statistics,
 )
 from app.database.models import Poll, PollAnswer, PollOption, PollQuestion, PollResponse
+from app.handlers.admin.messages import get_custom_users, get_target_users
+from app.services.poll_service import send_poll_to_users
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.polls import (
@@ -38,6 +43,8 @@ from ..schemas.polls import (
     PollStatisticsResponse,
     PollSummaryResponse,
     PollUserResponse,
+    PollSendRequest,
+    PollSendResponse,
 )
 
 router = APIRouter()
@@ -305,4 +312,56 @@ async def get_poll_responses(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.post("/{poll_id}/send", response_model=PollSendResponse)
+async def send_poll(
+    poll_id: int,
+    payload: PollSendRequest,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> PollSendResponse:
+    poll = await get_poll_by_id(db, poll_id)
+    if not poll:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Poll not found")
+
+    target = payload.target.strip()
+    if not target:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Target must not be empty")
+
+    if target.startswith("custom_"):
+        users = await get_custom_users(db, target.replace("custom_", ""))
+    else:
+        users = await get_target_users(db, target)
+
+    if not users:
+        return PollSendResponse(
+            poll_id=poll_id,
+            target=target,
+            sent=0,
+            failed=0,
+            skipped=0,
+            total=0,
+        )
+
+    from app.config import settings
+
+    bot = Bot(
+        token=settings.BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
+
+    try:
+        result = await send_poll_to_users(bot, db, poll, users)
+    finally:
+        await bot.session.close()
+
+    return PollSendResponse(
+        poll_id=poll_id,
+        target=target,
+        sent=result.get("sent", 0),
+        failed=result.get("failed", 0),
+        skipped=result.get("skipped", 0),
+        total=result.get("total", 0),
     )

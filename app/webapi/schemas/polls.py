@@ -169,3 +169,23 @@ class PollResponsesListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class PollSendRequest(BaseModel):
+    target: str = Field(
+        ...,
+        description=(
+            "Аудитория для отправки опроса (например: all, active, trial, "
+            "custom_today и т.д.)"
+        ),
+        max_length=100,
+    )
+
+
+class PollSendResponse(BaseModel):
+    poll_id: int
+    target: str
+    sent: int
+    failed: int
+    skipped: int
+    total: int
