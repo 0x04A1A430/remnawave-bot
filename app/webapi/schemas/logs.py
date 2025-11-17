@@ -88,3 +88,14 @@ class SystemLogPreviewResponse(BaseModel):
         default=None,
         description="Относительный путь до endpoint для скачивания лог-файла",
     )
+
+
+class SystemLogFullResponse(BaseModel):
+    """Полное содержимое системного лог-файла."""
+
+    path: str
+    exists: bool
+    updated_at: Optional[datetime] = None
+    size_bytes: int
+    size_chars: int
+    content: str

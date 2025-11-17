@@ -6,7 +6,12 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.crud.ticket import TicketCRUD
+from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+
+from app.config import settings
+from app.database.crud.ticket import TicketCRUD, TicketMessageCRUD
 from app.database.models import Ticket, TicketMessage, TicketStatus
 
 from ..dependencies import get_db_session, require_api_token
@@ -14,7 +19,10 @@ from ..schemas.tickets import (
     TicketMessageResponse,
     TicketPriorityUpdateRequest,
     TicketReplyBlockRequest,
+    TicketReplyRequest,
+    TicketReplyResponse,
     TicketResponse,
+    TicketMediaResponse,
     TicketStatusUpdateRequest,
 )
 
@@ -29,6 +37,7 @@ def _serialize_message(message: TicketMessage) -> TicketMessageResponse:
         is_from_admin=message.is_from_admin,
         has_media=message.has_media,
         media_type=message.media_type,
+        media_file_id=message.media_file_id,
         media_caption=message.media_caption,
         created_at=message.created_at,
     )
@@ -183,3 +192,80 @@ async def clear_reply_block(
 
     ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True, load_user=False)
     return _serialize_ticket(ticket, include_messages=True)
+
+
+@router.post("/{ticket_id}/reply", response_model=TicketReplyResponse, status_code=status.HTTP_201_CREATED)
+async def reply_to_ticket(
+    ticket_id: int,
+    payload: TicketReplyRequest,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> TicketReplyResponse:
+    ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False, load_user=True)
+    if not ticket:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ticket not found")
+
+    message_text = (payload.message_text or "").strip()
+    if not message_text and not payload.media_file_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Message text or media is required")
+
+    final_message_text = message_text or (payload.media_caption or "").strip() or "[media]"
+
+    message = await TicketMessageCRUD.add_message(
+        db,
+        ticket_id=ticket_id,
+        user_id=ticket.user_id,
+        message_text=final_message_text,
+        is_from_admin=True,
+        media_type=payload.media_type,
+        media_file_id=payload.media_file_id,
+        media_caption=payload.media_caption,
+    )
+
+    bot = Bot(
+        token=settings.BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
+    try:
+        from app.handlers.admin.tickets import notify_user_about_ticket_reply
+
+        await notify_user_about_ticket_reply(bot, ticket, final_message_text, db)
+    finally:
+        await bot.session.close()
+
+    ticket_with_messages = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True, load_user=False)
+
+    return TicketReplyResponse(
+        ticket=_serialize_ticket(ticket_with_messages, include_messages=True),
+        message=_serialize_message(message),
+    )
+
+
+@router.get(
+    "/{ticket_id}/messages/{message_id}/media",
+    response_model=TicketMediaResponse,
+)
+async def get_ticket_message_media(
+    ticket_id: int,
+    message_id: int,
+    _: Any = Security(require_api_token),
+    db: AsyncSession = Depends(get_db_session),
+) -> TicketMediaResponse:
+    ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True, load_user=False)
+    if not ticket:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ticket not found")
+
+    message = next((m for m in ticket.messages if m.id == message_id), None)
+    if not message:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Message not found")
+
+    if not message.has_media or not message.media_file_id or not message.media_type:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Media not found for this message")
+
+    return TicketMediaResponse(
+        id=message.id,
+        ticket_id=ticket.id,
+        media_type=message.media_type,
+        media_file_id=message.media_file_id,
+        media_caption=message.media_caption,
+    )

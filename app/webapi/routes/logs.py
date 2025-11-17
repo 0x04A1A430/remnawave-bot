@@ -24,6 +24,7 @@ from ..schemas.logs import (
     SupportAuditLogEntry,
     SupportAuditLogListResponse,
     SystemLogPreviewResponse,
+    SystemLogFullResponse,
 )
 
 router = APIRouter()
@@ -139,6 +140,33 @@ async def download_system_log(
     except Exception as error:  # pragma: no cover - защита от неожиданных ошибок отдачи файла
         logger.error("Ошибка отправки лог-файла %s: %s", log_path, error)
         raise HTTPException(status_code=500, detail="Не удалось отправить лог-файл") from error
+
+
+@router.get("/system/full", response_model=SystemLogFullResponse)
+async def get_system_log_full(
+    _: Any = Security(require_api_token),
+) -> SystemLogFullResponse:
+    """Получить полный системный лог-файл бота."""
+
+    log_path = _resolve_system_log_path()
+
+    if not log_path.exists() or not log_path.is_file():
+        raise HTTPException(status_code=404, detail="Лог-файл не найден")
+
+    try:
+        content, size_bytes, mtime = await _read_system_log(log_path)
+    except Exception as error:  # pragma: no cover - защита от неожиданных ошибок чтения
+        logger.error("Ошибка чтения лог-файла %s: %s", log_path, error)
+        raise HTTPException(status_code=500, detail="Не удалось прочитать лог-файл") from error
+
+    return SystemLogFullResponse(
+        path=str(log_path),
+        exists=True,
+        updated_at=_format_timestamp(mtime),
+        size_bytes=size_bytes,
+        size_chars=len(content),
+        content=content,
+    )
 
 
 @router.get("/monitoring", response_model=MonitoringLogListResponse)
