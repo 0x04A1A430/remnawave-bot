@@ -305,7 +305,13 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             if isinstance(event, Message):
                 return await event.answer(text, reply_markup=channel_sub_kb)
             elif isinstance(event, CallbackQuery):
-                return await event.message.edit_text(text, reply_markup=channel_sub_kb)
+                try:
+                    return await event.message.edit_text(text, reply_markup=channel_sub_kb)
+                except TelegramBadRequest as e:
+                    if "message is not modified" in str(e).lower():
+                        logger.debug("ℹ️ Сообщение уже содержит текст проверки подписки, пропускаем редактирование")
+                        return await event.answer(text, show_alert=True)
+                    raise
             elif isinstance(event, Update) and event.message:
                 return await bot.send_message(event.message.chat.id, text, reply_markup=channel_sub_kb)
         except Exception as e:
