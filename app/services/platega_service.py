@@ -181,19 +181,30 @@ class PlategaService:
         return None, raw_text
 
     @staticmethod
-    def _sanitize_description(description: str, max_length: int) -> str:
-        """Обрезает описание до максимально допустимой длины."""
+    def _sanitize_description(description: str, max_bytes: int) -> str:
+        """Обрезает описание с учётом байтового лимита Platega."""
 
         cleaned = (description or "").strip()
-        if max_length and len(cleaned) > max_length:
-            logger.debug(
-                "Platega description trimmed from %s to %s characters",
-                len(cleaned),
-                max_length,
-            )
-            return cleaned[:max_length]
+        if not max_bytes:
+            return cleaned
 
-        return cleaned
+        encoded = cleaned.encode("utf-8")
+        if len(encoded) <= max_bytes:
+            return cleaned
+
+        logger.debug(
+            "Platega description trimmed from %s to %s bytes",
+            len(encoded),
+            max_bytes,
+        )
+
+        trimmed_bytes = encoded[:max_bytes]
+        while True:
+            try:
+                return trimmed_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                trimmed_bytes = trimmed_bytes[:-1]
+
 
     @staticmethod
     def parse_expires_at(expires_in: Optional[str]) -> Optional[datetime]:
