@@ -59,6 +59,7 @@ from app.handlers.admin import (
     public_offer as admin_public_offer,
     faq as admin_faq,
     payments as admin_payments,
+    trials as admin_trials,
 )
 from app.handlers.stars_payments import register_stars_handlers
 
@@ -174,6 +175,7 @@ async def setup_bot() -> tuple[Bot, Dispatcher]:
     admin_public_offer.register_handlers(dp)
     admin_faq.register_handlers(dp)
     admin_payments.register_handlers(dp)
+    admin_trials.register_handlers(dp)
     common.register_handlers(dp)
     register_stars_handlers(dp)
     user_polls.register_handlers(dp)
