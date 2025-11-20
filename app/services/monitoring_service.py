@@ -912,12 +912,17 @@ class MonitoringService:
             
             result = await db.execute(
                 select(Subscription)
-                .options(selectinload(Subscription.user))
+                .options(
+                    selectinload(Subscription.user).options(
+                        selectinload(User.promo_group),
+                        selectinload(User.user_promo_groups).selectinload(UserPromoGroup.promo_group),
+                    )
+                )
                 .where(
                     and_(
                         Subscription.status == SubscriptionStatus.ACTIVE.value,
                         Subscription.autopay_enabled == True,
-                        Subscription.is_trial == False 
+                        Subscription.is_trial == False
                     )
                 )
             )
