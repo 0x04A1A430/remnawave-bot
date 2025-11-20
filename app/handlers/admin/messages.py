@@ -868,7 +868,24 @@ async def get_target_users_count(db: AsyncSession, target: str) -> int:
 
 
 async def get_target_users(db: AsyncSession, target: str) -> list:
-    users = await get_users_list(db, offset=0, limit=10000, status=UserStatus.ACTIVE)
+    # Загружаем всех активных пользователей батчами, чтобы не ограничиваться 10к
+    users: list[User] = []
+    offset = 0
+    batch_size = 5000
+
+    while True:
+        batch = await get_users_list(
+            db,
+            offset=offset,
+            limit=batch_size,
+            status=UserStatus.ACTIVE,
+        )
+
+        if not batch:
+            break
+
+        users.extend(batch)
+        offset += batch_size
 
     if target == "all":
         return users
