@@ -676,89 +676,9 @@ async def get_subscriptions_statistics(db: AsyncSession) -> dict:
         "purchased_today": purchased_today,
         "purchased_week": purchased_week,
         "purchased_month": purchased_month,
-        "trial_to_paid_conversion": trial_to_paid_conversion,
-        "renewals_count": renewals_count
+        "trial_to_paid_conversion": trial_to_paid_conversion, 
+        "renewals_count": renewals_count 
     }
-
-
-async def get_trial_statistics(db: AsyncSession) -> dict:
-    now = datetime.utcnow()
-
-    total_trials_result = await db.execute(
-        select(func.count(Subscription.id)).where(Subscription.is_trial.is_(True))
-    )
-    total_trials = total_trials_result.scalar() or 0
-
-    active_trials_result = await db.execute(
-        select(func.count(Subscription.id)).where(
-            Subscription.is_trial.is_(True),
-            Subscription.end_date > now,
-            Subscription.status.in_(
-                [SubscriptionStatus.TRIAL.value, SubscriptionStatus.ACTIVE.value]
-            ),
-        )
-    )
-    active_trials = active_trials_result.scalar() or 0
-
-    resettable_trials_result = await db.execute(
-        select(func.count(Subscription.id))
-        .join(User, Subscription.user_id == User.id)
-        .where(
-            Subscription.is_trial.is_(True),
-            Subscription.end_date <= now,
-            User.has_had_paid_subscription.is_(False),
-        )
-    )
-    resettable_trials = resettable_trials_result.scalar() or 0
-
-    return {
-        "used_trials": total_trials,
-        "active_trials": active_trials,
-        "resettable_trials": resettable_trials,
-    }
-
-
-async def reset_trials_for_users_without_paid_subscription(db: AsyncSession) -> int:
-    now = datetime.utcnow()
-
-    result = await db.execute(
-        select(Subscription)
-        .options(selectinload(Subscription.user))
-        .join(User, Subscription.user_id == User.id)
-        .where(
-            Subscription.is_trial.is_(True),
-            Subscription.end_date <= now,
-            User.has_had_paid_subscription.is_(False),
-        )
-    )
-
-    subscriptions = result.scalars().all()
-    if not subscriptions:
-        return 0
-
-    reset_count = 0
-    for subscription in subscriptions:
-        try:
-            await decrement_subscription_server_counts(db, subscription)
-        except Exception as error:  # pragma: no cover - defensive logging
-            logger.error(
-                "Не удалось обновить счётчики серверов при сбросе триала %s: %s",
-                subscription.id,
-                error,
-            )
-
-        await db.delete(subscription)
-        reset_count += 1
-
-    try:
-        await db.commit()
-    except Exception as error:  # pragma: no cover - defensive logging
-        await db.rollback()
-        logger.error("Ошибка сохранения сброса триалов: %s", error)
-        raise
-
-    logger.info("♻️ Сброшено триальных подписок: %s", reset_count)
-    return reset_count
 
 async def update_subscription_usage(
     db: AsyncSession,
