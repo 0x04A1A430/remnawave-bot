@@ -333,6 +333,41 @@ class Pal24PaymentMixin:
 
         payment_module = import_module("app.services.payment_service")
 
+        metadata = dict(getattr(payment, "metadata_json", {}) or {})
+        invoice_message = metadata.get("invoice_message") or {}
+        invoice_message_removed = False
+
+        if getattr(self, "bot", None) and invoice_message:
+            chat_id = invoice_message.get("chat_id")
+            message_id = invoice_message.get("message_id")
+            if chat_id and message_id:
+                try:
+                    await self.bot.delete_message(chat_id, message_id)
+                except Exception as delete_error:  # pragma: no cover - depends on rights
+                    logger.warning(
+                        "Не удалось удалить счёт PayPalych %s: %s",
+                        message_id,
+                        delete_error,
+                    )
+                else:
+                    metadata.pop("invoice_message", None)
+                    invoice_message_removed = True
+
+        if invoice_message_removed:
+            try:
+                await payment_module.update_pal24_payment_status(
+                    db,
+                    payment,
+                    status=payment.status,
+                    metadata=metadata,
+                )
+                payment.metadata_json = metadata
+            except Exception as error:  # pragma: no cover - diagnostics
+                logger.warning(
+                    "Не удалось обновить метаданные PayPalych после удаления счёта: %s",
+                    error,
+                )
+
         if payment.transaction_id:
             logger.info(
                 "Pal24 платеж %s уже привязан к транзакции (trigger=%s)",
