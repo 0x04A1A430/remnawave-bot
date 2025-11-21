@@ -79,7 +79,12 @@ async def start_cryptobot_payment(
     )
     
     await state.set_state(BalanceStates.waiting_for_amount)
-    await state.update_data(payment_method="cryptobot", current_rate=current_rate)
+    await state.update_data(
+        payment_method="cryptobot",
+        current_rate=current_rate,
+        cryptobot_prompt_message_id=callback.message.message_id,
+        cryptobot_prompt_chat_id=callback.message.chat.id,
+    )
     await callback.answer()
 
 
@@ -158,8 +163,29 @@ async def process_cryptobot_payment_amount(
             [types.InlineKeyboardButton(text="📊 Проверить статус", callback_data=f"check_cryptobot_{payment_result['local_payment_id']}")],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")]
         ])
-        
-        await message.answer(
+
+        state_data = await state.get_data()
+        prompt_message_id = state_data.get("cryptobot_prompt_message_id")
+        prompt_chat_id = state_data.get("cryptobot_prompt_chat_id", message.chat.id)
+
+        try:
+            await message.delete()
+        except Exception as delete_error:  # pragma: no cover - depends on bot rights
+            logger.warning(
+                "Не удалось удалить сообщение с суммой CryptoBot: %s",
+                delete_error,
+            )
+
+        if prompt_message_id:
+            try:
+                await message.bot.delete_message(prompt_chat_id, prompt_message_id)
+            except Exception as delete_error:  # pragma: no cover - diagnostics
+                logger.warning(
+                    "Не удалось удалить сообщение с запросом суммы CryptoBot: %s",
+                    delete_error,
+                )
+
+        invoice_message = await message.answer(
             f"🪙 <b>Оплата криптовалютой</b>\n\n"
             f"💰 Сумма к зачислению: {amount_rubles:.0f} ₽\n"
             f"💵 К оплате: {amount_usd:.2f} USD\n"
@@ -177,7 +203,12 @@ async def process_cryptobot_payment_amount(
             reply_markup=keyboard,
             parse_mode="HTML"
         )
-        
+
+        await state.update_data(
+            cryptobot_invoice_message_id=invoice_message.message_id,
+            cryptobot_invoice_chat_id=invoice_message.chat.id,
+        )
+
         await state.clear()
         
         logger.info(f"Создан CryptoBot платеж для пользователя {db_user.telegram_id}: "
