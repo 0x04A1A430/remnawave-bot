@@ -805,24 +805,24 @@ http {
 - Если используете Cloudflare/анти-DDoS, разрешите методы `POST` и заголовок `X-Telegram-Bot-Api-Secret-Token`.
 - После развёртывания перезапустите бот (`make reload`), чтобы он заново зарегистрировал webhook.
 
-#### Быстрая настройка SSL для Nginx
+### Быстрая настройка SSL для Nginx в Docker
 
-##### 1. Установка Certbot
+#### 1. Установка Certbot
 ```bash
 sudo apt update && sudo apt install certbot -y
 ```
 
-##### 2. Генерация сертификатов
+#### 2. Генерация сертификатов
 ```bash
-# Остановите Nginx
+# Остановите Nginx Docker контейнер
 docker compose down
 
-# Сгенерируйте сертификаты
+# Сгенерируйте сертификаты (порт 80 должен быть свободен)
 sudo certbot certonly --standalone -d hooks.domain.com --agree-tos --email your-email@example.com --non-interactive
 sudo certbot certonly --standalone -d miniapp.domain.com --agree-tos --email your-email@example.com --non-interactive
 ```
 
-##### 3. Копирование сертификатов
+#### 3. Копирование сертификатов
 ```bash
 sudo mkdir -p /etc/ssl/private
 
@@ -834,45 +834,72 @@ sudo cp /etc/letsencrypt/live/miniapp.domain.com/privkey.pem /etc/ssl/private/mi
 sudo chmod 600 /etc/ssl/private/*.pem
 ```
 
-##### 4. Добавление volume в docker-compose.yml
+#### 4. Обновите docker-compose.yml
 ```yaml
-volumes:
-  - /etc/ssl/private:/etc/ssl/private:ro
+services:
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/ssl/private:/etc/ssl/private:ro
+      - /var/www/remnawave-miniapp:/var/www/remnawave-miniapp:ro
+    networks:
+      - remnawave-network
+    restart: unless-stopped
+
+networks:
+  remnawave-network:
+    external: true
 ```
 
-##### 5. Запуск
+#### 5. Запуск Nginx
 ```bash
 docker compose up -d
 ```
 
-##### 6. Автообновление (опционально)
+#### 6. Автообновление сертификатов
 ```bash
-# Создайте скрипт
-sudo nano /opt/renew-certs.sh
-```
-
-Содержимое скрипта:
-```bash
+# Создайте скрипт обновления
+sudo tee /opt/renew-certs.sh > /dev/null <<'EOF'
 #!/bin/bash
-certbot renew --quiet
-cp /etc/letsencrypt/live/hooks.domain.com/*.pem /etc/ssl/private/
-cp /etc/letsencrypt/live/miniapp.domain.com/*.pem /etc/ssl/private/
-chmod 600 /etc/ssl/private/*.pem
-docker exec nginx nginx -s reload
-```
+# Останавливаем Nginx для освобождения порта 80
+docker compose -f /путь/к/docker-compose.yml down
 
-```bash
+# Обновляем сертификаты
+certbot renew --quiet
+
+# Копируем обновленные сертификаты
+cp /etc/letsencrypt/live/hooks.domain.com/fullchain.pem /etc/ssl/private/hooks.fullchain.pem
+cp /etc/letsencrypt/live/hooks.domain.com/privkey.pem /etc/ssl/private/hooks.privkey.pem
+cp /etc/letsencrypt/live/miniapp.domain.com/fullchain.pem /etc/ssl/private/miniapp.fullchain.pem
+cp /etc/letsencrypt/live/miniapp.domain.com/privkey.pem /etc/ssl/private/miniapp.privkey.pem
+chmod 600 /etc/ssl/private/*.pem
+
+# Запускаем Nginx обратно
+docker compose -f /путь/к/docker-compose.yml up -d
+EOF
+
+# Сделайте скрипт исполняемым
 sudo chmod +x /opt/renew-certs.sh
+
+# Добавьте в cron (запуск каждый день в 3:00 AM)
 echo "0 3 * * * /opt/renew-certs.sh" | sudo crontab -
 ```
 
-##### Проверка
+#### Проверка работы SSL
 ```bash
 curl -I https://hooks.domain.com
 curl -I https://miniapp.domain.com
 ```
 
-**Важно:** Замените `domain.com` и `your-email@example.com` на свои данные!
+**Важно:** 
+- Замените `domain.com` и `your-email@example.com` на свои данные
+- Замените `/путь/к/docker-compose.yml` на реальный путь к вашему docker-compose файлу
+- Убедитесь, что DNS записи для доменов указывают на IP вашего сервера
 
 ---
 
