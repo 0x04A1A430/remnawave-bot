@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
-from app.handlers.stars_payment_cleanup import pop_stars_invoice_message
 from app.services.payment_service import PaymentService
 from app.external.telegram_stars import TelegramStarsService
 from app.database.crud.user import get_user_by_telegram_id
@@ -114,7 +113,7 @@ async def handle_successful_payment(
             payload=payment.invoice_payload,
             telegram_payment_charge_id=payment.telegram_payment_charge_id
         )
-
+        
         if success:
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(payment.total_amount)
             amount_kopeks = int((rubles_amount * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
@@ -123,14 +122,6 @@ async def handle_successful_payment(
             keyboard = await payment_service.build_topup_success_keyboard(user)
 
             transaction_id_short = payment.telegram_payment_charge_id[:8]
-
-            invoice_message = pop_stars_invoice_message(payment.invoice_payload)
-            if invoice_message:
-                chat_id, message_id = invoice_message
-                try:
-                    await message.bot.delete_message(chat_id, message_id)
-                except Exception:
-                    logger.debug("Не удалось удалить сообщение со счетом Stars", exc_info=True)
 
             await message.answer(
                 texts.t(
