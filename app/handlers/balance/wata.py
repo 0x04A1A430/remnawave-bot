@@ -1,8 +1,10 @@
 import logging
+from datetime import datetime
 from typing import Dict
 
 from aiogram import types
 from aiogram.fsm.context import FSMContext
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -56,7 +58,11 @@ async def start_wata_payment(
     )
 
     await state.set_state(BalanceStates.waiting_for_amount)
-    await state.update_data(payment_method="wata")
+    await state.update_data(
+        payment_method="wata",
+        wata_prompt_message_id=callback.message.message_id,
+        wata_prompt_chat_id=callback.message.chat.id,
+    )
     await callback.answer()
 
 
@@ -159,10 +165,52 @@ async def process_wata_payment_amount(
         support=settings.get_support_contact_display_html(),
     )
 
-    await message.answer(
+    state_data = await state.get_data()
+    prompt_message_id = state_data.get("wata_prompt_message_id")
+    prompt_chat_id = state_data.get("wata_prompt_chat_id", message.chat.id)
+
+    try:
+        await message.delete()
+    except Exception as delete_error:  # pragma: no cover - depends on bot rights
+        logger.warning("Не удалось удалить сообщение с суммой WATA: %s", delete_error)
+
+    if prompt_message_id:
+        try:
+            await message.bot.delete_message(prompt_chat_id, prompt_message_id)
+        except Exception as delete_error:  # pragma: no cover - diagnostic
+            logger.warning(
+                "Не удалось удалить сообщение с запросом суммы WATA: %s",
+                delete_error,
+            )
+
+    invoice_message = await message.answer(
         message_text,
         reply_markup=keyboard,
         parse_mode="HTML",
+    )
+
+    try:
+        from app.services import payment_service as payment_module
+
+        payment = await payment_module.get_wata_payment_by_local_id(db, local_payment_id)
+        if payment:
+            metadata = dict(getattr(payment, "metadata_json", {}) or {})
+            metadata["invoice_message"] = {
+                "chat_id": invoice_message.chat.id,
+                "message_id": invoice_message.message_id,
+            }
+            await db.execute(
+                update(payment.__class__)
+                .where(payment.__class__.id == payment.id)
+                .values(metadata_json=metadata, updated_at=datetime.utcnow())
+            )
+            await db.commit()
+    except Exception as error:  # pragma: no cover - diagnostics
+        logger.warning("Не удалось сохранить сообщение WATA: %s", error)
+
+    await state.update_data(
+        wata_invoice_message_id=invoice_message.message_id,
+        wata_invoice_chat_id=invoice_message.chat.id,
     )
 
     await state.clear()
