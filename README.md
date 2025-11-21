@@ -1506,10 +1506,24 @@ REMNAWAVE_SECRET_KEY=XXXXXXX:DDDDDDDD
 
 **Вручную:**
 ```bash
-git pull
-docker compose down
-docker compose pull
-docker compose up -d
+cd /root/remnawave-bedolaga-telegram-bot
+
+# Обновление до последнего коммита (до последней мастер ветки, не всегда стабильно):
+
+git pull origin main
+
+# Обновление до конкретной версии (более стабильно, релиз версии):
+
+git fetch --tags
+git checkout v2.7.0
+
+# Перезагружаем конты:
+
+make reload
+
+# Перезагружаем конты с логами:
+
+make reload-follow
 ```
 
 Скрипт автоматически создаст бэкап перед обновлением!
