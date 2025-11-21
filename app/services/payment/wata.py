@@ -415,6 +415,25 @@ class WataPaymentMixin:
         if not paid_at and getattr(payment, "paid_at", None):
             paid_at = payment.paid_at
         existing_metadata = dict(getattr(payment, "metadata_json", {}) or {})
+
+        invoice_message = existing_metadata.get("invoice_message") or {}
+        invoice_message_removed = False
+        if getattr(self, "bot", None) and invoice_message:
+            chat_id = invoice_message.get("chat_id")
+            message_id = invoice_message.get("message_id")
+            if chat_id and message_id:
+                try:
+                    await self.bot.delete_message(chat_id, message_id)
+                except Exception as delete_error:  # pragma: no cover - depends on rights
+                    logger.warning(
+                        "Не удалось удалить счёт WATA %s: %s",
+                        message_id,
+                        delete_error,
+                    )
+                else:
+                    invoice_message_removed = True
+                    existing_metadata.pop("invoice_message", None)
+
         existing_metadata["transaction"] = transaction_payload
 
         await payment_module.update_wata_payment_status(
