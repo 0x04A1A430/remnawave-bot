@@ -10,6 +10,7 @@ from app.external.telegram_stars import TelegramStarsService
 from app.database.crud.user import get_user_by_telegram_id
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
+from app.handlers.balance.stars import pop_stars_invoice_message
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +114,21 @@ async def handle_successful_payment(
             payload=payment.invoice_payload,
             telegram_payment_charge_id=payment.telegram_payment_charge_id
         )
-        
+
         if success:
+            invoice_message_id = pop_stars_invoice_message(user.telegram_id)
+            if invoice_message_id:
+                try:
+                    await message.bot.delete_message(
+                        chat_id=message.chat.id,
+                        message_id=invoice_message_id,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Не удалось удалить сообщение с invoice Stars",
+                        exc_info=True,
+                    )
+
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(payment.total_amount)
             amount_kopeks = int((rubles_amount * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
             amount_text = settings.format_price(amount_kopeks).replace(" ₽", "")
