@@ -98,10 +98,6 @@ async def _prompt_amount(
     )
 
     await state.set_state(BalanceStates.waiting_for_amount)
-    await state.update_data(
-        platega_prompt_message_id=message.message_id,
-        platega_prompt_chat_id=message.chat.id,
-    )
 
 
 @error_handler
@@ -304,25 +300,7 @@ async def process_platega_payment_amount(
         ),
     )
 
-    state_data = await state.get_data()
-    prompt_message_id = state_data.get("platega_prompt_message_id")
-    prompt_chat_id = state_data.get("platega_prompt_chat_id", message.chat.id)
-
-    try:
-        await message.delete()
-    except Exception as delete_error:  # pragma: no cover - зависит от прав бота
-        logger.warning("Не удалось удалить сообщение с суммой Platega: %s", delete_error)
-
-    if prompt_message_id:
-        try:
-            await message.bot.delete_message(prompt_chat_id, prompt_message_id)
-        except Exception as delete_error:  # pragma: no cover - диагностический лог
-            logger.warning(
-                "Не удалось удалить сообщение с запросом суммы Platega: %s",
-                delete_error,
-            )
-
-    invoice_message = await message.answer(
+    await message.answer(
         instructions_template.format(
             method=method_title,
             amount=settings.format_price(amount_kopeks),
@@ -331,11 +309,6 @@ async def process_platega_payment_amount(
         ),
         reply_markup=keyboard,
         parse_mode="HTML",
-    )
-
-    await state.update_data(
-        platega_invoice_message_id=invoice_message.message_id,
-        platega_invoice_chat_id=invoice_message.chat.id,
     )
 
     await state.clear()
