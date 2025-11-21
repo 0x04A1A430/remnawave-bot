@@ -10,6 +10,7 @@ from app.external.telegram_stars import TelegramStarsService
 from app.database.crud.user import get_user_by_telegram_id
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
+from app.utils.stars_message_cleanup import consume_stars_payment_messages
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +114,30 @@ async def handle_successful_payment(
             payload=payment.invoice_payload,
             telegram_payment_charge_id=payment.telegram_payment_charge_id
         )
-        
+
         if success:
+            cleanup_message_ids = set()
+
+            try:
+                cleanup_message_ids = await consume_stars_payment_messages(user_id)
+            except Exception:
+                logger.warning(
+                    "Не удалось получить сообщения Stars для удаления",
+                    exc_info=True,
+                )
+
+            for message_id in cleanup_message_ids:
+                try:
+                    await message.bot.delete_message(
+                        chat_id=message.chat.id,
+                        message_id=message_id,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Не удалось удалить промежуточное сообщение Stars",
+                        exc_info=True,
+                    )
+
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(payment.total_amount)
             amount_kopeks = int((rubles_amount * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
             amount_text = settings.format_price(amount_kopeks).replace(" ₽", "")

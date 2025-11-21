@@ -1,7 +1,6 @@
 import logging
 from aiogram import types
 from aiogram.fsm.context import FSMContext
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
@@ -22,11 +21,11 @@ async def start_stars_payment(
     state: FSMContext
 ):
     texts = get_texts(db_user.language)
-    
+
     if not settings.TELEGRAM_STARS_ENABLED:
         await callback.answer("❌ Пополнение через Stars временно недоступно", show_alert=True)
         return
-    
+
     # Формируем текст сообщения в зависимости от настройки
     if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
         message_text = (
@@ -35,10 +34,10 @@ async def start_stars_payment(
         )
     else:
         message_text = texts.TOP_UP_AMOUNT
-    
+
     # Создаем клавиатуру
     keyboard = get_back_keyboard(db_user.language)
-    
+
     # Если включен быстрый выбор суммы и не отключены кнопки, добавляем кнопки
     if settings.YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED and not settings.DISABLE_TOPUP_BUTTONS:
         from .main import get_quick_amount_buttons
@@ -46,14 +45,17 @@ async def start_stars_payment(
         if quick_amount_buttons:
             # Вставляем кнопки быстрого выбора перед кнопкой "Назад"
             keyboard.inline_keyboard = quick_amount_buttons + keyboard.inline_keyboard
-    
+
     await callback.message.edit_text(
         message_text,
         reply_markup=keyboard
     )
-    
+
     await state.set_state(BalanceStates.waiting_for_amount)
-    await state.update_data(payment_method="stars")
+    await state.update_data(
+        payment_method="stars",
+        prompt_message_id=callback.message.message_id,
+    )
     await callback.answer()
 
 
@@ -65,40 +67,75 @@ async def process_stars_payment_amount(
     state: FSMContext
 ):
     texts = get_texts(db_user.language)
-    
+
     if not settings.TELEGRAM_STARS_ENABLED:
         await message.answer("⚠️ Оплата Stars временно недоступна")
         return
-    
+
     try:
         amount_rubles = amount_kopeks / 100
         stars_amount = TelegramStarsService.calculate_stars_from_rubles(amount_rubles)
-        stars_rate = settings.get_stars_rate() 
-        
+        stars_rate = settings.get_stars_rate()
+
         payment_service = PaymentService(message.bot)
         invoice_link = await payment_service.create_stars_invoice(
             amount_kopeks=amount_kopeks,
             description=f"Пополнение баланса на {texts.format_price(amount_kopeks)}",
             payload=f"balance_{db_user.id}_{amount_kopeks}"
         )
-        
+
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
             [types.InlineKeyboardButton(text="⭐ Оплатить", url=invoice_link)],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")]
         ])
-        
-        await message.answer(
-            f"⭐ <b>Оплата через Telegram Stars</b>\n\n"
-            f"💰 Сумма: {texts.format_price(amount_kopeks)}\n"
-            f"⭐ К оплате: {stars_amount} звезд\n"
-            f"📊 Курс: {stars_rate}₽ за звезду\n\n"
+
+        prompt_message_id = (await state.get_data()).get("prompt_message_id")
+
+        if prompt_message_id:
+            try:
+                await message.bot.delete_message(
+                    chat_id=message.chat.id,
+                    message_id=prompt_message_id,
+                )
+            except Exception:
+                logger.warning(
+                    "Не удалось удалить сообщение с вводом суммы Stars",
+                    exc_info=True,
+                )
+
+        try:
+            await message.delete()
+        except Exception:
+            logger.warning(
+                "Не удалось удалить сообщение пользователя с суммой",
+                exc_info=True,
+            )
+
+        invoice_message = await message.answer(
+            f"⭐ <b>Оплата через Telegram Stars</b>\n\n",
+            f"💰 Сумма: {texts.format_price(amount_kopeks)}\n",
+            f"⭐ К оплате: {stars_amount} звезд\n",
+            f"📊 Курс: {stars_rate}₽ за звезду\n\n",
             f"Нажмите кнопку ниже для оплаты:",
             reply_markup=keyboard,
             parse_mode="HTML"
         )
-        
+
+        try:
+            from app.utils.stars_message_cleanup import register_stars_payment_messages
+
+            await register_stars_payment_messages(
+                user_id=message.from_user.id,
+                message_ids=[invoice_message.message_id],
+            )
+        except Exception:
+            logger.warning(
+                "Не удалось зарегистрировать сообщения Stars для очистки",
+                exc_info=True,
+            )
+
         await state.clear()
-        
+
     except Exception as e:
         logger.error(f"Ошибка создания Stars invoice: {e}")
         await message.answer("⚠️ Ошибка создания платежа")
