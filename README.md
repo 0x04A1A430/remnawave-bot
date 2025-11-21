@@ -154,7 +154,7 @@ WEBHOOK_SECRET_TOKEN=super-secret-token
 # Настройки Web API
 WEB_API_ENABLED=true
 WEB_API_PORT=8080
-WEB_API_ALLOWED_ORIGINS=https://miniapp.example.com
+WEB_API_ALLOWED_ORIGINS=https://miniapp.domain.com
 WEB_API_DEFAULT_TOKEN=super-secret-token
 
 # Настройки Remnawave
@@ -184,7 +184,7 @@ WEBHOOK_WORKER_SHUTDOWN_TIMEOUT=30.0
 WEB_API_ENABLED=true
 WEB_API_HOST=0.0.0.0
 WEB_API_PORT=8080
-WEB_API_ALLOWED_ORIGINS=https://miniapp.example.com
+WEB_API_ALLOWED_ORIGINS=https://miniapp.domain.com
 ```
 
 * `WEBHOOK_URL` — публичный HTTPS-домен прокси. К нему автоматически добавится путь из `WEBHOOK_PATH`.
