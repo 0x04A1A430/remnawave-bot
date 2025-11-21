@@ -82,7 +82,7 @@ class ChannelCheckerMiddleware(BaseMiddleware):
         bot: Bot = data["bot"]
 
         channel_id = settings.CHANNEL_SUB_ID
-        
+
         if not channel_id:
             logger.warning("⚠️ CHANNEL_SUB_ID не установлен, пропускаем проверку")
             return await handler(event, data)
@@ -93,7 +93,12 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             logger.debug("⚠️ Обязательная подписка отключена, пропускаем проверку")
             return await handler(event, data)
 
-        channel_link = settings.CHANNEL_LINK
+        channel_link = self._normalize_channel_link(settings.CHANNEL_LINK, channel_id)
+
+        if not channel_link:
+            logger.warning(
+                "⚠️ CHANNEL_LINK не задан или невалиден, кнопка подписки будет скрыта"
+            )
 
         try:
             member = await bot.get_chat_member(chat_id=channel_id, user_id=telegram_id)
@@ -112,16 +117,16 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                     await event.answer("❌ Вы еще не подписались на канал! Подпишитесь и попробуйте снова.", show_alert=True)
                     return
 
-                return await self._deny_message(event, bot, channel_link)
+                return await self._deny_message(event, bot, channel_link, channel_id)
             else:
                 logger.warning(f"⚠️ Неожиданный статус пользователя {telegram_id}: {member.status}")
                 await self._capture_start_payload(state, event, bot)
-                return await self._deny_message(event, bot, channel_link)
+                return await self._deny_message(event, bot, channel_link, channel_id)
 
         except TelegramForbiddenError as e:
             logger.error(f"❌ Бот заблокирован в канале {channel_id}: {e}")
             await self._capture_start_payload(state, event, bot)
-            return await self._deny_message(event, bot, channel_link)
+            return await self._deny_message(event, bot, channel_link, channel_id)
         except TelegramBadRequest as e:
             if "chat not found" in str(e).lower():
                 logger.error(f"❌ Канал {channel_id} не найден: {e}")
@@ -130,10 +135,28 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             else:
                 logger.error(f"❌ Ошибка запроса к каналу {channel_id}: {e}")
             await self._capture_start_payload(state, event, bot)
-            return await self._deny_message(event, bot, channel_link)
+            return await self._deny_message(event, bot, channel_link, channel_id)
         except Exception as e:
             logger.error(f"❌ Неожиданная ошибка при проверке подписки: {e}")
             return await handler(event, data)
+
+    @staticmethod
+    def _normalize_channel_link(channel_link: Optional[str], channel_id: Optional[str]) -> Optional[str]:
+        link = (channel_link or "").strip()
+
+        if link.startswith("@"):  # raw username
+            return f"https://t.me/{link.lstrip('@')}"
+
+        if link and not link.lower().startswith(("http://", "https://", "tg://")):
+            return f"https://{link}"
+
+        if link:
+            return link
+
+        if channel_id and str(channel_id).startswith("@"):
+            return f"https://t.me/{str(channel_id).lstrip('@')}"
+
+        return None
 
     async def _capture_start_payload(
         self,
@@ -278,7 +301,12 @@ class ChannelCheckerMiddleware(BaseMiddleware):
                 break
 
     @staticmethod
-    async def _deny_message(event: TelegramObject, bot: Bot, channel_link: str):
+    async def _deny_message(
+        event: TelegramObject,
+        bot: Bot,
+        channel_link: Optional[str],
+        channel_id: Optional[str],
+    ):
         logger.debug("🚫 Отправляем сообщение о необходимости подписки")
 
         user = None
@@ -300,6 +328,15 @@ class ChannelCheckerMiddleware(BaseMiddleware):
             "CHANNEL_REQUIRED_TEXT",
             "🔒 Для использования бота подпишитесь на новостной канал, чтобы получать уведомления о новых возможностях и обновлениях бота. Спасибо!",
         )
+
+        if not channel_link and channel_id:
+            channel_hint = None
+
+            if str(channel_id).startswith("@"):  # username-based channel id
+                channel_hint = f"@{str(channel_id).lstrip('@')}"
+
+            if channel_hint:
+                text = f"{text}\n\n{channel_hint}"
 
         try:
             if isinstance(event, Message):

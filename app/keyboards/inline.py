@@ -128,26 +128,33 @@ def get_rules_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup
     ])
 
 def get_channel_sub_keyboard(
-    channel_link: str,
+    channel_link: Optional[str],
     language: str = DEFAULT_LANGUAGE,
 ) -> InlineKeyboardMarkup:
     texts = get_texts(language)
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+
+    buttons: List[List[InlineKeyboardButton]] = []
+
+    if channel_link:
+        buttons.append(
             [
                 InlineKeyboardButton(
                     text=texts.t("CHANNEL_SUBSCRIBE_BUTTON", "🔗 Подписаться"),
                     url=channel_link,
                 )
-            ],
-            [
-                InlineKeyboardButton(
-                    text=texts.t("CHANNEL_CHECK_BUTTON", "✅ Я подписался"),
-                    callback_data="sub_channel_check",
-                )
-            ],
+            ]
+        )
+
+    buttons.append(
+        [
+            InlineKeyboardButton(
+                text=texts.t("CHANNEL_CHECK_BUTTON", "✅ Я подписался"),
+                callback_data="sub_channel_check",
+            )
         ]
     )
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_post_registration_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:

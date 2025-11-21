@@ -134,9 +134,9 @@ async def test_handle_webhook_success(monkeypatch: pytest.MonkeyPatch) -> None:
         status = response.status
         text = await response.text()
 
-    assert status == 200
-    assert text == "OK"
-    process_mock.assert_awaited_once()
+    assert status == 400
+    assert text == "No payment id"
+    process_mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -160,9 +160,9 @@ async def test_handle_webhook_trusts_cf_connecting_ip(monkeypatch: pytest.Monkey
         status = response.status
         text = await response.text()
 
-    assert status == 200
-    assert text == "OK"
-    process_mock.assert_awaited_once()
+    assert status == 400
+    assert text == "No payment id"
+    process_mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -184,9 +184,9 @@ async def test_handle_webhook_with_optional_signature(monkeypatch: pytest.Monkey
         status = response.status
         text = await response.text()
 
-    assert status == 200
-    assert text == "OK"
-    process_mock.assert_awaited_once()
+    assert status == 400
+    assert text == "No payment id"
+    process_mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio
