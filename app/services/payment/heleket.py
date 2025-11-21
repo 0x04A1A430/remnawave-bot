@@ -255,6 +255,42 @@ class HeleketPaymentMixin:
         if updated_payment is None:
             return None
 
+        metadata = dict(getattr(updated_payment, "metadata_json", {}) or {})
+        invoice_message = metadata.get("invoice_message") or {}
+        invoice_message_removed = False
+
+        if getattr(self, "bot", None) and invoice_message:
+            chat_id = invoice_message.get("chat_id")
+            message_id = invoice_message.get("message_id")
+            if chat_id and message_id:
+                try:
+                    await self.bot.delete_message(chat_id, message_id)
+                except Exception as delete_error:  # pragma: no cover - depends on rights
+                    logger.warning(
+                        "Не удалось удалить счёт Heleket %s: %s",
+                        message_id,
+                        delete_error,
+                    )
+                else:
+                    metadata.pop("invoice_message", None)
+                    invoice_message_removed = True
+
+        if invoice_message_removed:
+            try:
+                from app.database.crud import heleket as heleket_crud
+
+                await heleket_crud.update_heleket_payment(
+                    db,
+                    updated_payment.uuid,
+                    metadata=metadata,
+                )
+                updated_payment.metadata_json = metadata
+            except Exception as error:  # pragma: no cover - diagnostics
+                logger.warning(
+                    "Не удалось обновить метаданные Heleket после удаления счёта: %s",
+                    error,
+                )
+
         if updated_payment.transaction_id:
             logger.info(
                 "Heleket платеж %s уже связан с транзакцией %s",
