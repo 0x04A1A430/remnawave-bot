@@ -172,7 +172,7 @@ REMNAWAVE_API_KEY=your_api_key
 
 ```env
 BOT_RUN_MODE=webhook
-WEBHOOK_URL=https://api.domain.com
+WEBHOOK_URL=https://hooks.domain.com
 WEBHOOK_PATH=/webhook
 WEBHOOK_SECRET_TOKEN=super-secret-token
 WEBHOOK_DROP_PENDING_UPDATES=true
@@ -184,8 +184,7 @@ WEBHOOK_WORKER_SHUTDOWN_TIMEOUT=30.0
 WEB_API_ENABLED=true
 WEB_API_HOST=0.0.0.0
 WEB_API_PORT=8080
-WEB_API_ALLOWED_ORIGINS=https://bot.example.com
-MINIAPP_CUSTOM_URL=https://bot.example.com/miniapp
+WEB_API_ALLOWED_ORIGINS=https://miniapp.example.com
 ```
 
 * `WEBHOOK_URL` — публичный HTTPS-домен прокси. К нему автоматически добавится путь из `WEBHOOK_PATH`.
@@ -458,18 +457,111 @@ curl -s https://bot.example.com/health/unified | jq
 `Caddyfile`:
 
 ```caddy
-# API
-api.domain.com {
+# Hooks + API 
+hooks.domain.com {
     encode gzip zstd
     
-    @config path /app-config.json
-    header @config Access-Control-Allow-Origin "*"
+    # Webhook пути для платежных систем
+    handle /yookassa-webhook {
+        reverse_proxy remnawave_bot:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                read_buffer 0
+            }
+        }
+    }
     
-    reverse_proxy remnawave_bot:8080 {
-        header_up Host {host}
-        header_up X-Real-IP {remote_host}
-        transport http {
-            read_buffer 0
+    handle /platega-webhook {
+        reverse_proxy remnawave_bot:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                read_buffer 0
+            }
+        }
+    }
+    
+    handle /cryptobot-webhook {
+        reverse_proxy remnawave_bot:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                read_buffer 0
+            }
+        }
+    }
+    
+    handle /wata-webhook {
+        reverse_proxy remnawave_bot:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                read_buffer 0
+            }
+        }
+    }
+    
+    handle /heleket-webhook {
+        reverse_proxy remnawave_bot:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                read_buffer 0
+            }
+        }
+    }
+    
+    handle /tribute-webhook {
+        reverse_proxy remnawave_bot:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                read_buffer 0
+            }
+        }
+    }
+    
+    handle /pal24-webhook {
+        reverse_proxy remnawave_bot:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                read_buffer 0
+            }
+        }
+    }
+    
+    handle /mulenpay-webhook {
+        reverse_proxy remnawave_bot:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                read_buffer 0
+            }
+        }
+    }
+    
+    # app-config.json с CORS
+    handle /app-config.json {
+        header Access-Control-Allow-Origin "*"
+        reverse_proxy remnawave_bot:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                read_buffer 0
+            }
+        }
+    }
+    
+    # Все остальные запросы
+    handle {
+        reverse_proxy remnawave_bot:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            transport http {
+                read_buffer 0
+            }
         }
     }
 }
@@ -518,7 +610,6 @@ podpiska.domain.com {
 
 ```nginx
 events {}
-
 http {
     include /etc/nginx/mime.types;
     sendfile on;
@@ -527,16 +618,113 @@ http {
         server remnawave_bot:8080;
     }
     
-    # API домен
+    # Hooks + API домен
     server {
         listen 80;
         listen 443 ssl http2;
-        server_name api.domain.com;
+        server_name hooks.domain.com;
         
         ssl_certificate /etc/ssl/private/api.fullchain.pem;
         ssl_certificate_key /etc/ssl/private/api.privkey.pem;
         
         client_max_body_size 32m;
+        
+        # Webhook пути для платежных систем
+        location = /yookassa-webhook {
+            proxy_pass http://remnawave_bot_unified;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_buffering off;
+            proxy_request_buffering off;
+        }
+        
+        location = /platega-webhook {
+            proxy_pass http://remnawave_bot_unified;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_buffering off;
+            proxy_request_buffering off;
+        }
+        
+        location = /cryptobot-webhook {
+            proxy_pass http://remnawave_bot_unified;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_buffering off;
+            proxy_request_buffering off;
+        }
+        
+        location = /wata-webhook {
+            proxy_pass http://remnawave_bot_unified;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_buffering off;
+            proxy_request_buffering off;
+        }
+        
+        location = /heleket-webhook {
+            proxy_pass http://remnawave_bot_unified;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_buffering off;
+            proxy_request_buffering off;
+        }
+        
+        location = /tribute-webhook {
+            proxy_pass http://remnawave_bot_unified;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_buffering off;
+            proxy_request_buffering off;
+        }
+        
+        location = /pal24-webhook {
+            proxy_pass http://remnawave_bot_unified;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_buffering off;
+            proxy_request_buffering off;
+        }
+        
+        location = /mulenpay-webhook {
+            proxy_pass http://remnawave_bot_unified;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_buffering off;
+            proxy_request_buffering off;
+        }
         
         # app-config.json с CORS
         location = /app-config.json {
@@ -566,7 +754,7 @@ http {
     server {
         listen 80;
         listen 443 ssl http2;
-        server_name podpiska.domain.com;
+        server_name miniapp.domain.com;
         
         ssl_certificate /etc/ssl/private/podpiska.fullchain.pem;
         ssl_certificate_key /etc/ssl/private/podpiska.privkey.pem;
