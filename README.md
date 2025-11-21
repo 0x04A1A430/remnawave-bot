@@ -624,8 +624,8 @@ http {
         listen 443 ssl http2;
         server_name hooks.domain.com;
         
-        ssl_certificate /etc/ssl/private/api.fullchain.pem;
-        ssl_certificate_key /etc/ssl/private/api.privkey.pem;
+        ssl_certificate /etc/ssl/private/hooks.fullchain.pem;
+        ssl_certificate_key /etc/ssl/private/hooks.privkey.pem;
         
         client_max_body_size 32m;
         
@@ -756,8 +756,8 @@ http {
         listen 443 ssl http2;
         server_name miniapp.domain.com;
         
-        ssl_certificate /etc/ssl/private/podpiska.fullchain.pem;
-        ssl_certificate_key /etc/ssl/private/podpiska.privkey.pem;
+        ssl_certificate /etc/ssl/private/miniapp.fullchain.pem;
+        ssl_certificate_key /etc/ssl/private/miniapp.privkey.pem;
         
         client_max_body_size 32m;
         
@@ -804,6 +804,75 @@ http {
 - Откройте входящие 80/443 в файерволе.
 - Если используете Cloudflare/анти-DDoS, разрешите методы `POST` и заголовок `X-Telegram-Bot-Api-Secret-Token`.
 - После развёртывания перезапустите бот (`make reload`), чтобы он заново зарегистрировал webhook.
+
+#### Быстрая настройка SSL для Nginx
+
+##### 1. Установка Certbot
+```bash
+sudo apt update && sudo apt install certbot -y
+```
+
+##### 2. Генерация сертификатов
+```bash
+# Остановите Nginx
+docker compose down
+
+# Сгенерируйте сертификаты
+sudo certbot certonly --standalone -d hooks.domain.com --agree-tos --email your-email@example.com --non-interactive
+sudo certbot certonly --standalone -d miniapp.domain.com --agree-tos --email your-email@example.com --non-interactive
+```
+
+##### 3. Копирование сертификатов
+```bash
+sudo mkdir -p /etc/ssl/private
+
+sudo cp /etc/letsencrypt/live/hooks.domain.com/fullchain.pem /etc/ssl/private/hooks.fullchain.pem
+sudo cp /etc/letsencrypt/live/hooks.domain.com/privkey.pem /etc/ssl/private/hooks.privkey.pem
+sudo cp /etc/letsencrypt/live/miniapp.domain.com/fullchain.pem /etc/ssl/private/miniapp.fullchain.pem
+sudo cp /etc/letsencrypt/live/miniapp.domain.com/privkey.pem /etc/ssl/private/miniapp.privkey.pem
+
+sudo chmod 600 /etc/ssl/private/*.pem
+```
+
+##### 4. Добавление volume в docker-compose.yml
+```yaml
+volumes:
+  - /etc/ssl/private:/etc/ssl/private:ro
+```
+
+##### 5. Запуск
+```bash
+docker compose up -d
+```
+
+##### 6. Автообновление (опционально)
+```bash
+# Создайте скрипт
+sudo nano /opt/renew-certs.sh
+```
+
+Содержимое скрипта:
+```bash
+#!/bin/bash
+certbot renew --quiet
+cp /etc/letsencrypt/live/hooks.domain.com/*.pem /etc/ssl/private/
+cp /etc/letsencrypt/live/miniapp.domain.com/*.pem /etc/ssl/private/
+chmod 600 /etc/ssl/private/*.pem
+docker exec nginx nginx -s reload
+```
+
+```bash
+sudo chmod +x /opt/renew-certs.sh
+echo "0 3 * * * /opt/renew-certs.sh" | sudo crontab -
+```
+
+##### Проверка
+```bash
+curl -I https://hooks.domain.com
+curl -I https://miniapp.domain.com
+```
+
+**Важно:** Замените `domain.com` и `your-email@example.com` на свои данные!
 
 ---
 
