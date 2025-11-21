@@ -15,36 +15,6 @@ from app.external.telegram_stars import TelegramStarsService
 logger = logging.getLogger(__name__)
 
 
-_user_stars_messages: dict[int, dict[str, int]] = {}
-
-
-def _remember_user_message(user_id: int, key: str, message_id: int) -> None:
-    """Сохраняет ID служебного сообщения Stars для последующего удаления."""
-
-    store = _user_stars_messages.setdefault(user_id, {})
-    store[key] = message_id
-
-
-def _pop_user_message(user_id: int, key: str) -> int | None:
-    """Извлекает и удаляет сохранённый ID сообщения пользователя."""
-
-    store = _user_stars_messages.get(user_id)
-    if not store:
-        return None
-
-    message_id = store.pop(key, None)
-    if not store:
-        _user_stars_messages.pop(user_id, None)
-
-    return message_id
-
-
-def pop_stars_invoice_message(user_id: int) -> int | None:
-    """Возвращает сохранённое сообщение с invoice Stars для удаления."""
-
-    return _pop_user_message(user_id, "stars_invoice_message_id")
-
-
 @error_handler
 async def start_stars_payment(
     callback: types.CallbackQuery,
@@ -81,12 +51,9 @@ async def start_stars_payment(
         message_text,
         reply_markup=keyboard
     )
-
+    
     await state.set_state(BalanceStates.waiting_for_amount)
-    await state.update_data(
-        payment_method="stars",
-        stars_prompt_message_id=callback.message.message_id,
-    )
+    await state.update_data(payment_method="stars")
     await callback.answer()
 
 
@@ -98,75 +65,40 @@ async def process_stars_payment_amount(
     state: FSMContext
 ):
     texts = get_texts(db_user.language)
-
+    
     if not settings.TELEGRAM_STARS_ENABLED:
         await message.answer("⚠️ Оплата Stars временно недоступна")
         return
-
+    
     try:
         amount_rubles = amount_kopeks / 100
         stars_amount = TelegramStarsService.calculate_stars_from_rubles(amount_rubles)
-        stars_rate = settings.get_stars_rate()
-
+        stars_rate = settings.get_stars_rate() 
+        
         payment_service = PaymentService(message.bot)
         invoice_link = await payment_service.create_stars_invoice(
             amount_kopeks=amount_kopeks,
             description=f"Пополнение баланса на {texts.format_price(amount_kopeks)}",
             payload=f"balance_{db_user.id}_{amount_kopeks}"
         )
-
-        keyboard = types.InlineKeyboardMarkup(
-            inline_keyboard=[
-                [types.InlineKeyboardButton(text="⭐ Оплатить", url=invoice_link)],
-                [
-                    types.InlineKeyboardButton(
-                        text=texts.BACK, callback_data="balance_topup"
-                    )
-                ],
-            ]
-        )
-
-        prompt_data = await state.get_data()
-        prompt_message_id = prompt_data.get("stars_prompt_message_id")
-
-        if prompt_message_id:
-            try:
-                await message.bot.delete_message(
-                    chat_id=message.chat.id,
-                    message_id=prompt_message_id,
-                )
-            except Exception:
-                logger.warning(
-                    "Не удалось удалить сообщение с запросом суммы Stars",
-                    exc_info=True,
-                )
-
-        try:
-            await message.delete()
-        except Exception:
-            logger.warning(
-                "Не удалось удалить сообщение пользователя с суммой Stars",
-                exc_info=True,
-            )
-
-        invoice_message = await message.answer(
-            f"⭐ <b>Оплата через Telegram Stars</b>\n\n",
-            f"💰 Сумма: {texts.format_price(amount_kopeks)}\n",
-            f"⭐ К оплате: {stars_amount} звезд\n",
-            f"📊 Курс: {stars_rate}₽ за звезду\n\n",
+        
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+            [types.InlineKeyboardButton(text="⭐ Оплатить", url=invoice_link)],
+            [types.InlineKeyboardButton(text=texts.BACK, callback_data="balance_topup")]
+        ])
+        
+        await message.answer(
+            f"⭐ <b>Оплата через Telegram Stars</b>\n\n"
+            f"💰 Сумма: {texts.format_price(amount_kopeks)}\n"
+            f"⭐ К оплате: {stars_amount} звезд\n"
+            f"📊 Курс: {stars_rate}₽ за звезду\n\n"
             f"Нажмите кнопку ниже для оплаты:",
             reply_markup=keyboard,
-            parse_mode="HTML",
+            parse_mode="HTML"
         )
-
-        _remember_user_message(
-            db_user.telegram_id,
-            "stars_invoice_message_id",
-            invoice_message.message_id,
-        )
-
+        
         await state.clear()
-
+        
     except Exception as e:
         logger.error(f"Ошибка создания Stars invoice: {e}")
         await message.answer("⚠️ Ошибка создания платежа")
