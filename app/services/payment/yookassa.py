@@ -383,11 +383,19 @@ class YooKassaPaymentMixin:
             payment_module = import_module("app.services.payment_service")
 
             # Проверяем, не обрабатывается ли уже этот платеж (защита от дублирования)
-            existing_transaction = await payment_module.get_transaction_by_external_id(  # type: ignore[attr-defined]
-                db,
-                payment.yookassa_payment_id,
-                PaymentMethod.YOOKASSA,
+            get_transaction_by_external_id = getattr(
+                payment_module, "get_transaction_by_external_id", None
             )
+            existing_transaction = None
+            if get_transaction_by_external_id:
+                try:
+                    existing_transaction = await get_transaction_by_external_id(  # type: ignore[attr-defined]
+                        db,
+                        payment.yookassa_payment_id,
+                        PaymentMethod.YOOKASSA,
+                    )
+                except AttributeError:
+                    logger.debug("get_transaction_by_external_id недоступен, пропускаем проверку дубликатов")
             
             if existing_transaction:
                 # Если транзакция уже существует, просто завершаем обработку
@@ -437,6 +445,22 @@ class YooKassaPaymentMixin:
             except Exception as parse_error:
                 logger.error(f"Ошибка парсинга метаданных платежа: {parse_error}")
 
+            invoice_message = payment_metadata.get("invoice_message") or {}
+            if getattr(self, "bot", None):
+                chat_id = invoice_message.get("chat_id")
+                message_id = invoice_message.get("message_id")
+                if chat_id and message_id:
+                    try:
+                        await self.bot.delete_message(chat_id, message_id)
+                    except Exception as delete_error:  # pragma: no cover - depends on bot rights
+                        logger.warning(
+                            "Не удалось удалить сообщение YooKassa %s: %s",
+                            message_id,
+                            delete_error,
+                        )
+                    else:
+                        payment_metadata.pop("invoice_message", None)
+
             processing_completed = bool(payment_metadata.get("processing_completed"))
 
             transaction = None
@@ -472,11 +496,20 @@ class YooKassaPaymentMixin:
                     )
 
             if transaction is None:
-                existing_transaction = await payment_module.get_transaction_by_external_id(  # type: ignore[attr-defined]
-                    db,
-                    payment.yookassa_payment_id,
-                    PaymentMethod.YOOKASSA,
+                get_transaction_by_external_id = getattr(
+                    payment_module, "get_transaction_by_external_id", None
                 )
+                existing_transaction = None
+
+                if get_transaction_by_external_id:
+                    try:
+                        existing_transaction = await get_transaction_by_external_id(  # type: ignore[attr-defined]
+                            db,
+                            payment.yookassa_payment_id,
+                            PaymentMethod.YOOKASSA,
+                        )
+                    except AttributeError:
+                        logger.debug("get_transaction_by_external_id недоступен, пропускаем проверку дубликатов")
                 
                 if existing_transaction:
                     # Если транзакция уже существует, пропускаем обработку
