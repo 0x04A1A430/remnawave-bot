@@ -565,7 +565,7 @@ hooks.domain.com {
 }
 
 # Статика для miniapp
-podpiska.domain.com {
+miniapp.domain.com {
     encode gzip zstd
     
     # API эндпоинты /miniapp/* в приложение
