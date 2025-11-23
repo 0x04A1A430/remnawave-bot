@@ -428,13 +428,12 @@ async def sync_from_panel(
 async def sync_to_panel(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
-    limit: int = Query(None, ge=1, le=10000, description="Ограничение на количество пользователей для синхронизации")
 ) -> RemnaWaveGenericSyncResponse:
     service = _get_service()
     _ensure_service_configured(service)
 
-    stats = await service.sync_users_to_panel(db, limit=limit)
-    detail = f"Синхронизация в панель выполнена (лимит: {limit if limit else 'все'})"
+    stats = await service.sync_users_to_panel(db)
+    detail = "Синхронизация в панель выполнена"
     return RemnaWaveGenericSyncResponse(success=True, detail=detail, data=stats)
 
 
