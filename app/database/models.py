@@ -1078,6 +1078,30 @@ class SentNotification(Base):
     subscription = relationship("Subscription", backref="sent_notifications")
 
 
+class SubscriptionEvent(Base):
+    __tablename__ = "subscription_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String(50), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    subscription_id = Column(
+        Integer, ForeignKey("subscriptions.id", ondelete="SET NULL"), nullable=True
+    )
+    transaction_id = Column(
+        Integer, ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True
+    )
+    amount_kopeks = Column(Integer, nullable=True)
+    currency = Column(String(16), nullable=True)
+    message = Column(Text, nullable=True)
+    occurred_at = Column(DateTime, nullable=False, default=func.now())
+    extra = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+
+    user = relationship("User", backref="subscription_events")
+    subscription = relationship("Subscription", backref="subscription_events")
+    transaction = relationship("Transaction", backref="subscription_events")
+
+
 class DiscountOffer(Base):
     __tablename__ = "discount_offers"
     __table_args__ = (
