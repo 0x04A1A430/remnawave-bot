@@ -2297,12 +2297,6 @@ async def show_sync_options(
         ],
         [
             types.InlineKeyboardButton(
-                text="🔄 Обратная синхронизация",
-                callback_data="sync_to_panel",
-            )
-        ],
-        [
-            types.InlineKeyboardButton(
                 text="⚙️ Настройки автосинхронизации",
                 callback_data="admin_rw_auto_sync",
             )
@@ -2313,94 +2307,6 @@ async def show_sync_options(
     await callback.message.edit_text(
         text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
-    )
-    await callback.answer()
-
-
-@admin_required
-@error_handler
-async def sync_users_to_panel(
-    callback: types.CallbackQuery,
-    db_user: User,
-    db: AsyncSession
-):
-
-    progress_text = """
-🔄 <b>Выполняется обратная синхронизация...</b>
-
-📋 Этапы:
-• Загрузка ВСЕХ пользователей из бота
-• Проверка существования в панели Remnawave
-• Создание новых пользователей в панели
-• Обновление данных существующих пользователей
-• Настройка подписок и трафика
-
-⏳ Пожалуйста, подождите...
-"""
-
-    await callback.message.edit_text(progress_text, reply_markup=None)
-
-    remnawave_service = RemnaWaveService()
-    stats = await remnawave_service.sync_users_to_panel(db)
-
-    total_operations = stats['created'] + stats['updated']
-
-    if stats['errors'] == 0:
-        status_emoji = "✅"
-        status_text = "успешно завершена"
-    elif stats['errors'] < total_operations:
-        status_emoji = "⚠️"
-        status_text = "завершена с предупреждениями"
-    else:
-        status_emoji = "❌"
-        status_text = "завершена с ошибками"
-
-    text = f"""
-{status_emoji} <b>Обратная синхронизация {status_text}</b>
-
-📊 <b>Результат:</b>
-• 🆕 Создано в панели: {stats['created']}
-• 🔄 Обновлено в панели: {stats['updated']}
-• ❌ Ошибок: {stats['errors']}
-"""
-
-    if stats['errors'] > 0:
-        text += f"""
-
-⚠️ <b>Внимание:</b>
-Некоторые операции завершились с ошибками.
-Проверьте логи для получения подробной информации.
-"""
-
-    text += f"""
-
-💡 <b>Рекомендации:</b>
-• Обратная синхронизация выполнена
-• Все пользователи из бота теперь в панели Remnawave
-• Подписки пользователей синхронизированы (если есть)
-"""
-
-    keyboard = []
-
-    if stats['errors'] > 0:
-        keyboard.append([
-            types.InlineKeyboardButton(
-                text="🔄 Повторить синхронизацию",
-                callback_data="sync_to_panel"
-            )
-        ])
-
-    keyboard.extend([
-        [
-            types.InlineKeyboardButton(text="📊 Статистика системы", callback_data="admin_rw_system"),
-            types.InlineKeyboardButton(text="🌐 Ноды", callback_data="admin_rw_nodes")
-        ],
-        [types.InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_remnawave")]
-    ])
-
-    await callback.message.edit_text(
-        text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard)
     )
     await callback.answer()
 
@@ -3214,7 +3120,6 @@ def register_handlers(dp: Dispatcher):
     dp.callback_query.register(manage_node, F.data.startswith("node_restart_"))
     dp.callback_query.register(restart_all_nodes, F.data == "admin_restart_all_nodes")
     dp.callback_query.register(show_sync_options, F.data == "admin_rw_sync")
-    dp.callback_query.register(sync_users_to_panel, F.data == "sync_to_panel")
     dp.callback_query.register(show_auto_sync_settings, F.data == "admin_rw_auto_sync")
     dp.callback_query.register(toggle_auto_sync_setting, F.data == "remnawave_auto_sync_toggle")
     dp.callback_query.register(prompt_auto_sync_schedule, F.data == "remnawave_auto_sync_times")
