@@ -541,7 +541,11 @@ class PromoGroup(Base):
             "traffic": self.traffic_discount_percent,
             "devices": self.device_discount_percent,
         }
-        percent = mapping.get(category, 0)
+        percent = mapping.get(category) or 0
+
+        if percent == 0 and self.is_default:
+            base_period_discount = self._get_period_discount(period_days)
+            percent = max(percent, base_period_discount)
 
         return max(0, min(100, percent))
 
