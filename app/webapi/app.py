@@ -22,6 +22,7 @@ from .routes import (
     pages,
     remnawave,
     servers,
+    subscription_events,
     stats,
     subscriptions,
     tickets,
@@ -113,6 +114,13 @@ OPENAPI_TAGS = [
         "name": "pages",
         "description": "Управление контентом публичных страниц: оферта, политика, FAQ и правила.",
     },
+    {
+        "name": "notifications",
+        "description": (
+            "Получение и просмотр уведомлений о покупках, активациях и продлениях подписок "
+            "для административной панели."
+        ),
+    },
 ]
 
 
@@ -167,5 +175,10 @@ def create_web_api_app() -> FastAPI:
     app.include_router(miniapp.router, prefix="/miniapp", tags=["miniapp"])
     app.include_router(polls.router, prefix="/polls", tags=["polls"])
     app.include_router(logs.router, prefix="/logs", tags=["logs"])
+    app.include_router(
+        subscription_events.router,
+        prefix="/notifications/subscriptions",
+        tags=["notifications"],
+    )
 
     return app
