@@ -539,6 +539,13 @@ class RemnaWaveService:
                         nodes_weekly_data = list(nodes_by_name.values())
                         nodes_weekly_data.sort(key=lambda x: x['total_bytes'], reverse=True)
                 
+                    uptime_seconds = 0
+                    uptime_value = system_stats.get('uptime')
+                    try:
+                        uptime_seconds = int(float(uptime_value)) if uptime_value is not None else 0
+                    except (TypeError, ValueError):
+                        logger.warning(f"Не удалось преобразовать uptime '{uptime_value}' в число, используем 0")
+
                     result = {
                         "system": {
                             "users_online": system_stats.get('onlineStats', {}).get('onlineNow', 0),
@@ -558,7 +565,7 @@ class RemnaWaveService:
                             "memory_used": system_stats.get('memory', {}).get('used', 0),
                             "memory_free": system_stats.get('memory', {}).get('free', 0),
                             "memory_available": system_stats.get('memory', {}).get('available', 0),
-                            "uptime_seconds": system_stats.get('uptime', 0)
+                            "uptime_seconds": uptime_seconds
                         },
                         "bandwidth": {
                             "realtime_download": total_download,
