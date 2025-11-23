@@ -135,6 +135,24 @@ CORE_PRICING_ENTRIES: Tuple[SettingEntry, ...] = (
         action="price",
     ),
     SettingEntry(
+        key="BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED",
+        section="core",
+        label_ru="🎟️ Базовые скидки для групп",
+        label_en="🎟️ Base group discounts",
+        action="toggle",
+        description_ru="Включает применение базовых скидок для групповых промо-периодов.",
+        description_en="Enables base discounts for promo group periods.",
+    ),
+    SettingEntry(
+        key="BASE_PROMO_GROUP_PERIOD_DISCOUNTS",
+        section="core",
+        label_ru="🔖 Скидки по периодам",
+        label_en="🔖 Period discounts",
+        action="input",
+        description_ru="Формат: список пар дней и скидки через запятую (например 30:10,60:20).",
+        description_en="Format: comma-separated day/discount pairs (e.g. 30:10,60:20).",
+    ),
+    SettingEntry(
         key="DEFAULT_DEVICE_LIMIT",
         section="core",
         label_ru="📱 Устройств по умолчанию",
@@ -204,6 +222,26 @@ SETTING_ENTRIES_BY_SECTION: Dict[str, Tuple[SettingEntry, ...]] = {
 SETTING_ENTRY_BY_KEY: Dict[str, SettingEntry] = {
     entry.key: entry for entries in SETTING_ENTRIES_BY_SECTION.values() for entry in entries
 }
+
+SETTING_ENTRIES: Tuple[SettingEntry, ...] = tuple(
+    entry for entries in SETTING_ENTRIES_BY_SECTION.values() for entry in entries
+)
+
+SETTING_KEY_TO_TOKEN: Dict[str, str] = {
+    entry.key: f"s{index}" for index, entry in enumerate(SETTING_ENTRIES)
+}
+
+SETTING_TOKEN_TO_KEY: Dict[str, str] = {
+    token: key for key, token in SETTING_KEY_TO_TOKEN.items()
+}
+
+
+def _encode_setting_callback_key(key: str) -> str:
+    return SETTING_KEY_TO_TOKEN.get(key, key)
+
+
+def _decode_setting_callback_key(raw: str) -> str:
+    return SETTING_TOKEN_TO_KEY.get(raw, raw)
 
 
 def _traffic_package_sort_key(package: Dict[str, Any]) -> Tuple[int, int]:
@@ -447,7 +485,9 @@ def _build_settings_section(
                 [
                     types.InlineKeyboardButton(
                         text=button_text,
-                        callback_data=f"admin_pricing_toggle:{section}:{entry.key}",
+                        callback_data=(
+                            f"admin_pricing_toggle:{section}:{_encode_setting_callback_key(entry.key)}"
+                        ),
                     )
                 ]
             )
@@ -461,7 +501,7 @@ def _build_settings_section(
                     types.InlineKeyboardButton(
                         text=f"{icon} {option.label(lang_code)}",
                         callback_data=(
-                            f"admin_pricing_choice:{section}:{entry.key}:{option.value}"
+                            f"admin_pricing_choice:{section}:{_encode_setting_callback_key(entry.key)}:{option.value}"
                         ),
                     )
                 )
@@ -477,7 +517,9 @@ def _build_settings_section(
                 [
                     types.InlineKeyboardButton(
                         text=button_text,
-                        callback_data=f"admin_pricing_setting:{section}:{entry.key}",
+                        callback_data=(
+                            f"admin_pricing_setting:{section}:{_encode_setting_callback_key(entry.key)}"
+                        ),
                     )
                 ]
             )
@@ -939,11 +981,12 @@ async def start_setting_edit(
     state: FSMContext,
 ) -> None:
     try:
-        _, section, key = callback.data.split(":", 2)
+        _, section, raw_key = callback.data.split(":", 2)
     except ValueError:
         await callback.answer()
         return
 
+    key = _decode_setting_callback_key(raw_key)
     entry = SETTING_ENTRY_BY_KEY.get(key)
     texts = get_texts(db_user.language)
     lang_code = _language_code(db_user.language)
@@ -1140,11 +1183,12 @@ async def toggle_setting(
     state: FSMContext,
 ) -> None:
     try:
-        _, section, key = callback.data.split(":", 2)
+        _, section, raw_key = callback.data.split(":", 2)
     except ValueError:
         await callback.answer()
         return
 
+    key = _decode_setting_callback_key(raw_key)
     entry = SETTING_ENTRY_BY_KEY.get(key)
     if not entry or entry.action != "toggle":
         await callback.answer()
@@ -1171,11 +1215,12 @@ async def select_setting_choice(
     state: FSMContext,
 ) -> None:
     try:
-        _, section, key, value_raw = callback.data.split(":", 3)
+        _, section, raw_key, value_raw = callback.data.split(":", 3)
     except ValueError:
         await callback.answer()
         return
 
+    key = _decode_setting_callback_key(raw_key)
     entry = SETTING_ENTRY_BY_KEY.get(key)
     if not entry or entry.action != "choice" or not entry.choices:
         await callback.answer()
