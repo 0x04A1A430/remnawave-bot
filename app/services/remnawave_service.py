@@ -147,6 +147,12 @@ class RemnaWaveService:
                 password=auth_params.get("password")
             )
 
+    def _gb_to_bytes(self, gb: int) -> int:
+        """Конвертирует гигабайты в байты"""
+        if gb == 0:
+            return 0
+        return gb * 1024 * 1024 * 1024
+
     @property
     def is_configured(self) -> bool:
         return self._config_error is None
@@ -2500,5 +2506,132 @@ class RemnaWaveService:
             "api_url": settings.REMNAWAVE_API_URL,
             "attempts_used": attempts,
         }
-        
+
+    async def sync_users_to_panel(self, db: AsyncSession, limit: Optional[int] = None) -> Dict[str, int]:
+        """
+        Синхронизирует пользователей бота в RemnaWave панель (бот → RemnaWave)
+        """
+        from datetime import datetime, timedelta
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+        from app.database.models import User, Subscription
+        from app.external.remnawave_api import UserStatus, TrafficLimitStrategy
+
+        stats = {"created": 0, "updated": 0, "errors": 0, "total_processed": 0}
+
+        try:
+            # Получаем всех пользователей с их подписками
+            users_query = select(User).options(selectinload(User.subscription))
+
+            if limit:
+                users_query = users_query.limit(limit)
+
+            result = await db.execute(users_query)
+            users = result.scalars().unique().all()
+
+            logger.info(f"🚀 Начинаем синхронизацию {len(users)} пользователей в RemnaWave")
+
+            async with self.get_api_client() as api:
+                for user in users:
+                    stats["total_processed"] += 1
+
+                    try:
+                        # Проверяем, есть ли уже пользователь в RemnaWave
+                        existing_users = await api.get_user_by_telegram_id(user.telegram_id)
+
+                        if existing_users:
+                            # Пользователь уже существует - обновляем его данные
+                            remnawave_user = existing_users[0]
+                            update_kwargs = {
+                                'uuid': remnawave_user.uuid,
+                                'description': settings.format_remnawave_user_description(
+                                    full_name=user.full_name,
+                                    username=user.username,
+                                    telegram_id=user.telegram_id
+                                )
+                            }
+
+                            # Если у пользователя есть активная подписка, обновляем и её параметры
+                            if hasattr(user, 'subscription') and user.subscription:
+                                from app.services.subscription_service import get_traffic_reset_strategy
+
+                                update_kwargs.update({
+                                    'status': UserStatus.ACTIVE if user.subscription.end_date > datetime.utcnow() else UserStatus.DISABLED,
+                                    'expire_at': user.subscription.end_date,
+                                    'traffic_limit_bytes': self._gb_to_bytes(user.subscription.traffic_limit_gb),
+                                    'traffic_limit_strategy': get_traffic_reset_strategy(),
+                                    'active_internal_squads': user.subscription.connected_squads
+                                })
+
+                                # Устанавливаем лимит устройств
+                                from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
+                                hwid_limit = resolve_hwid_device_limit_for_payload(user.subscription)
+                                if hwid_limit is not None:
+                                    update_kwargs['hwid_device_limit'] = hwid_limit
+
+                            await api.update_user(**update_kwargs)
+                            stats["updated"] += 1
+
+                            logger.info(f"🔄 Пользователь {user.telegram_id} обновлен в RemnaWave")
+
+                        else:
+                            # Создаем нового пользователя в RemnaWave
+                            username = settings.format_remnawave_username(
+                                full_name=user.full_name,
+                                username=user.username,
+                                telegram_id=user.telegram_id,
+                            )
+
+                            # Подготовим параметры для создания
+                            create_kwargs = {
+                                'username': username,
+                                'telegram_id': user.telegram_id,
+                                'description': settings.format_remnawave_user_description(
+                                    full_name=user.full_name,
+                                    username=user.username,
+                                    telegram_id=user.telegram_id
+                                )
+                            }
+
+                            # Если у пользователя есть активная подписка, используем её данные
+                            if hasattr(user, 'subscription') and user.subscription:
+                                from app.services.subscription_service import get_traffic_reset_strategy
+
+                                create_kwargs.update({
+                                    'status': UserStatus.ACTIVE if user.subscription.end_date > datetime.utcnow() else UserStatus.DISABLED,
+                                    'expire_at': user.subscription.end_date,
+                                    'traffic_limit_bytes': self._gb_to_bytes(user.subscription.traffic_limit_gb),
+                                    'traffic_limit_strategy': get_traffic_reset_strategy(),
+                                    'active_internal_squads': user.subscription.connected_squads
+                                })
+
+                                # Устанавливаем лимит устройств
+                                from app.utils.subscription_utils import resolve_hwid_device_limit_for_payload
+                                hwid_limit = resolve_hwid_device_limit_for_payload(user.subscription)
+                                if hwid_limit is not None:
+                                    create_kwargs['hwid_device_limit'] = hwid_limit
+                            else:
+                                # Для пользователей без подписки - создаем с базовыми параметрами
+                                create_kwargs.update({
+                                    'status': UserStatus.DISABLED,  # По умолчанию отключаем
+                                    'expire_at': datetime.utcnow() + timedelta(days=30),  # 30 дней по умолчанию
+                                    'traffic_limit_bytes': 0,  # 0 трафика по умолчанию
+                                    'traffic_limit_strategy': TrafficLimitStrategy.NO_RESET
+                                })
+
+                            await api.create_user(**create_kwargs)
+                            stats["created"] += 1
+
+                            logger.info(f"✅ Пользователь {user.telegram_id} создан в RemnaWave")
+
+                    except Exception as user_error:
+                        logger.error(f"❌ Ошибка синхронизации пользователя {user.telegram_id}: {user_error}")
+                        stats["errors"] += 1
+
+            logger.info(f"✅ Синхронизация завершена. Создано: {stats['created']}, Обновлено: {stats['updated']}, Ошибок: {stats['errors']}")
+            return stats
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка синхронизации пользователей в RemnaWave: {e}")
+            raise e
 
