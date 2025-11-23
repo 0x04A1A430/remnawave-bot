@@ -72,11 +72,8 @@ def calculate_user_price(
         # Get user's promo group discount for this category
         discount_percent = user.get_promo_discount(category, period_days)
     else:
-        # For None user, use base settings discount (only for period category)
-        if category == "period":
-            discount_percent = settings.get_base_promo_group_period_discount(period_days)
-        else:
-            discount_percent = 0
+        # For None user, use base settings discount
+        discount_percent = settings.get_base_promo_group_period_discount(period_days)
 
     logger.debug(
         f"calculate_user_price: user={user.telegram_id if user else 'None'}, "
