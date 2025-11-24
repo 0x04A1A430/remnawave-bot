@@ -758,6 +758,7 @@ def get_subscription_keyboard(
     
     texts = get_texts(language)
     keyboard = []
+    has_direct_payment_methods = False
 
     if has_subscription:
         subscription_link = get_display_subscription_link(subscription) if subscription else None
@@ -1146,6 +1147,7 @@ def get_balance_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMark
 def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LANGUAGE) -> InlineKeyboardMarkup:
     texts = get_texts(language)
     keyboard = []
+    has_direct_payment_methods = False
 
     amount_kopeks = max(0, int(amount_kopeks or 0))
 
@@ -1161,6 +1163,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
                 callback_data=_build_callback("stars")
             )
         ])
+        has_direct_payment_methods = True
 
     if settings.is_yookassa_enabled():
         if settings.YOOKASSA_SBP_ENABLED:
@@ -1170,6 +1173,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
                     callback_data=_build_callback("yookassa_sbp"),
                 )
             ])
+            has_direct_payment_methods = True
 
         keyboard.append([
             InlineKeyboardButton(
@@ -1177,6 +1181,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
                 callback_data=_build_callback("yookassa"),
             )
         ])
+        has_direct_payment_methods = True
 
     if settings.TRIBUTE_ENABLED:
         keyboard.append([
@@ -1185,6 +1190,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
                 callback_data=_build_callback("tribute")
             )
         ])
+        has_direct_payment_methods = True
 
     if settings.is_mulenpay_enabled():
         mulenpay_name = settings.get_mulenpay_display_name()
@@ -1197,6 +1203,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
                 callback_data=_build_callback("mulenpay")
             )
         ])
+        has_direct_payment_methods = True
 
     if settings.is_wata_enabled():
         keyboard.append([
@@ -1205,6 +1212,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
                 callback_data=_build_callback("wata")
             )
         ])
+        has_direct_payment_methods = True
 
     if settings.is_pal24_enabled():
         keyboard.append([
@@ -1213,6 +1221,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
                 callback_data=_build_callback("pal24")
             )
         ])
+        has_direct_payment_methods = True
 
     if settings.is_platega_enabled() and settings.get_platega_active_methods():
         keyboard.append([
@@ -1221,6 +1230,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
                 callback_data=_build_callback("platega"),
             )
         ])
+        has_direct_payment_methods = True
 
     if settings.is_cryptobot_enabled():
         keyboard.append([
@@ -1229,6 +1239,7 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
                 callback_data=_build_callback("cryptobot")
             )
         ])
+        has_direct_payment_methods = True
 
     if settings.is_heleket_enabled():
         keyboard.append([
@@ -1237,15 +1248,24 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
                 callback_data=_build_callback("heleket")
             )
         ])
+        has_direct_payment_methods = True
 
-    keyboard.append([
-        InlineKeyboardButton(
-            text=texts.t("PAYMENT_VIA_SUPPORT", "🛠️ Через поддержку"),
-            callback_data="topup_support"
-        )
-    ])
+    if settings.is_support_topup_enabled():
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("PAYMENT_VIA_SUPPORT", "🛠️ Через поддержку"),
+                callback_data="topup_support"
+            )
+        ])
 
-    if len(keyboard) == 1:
+    if not keyboard:
+        keyboard.append([
+            InlineKeyboardButton(
+                text=texts.t("PAYMENTS_TEMPORARILY_UNAVAILABLE", "⚠️ Способы оплаты временно недоступны"),
+                callback_data="payment_methods_unavailable"
+            )
+        ])
+    elif not has_direct_payment_methods and settings.is_support_topup_enabled():
         keyboard.insert(0, [
             InlineKeyboardButton(
                 text=texts.t("PAYMENTS_TEMPORARILY_UNAVAILABLE", "⚠️ Способы оплаты временно недоступны"),
