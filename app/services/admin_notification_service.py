@@ -744,6 +744,8 @@ class AdminNotificationService:
         user: User,
         promocode_data: Dict[str, Any],
         effect_description: str,
+        balance_before_kopeks: int | None = None,
+        balance_after_kopeks: int | None = None,
     ) -> bool:
         try:
             await self._record_subscription_event(
@@ -766,6 +768,8 @@ class AdminNotificationService:
                         if isinstance(promocode_data.get("valid_until"), datetime)
                         else promocode_data.get("valid_until")
                     ),
+                    "balance_before_kopeks": balance_before_kopeks,
+                    "balance_after_kopeks": balance_after_kopeks,
                 },
             )
         except Exception:
@@ -820,6 +824,13 @@ class AdminNotificationService:
 
             message_lines.extend(
                 [
+                    "",
+                    "💼 <b>Баланс:</b>",
+                    (
+                        f"{settings.format_price(balance_before_kopeks)} → {settings.format_price(balance_after_kopeks)}"
+                        if balance_before_kopeks is not None and balance_after_kopeks is not None
+                        else "ℹ️ Баланс не изменился"
+                    ),
                     "",
                     "📝 <b>Эффект:</b>",
                     effect_description.strip() or "✅ Промокод активирован",
