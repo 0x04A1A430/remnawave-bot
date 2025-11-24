@@ -5,7 +5,7 @@ from typing import Optional, List
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import User, UserMessage
+from app.database.models import UserMessage
 
 logger = logging.getLogger(__name__)
 
@@ -13,21 +13,15 @@ logger = logging.getLogger(__name__)
 async def create_user_message(
     db: AsyncSession,
     message_text: str,
-    created_by: Optional[int] = None,
+    created_by: int,
     is_active: bool = True,
     sort_order: int = 0
 ) -> UserMessage:
-    resolved_creator = created_by
-
-    if created_by is not None:
-        result = await db.execute(select(User.id).where(User.id == created_by))
-        resolved_creator = result.scalar_one_or_none()
-
     message = UserMessage(
         message_text=message_text,
         is_active=is_active,
         sort_order=sort_order,
-        created_by=resolved_creator,
+        created_by=created_by
     )
     
     db.add(message)
@@ -67,27 +61,19 @@ async def get_random_active_message(db: AsyncSession) -> Optional[str]:
 async def get_all_user_messages(
     db: AsyncSession,
     offset: int = 0,
-    limit: int = 50,
-    include_inactive: bool = True,
+    limit: int = 50
 ) -> List[UserMessage]:
-    query = select(UserMessage).order_by(UserMessage.created_at.desc())
-    if not include_inactive:
-        query = query.where(UserMessage.is_active == True)
-
     result = await db.execute(
-        query
+        select(UserMessage)
+        .order_by(UserMessage.created_at.desc())
         .offset(offset)
         .limit(limit)
     )
     return result.scalars().all()
 
 
-async def get_user_messages_count(db: AsyncSession, include_inactive: bool = True) -> int:
-    query = select(func.count(UserMessage.id))
-    if not include_inactive:
-        query = query.where(UserMessage.is_active == True)
-
-    result = await db.execute(query)
+async def get_user_messages_count(db: AsyncSession) -> int:
+    result = await db.execute(select(func.count(UserMessage.id)))
     return result.scalar()
 
 
