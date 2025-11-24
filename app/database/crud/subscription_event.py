@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, Optional, Tuple
 
 from sqlalchemy import and_, func, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import SubscriptionEvent
@@ -62,7 +63,8 @@ async def list_subscription_events(
     total = await db.scalar(total_query) or 0
 
     result = await db.execute(
-        base_query.order_by(SubscriptionEvent.occurred_at.desc())
+        base_query.options(selectinload(SubscriptionEvent.user))
+        .order_by(SubscriptionEvent.occurred_at.desc())
         .offset(offset)
         .limit(limit)
     )
