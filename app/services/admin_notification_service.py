@@ -99,7 +99,7 @@ class AdminNotificationService:
         *,
         event_type: str,
         user: User,
-        subscription: Subscription,
+        subscription: Subscription | None,
         transaction: Transaction | None = None,
         amount_kopeks: int | None = None,
         message: str | None = None,
@@ -549,11 +549,38 @@ class AdminNotificationService:
         promo_group: PromoGroup | None,
         db: AsyncSession | None = None,
     ) -> bool:
+        logger.info("Начинаем отправку уведомления о пополнении баланса")
+
+        if db:
+            try:
+                await self._record_subscription_event(
+                    db,
+                    event_type="balance_topup",
+                    user=user,
+                    subscription=subscription,
+                    transaction=transaction,
+                    amount_kopeks=transaction.amount_kopeks,
+                    message="Balance top-up",
+                    occurred_at=transaction.completed_at or transaction.created_at,
+                    extra={
+                        "status": topup_status,
+                        "balance_before": old_balance,
+                        "balance_after": user.balance_kopeks,
+                        "referrer_info": referrer_info,
+                        "promo_group_id": getattr(promo_group, "id", None),
+                        "promo_group_name": getattr(promo_group, "name", None),
+                    },
+                )
+            except Exception:
+                logger.error(
+                    "Не удалось сохранить событие пополнения баланса пользователя %s",
+                    getattr(user, "id", "unknown"),
+                    exc_info=True,
+                )
+
         if not self._is_enabled():
             return False
 
-        logger.info("Начинаем отправку уведомления о пополнении баланса")
-        
         try:
             logger.info("Пытаемся создать сообщение уведомления")
             message = self._build_balance_topup_message(
@@ -718,6 +745,36 @@ class AdminNotificationService:
         promocode_data: Dict[str, Any],
         effect_description: str,
     ) -> bool:
+        try:
+            await self._record_subscription_event(
+                db,
+                event_type="promocode_activation",
+                user=user,
+                subscription=None,
+                transaction=None,
+                amount_kopeks=promocode_data.get("balance_bonus_kopeks"),
+                message="Promocode activation",
+                occurred_at=datetime.utcnow(),
+                extra={
+                    "code": promocode_data.get("code"),
+                    "type": promocode_data.get("type"),
+                    "subscription_days": promocode_data.get("subscription_days"),
+                    "balance_bonus_kopeks": promocode_data.get("balance_bonus_kopeks"),
+                    "description": effect_description,
+                    "valid_until": (
+                        promocode_data.get("valid_until").isoformat()
+                        if isinstance(promocode_data.get("valid_until"), datetime)
+                        else promocode_data.get("valid_until")
+                    ),
+                },
+            )
+        except Exception:
+            logger.error(
+                "Не удалось сохранить событие активации промокода пользователя %s",
+                getattr(user, "id", "unknown"),
+                exc_info=True,
+            )
+
         if not self._is_enabled():
             return False
 
@@ -784,6 +841,31 @@ class AdminNotificationService:
         campaign: AdvertisingCampaign,
         user: Optional[User] = None,
     ) -> bool:
+        if user:
+            try:
+                await self._record_subscription_event(
+                    db,
+                    event_type="referral_link_visit",
+                    user=user,
+                    subscription=None,
+                    transaction=None,
+                    amount_kopeks=None,
+                    message="Referral link visit",
+                    occurred_at=datetime.utcnow(),
+                    extra={
+                        "campaign_id": campaign.id,
+                        "campaign_name": campaign.name,
+                        "start_parameter": campaign.start_parameter,
+                        "was_registered": bool(user),
+                    },
+                )
+            except Exception:
+                logger.error(
+                    "Не удалось сохранить событие перехода по кампании для пользователя %s",
+                    getattr(user, "id", "unknown"),
+                    exc_info=True,
+                )
+
         if not self._is_enabled():
             return False
 
@@ -842,6 +924,33 @@ class AdminNotificationService:
         initiator: Optional[User] = None,
         automatic: bool = False,
     ) -> bool:
+        try:
+            await self._record_subscription_event(
+                db,
+                event_type="promo_group_change",
+                user=user,
+                subscription=None,
+                transaction=None,
+                message="Promo group change",
+                occurred_at=datetime.utcnow(),
+                extra={
+                    "old_group_id": getattr(old_group, "id", None),
+                    "old_group_name": getattr(old_group, "name", None),
+                    "new_group_id": new_group.id,
+                    "new_group_name": new_group.name,
+                    "reason": reason,
+                    "initiator_id": getattr(initiator, "id", None),
+                    "initiator_telegram_id": getattr(initiator, "telegram_id", None),
+                    "automatic": automatic,
+                },
+            )
+        except Exception:
+            logger.error(
+                "Не удалось сохранить событие смены промогруппы пользователя %s",
+                getattr(user, "id", "unknown"),
+                exc_info=True,
+            )
+
         if not self._is_enabled():
             return False
 
