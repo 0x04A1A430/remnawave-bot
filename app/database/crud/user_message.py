@@ -61,27 +61,19 @@ async def get_random_active_message(db: AsyncSession) -> Optional[str]:
 async def get_all_user_messages(
     db: AsyncSession,
     offset: int = 0,
-    limit: int = 50,
-    include_inactive: bool = True,
+    limit: int = 50
 ) -> List[UserMessage]:
-    query = select(UserMessage).order_by(UserMessage.created_at.desc())
-    if not include_inactive:
-        query = query.where(UserMessage.is_active == True)
-
     result = await db.execute(
-        query
+        select(UserMessage)
+        .order_by(UserMessage.created_at.desc())
         .offset(offset)
         .limit(limit)
     )
     return result.scalars().all()
 
 
-async def get_user_messages_count(db: AsyncSession, include_inactive: bool = True) -> int:
-    query = select(func.count(UserMessage.id))
-    if not include_inactive:
-        query = query.where(UserMessage.is_active == True)
-
-    result = await db.execute(query)
+async def get_user_messages_count(db: AsyncSession) -> int:
+    result = await db.execute(select(func.count(UserMessage.id)))
     return result.scalar()
 
 
