@@ -20,6 +20,8 @@ from .routes import (
     promocodes,
     promo_groups,
     promo_offers,
+    user_messages,
+    welcome_texts,
     pages,
     remnawave,
     servers,
@@ -49,7 +51,11 @@ OPENAPI_TAGS = [
     },
     {
         "name": "main-menu",
-        "description": "Управление кнопками главного меню Telegram-бота.",
+        "description": "Управление кнопками и сообщениями главного меню Telegram-бота.",
+    },
+    {
+        "name": "welcome-texts",
+        "description": "Создание, редактирование и управление приветственными текстами.",
     },
     {
         "name": "users",
@@ -122,8 +128,9 @@ OPENAPI_TAGS = [
     {
         "name": "notifications",
         "description": (
-            "Получение и просмотр уведомлений о покупках, активациях и продлениях подписок "
-            "для административной панели."
+            "Получение и просмотр уведомлений о покупках, активациях и продлениях подписок, "
+            "пополнениях баланса, активациях промокодов, переходах по реферальным ссылкам и "
+            "сменах промогрупп пользователей для административной панели."
         ),
     },
 ]
@@ -168,6 +175,16 @@ def create_web_api_app() -> FastAPI:
         main_menu_buttons.router,
         prefix="/main-menu/buttons",
         tags=["main-menu"],
+    )
+    app.include_router(
+        user_messages.router,
+        prefix="/main-menu/messages",
+        tags=["main-menu"],
+    )
+    app.include_router(
+        welcome_texts.router,
+        prefix="/welcome-texts",
+        tags=["welcome-texts"],
     )
     app.include_router(pages.router, prefix="/pages", tags=["pages"])
     app.include_router(promocodes.router, prefix="/promo-codes", tags=["promo-codes"])

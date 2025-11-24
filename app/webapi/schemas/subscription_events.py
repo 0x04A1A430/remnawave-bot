@@ -7,7 +7,15 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class SubscriptionEventCreate(BaseModel):
-    event_type: Literal["activation", "purchase", "renewal"]
+    event_type: Literal[
+        "activation",
+        "purchase",
+        "renewal",
+        "balance_topup",
+        "promocode_activation",
+        "referral_link_visit",
+        "promo_group_change",
+    ]
     user_id: int = Field(..., ge=1)
     subscription_id: Optional[int] = Field(default=None, ge=1)
     transaction_id: Optional[int] = Field(default=None, ge=1)
