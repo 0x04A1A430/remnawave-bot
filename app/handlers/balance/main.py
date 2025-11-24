@@ -421,7 +421,17 @@ async def request_support_topup(
     db_user: User
 ):
     texts = get_texts(db_user.language)
-    
+
+    if not settings.is_support_topup_enabled():
+        await callback.answer(
+            texts.t(
+                "SUPPORT_TOPUP_DISABLED",
+                "Пополнение через поддержку отключено. Попробуйте другой способ оплаты.",
+            ),
+            show_alert=True,
+        )
+        return
+
     support_text = f"""
 🛠️ <b>Пополнение через поддержку</b>
 

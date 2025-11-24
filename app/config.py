@@ -194,6 +194,7 @@ class Settings(BaseSettings):
     YOOKASSA_MAX_AMOUNT_KOPEKS: int = 1000000
     YOOKASSA_QUICK_AMOUNT_SELECTION_ENABLED: bool = False
     DISABLE_TOPUP_BUTTONS: bool = False
+    SUPPORT_TOPUP_ENABLED: bool = True
     PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED: bool = False
     PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES: int = 10
 
@@ -931,9 +932,12 @@ class Settings(BaseSettings):
         return value
     
     def is_yookassa_enabled(self) -> bool:
-        return (self.YOOKASSA_ENABLED and 
-                self.YOOKASSA_SHOP_ID is not None and 
+        return (self.YOOKASSA_ENABLED and
+                self.YOOKASSA_SHOP_ID is not None and
                 self.YOOKASSA_SECRET_KEY is not None)
+
+    def is_support_topup_enabled(self) -> bool:
+        return bool(self.SUPPORT_TOPUP_ENABLED)
     
     def get_yookassa_return_url(self) -> str:
         if self.YOOKASSA_RETURN_URL:
