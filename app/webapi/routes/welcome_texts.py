@@ -104,6 +104,8 @@ async def update_welcome_text_endpoint(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Welcome text not found")
 
     update_payload = payload.dict(exclude_unset=True)
+    if "text" in update_payload:
+        update_payload["text_content"] = update_payload.pop("text")
     updated = await update_welcome_text(db, record, **update_payload)
     return _serialize(updated)
 
