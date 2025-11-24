@@ -7,6 +7,7 @@ from app.config import settings
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.crud.referral import create_referral_earning
 from app.database.models import TransactionType, ReferralEarning
+from app.utils.user_utils import get_effective_referral_commission_percent
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,9 @@ async def process_referral_registration(
             amount_kopeks=0,
             reason="referral_registration_pending"
         )
-        
+
         if bot:
+            commission_percent = get_effective_referral_commission_percent(referrer)
             referral_notification = (
                 f"🎉 <b>Добро пожаловать!</b>\n\n"
                 f"Вы перешли по реферальной ссылке пользователя <b>{referrer.full_name}</b>!\n\n"
@@ -64,8 +66,8 @@ async def process_referral_registration(
                 f"По вашей ссылке зарегистрировался пользователь <b>{new_user.full_name}</b>!\n\n"
                 f"💰 Когда он пополнит баланс от {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)}, "
                 f"вы получите минимум {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)} или "
-                f"{settings.REFERRAL_COMMISSION_PERCENT}% от суммы (что больше).\n\n"
-                f"📈 С каждого последующего пополнения вы будете получать {settings.REFERRAL_COMMISSION_PERCENT}% комиссии."
+                f"{commission_percent}% от суммы (что больше).\n\n"
+                f"📈 С каждого последующего пополнения вы будете получать {commission_percent}% комиссии."
             )
             await send_referral_notification(bot, referrer.telegram_id, inviter_notification)
         
@@ -94,13 +96,14 @@ async def process_referral_topup(
             logger.error(f"Реферер {user.referred_by_id} не найден")
             return False
 
+        commission_percent = get_effective_referral_commission_percent(referrer)
         qualifies_for_first_bonus = (
             topup_amount_kopeks >= settings.REFERRAL_MINIMUM_TOPUP_KOPEKS
         )
         commission_amount = 0
-        if settings.REFERRAL_COMMISSION_PERCENT > 0:
+        if commission_percent > 0:
             commission_amount = int(
-                topup_amount_kopeks * settings.REFERRAL_COMMISSION_PERCENT / 100
+                topup_amount_kopeks * commission_percent / 100
             )
 
         if not user.has_made_first_topup:
@@ -116,7 +119,7 @@ async def process_referral_topup(
                         db,
                         referrer,
                         commission_amount,
-                        f"Комиссия {settings.REFERRAL_COMMISSION_PERCENT}% с пополнения {user.full_name}",
+                        f"Комиссия {commission_percent}% с пополнения {user.full_name}",
                         bot=bot,
                     )
 
@@ -139,7 +142,7 @@ async def process_referral_topup(
                             f"💰 <b>Реферальная комиссия!</b>\n\n"
                             f"Ваш реферал <b>{user.full_name}</b> пополнил баланс на "
                             f"{settings.format_price(topup_amount_kopeks)}\n\n"
-                            f"🎁 Ваша комиссия ({settings.REFERRAL_COMMISSION_PERCENT}%): "
+                            f"🎁 Ваша комиссия ({commission_percent}%): "
                             f"{settings.format_price(commission_amount)}\n\n"
                             f"💎 Средства зачислены на ваш баланс."
                         )
@@ -180,7 +183,7 @@ async def process_referral_topup(
                     )
                     await send_referral_notification(bot, user.telegram_id, bonus_notification)
             
-            commission_amount = int(topup_amount_kopeks * settings.REFERRAL_COMMISSION_PERCENT / 100)
+            commission_amount = int(topup_amount_kopeks * commission_percent / 100)
             inviter_bonus = max(settings.REFERRAL_INVITER_BONUS_KOPEKS, commission_amount)
 
             if inviter_bonus > 0:
@@ -204,7 +207,7 @@ async def process_referral_topup(
                         f"💰 <b>Реферальная награда!</b>\n\n"
                         f"Ваш реферал <b>{user.full_name}</b> сделал первое пополнение!\n\n"
                         f"🎁 Вы получили награду: {settings.format_price(inviter_bonus)}\n\n"
-                        f"📈 Теперь с каждого его пополнения вы будете получать {settings.REFERRAL_COMMISSION_PERCENT}% комиссии."
+                        f"📈 Теперь с каждого его пополнения вы будете получать {commission_percent}% комиссии."
                     )
                     await send_referral_notification(bot, referrer.telegram_id, inviter_bonus_notification)
         
@@ -212,7 +215,7 @@ async def process_referral_topup(
             if commission_amount > 0:
                 await add_user_balance(
                     db, referrer, commission_amount,
-                    f"Комиссия {settings.REFERRAL_COMMISSION_PERCENT}% с пополнения {user.full_name}",
+                    f"Комиссия {commission_percent}% с пополнения {user.full_name}",
                     bot=bot
                 )
 
@@ -231,7 +234,7 @@ async def process_referral_topup(
                         f"💰 <b>Реферальная комиссия!</b>\n\n"
                         f"Ваш реферал <b>{user.full_name}</b> пополнил баланс на "
                         f"{settings.format_price(topup_amount_kopeks)}\n\n"
-                        f"🎁 Ваша комиссия ({settings.REFERRAL_COMMISSION_PERCENT}%): "
+                        f"🎁 Ваша комиссия ({commission_percent}%): "
                         f"{settings.format_price(commission_amount)}\n\n"
                         f"💎 Средства зачислены на ваш баланс."
                     )
@@ -261,11 +264,7 @@ async def process_referral_purchase(
             logger.error(f"Реферер {user.referred_by_id} не найден")
             return False
         
-        if not (0 <= settings.REFERRAL_COMMISSION_PERCENT <= 100):
-            logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА: REFERRAL_COMMISSION_PERCENT = {settings.REFERRAL_COMMISSION_PERCENT} некорректный!")
-            commission_percent = 10 
-        else:
-            commission_percent = settings.REFERRAL_COMMISSION_PERCENT
+        commission_percent = get_effective_referral_commission_percent(referrer)
             
         commission_amount = int(purchase_amount_kopeks * commission_percent / 100)
         

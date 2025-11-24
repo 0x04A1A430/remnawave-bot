@@ -14,6 +14,7 @@ from app.localization.texts import get_texts
 from app.utils.photo_message import edit_or_answer_photo
 from app.utils.user_utils import (
     get_detailed_referral_list,
+    get_effective_referral_commission_percent,
     get_referral_analytics,
     get_user_referral_summary,
 )
@@ -86,7 +87,7 @@ async def show_referral_info(
         + texts.t(
             "REFERRAL_REWARD_COMMISSION",
             "• Комиссия с каждого пополнения реферала: <b>{percent}%</b>",
-        ).format(percent=settings.REFERRAL_COMMISSION_PERCENT)
+        ).format(percent=get_effective_referral_commission_percent(db_user))
         + "\n\n"
         + texts.t("REFERRAL_LINK_TITLE", "🔗 <b>Ваша реферальная ссылка:</b>")
         + f"\n<code>{referral_link}</code>\n\n"

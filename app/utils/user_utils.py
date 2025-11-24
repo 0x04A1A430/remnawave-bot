@@ -1,12 +1,14 @@
 import logging
 import secrets
 import string
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 from sqlalchemy import select, func, and_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database.models import User, ReferralEarning, Transaction, TransactionType
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,25 @@ async def generate_unique_referral_code(db: AsyncSession, telegram_id: int) -> s
     
     timestamp = str(int(datetime.utcnow().timestamp()))[-6:]
     return f"ref{timestamp}"
+
+
+def get_effective_referral_commission_percent(user: User) -> int:
+    """Возвращает индивидуальный процент комиссии пользователя или дефолтное значение."""
+
+    percent = getattr(user, "referral_commission_percent", None)
+
+    if percent is None:
+        percent = settings.REFERRAL_COMMISSION_PERCENT
+
+    if percent < 0 or percent > 100:
+        logger.error(
+            "❌ Некорректный процент комиссии для пользователя %s: %s",
+            getattr(user, "telegram_id", None),
+            percent,
+        )
+        return max(0, min(100, settings.REFERRAL_COMMISSION_PERCENT))
+
+    return percent
 
 
 async def mark_user_as_had_paid_subscription(db: AsyncSession, user: User) -> bool:

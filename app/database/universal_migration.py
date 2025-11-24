@@ -2742,6 +2742,35 @@ async def fix_foreign_keys_for_user_deletion():
         logger.error(f"Ошибка обновления внешних ключей: {e}")
         return False
 
+async def add_referral_commission_percent_column() -> bool:
+    column_exists = await check_column_exists('users', 'referral_commission_percent')
+    if column_exists:
+        logger.info("ℹ️ Колонка referral_commission_percent уже существует")
+        return True
+
+    try:
+        async with engine.begin() as conn:
+            db_type = await get_database_type()
+
+            if db_type == 'sqlite':
+                alter_sql = "ALTER TABLE users ADD COLUMN referral_commission_percent INTEGER NULL"
+            elif db_type == 'postgresql':
+                alter_sql = "ALTER TABLE users ADD COLUMN referral_commission_percent INTEGER NULL"
+            elif db_type == 'mysql':
+                alter_sql = "ALTER TABLE users ADD COLUMN referral_commission_percent INT NULL"
+            else:
+                logger.error(f"Неподдерживаемый тип БД для добавления referral_commission_percent: {db_type}")
+                return False
+
+            await conn.execute(text(alter_sql))
+            logger.info("✅ Добавлена колонка referral_commission_percent в таблицу users")
+            return True
+
+    except Exception as error:
+        logger.error(f"Ошибка добавления referral_commission_percent: {error}")
+        return False
+
+
 async def add_referral_system_columns():
     logger.info("=== МИГРАЦИЯ РЕФЕРАЛЬНОЙ СИСТЕМЫ ===")
     
@@ -3809,6 +3838,12 @@ async def run_universal_migration():
         if not referral_migration_success:
             logger.warning("⚠️ Проблемы с миграцией реферальной системы")
 
+        commission_column_ready = await add_referral_commission_percent_column()
+        if commission_column_ready:
+            logger.info("✅ Колонка referral_commission_percent готова")
+        else:
+            logger.warning("⚠️ Проблемы с колонкой referral_commission_percent")
+
         logger.info("=== СОЗДАНИЕ ТАБЛИЦЫ SYSTEM_SETTINGS ===")
         system_settings_ready = await create_system_settings_table()
         if system_settings_ready:
@@ -4223,6 +4258,7 @@ async def check_migration_status():
             "users_promo_offer_discount_percent_column": False,
             "users_promo_offer_discount_source_column": False,
             "users_promo_offer_discount_expires_column": False,
+            "users_referral_commission_percent_column": False,
             "subscription_crypto_link_column": False,
             "discount_offers_table": False,
             "discount_offers_effect_column": False,
@@ -4265,6 +4301,7 @@ async def check_migration_status():
         status["users_promo_offer_discount_percent_column"] = await check_column_exists('users', 'promo_offer_discount_percent')
         status["users_promo_offer_discount_source_column"] = await check_column_exists('users', 'promo_offer_discount_source')
         status["users_promo_offer_discount_expires_column"] = await check_column_exists('users', 'promo_offer_discount_expires_at')
+        status["users_referral_commission_percent_column"] = await check_column_exists('users', 'referral_commission_percent')
         status["subscription_crypto_link_column"] = await check_column_exists('subscriptions', 'subscription_crypto_link')
         
         media_fields_exist = (
@@ -4312,6 +4349,7 @@ async def check_migration_status():
             "users_promo_offer_discount_percent_column": "Колонка процента промо-скидки у пользователей",
             "users_promo_offer_discount_source_column": "Колонка источника промо-скидки у пользователей",
             "users_promo_offer_discount_expires_column": "Колонка срока действия промо-скидки у пользователей",
+            "users_referral_commission_percent_column": "Колонка процента реферальной комиссии у пользователей",
             "subscription_crypto_link_column": "Колонка subscription_crypto_link в subscriptions",
             "discount_offers_table": "Таблица discount_offers",
             "discount_offers_effect_column": "Колонка effect_type в discount_offers",
