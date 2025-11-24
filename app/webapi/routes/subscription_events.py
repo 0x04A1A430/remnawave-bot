@@ -57,10 +57,15 @@ async def _ensure_transaction_exists(db: AsyncSession, transaction_id: Optional[
 
 
 def _serialize_event(event: SubscriptionEvent) -> SubscriptionEventResponse:
+    user = event.user
+
     return SubscriptionEventResponse(
         id=event.id,
         event_type=event.event_type,
         user_id=event.user_id,
+        user_full_name=user.full_name if user else "",
+        user_username=user.username if user else None,
+        user_telegram_id=user.telegram_id if user else 0,
         subscription_id=event.subscription_id,
         transaction_id=event.transaction_id,
         amount_kopeks=event.amount_kopeks,
@@ -78,7 +83,7 @@ async def receive_subscription_event(
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
 ) -> SubscriptionEventResponse:
-    await _get_user_or_error(db, payload.user_id)
+    user = await _get_user_or_error(db, payload.user_id)
     await _ensure_subscription_exists(db, payload.subscription_id)
     await _ensure_transaction_exists(db, payload.transaction_id)
 
@@ -94,6 +99,10 @@ async def receive_subscription_event(
         occurred_at=payload.occurred_at,
         extra=payload.extra or None,
     )
+
+    await db.refresh(event, attribute_names=["user"])
+
+    event.user = user
 
     return _serialize_event(event)
 
