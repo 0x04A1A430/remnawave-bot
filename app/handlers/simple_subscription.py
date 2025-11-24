@@ -134,8 +134,11 @@ async def start_simple_subscription_purchase(
     if show_devices:
         message_lines.append(f"📱 Устройства: {subscription_params['device_limit']}")
 
+    traffic_limit_gb = subscription_params["traffic_limit_gb"]
+    traffic_label = "Безлимит" if traffic_limit_gb == 0 else f"{traffic_limit_gb} ГБ"
+
     message_lines.extend([
-        f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}",
+        f"📊 Трафик: {traffic_label}",
         f"🌍 Сервер: {server_label}",
         "",
         f"💰 Стоимость: {settings.format_price(price_kopeks)}",
@@ -523,8 +526,11 @@ async def handle_simple_subscription_pay_with_balance(
         if show_devices:
             success_lines.append(f"📱 Устройства: {subscription_params['device_limit']}")
 
+        success_traffic_gb = subscription_params["traffic_limit_gb"]
+        success_traffic_label = "Безлимит" if success_traffic_gb == 0 else f"{success_traffic_gb} ГБ"
+
         success_lines.extend([
-            f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}",
+            f"📊 Трафик: {success_traffic_label}",
             f"🌍 Сервер: {server_label}",
             "",
             f"💰 Списано с баланса: {settings.format_price(price_kopeks)}",
@@ -721,8 +727,11 @@ async def handle_simple_subscription_other_payment_methods(
     if show_devices:
         message_lines.append(f"📱 Устройства: {subscription_params['device_limit']}")
 
+    payment_traffic_gb = subscription_params["traffic_limit_gb"]
+    payment_traffic_label = "Безлимит" if payment_traffic_gb == 0 else f"{payment_traffic_gb} ГБ"
+
     message_lines.extend([
-        f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}",
+        f"📊 Трафик: {payment_traffic_label}",
         f"🌍 Сервер: {server_label}",
         "",
         f"💰 Стоимость: {settings.format_price(price_kopeks)}",
@@ -826,6 +835,9 @@ async def handle_simple_subscription_payment_method(
 
             stars_count = settings.rubles_to_stars(settings.kopeks_to_rubles(price_kopeks))
 
+            stars_traffic_gb = subscription_params["traffic_limit_gb"]
+            stars_traffic_label = "Безлимит" if stars_traffic_gb == 0 else f"{stars_traffic_gb} ГБ"
+
             await callback.bot.send_invoice(
                 chat_id=callback.from_user.id,
                 title=f"Подписка на {subscription_params['period_days']} дней",
@@ -833,7 +845,7 @@ async def handle_simple_subscription_payment_method(
                     f"Простая покупка подписки\n"
                     f"Период: {subscription_params['period_days']} дней\n"
                     f"Устройства: {subscription_params['device_limit']}\n"
-                    f"Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}"
+                    f"Трафик: {stars_traffic_label}"
                 ),
                 payload=(
                     f"simple_sub_{db_user.id}_{order.id}_{subscription_params['period_days']}"
@@ -977,8 +989,11 @@ async def handle_simple_subscription_payment_method(
             if show_devices:
                 message_lines.append(f"📱 Устройства: {subscription_params['device_limit']}")
 
+            yookassa_traffic_gb = subscription_params["traffic_limit_gb"]
+            yookassa_traffic_label = "Безлимит" if yookassa_traffic_gb == 0 else f"{yookassa_traffic_gb} ГБ"
+
             message_lines.extend([
-                f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}",
+                f"📊 Трафик: {yookassa_traffic_label}",
                 f"💰 Сумма: {settings.format_price(price_kopeks)}",
                 f"🆔 ID платежа: {payment_result['yookassa_payment_id'][:8]}...",
                 "",
@@ -2220,8 +2235,11 @@ async def confirm_simple_subscription_purchase(
         if show_devices:
             success_lines.append(f"📱 Устройства: {subscription_params['device_limit']}")
 
+        success_traffic_gb = subscription_params["traffic_limit_gb"]
+        success_traffic_label = "Безлимит" if success_traffic_gb == 0 else f"{success_traffic_gb} ГБ"
+
         success_lines.extend([
-            f"📊 Трафик: {'Безлимит' if subscription_params['traffic_limit_gb'] == 0 else f'{subscription_params['traffic_limit_gb']} ГБ'}",
+            f"📊 Трафик: {success_traffic_label}",
             f"🌍 Сервер: {server_label}",
             "",
             f"💰 Списано с баланса: {settings.format_price(price_kopeks)}",

@@ -96,6 +96,7 @@ from app.utils.telegram_webapp import (
     parse_webapp_init_data,
 )
 from app.utils.user_utils import (
+    get_effective_referral_commission_percent,
     get_detailed_referral_list,
     get_user_referral_summary,
 )
@@ -2447,7 +2448,12 @@ async def _build_referral_info(
     minimum_topup_kopeks = int(referral_settings.get("minimum_topup_kopeks") or 0)
     first_topup_bonus_kopeks = int(referral_settings.get("first_topup_bonus_kopeks") or 0)
     inviter_bonus_kopeks = int(referral_settings.get("inviter_bonus_kopeks") or 0)
-    commission_percent = float(referral_settings.get("commission_percent") or 0)
+    commission_percent = float(
+        get_effective_referral_commission_percent(user)
+        if user
+        else referral_settings.get("commission_percent")
+        or 0
+    )
 
     terms = MiniAppReferralTerms(
         minimum_topup_kopeks=minimum_topup_kopeks,

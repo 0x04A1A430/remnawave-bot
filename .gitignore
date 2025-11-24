@@ -12,6 +12,8 @@ docker-compose.override.yml
 !requirements.txt
 !docs/
 !docs/**
+!migrations/
+!migrations/**
 
 # Разрешаем папку app/ и все её содержимое рекурсивно
 !app/
