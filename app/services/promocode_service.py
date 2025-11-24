@@ -52,7 +52,10 @@ class PromoCodeService:
             if existing_use:
                 return {"success": False, "error": "already_used_by_user"}
             
+            balance_before_kopeks = user.balance_kopeks
+
             result_description = await self._apply_promocode_effects(db, user, promocode)
+            balance_after_kopeks = user.balance_kopeks
 
             if promocode.type == PromoCodeType.SUBSCRIPTION_DAYS.value and promocode.subscription_days > 0:
                 from app.utils.user_utils import mark_user_as_had_paid_subscription
@@ -123,6 +126,8 @@ class PromoCodeService:
                 "success": True,
                 "description": result_description,
                 "promocode": promocode_data,
+                "balance_before_kopeks": balance_before_kopeks,
+                "balance_after_kopeks": balance_after_kopeks,
             }
             
         except Exception as e:

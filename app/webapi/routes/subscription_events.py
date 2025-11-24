@@ -59,6 +59,13 @@ async def _ensure_transaction_exists(db: AsyncSession, transaction_id: Optional[
 def _serialize_event(event: SubscriptionEvent) -> SubscriptionEventResponse:
     user = event.user
 
+    extra = event.extra or {}
+
+    if event.event_type == "promocode_activation":
+        extra = {**extra}
+        extra.setdefault("balance_before_kopeks", None)
+        extra.setdefault("balance_after_kopeks", None)
+
     return SubscriptionEventResponse(
         id=event.id,
         event_type=event.event_type,
@@ -73,7 +80,7 @@ def _serialize_event(event: SubscriptionEvent) -> SubscriptionEventResponse:
         message=event.message,
         occurred_at=event.occurred_at,
         created_at=event.created_at,
-        extra=event.extra or {},
+        extra=extra,
     )
 
 
