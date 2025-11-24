@@ -59,6 +59,8 @@ async def activate_promocode_for_registration(
                         user,
                         result.get("promocode", {"code": code}),
                         result["description"],
+                        result.get("balance_before_kopeks"),
+                        result.get("balance_after_kopeks"),
                     )
             except Exception as notify_error:
                 logger.error(
