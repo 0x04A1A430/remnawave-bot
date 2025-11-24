@@ -100,14 +100,14 @@ def get_available_payment_methods() -> List[Dict[str, str]]:
             "callback": "topup_platega",
         })
 
-    # Поддержка всегда доступна
-    methods.append({
-        "id": "support",
-        "name": "Через поддержку",
-        "icon": "🛠️",
-        "description": "другие способы",
-        "callback": "topup_support"
-    })
+    if settings.is_support_topup_enabled():
+        methods.append({
+            "id": "support",
+            "name": "Через поддержку",
+            "icon": "🛠️",
+            "description": "другие способы",
+            "callback": "topup_support"
+        })
     
     return methods
 
@@ -118,7 +118,18 @@ def get_payment_methods_text(language: str) -> str:
     texts = get_texts(language)
     methods = get_available_payment_methods()
 
-    if len(methods) <= 1:  # Только поддержка
+    if not methods:
+        return texts.t(
+            "PAYMENT_METHODS_NONE_AVAILABLE",
+            """💳 <b>Способы пополнения баланса</b>
+
+⚠️ В данный момент способы оплаты временно недоступны.
+Попробуйте позже.
+
+Выберите способ пополнения:""",
+        )
+
+    if len(methods) == 1 and methods[0]["id"] == "support":
         return texts.t(
             "PAYMENT_METHODS_ONLY_SUPPORT",
             """💳 <b>Способы пополнения баланса</b>
@@ -186,7 +197,7 @@ def is_payment_method_available(method_id: str) -> bool:
     elif method_id == "platega":
         return settings.is_platega_enabled() and bool(settings.get_platega_active_methods())
     elif method_id == "support":
-        return True  # Поддержка всегда доступна
+        return settings.is_support_topup_enabled()
     else:
         return False
 
@@ -204,7 +215,7 @@ def get_payment_method_status() -> Dict[str, bool]:
         "cryptobot": settings.is_cryptobot_enabled(),
         "heleket": settings.is_heleket_enabled(),
         "platega": settings.is_platega_enabled() and bool(settings.get_platega_active_methods()),
-        "support": True
+        "support": settings.is_support_topup_enabled()
     }
 
 def get_enabled_payment_methods_count() -> int:

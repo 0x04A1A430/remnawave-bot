@@ -32,3 +32,12 @@ RULES_TEXT: |
     2. Do not distribute spam or malicious content.
     3. Respect other community members.
 
+PAYMENT_METHODS_NONE_AVAILABLE: |
+  💳 <b>Balance top-up methods</b>
+
+  ⚠️ Payment methods are temporarily unavailable.
+  Please try again later.
+
+  Choose a top-up option:
+SUPPORT_TOPUP_DISABLED: "Top-ups via support are disabled. Please use another payment method."
+
