@@ -128,7 +128,6 @@ class PlategaPaymentMixin:
             "status": status,
             "expires_at": expires_at,
             "correlation_id": correlation_id,
-            "payload": payload_token,
         }
 
     async def process_platega_webhook(
