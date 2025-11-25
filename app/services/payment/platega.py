@@ -336,6 +336,10 @@ class PlategaPaymentMixin:
             logger.error("Пользователь %s не найден для Platega", payment.user_id)
             return payment
 
+        promo_group = user.get_primary_promo_group()
+        subscription = getattr(user, "subscription", None)
+        referrer_info = format_referrer_info(user)
+
         transaction_external_id = (
             str(payload.get("id"))
             if isinstance(payload, dict) and payload.get("id")
@@ -393,10 +397,6 @@ class PlategaPaymentMixin:
         user.updated_at = datetime.utcnow()
         await db.commit()
         await db.refresh(user)
-
-        promo_group = user.get_primary_promo_group()
-        subscription = getattr(user, "subscription", None)
-        referrer_info = format_referrer_info(user)
         topup_status = "🆕 Первое пополнение" if was_first_topup else "🔄 Пополнение"
 
         try:
