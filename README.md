@@ -325,7 +325,7 @@ networks:
 
 Если бот и панель Remnawave запускаются на одном сервере, подключите бота к сети панели:
 
-**docker-compose.yml бота:**
+**docker-compose.local.yml бота(есть в репо):**
 ```yaml
 services:
   postgres:
