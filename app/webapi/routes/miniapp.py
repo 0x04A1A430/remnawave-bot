@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 import math
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_FLOOR, ROUND_UP
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from uuid import uuid4
 from typing import Any, Callable, Collection, Dict, List, Optional, Tuple, Union
 
@@ -195,6 +197,57 @@ renewal_service = SubscriptionRenewalService()
 _CRYPTOBOT_MIN_USD = 1.0
 _CRYPTOBOT_MAX_USD = 1000.0
 _CRYPTOBOT_FALLBACK_RATE = 95.0
+
+
+@router.get("/app-config.json")
+async def get_app_config() -> Dict[str, Any]:
+    data = _load_app_config_data()
+    if data is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App config not found")
+
+    return data
+
+
+def _get_app_config_candidate_files() -> List[Path]:
+    seen: set[Path] = set()
+    candidates: List[Path] = []
+
+    def _add_candidate(path: Path) -> None:
+        resolved = path.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            candidates.append(resolved)
+
+    cwd = Path.cwd()
+    _add_candidate(cwd / "miniapp" / "app-config.json")
+    _add_candidate(cwd / "app-config.json")
+
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        _add_candidate(parent / "miniapp" / "app-config.json")
+        _add_candidate(parent / "app-config.json")
+
+    _add_candidate(Path("/var/www/remnawave-miniapp/app-config.json"))
+
+    return candidates
+
+
+def _load_app_config_data() -> Optional[Dict[str, Any]]:
+    for path in _get_app_config_candidate_files():
+        if not path.is_file():
+            continue
+
+        try:
+            with path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+        except (OSError, json.JSONDecodeError) as error:
+            logger.warning("Failed to load app-config from %s: %s", path, error)
+            continue
+
+        if isinstance(data, dict):
+            return data
+
+    return None
 
 _DECIMAL_ONE_HUNDRED = Decimal(100)
 _DECIMAL_CENT = Decimal("0.01")

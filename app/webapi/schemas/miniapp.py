@@ -18,6 +18,8 @@ class MiniAppSubscriptionRequest(BaseModel):
 
 
 class MiniAppMaintenanceStatusResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     is_active: bool = Field(..., alias="isActive")
     message: Optional[str] = None
     reason: Optional[str] = None
