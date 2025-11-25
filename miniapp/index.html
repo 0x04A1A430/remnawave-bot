@@ -40,6 +40,7 @@
             --success: #10b981;
             --success-rgb: 16, 185, 129;
             --warning: #f59e0b;
+            --warning-rgb: 245, 158, 11;
             --danger: #ef4444;
             --danger-rgb: 239, 68, 68;
             --info: #3b82f6;
@@ -286,6 +287,80 @@
         .loading {
             text-align: center;
             padding: 80px 20px;
+        }
+
+        .maintenance-banner {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(var(--warning-rgb), 0.18);
+            background: linear-gradient(135deg, rgba(var(--warning-rgb), 0.08), rgba(var(--warning-rgb), 0.02));
+            color: var(--text-primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .maintenance-icon {
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        .maintenance-content {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .maintenance-title {
+            font-weight: 800;
+            font-size: 15px;
+        }
+
+        .maintenance-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .maintenance-state {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-lg);
+            margin-bottom: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 12px;
+        }
+
+        .maintenance-state .maintenance-icon {
+            width: 54px;
+            height: 54px;
+            font-size: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(var(--primary-rgb), 0.1);
+            border-radius: 50%;
+            color: var(--primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .maintenance-state .maintenance-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+
+        .maintenance-state .maintenance-text {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.7;
         }
 
         .spinner {
@@ -4766,6 +4841,24 @@
             <div class="subtitle" data-i18n="app.subtitle">Secure & Fast Connection</div>
         </div>
 
+        <div id="maintenanceBanner" class="maintenance-banner hidden" role="status" aria-live="polite">
+            <div class="maintenance-icon" aria-hidden="true">🔧</div>
+            <div class="maintenance-content">
+                <div class="maintenance-title" data-i18n="maintenance.title">Технические работы</div>
+                <div id="maintenanceMessage" class="maintenance-text" data-i18n="maintenance.message">
+                    Сервис временно недоступен из-за технических работ. Попробуйте позже.
+                </div>
+            </div>
+        </div>
+
+        <div id="maintenanceState" class="maintenance-state hidden" role="status" aria-live="polite">
+            <div class="maintenance-icon" aria-hidden="true">🔧</div>
+            <div class="maintenance-title" data-i18n="maintenance.title">Технические работы</div>
+            <div id="maintenanceStateMessage" class="maintenance-text" data-i18n="maintenance.message">
+                Сервис временно недоступен из-за технических работ. Попробуйте позже.
+            </div>
+        </div>
+
         <!-- Loading State -->
         <div id="loadingState" class="loading">
             <div class="spinner"></div>
@@ -5586,6 +5679,8 @@
                 'values.not_available': 'Not available',
                 'app.subtitle': 'Secure & Fast Connection',
                 'app.loading': 'Loading your subscription...',
+                'maintenance.title': 'Technical maintenance',
+                'maintenance.message': 'The service is temporarily in maintenance mode. Some actions may be unavailable.',
                 'error.default.title': 'Subscription Not Found',
                 'error.default.message': 'Please contact support to activate your subscription.',
                 'error.user_not_found.title': 'Register in the bot',
@@ -5615,6 +5710,18 @@
                 'topup.method.yookassa.description': 'Pay securely with a bank card',
                 'topup.method.mulenpay.title': 'Bank card (Mulen Pay)',
                 'topup.method.mulenpay.description': 'Fast payment with bank card',
+                'topup.method.platega.title': 'Platega.io',
+                'topup.method.platega.description': 'Bank cards and SBP via Platega',
+                'topup.method.platega.option.2.title': 'SBP (QR)',
+                'topup.method.platega.option.2.description': 'Pay with Faster Payments QR code.',
+                'topup.method.platega.option.10.title': 'Bank cards (RUB)',
+                'topup.method.platega.option.10.description': 'Russian bank cards through Platega.',
+                'topup.method.platega.option.11.title': 'Bank cards',
+                'topup.method.platega.option.11.description': 'Local bank cards via Platega.',
+                'topup.method.platega.option.12.title': 'International cards',
+                'topup.method.platega.option.12.description': 'International cards supported by Platega.',
+                'topup.method.platega.option.13.title': 'Cryptocurrency',
+                'topup.method.platega.option.13.description': 'Top up balance with crypto via Platega.',
                 'topup.method.wata.title': 'Bank card (Wata)',
                 'topup.method.wata.description': 'Pay with a bank card via Wata',
                 'topup.method.pal24.title': 'SBP (PayPalych)',
@@ -5992,6 +6099,8 @@
                 'values.not_available': 'Закрыто',
                 'app.subtitle': 'Безопасное и быстрое подключение',
                 'app.loading': 'Загружаем вашу подписку...',
+                'maintenance.title': 'Технические работы',
+                'maintenance.message': 'Сервис находится в режиме технических работ. Некоторые действия могут быть недоступны.',
                 'error.default.title': 'Подписка не найдена',
                 'error.default.message': 'Свяжитесь с поддержкой, чтобы активировать подписку.',
                 'error.user_not_found.title': 'Зарегистрируйтесь в боте',
@@ -6021,6 +6130,18 @@
                 'topup.method.yookassa.description': 'Безопасная оплата банковской картой',
                 'topup.method.mulenpay.title': 'Банковская карта (Mulen Pay)',
                 'topup.method.mulenpay.description': 'Мгновенное списание с карты',
+                'topup.method.platega.title': 'Platega.io',
+                'topup.method.platega.description': 'Карта или СБП через Platega',
+                'topup.method.platega.option.2.title': 'СБП (QR)',
+                'topup.method.platega.option.2.description': 'Оплата по QR-коду через СБП.',
+                'topup.method.platega.option.10.title': 'Банковские карты (RUB)',
+                'topup.method.platega.option.10.description': 'Российские карты через Platega.',
+                'topup.method.platega.option.11.title': 'Банковские карты',
+                'topup.method.platega.option.11.description': 'Оплата картами через Platega.',
+                'topup.method.platega.option.12.title': 'Международные карты',
+                'topup.method.platega.option.12.description': 'Оплата международными картами.',
+                'topup.method.platega.option.13.title': 'Криптовалюта',
+                'topup.method.platega.option.13.description': 'Пополнение через криптовалюту в Platega.',
                 'topup.method.wata.title': 'Банковская карта (Wata)',
                 'topup.method.wata.description': 'Оплата банковской картой через Wata',
                 'topup.method.pal24.title': 'СБП (PayPalych)',
@@ -6664,6 +6785,7 @@
         let paymentMethodsCache = null;
         let paymentMethodsPromise = null;
         let activePaymentMethod = null;
+        let maintenanceState = { isActive: false, message: null };
         const paymentMethodSelections = {};
         const activePaymentMonitors = new Map();
         let paymentStatusPollTimer = null;
@@ -6841,13 +6963,18 @@
                 return;
             }
 
-            if (monitor.method.id === 'pal24') {
-                const option = (monitor.option || 'sbp').toLowerCase();
-                const optionKey = option === 'card' ? 'card' : 'sbp';
-                const fallback = optionKey === 'card'
-                    ? 'Bank card payment'
-                    : 'Faster Payments (SBP)';
-                setTopupModalSubtitle(`topup.method.pal24.option.${optionKey}.title`, fallback);
+            const optionsMap = (Array.isArray(monitor.method.options) ? monitor.method.options : []).reduce((map, item) => {
+                map[String(item.id)] = item;
+                return map;
+            }, {});
+
+            if (monitor.method.id === 'pal24' || monitor.method.id === 'platega') {
+                const option = (monitor.option || monitor.extra?.selected_option || 'sbp').toString();
+                const optionKey = ['card', 'sbp'].includes(option) ? option : option;
+                const optionConfig = optionsMap[optionKey];
+                const fallback = optionConfig?.title || (optionKey === 'card' ? 'Bank card payment' : 'Faster Payments (SBP)');
+                const titleKey = optionConfig?.titleKey || optionConfig?.title_key || `topup.method.${monitor.method.id}.option.${optionKey}.title`;
+                setTopupModalSubtitle(titleKey, fallback || monitor.method.id);
                 return;
             }
 
@@ -6876,6 +7003,11 @@
             if (extra.payment_id) {
                 query.paymentId = extra.payment_id;
                 identifiers.paymentId = extra.payment_id;
+            }
+
+            if (extra.correlation_id && !query.payload) {
+                query.payload = extra.correlation_id;
+                identifiers.payload = extra.correlation_id;
             }
 
             const payloadValue = extra.payload || extra.invoice_payload;
@@ -7462,6 +7594,80 @@
             label.textContent = t(key);
         }
 
+        function resolveMaintenanceMessage() {
+            const resolvedMessage = (typeof maintenanceState.message === 'string'
+                ? maintenanceState.message.trim()
+                : '')
+                || t('maintenance.message');
+            const translatedFallback = t('maintenance.message');
+            const messageFallback = translatedFallback === 'maintenance.message'
+                ? 'The service is temporarily unavailable due to maintenance. Please try again later.'
+                : translatedFallback;
+
+            return resolvedMessage === 'maintenance.message'
+                ? messageFallback
+                : resolvedMessage;
+        }
+
+        function renderMaintenanceBanner() {
+            const banner = document.getElementById('maintenanceBanner');
+            const messageElement = document.getElementById('maintenanceMessage');
+
+            if (!banner || !messageElement) {
+                return;
+            }
+
+            if (!maintenanceState?.isActive) {
+                banner.classList.add('hidden');
+                return;
+            }
+
+            messageElement.textContent = resolveMaintenanceMessage();
+            banner.classList.remove('hidden');
+        }
+
+        function renderMaintenanceScreen() {
+            const screen = document.getElementById('maintenanceState');
+            const messageElement = document.getElementById('maintenanceStateMessage');
+            const banner = document.getElementById('maintenanceBanner');
+            const loadingState = document.getElementById('loadingState');
+            const errorState = document.getElementById('errorState');
+            const mainContent = document.getElementById('mainContent');
+
+            if (!screen || !messageElement) {
+                return;
+            }
+
+            if (!maintenanceState?.isActive) {
+                screen.classList.add('hidden');
+                return;
+            }
+
+            messageElement.textContent = resolveMaintenanceMessage();
+            screen.classList.remove('hidden');
+
+            if (banner) {
+                banner.classList.add('hidden');
+            }
+            if (loadingState) {
+                loadingState.classList.add('hidden');
+            }
+            if (errorState) {
+                errorState.classList.add('hidden');
+            }
+            if (mainContent) {
+                mainContent.classList.add('hidden');
+            }
+        }
+
+        function applyMaintenanceStatus(status) {
+            const isActive = Boolean(status?.isActive ?? status?.is_active);
+            const message = typeof status?.message === 'string' ? status.message : null;
+            maintenanceState = { isActive, message };
+            renderMaintenanceBanner();
+            renderMaintenanceScreen();
+        }
+
         function refreshAfterLanguageChange() {
             applyTranslations();
             if (userData) {
@@ -7471,6 +7677,7 @@
             }
             renderApps();
             updateActionButtons();
+            renderMaintenanceBanner();
         }
 
         function setLanguage(language, options = {}) {
@@ -7667,6 +7874,22 @@
             });
 
             hasAnimatedCards = true;
+        }
+
+        async function fetchMaintenanceStatus(initData) {
+            const response = await fetch('/miniapp/maintenance/status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ initData })
+            });
+
+            if (response.ok) {
+                return response.json();
+            }
+
+            throw new Error('Unable to fetch maintenance status');
         }
 
         async function fetchSubscriptionPayload(initData) {
@@ -7910,6 +8133,23 @@
             return applySubscriptionData(payload);
         }
 
+        async function checkMaintenance(initData) {
+            if (!initData) {
+                applyMaintenanceStatus({ isActive: false, message: null });
+                return false;
+            }
+
+            try {
+                const status = await fetchMaintenanceStatus(initData);
+                applyMaintenanceStatus(status);
+                return Boolean(status?.isActive ?? status?.is_active);
+            } catch (error) {
+                console.warn('Unable to load maintenance status:', error);
+                applyMaintenanceStatus({ isActive: false, message: null });
+                return false;
+            }
+        }
+
         async function init() {
             try {
                 const telegramUser = tg.initDataUnsafe?.user;
@@ -7923,6 +8163,11 @@
                 }
 
                 await loadAppsConfig();
+                const initData = tg.initData || '';
+                const maintenanceActive = await checkMaintenance(initData);
+                if (maintenanceActive) {
+                    return;
+                }
                 await refreshSubscriptionData();
             } catch (error) {
                 console.error('Initialization error:', error);
@@ -7932,12 +8177,13 @@
 
         async function loadAppsConfig() {
             try {
-                const response = await fetch('/app-config.json', { cache: 'no-cache' });
-                if (!response.ok) {
-                    throw new Error('Failed to load app config');
+                const fallbackPaths = getAppConfigCandidatePaths();
+                const data = await fetchFirstAvailableAppConfig(fallbackPaths);
+
+                if (!data) {
+                    throw new Error('No available app config sources');
                 }
 
-                const data = await response.json();
                 appsConfig = sanitizeAppsConfig(data?.platforms || {});
                 ensurePlatformFilter();
 
@@ -8001,7 +8247,51 @@
             } catch (error) {
                 console.warn('Unable to load apps configuration:', error);
                 appsConfig = {};
+                ensurePlatformFilter();
             }
+        }
+
+        function getAppConfigCandidatePaths() {
+            const paths = [];
+            const currentPath = window.location?.pathname || '/';
+            const basePath = currentPath.endsWith('/')
+                ? currentPath
+                : currentPath.replace(/[^/]*$/, '');
+
+            const normalizedBase = basePath || '/';
+            const relativePath = `${normalizedBase}app-config.json`;
+            paths.push(relativePath);
+
+            ['/miniapp/app-config.json', '/app-config.json'].forEach(path => {
+                if (!paths.includes(path)) {
+                    paths.push(path);
+                }
+            });
+
+            return paths;
+        }
+
+        async function fetchFirstAvailableAppConfig(paths) {
+            if (!Array.isArray(paths) || !paths.length) {
+                return null;
+            }
+
+            for (const path of paths) {
+                try {
+                    const response = await fetch(path, { cache: 'no-cache' });
+                    if (!response.ok) {
+                        continue;
+                    }
+                    const data = await response.json();
+                    if (data && typeof data === 'object') {
+                        return data;
+                    }
+                } catch (error) {
+                    console.warn('App config path failed:', path, error);
+                }
+            }
+
+            return null;
         }
 
         function renderUserData() {
@@ -11503,32 +11793,44 @@
                 form.appendChild(hint);
             }
 
-            if (method.id === 'pal24') {
-                const optionsConfig = [
+            const providedOptions = Array.isArray(method.options) ? method.options : [];
+            const fallbackOptions = method.id === 'pal24'
+                ? [
                     {
                         id: 'sbp',
                         icon: '🏦',
                         titleKey: 'topup.method.pal24.option.sbp.title',
                         descriptionKey: 'topup.method.pal24.option.sbp.description',
-                        fallbackTitle: 'Faster Payments (SBP)',
-                        fallbackDescription: 'Instant SBP transfer with no fees.',
+                        title: 'Faster Payments (SBP)',
+                        description: 'Instant SBP transfer with no fees.',
                     },
                     {
                         id: 'card',
                         icon: '💳',
                         titleKey: 'topup.method.pal24.option.card.title',
                         descriptionKey: 'topup.method.pal24.option.card.description',
-                        fallbackTitle: 'Bank card',
-                        fallbackDescription: 'Pay with a bank card via PayPalych.',
+                        title: 'Bank card',
+                        description: 'Pay with a bank card via PayPalych.',
                     },
-                ];
+                ]
+                : [];
 
-                const selectedDefault = options.selectedOption
+            const optionsConfig = (providedOptions.length ? providedOptions : fallbackOptions).map(option => ({
+                id: String(option.id),
+                icon: option.icon || '💳',
+                titleKey: option.titleKey || option.title_key || option.titlekey,
+                descriptionKey: option.descriptionKey || option.description_key || option.descriptionkey,
+                fallbackTitle: option.title || option.name || String(option.id),
+                fallbackDescription: option.description || '',
+            }));
+
+            if (optionsConfig.length) {
+                const defaultSelection = options.selectedOption
                     || paymentMethodSelections[method.id]
-                    || 'sbp';
-                let currentOption = optionsConfig.some(option => option.id === selectedDefault)
-                    ? selectedDefault
-                    : 'sbp';
+                    || optionsConfig[0]?.id;
+                let currentOption = optionsConfig.some(option => option.id === defaultSelection)
+                    ? defaultSelection
+                    : optionsConfig[0]?.id;
                 paymentMethodSelections[method.id] = currentOption;
                 form.dataset.paymentOption = currentOption;
 
@@ -11537,7 +11839,7 @@
 
                 const optionTitle = document.createElement('div');
                 optionTitle.className = 'payment-option-title';
-                const titleKey = 'topup.method.pal24.title';
+                const titleKey = `topup.method.${method.id}.title`;
                 const titleValue = t(titleKey);
                 optionTitle.textContent = titleValue === titleKey ? 'Choose payment type' : titleValue;
                 optionGroup.appendChild(optionTitle);
@@ -11563,22 +11865,23 @@
 
                     const label = document.createElement('div');
                     label.className = 'payment-option-label';
-                    const labelValue = t(config.titleKey);
-                    label.textContent = labelValue === config.titleKey ? config.fallbackTitle : labelValue;
+                    const labelValue = config.titleKey ? t(config.titleKey) : config.fallbackTitle;
+                    label.textContent = labelValue && labelValue !== config.titleKey
+                        ? labelValue
+                        : config.fallbackTitle;
 
                     const description = document.createElement('div');
                     description.className = 'payment-option-description';
-                    const descriptionValue = t(config.descriptionKey);
-                    const finalDescription = descriptionValue === config.descriptionKey
-                        ? config.fallbackDescription
-                        : descriptionValue;
-                    description.textContent = finalDescription;
-
-                    text.appendChild(label);
+                    const descriptionValue = config.descriptionKey ? t(config.descriptionKey) : config.fallbackDescription;
+                    const finalDescription = descriptionValue && descriptionValue !== config.descriptionKey
+                        ? descriptionValue
+                        : config.fallbackDescription;
                     if (finalDescription) {
+                        description.textContent = finalDescription;
                         text.appendChild(description);
                     }
 
+                    text.appendChild(label);
                     button.appendChild(icon);
                     button.appendChild(text);
 
@@ -11816,8 +12119,19 @@
             const normalizedAmount = Number.isFinite(amountKopeks) ? Number(amountKopeks) : null;
             const monitorExtra = { ...extra };
 
+            const methodOptions = Array.isArray(method.options) ? method.options : [];
+            const optionsMap = methodOptions.reduce((map, item) => {
+                const key = String(item.id);
+                map[key] = item;
+                return map;
+            }, {});
+
             let option = null;
-            if (method.id === 'pal24') {
+            if (methodOptions.length) {
+                option = (options.providerOption || monitorExtra.selected_option || paymentMethodSelections[method.id] || methodOptions[0]?.id || '').toString();
+                paymentMethodSelections[method.id] = option;
+                monitorExtra.selected_option = option;
+            } else if (method.id === 'pal24') {
                 option = (options.providerOption || monitorExtra.selected_option || paymentMethodSelections[method.id] || 'sbp').toLowerCase();
                 if (!['card', 'sbp'].includes(option)) {
                     option = 'sbp';
@@ -11826,12 +12140,19 @@
                 monitorExtra.selected_option = option;
             }
 
-            const titleKey = method.id === 'pal24' && option
-                ? `topup.method.pal24.option.${option}.title`
-                : `topup.method.${method.id}.title`;
-            const titleFallback = method.id === 'pal24'
-                ? (option === 'card' ? 'Bank card payment' : 'Faster Payments (SBP)')
-                : method.id;
+            const selectedOption = option && (optionsMap[option] || optionsMap[String(option)]);
+            const optionTitleKey = selectedOption?.titleKey || selectedOption?.title_key;
+            const optionTitleFallback = selectedOption?.title || selectedOption?.name || option || method.id;
+            const titleKey = selectedOption && optionTitleKey
+                ? optionTitleKey
+                : option
+                    ? `topup.method.${method.id}.option.${option}.title`
+                    : `topup.method.${method.id}.title`;
+            const titleFallback = selectedOption
+                ? optionTitleFallback
+                : method.id === 'pal24'
+                    ? (option === 'card' ? 'Bank card payment' : 'Faster Payments (SBP)')
+                    : method.id;
             setTopupModalSubtitle(titleKey, titleFallback);
 
             body.innerHTML = '';
@@ -11902,8 +12223,8 @@
                 summary.appendChild(usdAmount);
             }
 
-            const descriptionKey = method.id === 'pal24' && option
-                ? `topup.method.pal24.option.${option}.description`
+            const descriptionKey = option
+                ? `topup.method.${method.id}.option.${option}.description`
                 : `topup.method.${method.id}.description`;
             const descriptionValue = t(descriptionKey);
             if (descriptionValue && descriptionValue !== descriptionKey) {
