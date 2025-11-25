@@ -324,6 +324,45 @@
             line-height: 1.4;
         }
 
+        .maintenance-state {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-lg);
+            margin-bottom: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 12px;
+        }
+
+        .maintenance-state .maintenance-icon {
+            width: 54px;
+            height: 54px;
+            font-size: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(var(--primary-rgb), 0.1);
+            border-radius: 50%;
+            color: var(--primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .maintenance-state .maintenance-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--text-primary);
+        }
+
+        .maintenance-state .maintenance-text {
+            font-size: 15px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
         .spinner {
             width: 48px;
             height: 48px;
@@ -4812,6 +4851,14 @@
             </div>
         </div>
 
+        <div id="maintenanceState" class="maintenance-state hidden" role="status" aria-live="polite">
+            <div class="maintenance-icon" aria-hidden="true">🔧</div>
+            <div class="maintenance-title" data-i18n="maintenance.title">Технические работы</div>
+            <div id="maintenanceStateMessage" class="maintenance-text" data-i18n="maintenance.message">
+                Сервис временно недоступен из-за технических работ. Попробуйте позже.
+            </div>
+        </div>
+
         <!-- Loading State -->
         <div id="loadingState" class="loading">
             <div class="spinner"></div>
@@ -7547,6 +7594,21 @@
             label.textContent = t(key);
         }
 
+        function resolveMaintenanceMessage() {
+            const resolvedMessage = (typeof maintenanceState.message === 'string'
+                ? maintenanceState.message.trim()
+                : '')
+                || t('maintenance.message');
+            const translatedFallback = t('maintenance.message');
+            const messageFallback = translatedFallback === 'maintenance.message'
+                ? 'The service is temporarily unavailable due to maintenance. Please try again later.'
+                : translatedFallback;
+
+            return resolvedMessage === 'maintenance.message'
+                ? messageFallback
+                : resolvedMessage;
+        }
+
         function renderMaintenanceBanner() {
             const banner = document.getElementById('maintenanceBanner');
             const messageElement = document.getElementById('maintenanceMessage');
@@ -7560,19 +7622,42 @@
                 return;
             }
 
-            const resolvedMessage = (typeof maintenanceState.message === 'string'
-                ? maintenanceState.message.trim()
-                : '')
-                || t('maintenance.message');
-            const translatedFallback = t('maintenance.message');
-            const messageFallback = translatedFallback === 'maintenance.message'
-                ? 'The service is temporarily unavailable due to maintenance. Please try again later.'
-                : translatedFallback;
-            messageElement.textContent = resolvedMessage === 'maintenance.message'
-                ? messageFallback
-                : resolvedMessage;
-
+            messageElement.textContent = resolveMaintenanceMessage();
             banner.classList.remove('hidden');
+        }
+
+        function renderMaintenanceScreen() {
+            const screen = document.getElementById('maintenanceState');
+            const messageElement = document.getElementById('maintenanceStateMessage');
+            const banner = document.getElementById('maintenanceBanner');
+            const loadingState = document.getElementById('loadingState');
+            const errorState = document.getElementById('errorState');
+            const mainContent = document.getElementById('mainContent');
+
+            if (!screen || !messageElement) {
+                return;
+            }
+
+            if (!maintenanceState?.isActive) {
+                screen.classList.add('hidden');
+                return;
+            }
+
+            messageElement.textContent = resolveMaintenanceMessage();
+            screen.classList.remove('hidden');
+
+            if (banner) {
+                banner.classList.add('hidden');
+            }
+            if (loadingState) {
+                loadingState.classList.add('hidden');
+            }
+            if (errorState) {
+                errorState.classList.add('hidden');
+            }
+            if (mainContent) {
+                mainContent.classList.add('hidden');
+            }
         }
 
         function applyMaintenanceStatus(status) {
@@ -7580,6 +7665,7 @@
             const message = typeof status?.message === 'string' ? status.message : null;
             maintenanceState = { isActive, message };
             renderMaintenanceBanner();
+            renderMaintenanceScreen();
         }
 
         function refreshAfterLanguageChange() {
@@ -8050,15 +8136,17 @@
         async function checkMaintenance(initData) {
             if (!initData) {
                 applyMaintenanceStatus({ isActive: false, message: null });
-                return;
+                return false;
             }
 
             try {
                 const status = await fetchMaintenanceStatus(initData);
                 applyMaintenanceStatus(status);
+                return Boolean(status?.isActive ?? status?.is_active);
             } catch (error) {
                 console.warn('Unable to load maintenance status:', error);
                 applyMaintenanceStatus({ isActive: false, message: null });
+                return false;
             }
         }
 
@@ -8076,7 +8164,10 @@
 
                 await loadAppsConfig();
                 const initData = tg.initData || '';
-                await checkMaintenance(initData);
+                const maintenanceActive = await checkMaintenance(initData);
+                if (maintenanceActive) {
+                    return;
+                }
                 await refreshSubscriptionData();
             } catch (error) {
                 console.error('Initialization error:', error);
@@ -8086,12 +8177,13 @@
 
         async function loadAppsConfig() {
             try {
-                const response = await fetch('/app-config.json', { cache: 'no-cache' });
-                if (!response.ok) {
-                    throw new Error('Failed to load app config');
+                const fallbackPaths = getAppConfigCandidatePaths();
+                const data = await fetchFirstAvailableAppConfig(fallbackPaths);
+
+                if (!data) {
+                    throw new Error('No available app config sources');
                 }
 
-                const data = await response.json();
                 appsConfig = sanitizeAppsConfig(data?.platforms || {});
                 ensurePlatformFilter();
 
@@ -8155,7 +8247,51 @@
             } catch (error) {
                 console.warn('Unable to load apps configuration:', error);
                 appsConfig = {};
+                ensurePlatformFilter();
             }
+        }
+
+        function getAppConfigCandidatePaths() {
+            const paths = [];
+            const currentPath = window.location?.pathname || '/';
+            const basePath = currentPath.endsWith('/')
+                ? currentPath
+                : currentPath.replace(/[^/]*$/, '');
+
+            const normalizedBase = basePath || '/';
+            const relativePath = `${normalizedBase}app-config.json`;
+            paths.push(relativePath);
+
+            ['/miniapp/app-config.json', '/app-config.json'].forEach(path => {
+                if (!paths.includes(path)) {
+                    paths.push(path);
+                }
+            });
+
+            return paths;
+        }
+
+        async function fetchFirstAvailableAppConfig(paths) {
+            if (!Array.isArray(paths) || !paths.length) {
+                return null;
+            }
+
+            for (const path of paths) {
+                try {
+                    const response = await fetch(path, { cache: 'no-cache' });
+                    if (!response.ok) {
+                        continue;
+                    }
+                    const data = await response.json();
+                    if (data && typeof data === 'object') {
+                        return data;
+                    }
+                } catch (error) {
+                    console.warn('App config path failed:', path, error);
+                }
+            }
+
+            return null;
         }
 
         function renderUserData() {
