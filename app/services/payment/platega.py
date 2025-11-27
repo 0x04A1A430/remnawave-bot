@@ -336,6 +336,12 @@ class PlategaPaymentMixin:
             logger.error("Пользователь %s не найден для Platega", payment.user_id)
             return payment
 
+        # Убеждаемся, что промогруппы загружены в асинхронном контексте,
+        # чтобы избежать попыток ленивой загрузки без greenlet
+        await db.refresh(user, attribute_names=["promo_group", "user_promo_groups"])
+        for user_promo_group in getattr(user, "user_promo_groups", []):
+            await db.refresh(user_promo_group, attribute_names=["promo_group"])
+
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, "subscription", None)
         referrer_info = format_referrer_info(user)
