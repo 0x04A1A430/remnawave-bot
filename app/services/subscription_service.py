@@ -153,6 +153,27 @@ class SubscriptionService:
         assert self.api is not None
         async with self.api as api:
             yield api
+
+    def ensure_future_expire_at(self, expire_at: Optional[datetime]) -> datetime:
+        """Гарантирует, что дата окончания передается в будущее значение для RemnaWave API."""
+
+        safe_now = datetime.utcnow()
+
+        if expire_at is None:
+            adjusted = safe_now + timedelta(days=30)
+            logger.debug("⚙️ Используем дефолтную дату окончания подписки: %s", adjusted)
+            return adjusted
+
+        if expire_at <= safe_now:
+            adjusted = safe_now + timedelta(minutes=1)
+            logger.debug(
+                "⚙️ Корректируем просроченную дату подписки %s → %s для RemnaWave API",
+                expire_at,
+                adjusted,
+            )
+            return adjusted
+
+        return expire_at
     
     async def create_remnawave_user(
         self,
@@ -187,10 +208,18 @@ class SubscriptionService:
                     except Exception as hwid_error:
                         logger.warning(f"⚠️ Не удалось сбросить HWID: {hwid_error}")
                     
+                    expire_at = self.ensure_future_expire_at(subscription.end_date)
+
+                    status = (
+                        UserStatus.ACTIVE
+                        if subscription.is_active
+                        else UserStatus.DISABLED
+                    )
+
                     update_kwargs = dict(
                         uuid=remnawave_user.uuid,
-                        status=UserStatus.ACTIVE,
-                        expire_at=subscription.end_date,
+                        status=status,
+                        expire_at=expire_at,
                         traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                         traffic_limit_strategy=get_traffic_reset_strategy(),
                         description=settings.format_remnawave_user_description(
@@ -221,10 +250,18 @@ class SubscriptionService:
                         username=user.username,
                         telegram_id=user.telegram_id,
                     )
+                    expire_at = self.ensure_future_expire_at(subscription.end_date)
+
+                    status = (
+                        UserStatus.ACTIVE
+                        if subscription.is_active
+                        else UserStatus.DISABLED
+                    )
+
                     create_kwargs = dict(
                         username=username,
-                        expire_at=subscription.end_date,
-                        status=UserStatus.ACTIVE,
+                        expire_at=expire_at,
+                        status=status,
                         traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                         traffic_limit_strategy=get_traffic_reset_strategy(),
                         telegram_id=user.telegram_id,
@@ -285,25 +322,32 @@ class SubscriptionService:
                 return None
             
             current_time = datetime.utcnow()
-            is_actually_active = (subscription.status == SubscriptionStatus.ACTIVE.value and 
-                                 subscription.end_date > current_time)
+            is_actually_active = (
+                subscription.status == SubscriptionStatus.ACTIVE.value
+                and subscription.end_date > current_time
+            )
             
-            if (subscription.status == SubscriptionStatus.ACTIVE.value and 
-                subscription.end_date <= current_time):
-                
+            if (
+                subscription.status == SubscriptionStatus.ACTIVE.value
+                and subscription.end_date <= current_time
+            ):
                 subscription.status = SubscriptionStatus.EXPIRED.value
                 subscription.updated_at = current_time
                 await db.commit()
                 is_actually_active = False
                 logger.info(f"🔔 Статус подписки {subscription.id} автоматически изменен на 'expired'")
-            
+
             async with self.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
 
+                expire_at = self.ensure_future_expire_at(subscription.end_date)
+
+                status = UserStatus.ACTIVE if is_actually_active else UserStatus.DISABLED
+
                 update_kwargs = dict(
                     uuid=user.remnawave_uuid,
-                    status=UserStatus.ACTIVE if is_actually_active else UserStatus.EXPIRED,
-                    expire_at=subscription.end_date,
+                    status=status,
+                    expire_at=expire_at,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=get_traffic_reset_strategy(),
                     description=settings.format_remnawave_user_description(
