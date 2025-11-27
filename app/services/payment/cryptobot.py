@@ -381,7 +381,7 @@ class CryptoBotPaymentMixin:
 
                         texts = get_texts(user.language)
                         cart_message = texts.BALANCE_TOPUP_CART_REMINDER_DETAILED.format(
-                            total_amount=settings.format_price(payment.amount_kopeks)
+                            total_amount=settings.format_price(amount_kopeks)
                         )
 
                         keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
@@ -402,7 +402,7 @@ class CryptoBotPaymentMixin:
                         saved_cart_notification = _SavedCartNotificationPayload(
                             telegram_id=user.telegram_id,
                             text=(
-                                f"✅ Баланс пополнен на {settings.format_price(payment.amount_kopeks)}!\n\n"
+                                f"✅ Баланс пополнен на {settings.format_price(amount_kopeks)}!\n\n"
                                 f"⚠️ <b>Важно:</b> Пополнение баланса не активирует подписку автоматически. "
                                 f"Обязательно активируйте подписку отдельно!\n\n"
                                 f"🔄 При наличии сохранённой корзины подписки и включенной автопокупке, "
