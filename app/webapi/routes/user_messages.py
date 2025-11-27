@@ -69,13 +69,16 @@ async def create_user_message_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> UserMessageResponse:
     created_by = getattr(token, "id", None)
-    message = await create_user_message(
-        db,
-        message_text=payload.message_text,
-        created_by=created_by,
-        is_active=payload.is_active,
-        sort_order=payload.sort_order,
-    )
+    try:
+        message = await create_user_message(
+            db,
+            message_text=payload.message_text,
+            created_by=created_by,
+            is_active=payload.is_active,
+            sort_order=payload.sort_order,
+        )
+    except ValueError as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
 
     return _serialize(message)
 
@@ -88,7 +91,10 @@ async def update_user_message_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> UserMessageResponse:
     update_payload = payload.dict(exclude_unset=True)
-    message = await update_user_message(db, message_id, **update_payload)
+    try:
+        message = await update_user_message(db, message_id, **update_payload)
+    except ValueError as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
 
     if not message:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User message not found")

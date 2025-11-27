@@ -12,6 +12,11 @@ from app.database.crud.user_message import (
 )
 from app.database.models import User
 from app.keyboards.admin import get_admin_main_keyboard
+from app.utils.validators import (
+    get_html_help_text,
+    sanitize_html,
+    validate_html_tags,
+)
 from app.utils.decorators import admin_required, error_handler
 from app.localization.texts import get_texts
 
@@ -122,8 +127,6 @@ async def add_user_message_start(
     db_user: User,
     db: AsyncSession
 ):
-    from app.utils.validators import get_html_help_text
-    
     await callback.message.edit_text(
         f"📝 <b>Добавление нового сообщения</b>\n\n"
         f"Введите текст сообщения, которое будет показываться в главном меню.\n\n"
@@ -160,8 +163,6 @@ async def process_new_message_text(
             "Попробуйте еще раз или отправьте /cancel для отмены."
         )
         return
-    
-    from app.utils.validators import validate_html_tags, get_html_help_text
     
     is_valid, error_msg = validate_html_tags(message_text)
     if not is_valid:
@@ -312,20 +313,22 @@ async def view_user_message(
         return
     
     message = await get_user_message_by_id(db, message_id)
-    
+
     if not message:
         await callback.answer("❌ Сообщение не найдено", show_alert=True)
         return
-    
+
+    safe_content = sanitize_html(message.message_text)
+
     status_text = "🟢 Активно" if message.is_active else "🔴 Неактивно"
-    
+
     text = (
         f"📋 <b>Сообщение ID {message.id}</b>\n\n"
         f"<b>Статус:</b> {status_text}\n"
         f"<b>Создано:</b> {message.created_at.strftime('%d.%m.%Y %H:%M')}\n"
         f"<b>Обновлено:</b> {message.updated_at.strftime('%d.%m.%Y %H:%M')}\n\n"
         f"<b>Содержимое:</b>\n"
-        f"<blockquote>{message.message_text}</blockquote>"
+        f"<blockquote>{safe_content}</blockquote>"
     )
     
     await callback.message.edit_text(
@@ -455,7 +458,7 @@ async def edit_user_message_start(
     await callback.message.edit_text(
         f"✏️ <b>Редактирование сообщения ID {message.id}</b>\n\n"
         f"<b>Текущий текст:</b>\n"
-        f"<blockquote>{message.message_text}</blockquote>\n\n"
+        f"<blockquote>{sanitize_html(message.message_text)}</blockquote>\n\n"
         f"Введите новый текст сообщения или отправьте /cancel для отмены:",
         parse_mode="HTML"
     )
@@ -489,14 +492,23 @@ async def process_edit_message_text(
         return
     
     new_text = message.text.strip()
-    
+
     if len(new_text) > 4000:
         await message.answer(
             "❌ Сообщение слишком длинное. Максимум 4000 символов.\n"
             "Попробуйте еще раз или отправьте /cancel для отмены."
         )
         return
-    
+
+    is_valid, error_msg = validate_html_tags(new_text)
+    if not is_valid:
+        await message.answer(
+            f"❌ Ошибка в HTML разметке: {error_msg}\n\n"
+            f"Исправьте ошибку и попробуйте еще раз, или отправьте /cancel для отмены.",
+            parse_mode=None
+        )
+        return
+
     try:
         updated_message = await update_user_message(
             db=db,
@@ -511,7 +523,7 @@ async def process_edit_message_text(
                 f"<b>ID:</b> {updated_message.id}\n"
                 f"<b>Обновлено:</b> {updated_message.updated_at.strftime('%d.%m.%Y %H:%M')}\n\n"
                 f"<b>Новый текст:</b>\n"
-                f"<blockquote>{new_text}</blockquote>",
+                f"<blockquote>{sanitize_html(new_text)}</blockquote>",
                 reply_markup=get_user_messages_keyboard(db_user.language),
                 parse_mode="HTML"
             )
