@@ -123,19 +123,23 @@ def validate_subscription_period(days: Union[str, int]) -> Optional[int]:
 def sanitize_html(text: str) -> str:
     if not text:
         return text
-
+    
     text = html.escape(text)
-
-    allowed_tags = ALLOWED_HTML_TAGS.union(SELF_CLOSING_TAGS)
-
-    for tag in allowed_tags:
+    
+    for tag in ALLOWED_HTML_TAGS:
         text = re.sub(
-            f'&lt;(/?{tag}\\b[^>]*)&gt;',
-            lambda m: html.unescape(f"<{m.group(1)}>"),
-            text,
+            f'&lt;{tag}(&gt;|\\s[^&]*&gt;)', 
+            lambda m: m.group(0).replace('&lt;', '<').replace('&gt;', '>'),
+            text, 
             flags=re.IGNORECASE
         )
-
+        text = re.sub(
+            f'&lt;/{tag}&gt;', 
+            f'</{tag}>', 
+            text, 
+            flags=re.IGNORECASE
+        )
+    
     return text
 
 
