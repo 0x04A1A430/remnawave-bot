@@ -688,6 +688,7 @@
   "ADMIN_SUPPORT_SUBMENU_TITLE": "🛟 **Поддержка**\n\n",
   "ADMIN_SUPPORT_TICKETS": "🎫 Тикеты поддержки",
   "ADMIN_SYNC_BACK": "⬅️ К синхронизации",
+  "ADMIN_SYNC_TO_PANEL": "⬆️ Синхронизация в панель",
   "ADMIN_SYNC_CLEANUP": "🧹 Очистка",
   "ADMIN_SYNC_CONFIRM": "✅ Подтвердить",
   "ADMIN_SYNC_FULL": "🔄 Полная синхронизация",
