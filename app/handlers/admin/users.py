@@ -4595,10 +4595,19 @@ async def admin_buy_subscription_execute(
 
                 if target_user.remnawave_uuid:
                     async with remnawave_service.get_api_client() as api:
+                        expire_at = remnawave_service.ensure_future_expire_at(
+                            subscription.end_date
+                        )
+                        status = (
+                            UserStatus.ACTIVE
+                            if subscription.is_active
+                            else UserStatus.DISABLED
+                        )
+
                         update_kwargs = dict(
                             uuid=target_user.remnawave_uuid,
-                            status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
-                            expire_at=subscription.end_date,
+                            status=status,
+                            expire_at=expire_at,
                             traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
                             traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                             description=settings.format_remnawave_user_description(
@@ -4620,10 +4629,19 @@ async def admin_buy_subscription_execute(
                         telegram_id=target_user.telegram_id,
                     )
                     async with remnawave_service.get_api_client() as api:
+                        expire_at = remnawave_service.ensure_future_expire_at(
+                            subscription.end_date
+                        )
+                        status = (
+                            UserStatus.ACTIVE
+                            if subscription.is_active
+                            else UserStatus.DISABLED
+                        )
+
                         create_kwargs = dict(
                             username=username,
-                            expire_at=subscription.end_date,
-                            status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
+                            expire_at=expire_at,
+                            status=status,
                             traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
                             traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                             telegram_id=target_user.telegram_id,

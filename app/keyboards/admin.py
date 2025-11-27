@@ -1120,6 +1120,12 @@ def get_sync_options_keyboard(language: str = "ru") -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
+                text=_t(texts, "ADMIN_SYNC_TO_PANEL", "⬆️ Синхронизация в панель"),
+                callback_data="sync_to_panel"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 text=_t(texts, "ADMIN_SYNC_ONLY_NEW", "🆕 Только новые"),
                 callback_data="sync_new_users"
             )

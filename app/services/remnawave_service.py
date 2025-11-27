@@ -220,6 +220,27 @@ class RemnaWaveService:
         """Возвращает текущее время в UTC без привязки к часовому поясу."""
         return datetime.now(self._utc_timezone).replace(tzinfo=None)
 
+    def ensure_future_expire_at(self, expire_at: Optional[datetime]) -> datetime:
+        """Приводит дату окончания подписки к будущему значению для API панели."""
+
+        safe_now = self._now_utc()
+
+        if expire_at is None:
+            adjusted = safe_now + timedelta(days=30)
+            logger.debug("⚙️ Используем дефолтную дату окончания подписки: %s", adjusted)
+            return adjusted
+
+        if expire_at <= safe_now:
+            adjusted = safe_now + timedelta(minutes=1)
+            logger.debug(
+                "⚙️ Корректируем просроченную дату подписки %s → %s для RemnaWave API",
+                expire_at,
+                adjusted,
+            )
+            return adjusted
+
+        return expire_at
+
     def _parse_remnawave_date(self, date_str: str) -> datetime:
         if not date_str:
             return self._now_utc() + timedelta(days=30)
@@ -1615,77 +1636,109 @@ class RemnaWaveService:
     async def sync_users_to_panel(self, db: AsyncSession) -> Dict[str, int]:
         try:
             stats = {"created": 0, "updated": 0, "errors": 0}
-            
-            users = await get_users_list(db, offset=0, limit=10000)
-            
+
+            batch_size = 100
+            offset = 0
+
             async with self.get_api_client() as api:
-                for user in users:
-                    if not user.subscription:
-                        continue
+                while True:
+                    users = await get_users_list(db, offset=offset, limit=batch_size)
+
+                    if not users:
+                        break
+
+                    for user in users:
+                        if not user.subscription:
+                            continue
+
+                        try:
+                            subscription = user.subscription
+                            hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
+
+                            expire_at = self.ensure_future_expire_at(
+                                subscription.end_date
+                            )
+
+                            status = (
+                                UserStatus.ACTIVE
+                                if subscription.is_active
+                                else UserStatus.DISABLED
+                            )
+
+                            if user.remnawave_uuid:
+                                update_kwargs = dict(
+                                    uuid=user.remnawave_uuid,
+                                    status=status,
+                                    expire_at=expire_at,
+                                    traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
+                                    traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                                    description=settings.format_remnawave_user_description(
+                                        full_name=user.full_name,
+                                        username=user.username,
+                                        telegram_id=user.telegram_id
+                                    ),
+                                    active_internal_squads=subscription.connected_squads,
+                                )
+
+                                if hwid_limit is not None:
+                                    update_kwargs['hwid_device_limit'] = hwid_limit
+
+                                await api.update_user(**update_kwargs)
+                                stats["updated"] += 1
+                            else:
+                                username = settings.format_remnawave_username(
+                                    full_name=user.full_name,
+                                    username=user.username,
+                                    telegram_id=user.telegram_id,
+                                )
+
+                                create_kwargs = dict(
+                                    username=username,
+                                    expire_at=expire_at,
+                                    status=status,
+                                    traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
+                                    traffic_limit_strategy=TrafficLimitStrategy.MONTH,
+                                    telegram_id=user.telegram_id,
+                                    description=settings.format_remnawave_user_description(
+                                        full_name=user.full_name,
+                                        username=user.username,
+                                        telegram_id=user.telegram_id
+                                    ),
+                                    active_internal_squads=subscription.connected_squads,
+                                )
+
+                                if hwid_limit is not None:
+                                    create_kwargs['hwid_device_limit'] = hwid_limit
+
+                                new_user = await api.create_user(**create_kwargs)
+
+                                user.remnawave_uuid = new_user.uuid
+                                subscription.remnawave_short_uuid = new_user.short_uuid
+
+                                stats["created"] += 1
+
+                        except Exception as e:
+                            logger.error(f"Ошибка синхронизации пользователя {user.telegram_id} в панель: {e}")
+                            stats["errors"] += 1
 
                     try:
-                        subscription = user.subscription
-                        hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
+                        await db.commit()
+                    except Exception as commit_error:
+                        logger.error(
+                            "Ошибка фиксации транзакции при синхронизации в панель: %s",
+                            commit_error,
+                        )
+                        await db.rollback()
+                        stats["errors"] += len(users)
 
-                        if user.remnawave_uuid:
-                            update_kwargs = dict(
-                                uuid=user.remnawave_uuid,
-                                status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
-                                expire_at=subscription.end_date,
-                                traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
-                                traffic_limit_strategy=TrafficLimitStrategy.MONTH,
-                                description=settings.format_remnawave_user_description(
-                                    full_name=user.full_name,
-                                    username=user.username,
-                                    telegram_id=user.telegram_id
-                                ),
-                                active_internal_squads=subscription.connected_squads,
-                            )
+                    if len(users) < batch_size:
+                        break
 
-                            if hwid_limit is not None:
-                                update_kwargs['hwid_device_limit'] = hwid_limit
+                    offset += batch_size
 
-                            await api.update_user(**update_kwargs)
-                            stats["updated"] += 1
-                        else:
-                            username = settings.format_remnawave_username(
-                                full_name=user.full_name,
-                                username=user.username,
-                                telegram_id=user.telegram_id,
-                            )
-
-                            create_kwargs = dict(
-                                username=username,
-                                expire_at=subscription.end_date,
-                                status=UserStatus.ACTIVE if subscription.is_active else UserStatus.EXPIRED,
-                                traffic_limit_bytes=subscription.traffic_limit_gb * (1024**3) if subscription.traffic_limit_gb > 0 else 0,
-                                traffic_limit_strategy=TrafficLimitStrategy.MONTH,
-                                telegram_id=user.telegram_id,
-                                description=settings.format_remnawave_user_description(
-                                    full_name=user.full_name,
-                                    username=user.username,
-                                    telegram_id=user.telegram_id
-                                ),
-                                active_internal_squads=subscription.connected_squads,
-                            )
-
-                            if hwid_limit is not None:
-                                create_kwargs['hwid_device_limit'] = hwid_limit
-
-                            new_user = await api.create_user(**create_kwargs)
-                            
-                            await update_user(db, user, remnawave_uuid=new_user.uuid)
-                            subscription.remnawave_short_uuid = new_user.short_uuid
-                            # Убираем немедленный коммит для пакетной обработки
-                            # await db.commit()
-                            
-                            stats["created"] += 1
-                            
-                    except Exception as e:
-                        logger.error(f"Ошибка синхронизации пользователя {user.telegram_id} в панель: {e}")
-                        stats["errors"] += 1
-            
-            logger.info(f"✅ Синхронизация в панель завершена: создано {stats['created']}, обновлено {stats['updated']}, ошибок {stats['errors']}")
+            logger.info(
+                f"✅ Синхронизация в панель завершена: создано {stats['created']}, обновлено {stats['updated']}, ошибок {stats['errors']}"
+            )
             return stats
             
         except Exception as e:
