@@ -6,6 +6,7 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User, UserMessage
+from app.utils.validators import sanitize_html, validate_html_tags
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,10 @@ async def create_user_message(
     is_active: bool = True,
     sort_order: int = 0
 ) -> UserMessage:
+    is_valid, error_message = validate_html_tags(message_text)
+    if not is_valid:
+        raise ValueError(error_message)
+
     resolved_creator = created_by
 
     if created_by is not None:
@@ -61,7 +66,7 @@ async def get_random_active_message(db: AsyncSession) -> Optional[str]:
         return None
     
     random_message = random.choice(active_messages)
-    return random_message.message_text
+    return sanitize_html(random_message.message_text)
 
 
 async def get_all_user_messages(
@@ -102,8 +107,11 @@ async def update_user_message(
     
     if not message:
         return None
-    
+
     if message_text is not None:
+        is_valid, error_message = validate_html_tags(message_text)
+        if not is_valid:
+            raise ValueError(error_message)
         message.message_text = message_text
     
     if is_active is not None:
