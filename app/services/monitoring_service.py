@@ -281,15 +281,11 @@ class MonitoringService:
                 return None
             
             current_time = datetime.utcnow()
-            is_active = (
-                subscription.status == SubscriptionStatus.ACTIVE.value
-                and subscription.end_date > current_time
-            )
+            is_active = (subscription.status == SubscriptionStatus.ACTIVE.value and 
+                        subscription.end_date > current_time)
             
-            if (
-                subscription.status == SubscriptionStatus.ACTIVE.value
-                and subscription.end_date <= current_time
-            ):
+            if (subscription.status == SubscriptionStatus.ACTIVE.value and 
+                subscription.end_date <= current_time):
                 subscription.status = SubscriptionStatus.EXPIRED.value
                 await db.commit()
                 is_active = False
@@ -305,16 +301,10 @@ class MonitoringService:
             async with self.subscription_service.get_api_client() as api:
                 hwid_limit = resolve_hwid_device_limit_for_payload(subscription)
 
-                expire_at = self.subscription_service.ensure_future_expire_at(
-                    subscription.end_date
-                )
-
-                status = UserStatus.ACTIVE if is_active else UserStatus.DISABLED
-
                 update_kwargs = dict(
                     uuid=user.remnawave_uuid,
-                    status=status,
-                    expire_at=expire_at,
+                    status=UserStatus.ACTIVE if is_active else UserStatus.EXPIRED,
+                    expire_at=subscription.end_date,
                     traffic_limit_bytes=self._gb_to_bytes(subscription.traffic_limit_gb),
                     traffic_limit_strategy=TrafficLimitStrategy.MONTH,
                     description=settings.format_remnawave_user_description(
