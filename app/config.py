@@ -1336,13 +1336,13 @@ class Settings(BaseSettings):
             packages = []
             config_str = self.TRAFFIC_PACKAGES_CONFIG.strip()
             
-            logger.info(f"CONFIG STRING: '{config_str}'")
-            
+            logger.debug(f"CONFIG STRING: '{config_str}'")
+
             if not config_str:
-                logger.info("CONFIG EMPTY, USING FALLBACK")
+                logger.debug("CONFIG EMPTY, USING FALLBACK")
                 return self._get_fallback_traffic_packages()
-            
-            logger.info("PARSING CONFIG...")
+
+            logger.debug("PARSING CONFIG...")
             
             for package_config in config_str.split(','):
                 package_config = package_config.strip()
@@ -1366,7 +1366,7 @@ class Settings(BaseSettings):
                 except ValueError:
                     continue
             
-            logger.info(f"PARSED {len(packages)} packages from config")
+            logger.debug(f"PARSED {len(packages)} packages from config")
             return packages if packages else self._get_fallback_traffic_packages()
             
         except Exception as e:

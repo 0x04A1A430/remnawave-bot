@@ -521,36 +521,36 @@ class SubscriptionService:
 
         total_price = base_price + discounted_traffic_price + total_servers_price + discounted_devices_price
 
-        logger.info(f"Расчет стоимости новой подписки:")
+        logger.debug("Расчет стоимости новой подписки:")
         base_log = f"   Период {period_days} дней: {base_price_original/100}₽"
         if base_discount_total > 0:
             base_log += (
                 f" → {base_price/100}₽"
                 f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
             )
-        logger.info(base_log)
+        logger.debug(base_log)
         if discounted_traffic_price > 0:
             message = f"   Трафик {traffic_gb} ГБ: {traffic_price/100}₽"
             if traffic_discount > 0:
                 message += (
                     f" (скидка {traffic_discount_percent}%: -{traffic_discount/100}₽ → {discounted_traffic_price/100}₽)"
                 )
-            logger.info(message)
+            logger.debug(message)
         if total_servers_price > 0:
             message = f"   Серверы ({len(server_squad_ids)}): {total_servers_price/100}₽"
             if servers_discount_percent > 0:
                 message += (
                     f" (скидка {servers_discount_percent}% применяется ко всем серверам)"
                 )
-            logger.info(message)
+            logger.debug(message)
         if discounted_devices_price > 0:
             message = f"   Устройства ({devices}): {devices_price/100}₽"
             if devices_discount > 0:
                 message += (
                     f" (скидка {devices_discount_percent}%: -{devices_discount/100}₽ → {discounted_devices_price/100}₽)"
                 )
-            logger.info(message)
-        logger.info(f"   ИТОГО: {total_price/100}₽")
+            logger.debug(message)
+        logger.debug(f"   ИТОГО: {total_price/100}₽")
 
         return total_price, server_prices
     
@@ -634,36 +634,36 @@ class SubscriptionService:
                 + discounted_traffic_price
             )
 
-            logger.info(f"💰 Расчет стоимости продления для подписки {subscription.id} (по текущим ценам):")
+            logger.debug(f"💰 Расчет стоимости продления для подписки {subscription.id} (по текущим ценам):")
             base_log = f"   📅 Период {period_days} дней: {base_price_original/100}₽"
             if base_discount_total > 0:
                 base_log += (
                     f" → {base_price/100}₽"
                     f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
                 )
-            logger.info(base_log)
+            logger.debug(base_log)
             if servers_price > 0:
                 message = f"   🌍 Серверы ({len(subscription.connected_squads)}) по текущим ценам: {discounted_servers_price/100}₽"
                 if servers_discount > 0:
                     message += (
                         f" (скидка {servers_discount_percent}%: -{servers_discount/100}₽ от {servers_price/100}₽)"
                     )
-                logger.info(message)
+                logger.debug(message)
             if devices_price > 0:
                 message = f"   📱 Устройства ({device_limit}): {discounted_devices_price/100}₽"
                 if devices_discount > 0:
                     message += (
                         f" (скидка {devices_discount_percent}%: -{devices_discount/100}₽ от {devices_price/100}₽)"
                     )
-                logger.info(message)
+                logger.debug(message)
             if traffic_price > 0:
                 message = f"   📊 Трафик ({subscription.traffic_limit_gb} ГБ): {discounted_traffic_price/100}₽"
                 if traffic_discount > 0:
                     message += (
                         f" (скидка {traffic_discount_percent}%: -{traffic_discount/100}₽ от {traffic_price/100}₽)"
                     )
-                logger.info(message)
-            logger.info(f"   💎 ИТОГО: {total_price/100}₽")
+                logger.debug(message)
+            logger.debug(f"   💎 ИТОГО: {total_price/100}₽")
 
             return total_price
             
@@ -855,14 +855,14 @@ class SubscriptionService:
 
         total_price = base_price + total_traffic_price + total_servers_price + total_devices_price
 
-        logger.info(f"Расчет стоимости новой подписки на {period_days} дней ({months_in_period} мес):")
+        logger.debug(f"Расчет стоимости новой подписки на {period_days} дней ({months_in_period} мес):")
         base_log = f"   Период {period_days} дней: {base_price_original/100}₽"
         if base_discount_total > 0:
             base_log += (
                 f" → {base_price/100}₽"
                 f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
             )
-        logger.info(base_log)
+        logger.debug(base_log)
         if total_traffic_price > 0:
             message = (
                 f"   Трафик {traffic_gb} ГБ: {traffic_price_per_month/100}₽/мес x {months_in_period} = {total_traffic_price/100}₽"
@@ -871,14 +871,14 @@ class SubscriptionService:
                 message += (
                     f" (скидка {traffic_discount_percent}%: -{traffic_discount_per_month * months_in_period/100}₽)"
                 )
-            logger.info(message)
+            logger.debug(message)
         if total_servers_price > 0:
             message = f"   Серверы ({len(server_squad_ids)}): {total_servers_price/100}₽"
             if servers_discount_percent > 0:
                 message += (
                     f" (скидка {servers_discount_percent}% применяется ко всем серверам)"
                 )
-            logger.info(message)
+            logger.debug(message)
         if total_devices_price > 0:
             message = (
                 f"   Устройства ({additional_devices}): {devices_price_per_month/100}₽/мес x {months_in_period} = {total_devices_price/100}₽"
@@ -887,8 +887,8 @@ class SubscriptionService:
                 message += (
                     f" (скидка {devices_discount_percent}%: -{devices_discount_per_month * months_in_period/100}₽)"
                 )
-            logger.info(message)
-        logger.info(f"   ИТОГО: {total_price/100}₽")
+            logger.debug(message)
+        logger.debug(f"   ИТОГО: {total_price/100}₽")
 
         return total_price, server_prices
     
@@ -972,14 +972,14 @@ class SubscriptionService:
 
             total_price = base_price + total_servers_price + total_devices_price + total_traffic_price
 
-            logger.info(f"💰 Расчет стоимости продления подписки {subscription.id} на {period_days} дней ({months_in_period} мес):")
+            logger.debug(f"💰 Расчет стоимости продления подписки {subscription.id} на {period_days} дней ({months_in_period} мес):")
             base_log = f"   📅 Период {period_days} дней: {base_price_original/100}₽"
             if base_discount_total > 0:
                 base_log += (
                     f" → {base_price/100}₽"
                     f" (скидка {period_discount_percent}%: -{base_discount_total/100}₽)"
                 )
-            logger.info(base_log)
+            logger.debug(base_log)
             if total_servers_price > 0:
                 message = (
                     f"   🌍 Серверы: {servers_price_per_month/100}₽/мес x {months_in_period} = {total_servers_price/100}₽"
@@ -988,7 +988,7 @@ class SubscriptionService:
                     message += (
                         f" (скидка {servers_discount_percent}%: -{servers_discount_per_month * months_in_period/100}₽)"
                     )
-                logger.info(message)
+                logger.debug(message)
             if total_devices_price > 0:
                 message = (
                     f"   📱 Устройства: {devices_price_per_month/100}₽/мес x {months_in_period} = {total_devices_price/100}₽"
@@ -997,7 +997,7 @@ class SubscriptionService:
                     message += (
                         f" (скидка {devices_discount_percent}%: -{devices_discount_per_month * months_in_period/100}₽)"
                     )
-                logger.info(message)
+                logger.debug(message)
             if total_traffic_price > 0:
                 message = (
                     f"   📊 Трафик: {traffic_price_per_month/100}₽/мес x {months_in_period} = {total_traffic_price/100}₽"
@@ -1006,8 +1006,8 @@ class SubscriptionService:
                     message += (
                         f" (скидка {traffic_discount_percent}%: -{traffic_discount_per_month * months_in_period/100}₽)"
                     )
-                logger.info(message)
-            logger.info(f"   💎 ИТОГО: {total_price/100}₽")
+                logger.debug(message)
+            logger.debug(f"   💎 ИТОГО: {total_price/100}₽")
 
             return total_price
             

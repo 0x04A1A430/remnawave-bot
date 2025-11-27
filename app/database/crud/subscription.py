@@ -988,8 +988,8 @@ async def calculate_subscription_total_cost(
         ]
     }
 
-    logger.info(f"📊 Расчет стоимости подписки на {period_days} дней ({months_in_period} мес):")
-    logger.info(f"   Базовый период: {base_price/100}₽")
+    logger.debug(f"📊 Расчет стоимости подписки на {period_days} дней ({months_in_period} мес):")
+    logger.debug(f"   Базовый период: {base_price/100}₽")
     if total_traffic_price > 0:
         message = (
             f"   Трафик: {traffic_price_per_month/100}₽/мес × {months_in_period} = {total_traffic_price/100}₽"
@@ -998,7 +998,7 @@ async def calculate_subscription_total_cost(
             message += (
                 f" (скидка {traffic_discount_percent}%: -{total_traffic_discount/100}₽)"
             )
-        logger.info(message)
+        logger.debug(message)
     if total_servers_price > 0:
         message = (
             f"   Серверы: {servers_price_per_month/100}₽/мес × {months_in_period} = {total_servers_price/100}₽"
@@ -1007,7 +1007,7 @@ async def calculate_subscription_total_cost(
             message += (
                 f" (скидка {servers_discount_percent}%: -{total_servers_discount/100}₽)"
             )
-        logger.info(message)
+        logger.debug(message)
     if total_devices_price > 0:
         message = (
             f"   Устройства: {devices_price_per_month/100}₽/мес × {months_in_period} = {total_devices_price/100}₽"
@@ -1016,8 +1016,8 @@ async def calculate_subscription_total_cost(
             message += (
                 f" (скидка {devices_discount_percent}%: -{total_devices_discount/100}₽)"
             )
-        logger.info(message)
-    logger.info(f"   ИТОГО: {total_cost/100}₽")
+        logger.debug(message)
+    logger.debug(f"   ИТОГО: {total_cost/100}₽")
     
     return total_cost, details
     
