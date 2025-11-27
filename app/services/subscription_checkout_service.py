@@ -1,7 +1,13 @@
+import logging
 from typing import Optional
 
-from app.database.models import User
+from sqlalchemy.exc import MissingGreenlet
+
+from app.database.models import Subscription, User
 from app.utils.cache import UserCache
+
+
+logger = logging.getLogger(__name__)
 
 
 _CHECKOUT_SESSION_KEY = "subscription_checkout"
@@ -33,7 +39,12 @@ async def has_subscription_checkout_draft(user_id: int) -> bool:
     return draft is not None
 
 
-def should_offer_checkout_resume(user: User, has_draft: bool) -> bool:
+def should_offer_checkout_resume(
+    user: User,
+    has_draft: bool,
+    *,
+    subscription: Subscription | None = None,
+) -> bool:
     """
     Determine whether checkout resume button should be available for the user.
 
@@ -44,7 +55,16 @@ def should_offer_checkout_resume(user: User, has_draft: bool) -> bool:
     if not has_draft:
         return False
 
-    subscription = getattr(user, "subscription", None)
+    if subscription is None:
+        try:
+            subscription = getattr(user, "subscription", None)
+        except MissingGreenlet as error:
+            logger.warning(
+                "Не удалось лениво загрузить подписку пользователя %s при проверке возврата к checkout: %s",
+                getattr(user, "id", None),
+                error,
+            )
+            subscription = None
 
     if subscription is None:
         return True
