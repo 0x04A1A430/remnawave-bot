@@ -133,7 +133,6 @@ async def test_unified_app_docs_enabled_with_alias(monkeypatch: pytest.MonkeyPat
     app = _build_unified_app(monkeypatch, docs_enabled=True)
 
     assert app.docs_url == "/docs"
-    assert app.redoc_url == "/redoc"
     assert app.openapi_url == "/openapi.json"
 
     alias_route = next(
@@ -143,6 +142,16 @@ async def test_unified_app_docs_enabled_with_alias(monkeypatch: pytest.MonkeyPat
     assert alias_route is not None
     assert getattr(alias_route, "include_in_schema", True) is False
 
+    redoc_route = next(
+        (route for route in app.routes if getattr(route, "path", None) == "/redoc"),
+        None,
+    )
+    assert redoc_route is not None
+    assert getattr(redoc_route, "include_in_schema", True) is False
+
     response = await alias_route.endpoint()  # type: ignore[func-returns-value]
     assert response.status_code == status.HTTP_307_TEMPORARY_REDIRECT
     assert response.headers["location"] == "/docs"
+
+    redoc_response = await redoc_route.endpoint()  # type: ignore[func-returns-value]
+    assert b"ReDoc" in redoc_response.body  # type: ignore[attr-defined]
