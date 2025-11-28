@@ -90,6 +90,9 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
         pass
     language = _get_language(self)
 
+    # По умолчанию используем HTML, чтобы Telegram корректно распознавал разметку
+    kwargs.setdefault("parse_mode", "HTML")
+
     if LOGO_PATH.exists():
         try:
             # Отправляем caption как есть; при ошибке парсинга ниже сработает фоллбек
