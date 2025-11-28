@@ -406,6 +406,17 @@ async def apply_countries_changes(
         await callback.answer()
         return
 
+    # Проверяем, что пользователь не пытается отключить все страны (должна остаться хотя бы 1 страна)
+    if len(selected_countries) == 0:
+        await callback.answer(
+            texts.t(
+                "COUNTRIES_MINIMUM_REQUIRED",
+                "❌ Нельзя отключить все страны. Должна быть подключена хотя бы одна страна."
+            ),
+            show_alert=True
+        )
+        return
+
     try:
         if added and total_cost > 0:
             success = await subtract_user_balance(
@@ -898,6 +909,17 @@ async def confirm_add_countries_to_subscription(
         return
 
     try:
+        # Проверяем, что пользователь не пытается отключить все страны (должна остаться хотя бы 1 страна)
+        if len(selected_countries) == 0:
+            await callback.answer(
+                texts.t(
+                    "COUNTRIES_MINIMUM_REQUIRED",
+                    "❌ Нельзя отключить все страны. Должна быть подключена хотя бы одна страна."
+                ),
+                show_alert=True
+            )
+            return
+
         if new_countries and total_price > 0:
             success = await subtract_user_balance(
                 db, db_user, total_price,
