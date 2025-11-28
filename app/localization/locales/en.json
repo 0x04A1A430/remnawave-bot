@@ -865,6 +865,7 @@
   "COUNTRY_CHANGES_REMOVED_HEADER": "➖ <b>Removed countries:</b>\n",
   "COUNTRY_CHANGES_REMOVED_WARNING": "ℹ️ Reconnecting later will be charged",
   "COUNTRY_CHANGES_SUCCESS_HEADER": "✅ <b>Countries updated!</b>\n\n",
+  "COUNTRIES_MINIMUM_REQUIRED": "❌ Cannot disconnect all countries. At least one country must remain connected.",
   "COUNTRY_MANAGEMENT_NONE": "No countries connected",
   "COUNTRY_MANAGEMENT_PROMPT": "🌍 <b>Manage subscription countries</b>\n\n📋 <b>Current countries ({current_count}):</b>\n{current_list}\n\n💡 <b>How it works:</b>\n✅ — currently connected\n➕ — will be added (paid)\n➖ — will be removed (free)\n⚪ — not selected\n\n⚠️ <b>Important:</b> Reconnecting removed countries will be charged again!",
   "COUNTRY_MANAGEMENT_UNAVAILABLE": "ℹ️ Server management is unavailable — only one server is accessible",
