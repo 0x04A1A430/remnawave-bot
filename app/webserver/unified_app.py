@@ -13,6 +13,7 @@ from aiogram import Dispatcher
 from app.config import settings
 from app.services.payment_service import PaymentService
 from app.webapi.app import create_web_api_app
+from app.webapi.docs import add_redoc_endpoint
 
 from . import payments
 from . import telegram
@@ -47,12 +48,19 @@ def _create_base_app() -> FastAPI:
         app = create_web_api_app()
     else:
         app = FastAPI(
-        title="Bedolaga Unified Server",
-        version=settings.WEB_API_VERSION,
-        docs_url=docs_config.get("docs_url"),
-        redoc_url=docs_config.get("redoc_url"),
-        openapi_url=docs_config.get("openapi_url"),
-    )
+            title="Bedolaga Unified Server",
+            version=settings.WEB_API_VERSION,
+            docs_url=docs_config.get("docs_url"),
+            redoc_url=None,
+            openapi_url=docs_config.get("openapi_url"),
+        )
+
+        add_redoc_endpoint(
+            app,
+            redoc_url=docs_config.get("redoc_url"),
+            openapi_url=docs_config.get("openapi_url"),
+            title="Bedolaga Unified Server",
+        )
 
     _attach_docs_alias(app, app.docs_url)
     return app

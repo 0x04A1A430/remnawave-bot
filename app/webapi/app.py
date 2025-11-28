@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.webapi.docs import add_redoc_endpoint
 
 from .middleware import RequestLoggingMiddleware
 from .routes import (
@@ -144,9 +145,16 @@ def create_web_api_app() -> FastAPI:
         title=settings.WEB_API_TITLE,
         version=settings.WEB_API_VERSION,
         docs_url=docs_config.get("docs_url"),
-        redoc_url=docs_config.get("redoc_url"),
+        redoc_url=None,
         openapi_url=docs_config.get("openapi_url"),
         swagger_ui_parameters={"persistAuthorization": True},
+    )
+
+    add_redoc_endpoint(
+        app,
+        redoc_url=docs_config.get("redoc_url"),
+        openapi_url=docs_config.get("openapi_url"),
+        title=settings.WEB_API_TITLE,
     )
 
     allowed_origins = settings.get_web_api_allowed_origins()
