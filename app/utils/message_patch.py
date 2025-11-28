@@ -1,3 +1,5 @@
+import html
+import re
 from pathlib import Path
 from typing import Any, Dict
 
@@ -17,6 +19,14 @@ def is_qr_message(message: Message) -> bool:
 
 _original_answer = Message.answer
 _original_edit_text = Message.edit_text
+
+
+def _strip_html(text: str | None) -> str:
+    if not text:
+        return ""
+
+    plain_text = html.unescape(re.sub(r"<[^>]+>", "", text))
+    return plain_text.strip()
 
 
 def _get_language(message: Message) -> str | None:
@@ -69,6 +79,29 @@ def prepare_privacy_safe_kwargs(kwargs: Dict[str, Any] | None = None) -> Dict[st
     return safe_kwargs
 
 
+async def _answer_plain_text(self: Message, text: str | None, kwargs: Dict[str, Any], error: Exception | None = None):
+    language = _get_language(self)
+
+    if error and is_privacy_restricted_error(error):
+        text = append_privacy_hint(text, language)
+        kwargs = prepare_privacy_safe_kwargs(kwargs)
+
+    try:
+        return await _original_answer(self, text, **kwargs)
+    except TelegramBadRequest as send_error:
+        if is_privacy_restricted_error(send_error):
+            text = append_privacy_hint(text, language)
+            kwargs = prepare_privacy_safe_kwargs(kwargs)
+        else:
+            text = _strip_html(text)
+            kwargs = dict(kwargs)
+            kwargs.pop("parse_mode", None)
+
+        return await _original_answer(self, text, **kwargs)
+    except Exception:
+        return await _original_answer(self, text, **kwargs)
+
+
 def is_privacy_restricted_error(error: Exception) -> bool:
     if not isinstance(error, TelegramBadRequest):
         return False
@@ -81,11 +114,11 @@ def is_privacy_restricted_error(error: Exception) -> bool:
 async def _answer_with_photo(self: Message, text: str = None, **kwargs):
     # Уважаем флаг в рантайме: если логотип выключен — не подменяем ответ
     if not settings.ENABLE_LOGO_MODE:
-        return await _original_answer(self, text, **kwargs)
+        return await _answer_plain_text(self, text, kwargs)
     # Если caption слишком длинный для фото — отправим как текст
     try:
         if text is not None and len(text) > 900:
-            return await _original_answer(self, text, **kwargs)
+            return await _answer_plain_text(self, text, kwargs)
     except Exception:
         pass
     language = _get_language(self)
@@ -100,10 +133,10 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
                 safe_kwargs = prepare_privacy_safe_kwargs(kwargs)
                 return await _original_answer(self, fallback_text, **safe_kwargs)
             # Фоллбек, если Telegram ругается на caption или другое ограничение: отправим как текст
-            return await _original_answer(self, text, **kwargs)
+            return await _answer_plain_text(self, text, kwargs, error)
         except Exception:
-            return await _original_answer(self, text, **kwargs)
-    return await _original_answer(self, text, **kwargs)
+            return await _answer_plain_text(self, text, kwargs)
+    return await _answer_plain_text(self, text, kwargs)
 
 
 async def _edit_with_photo(self: Message, text: str, **kwargs):
@@ -119,7 +152,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                     await self.delete()
                 except Exception:
                     pass
-                return await _original_answer(self, text, **kwargs)
+                return await _answer_plain_text(self, text, kwargs)
         except Exception:
             pass
         # Всегда используем логотип если включен режим логотипа,
@@ -147,13 +180,13 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                     await self.delete()
                 except Exception:
                     pass
-                return await _original_answer(self, fallback_text, **safe_kwargs)
+                return await _answer_plain_text(self, fallback_text, safe_kwargs)
             # Фоллбек: удалим и отправим обычный текст без фото
             try:
                 await self.delete()
             except Exception:
                 pass
-            return await _original_answer(self, text, **kwargs)
+            return await _answer_plain_text(self, text, kwargs, error)
     return await _original_edit_text(self, text, **kwargs)
 
 
