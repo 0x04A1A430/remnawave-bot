@@ -1,6 +1,3 @@
-import html
-import re
-
 from aiogram import types
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import FSInputFile, InputMediaPhoto
@@ -36,14 +33,6 @@ def _get_language(callback: types.CallbackQuery) -> str | None:
     return None
 
 
-def _strip_html(text: str | None) -> str:
-    if not text:
-        return ""
-
-    plain_text = html.unescape(re.sub(r"<[^>]+>", "", text))
-    return plain_text.strip()
-
-
 def _build_base_kwargs(keyboard: types.InlineKeyboardMarkup | None, parse_mode: str | None):
     kwargs: dict[str, object] = {}
     if parse_mode is not None:
@@ -68,19 +57,6 @@ async def _answer_text(
         kwargs = prepare_privacy_safe_kwargs(kwargs)
 
     kwargs.setdefault("parse_mode", parse_mode or "HTML")
-    try:
-        await callback.message.answer(
-            caption,
-            **kwargs,
-        )
-        return
-    except TelegramBadRequest as send_error:
-        if is_privacy_restricted_error(send_error):
-            caption = append_privacy_hint(caption, language)
-            kwargs = prepare_privacy_safe_kwargs(kwargs)
-        else:
-            caption = _strip_html(caption)
-            kwargs.pop("parse_mode", None)
 
     await callback.message.answer(
         caption,

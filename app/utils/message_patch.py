@@ -1,5 +1,3 @@
-import html
-import re
 from pathlib import Path
 from typing import Any, Dict
 
@@ -65,14 +63,6 @@ def append_privacy_hint(text: str | None, language: str | None) -> str:
     return hint
 
 
-def _strip_html(text: str | None) -> str:
-    if not text:
-        return ""
-
-    plain_text = html.unescape(re.sub(r"<[^>]+>", "", text))
-    return plain_text.strip()
-
-
 def prepare_privacy_safe_kwargs(kwargs: Dict[str, Any] | None = None) -> Dict[str, Any]:
     safe_kwargs: Dict[str, Any] = dict(kwargs or {})
     safe_kwargs.pop("reply_markup", None)
@@ -110,10 +100,7 @@ async def _answer_with_photo(self: Message, text: str = None, **kwargs):
                 safe_kwargs = prepare_privacy_safe_kwargs(kwargs)
                 return await _original_answer(self, fallback_text, **safe_kwargs)
             # Фоллбек, если Telegram ругается на caption или другое ограничение: отправим как текст
-            fallback_text = _strip_html(text)
-            safe_kwargs = dict(kwargs)
-            safe_kwargs.pop("parse_mode", None)
-            return await _original_answer(self, fallback_text, **safe_kwargs)
+            return await _original_answer(self, text, **kwargs)
         except Exception:
             return await _original_answer(self, text, **kwargs)
     return await _original_answer(self, text, **kwargs)
@@ -166,10 +153,7 @@ async def _edit_with_photo(self: Message, text: str, **kwargs):
                 await self.delete()
             except Exception:
                 pass
-            fallback_text = _strip_html(text)
-            safe_kwargs = dict(kwargs)
-            safe_kwargs.pop("parse_mode", None)
-            return await _original_answer(self, fallback_text, **safe_kwargs)
+            return await _original_answer(self, text, **kwargs)
     return await _original_edit_text(self, text, **kwargs)
 
 
@@ -178,3 +162,4 @@ def patch_message_methods():
         return
     Message.answer = _answer_with_photo
     Message.edit_text = _edit_with_photo
+

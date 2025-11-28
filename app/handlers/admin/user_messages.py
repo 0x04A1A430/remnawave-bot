@@ -14,7 +14,6 @@ from app.database.models import User
 from app.keyboards.admin import get_admin_main_keyboard
 from app.utils.validators import (
     get_html_help_text,
-    format_telegram_quote,
     sanitize_html,
     validate_html_tags,
 )
@@ -183,14 +182,14 @@ async def process_new_message_text(
         )
         
         await state.clear()
-
+        
         await message.answer(
             f"✅ <b>Сообщение добавлено!</b>\n\n"
             f"<b>ID:</b> {new_message.id}\n"
             f"<b>Статус:</b> {'🟢 Активно' if new_message.is_active else '🔴 Неактивно'}\n"
             f"<b>Создано:</b> {new_message.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
             f"<b>Предварительный просмотр:</b>\n"
-            f"{format_telegram_quote(sanitize_html(message_text))}",
+            f"<blockquote>{message_text}</blockquote>",
             reply_markup=get_user_messages_keyboard(db_user.language),
             parse_mode="HTML"
         )
@@ -319,7 +318,7 @@ async def view_user_message(
         await callback.answer("❌ Сообщение не найдено", show_alert=True)
         return
 
-    safe_content = format_telegram_quote(sanitize_html(message.message_text))
+    safe_content = sanitize_html(message.message_text)
 
     status_text = "🟢 Активно" if message.is_active else "🔴 Неактивно"
 
@@ -329,7 +328,7 @@ async def view_user_message(
         f"<b>Создано:</b> {message.created_at.strftime('%d.%m.%Y %H:%M')}\n"
         f"<b>Обновлено:</b> {message.updated_at.strftime('%d.%m.%Y %H:%M')}\n\n"
         f"<b>Содержимое:</b>\n"
-        f"{safe_content}"
+        f"<blockquote>{safe_content}</blockquote>"
     )
     
     await callback.message.edit_text(
@@ -459,7 +458,7 @@ async def edit_user_message_start(
     await callback.message.edit_text(
         f"✏️ <b>Редактирование сообщения ID {message.id}</b>\n\n"
         f"<b>Текущий текст:</b>\n"
-        f"{format_telegram_quote(sanitize_html(message.message_text))}\n\n"
+        f"<blockquote>{sanitize_html(message.message_text)}</blockquote>\n\n"
         f"Введите новый текст сообщения или отправьте /cancel для отмены:",
         parse_mode="HTML"
     )
@@ -524,7 +523,7 @@ async def process_edit_message_text(
                 f"<b>ID:</b> {updated_message.id}\n"
                 f"<b>Обновлено:</b> {updated_message.updated_at.strftime('%d.%m.%Y %H:%M')}\n\n"
                 f"<b>Новый текст:</b>\n"
-                f"{format_telegram_quote(sanitize_html(new_text))}",
+                f"<blockquote>{sanitize_html(new_text)}</blockquote>",
                 reply_markup=get_user_messages_keyboard(db_user.language),
                 parse_mode="HTML"
             )

@@ -355,7 +355,7 @@ async def show_subscription_info(
     if show_devices and devices_list:
         message += "\n\n" + texts.t(
             "SUBSCRIPTION_CONNECTED_DEVICES_TITLE",
-            "📱 <b>Подключенные устройства:</b>\n",
+            "<blockquote>📱 <b>Подключенные устройства:</b>\n",
         )
         for device in devices_list[:5]:
             platform = device.get('platform', 'Unknown')
@@ -365,7 +365,7 @@ async def show_subscription_info(
             if len(device_info) > 35:
                 device_info = device_info[:32] + "..."
             message += f"• {device_info}\n"
-        message += texts.t("SUBSCRIPTION_CONNECTED_DEVICES_FOOTER", "")
+        message += texts.t("SUBSCRIPTION_CONNECTED_DEVICES_FOOTER", "</blockquote>")
 
     subscription_link = get_display_subscription_link(subscription)
     hide_subscription_link = settings.should_hide_subscription_link()
