@@ -4,14 +4,13 @@ from datetime import datetime
 import html
 
 ALLOWED_HTML_TAGS = {
-    'b', 'strong',           
-    'i', 'em',              
-    'u', 'ins',             
-    's', 'strike', 'del',  
-    'code',                 
-    'pre',                
-    'a',                  
-    'blockquote'
+    'b', 'strong',
+    'i', 'em',
+    'u', 'ins',
+    's', 'strike', 'del',
+    'code',
+    'pre',
+    'a'
 }
 
 SELF_CLOSING_TAGS = {
@@ -144,6 +143,24 @@ def sanitize_html(text: str) -> str:
         )
 
     return text
+
+
+def strip_blockquote_tags(text: str) -> str:
+    """Remove Telegram-unsupported blockquote tags (both raw and escaped)."""
+    if not text:
+        return text
+
+    without_tags = re.sub(r"</?blockquote>\s*", "", text, flags=re.IGNORECASE)
+    without_escaped = re.sub(r"&lt;/?blockquote[^&]*&gt;\s*", "", without_tags, flags=re.IGNORECASE)
+    return without_escaped
+
+
+def format_telegram_quote(text: str | None) -> str:
+    """Format text as a lightweight quote safe for Telegram HTML parse mode."""
+    clean_text = strip_blockquote_tags(text or "").strip()
+    if not clean_text:
+        return "—"
+    return f"<i>❝ {clean_text} ❞</i>"
 
 
 def sanitize_telegram_name(name: Optional[str]) -> Optional[str]:
