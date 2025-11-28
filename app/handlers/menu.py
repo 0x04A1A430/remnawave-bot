@@ -149,6 +149,18 @@ async def show_main_menu(
     *,
     skip_callback_answer: bool = False,
 ):
+    if db_user is None:
+        # Пользователь не найден, используем язык по умолчанию
+        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        await callback.answer(
+            texts.t(
+                "USER_NOT_FOUND_ERROR",
+                "Ошибка: пользователь не найден.",
+            ),
+            show_alert=True,
+        )
+        return
+
     texts = get_texts(db_user.language)
 
     db_user.last_activity = datetime.utcnow()
@@ -164,7 +176,7 @@ async def show_main_menu(
 
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
-    
+
     # Проверяем наличие сохраненной корзины в Redis
     try:
         has_saved_cart = await user_cart_service.has_user_cart(db_user.id)
@@ -230,6 +242,18 @@ async def show_service_rules(
     db_user: User,
     db: AsyncSession
 ):
+    if db_user is None:
+        # Пользователь не найден, используем язык по умолчанию
+        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        await callback.answer(
+            texts.t(
+                "USER_NOT_FOUND_ERROR",
+                "Ошибка: пользователь не найден.",
+            ),
+            show_alert=True,
+        )
+        return
+
     from app.database.crud.rules import get_current_rules_content
 
     texts = get_texts(db_user.language)
@@ -252,6 +276,18 @@ async def show_info_menu(
     db_user: User,
     db: AsyncSession,
 ):
+    if db_user is None:
+        # Пользователь не найден, используем язык по умолчанию
+        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        await callback.answer(
+            texts.t(
+                "USER_NOT_FOUND_ERROR",
+                "Ошибка: пользователь не найден.",
+            ),
+            show_alert=True,
+        )
+        return
+
     texts = get_texts(db_user.language)
 
     header = texts.t("MENU_INFO_HEADER", "ℹ️ <b>Инфо</b>")
@@ -283,6 +319,18 @@ async def show_promo_groups_info(
     db_user: User,
     db: AsyncSession,
 ):
+    if db_user is None:
+        # Пользователь не найден, используем язык по умолчанию
+        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        await callback.answer(
+            texts.t(
+                "USER_NOT_FOUND_ERROR",
+                "Ошибка: пользователь не найден.",
+            ),
+            show_alert=True,
+        )
+        return
+
     texts = get_texts(db_user.language)
 
     promo_groups = await get_auto_assign_promo_groups(db)
@@ -423,6 +471,18 @@ async def show_faq_pages(
     db_user: User,
     db: AsyncSession,
 ):
+    if db_user is None:
+        # Пользователь не найден, используем язык по умолчанию
+        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        await callback.answer(
+            texts.t(
+                "USER_NOT_FOUND_ERROR",
+                "Ошибка: пользователь не найден.",
+            ),
+            show_alert=True,
+        )
+        return
+
     texts = get_texts(db_user.language)
 
     pages = await FaqService.get_pages(db, db_user.language)
@@ -467,6 +527,18 @@ async def show_faq_page(
     db_user: User,
     db: AsyncSession,
 ):
+    if db_user is None:
+        # Пользователь не найден, используем язык по умолчанию
+        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        await callback.answer(
+            texts.t(
+                "USER_NOT_FOUND_ERROR",
+                "Ошибка: пользователь не найден.",
+            ),
+            show_alert=True,
+        )
+        return
+
     texts = get_texts(db_user.language)
 
     raw_data = callback.data or ""
@@ -590,6 +662,18 @@ async def show_privacy_policy(
     db_user: User,
     db: AsyncSession,
 ):
+    if db_user is None:
+        # Пользователь не найден, используем язык по умолчанию
+        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        await callback.answer(
+            texts.t(
+                "USER_NOT_FOUND_ERROR",
+                "Ошибка: пользователь не найден.",
+            ),
+            show_alert=True,
+        )
+        return
+
     texts = get_texts(db_user.language)
 
     raw_page = 1
@@ -697,6 +781,18 @@ async def show_public_offer(
     db_user: User,
     db: AsyncSession,
 ):
+    if db_user is None:
+        # Пользователь не найден, используем язык по умолчанию
+        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        await callback.answer(
+            texts.t(
+                "USER_NOT_FOUND_ERROR",
+                "Ошибка: пользователь не найден.",
+            ),
+            show_alert=True,
+        )
+        return
+
     texts = get_texts(db_user.language)
 
     raw_page = 1
@@ -804,6 +900,18 @@ async def show_language_menu(
     db_user: User,
     db: AsyncSession,
 ):
+    if db_user is None:
+        # Пользователь не найден, используем язык по умолчанию
+        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        await callback.answer(
+            texts.t(
+                "USER_NOT_FOUND_ERROR",
+                "Ошибка: пользователь не найден.",
+            ),
+            show_alert=True,
+        )
+        return
+
     texts = get_texts(db_user.language)
 
     if not settings.is_language_selection_enabled():
@@ -834,6 +942,18 @@ async def process_language_change(
     db_user: User,
     db: AsyncSession,
 ):
+    if db_user is None:
+        # Пользователь не найден, используем язык по умолчанию
+        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        await callback.answer(
+            texts.t(
+                "USER_NOT_FOUND_ERROR",
+                "Ошибка: пользователь не найден.",
+            ),
+            show_alert=True,
+        )
+        return
+
     texts = get_texts(db_user.language)
 
     if not settings.is_language_selection_enabled():
@@ -889,6 +1009,18 @@ async def handle_back_to_menu(
     db_user: User,
     db: AsyncSession
 ):
+    if db_user is None:
+        # Пользователь не найден, используем язык по умолчанию
+        texts = get_texts(settings.DEFAULT_LANGUAGE_CODE)
+        await callback.answer(
+            texts.t(
+                "USER_NOT_FOUND_ERROR",
+                "Ошибка: пользователь не найден.",
+            ),
+            show_alert=True,
+        )
+        return
+
     await state.clear()
 
     texts = get_texts(db_user.language)
@@ -903,7 +1035,7 @@ async def handle_back_to_menu(
 
     draft_exists = await has_subscription_checkout_draft(db_user.id)
     show_resume_checkout = should_offer_checkout_resume(db_user, draft_exists)
-    
+
     # Проверяем наличие сохраненной корзины в Redis
     try:
         has_saved_cart = await user_cart_service.has_user_cart(db_user.id)
