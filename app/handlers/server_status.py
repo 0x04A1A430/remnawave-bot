@@ -194,7 +194,7 @@ def _format_server_lines(
         name = server.display_name or server.name
         flag_prefix = f"{server.flag} " if server.flag else ""
         server_line = f"{flag_prefix}{name} — {latency_text}"
-        lines.append(f"• {server_line}")
+        lines.append(f"<blockquote>{server_line}</blockquote>")
 
     return lines
 
