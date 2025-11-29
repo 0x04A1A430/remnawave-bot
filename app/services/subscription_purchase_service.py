@@ -329,7 +329,9 @@ class MiniAppSubscriptionPurchaseService:
     """Builds configuration and pricing for subscription purchases in the mini app."""
 
     async def build_options(self, db: AsyncSession, user: User) -> PurchaseOptionsContext:
-        subscription = getattr(user, "subscription", None)
+        from app.database.crud.subscription import get_subscription_by_user_id
+
+        subscription = await get_subscription_by_user_id(db, user.id)
         balance_kopeks = int(getattr(user, "balance_kopeks", 0) or 0)
         currency = (getattr(user, "balance_currency", None) or "RUB").upper()
         texts = get_texts(getattr(user, "language", None))
